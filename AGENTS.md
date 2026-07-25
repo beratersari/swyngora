@@ -23,8 +23,9 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 
 | Surface | Stack | Notes |
 |---|---|---|
-| Web app | React | Atomic Design (§6.8); **RTK Query** for server state; types from **OpenAPI** (§6.9) |
-| Mobile app | React Native | Same as web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
+| Simple frontend | Static HTML/JS | **Test harness only** under `simple-frontend/` — not Atomic Design / RTK Query |
+| Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **RTK Query**; OpenAPI types (§6.9) |
+| Mobile app | React Native | Same as product web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
 | Messaging | Telegram bot | Not a React UI; follow bot package conventions when scaffolded |
 
 ### Backend and AI
@@ -53,12 +54,16 @@ swyngora/
 ├── docs/                     # Architecture, ADRs, API notes
 ├── backend/                  # Go services and APIs (N-layered — see §6.7)
 ├── ai/                       # Python LangChain assistant + MCP tools
-├── web/                      # React web (Atomic Design — §6.8)
+├── simple-frontend/          # Static test harness for the API (not production UI)
+├── frontend/                 # Production web UI (reserved; Atomic Design when scaffolded)
+├── web/                      # Optional alias/legacy name — prefer frontend/ for product UI
 ├── mobile/                   # React Native (Atomic Design — §6.8)
 ├── bot/                      # Telegram bot
 ├── packages/                 # Shared libs (schemas, clients, types) if needed
 └── scripts/                  # Dev, release, and CI helpers
 ```
+
+**Frontend naming:** use `simple-frontend/` for lightweight API testing. The real product web app lives under `frontend/` (Atomic Design + RTK Query + OpenAPI types — §6.8 / §6.9). Do not treat `simple-frontend` as the long-term design-system home.
 
 When a package gains its own long-lived conventions, add a nested `AGENTS.md` in that package. **Closest `AGENTS.md` wins** for files under that tree; user chat instructions always override docs.
 
@@ -637,14 +642,19 @@ golangci-lint run   # when configured
 pytest
 ruff check .
 
-# Web — from web/
-npm run codegen:api   # regenerate RTK Query / OpenAPI types when configured
-npm test              # or pnpm / yarn — match lockfile
-npm run lint
-npm run build
+# Backend (implemented) — from backend/
+go test ./...
+go run ./cmd/server   # :8080 — see backend/README.md for env vars
+
+# Simple frontend (test harness) — from simple-frontend/
+python3 -m http.server 5173   # open http://localhost:5173
+
+# Product frontend — from frontend/ (when scaffolded)
+# npm run codegen:api
+# npm test && npm run lint && npm run build
 
 # Mobile — from mobile/
-npm run codegen:api   # same OpenAPI source as web when configured
+# npm run codegen:api   # same OpenAPI source as frontend when configured
 # follow React Native project scripts once scaffolded
 ```
 
@@ -798,5 +808,5 @@ Production branch: main
 
 This project is early. When stack choices solidify (module paths, package managers, CI jobs, deploy targets), update **§2**, **§7**, nested package `AGENTS.md`, and related `README.md` files in the same change set (see §8.2). Stale agent docs are worse than short ones.
 
-**Last updated:** 2026-07-24  
+**Last updated:** 2026-07-25  
 **Initial product version target:** `0.1.0` (pre-release development)

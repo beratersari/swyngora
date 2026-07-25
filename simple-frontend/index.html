@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swyngora · Simple Frontend (test)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <p class="eyebrow">Swyngora · test harness</p>
+        <h1>Market data explorer</h1>
+        <p class="sub">
+          Calls the local Go API. Candles &amp; 24h volume from <strong>Binance</strong>;
+          supply from free <strong>CoinGecko</strong> (Binance does not publish supply on market endpoints).
+        </p>
+      </div>
+      <label class="field inline">
+        <span>API base</span>
+        <input id="apiBase" type="text" value="http://localhost:8080" spellcheck="false" />
+      </label>
+    </header>
+
+    <section class="card controls">
+      <label class="field">
+        <span>Symbol / asset</span>
+        <input id="symbol" type="text" value="BTCUSDT" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Interval</span>
+        <select id="interval">
+          <option value="1m">1m</option>
+          <option value="5m">5m</option>
+          <option value="15m">15m</option>
+          <option value="1h" selected>1h</option>
+          <option value="4h">4h</option>
+          <option value="1d">1d</option>
+          <option value="1w">1w</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Candle limit</span>
+        <input id="limit" type="number" min="1" max="1000" value="24" />
+      </label>
+      <div class="actions">
+        <button type="button" id="btnAll" class="primary">Fetch all</button>
+        <button type="button" id="btnCandles">Candles</button>
+        <button type="button" id="btnTicker">24h volume</button>
+        <button type="button" id="btnSupply">Supply</button>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status"></p>
+
+    <div class="grid">
+      <section class="card">
+        <h2>24h ticker / volume</h2>
+        <div id="ticker" class="panel muted">No data yet.</div>
+      </section>
+      <section class="card">
+        <h2>Supply</h2>
+        <div id="supply" class="panel muted">No data yet.</div>
+      </section>
+      <section class="card wide">
+        <h2>Candles</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Open time</th>
+                <th>Open</th>
+                <th>High</th>
+                <th>Low</th>
+                <th>Close</th>
+                <th>Volume</th>
+                <th>Quote vol</th>
+                <th>Trades</th>
+              </tr>
+            </thead>
+            <tbody id="candlesBody">
+              <tr><td colspan="8" class="muted">No data yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="card wide">
+        <h2>Raw JSON</h2>
+        <pre id="raw" class="raw">{}</pre>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <span>Simple frontend for API testing only.</span>
+      <span>Production UI will live under <code>frontend/</code>.</span>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

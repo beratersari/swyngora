@@ -1,0 +1,201 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+)
+
+type stubMarket struct{}
+
+func (stubMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	if q.Symbol == "BAD" {
+		return nil, domain.ErrNotFound
+	}
+	return []domain.Candle{{
+		OpenTime:  time.Unix(0, 0).UTC(),
+		Open:      "1",
+		High:      "2",
+		Low:       "0.5",
+		Close:     "1.5",
+		Volume:    "10",
+		CloseTime: time.Unix(60, 0).UTC(),
+		QuoteVolume: "15",
+		TradeCount:  3,
+	}}, nil
+}
+
+func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
+	return &domain.Ticker24h{
+		Symbol:      symbol,
+		LastPrice:   "100",
+		Volume:      "50",
+		QuoteVolume: "5000",
+		OpenTime:    time.Unix(0, 0).UTC(),
+		CloseTime:   time.Unix(1, 0).UTC(),
+	}, nil
+}
+
+type stubSupply struct{}
+
+func (stubSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSupply, error) {
+	max := 21_000_000.0
+	return &domain.AssetSupply{
+		Asset:     asset,
+		Name:      "Bitcoin",
+		MaxSupply: &max,
+		AsOf:      time.Unix(0, 0).UTC(),
+		Source:    "coingecko",
+	}, nil
+}
+
+func newTestHandler() *MarketHandler {
+	return NewMarketHandler(market.New(stubMarket{}, stubSupply{}))
+}
+
+func TestGetCandles_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=5", nil)
+	rr := httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body candlesResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Exchange != "binance" || len(body.Candles) != 1 || body.Candles[0].Close != "1.5" {
+		t.Fatalf("body=%+v", body)
+	}
+}
+
+func TestGetCandles_MissingSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles", nil)
+	rr := httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetTicker24h_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/ticker/24h?symbol=ETHUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetTicker24h(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetSupply_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/supply?asset=BTC", nil)
+	rr := httptest.NewRecorder()
+	h.GetSupply(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+	var body supplyResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.MaxSupply == nil || *body.MaxSupply != 21_000_000 {
+		t.Fatalf("body=%+v", body)
+	}
+}
+
+func TestGetIntervals(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/intervals", nil)
+	rr := httptest.NewRecorder()
+	h.GetIntervals(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetCandles_NotFound(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BAD&interval=1h", nil)
+	rr := httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetCandles_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BTCUSDT&limit=abc", nil)
+	rr := httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetCandles_TimeParams(t *testing.T) {
+	h := newTestHandler()
+	// Unix ms
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BTCUSDT&interval=1h&startTime=1700000000000&endTime=1700003600000", nil)
+	rr := httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unix ms status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// RFC3339
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BTCUSDT&interval=1h&startTime=2024-01-01T00:00:00Z&endTime=2024-01-02T00:00:00Z", nil)
+	rr = httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("rfc3339 status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// Invalid time
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/market/candles?symbol=BTCUSDT&startTime=not-a-time", nil)
+	rr = httptest.NewRecorder()
+	h.GetCandles(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("bad time status=%d", rr.Code)
+	}
+}
+
+func TestGetSupply_ViaSymbolParam(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/supply?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetSupply(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetSupply_MissingAsset(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/supply", nil)
+	rr := httptest.NewRecorder()
+	h.GetSupply(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetTicker24h_MissingSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/ticker/24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetTicker24h(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
