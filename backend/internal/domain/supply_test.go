@@ -23,9 +23,9 @@ func TestAssetSupply_FieldsAndNullables(t *testing.T) {
 		MaxSupply:         &max,
 		CurrentPriceUSD:   &price,
 		AsOf:              asOf,
-		Source:            "coingecko",
+		Source:            "binance",
 	}
-	if s.Asset != "BTC" || s.Source != "coingecko" {
+	if s.Asset != "BTC" || s.Source != "binance" {
 		t.Fatalf("supply=%+v", s)
 	}
 	if s.CirculatingSupply == nil || *s.CirculatingSupply != circ {
@@ -36,7 +36,7 @@ func TestAssetSupply_FieldsAndNullables(t *testing.T) {
 	}
 
 	// Assets without a hard cap leave MaxSupply nil (e.g. ETH-style).
-	noCap := AssetSupply{Asset: "ETH", Source: "coingecko"}
+	noCap := AssetSupply{Asset: "ETH", Source: "binance"}
 	if noCap.MaxSupply != nil || noCap.CirculatingSupply != nil {
 		t.Fatalf("expected nil optional fields, got %+v", noCap)
 	}

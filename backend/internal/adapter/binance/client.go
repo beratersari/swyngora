@@ -17,42 +17,53 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// Client implements domain.MarketDataPort against Binance public REST APIs.
-// No API key is required for market data endpoints used here.
+// Client implements domain.MarketDataPort and domain.SupplyPort against Binance.
+// No API key is required for the market-data and product-catalog endpoints used here.
 type Client struct {
-	baseURL     string
-	httpClient  *http.Client
-	candles     *cache.TTL[[]domain.Candle]
-	tickers     *cache.TTL[*domain.Ticker24h]
-	spotMarkets *cache.TTL[[]domain.SpotMarket]
-	spotSF      singleflight.Group
+	baseURL        string // official Spot REST (api.binance.com)
+	productBaseURL string // product catalog host (www.binance.com bapi)
+	httpClient     *http.Client
+	candles        *cache.TTL[[]domain.Candle]
+	tickers        *cache.TTL[*domain.Ticker24h]
+	spotMarkets    *cache.TTL[[]domain.SpotMarket]
+	supply         *cache.TTL[*domain.AssetSupply]
+	spotSF         singleflight.Group
+	supplySF       singleflight.Group
 }
 
 // Options configures the Binance client.
 type Options struct {
 	BaseURL         string
+	ProductBaseURL  string // default https://www.binance.com — product catalog with circulating supply
 	HTTPClient      *http.Client
 	CandleCache     *cache.TTL[[]domain.Candle]
 	TickerCache     *cache.TTL[*domain.Ticker24h]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
+	SupplyCache     *cache.TTL[*domain.AssetSupply]
 }
 
-// NewClient constructs a Binance market-data client.
+// NewClient constructs a Binance market-data + supply client.
 func NewClient(opts Options) *Client {
 	base := strings.TrimRight(opts.BaseURL, "/")
 	if base == "" {
 		base = "https://api.binance.com"
+	}
+	productBase := strings.TrimRight(opts.ProductBaseURL, "/")
+	if productBase == "" {
+		productBase = "https://www.binance.com"
 	}
 	hc := opts.HTTPClient
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Client{
-		baseURL:     base,
-		httpClient:  hc,
-		candles:     opts.CandleCache,
-		tickers:     opts.TickerCache,
-		spotMarkets: opts.SpotMarketCache,
+		baseURL:        base,
+		productBaseURL: productBase,
+		httpClient:     hc,
+		candles:        opts.CandleCache,
+		tickers:        opts.TickerCache,
+		spotMarkets:    opts.SpotMarketCache,
+		supply:         opts.SupplyCache,
 	}
 }
 
@@ -232,6 +243,12 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		bySymbol[t.Symbol] = t
 	}
 
+	// Exclude tokenized equities (bStocks) and commodity wrappers from crypto spot list.
+	nonCryptoBases, err := c.fetchNonCryptoBases(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]domain.SpotMarket, 0, len(info.Symbols))
 	for _, s := range info.Symbols {
 		if !s.IsSpotTradingAllowed {
@@ -239,6 +256,10 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		}
 		// Prefer explicit SPOT permission when the array is present.
 		if len(s.Permissions) > 0 && !hasPermission(s.Permissions, "SPOT") {
+			continue
+		}
+		base := strings.ToUpper(strings.TrimSpace(s.BaseAsset))
+		if _, skip := nonCryptoBases[base]; skip {
 			continue
 		}
 		m := domain.SpotMarket{
@@ -264,6 +285,50 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		c.spotMarkets.Set(cacheKey, append([]domain.SpotMarket(nil), out...))
 	}
 	return out, nil
+}
+
+// fetchNonCryptoBases returns base assets tagged as non-crypto on the product catalog
+// (bStocks, tCommodities). Used to keep the spot list crypto-only.
+func (c *Client) fetchNonCryptoBases(ctx context.Context) (map[string]struct{}, error) {
+	params := url.Values{}
+	params.Set("includeEtf", "true")
+	body, err := c.getProduct(ctx, productCatalogPath, params)
+	if err != nil {
+		return nil, err
+	}
+	var envelope productCatalogResponse
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("%w: decode product catalog: %v", domain.ErrUpstream, err)
+	}
+	if !envelope.Success && envelope.Code != "" && envelope.Code != "000000" {
+		return nil, fmt.Errorf("%w: binance product catalog code=%s msg=%s",
+			domain.ErrUpstream, envelope.Code, envelope.Message)
+	}
+	out := make(map[string]struct{})
+	for _, row := range envelope.Data {
+		if !hasNonCryptoTag(row.Tags) {
+			continue
+		}
+		base := strings.ToUpper(strings.TrimSpace(row.BaseAsset))
+		if base != "" {
+			out[base] = struct{}{}
+		}
+	}
+	return out, nil
+}
+
+// productCatalogResponse is the www.binance.com product list envelope.
+type productCatalogResponse struct {
+	Code    string              `json:"code"`
+	Message string              `json:"message"`
+	Success bool                `json:"success"`
+	Data    []productCatalogRow `json:"data"`
+}
+
+type productCatalogRow struct {
+	Symbol    string   `json:"s"`
+	BaseAsset string   `json:"b"`
+	Tags      []string `json:"tags"`
 }
 
 func hasPermission(perms []string, want string) bool {

@@ -73,7 +73,7 @@ type SpotMarket struct {
 	QuoteVolume string
 	TradeCount  int64
 
-	// Supply snapshot (from free CoinGecko metadata).
+	// Supply snapshot (from Binance product catalog circulating supply).
 	CirculatingSupply *float64
 	TotalSupply       *float64
 	MaxSupply         *float64

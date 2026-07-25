@@ -4,9 +4,9 @@ info:
   description: |
     Public market data for Swyngora (v0.1).
 
-    - Candles, 24h volume/ticker, and spot market listing are sourced from **Binance** public REST APIs.
-    - Circulating / total / max supply is sourced from free **CoinGecko** metadata
-      (Binance market endpoints do not expose supply).
+    - Candles, 24h volume/ticker, and spot market listing are sourced from **Binance** public Spot REST APIs.
+    - Circulating / total / max supply is sourced from the **Binance** public marketing
+      symbol list, refreshed on a daily schedule. Max supply is null when undefined.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -220,10 +220,12 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
-      summary: Asset circulating / total / max supply
+      summary: Asset circulating / total / max supply (Binance)
       description: |
-        Supply metadata from CoinGecko (free). Accepts base asset (`BTC`) or
-        a pair (`BTCUSDT`); quote suffixes are stripped for convenience.
+        Supply metrics from the Binance marketing symbol list snapshot (cache-only
+        on the request path). Accepts base asset (`BTC`) or a pair (`BTCUSDT`);
+        USD-stable quote suffixes are stripped for convenience. `maxSupply` is null
+        when Binance does not publish a hard cap.
       operationId: getSupply
       tags: [Market]
       parameters:

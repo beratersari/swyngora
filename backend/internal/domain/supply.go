@@ -4,8 +4,8 @@ import "time"
 
 // AssetSupply holds circulating / total / max supply for an asset.
 //
-// Note: Binance public market APIs do not expose supply metrics. This data is
-// sourced from a free public metadata provider (CoinGecko) and is informational.
+// Loaded from Binance's public marketing symbol list (circulatingSupply, totalSupply,
+// maxSupply). Max remains nil when Binance does not define a hard cap.
 type AssetSupply struct {
 	// Asset is the base asset ticker, uppercased (e.g. "BTC").
 	Asset string
@@ -23,7 +23,7 @@ type AssetSupply struct {
 	CurrentPriceUSD *float64
 	// AsOf is when this snapshot was retrieved or produced.
 	AsOf time.Time
-	// Source identifies the data provider (e.g. "coingecko").
+	// Source identifies the data provider (e.g. "binance").
 	Source string
 }
 

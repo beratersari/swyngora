@@ -6,7 +6,7 @@ Expose first market-data APIs so clients can:
 
 1. Load OHLCV candlesticks for a Binance pair at multiple intervals
 2. Read 24-hour volume and price statistics
-3. Read circulating / total / max supply for an asset
+3. Read circulating supply for an asset (and market-cap columns on the spot list)
 
 ## Behavior
 
@@ -17,17 +17,17 @@ Expose first market-data APIs so clients can:
 
 ### Spot markets — `GET /api/v1/market/spot`
 
-- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr`
+- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded)
 - **Params:**
   - `q` — search substring (symbol / base / quote)
   - `quote`, `base`, `status` — filters
-  - `sort` — `quoteVolume` (default), `volume`, `priceChangePercent`, `lastPrice`, `tradeCount`, `symbol`, `baseAsset`
+  - `sort` — `quoteVolume` (default), `volume`, `priceChangePercent`, `lastPrice`, `tradeCount`, `symbol`, `baseAsset`, mcap fields
   - `order` — `asc` | `desc` (default `desc` for metrics)
   - `limit` (default 50, max 500), `offset` (default 0)
 - **Returns:** paged list with `total` match count, 24h metrics, supply, and market caps
   - `marketCapCirculating` / `marketCapTotal` / `marketCapMax` = USD price × supply
-  - `marketCapMax` is the string `"∞"` when max supply is undefined
-  - Supply/mcap is **not** fetched per user request: daily CoinGecko bulk refresh populates cache; requests are cache-only
+  - `marketCapMax` is `"∞"` when max supply is undefined
+  - Supply/mcap is **not** fetched per user request: daily Binance marketing symbol-list refresh populates cache; requests are cache-only
   - base/quote/status are filter params only (not list columns)
 
 ### Candles — `GET /api/v1/market/candles`
@@ -44,9 +44,9 @@ Expose first market-data APIs so clients can:
 
 ### Supply — `GET /api/v1/market/supply`
 
-- **Source:** CoinGecko free public API (not Binance — supply is not on Binance public market endpoints)
+- **Source:** Binance marketing symbol list (`circulatingSupply`, `totalSupply`, `maxSupply`); not Spot REST kline/ticker APIs
 - **Params:** `asset` or `symbol` (e.g. `BTC` or `BTCUSDT`)
-- **Returns:** circulatingSupply, totalSupply, maxSupply (nullable), optional USD price, `source: coingecko`
+- **Returns:** circulating / total / max (max null when undefined), optional USD price, `source: binance`
 
 ### Caching
 
@@ -56,9 +56,8 @@ In-memory TTL caches with periodic cleanup:
 |---|---|
 | Candles | 30s |
 | Spot markets (joined list) | 30s |
-| Supply / mcap snapshot | Daily @ 03:00 (default UTC) + startup; cache TTL 26h |
+| Supply snapshot | Daily @ 03:00 UTC (default) + startup; cache TTL 26h |
 | Ticker | 15s |
-| Supply | 5m |
 
 ## Code locations
 
@@ -66,8 +65,7 @@ In-memory TTL caches with periodic cleanup:
 |---|---|
 | Domain | `backend/internal/domain/` |
 | Use cases | `backend/internal/service/market/` |
-| Binance adapter | `backend/internal/adapter/binance/` |
-| CoinGecko adapter | `backend/internal/adapter/coingecko/` |
+| Binance adapter | `backend/internal/adapter/binance/` (market + supply) |
 | HTTP | `backend/internal/transport/http/` |
 | OpenAPI | `backend/api/openapi/openapi.yaml` |
 | Test UI | `simple-frontend/` |
@@ -78,25 +76,13 @@ In-memory TTL caches with periodic cleanup:
 cd backend && go test ./...
 go run ./cmd/server
 # another terminal
-curl -s 'http://localhost:8080/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=3'
-curl -s 'http://localhost:8080/api/v1/market/ticker/24h?symbol=BTCUSDT'
-curl -s 'http://localhost:8080/api/v1/market/supply?asset=BTC'
+curl -s 'http://localhost:8080/api/v1/market/supply?asset=BTC' | jq .
+curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&limit=20' | jq '.items[] | {symbol, circulatingSupply, marketCapCirculating}'
 ```
-
-Or open `simple-frontend/` via a static server and use **Fetch all**.
-
-## Errors
-
-| HTTP | Code | When |
-|---|---|---|
-| 400 | `invalid_argument` | Missing/invalid params |
-| 404 | `not_found` | Unknown symbol/asset |
-| 429 | `rate_limited` | Upstream rate limit / ban |
-| 502 | `upstream_error` | Upstream failure / bad payload |
 
 ## Known limitations
 
-- No WebSocket streaming yet (REST only)
-- Supply depends on CoinGecko rate limits and free-tier availability
-- No auth; public read-only endpoints for local/dev
-- Single exchange (Binance) for market data
+- Marketing symbol list is a public web API; response shape can change — adapter isolation + tests required
+- Coverage is Binance-listed marketing symbols (~470), not every historical exchangeInfo pair
+- Fiat pairs (e.g. EUR) are not crypto supply
+- Max supply is null for coins without a hard cap (e.g. ETH)

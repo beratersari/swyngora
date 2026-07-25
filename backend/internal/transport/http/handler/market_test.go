@@ -60,7 +60,7 @@ func (stubSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSuppl
 		Name:      "Bitcoin",
 		MaxSupply: &max,
 		AsOf:      time.Unix(0, 0).UTC(),
-		Source:    "coingecko",
+		Source:    "binance",
 	}, nil
 }
 

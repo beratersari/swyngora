@@ -181,7 +181,7 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 		CurrentPriceUSD:   domain.CloneFloatPtr(sup.CurrentPriceUSD),
 		AsOf:              sup.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:            sup.Source,
-		Note:              "Supply metrics are not available from Binance; served from a daily CoinGecko snapshot cache (default refresh 03:00 UTC, plus startup). Request path does not call CoinGecko.",
+		Note:              "Circulating / total / max supply from Binance marketing symbol list (daily snapshot @ 03:00 UTC plus startup). Max may be null when undefined. Request path is cache-only.",
 	})
 }
 

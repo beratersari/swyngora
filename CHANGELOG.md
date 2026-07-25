@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Supply (circulating / total / max) comes **only from Binance** marketing symbol list; CoinGecko adapter removed
+- Supply snapshot still daily @ 03:00 UTC (+ startup); request path remains cache-only
+- Max supply is null when Binance does not publish a hard cap
+- Spot list and supply exclude non-crypto products (`bStocks` e.g. NVDAB/TSLAB, `tCommodities` e.g. PAXG)
+
 ### Added
 
 - Daily supply/mcap snapshot refresh (default 03:00 UTC); user requests are cache-only

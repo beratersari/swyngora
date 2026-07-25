@@ -11,7 +11,6 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -30,7 +29,6 @@ func main() {
 	tickerCache := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	// Long-lived supply snapshot (daily refresh + safety TTL).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
-	symbolCache := cache.New[string](24 * time.Hour)
 	spotMarketCache := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 
 	stopCleanup := make(chan struct{})
@@ -43,7 +41,6 @@ func main() {
 				candleCache.Cleanup()
 				tickerCache.Cleanup()
 				supplyCache.Cleanup()
-				symbolCache.Cleanup()
 				spotMarketCache.Cleanup()
 			case <-stopCleanup:
 				return
@@ -51,31 +48,26 @@ func main() {
 		}
 	}()
 
+	// Single Binance client: Spot REST (candles/ticker/spot) + product catalog (circulating supply).
 	binanceClient := binance.NewClient(binance.Options{
 		BaseURL:         cfg.BinanceBaseURL,
+		ProductBaseURL:  cfg.BinanceProductBaseURL,
 		HTTPClient:      httpClient,
 		CandleCache:     candleCache,
 		TickerCache:     tickerCache,
 		SpotMarketCache: spotMarketCache,
-	})
-	geckoClient := coingecko.NewClient(coingecko.Options{
-		BaseURL:          cfg.CoinGeckoBaseURL,
-		HTTPClient:       httpClient,
-		SupplyCache:      supplyCache,
-		SymbolCache:      symbolCache,
-		RefreshPages:     cfg.SupplyRefreshPages,
-		RefreshPageDelay: cfg.SupplyRefreshPageDelay,
+		SupplyCache:     supplyCache,
 	})
 
-	marketSvc := market.New(binanceClient, geckoClient)
+	marketSvc := market.New(binanceClient, binanceClient)
 	handler := httpx.NewRouter(marketSvc)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Daily supply/mcap snapshot (default 03:00 UTC). User requests are cache-only.
+	// Daily supply snapshot from Binance product catalog (default 03:00 UTC). Requests are cache-only.
 	job := &supplyjob.Runner{
-		Supply:     geckoClient,
+		Supply:     binanceClient,
 		Hour:       cfg.SupplyRefreshHour,
 		Minute:     cfg.SupplyRefreshMinute,
 		Loc:        cfg.SupplyRefreshLocation,

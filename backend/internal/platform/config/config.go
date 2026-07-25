@@ -9,22 +9,20 @@ import (
 
 // Config holds process configuration from the environment.
 type Config struct {
-	HTTPAddr           string
-	BinanceBaseURL     string
-	CoinGeckoBaseURL   string
-	HTTPClientTimeout  time.Duration
-	CandleCacheTTL     time.Duration
-	TickerCacheTTL     time.Duration
-	SupplyCacheTTL     time.Duration
-	CacheCleanupEvery  time.Duration
-	SpotMarketCacheTTL time.Duration
+	HTTPAddr              string
+	BinanceBaseURL        string
+	BinanceProductBaseURL string
+	HTTPClientTimeout     time.Duration
+	CandleCacheTTL        time.Duration
+	TickerCacheTTL        time.Duration
+	SupplyCacheTTL        time.Duration
+	CacheCleanupEvery     time.Duration
+	SpotMarketCacheTTL    time.Duration
 
-	// Daily supply/mcap snapshot refresh (CoinGecko). User requests read cache only.
-	SupplyRefreshHour     int
-	SupplyRefreshMinute   int
-	SupplyRefreshLocation *time.Location
-	SupplyRefreshPages    int
-	SupplyRefreshPageDelay time.Duration
+	// Daily supply snapshot refresh (Binance product catalog). User requests read cache only.
+	SupplyRefreshHour      int
+	SupplyRefreshMinute    int
+	SupplyRefreshLocation  *time.Location
 	SupplyRefreshOnStartup bool
 }
 
@@ -32,12 +30,12 @@ type Config struct {
 func Load() Config {
 	loc := loadLocation(getenv("SUPPLY_REFRESH_TZ", "UTC"))
 	return Config{
-		HTTPAddr:           getenv("HTTP_ADDR", ":8080"),
-		BinanceBaseURL:     getenv("BINANCE_BASE_URL", "https://api.binance.com"),
-		CoinGeckoBaseURL:   getenv("COINGECKO_BASE_URL", "https://api.coingecko.com"),
-		HTTPClientTimeout:  durationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
-		CandleCacheTTL:     durationEnv("CANDLE_CACHE_TTL", 30*time.Second),
-		TickerCacheTTL:     durationEnv("TICKER_CACHE_TTL", 15*time.Second),
+		HTTPAddr:              getenv("HTTP_ADDR", ":8080"),
+		BinanceBaseURL:        getenv("BINANCE_BASE_URL", "https://api.binance.com"),
+		BinanceProductBaseURL: getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
+		HTTPClientTimeout:     durationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
+		CandleCacheTTL:        durationEnv("CANDLE_CACHE_TTL", 30*time.Second),
+		TickerCacheTTL:        durationEnv("TICKER_CACHE_TTL", 15*time.Second),
 		// Safety TTL slightly over 24h so a late refresh still serves yesterday's snapshot.
 		SupplyCacheTTL:     durationEnv("SUPPLY_CACHE_TTL", 26*time.Hour),
 		CacheCleanupEvery:  durationEnv("CACHE_CLEANUP_EVERY", 1*time.Minute),
@@ -46,8 +44,6 @@ func Load() Config {
 		SupplyRefreshHour:      intEnv("SUPPLY_REFRESH_HOUR", 3),
 		SupplyRefreshMinute:    intEnv("SUPPLY_REFRESH_MINUTE", 0),
 		SupplyRefreshLocation:  loc,
-		SupplyRefreshPages:     intEnv("SUPPLY_REFRESH_PAGES", 4), // 4×250 ≈ top 1000 by mcap
-		SupplyRefreshPageDelay: durationEnv("SUPPLY_REFRESH_PAGE_DELAY", 2*time.Second),
 		SupplyRefreshOnStartup: boolEnv("SUPPLY_REFRESH_ON_STARTUP", true),
 	}
 }

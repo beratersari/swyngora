@@ -93,7 +93,7 @@ const (
 )
 
 // ListSpotMarkets lists Binance spot pairs with search, metric sort, and pagination.
-// Market-cap fields are enriched from CoinGecko supply (best-effort; missing assets stay null).
+// Market-cap fields are enriched from Binance circulating supply (best-effort; missing assets stay null).
 func (s *Service) ListSpotMarkets(ctx context.Context, q domain.SpotListQuery) (*domain.SpotListResult, error) {
 	q, err := normalizeSpotListQuery(q)
 	if err != nil {
@@ -199,7 +199,7 @@ func applySupplyAndMcap(m *domain.SpotMarket, sup *domain.AssetSupply) {
 }
 
 // usdPriceForMcap prefers Binance last price when the quote is a USD stablecoin;
-// otherwise uses CoinGecko USD price when available.
+// otherwise uses the supply snapshot USD price when available (from a USDT-class pair).
 func usdPriceForMcap(m domain.SpotMarket, sup *domain.AssetSupply) *float64 {
 	q := strings.ToUpper(m.QuoteAsset)
 	switch q {

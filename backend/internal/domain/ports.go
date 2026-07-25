@@ -13,7 +13,7 @@ type MarketDataPort interface {
 
 // SupplyPort serves asset supply / mcap inputs for user requests.
 // Implementations MUST serve GetSupply from cache only (no live upstream on request path).
-// Refresh populates the cache (e.g. daily CoinGecko snapshot).
+// Refresh populates the cache (e.g. daily Binance product-catalog snapshot).
 type SupplyPort interface {
 	GetSupply(ctx context.Context, asset string) (*AssetSupply, error)
 	// Refresh loads a bulk snapshot into cache. Returns number of assets stored.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -218,8 +219,8 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 	hits := map[string]int{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits[r.URL.Path]++
-		switch r.URL.Path {
-		case "/api/v3/exchangeInfo":
+		switch {
+		case r.URL.Path == "/api/v3/exchangeInfo":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"symbols": []map[string]any{
 					{
@@ -228,6 +229,18 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 					},
 					{
 						"symbol": "ETHUSDT", "status": "TRADING", "baseAsset": "ETH", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "NVDABUSDT", "status": "TRADING", "baseAsset": "NVDAB", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "TSLABUSDT", "status": "TRADING", "baseAsset": "TSLAB", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "PAXGUSDT", "status": "TRADING", "baseAsset": "PAXG", "quoteAsset": "USDT",
 						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
 					},
 					{
@@ -240,10 +253,24 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 					},
 				},
 			})
-		case "/api/v3/ticker/24hr":
+		case r.URL.Path == "/api/v3/ticker/24hr":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"symbol": "BTCUSDT", "lastPrice": "100", "volume": "10", "quoteVolume": "1000", "priceChangePercent": "1.5", "count": 9},
 				{"symbol": "ETHUSDT", "lastPrice": "50", "volume": "20", "quoteVolume": "500", "priceChangePercent": "-2", "count": 3},
+				{"symbol": "NVDABUSDT", "lastPrice": "200", "volume": "1", "quoteVolume": "200", "count": 1},
+				{"symbol": "TSLABUSDT", "lastPrice": "300", "volume": "1", "quoteVolume": "300", "count": 1},
+				{"symbol": "PAXGUSDT", "lastPrice": "2000", "volume": "1", "quoteVolume": "2000", "count": 1},
+			})
+		case strings.Contains(r.URL.Path, "get-products"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": "000000", "success": true,
+				"data": []map[string]any{
+					{"s": "BTCUSDT", "b": "BTC", "tags": []string{"Payments"}},
+					{"s": "ETHUSDT", "b": "ETH", "tags": []string{"Layer1_Layer2"}},
+					{"s": "NVDABUSDT", "b": "NVDAB", "tags": []string{"bStocks"}},
+					{"s": "TSLABUSDT", "b": "TSLAB", "tags": []string{"bStocks"}},
+					{"s": "PAXGUSDT", "b": "PAXG", "tags": []string{"tCommodities"}},
+				},
 			})
 		default:
 			http.NotFound(w, r)
@@ -254,6 +281,7 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 	spotCache := cache.New[[]domain.SpotMarket](time.Minute)
 	c := NewClient(Options{
 		BaseURL:         srv.URL,
+		ProductBaseURL:  srv.URL,
 		HTTPClient:      srv.Client(),
 		SpotMarketCache: spotCache,
 	})
@@ -262,11 +290,20 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(list) != 2 {
-		t.Fatalf("len=%d want 2 (spot only): %+v", len(list), list)
+		t.Fatalf("len=%d want 2 crypto spot only: %+v", len(list), list)
 	}
 	bySym := map[string]domain.SpotMarket{}
 	for _, m := range list {
 		bySym[m.Symbol] = m
+	}
+	if _, ok := bySym["NVDABUSDT"]; ok {
+		t.Fatal("expected bStocks NVDABUSDT excluded")
+	}
+	if _, ok := bySym["TSLABUSDT"]; ok {
+		t.Fatal("expected bStocks TSLABUSDT excluded")
+	}
+	if _, ok := bySym["PAXGUSDT"]; ok {
+		t.Fatal("expected tCommodities PAXGUSDT excluded")
 	}
 	if bySym["BTCUSDT"].QuoteVolume != "1000" || bySym["ETHUSDT"].LastPrice != "50" {
 		t.Fatalf("metrics=%+v", bySym)

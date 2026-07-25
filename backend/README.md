@@ -1,6 +1,6 @@
 # Swyngora Backend
 
-Go HTTP API for market data. First slice: **Binance** candles + 24h volume/ticker, and **asset supply** (circulating / total / max) from free CoinGecko metadata.
+Go HTTP API for market data: **Binance** candles, 24h volume/ticker, spot list, and **circulating supply** from the Binance product catalog.
 
 ## Architecture (N-layered)
 
@@ -9,7 +9,7 @@ Go HTTP API for market data. First slice: **Binance** candles + 24h volume/ticke
 | Transport | `internal/transport/http` | HTTP handlers, CORS, JSON mapping |
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
-| Infrastructure | `internal/adapter/*` | Binance, CoinGecko, TTL cache |
+| Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache |
 | Platform | `internal/platform/config` | Env config |
 
 OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
@@ -23,13 +23,13 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&sort=quoteVolume` | List/search/sort spot markets |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
-| `GET` | `/api/v1/market/supply?asset=BTC` | Circulating / total / max supply |
+| `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
 
 Intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`.
 
 Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
-**Supply / mcap note:** Binance does not expose supply. CoinGecko supply is loaded on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only** and never call CoinGecko on the request path.
+**Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only**. Max is null when Binance does not define a hard cap (max mcap may show as infinite).
 
 ## Run
 
@@ -44,18 +44,16 @@ go run ./cmd/server
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
-| `BINANCE_BASE_URL` | `https://api.binance.com` | Binance REST base |
-| `COINGECKO_BASE_URL` | `https://api.coingecko.com` | CoinGecko REST base |
+| `BINANCE_BASE_URL` | `https://api.binance.com` | Binance Spot REST base |
+| `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
 | `HTTP_CLIENT_TIMEOUT` | `15s` | Upstream HTTP timeout |
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
-| `SUPPLY_CACHE_TTL` | `26h` | Safety TTL for daily supply/mcap snapshot |
+| `SUPPLY_CACHE_TTL` | `26h` | Safety TTL for daily supply snapshot |
 | `SPOT_MARKET_CACHE_TTL` | `30s` | Joined spot list TTL |
-| `SUPPLY_REFRESH_HOUR` | `3` | Daily CoinGecko snapshot hour (local to TZ) |
+| `SUPPLY_REFRESH_HOUR` | `3` | Daily product-catalog snapshot hour (local to TZ) |
 | `SUPPLY_REFRESH_MINUTE` | `0` | Daily snapshot minute |
 | `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule |
-| `SUPPLY_REFRESH_PAGES` | `4` | CoinGecko markets pages × 250 coins |
-| `SUPPLY_REFRESH_PAGE_DELAY` | `2s` | Delay between market pages |
 | `SUPPLY_REFRESH_ON_STARTUP` | `true` | Run one snapshot load on process start |
 | `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup |
 
@@ -68,7 +66,7 @@ go test ./...
 go vet ./...
 ```
 
-Unit tests mock upstream HTTP; they do not call live Binance/CoinGecko.
+Unit tests mock upstream HTTP; they do not call live Binance.
 
 ### Test coverage by layer (AGENTS.md §6.3 / §6.7)
 
@@ -76,8 +74,7 @@ Unit tests mock upstream HTTP; they do not call live Binance/CoinGecko.
 |---|---|---|
 | Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go` |
 | Application | `internal/service/market` | `service_test.go` (fakes for ports) |
-| Infrastructure | `internal/adapter/binance` | `client_test.go` (`httptest`) |
-| Infrastructure | `internal/adapter/coingecko` | `client_test.go` (`httptest`) |
+| Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go` |
 | Transport middleware | `internal/transport/http/middleware` | `cors_test.go` |
