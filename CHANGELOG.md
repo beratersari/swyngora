@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Technical indicators: **RSI** (Wilder) and **EMA** via `GET /api/v1/market/indicators`
+- **Watchlist** API (`/api/v1/watchlist`) + dashboard stars / filter (client id + localStorage)
 - Multi-exchange spot data: **Coinbase** + **Bybit** via `?exchange=`; `GET /api/v1/market/exchanges`
 - Binance product-catalog **tags** on spot markets: `tags` field, `tag`/`tags` filter (OR), `sort=tags`, and `GET /api/v1/market/tags`
 - Simple frontend tag filter dropdown and Tags column

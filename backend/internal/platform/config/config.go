@@ -60,8 +60,8 @@ func Load() Config {
 		SupplyRefreshLocation:  loc,
 		SupplyRefreshOnStartup: boolEnv("SUPPLY_REFRESH_ON_STARTUP", true),
 
-		RateLimitRPS:   floatEnv("RATE_LIMIT_RPS", 20),
-		RateLimitBurst: positiveIntEnv("RATE_LIMIT_BURST", 40),
+		RateLimitRPS:   floatEnv("RATE_LIMIT_RPS", 40),
+		RateLimitBurst: positiveIntEnv("RATE_LIMIT_BURST", 80),
 	}
 }
 

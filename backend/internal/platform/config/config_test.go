@@ -45,7 +45,7 @@ func TestLoad_Defaults(t *testing.T) {
 	if !cfg.SupplyRefreshOnStartup {
 		t.Fatal("startup refresh default true")
 	}
-	if cfg.RateLimitRPS != 20 || cfg.RateLimitBurst != 40 {
+	if cfg.RateLimitRPS != 40 || cfg.RateLimitBurst != 80 {
 		t.Fatalf("rate limit %v/%d", cfg.RateLimitRPS, cfg.RateLimitBurst)
 	}
 }

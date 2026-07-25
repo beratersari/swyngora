@@ -15,8 +15,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
 )
 
@@ -95,7 +97,9 @@ func main() {
 		domain.ExchangeBybit:    bybitClient,
 	}, binanceClient)
 
-	handler := httpx.NewRouterWithOptions(marketSvc, httpx.RouterOptions{
+	watchSvc := watchlist.New(watchliststore.NewMemory())
+
+	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
 		RateLimitRPS:   cfg.RateLimitRPS,
 		RateLimitBurst: cfg.RateLimitBurst,
 	})

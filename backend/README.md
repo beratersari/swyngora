@@ -23,6 +23,11 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/intervals` | Candle intervals (per `exchange`) |
 | `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
+| `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
+| `GET` | `/api/v1/watchlist` | Get watchlist (`clientId` / `X-Client-Id`) |
+| `POST` | `/api/v1/watchlist/items` | Add symbol to watchlist |
+| `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove from watchlist |
+| `PUT` | `/api/v1/watchlist` | Replace entire watchlist |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |

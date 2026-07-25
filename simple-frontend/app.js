@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "swyngora.simple-frontend.columns.v2";
+const STORAGE_KEY = "swyngora.simple-frontend.columns.v4";
 const SORT_STORAGE_KEY = "swyngora.simple-frontend.sort.v1";
 
 /** @typedef {{ id: string, label: string, sortKey: string|null, defaultVisible: boolean, align?: 'left'|'right', format: (row: object) => string }} ColumnDef */
@@ -33,6 +33,9 @@ const COL_BY_ID = Object.fromEntries(COLUMN_DEFS.map((c) => [c.id, c]));
 const ALL_IDS = COLUMN_DEFS.map((c) => c.id);
 
 const LIVE_STORAGE_KEY = "swyngora.simple-frontend.liveInterval.v1";
+const WATCHLIST_STORAGE_KEY = "swyngora.simple-frontend.watchlist.v1";
+const CLIENT_ID_KEY = "swyngora.simple-frontend.clientId.v1";
+const API_BASE_KEY = "swyngora.simple-frontend.apiBase.v1";
 /** Fields that flash green/red when the numeric value moves between polls. */
 const ANIMATED_FIELDS = new Set([
   "lastPrice",
@@ -50,7 +53,6 @@ const els = {
   status: $("status"),
   spotQ: $("spotQ"),
   spotExchange: $("spotExchange"),
-  spotQuote: $("spotQuote"),
   spotTag: $("spotTag"),
   spotLimit: $("spotLimit"),
   liveInterval: $("liveInterval"),
@@ -64,16 +66,10 @@ const els = {
   btnColumnsAll: $("btnColumnsAll"),
   btnColumnsDefaults: $("btnColumnsDefaults"),
   btnColumnsMinimal: $("btnColumnsMinimal"),
-  detailSection: $("detailSection"),
-  detailSymbol: $("detailSymbol"),
   selectedHint: $("selectedHint"),
-  interval: $("interval"),
-  limit: $("limit"),
-  ticker: $("ticker"),
-  supply: $("supply"),
-  candlesBody: $("candlesBody"),
-  btnDetailRefresh: $("btnDetailRefresh"),
-  btnDetailClose: $("btnDetailClose"),
+  watchlistChips: $("watchlistChips"),
+  watchMeta: $("watchMeta"),
+  watchOnly: $("watchOnly"),
 };
 
 /**
@@ -88,6 +84,198 @@ let sortState = loadSortState();
 
 /** @type {string|null} */
 let selectedSymbol = null;
+
+/** @type {{ exchange: string, symbol: string }[]} */
+let watchlist = loadWatchlistLocal();
+
+function clientId() {
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY);
+    if (!id) {
+      id = "web-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+      localStorage.setItem(CLIENT_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    return "default";
+  }
+}
+
+function watchKey(exchange, symbol) {
+  return `${String(exchange || "binance").toLowerCase()}|${String(symbol || "").toUpperCase()}`;
+}
+
+function loadWatchlistLocal() {
+  try {
+    const raw = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((x) => x && x.symbol)
+      .map((x) => ({
+        exchange: String(x.exchange || "binance").toLowerCase(),
+        symbol: String(x.symbol).toUpperCase(),
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function saveWatchlistLocal() {
+  localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(watchlist));
+}
+
+function isWatched(exchange, symbol) {
+  const k = watchKey(exchange, symbol);
+  return watchlist.some((w) => watchKey(w.exchange, w.symbol) === k);
+}
+
+async function syncWatchlistFromApi() {
+  try {
+    const data = await apiGet(`/api/v1/watchlist?clientId=${encodeURIComponent(clientId())}`);
+    if (Array.isArray(data.items)) {
+      watchlist = data.items.map((x) => ({
+        exchange: String(x.exchange || "binance").toLowerCase(),
+        symbol: String(x.symbol).toUpperCase(),
+      }));
+      saveWatchlistLocal();
+      renderWatchlist();
+    }
+  } catch {
+    /* offline / backend down — keep local */
+    renderWatchlist();
+  }
+}
+
+/** Update ★ buttons in the open table without rebuilding all rows. */
+function paintStarButtons() {
+  const ex = els.spotExchange?.value || "binance";
+  els.spotBody?.querySelectorAll("[data-star]").forEach((btn) => {
+    const sym = btn.getAttribute("data-star");
+    const on = isWatched(ex, sym);
+    btn.classList.toggle("on", on);
+    btn.textContent = on ? "★" : "☆";
+    btn.setAttribute("aria-label", on ? `Unwatch ${sym}` : `Watch ${sym}`);
+    btn.title = on ? "Remove from watchlist" : "Add to watchlist";
+  });
+}
+
+/**
+ * Optimistic watchlist update: UI first, API in background.
+ * Avoids 2–3s delay from awaiting network + full table rebuild.
+ */
+function addWatch(exchange, symbol) {
+  exchange = String(exchange || "binance").toLowerCase();
+  symbol = String(symbol || "").toUpperCase();
+  if (!symbol) return;
+  if (!isWatched(exchange, symbol)) {
+    watchlist.push({ exchange, symbol });
+    saveWatchlistLocal();
+  }
+  renderWatchlist();
+  paintStarButtons();
+  // Background sync — do not block click.
+  apiSend("POST", "/api/v1/watchlist/items", {
+    clientId: clientId(),
+    exchange,
+    symbol,
+  }).catch((e) => console.warn("watchlist add api", e));
+}
+
+function removeWatch(exchange, symbol) {
+  exchange = String(exchange || "binance").toLowerCase();
+  symbol = String(symbol || "").toUpperCase();
+  watchlist = watchlist.filter((w) => watchKey(w.exchange, w.symbol) !== watchKey(exchange, symbol));
+  saveWatchlistLocal();
+  renderWatchlist();
+  paintStarButtons();
+  // If "watchlist only" is on, drop the row immediately from the table.
+  if (els.watchOnly?.checked && lastSpotData?.items) {
+    lastSpotData = {
+      ...lastSpotData,
+      items: lastSpotData.items.filter(
+        (m) => String(m.symbol || "").toUpperCase() !== symbol
+      ),
+      total: Math.max(0, (lastSpotData.total || 0) - 1),
+    };
+    renderSpotBody(lastSpotData, { forceFull: true });
+  }
+  const q = new URLSearchParams({
+    clientId: clientId(),
+    exchange,
+    symbol,
+  });
+  apiSend("DELETE", `/api/v1/watchlist/items?${q.toString()}`).catch((e) =>
+    console.warn("watchlist remove api", e)
+  );
+}
+
+function toggleWatch(exchange, symbol) {
+  if (isWatched(exchange, symbol)) removeWatch(exchange, symbol);
+  else addWatch(exchange, symbol);
+}
+
+function renderWatchlist() {
+  if (!els.watchlistChips) return;
+  const ex = els.spotExchange?.value || "binance";
+  if (els.watchMeta) {
+    els.watchMeta.textContent = `· ${watchlist.length} saved`;
+  }
+  if (!watchlist.length) {
+    els.watchlistChips.innerHTML = `<span class="muted">No watched symbols yet — click ★ on a row.</span>`;
+    return;
+  }
+  els.watchlistChips.innerHTML = watchlist
+    .map((w) => {
+      const label = `${escapeHtml(w.symbol)} <span class="muted">${escapeHtml(w.exchange)}</span>`;
+      return `<span class="watch-chip" data-ex="${escapeAttr(w.exchange)}" data-sym="${escapeAttr(w.symbol)}" title="Open detail">
+        <span class="watch-label">${label}</span>
+        <button type="button" class="watch-x" data-remove="1" title="Remove" aria-label="Remove ${escapeAttr(w.symbol)}">×</button>
+      </span>`;
+    })
+    .join("");
+  els.watchlistChips.querySelectorAll(".watch-chip").forEach((chip) => {
+    const wEx = chip.getAttribute("data-ex");
+    const wSym = chip.getAttribute("data-sym");
+    chip.querySelector(".watch-label")?.addEventListener("click", () => {
+      openDetailPage(wSym, wEx);
+    });
+    chip.querySelector(".watch-label")?.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      openDetailPage(wSym, wEx);
+    });
+    chip.querySelector("[data-remove]")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeWatch(wEx, wSym);
+    });
+  });
+}
+
+async function apiSend(method, path, body) {
+  const url = `${baseUrl()}${path}`;
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Client-Id": clientId(),
+    },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Non-JSON (${res.status})`);
+  }
+  if (!res.ok) {
+    const msg = data?.error?.message || res.statusText || "request failed";
+    throw new Error(`${res.status}: ${msg}`);
+  }
+  return data;
+}
 
 /** @type {object|null} */
 let lastSpotData = null;
@@ -228,8 +416,10 @@ function loadSortState() {
     if (!raw) return { sort: "quoteVolume", order: "desc" };
     const s = JSON.parse(raw);
     const ok = COLUMN_DEFS.some((c) => c.sortKey === s.sort);
+    // Drop obsolete client-only indicator sorts from older sessions.
+    const bad = s.sort === "rsi" || s.sort === "ema12" || s.sort === "ema26";
     return {
-      sort: ok ? s.sort : "quoteVolume",
+      sort: ok && !bad ? s.sort : "quoteVolume",
       order: s.order === "asc" ? "asc" : "desc",
     };
   } catch {
@@ -252,6 +442,33 @@ function setStatus(msg, kind = "") {
 
 function baseUrl() {
   return els.apiBase.value.replace(/\/$/, "");
+}
+
+function persistApiBase() {
+  try {
+    localStorage.setItem(API_BASE_KEY, baseUrl());
+  } catch { /* ignore */ }
+}
+
+function restoreApiBase() {
+  try {
+    const v = localStorage.getItem(API_BASE_KEY);
+    if (v && els.apiBase) els.apiBase.value = v;
+  } catch { /* ignore */ }
+}
+
+/** Open coin detail on its own page (double-click). */
+function openDetailPage(sym, exchange) {
+  if (!sym) return;
+  persistApiBase();
+  const ex = String(exchange || els.spotExchange?.value || "binance").toLowerCase();
+  const q = new URLSearchParams({
+    symbol: String(sym).toUpperCase(),
+    exchange: ex,
+    interval: "1h",
+    limit: "48",
+  });
+  location.href = `detail.html?${q.toString()}`;
 }
 
 function fmtNum(v, digits = 2) {
@@ -295,6 +512,7 @@ function changeClass(v) {
   return n > 0 ? "pos" : "neg";
 }
 
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -306,6 +524,7 @@ function escapeHtml(s) {
 function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
 }
+
 
 /** Format Binance product tags as HTML chips (already escaped). */
 function formatTags(tags) {
@@ -512,6 +731,7 @@ function renderColumnChips() {
   });
 }
 
+
 function renderHead() {
   const cols = visibleDefs();
   els.spotHead.innerHTML = cols
@@ -602,13 +822,49 @@ function snapshotRow(m) {
 
 function bindRowClicks() {
   els.spotBody.querySelectorAll("[data-pick]").forEach((btn) => {
+    // Double-click symbol → detail page (prevent text selection delay feel)
+    btn.addEventListener("dblclick", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tr = btn.closest("tr[data-exchange]");
+      openDetailPage(btn.getAttribute("data-pick"), tr?.getAttribute("data-exchange"));
+    });
+    // Single click only selects/highlights row — no bottom panel
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      selectSymbol(btn.getAttribute("data-pick"));
+      const sym = btn.getAttribute("data-pick");
+      selectedSymbol = sym;
+      if (lastSpotData) renderSpotBody(lastSpotData);
+      if (els.selectedHint) {
+        els.selectedHint.textContent = `${sym} selected · double-click to open detail`;
+      }
+    });
+  });
+  els.spotBody.querySelectorAll("[data-star]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const sym = btn.getAttribute("data-star");
+      const tr = btn.closest("tr[data-exchange]");
+      const ex = tr?.getAttribute("data-exchange") || els.spotExchange?.value || "binance";
+      toggleWatch(ex, sym);
     });
   });
   els.spotBody.querySelectorAll("tr[data-symbol]").forEach((tr) => {
-    tr.addEventListener("click", () => selectSymbol(tr.getAttribute("data-symbol")));
+    tr.addEventListener("dblclick", (e) => {
+      if (e.target.closest("[data-star]")) return;
+      e.preventDefault();
+      openDetailPage(tr.getAttribute("data-symbol"), tr.getAttribute("data-exchange"));
+    });
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("[data-star]")) return;
+      if (e.target.closest("[data-pick]")) return; // handled above
+      const sym = tr.getAttribute("data-symbol");
+      selectedSymbol = sym;
+      if (lastSpotData) renderSpotBody(lastSpotData);
+      if (els.selectedHint) {
+        els.selectedHint.textContent = `${sym} selected · double-click to open detail`;
+      }
+    });
   });
 }
 
@@ -753,7 +1009,13 @@ function renderSpotBody(data, opts = {}) {
       const cells = cols
         .map((col) => {
           if (col.id === "symbol") {
-            return `<td class="td-left"><button type="button" class="linkish" data-pick="${escapeAttr(m.symbol)}">${escapeHtml(m.symbol)}</button></td>`;
+            const ex = els.spotExchange?.value || "binance";
+            const on = isWatched(ex, m.symbol) ? "on" : "";
+            const star = on ? "★" : "☆";
+            return `<td class="td-left">
+              <button type="button" class="star-btn ${on}" data-star="${escapeAttr(m.symbol)}" title="Toggle watchlist" aria-label="Watch ${escapeAttr(m.symbol)}">${star}</button>
+              <button type="button" class="linkish" data-pick="${escapeAttr(m.symbol)}">${escapeHtml(m.symbol)}</button>
+            </td>`;
           }
           const move = old ? priceMove(old[col.id], m[col.id]) : "";
           const align = col.align === "left" ? "td-left" : "";
@@ -764,7 +1026,8 @@ function renderSpotBody(data, opts = {}) {
           return `<td class="${cls}" data-field="${col.id}" data-move="${move}">${formatCellInner(col, m, move)}</td>`;
         })
         .join("");
-      return `<tr class="${selected}" data-symbol="${escapeAttr(m.symbol)}">${cells}</tr>`;
+      const wEx = m._watchExchange || els.spotExchange?.value || "binance";
+      return `<tr class="${selected}" data-symbol="${escapeAttr(m.symbol)}" data-exchange="${escapeAttr(wEx)}">${cells}</tr>`;
     })
     .join("");
 
@@ -779,6 +1042,156 @@ function renderSpotBody(data, opts = {}) {
 }
 
 /**
+ * Fetch one watchlist pair from the API (exact symbol match).
+ * Does NOT use global page/sort — that was the bug: filtering top-N by volume
+ * dropped most watched coins and changed the set when sort changed.
+ */
+async function fetchOneWatchMarket(exchange, symbol) {
+  const ex = String(exchange || "binance").toLowerCase();
+  const sym = String(symbol || "").toUpperCase();
+  const tryOnce = async (extra) => {
+    const params = new URLSearchParams({
+      exchange: ex,
+      status: "TRADING",
+      q: sym,
+      limit: "30",
+      sort: "symbol",
+      order: "asc",
+      ...extra,
+    });
+    const data = await apiGet(`/api/v1/market/spot?${params.toString()}`);
+    const items = data.items || [];
+    if (globalThis.WatchlistLogic?.pickExactSymbol) {
+      return globalThis.WatchlistLogic.pickExactSymbol(items, sym);
+    }
+    return items.find((m) => String(m.symbol || "").toUpperCase() === sym) || null;
+  };
+  // Prefer USDT for binance/bybit; coinbase often uses USD — try both.
+  if (ex === "coinbase") {
+    return (
+      (await tryOnce({ quote: "USD" })) ||
+      (await tryOnce({ quote: "USDT" })) ||
+      (await tryOnce({}))
+    );
+  }
+  return (await tryOnce({ quote: "USDT" })) || (await tryOnce({}));
+}
+
+/** Client-side sort for watchlist mode (full set is in memory). */
+function sortSpotItemsClient(items, sort, order) {
+  if (globalThis.WatchlistLogic?.sortSpotItemsClient) {
+    return globalThis.WatchlistLogic.sortSpotItemsClient(items, sort, order);
+  }
+  // Fallback if script not loaded
+  const desc = order === "desc";
+  const key = sort || "quoteVolume";
+  return [...items].sort((a, b) => {
+    const av = toNum(a[key]);
+    const bv = toNum(b[key]);
+    if (av === null && bv === null) return String(a.symbol || "").localeCompare(String(b.symbol || ""));
+    if (av === null) return 1; // nulls last
+    if (bv === null) return -1;
+    if (av === bv) return String(a.symbol || "").localeCompare(String(b.symbol || ""));
+    return desc ? bv - av : av - bv;
+  });
+}
+
+/**
+ * Load every watchlist entry (optionally only current exchange).
+ * Always returns the full watched set for that filter — not a slice of top markets.
+ */
+async function loadWatchlistMarkets({ currentExchangeOnly }) {
+  let targets = watchlist.slice();
+  if (currentExchangeOnly) {
+    const ex = (els.spotExchange?.value || "binance").toLowerCase();
+    targets = targets.filter((w) => String(w.exchange || "binance").toLowerCase() === ex);
+  }
+  const q = (els.spotQ?.value || "").trim().toUpperCase();
+  if (q) {
+    targets = targets.filter((w) => String(w.symbol || "").toUpperCase().includes(q));
+  }
+  if (!targets.length) {
+    return {
+      exchange: "watchlist",
+      query: q,
+      sort: sortState.sort,
+      order: sortState.order,
+      total: 0,
+      limit: 0,
+      offset: 0,
+      items: [],
+    };
+  }
+
+  // Parallel fetch with a small concurrency limit
+  const items = [];
+  const concurrency = 6;
+  let idx = 0;
+  async function worker() {
+    while (idx < targets.length) {
+      const i = idx++;
+      const w = targets[i];
+      try {
+        const row = await fetchOneWatchMarket(w.exchange, w.symbol);
+        if (row) {
+          items.push({ ...row, _watchExchange: w.exchange });
+        } else {
+          // Still show a placeholder so the watchlist length stays stable
+          items.push({
+            symbol: w.symbol,
+            lastPrice: "",
+            priceChangePercent: "",
+            volume: "",
+            quoteVolume: "",
+            tradeCount: 0,
+            tags: [],
+            _missing: true,
+            _watchExchange: w.exchange,
+          });
+        }
+      } catch {
+        items.push({
+          symbol: w.symbol,
+          lastPrice: "",
+          priceChangePercent: "",
+          volume: "",
+          quoteVolume: "",
+          tradeCount: 0,
+          tags: [],
+          _missing: true,
+          _watchExchange: w.exchange,
+        });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, () => worker()));
+
+  const tag = (els.spotTag?.value || "").trim().toLowerCase();
+  let filtered = items;
+  if (tag) {
+    filtered = items.filter(
+      (m) =>
+        Array.isArray(m.tags) &&
+        m.tags.some((t) => String(t).toLowerCase() === tag)
+    );
+  }
+
+  const sorted = sortSpotItemsClient(filtered, sortState.sort, sortState.order);
+  return {
+    exchange: currentExchangeOnly
+      ? els.spotExchange?.value || "binance"
+      : "watchlist",
+    query: q,
+    sort: sortState.sort,
+    order: sortState.order,
+    total: sorted.length,
+    limit: sorted.length,
+    offset: 0,
+    items: sorted,
+  };
+}
+
+/**
  * @param {{ silent?: boolean }} [opts]
  */
 async function loadMarkets(opts = {}) {
@@ -789,21 +1202,30 @@ async function loadMarkets(opts = {}) {
     setStatus("Loading markets…");
   }
   try {
-    const params = new URLSearchParams();
-    const q = els.spotQ.value.trim();
-    const quote = els.spotQuote.value.trim();
     const exchange = els.spotExchange?.value || "binance";
-    params.set("exchange", exchange);
-    if (q) params.set("q", q);
-    if (quote) params.set("quote", quote);
-    const tag = els.spotTag?.value?.trim() || "";
-    if (tag) params.set("tag", tag);
-    params.set("sort", sortState.sort);
-    params.set("order", sortState.order);
-    params.set("limit", els.spotLimit.value || "50");
-    params.set("status", "TRADING");
+    let data;
 
-    const data = await apiGet(`/api/v1/market/spot?${params.toString()}`);
+    if (els.watchOnly?.checked) {
+      // Watchlist mode: load each watched pair explicitly (stable count + sort).
+      // Show all exchanges in the watchlist so 6 saved coins always show as 6.
+      data = await loadWatchlistMarkets({ currentExchangeOnly: false });
+    } else {
+      const params = new URLSearchParams();
+      params.set("exchange", exchange);
+      // Quote is fixed to USDT for the dashboard (no UI control).
+      params.set("quote", "USDT");
+      const q = els.spotQ.value.trim();
+      if (q) params.set("q", q);
+      const tag = els.spotTag?.value?.trim() || "";
+      if (tag) params.set("tag", tag);
+      params.set("sort", sortState.sort);
+      params.set("order", sortState.order);
+      params.set("limit", els.spotLimit.value || "50");
+      params.set("status", "TRADING");
+
+      data = await apiGet(`/api/v1/market/spot?${params.toString()}`);
+    }
+
     if (seq !== loadSeq) return;
     // Only rebuild headers when not a quiet poll (avoids focus steal / flicker)
     if (!silent) renderHead();
@@ -815,6 +1237,7 @@ async function loadMarkets(opts = {}) {
 
     renderSpotBody(data);
     const t = new Date().toLocaleTimeString();
+    const n = data.items?.length ?? 0;
     if (silent) {
       setStatus(
         pricesMoved
@@ -822,157 +1245,61 @@ async function loadMarkets(opts = {}) {
           : `Live · polled ${t} · waiting for new ticks · next ~${liveSeconds}s`,
         "ok"
       );
+    } else if (els.watchOnly?.checked) {
+      setStatus(`Watchlist · ${n} coin${n === 1 ? "" : "s"} · sort ${sortState.sort} ${sortState.order}`, "ok");
     } else {
       setStatus(`Updated ${t}`, "ok");
-    }
-    // Keep detail ticker relatively fresh while live
-    if (silent && selectedSymbol && !els.detailSection.hidden) {
-      refreshDetailTickerQuiet();
     }
   } catch (err) {
     if (seq !== loadSeq) return;
     console.error(err);
+    const msg = String(err.message || err);
+    const offline =
+      msg === "Failed to fetch" ||
+      msg.includes("NetworkError") ||
+      msg.includes("Load failed");
+    const hint = offline
+      ? `Cannot reach API at ${baseUrl()} — is the backend running (go run ./cmd/server)?`
+      : msg;
     if (!silent) {
-      setStatus(String(err.message || err), "error");
+      setStatus(hint, "error");
       const cols = Math.max(visibleDefs().length, 1);
-      els.spotBody.innerHTML = `<tr><td colspan="${cols}" class="muted">Failed to load. Is the API running at ${escapeHtml(baseUrl())}?</td></tr>`;
+      els.spotBody.innerHTML = `<tr><td colspan="${cols}" class="muted">${escapeHtml(hint)}</td></tr>`;
     } else {
-      setStatus(`Live update failed: ${String(err.message || err)}`, "error");
+      setStatus(`Live update failed: ${hint}`, "error");
     }
   } finally {
     if (seq === loadSeq && !silent) els.btnRefresh.disabled = false;
   }
 }
 
-async function refreshDetailTickerQuiet() {
-  if (!selectedSymbol) return;
-  try {
-    const exchange = els.spotExchange?.value || "binance";
-    const ticker = await apiGet(
-      `/api/v1/market/ticker/24h?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(selectedSymbol)}`
-    );
-    renderTicker(ticker);
-    if (els.ticker) els.ticker.dataset.stale = "0";
-  } catch (err) {
-    if (els.ticker) {
-      els.ticker.dataset.stale = "1";
-      const note = document.createElement("p");
-      note.className = "muted";
-      note.dataset.staleNote = "1";
-      note.textContent = `Ticker may be stale · ${String(err.message || err)}`;
-      // Replace prior note only
-      els.ticker.querySelectorAll("[data-stale-note]").forEach((n) => n.remove());
-      els.ticker.appendChild(note);
-    }
-  }
-}
+
 
 function scheduleSearch() {
   clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => loadMarkets(), 280);
 }
 
-async function selectSymbol(sym) {
+function selectSymbol(sym) {
   if (!sym) return;
-  selectedSymbol = sym;
-  els.detailSymbol.textContent = sym;
-  els.detailSection.hidden = false;
-  els.selectedHint.textContent = `Selected ${sym}`;
-  if (lastSpotData) renderSpotBody(lastSpotData);
-  await loadDetail();
+  openDetailPage(sym);
 }
 
-async function loadDetail() {
-  if (!selectedSymbol) return;
-  const sym = selectedSymbol;
-  setStatus(`Loading detail for ${sym}…`);
-  try {
-    const exchange = els.spotExchange?.value || "binance";
-    const [ticker, supply, candles] = await Promise.all([
-      apiGet(`/api/v1/market/ticker/24h?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(sym)}`),
-      apiGet(`/api/v1/market/supply?symbol=${encodeURIComponent(sym)}`).catch((e) => ({
-        _error: String(e.message || e),
-      })),
-      apiGet(
-        `/api/v1/market/candles?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(sym)}&interval=${encodeURIComponent(els.interval.value)}&limit=${encodeURIComponent(els.limit.value || "24")}`
-      ),
-    ]);
-    renderTicker(ticker);
-    if (supply?._error) {
-      els.supply.innerHTML = `<span class="muted">${escapeHtml(supply._error)}</span>`;
-    } else {
-      renderSupply(supply);
-    }
-    renderCandles(candles);
-    setStatus(`Detail ready · ${sym}`, "ok");
-  } catch (err) {
-    console.error(err);
-    setStatus(String(err.message || err), "error");
-  }
-}
 
-function renderTicker(data) {
-  if (!data) {
-    els.ticker.innerHTML = `<span class="muted">—</span>`;
-    return;
-  }
-  els.ticker.innerHTML = `
-    <dl>
-      <dt>Last</dt><dd>${fmtNum(data.lastPrice, 8)}</dd>
-      <dt>Change 24h</dt><dd class="${changeClass(data.priceChangePercent)}">${fmtChange(data.priceChangePercent)}</dd>
-      <dt>High / Low</dt><dd>${fmtNum(data.highPrice, 8)} / ${fmtNum(data.lowPrice, 8)}</dd>
-      <dt>Volume</dt><dd>${fmtNum(data.volume, 4)}</dd>
-      <dt>Quote vol</dt><dd>${fmtNum(data.quoteVolume, 2)}</dd>
-      <dt>Trades</dt><dd>${fmtNum(data.tradeCount, 0)}</dd>
-    </dl>
-  `;
-}
 
-function renderSupply(data) {
-  if (!data) {
-    els.supply.innerHTML = `<span class="muted">—</span>`;
-    return;
-  }
-  const asOf = data.asOf ? fmtTime(data.asOf) : "—";
-  els.supply.innerHTML = `
-    <dl>
-      <dt>Asset</dt><dd>${escapeHtml(data.asset)} <span class="muted">(${escapeHtml(data.name || "—")})</span></dd>
-      <dt>Circulating</dt><dd>${fmtNum(data.circulatingSupply, 0)}</dd>
-      <dt>Total</dt><dd>${fmtNum(data.totalSupply, 0)}</dd>
-      <dt>Max</dt><dd>${fmtNum(data.maxSupply, 0)}</dd>
-      <dt>Price USD</dt><dd>${fmtNum(data.currentPriceUsd, 4)}</dd>
-      <dt>As of</dt><dd>${escapeHtml(asOf)} <span class="muted">(daily snapshot, not live)</span></dd>
-      <dt>Source</dt><dd>${escapeHtml(data.source || "—")}</dd>
-    </dl>
-  `;
-}
 
-function renderCandles(data) {
-  const rows = data?.candles || [];
-  if (!rows.length) {
-    els.candlesBody.innerHTML = `<tr><td colspan="8" class="muted">No candles.</td></tr>`;
-    return;
-  }
-  els.candlesBody.innerHTML = rows
-    .slice()
-    .reverse()
-    .map(
-      (c) => `
-      <tr>
-        <td class="td-left">${fmtTime(c.openTime)}</td>
-        <td>${fmtNum(c.open, 8)}</td>
-        <td>${fmtNum(c.high, 8)}</td>
-        <td>${fmtNum(c.low, 8)}</td>
-        <td>${fmtNum(c.close, 8)}</td>
-        <td>${fmtNum(c.volume, 4)}</td>
-        <td>${fmtNum(c.quoteVolume, 2)}</td>
-        <td>${fmtNum(c.tradeCount, 0)}</td>
-      </tr>`
-    )
-    .join("");
-}
+
+
+
+
+
+
+
 
 // —— Wire UI ——
+if (els.watchOnly) {
+  els.watchOnly.addEventListener("change", () => loadMarkets({ silent: false }));
+}
 els.btnRefresh.addEventListener("click", () => loadMarkets({ silent: false }));
 els.spotQ.addEventListener("input", scheduleSearch);
 els.spotQ.addEventListener("keydown", (e) => {
@@ -981,26 +1308,11 @@ els.spotQ.addEventListener("keydown", (e) => {
     loadMarkets();
   }
 });
-els.spotQuote.addEventListener("change", () => loadMarkets());
 if (els.spotTag) els.spotTag.addEventListener("change", () => loadMarkets());
 if (els.spotExchange) {
   els.spotExchange.addEventListener("change", async () => {
     const ex = els.spotExchange.value;
-    if (ex === "coinbase" && (els.spotQuote.value === "USDT" || !els.spotQuote.value)) {
-      els.spotQuote.value = "USD";
-    } else if (ex !== "coinbase" && els.spotQuote.value === "USD") {
-      els.spotQuote.value = "USDT";
-    }
-    try {
-      const data = await apiGet(`/api/v1/market/intervals?exchange=${encodeURIComponent(ex)}`);
-      if (Array.isArray(data.intervals) && data.intervals.length && els.interval) {
-        const current = els.interval.value;
-        els.interval.innerHTML = data.intervals
-          .map((iv) => `<option value="${escapeAttr(iv)}">${escapeHtml(iv)}</option>`)
-          .join("");
-        els.interval.value = data.intervals.includes(current) ? current : data.intervals[0];
-      }
-    } catch { /* ignore */ }
+    // Cache is per-exchange key already; no need to clear. Keep values for instant switch-back.
     if (els.spotTag) {
       els.spotTag.value = "";
       els.spotTag.disabled = ex !== "binance";
@@ -1009,7 +1321,10 @@ if (els.spotExchange) {
   });
 }
 els.spotLimit.addEventListener("change", () => loadMarkets());
-els.apiBase.addEventListener("change", () => loadMarkets());
+els.apiBase.addEventListener("change", () => {
+  persistApiBase();
+  loadMarkets();
+});
 
 if (els.liveInterval) {
   els.liveInterval.value = String(liveSeconds);
@@ -1041,33 +1356,9 @@ els.btnColumnsMinimal.addEventListener("click", () => {
   applyColumnLayout();
 });
 
-els.btnDetailClose.addEventListener("click", () => {
-  selectedSymbol = null;
-  els.detailSection.hidden = true;
-  els.selectedHint.textContent = "Click a symbol for detail (ticker / supply / candles).";
-  if (lastSpotData) renderSpotBody(lastSpotData);
-});
-els.btnDetailRefresh.addEventListener("click", () => loadDetail());
-els.interval.addEventListener("change", () => {
-  if (selectedSymbol) loadDetail();
-});
-els.limit.addEventListener("change", () => {
-  if (selectedSymbol) loadDetail();
-});
 
 (async () => {
-  try {
-    const data = await apiGet("/api/v1/market/intervals");
-    if (Array.isArray(data.intervals) && data.intervals.length) {
-      const current = els.interval.value;
-      els.interval.innerHTML = data.intervals
-        .map((iv) => `<option value="${escapeAttr(iv)}">${escapeHtml(iv)}</option>`)
-        .join("");
-      els.interval.value = data.intervals.includes(current) ? current : "1h";
-    }
-  } catch {
-    /* backend may not be up yet */
-  }
+  // Candle intervals are configured on the detail page only.
   try {
     const data = await apiGet("/api/v1/market/exchanges");
     if (els.spotExchange && Array.isArray(data.exchanges) && data.exchanges.length) {
@@ -1093,8 +1384,10 @@ els.limit.addEventListener("change", () => {
   }
 })();
 
+restoreApiBase();
 renderColumnChips();
 renderHead();
+renderWatchlist();
 updateLiveBadge();
 startPolling();
-loadMarkets();
+syncWatchlistFromApi().finally(() => loadMarkets());

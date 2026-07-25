@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swyngora · Coin detail</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app detail-app">
+    <header class="header">
+      <div>
+        <p class="eyebrow"><a class="back-link" href="index.html">← Markets</a></p>
+        <h1 id="pageTitle">Coin detail</h1>
+        <p class="sub" id="pageSub">Loading…</p>
+      </div>
+      <div class="detail-header-actions">
+        <label class="field inline">
+          <span>API base</span>
+          <input id="apiBase" type="text" value="http://localhost:8080" spellcheck="false" />
+        </label>
+        <button type="button" id="btnWatch" class="ghost" title="Toggle watchlist">☆ Watch</button>
+      </div>
+    </header>
+
+    <section class="card toolbar detail-toolbar">
+      <label class="field">
+        <span>Exchange</span>
+        <select id="exchange">
+          <option value="binance">binance</option>
+          <option value="coinbase">coinbase</option>
+          <option value="bybit">bybit</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Symbol</span>
+        <input id="symbol" type="text" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Interval</span>
+        <select id="interval">
+          <option value="1m">1m</option>
+          <option value="5m">5m</option>
+          <option value="15m">15m</option>
+          <option value="1h" selected>1h</option>
+          <option value="4h">4h</option>
+          <option value="1d">1d</option>
+          <option value="1w">1w</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Candles</span>
+        <input id="limit" type="number" min="1" max="1000" value="48" />
+      </label>
+      <div class="toolbar-actions">
+        <button type="button" id="btnReload" class="primary">Reload</button>
+      </div>
+    </section>
+
+    <p id="status" class="status" role="status">Loading detail…</p>
+
+    <div class="grid detail-grid">
+      <section class="card">
+        <h2>24h ticker</h2>
+        <div id="ticker" class="panel muted">—</div>
+      </section>
+      <section class="card">
+        <h2>Supply</h2>
+        <div id="supply" class="panel muted">—</div>
+      </section>
+      <section class="card">
+        <h2>Indicators <span class="muted" style="font-weight:500;font-size:0.85rem">(RSI · EMA)</span></h2>
+        <div id="indicators" class="panel muted">—</div>
+        <p class="muted" style="font-size:0.78rem;margin:0.5rem 0 0">Informational only — not financial advice.</p>
+      </section>
+      <section class="card wide">
+        <h2>Candles</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Open time</th>
+                <th>Open</th>
+                <th>High</th>
+                <th>Low</th>
+                <th>Close</th>
+                <th>Volume</th>
+                <th>Quote vol</th>
+                <th>Trades</th>
+              </tr>
+            </thead>
+            <tbody id="candlesBody">
+              <tr><td colspan="8" class="muted">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <span>Double-click a symbol on the <a href="index.html">markets</a> table to open this page.</span>
+    </footer>
+  </div>
+  <script src="detail.js"></script>
+</body>
+</html>

@@ -706,3 +706,85 @@ code {
 td.td-left .tag-chip {
   vertical-align: middle;
 }
+
+
+/* Watchlist */
+.watchlist-panel { margin-bottom: 0.75rem; }
+.watch-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 1.5rem;
+}
+.watch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 61, 0.45);
+  background: rgba(255, 196, 61, 0.1);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.watch-chip:hover { border-color: var(--accent); }
+.watch-chip .watch-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.15rem;
+  font-size: 0.9rem;
+}
+.watch-chip .watch-x:hover { color: var(--neg, #f66); }
+.watch-help { margin: 0.6rem 0 0; font-size: 0.8rem; }
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.star-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem 0.25rem;
+  color: var(--muted);
+}
+.star-btn.on { color: #ffc43d; }
+.star-btn:hover { transform: scale(1.1); }
+.ind-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.5rem 0.75rem;
+}
+.ind-grid dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0; }
+.ind-grid dd { margin: 0.1rem 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rsi-over { color: var(--neg, #f66); }
+.rsi-under { color: var(--pos, #3dd6c6); }
+
+
+/* Detail page */
+.back-link {
+  color: var(--accent-2);
+  text-decoration: none;
+  font-weight: 600;
+}
+.back-link:hover { text-decoration: underline; color: var(--text); }
+.detail-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+.detail-toolbar { margin-bottom: 0.75rem; }
+#btnWatch.on {
+  border-color: rgba(255, 196, 61, 0.55);
+  color: #ffc43d;
+}
+.detail-app .detail-grid {
+  margin-top: 0.5rem;
+}

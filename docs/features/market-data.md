@@ -99,3 +99,17 @@ curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&limit=20' | jq '.it
 - Coverage is Binance-listed marketing symbols (~470), not every historical exchangeInfo pair
 - Fiat pairs (e.g. EUR) are not crypto supply
 - Max supply is null for coins without a hard cap (e.g. ETH)
+
+
+### Indicators — `GET /api/v1/market/indicators`
+
+- Computes **RSI** (Wilder's smoothing, default period 14) and **EMA** (default 12, 26) from exchange candles
+- Params: `exchange`, `symbol`, `interval`, `limit`, `rsiPeriod`, `emaPeriods` (comma-separated)
+- Returns point series + `latest` snapshot; warm-up bars may have null indicator values
+- **Not financial advice** — informational analysis only
+
+### Watchlist — `/api/v1/watchlist`
+
+- No auth: scoped by `clientId` query or `X-Client-Id` header (simple frontend generates a browser id)
+- `GET` list, `POST /items` add, `DELETE /items` remove, `PUT` replace
+- In-memory store (process lifetime); UI also persists to `localStorage`

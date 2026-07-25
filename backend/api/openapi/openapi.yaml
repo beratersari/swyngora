@@ -338,6 +338,182 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/indicators:
+    get:
+      summary: RSI and EMA indicators for a symbol
+      description: |
+        Fetches OHLCV candles from the selected exchange and computes:
+        - RSI (Wilder's smoothing, default period 14)
+        - EMA (default periods 12 and 26; seed = SMA of first period)
+        Informational only — not financial advice.
+      operationId: getIndicators
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: interval
+          in: query
+          schema: { type: string, default: 1h }
+        - name: limit
+          in: query
+          description: Number of output bars (extra history is fetched for warm-up)
+          schema: { type: integer, default: 100, minimum: 1, maximum: 1000 }
+        - name: rsiPeriod
+          in: query
+          schema: { type: integer, default: 14, minimum: 2, maximum: 500 }
+        - name: emaPeriods
+          in: query
+          description: Comma-separated EMA periods
+          schema: { type: string, default: "12,26", example: "12,26" }
+      responses:
+        '200':
+          description: Indicator series
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exchange: { type: string }
+                  symbol: { type: string }
+                  interval: { type: string }
+                  rsiPeriod: { type: integer }
+                  emaPeriods:
+                    type: array
+                    items: { type: integer }
+                  latest:
+                    type: object
+                    properties:
+                      rsi: { type: number, nullable: true }
+                      ema:
+                        type: object
+                        additionalProperties: { type: number }
+                  points:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        openTime: { type: string, format: date-time }
+                        close: { type: number }
+                        rsi: { type: number, nullable: true }
+                        ema:
+                          type: object
+                          additionalProperties: { type: number }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/watchlist:
+    get:
+      summary: Get watchlist for a client id
+      operationId: getWatchlist
+      tags: [Watchlist]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Watchlist'
+    put:
+      summary: Replace entire watchlist
+      operationId: putWatchlist
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [symbol]
+                    properties:
+                      exchange: { type: string }
+                      symbol: { type: string }
+                      note: { type: string }
+      responses:
+        '200':
+          description: Updated watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/watchlist/items:
+    post:
+      summary: Add or update a watchlist item
+      operationId: addWatchlistItem
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol]
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, default: binance }
+                symbol: { type: string }
+                note: { type: string }
+      responses:
+        '200':
+          description: Updated watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Remove a watchlist item
+      operationId: removeWatchlistItem
+      tags: [Watchlist]
+      parameters:
+        - name: exchange
+          in: query
+          required: true
+          schema: { type: string }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated watchlist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/Error'
+
+
 components:
   responses:
     Error:
@@ -481,6 +657,20 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpotMarket'
+    Watchlist:
+      type: object
+      properties:
+        clientId: { type: string }
+        updatedAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              symbol: { type: string }
+              note: { type: string }
+              addedAt: { type: string, format: date-time }
     SpotMarket:
       type: object
       properties:

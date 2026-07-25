@@ -13,8 +13,8 @@
         <p class="eyebrow">Swyngora · markets</p>
         <h1>Coin dashboard</h1>
         <p class="sub">
-          Live Binance spot dashboard. Prices auto-refresh (default every 10s); cells flash green/red when values move.
-          Click a column header to sort · <strong>drag headers or chips</strong> to reorder columns.
+          Multi-exchange spot dashboard with watchlist. Prices auto-refresh (default every 10s).
+          <strong>Double-click a symbol</strong> for detail (incl. RSI / EMA) · drag headers/chips to reorder columns.
         </p>
       </div>
       <label class="field inline">
@@ -35,10 +35,6 @@
           <option value="coinbase">Coinbase</option>
           <option value="bybit">Bybit</option>
         </select>
-      </label>
-      <label class="field">
-        <span>Quote</span>
-        <input id="spotQuote" type="text" value="USDT" spellcheck="false" />
       </label>
       <label class="field">
         <span>Tag</span>
@@ -86,12 +82,24 @@
       <p id="columnSummary" class="muted column-summary"></p>
     </section>
 
+    <section class="card watchlist-panel" id="watchlistSection" aria-label="Watchlist">
+      <div class="dashboard-head">
+        <h2>Watchlist <span id="watchMeta" class="muted"></span></h2>
+        <label class="field compact inline-check">
+          <input type="checkbox" id="watchOnly" />
+          <span>Show watchlist only</span>
+        </label>
+      </div>
+      <div id="watchlistChips" class="watch-chips"></div>
+      <p class="muted watch-help">Star rows to pin symbols (per exchange). “Show watchlist only” loads <strong>all</strong> watched coins (not just top volume), then sorts that full set. Saved in this browser + API.</p>
+    </section>
+
     <p id="status" class="status" role="status">Loading markets…</p>
 
     <section class="card dashboard">
       <div class="dashboard-head">
         <h2>Markets <span id="spotMeta" class="muted"></span></h2>
-        <p id="selectedHint" class="muted selected-hint">Click a symbol for detail (ticker / supply / candles).</p>
+        <p id="selectedHint" class="muted selected-hint">Double-click a symbol to open detail. Star to watchlist.</p>
       </div>
       <div class="table-wrap dashboard-table">
         <table id="spotTable">
@@ -105,69 +113,12 @@
       </div>
     </section>
 
-    <section id="detailSection" class="detail-section" hidden>
-      <div class="detail-bar">
-        <h2>Selected: <span id="detailSymbol">—</span></h2>
-        <div class="detail-actions">
-          <label class="field compact">
-            <span>Interval</span>
-            <select id="interval">
-              <option value="1m">1m</option>
-              <option value="5m">5m</option>
-              <option value="15m">15m</option>
-              <option value="1h" selected>1h</option>
-              <option value="4h">4h</option>
-              <option value="1d">1d</option>
-              <option value="1w">1w</option>
-            </select>
-          </label>
-          <label class="field compact">
-            <span>Candles</span>
-            <input id="limit" type="number" min="1" max="1000" value="24" />
-          </label>
-          <button type="button" id="btnDetailRefresh" class="ghost">Reload detail</button>
-          <button type="button" id="btnDetailClose" class="ghost">Close</button>
-        </div>
-      </div>
-      <div class="grid detail-grid">
-        <section class="card">
-          <h2>24h ticker</h2>
-          <div id="ticker" class="panel muted">—</div>
-        </section>
-        <section class="card">
-          <h2>Supply</h2>
-          <div id="supply" class="panel muted">—</div>
-        </section>
-        <section class="card wide">
-          <h2>Candles</h2>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Open time</th>
-                  <th>Open</th>
-                  <th>High</th>
-                  <th>Low</th>
-                  <th>Close</th>
-                  <th>Volume</th>
-                  <th>Quote vol</th>
-                  <th>Trades</th>
-                </tr>
-              </thead>
-              <tbody id="candlesBody">
-                <tr><td colspan="8" class="muted">—</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </section>
-
     <footer class="footer">
       <span>Test harness dashboard — not the production <code>frontend/</code> app.</span>
       <span>Column layout is saved in this browser.</span>
     </footer>
   </div>
+  <script src="watchlist-logic.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

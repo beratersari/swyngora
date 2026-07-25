@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
@@ -17,14 +18,14 @@ type RouterOptions struct {
 
 // NewRouter wires HTTP routes for the API with default rate limits.
 func NewRouter(marketSvc *market.Service) http.Handler {
-	return NewRouterWithOptions(marketSvc, RouterOptions{
+	return NewRouterWithOptions(marketSvc, nil, RouterOptions{
 		RateLimitRPS:   20,
 		RateLimitBurst: 40,
 	})
 }
 
 // NewRouterWithOptions wires HTTP routes with explicit middleware options.
-func NewRouterWithOptions(marketSvc *market.Service, opts RouterOptions) http.Handler {
+func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service, opts RouterOptions) http.Handler {
 	mux := http.NewServeMux()
 
 	health := handler.NewHealthHandler()
@@ -38,6 +39,16 @@ func NewRouterWithOptions(marketSvc *market.Service, opts RouterOptions) http.Ha
 	mux.HandleFunc("GET /api/v1/market/intervals", mh.GetIntervals)
 	mux.HandleFunc("GET /api/v1/market/tags", mh.ListProductTags)
 	mux.HandleFunc("GET /api/v1/market/spot", mh.ListSpotMarkets)
+	mux.HandleFunc("GET /api/v1/market/indicators", mh.GetIndicators)
+	mux.HandleFunc("POST /api/v1/market/indicators/batch", mh.PostIndicatorsBatch)
+
+	if watchSvc != nil {
+		wh := handler.NewWatchlistHandler(watchSvc)
+		mux.HandleFunc("GET /api/v1/watchlist", wh.Get)
+		mux.HandleFunc("PUT /api/v1/watchlist", wh.Replace)
+		mux.HandleFunc("POST /api/v1/watchlist/items", wh.Add)
+		mux.HandleFunc("DELETE /api/v1/watchlist/items", wh.Remove)
+	}
 
 	var h http.Handler = mux
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)

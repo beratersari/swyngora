@@ -46,7 +46,7 @@ func (routerSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSup
 
 func TestNewRouter_RoutesAndCORS(t *testing.T) {
 	svc := market.New(routerMarket{}, routerSupply{})
-	h := NewRouter(svc)
+	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
 
 	paths := []struct {
 		path   string
@@ -83,6 +83,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 			}
 		}},
 		{"/api/v1/market/spot?limit=5&tag=Payments", http.StatusOK, nil},
+		{"/api/v1/market/indicators?symbol=BTCUSDT&interval=1h&limit=30", http.StatusOK, nil},
 		{"/nope", http.StatusNotFound, nil},
 	}
 
