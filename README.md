@@ -66,6 +66,8 @@ OpenAPI: [`backend/api/openapi/openapi.yaml`](backend/api/openapi/openapi.yaml)
 
 Integration branch: **`develop`**. Features: `feature/*` → MR into `develop`. Full rules in [`AGENTS.md`](AGENTS.md).
 
+**Remotes:** `origin` = GitLab (primary team host); `beratersari` = private GitHub mirror (`https://github.com/beratersari/swyngora`). Publish shared branches to **both** (`git pushboth <ref>` — see AGENTS.md §3.8).
+
 ## License
 
 TBD.

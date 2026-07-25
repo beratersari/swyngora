@@ -146,6 +146,48 @@ We follow **Git Flow** adapted for a default branch named `main` (not `master`).
 - Disallow direct pushes to `main` and `develop`.
 - Restrict who may create tags matching `v*`.
 
+### 3.8 Remotes (GitLab primary + GitHub mirror)
+
+Swyngora is mirrored to **two** remotes. All humans and agents must keep them in sync when publishing work.
+
+| Remote name | Host | Role |
+|---|---|---|
+| **`origin`** | GitLab (`nova.teachx.ai` / `trace-analysis/swyngora`) | **Primary** — team MRs, CI, protected `main` / `develop`, default `git pull` / tracking |
+| **`beratersari`** | GitHub (`https://github.com/beratersari/swyngora`) | **Private mirror** — same history for backup / personal access; remote name matches the GitHub account |
+
+**Rules**
+
+1. **Always push published branches to both remotes** after a successful commit set that is meant to be shared (feature branches, `develop` after merge, `main` after release/hotfix, tags).
+2. Prefer the alias (configure once per clone):
+
+   ```bash
+   git config alias.pushboth '!f(){ git push origin "$@"; git push beratersari "$@"; }; f'
+   # examples:
+   git pushboth -u HEAD
+   git pushboth develop
+   git pushboth main
+   git pushboth --tags
+   ```
+
+   Without the alias: `git push origin <ref>` then `git push beratersari <ref>`.
+3. **Open merge requests on GitLab (`origin`)** as the team workflow. GitHub is a mirror unless the team explicitly says otherwise — do not assume GitHub PRs replace GitLab MRs.
+4. **Branch tracking** stays on `origin` (e.g. `develop` tracks `origin/develop`). Do not retarget long-lived branches to the GitHub remote for daily pull/rebase.
+5. **First-time clone setup:**
+
+   ```bash
+   git clone <gitlab-ssh-or-https-url> swyngora
+   cd swyngora
+   git remote add beratersari https://github.com/beratersari/swyngora.git
+   git config alias.pushboth '!f(){ git push origin "$@"; git push beratersari "$@"; }; f'
+   git fetch beratersari
+   ```
+
+6. **New clone / new machine:** if `beratersari` is missing, add it before the next push. Agents must not silently drop the GitHub mirror.
+7. **Long-lived branches on both remotes:** keep at least `main` and `develop` present on GitLab and GitHub. After the first release flow lands commits on `main`, push `main` (and tags) to both.
+8. **Never** put secrets in either remote. Private on GitHub does not mean safe for keys or `.env` files.
+
+**Why `main` may look empty early:** integration work lands on `develop` first (Git Flow). `main` only moves on release/hotfix. Still mirror whatever exists on `origin/main` to `beratersari` so both remotes have the full branch set.
+
 ---
 
 ## 4. Versioning
@@ -763,6 +805,7 @@ Whenever you edit production or tooling code, ask: *did this make any README or 
 ## 10. What agents must not do
 
 - Force-push or rewrite history on `main` / `develop`.
+- Publish shared work to only one of `origin` / `beratersari` when both remotes are configured (§3.8).
 - Merge to `main` without going through release or hotfix flow.
 - Invent production credentials or disable auth “temporarily” in committed code.
 - Add heavy dependencies without a clear need.
@@ -800,6 +843,8 @@ LLMs:           Local Ollama + Grok (xAI) only — no other commercial LLM defau
 External APIs:  No paid pricing-tier choices; prefer free/public/self-hosted data sources
 Default branch for integration: develop
 Production branch: main
+Remotes:        origin = GitLab (primary); beratersari = GitHub private mirror
+Push:           git pushboth <ref>  # both remotes (§3.8)
 ```
 
 ---
