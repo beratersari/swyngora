@@ -304,3 +304,12 @@ func TestListSpotMarkets_SortByMcap(t *testing.T) {
 }
 
 func ptr(f float64) *float64 { return &f }
+
+// Test that a nil SupplyPort produces a clean error (not a panic) from GetSupply.
+func TestGetSupply_NilSupplyPortReturnsError(t *testing.T) {
+	svc := New(&fakeMarket{}, nil)
+	_, err := svc.GetSupply(context.Background(), "BTC")
+	if err == nil || !errors.Is(err, domain.ErrUpstream) {
+		t.Fatalf("expected upstream error, got %v", err)
+	}
+}

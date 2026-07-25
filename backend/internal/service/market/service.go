@@ -74,6 +74,9 @@ func (s *Service) GetSupply(ctx context.Context, asset string) (*domain.AssetSup
 	if asset == "" {
 		return nil, fmt.Errorf("%w: asset is required", domain.ErrInvalidArgument)
 	}
+	if s.supply == nil {
+		return nil, fmt.Errorf("%w: supply port not configured", domain.ErrUpstream)
+	}
 	return s.supply.GetSupply(ctx, asset)
 }
 
@@ -164,9 +167,9 @@ func applySupplyAndMcap(m *domain.SpotMarket, sup *domain.AssetSupply) {
 		// for infinity when max is not defined — only after we know supply is missing max.
 		return
 	}
-	m.CirculatingSupply = sup.CirculatingSupply
-	m.TotalSupply = sup.TotalSupply
-	m.MaxSupply = sup.MaxSupply
+	m.CirculatingSupply = domain.CloneFloatPtr(sup.CirculatingSupply)
+	m.TotalSupply = domain.CloneFloatPtr(sup.TotalSupply)
+	m.MaxSupply = domain.CloneFloatPtr(sup.MaxSupply)
 
 	price := usdPriceForMcap(*m, sup)
 	if price == nil {

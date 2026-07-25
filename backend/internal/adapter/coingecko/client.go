@@ -79,8 +79,13 @@ func (c *Client) GetSupply(ctx context.Context, asset string) (*domain.AssetSupp
 		return nil, fmt.Errorf("%w: supply cache not configured", domain.ErrUpstream)
 	}
 	if hit, ok := c.supply.Get(asset); ok {
-		// Return a shallow copy so callers cannot mutate the cache entry.
+		// Deep copy of pointer fields so callers cannot mutate the cache entry
+		// (or each other) by writing through the returned *float64s.
 		cp := *hit
+		cp.CirculatingSupply = domain.CloneFloatPtr(hit.CirculatingSupply)
+		cp.TotalSupply = domain.CloneFloatPtr(hit.TotalSupply)
+		cp.MaxSupply = domain.CloneFloatPtr(hit.MaxSupply)
+		cp.CurrentPriceUSD = domain.CloneFloatPtr(hit.CurrentPriceUSD)
 		return &cp, nil
 	}
 	return nil, fmt.Errorf("%w: supply for %q not in daily snapshot cache", domain.ErrNotFound, asset)
@@ -113,12 +118,15 @@ func (c *Client) Refresh(ctx context.Context) (int, error) {
 		}
 	}
 	// Ensure important tickers (e.g. WBTC) are present even if outside top pages.
+	// We always add what we successfully fetched from well-known (even if a later
+	// batch fails) and treat the whole well-known step as non-fatal so a transient
+	// failure for a few wrapped assets does not invalidate the daily snapshot.
 	n, err := c.refreshByIDs(ctx, wellKnownCoinIDs(), asOf, seen)
+	stored += n
 	if err != nil {
 		// Non-fatal: markets pages already loaded.
 		return stored, nil
 	}
-	stored += n
 	return stored, nil
 }
 

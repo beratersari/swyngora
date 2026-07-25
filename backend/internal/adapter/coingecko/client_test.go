@@ -105,6 +105,45 @@ func TestGetSupply_EmptyAsset(t *testing.T) {
 	}
 }
 
+// Test that GetSupply returns a safe copy (cloned *float64 fields). Mutation of
+// the returned value must not affect the cache or future callers.
+func TestGetSupply_ReturnsIndependentFloats(t *testing.T) {
+	supCache := cache.New[*domain.AssetSupply](time.Hour)
+	orig := 21000000.0
+	supCache.Set("BTC", &domain.AssetSupply{
+		Asset:             "BTC",
+		CirculatingSupply: &orig,
+		CurrentPriceUSD:   domain.CloneFloatPtr(ptrForTest(100.0)),
+	})
+
+	c := NewClient(Options{SupplyCache: supCache})
+
+	s1, err := c.GetSupply(context.Background(), "BTC")
+	if err != nil || s1.CirculatingSupply == nil {
+		t.Fatalf("s1 err=%v", err)
+	}
+
+	// Mutate the copy we received
+	*s1.CirculatingSupply = 999999999.0
+	if s1.CurrentPriceUSD != nil {
+		*s1.CurrentPriceUSD = 999.0
+	}
+
+	// Cache and subsequent Get must be unaffected
+	s2, err := c.GetSupply(context.Background(), "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s2.CirculatingSupply == nil || *s2.CirculatingSupply != orig {
+		t.Fatalf("cache was mutated, got %v want %v", s2.CirculatingSupply, orig)
+	}
+	if s2.CurrentPriceUSD == nil || *s2.CurrentPriceUSD != 100.0 {
+		t.Fatalf("price mutated in cache")
+	}
+}
+
+func ptrForTest(f float64) *float64 { return &f }
+
 func TestNormalizeAsset_PairSuffix(t *testing.T) {
 	cases := map[string]string{
 		"btcusdt":  "BTC",

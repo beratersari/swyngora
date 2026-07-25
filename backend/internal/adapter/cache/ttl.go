@@ -34,17 +34,28 @@ func New[T any](defaultTTL time.Duration) *TTL[T] {
 func (c *TTL[T]) Get(key string) (T, bool) {
 	c.mu.RLock()
 	e, ok := c.items[key]
-	c.mu.RUnlock()
 	if !ok {
+		c.mu.RUnlock()
 		var zero T
 		return zero, false
 	}
-	if !e.ExpiresAt.After(c.now()) {
-		c.Delete(key)
-		var zero T
-		return zero, false
+	if e.ExpiresAt.After(c.now()) {
+		val := e.Value
+		c.mu.RUnlock()
+		return val, true
 	}
-	return e.Value, true
+	c.mu.RUnlock()
+
+	// Expired: re-check under exclusive lock to avoid deleting a value that a
+	// concurrent Set may have just installed (TOCTOU race on lazy eviction).
+	c.mu.Lock()
+	if ee, ok := c.items[key]; ok && !ee.ExpiresAt.After(c.now()) {
+		delete(c.items, key)
+	}
+	c.mu.Unlock()
+
+	var zero T
+	return zero, false
 }
 
 // Set stores value with the default TTL.

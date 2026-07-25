@@ -99,6 +99,42 @@ func TestGetTicker24h_OK_AndCache(t *testing.T) {
 	}
 }
 
+// Test that GetTicker24h returns a copy. Mutation must not pollute the cache.
+func TestGetTicker24h_ReturnsCopy_NotSharedPointer(t *testing.T) {
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "lastPrice": "50000", "volume": "100", "quoteVolume": "5000000",
+			"priceChange": "0", "priceChangePercent": "0", "openPrice": "49000",
+			"highPrice": "51000", "lowPrice": "48000", "openTime": 1_700_000_000_000,
+			"closeTime": 1_700_086_400_000, "count": 10,
+		})
+	}))
+	defer srv.Close()
+
+	tickers := cache.New[*domain.Ticker24h](time.Minute)
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), TickerCache: tickers})
+
+	t1, err := c.GetTicker24h(context.Background(), "btcusdt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t1.LastPrice = "HACKED"
+
+	t2, err := c.GetTicker24h(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if t2.LastPrice == "HACKED" {
+		t.Fatal("ticker cache was polluted by mutation of returned value")
+	}
+	if hits != 1 {
+		t.Fatalf("unexpected hits: %d", hits)
+	}
+}
+
 func TestGetTicker24h_InvalidSymbol(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

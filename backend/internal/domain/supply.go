@@ -26,3 +26,14 @@ type AssetSupply struct {
 	// Source identifies the data provider (e.g. "coingecko").
 	Source string
 }
+
+// CloneFloatPtr returns a copy of the pointed-to float64 (or nil). This is used
+// to ensure that values returned from caches are not shared pointers, preventing
+// accidental mutation of cached data from affecting other callers or the cache itself.
+func CloneFloatPtr(p *float64) *float64 {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	return &v
+}

@@ -127,7 +127,9 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 
 	if c.tickers != nil {
 		if hit, ok := c.tickers.Get(symbol); ok {
-			return hit, nil
+			// Return a copy so callers cannot mutate the cached *Ticker24h.
+			cp := *hit
+			return &cp, nil
 		}
 	}
 
@@ -164,7 +166,9 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 	if c.tickers != nil {
 		c.tickers.Set(symbol, t)
 	}
-	return t, nil
+	// Return a copy in all cases so that the caller cannot mutate the value stored in cache.
+	cp := *t
+	return &cp, nil
 }
 
 
@@ -173,6 +177,9 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 // Concurrent cold misses are coalesced via singleflight.
 func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, error) {
 	const cacheKey = "all"
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	if c.spotMarkets != nil {
 		if hit, ok := c.spotMarkets.Get(cacheKey); ok {
 			return append([]domain.SpotMarket(nil), hit...), nil
@@ -186,10 +193,16 @@ func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, erro
 				return hit, nil
 			}
 		}
-		return c.fetchSpotMarkets(ctx)
+		// Use a detached context for the actual fetch. The work is shared across
+		// callers; a single caller's cancellation (or short timeout) must not
+		// abort the cache fill for other waiters.
+		return c.fetchSpotMarkets(context.Background())
 	})
 	if err != nil {
 		return nil, err
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	list := v.([]domain.SpotMarket)
 	return append([]domain.SpotMarket(nil), list...), nil
