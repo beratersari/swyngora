@@ -14,6 +14,22 @@ Expose first market-data APIs so clients can:
 
 - Lists supported Binance candle intervals used by the candles endpoint.
 
+
+### Spot markets — `GET /api/v1/market/spot`
+
+- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr`
+- **Params:**
+  - `q` — search substring (symbol / base / quote)
+  - `quote`, `base`, `status` — filters
+  - `sort` — `quoteVolume` (default), `volume`, `priceChangePercent`, `lastPrice`, `tradeCount`, `symbol`, `baseAsset`
+  - `order` — `asc` | `desc` (default `desc` for metrics)
+  - `limit` (default 50, max 500), `offset` (default 0)
+- **Returns:** paged list with `total` match count, 24h metrics, supply, and market caps
+  - `marketCapCirculating` / `marketCapTotal` / `marketCapMax` = USD price × supply
+  - `marketCapMax` is the string `"∞"` when max supply is undefined
+  - Supply/mcap is **not** fetched per user request: daily CoinGecko bulk refresh populates cache; requests are cache-only
+  - base/quote/status are filter params only (not list columns)
+
 ### Candles — `GET /api/v1/market/candles`
 
 - **Source:** Binance `GET /api/v3/klines`
@@ -39,6 +55,8 @@ In-memory TTL caches with periodic cleanup:
 | Data | Default TTL |
 |---|---|
 | Candles | 30s |
+| Spot markets (joined list) | 30s |
+| Supply / mcap snapshot | Daily @ 03:00 (default UTC) + startup; cache TTL 26h |
 | Ticker | 15s |
 | Supply | 5m |
 

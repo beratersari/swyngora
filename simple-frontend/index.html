@@ -13,7 +13,7 @@
         <p class="eyebrow">Swyngora · test harness</p>
         <h1>Market data explorer</h1>
         <p class="sub">
-          Calls the local Go API. Candles &amp; 24h volume from <strong>Binance</strong>;
+          Calls the local Go API. Spot list, candles &amp; 24h volume from <strong>Binance</strong>;
           supply from free <strong>CoinGecko</strong> (Binance does not publish supply on market endpoints).
         </p>
       </div>
@@ -52,9 +52,74 @@
       </div>
     </section>
 
+    
+    <section class="card controls spot-controls">
+      <label class="field">
+        <span>Search spot</span>
+        <input id="spotQ" type="text" value="" placeholder="btc, eth, …" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Quote filter</span>
+        <input id="spotQuote" type="text" value="USDT" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Sort by</span>
+        <select id="spotSort">
+          <option value="quoteVolume" selected>quoteVolume</option>
+          <option value="volume">volume</option>
+          <option value="priceChangePercent">priceChangePercent</option>
+          <option value="lastPrice">lastPrice</option>
+          <option value="tradeCount">tradeCount</option>
+          <option value="symbol">symbol</option>
+          <option value="baseAsset">baseAsset</option>
+          <option value="marketCapCirculating">marketCapCirculating</option>
+          <option value="marketCapTotal">marketCapTotal</option>
+          <option value="marketCapMax">marketCapMax</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Order</span>
+        <select id="spotOrder">
+          <option value="desc" selected>desc</option>
+          <option value="asc">asc</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Limit</span>
+        <input id="spotLimit" type="number" min="1" max="500" value="25" />
+      </label>
+      <div class="actions">
+        <button type="button" id="btnSpot" class="primary">List spot markets</button>
+      </div>
+    </section>
+
     <p id="status" class="status" role="status"></p>
 
     <div class="grid">
+      <section class="card wide">
+        <h2>Spot markets <span id="spotMeta" class="muted" style="font-weight:400;font-size:0.9rem"></span></h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Last</th>
+                <th>Change %</th>
+                <th>Volume</th>
+                <th>Quote vol</th>
+                <th>Trades</th>
+                <th>Mcap (circ)</th>
+                <th>Mcap (total)</th>
+                <th>Mcap (max)</th>
+              </tr>
+            </thead>
+            <tbody id="spotBody">
+              <tr><td colspan="9" class="muted">No data yet. Click “List spot markets”.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="card">
         <h2>24h ticker / volume</h2>
         <div id="ticker" class="panel muted">No data yet.</div>

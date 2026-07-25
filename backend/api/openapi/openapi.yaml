@@ -4,7 +4,7 @@ info:
   description: |
     Public market data for Swyngora (v0.1).
 
-    - Candles and 24h volume/ticker are sourced from **Binance** public REST APIs.
+    - Candles, 24h volume/ticker, and spot market listing are sourced from **Binance** public REST APIs.
     - Circulating / total / max supply is sourced from free **CoinGecko** metadata
       (Binance market endpoints do not expose supply).
   version: 0.1.0
@@ -51,6 +51,89 @@ paths:
                     items:
                       type: string
                     example: ["1m", "5m", "1h", "1d"]
+
+  /api/v1/market/spot:
+    get:
+      summary: List Binance spot markets with search and sort
+      description: |
+        Returns spot-tradable pairs from Binance `exchangeInfo`, joined with
+        24h ticker metrics. Supports substring search (`q`), quote/base/status
+        filters, sorting by volume and other metrics, and offset pagination.
+      operationId: listSpotMarkets
+      tags: [Market]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive search on symbol, baseAsset, or quoteAsset
+          schema:
+            type: string
+            example: btc
+        - name: quote
+          in: query
+          required: false
+          description: Filter by quote asset (e.g. USDT)
+          schema:
+            type: string
+            example: USDT
+        - name: base
+          in: query
+          required: false
+          description: Filter by base asset (e.g. BTC)
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Filter by exchange status (e.g. TRADING)
+          schema:
+            type: string
+            example: TRADING
+        - name: sort
+          in: query
+          required: false
+          description: Sort field (default quoteVolume)
+          schema:
+            type: string
+            default: quoteVolume
+            enum: [quoteVolume, volume, priceChangePercent, lastPrice, tradeCount, symbol, baseAsset, marketCapCirculating, marketCapTotal, marketCapMax]
+        - name: order
+          in: query
+          required: false
+          description: Sort direction (default desc for metrics, asc for symbol/baseAsset)
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: limit
+          in: query
+          required: false
+          description: Page size (1–500, default 50)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Rows to skip after filter+sort (default 0)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Paged spot market list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotListResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/candles:
     get:
       summary: Fetch OHLCV candlesticks
@@ -291,3 +374,71 @@ components:
           type: string
         note:
           type: string
+
+    SpotListResponse:
+      type: object
+      properties:
+        exchange:
+          type: string
+        query:
+          type: string
+        sort:
+          type: string
+        order:
+          type: string
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpotMarket'
+    SpotMarket:
+      type: object
+      properties:
+        symbol:
+          type: string
+        lastPrice:
+          type: string
+        priceChange:
+          type: string
+        priceChangePercent:
+          type: string
+        highPrice:
+          type: string
+        lowPrice:
+          type: string
+        volume:
+          type: string
+        quoteVolume:
+          type: string
+        tradeCount:
+          type: integer
+          format: int64
+        circulatingSupply:
+          type: number
+          nullable: true
+        totalSupply:
+          type: number
+          nullable: true
+        maxSupply:
+          type: number
+          nullable: true
+        marketCapCirculating:
+          type: number
+          nullable: true
+          description: USD price × circulating supply
+        marketCapTotal:
+          type: number
+          nullable: true
+          description: USD price × total supply
+        marketCapMax:
+          description: USD price × max supply, or the string "∞" when max supply is undefined
+          nullable: true
+          oneOf:
+            - type: number
+            - type: string
+              enum: ["∞"]

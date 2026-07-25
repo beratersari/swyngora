@@ -181,7 +181,7 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 		CurrentPriceUSD:   sup.CurrentPriceUSD,
 		AsOf:              sup.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:            sup.Source,
-		Note:              "Supply metrics are not available from Binance public market APIs; sourced from free CoinGecko metadata.",
+		Note:              "Supply metrics are not available from Binance; served from a daily CoinGecko snapshot cache (default refresh 03:00 UTC, plus startup). Request path does not call CoinGecko.",
 	})
 }
 
@@ -217,3 +217,114 @@ func parseTimeParam(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%w: time must be RFC3339 or unix milliseconds", domain.ErrInvalidArgument)
 }
 
+
+
+type spotMarketDTO struct {
+	Symbol             string   `json:"symbol"`
+	LastPrice          string   `json:"lastPrice"`
+	PriceChange        string   `json:"priceChange"`
+	PriceChangePercent string   `json:"priceChangePercent"`
+	HighPrice          string   `json:"highPrice"`
+	LowPrice           string   `json:"lowPrice"`
+	Volume             string   `json:"volume"`
+	QuoteVolume        string   `json:"quoteVolume"`
+	TradeCount         int64    `json:"tradeCount"`
+	CirculatingSupply  *float64 `json:"circulatingSupply"`
+	TotalSupply        *float64 `json:"totalSupply"`
+	MaxSupply          *float64 `json:"maxSupply"`
+	MarketCapCirculating *float64 `json:"marketCapCirculating"`
+	MarketCapTotal       *float64 `json:"marketCapTotal"`
+	// MarketCapMax is a number, the string "∞" when max supply is undefined, or null.
+	MarketCapMax any `json:"marketCapMax"`
+}
+
+type spotListResponse struct {
+	Exchange string          `json:"exchange"`
+	Query    string          `json:"query"`
+	Sort     string          `json:"sort"`
+	Order    string          `json:"order"`
+	Total    int             `json:"total"`
+	Limit    int             `json:"limit"`
+	Offset   int             `json:"offset"`
+	Items    []spotMarketDTO `json:"items"`
+}
+
+// ListSpotMarkets handles GET /api/v1/market/spot
+func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	offset := 0
+	if raw := q.Get("offset"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: offset must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		offset = n
+	}
+
+	res, err := h.svc.ListSpotMarkets(r.Context(), domain.SpotListQuery{
+		Query:      q.Get("q"),
+		QuoteAsset: q.Get("quote"),
+		BaseAsset:  q.Get("base"),
+		Status:     q.Get("status"),
+		SortBy:     domain.SpotSortField(q.Get("sort")),
+		Order:      domain.SortOrder(q.Get("order")),
+		Limit:      limit,
+		Offset:     offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	out := spotListResponse{
+		Exchange: "binance",
+		Query:    res.Query,
+		Sort:     string(res.SortBy),
+		Order:    string(res.Order),
+		Total:    res.Total,
+		Limit:    res.Limit,
+		Offset:   res.Offset,
+		Items:    make([]spotMarketDTO, 0, len(res.Items)),
+	}
+	for _, m := range res.Items {
+		out.Items = append(out.Items, spotMarketDTO{
+			Symbol:               m.Symbol,
+			LastPrice:            m.LastPrice,
+			PriceChange:          m.PriceChange,
+			PriceChangePercent:   m.PriceChangePercent,
+			HighPrice:            m.HighPrice,
+			LowPrice:             m.LowPrice,
+			Volume:               m.Volume,
+			QuoteVolume:          m.QuoteVolume,
+			TradeCount:           m.TradeCount,
+			CirculatingSupply:    m.CirculatingSupply,
+			TotalSupply:          m.TotalSupply,
+			MaxSupply:            m.MaxSupply,
+			MarketCapCirculating: m.MarketCapCirculating,
+			MarketCapTotal:       m.MarketCapTotal,
+			MarketCapMax:         encodeMarketCapMax(m),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+
+func encodeMarketCapMax(m domain.SpotMarket) any {
+	if m.MarketCapMaxInfinite {
+		return "∞"
+	}
+	if m.MarketCapMax != nil {
+		return *m.MarketCapMax
+	}
+	return nil
+}

@@ -244,3 +244,21 @@ code {
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
 }
+
+button.linkish {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 0;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.spot-controls {
+  margin-bottom: 0.5rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+}
+@media (max-width: 900px) {
+  .spot-controls { grid-template-columns: 1fr 1fr; }
+}

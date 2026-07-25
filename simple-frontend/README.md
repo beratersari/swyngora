@@ -6,6 +6,7 @@ Lightweight static UI for manually exercising the Swyngora market API during dev
 
 ## Features
 
+- List/search/sort Binance spot markets by volume and other metrics
 - Fetch Binance candlesticks at selectable intervals
 - Fetch 24h ticker / base & quote volume
 - Fetch circulating / total / max supply (via API → CoinGecko)

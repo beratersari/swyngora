@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,142 +13,154 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-func TestGetSupply_WellKnown(t *testing.T) {
-	var path string
+func TestGetSupply_CacheOnly(t *testing.T) {
+	hits := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path = r.URL.Path
-		circ := 19_800_000.0
-		total := 19_800_000.0
-		max := 21_000_000.0
-		price := 64000.0
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":     "bitcoin",
-			"symbol": "btc",
-			"name":   "Bitcoin",
-			"market_data": map[string]any{
-				"circulating_supply": circ,
-				"total_supply":       total,
-				"max_supply":         max,
-				"current_price":      map[string]any{"usd": price},
-			},
-		})
+		hits++
+		http.Error(w, "should not call", 500)
 	}))
 	defer srv.Close()
 
-	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
-	sup, err := c.GetSupply(context.Background(), "btc")
+	supCache := cache.New[*domain.AssetSupply](time.Hour)
+	circ := 21_000_000.0
+	supCache.Set("BTC", &domain.AssetSupply{Asset: "BTC", CirculatingSupply: &circ, Source: "coingecko"})
+
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client(), SupplyCache: supCache})
+	got, err := c.GetSupply(context.Background(), "btc")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if path != "/api/v3/coins/bitcoin" {
-		t.Fatalf("path=%s", path)
+	if got.CirculatingSupply == nil || *got.CirculatingSupply != circ {
+		t.Fatalf("got=%+v", got)
 	}
-	if sup.Asset != "BTC" || sup.MaxSupply == nil || *sup.MaxSupply != 21_000_000 {
-		t.Fatalf("supply=%+v", sup)
-	}
-	if sup.CirculatingSupply == nil || *sup.CirculatingSupply != 19_800_000 {
-		t.Fatalf("circulating=%v", sup.CirculatingSupply)
-	}
-	if sup.Source != "coingecko" {
-		t.Fatalf("source=%s", sup.Source)
-	}
-}
-
-func TestGetSupply_SearchFallback(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/api/v3/search":
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"coins": []map[string]any{
-					{"id": "foo-coin", "symbol": "FOO", "name": "Foo"},
-				},
-			})
-		case strings.HasPrefix(r.URL.Path, "/api/v3/coins/"):
-			circ := 1_000.0
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"id":     "foo-coin",
-				"symbol": "foo",
-				"name":   "Foo",
-				"market_data": map[string]any{
-					"circulating_supply": circ,
-					"total_supply":       circ,
-					"max_supply":         nil,
-					"current_price":      map[string]any{"usd": 1.5},
-				},
-			})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	c := NewClient(Options{
-		BaseURL:     srv.URL,
-		HTTPClient:  srv.Client(),
-		SymbolCache: cache.New[string](time.Hour),
-		SupplyCache: cache.New[*domain.AssetSupply](time.Hour),
-	})
-	sup, err := c.GetSupply(context.Background(), "FOO")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sup.ProviderID != "foo-coin" || sup.MaxSupply != nil {
-		t.Fatalf("supply=%+v", sup)
+	if hits != 0 {
+		t.Fatalf("GetSupply must not hit network, hits=%d", hits)
 	}
 
-	// Second call should be fully cached (no panic if server dies).
-	srv.Close()
-	sup2, err := c.GetSupply(context.Background(), "FOO")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if sup2.Name != "Foo" {
-		t.Fatalf("cached=%+v", sup2)
-	}
-}
-
-func TestGetSupply_NotFound(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"coins": []any{}})
-	}))
-	defer srv.Close()
-
-	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
-	_, err := c.GetSupply(context.Background(), "ZZZNOPE")
+	_, err = c.GetSupply(context.Background(), "ETH")
 	if !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("err=%v", err)
+		t.Fatalf("miss should be not found, err=%v", err)
 	}
 }
 
-func TestNormalizeAsset_PairSuffix(t *testing.T) {
-	if got := normalizeAsset("btcusdt"); got != "BTC" {
-		t.Fatalf("got %s", got)
+func TestRefresh_PopulatesCache(t *testing.T) {
+	pages := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v3/coins/markets" {
+			t.Fatalf("path=%s", r.URL.Path)
+		}
+		pages++
+		page := r.URL.Query().Get("page")
+		circ := 10.0
+		max := 21.0
+		price := 100.0
+		if page == "1" {
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": "bitcoin", "symbol": "btc", "name": "Bitcoin",
+					"current_price": price, "circulating_supply": circ, "total_supply": circ, "max_supply": max},
+				{"id": "ethereum", "symbol": "eth", "name": "Ethereum",
+					"current_price": 50.0, "circulating_supply": circ, "total_supply": circ, "max_supply": nil},
+			})
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
+	}))
+	defer srv.Close()
+
+	supCache := cache.New[*domain.AssetSupply](time.Hour)
+	c := NewClient(Options{
+		BaseURL:          srv.URL,
+		HTTPClient:       srv.Client(),
+		SupplyCache:      supCache,
+		RefreshPages:     2,
+		RefreshPageDelay: time.Millisecond,
+	})
+	n, err := c.Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := normalizeAsset("ETH"); got != "ETH" {
-		t.Fatalf("got %s", got)
+	if n != 2 {
+		t.Fatalf("stored=%d", n)
+	}
+	// markets pages + well-known ids batch
+	if pages < 2 {
+		t.Fatalf("pages=%d", pages)
+	}
+
+	btc, err := c.GetSupply(context.Background(), "BTC")
+	if err != nil || btc.MaxSupply == nil {
+		t.Fatalf("btc=%+v err=%v", btc, err)
+	}
+	eth, err := c.GetSupply(context.Background(), "ETH")
+	if err != nil || eth.MaxSupply != nil {
+		t.Fatalf("eth=%+v err=%v", eth, err)
 	}
 }
 
 func TestGetSupply_EmptyAsset(t *testing.T) {
-	c := NewClient(Options{BaseURL: "http://example.invalid"})
+	c := NewClient(Options{SupplyCache: cache.New[*domain.AssetSupply](time.Hour)})
 	_, err := c.GetSupply(context.Background(), "  ")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
 	}
 }
 
-func TestGetSupply_RateLimited(t *testing.T) {
+func TestNormalizeAsset_PairSuffix(t *testing.T) {
+	cases := map[string]string{
+		"btcusdt":  "BTC",
+		"BTCUSDT":  "BTC",
+		"ethusdc":  "ETH",
+		"BTC":      "BTC",
+		"WBTC":     "WBTC", // must NOT become "W"
+		"wbtcusdt": "WBTC",
+		"RENBTC":   "RENBTC",
+		"WBETH":    "WBETH",
+		"BETH":     "BETH",
+		"ETHBTC":   "ETHBTC", // ambiguous pair — do not strip crypto quotes
+	}
+	for in, want := range cases {
+		if got := normalizeAsset(in); got != want {
+			t.Fatalf("normalizeAsset(%q)=%q want %q", in, got, want)
+		}
+	}
+}
+
+func TestRefresh_WellKnownIncludesWBTC(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusTooManyRequests)
+		ids := r.URL.Query().Get("ids")
+		if ids != "" {
+			// well-known batch
+			circ := 150_000.0
+			price := 64000.0
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"id": "wrapped-bitcoin", "symbol": "wbtc", "name": "Wrapped Bitcoin",
+					"current_price": price, "circulating_supply": circ, "total_supply": circ, "max_supply": circ},
+			})
+			return
+		}
+		// empty top pages
+		_ = json.NewEncoder(w).Encode([]map[string]any{})
 	}))
 	defer srv.Close()
 
-	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
-	_, err := c.GetSupply(context.Background(), "BTC")
-	if !errors.Is(err, domain.ErrNotFound) && !errors.Is(err, domain.ErrRateLimited) {
-		// well-known BTC hits coins endpoint directly
+	supCache := cache.New[*domain.AssetSupply](time.Hour)
+	c := NewClient(Options{
+		BaseURL: srv.URL, HTTPClient: srv.Client(), SupplyCache: supCache,
+		RefreshPages: 1, RefreshPageDelay: time.Millisecond,
+	})
+	if _, err := c.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
 	}
-	if !errors.Is(err, domain.ErrRateLimited) {
-		t.Fatalf("err=%v want rate limited", err)
+	wbtc, err := c.GetSupply(context.Background(), "WBTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wbtc.CirculatingSupply == nil || *wbtc.CirculatingSupply != 150_000 {
+		t.Fatalf("wbtc supply=%v", wbtc.CirculatingSupply)
+	}
+	// Sanity: mcap ~ 150k * 64k = 9.6B, not hundreds of trillions
+	mcap := *wbtc.CirculatingSupply * *wbtc.CurrentPriceUSD
+	if mcap > 1e12 {
+		t.Fatalf("absurd mcap %v", mcap)
 	}
 }

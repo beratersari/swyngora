@@ -14,22 +14,29 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// Client implements domain.SupplyPort using the free CoinGecko public API.
-// Binance does not publish circulating/total/max supply on public market endpoints.
+// Client implements domain.SupplyPort.
+//
+// User-facing GetSupply is **cache-only** (no live CoinGecko call).
+// Refresh bulk-loads CoinGecko /coins/markets pages into the cache (daily job).
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	supply     *cache.TTL[*domain.AssetSupply]
-	// idBySymbol caches resolved CoinGecko IDs for tickers (BTC -> bitcoin).
 	idBySymbol *cache.TTL[string]
+
+	// Refresh tuning (set via Options).
+	refreshPages     int
+	refreshPageDelay time.Duration
 }
 
 // Options configures the CoinGecko client.
 type Options struct {
-	BaseURL      string
-	HTTPClient   *http.Client
-	SupplyCache  *cache.TTL[*domain.AssetSupply]
-	SymbolCache  *cache.TTL[string]
+	BaseURL          string
+	HTTPClient       *http.Client
+	SupplyCache      *cache.TTL[*domain.AssetSupply]
+	SymbolCache      *cache.TTL[string]
+	RefreshPages     int           // default 4 (×250 coins)
+	RefreshPageDelay time.Duration // delay between market pages
 }
 
 // NewClient constructs a CoinGecko supply client.
@@ -42,102 +49,125 @@ func NewClient(opts Options) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
+	pages := opts.RefreshPages
+	if pages <= 0 {
+		pages = 4
+	}
+	delay := opts.RefreshPageDelay
+	if delay <= 0 {
+		delay = 2 * time.Second
+	}
 	return &Client{
-		baseURL:    base,
-		httpClient: hc,
-		supply:     opts.SupplyCache,
-		idBySymbol: opts.SymbolCache,
+		baseURL:          base,
+		httpClient:       hc,
+		supply:           opts.SupplyCache,
+		idBySymbol:       opts.SymbolCache,
+		refreshPages:     pages,
+		refreshPageDelay: delay,
 	}
 }
 
-// GetSupply returns circulating / total / max supply for an asset ticker (e.g. BTC, ETH).
+// GetSupply returns a cached supply snapshot for an asset ticker (e.g. BTC).
+// It does **not** call CoinGecko — populate the cache via Refresh (daily job).
 func (c *Client) GetSupply(ctx context.Context, asset string) (*domain.AssetSupply, error) {
+	_ = ctx
 	asset = normalizeAsset(asset)
 	if asset == "" {
 		return nil, fmt.Errorf("%w: asset is required", domain.ErrInvalidArgument)
 	}
-
-	if c.supply != nil {
-		if hit, ok := c.supply.Get(asset); ok {
-			return hit, nil
-		}
+	if c.supply == nil {
+		return nil, fmt.Errorf("%w: supply cache not configured", domain.ErrUpstream)
 	}
-
-	id, err := c.resolveID(ctx, asset)
-	if err != nil {
-		return nil, err
+	if hit, ok := c.supply.Get(asset); ok {
+		// Return a shallow copy so callers cannot mutate the cache entry.
+		cp := *hit
+		return &cp, nil
 	}
-
-	params := url.Values{}
-	params.Set("localization", "false")
-	params.Set("tickers", "false")
-	params.Set("market_data", "true")
-	params.Set("community_data", "false")
-	params.Set("developer_data", "false")
-	params.Set("sparkline", "false")
-
-	body, err := c.get(ctx, "/api/v3/coins/"+url.PathEscape(id), params)
-	if err != nil {
-		return nil, err
-	}
-
-	var raw coinResponse
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("%w: decode coin: %v", domain.ErrUpstream, err)
-	}
-
-	sup := &domain.AssetSupply{
-		Asset:               strings.ToUpper(raw.Symbol),
-		Name:                raw.Name,
-		ProviderID:          raw.ID,
-		CirculatingSupply:   raw.MarketData.CirculatingSupply,
-		TotalSupply:         raw.MarketData.TotalSupply,
-		MaxSupply:           raw.MarketData.MaxSupply,
-		CurrentPriceUSD:     raw.MarketData.CurrentPrice.USD,
-		AsOf:                time.Now().UTC(),
-		Source:              "coingecko",
-	}
-	if sup.Asset == "" {
-		sup.Asset = asset
-	}
-
-	if c.supply != nil {
-		c.supply.Set(asset, sup)
-	}
-	return sup, nil
+	return nil, fmt.Errorf("%w: supply for %q not in daily snapshot cache", domain.ErrNotFound, asset)
 }
 
-func (c *Client) resolveID(ctx context.Context, asset string) (string, error) {
-	if wellKnown, ok := wellKnownIDs[asset]; ok {
-		return wellKnown, nil
+// Refresh bulk-loads top coins by market cap from CoinGecko into the supply cache.
+// Safe to call from a background daily job. Returns the number of assets written.
+func (c *Client) Refresh(ctx context.Context) (int, error) {
+	if c.supply == nil {
+		return 0, fmt.Errorf("%w: supply cache not configured", domain.ErrUpstream)
 	}
-	if c.idBySymbol != nil {
-		if id, ok := c.idBySymbol.Get(asset); ok {
-			return id, nil
+	seen := map[string]struct{}{}
+	stored := 0
+	asOf := time.Now().UTC()
+	for page := 1; page <= c.refreshPages; page++ {
+		if err := ctx.Err(); err != nil {
+			return stored, err
 		}
+		n, err := c.refreshMarketsPage(ctx, page, asOf, seen)
+		if err != nil {
+			return stored, err
+		}
+		stored += n
+		if page < c.refreshPages && c.refreshPageDelay > 0 {
+			select {
+			case <-ctx.Done():
+				return stored, ctx.Err()
+			case <-time.After(c.refreshPageDelay):
+			}
+		}
+	}
+	// Ensure important tickers (e.g. WBTC) are present even if outside top pages.
+	n, err := c.refreshByIDs(ctx, wellKnownCoinIDs(), asOf, seen)
+	if err != nil {
+		// Non-fatal: markets pages already loaded.
+		return stored, nil
+	}
+	stored += n
+	return stored, nil
+}
+
+func (c *Client) refreshMarketsPage(ctx context.Context, page int, asOf time.Time, seen map[string]struct{}) (int, error) {
+	params := url.Values{}
+	params.Set("vs_currency", "usd")
+	params.Set("order", "market_cap_desc")
+	params.Set("per_page", "250")
+	params.Set("page", fmt.Sprintf("%d", page))
+	params.Set("sparkline", "false")
+
+	body, err := c.get(ctx, "/api/v3/coins/markets", params)
+	if err != nil {
+		return 0, err
+	}
+	var rows []marketRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return 0, fmt.Errorf("%w: decode markets: %v", domain.ErrUpstream, err)
 	}
 
-	// Search free endpoint — pick the first coin whose symbol matches exactly.
-	params := url.Values{}
-	params.Set("query", asset)
-	body, err := c.get(ctx, "/api/v3/search", params)
-	if err != nil {
-		return "", err
-	}
-	var sr searchResponse
-	if err := json.Unmarshal(body, &sr); err != nil {
-		return "", fmt.Errorf("%w: decode search: %v", domain.ErrUpstream, err)
-	}
-	want := strings.ToLower(asset)
-	for _, coin := range sr.Coins {
-		if strings.ToLower(coin.Symbol) == want {
-			if c.idBySymbol != nil {
-				c.idBySymbol.Set(asset, coin.ID)
-			}
-			return coin.ID, nil
+	// First occurrence wins (highest mcap first via order=market_cap_desc).
+	written := 0
+	for _, row := range rows {
+		asset := strings.ToUpper(strings.TrimSpace(row.Symbol))
+		if asset == "" {
+			continue
 		}
+		if _, ok := seen[asset]; ok {
+			continue // keep higher-ranked entry from earlier pages/rows
+		}
+		seen[asset] = struct{}{}
+		sup := &domain.AssetSupply{
+			Asset:             asset,
+			Name:              row.Name,
+			ProviderID:        row.ID,
+			CirculatingSupply: row.CirculatingSupply,
+			TotalSupply:       row.TotalSupply,
+			MaxSupply:         row.MaxSupply,
+			CurrentPriceUSD:   row.CurrentPrice,
+			AsOf:              asOf,
+			Source:            "coingecko",
+		}
+		c.supply.Set(asset, sup)
+		if c.idBySymbol != nil && row.ID != "" {
+			c.idBySymbol.Set(asset, row.ID)
+		}
+		written++
 	}
-	return "", fmt.Errorf("%w: asset %q", domain.ErrNotFound, asset)
+	return written, nil
 }
 
 func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
@@ -158,7 +188,7 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
 		return nil, fmt.Errorf("%w: read body: %v", domain.ErrUpstream, err)
 	}
@@ -175,68 +205,93 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 	return body, nil
 }
 
-// wellKnownIDs avoids an extra search call for the most common assets.
-var wellKnownIDs = map[string]string{
-	"BTC":  "bitcoin",
-	"ETH":  "ethereum",
-	"BNB":  "binancecoin",
-	"XRP":  "ripple",
-	"SOL":  "solana",
-	"ADA":  "cardano",
-	"DOGE": "dogecoin",
-	"TRX":  "tron",
-	"DOT":  "polkadot",
-	"AVAX": "avalanche-2",
-	"LINK": "chainlink",
-	"MATIC": "matic-network",
-	"POL":  "polygon-ecosystem-token",
-	"LTC":  "litecoin",
-	"BCH":  "bitcoin-cash",
-	"ATOM": "cosmos",
-	"UNI":  "uniswap",
-	"XLM":  "stellar",
-	"NEAR": "near",
-	"APT":  "aptos",
-	"ARB":  "arbitrum",
-	"OP":   "optimism",
-	"SUI":  "sui",
-	"PEPE": "pepe",
-	"SHIB": "shiba-inu",
-	"TON":  "the-open-network",
-	"USDT": "tether",
-	"USDC": "usd-coin",
+type marketRow struct {
+	ID                string   `json:"id"`
+	Symbol            string   `json:"symbol"`
+	Name              string   `json:"name"`
+	CurrentPrice      *float64 `json:"current_price"`
+	CirculatingSupply *float64 `json:"circulating_supply"`
+	TotalSupply       *float64 `json:"total_supply"`
+	MaxSupply         *float64 `json:"max_supply"`
 }
 
-type coinResponse struct {
-	ID     string `json:"id"`
-	Symbol string `json:"symbol"`
-	Name   string `json:"name"`
-	MarketData struct {
-		CirculatingSupply *float64 `json:"circulating_supply"`
-		TotalSupply       *float64 `json:"total_supply"`
-		MaxSupply         *float64 `json:"max_supply"`
-		CurrentPrice      struct {
-			USD *float64 `json:"usd"`
-		} `json:"current_price"`
-	} `json:"market_data"`
+
+// wellKnownCoinIDs are always refreshed so high-signal assets (including wrapped
+// majors that may fall outside top market-cap pages) stay in the daily cache.
+func wellKnownCoinIDs() []string {
+	return []string{
+		"bitcoin", "ethereum", "binancecoin", "ripple", "solana", "cardano",
+		"dogecoin", "tron", "polkadot", "avalanche-2", "chainlink",
+		"matic-network", "polygon-ecosystem-token", "litecoin", "bitcoin-cash",
+		"cosmos", "uniswap", "stellar", "near", "aptos", "arbitrum", "optimism",
+		"sui", "pepe", "shiba-inu", "the-open-network", "tether", "usd-coin",
+		"wrapped-bitcoin", "wrapped-beacon-eth", "staked-ether",
+	}
 }
 
-type searchResponse struct {
-	Coins []struct {
-		ID     string `json:"id"`
-		Symbol string `json:"symbol"`
-		Name   string `json:"name"`
-	} `json:"coins"`
+func (c *Client) refreshByIDs(ctx context.Context, ids []string, asOf time.Time, seen map[string]struct{}) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	const batch = 50
+	written := 0
+	for i := 0; i < len(ids); i += batch {
+		end := i + batch
+		if end > len(ids) {
+			end = len(ids)
+		}
+		params := url.Values{}
+		params.Set("vs_currency", "usd")
+		params.Set("ids", strings.Join(ids[i:end], ","))
+		params.Set("sparkline", "false")
+		body, err := c.get(ctx, "/api/v3/coins/markets", params)
+		if err != nil {
+			return written, err
+		}
+		var rows []marketRow
+		if err := json.Unmarshal(body, &rows); err != nil {
+			return written, fmt.Errorf("%w: decode markets by id: %v", domain.ErrUpstream, err)
+		}
+		for _, row := range rows {
+			asset := strings.ToUpper(strings.TrimSpace(row.Symbol))
+			if asset == "" {
+				continue
+			}
+			sup := &domain.AssetSupply{
+				Asset:             asset,
+				Name:              row.Name,
+				ProviderID:        row.ID,
+				CirculatingSupply: row.CirculatingSupply,
+				TotalSupply:       row.TotalSupply,
+				MaxSupply:         row.MaxSupply,
+				CurrentPriceUSD:   row.CurrentPrice,
+				AsOf:              asOf,
+				Source:            "coingecko",
+			}
+			c.supply.Set(asset, sup)
+			if c.idBySymbol != nil && row.ID != "" {
+				c.idBySymbol.Set(asset, row.ID)
+			}
+			if _, ok := seen[asset]; !ok {
+				seen[asset] = struct{}{}
+				written++
+			}
+		}
+	}
+	return written, nil
 }
 
+// normalizeAsset maps a user-facing ticker or pair to a base asset key for the supply cache.
+//
+// Only USD-stable quote suffixes are stripped (BTCUSDT → BTC). Crypto quote suffixes
+// like BTC/ETH/BNB are NOT stripped — otherwise WBTC becomes "W", RENBTC becomes "REN",
+// and market caps are computed against the wrong supply.
 func normalizeAsset(s string) string {
 	s = strings.TrimSpace(s)
-	// Allow pairs like BTCUSDT — strip common quote suffixes for convenience.
 	upper := strings.ToUpper(s)
-	for _, q := range []string{"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "BTC", "ETH", "BNB"} {
+	for _, q := range []string{"USDT", "USDC", "BUSD", "FDUSD", "TUSD", "DAI", "USD"} {
 		if len(upper) > len(q) && strings.HasSuffix(upper, q) {
 			base := strings.TrimSuffix(upper, q)
-			// Avoid stripping when the whole ticker is the quote (e.g. "USDT").
 			if base != "" && base != q {
 				return base
 			}
