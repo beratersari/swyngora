@@ -39,7 +39,9 @@ func Load() Config {
 		// Safety TTL slightly over 24h so a late refresh still serves yesterday's snapshot.
 		SupplyCacheTTL:     durationEnv("SUPPLY_CACHE_TTL", 26*time.Hour),
 		CacheCleanupEvery:  durationEnv("CACHE_CLEANUP_EVERY", 1*time.Minute),
-		SpotMarketCacheTTL: durationEnv("SPOT_MARKET_CACHE_TTL", 30*time.Second),
+		// Short TTL for joined spot list prices (dashboard live poll). Meta (exchangeInfo /
+		// product tags) is cached much longer inside the Binance adapter.
+		SpotMarketCacheTTL: durationEnv("SPOT_MARKET_CACHE_TTL", 5*time.Second),
 
 		SupplyRefreshHour:      intEnv("SUPPLY_REFRESH_HOUR", 3),
 		SupplyRefreshMinute:    intEnv("SUPPLY_REFRESH_MINUTE", 0),

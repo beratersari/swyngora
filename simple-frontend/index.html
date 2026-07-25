@@ -3,18 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Swyngora · Simple Frontend (test)</title>
+  <title>Swyngora · Markets dashboard</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="header">
       <div>
-        <p class="eyebrow">Swyngora · test harness</p>
-        <h1>Market data explorer</h1>
+        <p class="eyebrow">Swyngora · markets</p>
+        <h1>Coin dashboard</h1>
         <p class="sub">
-          Calls the local Go API. Spot list, candles &amp; 24h volume from <strong>Binance</strong>;
-          circulating / total / max supply from <strong>Binance</strong> marketing data (daily snapshot).
+          Live Binance spot dashboard. Prices auto-refresh (default every 10s); cells flash green/red when values move.
+          Click a column header to sort. Use <strong>column chips</strong> to show, hide, or reorder fields.
         </p>
       </div>
       <label class="field inline">
@@ -23,142 +23,134 @@
       </label>
     </header>
 
-    <section class="card controls">
-      <label class="field">
-        <span>Symbol / asset</span>
-        <input id="symbol" type="text" value="BTCUSDT" spellcheck="false" />
+    <section class="card toolbar">
+      <label class="field grow">
+        <span>Search</span>
+        <input id="spotQ" type="search" value="" placeholder="btc, eth, sol…" spellcheck="false" autocomplete="off" />
       </label>
       <label class="field">
-        <span>Interval</span>
-        <select id="interval">
-          <option value="1m">1m</option>
-          <option value="5m">5m</option>
-          <option value="15m">15m</option>
-          <option value="1h" selected>1h</option>
-          <option value="4h">4h</option>
-          <option value="1d">1d</option>
-          <option value="1w">1w</option>
-        </select>
-      </label>
-      <label class="field">
-        <span>Candle limit</span>
-        <input id="limit" type="number" min="1" max="1000" value="24" />
-      </label>
-      <div class="actions">
-        <button type="button" id="btnAll" class="primary">Fetch all</button>
-        <button type="button" id="btnCandles">Candles</button>
-        <button type="button" id="btnTicker">24h volume</button>
-        <button type="button" id="btnSupply">Supply</button>
-      </div>
-    </section>
-
-    
-    <section class="card controls spot-controls">
-      <label class="field">
-        <span>Search spot</span>
-        <input id="spotQ" type="text" value="" placeholder="btc, eth, …" spellcheck="false" />
-      </label>
-      <label class="field">
-        <span>Quote filter</span>
+        <span>Quote</span>
         <input id="spotQuote" type="text" value="USDT" spellcheck="false" />
       </label>
       <label class="field">
-        <span>Sort by</span>
-        <select id="spotSort">
-          <option value="quoteVolume" selected>quoteVolume</option>
-          <option value="volume">volume</option>
-          <option value="priceChangePercent">priceChangePercent</option>
-          <option value="lastPrice">lastPrice</option>
-          <option value="tradeCount">tradeCount</option>
-          <option value="symbol">symbol</option>
-          <option value="baseAsset">baseAsset</option>
-          <option value="marketCapCirculating">marketCapCirculating</option>
-          <option value="marketCapTotal">marketCapTotal</option>
-          <option value="marketCapMax">marketCapMax</option>
-        </select>
+        <span>Rows</span>
+        <input id="spotLimit" type="number" min="1" max="500" value="50" />
       </label>
       <label class="field">
-        <span>Order</span>
-        <select id="spotOrder">
-          <option value="desc" selected>desc</option>
-          <option value="asc">asc</option>
+        <span>Live refresh</span>
+        <select id="liveInterval">
+          <option value="5">every 5s</option>
+          <option value="10" selected>every 10s</option>
+          <option value="15">every 15s</option>
+          <option value="30">every 30s</option>
+          <option value="0">off (manual)</option>
         </select>
       </label>
-      <label class="field">
-        <span>Limit</span>
-        <input id="spotLimit" type="number" min="1" max="500" value="25" />
-      </label>
-      <div class="actions">
-        <button type="button" id="btnSpot" class="primary">List spot markets</button>
+      <div class="toolbar-actions">
+        <span id="liveBadge" class="live-badge off" title="Live auto-refresh status">LIVE off</span>
+        <button type="button" id="btnRefresh" class="primary">Refresh now</button>
       </div>
     </section>
 
-    <p id="status" class="status" role="status"></p>
-
-    <div class="grid">
-      <section class="card wide">
-        <h2>Spot markets <span id="spotMeta" class="muted" style="font-weight:400;font-size:0.9rem"></span></h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Symbol</th>
-                <th>Last</th>
-                <th>Change %</th>
-                <th>Volume</th>
-                <th>Quote vol</th>
-                <th>Trades</th>
-                <th>Mcap (circ)</th>
-                <th>Mcap (total)</th>
-                <th>Mcap (max)</th>
-              </tr>
-            </thead>
-            <tbody id="spotBody">
-              <tr><td colspan="9" class="muted">No data yet. Click “List spot markets”.</td></tr>
-            </tbody>
-          </table>
+    <!-- Always-visible column editor -->
+    <section class="card columns-editor" aria-label="Table columns">
+      <div class="columns-editor-head">
+        <div>
+          <h2 class="columns-editor-title">Table columns</h2>
+          <p class="muted columns-editor-help">
+            Click a chip to add or remove it from the table. Drag chips to reorder. Symbol stays on.
+          </p>
         </div>
-      </section>
-
-      <section class="card">
-        <h2>24h ticker / volume</h2>
-        <div id="ticker" class="panel muted">No data yet.</div>
-      </section>
-      <section class="card">
-        <h2>Supply</h2>
-        <div id="supply" class="panel muted">No data yet.</div>
-      </section>
-      <section class="card wide">
-        <h2>Candles</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Open time</th>
-                <th>Open</th>
-                <th>High</th>
-                <th>Low</th>
-                <th>Close</th>
-                <th>Volume</th>
-                <th>Quote vol</th>
-                <th>Trades</th>
-              </tr>
-            </thead>
-            <tbody id="candlesBody">
-              <tr><td colspan="8" class="muted">No data yet.</td></tr>
-            </tbody>
-          </table>
+        <div class="columns-editor-actions">
+          <button type="button" id="btnColumnsAll" class="ghost small">Show all</button>
+          <button type="button" id="btnColumnsDefaults" class="ghost small">Defaults</button>
+          <button type="button" id="btnColumnsMinimal" class="ghost small">Minimal</button>
         </div>
-      </section>
-      <section class="card wide">
-        <h2>Raw JSON</h2>
-        <pre id="raw" class="raw">{}</pre>
-      </section>
-    </div>
+      </div>
+      <div id="columnChips" class="column-chips" role="list"></div>
+      <p id="columnSummary" class="muted column-summary"></p>
+    </section>
+
+    <p id="status" class="status" role="status">Loading markets…</p>
+
+    <section class="card dashboard">
+      <div class="dashboard-head">
+        <h2>Markets <span id="spotMeta" class="muted"></span></h2>
+        <p id="selectedHint" class="muted selected-hint">Click a symbol for detail (ticker / supply / candles).</p>
+      </div>
+      <div class="table-wrap dashboard-table">
+        <table id="spotTable">
+          <thead>
+            <tr id="spotHead"></tr>
+          </thead>
+          <tbody id="spotBody">
+            <tr><td class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="detailSection" class="detail-section" hidden>
+      <div class="detail-bar">
+        <h2>Selected: <span id="detailSymbol">—</span></h2>
+        <div class="detail-actions">
+          <label class="field compact">
+            <span>Interval</span>
+            <select id="interval">
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="1h" selected>1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+              <option value="1w">1w</option>
+            </select>
+          </label>
+          <label class="field compact">
+            <span>Candles</span>
+            <input id="limit" type="number" min="1" max="1000" value="24" />
+          </label>
+          <button type="button" id="btnDetailRefresh" class="ghost">Reload detail</button>
+          <button type="button" id="btnDetailClose" class="ghost">Close</button>
+        </div>
+      </div>
+      <div class="grid detail-grid">
+        <section class="card">
+          <h2>24h ticker</h2>
+          <div id="ticker" class="panel muted">—</div>
+        </section>
+        <section class="card">
+          <h2>Supply</h2>
+          <div id="supply" class="panel muted">—</div>
+        </section>
+        <section class="card wide">
+          <h2>Candles</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Open time</th>
+                  <th>Open</th>
+                  <th>High</th>
+                  <th>Low</th>
+                  <th>Close</th>
+                  <th>Volume</th>
+                  <th>Quote vol</th>
+                  <th>Trades</th>
+                </tr>
+              </thead>
+              <tbody id="candlesBody">
+                <tr><td colspan="8" class="muted">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
 
     <footer class="footer">
-      <span>Simple frontend for API testing only.</span>
-      <span>Production UI will live under <code>frontend/</code>.</span>
+      <span>Test harness dashboard — not the production <code>frontend/</code> app.</span>
+      <span>Column layout is saved in this browser.</span>
     </footer>
   </div>
   <script src="app.js"></script>

@@ -50,7 +50,7 @@ go run ./cmd/server
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
 | `SUPPLY_CACHE_TTL` | `26h` | Safety TTL for daily supply snapshot |
-| `SPOT_MARKET_CACHE_TTL` | `30s` | Joined spot list TTL |
+| `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |
 | `SUPPLY_REFRESH_HOUR` | `3` | Daily product-catalog snapshot hour (local to TZ) |
 | `SUPPLY_REFRESH_MINUTE` | `0` | Daily snapshot minute |
 | `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule |

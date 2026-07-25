@@ -30,7 +30,7 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.SupplyCacheTTL != 26*time.Hour {
 		t.Fatalf("supply ttl=%v", cfg.SupplyCacheTTL)
 	}
-	if cfg.SpotMarketCacheTTL != 30*time.Second {
+	if cfg.SpotMarketCacheTTL != 5*time.Second {
 		t.Fatalf("spot ttl=%v", cfg.SpotMarketCacheTTL)
 	}
 	if cfg.SupplyRefreshHour != 3 || cfg.SupplyRefreshMinute != 0 {

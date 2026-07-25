@@ -17,6 +17,13 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// Long-lived meta caches: exchangeInfo and product tags change rarely.
+// Price/volume freshness is controlled by SpotMarketCache TTL (short).
+const (
+	exchangeInfoCacheTTL = 10 * time.Minute
+	nonCryptoBasesTTL    = 1 * time.Hour
+)
+
 // Client implements domain.MarketDataPort and domain.SupplyPort against Binance.
 // No API key is required for the market-data and product-catalog endpoints used here.
 type Client struct {
@@ -25,10 +32,15 @@ type Client struct {
 	httpClient     *http.Client
 	candles        *cache.TTL[[]domain.Candle]
 	tickers        *cache.TTL[*domain.Ticker24h]
-	spotMarkets    *cache.TTL[[]domain.SpotMarket]
+	spotMarkets    *cache.TTL[[]domain.SpotMarket] // joined list (short TTL → live prices)
+	// Layered meta so a short price refresh does NOT re-download exchangeInfo / product catalog
+	// (those were the main reason the UI saw ~30–40s between real updates).
+	exchangeSpot   *cache.TTL[[]spotSymbolMeta]
+	nonCryptoBases *cache.TTL[[]string]
 	supply         *cache.TTL[*domain.AssetSupply]
 	spotSF         singleflight.Group
 	supplySF       singleflight.Group
+	metaSF         singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -63,8 +75,18 @@ func NewClient(opts Options) *Client {
 		candles:        opts.CandleCache,
 		tickers:        opts.TickerCache,
 		spotMarkets:    opts.SpotMarketCache,
+		exchangeSpot:   cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
+		nonCryptoBases: cache.New[[]string](nonCryptoBasesTTL),
 		supply:         opts.SupplyCache,
 	}
+}
+
+// spotSymbolMeta is the static half of a spot row (from exchangeInfo).
+type spotSymbolMeta struct {
+	Symbol     string
+	BaseAsset  string
+	QuoteAsset string
+	Status     string
 }
 
 // GetCandles fetches OHLCV klines for the given query.
@@ -221,13 +243,15 @@ func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, erro
 
 func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, error) {
 	const cacheKey = "all"
-	infoBody, err := c.get(ctx, "/api/v3/exchangeInfo", nil)
+
+	// Meta is long-lived; only the all-ticker call is on the hot path for live prices.
+	symbols, err := c.getExchangeSpotSymbols(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var info exchangeInfoResponse
-	if err := json.Unmarshal(infoBody, &info); err != nil {
-		return nil, fmt.Errorf("%w: decode exchangeInfo: %v", domain.ErrUpstream, err)
+	nonCrypto, err := c.getNonCryptoBaseSet(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	tickerBody, err := c.get(ctx, "/api/v3/ticker/24hr", nil)
@@ -243,23 +267,10 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		bySymbol[t.Symbol] = t
 	}
 
-	// Exclude tokenized equities (bStocks) and commodity wrappers from crypto spot list.
-	nonCryptoBases, err := c.fetchNonCryptoBases(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]domain.SpotMarket, 0, len(info.Symbols))
-	for _, s := range info.Symbols {
-		if !s.IsSpotTradingAllowed {
-			continue
-		}
-		// Prefer explicit SPOT permission when the array is present.
-		if len(s.Permissions) > 0 && !hasPermission(s.Permissions, "SPOT") {
-			continue
-		}
+	out := make([]domain.SpotMarket, 0, len(symbols))
+	for _, s := range symbols {
 		base := strings.ToUpper(strings.TrimSpace(s.BaseAsset))
-		if _, skip := nonCryptoBases[base]; skip {
+		if _, skip := nonCrypto[base]; skip {
 			continue
 		}
 		m := domain.SpotMarket{
@@ -287,34 +298,120 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 	return out, nil
 }
 
-// fetchNonCryptoBases returns base assets tagged as non-crypto on the product catalog
-// (bStocks, tCommodities). Used to keep the spot list crypto-only.
-func (c *Client) fetchNonCryptoBases(ctx context.Context) (map[string]struct{}, error) {
-	params := url.Values{}
-	params.Set("includeEtf", "true")
-	body, err := c.getProduct(ctx, productCatalogPath, params)
+// getExchangeSpotSymbols returns SPOT-tradable symbols (not yet filtered by bStocks).
+// Cached ~10m — exchangeInfo is large and rarely needs a full refresh for a live dashboard.
+func (c *Client) getExchangeSpotSymbols(ctx context.Context) ([]spotSymbolMeta, error) {
+	const key = "all"
+	if c.exchangeSpot != nil {
+		if hit, ok := c.exchangeSpot.Get(key); ok {
+			return hit, nil
+		}
+	}
+	v, err, _ := c.metaSF.Do("exchangeInfo", func() (any, error) {
+		if c.exchangeSpot != nil {
+			if hit, ok := c.exchangeSpot.Get(key); ok {
+				return hit, nil
+			}
+		}
+		infoBody, err := c.get(ctx, "/api/v3/exchangeInfo", nil)
+		if err != nil {
+			return nil, err
+		}
+		var info exchangeInfoResponse
+		if err := json.Unmarshal(infoBody, &info); err != nil {
+			return nil, fmt.Errorf("%w: decode exchangeInfo: %v", domain.ErrUpstream, err)
+		}
+		out := make([]spotSymbolMeta, 0, len(info.Symbols))
+		for _, s := range info.Symbols {
+			if !s.IsSpotTradingAllowed {
+				continue
+			}
+			if len(s.Permissions) > 0 && !hasPermission(s.Permissions, "SPOT") {
+				continue
+			}
+			out = append(out, spotSymbolMeta{
+				Symbol:     s.Symbol,
+				BaseAsset:  s.BaseAsset,
+				QuoteAsset: s.QuoteAsset,
+				Status:     s.Status,
+			})
+		}
+		if c.exchangeSpot != nil {
+			c.exchangeSpot.Set(key, append([]spotSymbolMeta(nil), out...))
+		}
+		return out, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	var envelope productCatalogResponse
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, fmt.Errorf("%w: decode product catalog: %v", domain.ErrUpstream, err)
+	return v.([]spotSymbolMeta), nil
+}
+
+// getNonCryptoBaseSet returns bases tagged bStocks / tCommodities (long-lived cache).
+func (c *Client) getNonCryptoBaseSet(ctx context.Context) (map[string]struct{}, error) {
+	bases, err := c.getNonCryptoBaseList(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if !envelope.Success && envelope.Code != "" && envelope.Code != "000000" {
-		return nil, fmt.Errorf("%w: binance product catalog code=%s msg=%s",
-			domain.ErrUpstream, envelope.Code, envelope.Message)
-	}
-	out := make(map[string]struct{})
-	for _, row := range envelope.Data {
-		if !hasNonCryptoTag(row.Tags) {
-			continue
-		}
-		base := strings.ToUpper(strings.TrimSpace(row.BaseAsset))
-		if base != "" {
-			out[base] = struct{}{}
-		}
+	out := make(map[string]struct{}, len(bases))
+	for _, b := range bases {
+		out[b] = struct{}{}
 	}
 	return out, nil
+}
+
+func (c *Client) getNonCryptoBaseList(ctx context.Context) ([]string, error) {
+	const key = "all"
+	if c.nonCryptoBases != nil {
+		if hit, ok := c.nonCryptoBases.Get(key); ok {
+			return hit, nil
+		}
+	}
+	v, err, _ := c.metaSF.Do("nonCryptoBases", func() (any, error) {
+		if c.nonCryptoBases != nil {
+			if hit, ok := c.nonCryptoBases.Get(key); ok {
+				return hit, nil
+			}
+		}
+		params := url.Values{}
+		params.Set("includeEtf", "true")
+		body, err := c.getProduct(ctx, productCatalogPath, params)
+		if err != nil {
+			return nil, err
+		}
+		var envelope productCatalogResponse
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			return nil, fmt.Errorf("%w: decode product catalog: %v", domain.ErrUpstream, err)
+		}
+		if !envelope.Success && envelope.Code != "" && envelope.Code != "000000" {
+			return nil, fmt.Errorf("%w: binance product catalog code=%s msg=%s",
+				domain.ErrUpstream, envelope.Code, envelope.Message)
+		}
+		seen := map[string]struct{}{}
+		var out []string
+		for _, row := range envelope.Data {
+			if !hasNonCryptoTag(row.Tags) {
+				continue
+			}
+			base := strings.ToUpper(strings.TrimSpace(row.BaseAsset))
+			if base == "" {
+				continue
+			}
+			if _, ok := seen[base]; ok {
+				continue
+			}
+			seen[base] = struct{}{}
+			out = append(out, base)
+		}
+		if c.nonCryptoBases != nil {
+			c.nonCryptoBases.Set(key, append([]string(nil), out...))
+		}
+		return out, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]string), nil
 }
 
 // productCatalogResponse is the www.binance.com product list envelope.

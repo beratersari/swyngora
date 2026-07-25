@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -309,7 +310,7 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 		t.Fatalf("metrics=%+v", bySym)
 	}
 
-	// Cache: second call does not hit upstream again.
+	// Cache: second call does not hit upstream again (joined list still warm).
 	list2, err := c.ListSpotMarkets(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -320,5 +321,75 @@ func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
 	list[0].Symbol = "MUTATED"
 	if list2[0].Symbol == "MUTATED" {
 		t.Fatal("shared slice from cache")
+	}
+}
+
+// After the short price cache expires, only ticker/24hr is re-fetched — not exchangeInfo or product catalog.
+func TestListSpotMarkets_PriceRefreshDoesNotReloadMeta(t *testing.T) {
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		switch {
+		case r.URL.Path == "/api/v3/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{
+						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+				},
+			})
+		case r.URL.Path == "/api/v3/ticker/24hr":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "lastPrice": fmt.Sprintf("%d", hits["/api/v3/ticker/24hr"]), "volume": "1", "quoteVolume": "1", "count": 1},
+			})
+		case strings.Contains(r.URL.Path, "get-products"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": "000000", "success": true,
+				"data": []map[string]any{
+					{"s": "BTCUSDT", "b": "BTC", "tags": []string{"Payments"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// Very short joined-list TTL so the second call rebuilds prices.
+	spotCache := cache.New[[]domain.SpotMarket](30 * time.Millisecond)
+	c := NewClient(Options{
+		BaseURL:         srv.URL,
+		ProductBaseURL:  srv.URL,
+		HTTPClient:      srv.Client(),
+		SpotMarketCache: spotCache,
+	})
+
+	if _, err := c.ListSpotMarkets(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(40 * time.Millisecond)
+	list, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits["/api/v3/exchangeInfo"] != 1 {
+		t.Fatalf("exchangeInfo should stay cached, hits=%d", hits["/api/v3/exchangeInfo"])
+	}
+	if hits["/api/v3/ticker/24hr"] != 2 {
+		t.Fatalf("ticker should refresh, hits=%d", hits["/api/v3/ticker/24hr"])
+	}
+	// product catalog path may be full path under test server
+	prodHits := 0
+	for p, n := range hits {
+		if strings.Contains(p, "get-products") {
+			prodHits += n
+		}
+	}
+	if prodHits != 1 {
+		t.Fatalf("product catalog should stay cached, hits=%d map=%v", prodHits, hits)
+	}
+	if len(list) != 1 || list[0].LastPrice != "2" {
+		t.Fatalf("want refreshed price 2, got %+v", list)
 	}
 }
