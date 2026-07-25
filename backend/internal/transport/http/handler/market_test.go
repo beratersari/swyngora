@@ -31,6 +31,13 @@ func (stubMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.
 	}}, nil
 }
 
+func (stubMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
+	return []domain.SpotMarket{
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1000", LastPrice: "100", TradeCount: 9},
+		{Symbol: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "500", LastPrice: "50", TradeCount: 3},
+	}, nil
+}
+
 func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
 	return &domain.Ticker24h{
 		Symbol:      symbol,
@@ -43,6 +50,8 @@ func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker
 }
 
 type stubSupply struct{}
+
+func (stubSupply) Refresh(context.Context) (int, error) { return 0, nil }
 
 func (stubSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSupply, error) {
 	max := 21_000_000.0
@@ -195,6 +204,62 @@ func TestGetTicker24h_MissingSymbol(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/ticker/24h", nil)
 	rr := httptest.NewRecorder()
 	h.GetTicker24h(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestListSpotMarkets_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?q=btc&sort=quoteVolume&order=desc&limit=10", nil)
+	rr := httptest.NewRecorder()
+	h.ListSpotMarkets(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body spotListResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Exchange != "binance" || body.Total != 1 || len(body.Items) != 1 || body.Items[0].Symbol != "BTCUSDT" {
+		t.Fatalf("body=%+v", body)
+	}
+	// base/quote/status removed from public DTO
+	if body.Items[0].LastPrice == "" {
+		t.Fatalf("expected lastPrice on item")
+	}
+}
+
+func TestEncodeMarketCapMax(t *testing.T) {
+	if encodeMarketCapMax(domain.SpotMarket{MarketCapMaxInfinite: true}) != "∞" {
+		t.Fatal("want infinity symbol")
+	}
+	v := 1.5
+	got := encodeMarketCapMax(domain.SpotMarket{MarketCapMax: &v})
+	if got != v {
+		t.Fatalf("got %v", got)
+	}
+	if encodeMarketCapMax(domain.SpotMarket{}) != nil {
+		t.Fatal("want null")
+	}
+}
+
+
+func TestListSpotMarkets_BadSort(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?sort=nope", nil)
+	rr := httptest.NewRecorder()
+	h.ListSpotMarkets(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestListSpotMarkets_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?limit=x", nil)
+	rr := httptest.NewRecorder()
+	h.ListSpotMarkets(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
 	}

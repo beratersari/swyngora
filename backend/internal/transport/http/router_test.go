@@ -21,6 +21,10 @@ func (routerMarket) GetCandles(_ context.Context, _ domain.CandleQuery) ([]domai
 	}}, nil
 }
 
+func (routerMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
+	return []domain.SpotMarket{{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1"}}, nil
+}
+
 func (routerMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
 	return &domain.Ticker24h{
 		Symbol: symbol, LastPrice: "1", Volume: "2", QuoteVolume: "3",
@@ -29,6 +33,8 @@ func (routerMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tick
 }
 
 type routerSupply struct{}
+
+func (routerSupply) Refresh(context.Context) (int, error) { return 0, nil }
 
 func (routerSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSupply, error) {
 	return &domain.AssetSupply{Asset: asset, Source: "test", AsOf: time.Unix(0, 0).UTC()}, nil
@@ -62,6 +68,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=1", http.StatusOK, nil},
 		{"/api/v1/market/ticker/24h?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
+		{"/api/v1/market/spot?limit=5", http.StatusOK, nil},
 		{"/nope", http.StatusNotFound, nil},
 	}
 

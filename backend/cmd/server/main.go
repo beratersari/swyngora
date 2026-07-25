@@ -15,6 +15,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
 )
 
@@ -27,10 +28,11 @@ func main() {
 
 	candleCache := cache.New[[]domain.Candle](cfg.CandleCacheTTL)
 	tickerCache := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	// Long-lived supply snapshot (daily refresh + safety TTL).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
 	symbolCache := cache.New[string](24 * time.Hour)
+	spotMarketCache := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 
-	// Background cache hygiene: drop expired entries periodically.
 	stopCleanup := make(chan struct{})
 	go func() {
 		t := time.NewTicker(cfg.CacheCleanupEvery)
@@ -42,6 +44,7 @@ func main() {
 				tickerCache.Cleanup()
 				supplyCache.Cleanup()
 				symbolCache.Cleanup()
+				spotMarketCache.Cleanup()
 			case <-stopCleanup:
 				return
 			}
@@ -49,27 +52,44 @@ func main() {
 	}()
 
 	binanceClient := binance.NewClient(binance.Options{
-		BaseURL:     cfg.BinanceBaseURL,
-		HTTPClient:  httpClient,
-		CandleCache: candleCache,
-		TickerCache: tickerCache,
+		BaseURL:         cfg.BinanceBaseURL,
+		HTTPClient:      httpClient,
+		CandleCache:     candleCache,
+		TickerCache:     tickerCache,
+		SpotMarketCache: spotMarketCache,
 	})
 	geckoClient := coingecko.NewClient(coingecko.Options{
-		BaseURL:     cfg.CoinGeckoBaseURL,
-		HTTPClient:  httpClient,
-		SupplyCache: supplyCache,
-		SymbolCache: symbolCache,
+		BaseURL:          cfg.CoinGeckoBaseURL,
+		HTTPClient:       httpClient,
+		SupplyCache:      supplyCache,
+		SymbolCache:      symbolCache,
+		RefreshPages:     cfg.SupplyRefreshPages,
+		RefreshPageDelay: cfg.SupplyRefreshPageDelay,
 	})
 
 	marketSvc := market.New(binanceClient, geckoClient)
 	handler := httpx.NewRouter(marketSvc)
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Daily supply/mcap snapshot (default 03:00 UTC). User requests are cache-only.
+	job := &supplyjob.Runner{
+		Supply:     geckoClient,
+		Hour:       cfg.SupplyRefreshHour,
+		Minute:     cfg.SupplyRefreshMinute,
+		Loc:        cfg.SupplyRefreshLocation,
+		RunOnStart: cfg.SupplyRefreshOnStartup,
+		Logger:     logger,
+	}
+	go job.Start(ctx)
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      60 * time.Second, // list+enrich can be larger
 		IdleTimeout:       60 * time.Second,
 	}
 
@@ -81,8 +101,6 @@ func main() {
 		}
 	}()
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 	<-ctx.Done()
 	logger.Info("shutting down")
 

@@ -177,3 +177,75 @@ func TestGetCandles_CacheHit(t *testing.T) {
 		t.Fatal("cache returned shared slice")
 	}
 }
+
+func TestListSpotMarkets_JoinFilterCache(t *testing.T) {
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		switch r.URL.Path {
+		case "/api/v3/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{
+						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "ETHUSDT", "status": "TRADING", "baseAsset": "ETH", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "BTCUSDC", "status": "BREAK", "baseAsset": "BTC", "quoteAsset": "USDC",
+						"isSpotTradingAllowed": false, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "XYZUSDT", "status": "TRADING", "baseAsset": "XYZ", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"MARGIN"},
+					},
+				},
+			})
+		case "/api/v3/ticker/24hr":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "lastPrice": "100", "volume": "10", "quoteVolume": "1000", "priceChangePercent": "1.5", "count": 9},
+				{"symbol": "ETHUSDT", "lastPrice": "50", "volume": "20", "quoteVolume": "500", "priceChangePercent": "-2", "count": 3},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	spotCache := cache.New[[]domain.SpotMarket](time.Minute)
+	c := NewClient(Options{
+		BaseURL:         srv.URL,
+		HTTPClient:      srv.Client(),
+		SpotMarketCache: spotCache,
+	})
+	list, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("len=%d want 2 (spot only): %+v", len(list), list)
+	}
+	bySym := map[string]domain.SpotMarket{}
+	for _, m := range list {
+		bySym[m.Symbol] = m
+	}
+	if bySym["BTCUSDT"].QuoteVolume != "1000" || bySym["ETHUSDT"].LastPrice != "50" {
+		t.Fatalf("metrics=%+v", bySym)
+	}
+
+	// Cache: second call does not hit upstream again.
+	list2, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hits["/api/v3/exchangeInfo"] != 1 || hits["/api/v3/ticker/24hr"] != 1 {
+		t.Fatalf("hits=%v", hits)
+	}
+	list[0].Symbol = "MUTATED"
+	if list2[0].Symbol == "MUTATED" {
+		t.Fatal("shared slice from cache")
+	}
+}

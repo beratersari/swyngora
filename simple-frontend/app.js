@@ -10,7 +10,14 @@ const els = {
   supply: $("supply"),
   candlesBody: $("candlesBody"),
   raw: $("raw"),
-  buttons: ["btnAll", "btnCandles", "btnTicker", "btnSupply"].map($),
+  buttons: ["btnAll", "btnCandles", "btnTicker", "btnSupply", "btnSpot"].map($),
+  spotBody: $("spotBody"),
+  spotMeta: $("spotMeta"),
+  spotQ: $("spotQ"),
+  spotQuote: $("spotQuote"),
+  spotSort: $("spotSort"),
+  spotOrder: $("spotOrder"),
+  spotLimit: $("spotLimit"),
 };
 
 const rawPayload = {};
@@ -136,6 +143,72 @@ function updateRaw() {
   els.raw.textContent = JSON.stringify(rawPayload, null, 2);
 }
 
+
+function fmtMcap(v) {
+  if (v === "∞" || v === "Infinity") return "∞";
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  if (Number.isNaN(n)) return String(v);
+  if (n >= 1e12) return (n / 1e12).toFixed(2) + "T";
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+}
+
+function renderSpot(data) {
+  if (!data || !Array.isArray(data.items)) {
+    els.spotBody.innerHTML = `<tr><td colspan="9" class="muted">No data.</td></tr>`;
+    if (els.spotMeta) els.spotMeta.textContent = "";
+    return;
+  }
+  if (els.spotMeta) {
+    els.spotMeta.textContent = `(total ${data.total}, showing ${data.items.length}, sort ${data.sort} ${data.order})`;
+  }
+  if (!data.items.length) {
+    els.spotBody.innerHTML = `<tr><td colspan="9" class="muted">No matches.</td></tr>`;
+    return;
+  }
+  els.spotBody.innerHTML = data.items
+    .map(
+      (m) => `
+      <tr data-symbol="${m.symbol}">
+        <td><button type="button" class="linkish" data-pick="${m.symbol}">${m.symbol}</button></td>
+        <td>${fmtNum(m.lastPrice, 8)}</td>
+        <td>${fmtNum(m.priceChangePercent, 3)}</td>
+        <td>${fmtNum(m.volume, 4)}</td>
+        <td>${fmtNum(m.quoteVolume, 2)}</td>
+        <td>${fmtNum(m.tradeCount, 0)}</td>
+        <td>${fmtMcap(m.marketCapCirculating)}</td>
+        <td>${fmtMcap(m.marketCapTotal)}</td>
+        <td>${fmtMcap(m.marketCapMax)}</td>
+      </tr>`
+    )
+    .join("");
+  els.spotBody.querySelectorAll("[data-pick]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      els.symbol.value = btn.getAttribute("data-pick");
+      setStatus(`Selected ${els.symbol.value}`, "ok");
+    });
+  });
+}
+
+async function fetchSpot() {
+  const params = new URLSearchParams();
+  const q = (els.spotQ && els.spotQ.value.trim()) || "";
+  const quote = (els.spotQuote && els.spotQuote.value.trim()) || "";
+  if (q) params.set("q", q);
+  if (quote) params.set("quote", quote);
+  params.set("sort", els.spotSort.value || "quoteVolume");
+  params.set("order", els.spotOrder.value || "desc");
+  params.set("limit", els.spotLimit.value || "25");
+  params.set("status", "TRADING");
+  const data = await apiGet(`/api/v1/market/spot?${params.toString()}`);
+  rawPayload.spot = data;
+  renderSpot(data);
+  updateRaw();
+  return data;
+}
+
 async function fetchCandles() {
   const sym = encodeURIComponent(symbol());
   const interval = encodeURIComponent(els.interval.value);
@@ -181,6 +254,7 @@ async function run(job, label) {
   }
 }
 
+$("btnSpot").addEventListener("click", () => run(fetchSpot, "Spot markets"));
 $("btnCandles").addEventListener("click", () => run(fetchCandles, "Candles"));
 $("btnTicker").addEventListener("click", () => run(fetchTicker, "24h ticker"));
 $("btnSupply").addEventListener("click", () => run(fetchSupply, "Supply"));
@@ -206,3 +280,9 @@ $("btnAll").addEventListener("click", () =>
     /* backend may not be running yet */
   }
 })();
+
+if (els.spotQ) {
+  els.spotQ.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") run(fetchSpot, "Spot markets");
+  });
+}

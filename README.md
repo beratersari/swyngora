@@ -35,6 +35,7 @@ Example:
 ```bash
 curl -s 'http://localhost:8080/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=3' | jq .
 curl -s 'http://localhost:8080/api/v1/market/ticker/24h?symbol=BTCUSDT' | jq .
+curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&sort=quoteVolume&limit=5' | jq .
 curl -s 'http://localhost:8080/api/v1/market/supply?asset=BTC' | jq .
 ```
 
@@ -51,8 +52,9 @@ python3 -m http.server 5173
 | Data | Source | Notes |
 |---|---|---|
 | Candlesticks | Binance public REST | No API key for market data |
+| Spot market list / search / sort | Binance public REST | exchangeInfo + 24h tickers |
 | 24h volume / ticker | Binance public REST | Base + quote volume |
-| Circulating / total / max supply | CoinGecko free public API | Binance market APIs do not expose supply |
+| Circulating / total / max supply | CoinGecko free public API | Daily snapshot @ 03:00 UTC (cache-only requests) |
 
 See [docs/features/market-data.md](docs/features/market-data.md) and [docs/adr/0001-binance-and-coingecko-market-sources.md](docs/adr/0001-binance-and-coingecko-market-sources.md).
 

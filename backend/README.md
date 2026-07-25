@@ -20,6 +20,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 |---|---|---|
 | `GET` | `/health` | Liveness |
 | `GET` | `/api/v1/market/intervals` | Supported candle intervals |
+| `GET` | `/api/v1/market/spot?q=btc&quote=USDT&sort=quoteVolume` | List/search/sort spot markets |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating / total / max supply |
@@ -28,7 +29,7 @@ Intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, 
 
 Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
-**Supply note:** Binance public market APIs do not expose circulating/total/max supply. The supply endpoint uses the free CoinGecko public API and is labeled in the response `source` / `note` fields.
+**Supply / mcap note:** Binance does not expose supply. CoinGecko supply is loaded on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only** and never call CoinGecko on the request path.
 
 ## Run
 
@@ -48,7 +49,14 @@ go run ./cmd/server
 | `HTTP_CLIENT_TIMEOUT` | `15s` | Upstream HTTP timeout |
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
-| `SUPPLY_CACHE_TTL` | `5m` | Supply response TTL |
+| `SUPPLY_CACHE_TTL` | `26h` | Safety TTL for daily supply/mcap snapshot |
+| `SPOT_MARKET_CACHE_TTL` | `30s` | Joined spot list TTL |
+| `SUPPLY_REFRESH_HOUR` | `3` | Daily CoinGecko snapshot hour (local to TZ) |
+| `SUPPLY_REFRESH_MINUTE` | `0` | Daily snapshot minute |
+| `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule |
+| `SUPPLY_REFRESH_PAGES` | `4` | CoinGecko markets pages × 250 coins |
+| `SUPPLY_REFRESH_PAGE_DELAY` | `2s` | Delay between market pages |
+| `SUPPLY_REFRESH_ON_STARTUP` | `true` | Run one snapshot load on process start |
 | `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
@@ -84,5 +92,6 @@ Unit tests mock upstream HTTP; they do not call live Binance/CoinGecko.
 ```bash
 curl -s 'http://localhost:8080/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=3' | jq .
 curl -s 'http://localhost:8080/api/v1/market/ticker/24h?symbol=BTCUSDT' | jq .
+curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&sort=quoteVolume&limit=5' | jq .
 curl -s 'http://localhost:8080/api/v1/market/supply?asset=BTC' | jq .
 ```

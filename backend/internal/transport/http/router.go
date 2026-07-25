@@ -20,6 +20,7 @@ func NewRouter(marketSvc *market.Service) http.Handler {
 	mux.HandleFunc("GET /api/v1/market/ticker/24h", mh.GetTicker24h)
 	mux.HandleFunc("GET /api/v1/market/supply", mh.GetSupply)
 	mux.HandleFunc("GET /api/v1/market/intervals", mh.GetIntervals)
+	mux.HandleFunc("GET /api/v1/market/spot", mh.ListSpotMarkets)
 
 	return middleware.CORS(mux)
 }

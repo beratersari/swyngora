@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -18,18 +20,21 @@ import (
 // Client implements domain.MarketDataPort against Binance public REST APIs.
 // No API key is required for market data endpoints used here.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	candles    *cache.TTL[[]domain.Candle]
-	tickers    *cache.TTL[*domain.Ticker24h]
+	baseURL     string
+	httpClient  *http.Client
+	candles     *cache.TTL[[]domain.Candle]
+	tickers     *cache.TTL[*domain.Ticker24h]
+	spotMarkets *cache.TTL[[]domain.SpotMarket]
+	spotSF      singleflight.Group
 }
 
 // Options configures the Binance client.
 type Options struct {
-	BaseURL       string
-	HTTPClient    *http.Client
-	CandleCache   *cache.TTL[[]domain.Candle]
-	TickerCache   *cache.TTL[*domain.Ticker24h]
+	BaseURL         string
+	HTTPClient      *http.Client
+	CandleCache     *cache.TTL[[]domain.Candle]
+	TickerCache     *cache.TTL[*domain.Ticker24h]
+	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
 }
 
 // NewClient constructs a Binance market-data client.
@@ -43,10 +48,11 @@ func NewClient(opts Options) *Client {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Client{
-		baseURL:    base,
-		httpClient: hc,
-		candles:    opts.CandleCache,
-		tickers:    opts.TickerCache,
+		baseURL:     base,
+		httpClient:  hc,
+		candles:     opts.CandleCache,
+		tickers:     opts.TickerCache,
+		spotMarkets: opts.SpotMarketCache,
 	}
 }
 
@@ -161,6 +167,114 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 	return t, nil
 }
 
+
+// ListSpotMarkets returns spot-tradable symbols joined with 24h ticker metrics.
+// Sources: GET /api/v3/exchangeInfo + GET /api/v3/ticker/24hr (all symbols).
+// Concurrent cold misses are coalesced via singleflight.
+func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, error) {
+	const cacheKey = "all"
+	if c.spotMarkets != nil {
+		if hit, ok := c.spotMarkets.Get(cacheKey); ok {
+			return append([]domain.SpotMarket(nil), hit...), nil
+		}
+	}
+
+	v, err, _ := c.spotSF.Do(cacheKey, func() (any, error) {
+		// Re-check cache inside flight (another caller may have filled it).
+		if c.spotMarkets != nil {
+			if hit, ok := c.spotMarkets.Get(cacheKey); ok {
+				return hit, nil
+			}
+		}
+		return c.fetchSpotMarkets(ctx)
+	})
+	if err != nil {
+		return nil, err
+	}
+	list := v.([]domain.SpotMarket)
+	return append([]domain.SpotMarket(nil), list...), nil
+}
+
+func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, error) {
+	const cacheKey = "all"
+	infoBody, err := c.get(ctx, "/api/v3/exchangeInfo", nil)
+	if err != nil {
+		return nil, err
+	}
+	var info exchangeInfoResponse
+	if err := json.Unmarshal(infoBody, &info); err != nil {
+		return nil, fmt.Errorf("%w: decode exchangeInfo: %v", domain.ErrUpstream, err)
+	}
+
+	tickerBody, err := c.get(ctx, "/api/v3/ticker/24hr", nil)
+	if err != nil {
+		return nil, err
+	}
+	var rawTickers []ticker24hResponse
+	if err := json.Unmarshal(tickerBody, &rawTickers); err != nil {
+		return nil, fmt.Errorf("%w: decode tickers: %v", domain.ErrUpstream, err)
+	}
+	bySymbol := make(map[string]ticker24hResponse, len(rawTickers))
+	for _, t := range rawTickers {
+		bySymbol[t.Symbol] = t
+	}
+
+	out := make([]domain.SpotMarket, 0, len(info.Symbols))
+	for _, s := range info.Symbols {
+		if !s.IsSpotTradingAllowed {
+			continue
+		}
+		// Prefer explicit SPOT permission when the array is present.
+		if len(s.Permissions) > 0 && !hasPermission(s.Permissions, "SPOT") {
+			continue
+		}
+		m := domain.SpotMarket{
+			Symbol:     s.Symbol,
+			BaseAsset:  s.BaseAsset,
+			QuoteAsset: s.QuoteAsset,
+			Status:     s.Status,
+		}
+		if t, ok := bySymbol[s.Symbol]; ok {
+			m.LastPrice = t.LastPrice
+			m.PriceChange = t.PriceChange
+			m.PriceChangePercent = t.PriceChangePercent
+			m.HighPrice = t.HighPrice
+			m.LowPrice = t.LowPrice
+			m.Volume = t.Volume
+			m.QuoteVolume = t.QuoteVolume
+			m.TradeCount = t.Count
+		}
+		out = append(out, m)
+	}
+
+	if c.spotMarkets != nil {
+		c.spotMarkets.Set(cacheKey, append([]domain.SpotMarket(nil), out...))
+	}
+	return out, nil
+}
+
+func hasPermission(perms []string, want string) bool {
+	for _, p := range perms {
+		if p == want {
+			return true
+		}
+	}
+	return false
+}
+
+type exchangeInfoResponse struct {
+	Symbols []exchangeSymbol `json:"symbols"`
+}
+
+type exchangeSymbol struct {
+	Symbol               string   `json:"symbol"`
+	Status               string   `json:"status"`
+	BaseAsset            string   `json:"baseAsset"`
+	QuoteAsset           string   `json:"quoteAsset"`
+	IsSpotTradingAllowed bool     `json:"isSpotTradingAllowed"`
+	Permissions          []string `json:"permissions"`
+}
+
 func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
 	u := c.baseURL + path
 	if len(params) > 0 {
@@ -179,7 +293,7 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
 	if err != nil {
 		return nil, fmt.Errorf("%w: read body: %v", domain.ErrUpstream, err)
 	}
