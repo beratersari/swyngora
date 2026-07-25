@@ -4,6 +4,7 @@ import "time"
 
 // NextDailyAt returns the next local time at hour:minute in loc after (or equal to) now.
 // If that time today has already passed, it returns tomorrow's occurrence.
+// Uses calendar day arithmetic (AddDate) so DST transitions do not skip or double-fire.
 func NextDailyAt(now time.Time, hour, minute int, loc *time.Location) time.Time {
 	if loc == nil {
 		loc = time.UTC
@@ -23,7 +24,9 @@ func NextDailyAt(now time.Time, hour, minute int, loc *time.Location) time.Time 
 	now = now.In(loc)
 	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, loc)
 	if !next.After(now) {
-		next = next.Add(24 * time.Hour)
+		// Move to the next calendar day in loc, then re-apply wall clock (DST-safe).
+		day := next.AddDate(0, 0, 1)
+		next = time.Date(day.Year(), day.Month(), day.Day(), hour, minute, 0, 0, loc)
 	}
 	return next
 }

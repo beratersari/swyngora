@@ -76,16 +76,18 @@ func (h *MarketHandler) GetCandles(w http.ResponseWriter, r *http.Request) {
 		endPtr = &t
 	}
 
-	candles, err := h.svc.GetCandles(r.Context(), symbol, interval, limit, startPtr, endPtr)
+	exchange := q.Get("exchange")
+	candles, err := h.svc.GetCandles(r.Context(), exchange, symbol, interval, limit, startPtr, endPtr)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	ex, _ := h.svc.ResolveExchange(exchange)
 
 	out := candlesResponse{
 		Symbol:   symbol,
 		Interval: interval,
-		Exchange: "binance",
+		Exchange: string(ex),
 		Candles:  make([]candleDTO, 0, len(candles)),
 	}
 	for _, c := range candles {
@@ -123,14 +125,17 @@ type tickerResponse struct {
 
 // GetTicker24h handles GET /api/v1/market/ticker/24h
 func (h *MarketHandler) GetTicker24h(w http.ResponseWriter, r *http.Request) {
-	symbol := r.URL.Query().Get("symbol")
-	tkr, err := h.svc.GetTicker24h(r.Context(), symbol)
+	q := r.URL.Query()
+	symbol := q.Get("symbol")
+	exchange := q.Get("exchange")
+	tkr, err := h.svc.GetTicker24h(r.Context(), exchange, symbol)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
+	ex, _ := h.svc.ResolveExchange(exchange)
 	writeJSON(w, http.StatusOK, tickerResponse{
-		Exchange:           "binance",
+		Exchange:           string(ex),
 		Symbol:             tkr.Symbol,
 		PriceChange:        tkr.PriceChange,
 		PriceChangePercent: tkr.PriceChangePercent,
@@ -192,14 +197,20 @@ type intervalsResponse struct {
 
 // GetIntervals handles GET /api/v1/market/intervals
 func (h *MarketHandler) GetIntervals(w http.ResponseWriter, r *http.Request) {
-	ivs := h.svc.ListIntervals()
+	exchange := r.URL.Query().Get("exchange")
+	ivs, err := h.svc.ListIntervals(exchange)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	ex, _ := h.svc.ResolveExchange(exchange)
 	out := make([]string, len(ivs))
 	for i, iv := range ivs {
 		out[i] = string(iv)
 	}
 	writeJSON(w, http.StatusOK, intervalsResponse{
 		Intervals: out,
-		Exchange:  "binance",
+		Exchange:  string(ex),
 	})
 }
 
@@ -220,20 +231,21 @@ func parseTimeParam(raw string) (time.Time, error) {
 
 
 type spotMarketDTO struct {
-	Symbol             string   `json:"symbol"`
-	LastPrice          string   `json:"lastPrice"`
-	PriceChange        string   `json:"priceChange"`
-	PriceChangePercent string   `json:"priceChangePercent"`
-	HighPrice          string   `json:"highPrice"`
-	LowPrice           string   `json:"lowPrice"`
-	Volume             string   `json:"volume"`
-	QuoteVolume        string   `json:"quoteVolume"`
-	TradeCount         int64    `json:"tradeCount"`
-	CirculatingSupply  *float64 `json:"circulatingSupply"`
-	TotalSupply        *float64 `json:"totalSupply"`
-	MaxSupply          *float64 `json:"maxSupply"`
-	MarketCapCirculating *float64 `json:"marketCapCirculating"`
-	MarketCapTotal       *float64 `json:"marketCapTotal"`
+	Symbol               string    `json:"symbol"`
+	LastPrice            string    `json:"lastPrice"`
+	PriceChange          string    `json:"priceChange"`
+	PriceChangePercent   string    `json:"priceChangePercent"`
+	HighPrice            string    `json:"highPrice"`
+	LowPrice             string    `json:"lowPrice"`
+	Volume               string    `json:"volume"`
+	QuoteVolume          string    `json:"quoteVolume"`
+	TradeCount           int64     `json:"tradeCount"`
+	Tags                 []string  `json:"tags"`
+	CirculatingSupply    *float64  `json:"circulatingSupply"`
+	TotalSupply          *float64  `json:"totalSupply"`
+	MaxSupply            *float64  `json:"maxSupply"`
+	MarketCapCirculating *float64  `json:"marketCapCirculating"`
+	MarketCapTotal       *float64  `json:"marketCapTotal"`
 	// MarketCapMax is a number, the string "∞" when max supply is undefined, or null.
 	MarketCapMax any `json:"marketCapMax"`
 }
@@ -241,12 +253,54 @@ type spotMarketDTO struct {
 type spotListResponse struct {
 	Exchange string          `json:"exchange"`
 	Query    string          `json:"query"`
+	Tag      string          `json:"tag,omitempty"`
 	Sort     string          `json:"sort"`
 	Order    string          `json:"order"`
 	Total    int             `json:"total"`
 	Limit    int             `json:"limit"`
 	Offset   int             `json:"offset"`
 	Items    []spotMarketDTO `json:"items"`
+}
+
+type productTagsResponse struct {
+	Exchange string   `json:"exchange"`
+	Tags     []string `json:"tags"`
+}
+
+// ListProductTags handles GET /api/v1/market/tags
+func (h *MarketHandler) ListProductTags(w http.ResponseWriter, r *http.Request) {
+	exchange := r.URL.Query().Get("exchange")
+	tags, err := h.svc.ListProductTags(r.Context(), exchange)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	ex, _ := h.svc.ResolveExchange(exchange)
+	writeJSON(w, http.StatusOK, productTagsResponse{
+		Exchange: string(ex),
+		Tags:     tags,
+	})
+}
+
+type exchangesResponse struct {
+	Exchanges []string `json:"exchanges"`
+	Default   string   `json:"default"`
+}
+
+// ListExchanges handles GET /api/v1/market/exchanges
+func (h *MarketHandler) ListExchanges(w http.ResponseWriter, r *http.Request) {
+	exs := h.svc.ListExchanges()
+	out := make([]string, len(exs))
+	for i, e := range exs {
+		out[i] = string(e)
+	}
+	writeJSON(w, http.StatusOK, exchangesResponse{
+		Exchanges: out,
+		Default:   string(domain.DefaultExchange),
+	})
 }
 
 // ListSpotMarkets handles GET /api/v1/market/spot
@@ -271,11 +325,16 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 		offset = n
 	}
 
-	res, err := h.svc.ListSpotMarkets(r.Context(), domain.SpotListQuery{
+	// tag / tags query: comma-separated or repeated (OR match).
+	tagFilters := append([]string{}, q["tag"]...)
+	tagFilters = append(tagFilters, q["tags"]...)
+
+	res, err := h.svc.ListSpotMarkets(r.Context(), q.Get("exchange"), domain.SpotListQuery{
 		Query:      q.Get("q"),
 		QuoteAsset: q.Get("quote"),
 		BaseAsset:  q.Get("base"),
 		Status:     q.Get("status"),
+		Tags:       tagFilters,
 		SortBy:     domain.SpotSortField(q.Get("sort")),
 		Order:      domain.SortOrder(q.Get("order")),
 		Limit:      limit,
@@ -287,8 +346,9 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 	}
 
 	out := spotListResponse{
-		Exchange: "binance",
+		Exchange: string(res.Exchange),
 		Query:    res.Query,
+		Tag:      strings.Join(res.Tags, ","),
 		Sort:     string(res.SortBy),
 		Order:    string(res.Order),
 		Total:    res.Total,
@@ -297,6 +357,10 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 		Items:    make([]spotMarketDTO, 0, len(res.Items)),
 	}
 	for _, m := range res.Items {
+		tags := m.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		out.Items = append(out.Items, spotMarketDTO{
 			Symbol:               m.Symbol,
 			LastPrice:            m.LastPrice,
@@ -307,6 +371,7 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 			Volume:               m.Volume,
 			QuoteVolume:          m.QuoteVolume,
 			TradeCount:           m.TradeCount,
+			Tags:                 append([]string(nil), tags...),
 			CirculatingSupply:    domain.CloneFloatPtr(m.CirculatingSupply),
 			TotalSupply:          domain.CloneFloatPtr(m.TotalSupply),
 			MaxSupply:            domain.CloneFloatPtr(m.MaxSupply),

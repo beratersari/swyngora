@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -29,24 +30,53 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func writeError(w http.ResponseWriter, err error) {
-	status, code := mapError(err)
+	status, code, publicMsg := mapError(err)
+	// Always log the full error server-side; never leak upstream details to clients.
+	if status >= 500 || errors.Is(err, domain.ErrUpstream) || errors.Is(err, domain.ErrRateLimited) {
+		slog.Error("request error", "status", status, "code", code, "err", err)
+	} else {
+		slog.Debug("request error", "status", status, "code", code, "err", err)
+	}
 	writeJSON(w, status, errorBody{Error: errorDetail{
 		Code:    code,
-		Message: err.Error(),
+		Message: publicMsg,
 	}})
 }
 
-func mapError(err error) (int, string) {
+func mapError(err error) (status int, code, message string) {
 	switch {
+	case err == nil:
+		return http.StatusInternalServerError, "internal_error", "internal error"
+	case errors.Is(err, context.Canceled):
+		// Client went away — not a server fault. 499 is non-standard; 400 is safe.
+		return http.StatusBadRequest, "canceled", "request canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout, "timeout", "request timed out"
 	case errors.Is(err, domain.ErrInvalidArgument):
-		return http.StatusBadRequest, "invalid_argument"
+		return http.StatusBadRequest, "invalid_argument", publicInvalidArgument(err)
 	case errors.Is(err, domain.ErrNotFound):
-		return http.StatusNotFound, "not_found"
+		return http.StatusNotFound, "not_found", "resource not found"
 	case errors.Is(err, domain.ErrRateLimited):
-		return http.StatusTooManyRequests, "rate_limited"
+		return http.StatusTooManyRequests, "rate_limited", "rate limited; try again later"
 	case errors.Is(err, domain.ErrUpstream):
-		return http.StatusBadGateway, "upstream_error"
+		return http.StatusBadGateway, "upstream_error", "upstream data source unavailable"
 	default:
-		return http.StatusInternalServerError, "internal_error"
+		return http.StatusInternalServerError, "internal_error", "internal error"
 	}
+}
+
+// publicInvalidArgument returns a short client-safe validation message.
+// Domain validation messages are intentionally simple and safe to surface.
+func publicInvalidArgument(err error) string {
+	msg := err.Error()
+	// Strip the sentinel prefix "invalid argument: " when present.
+	const prefix = "invalid argument: "
+	if len(msg) > len(prefix) && msg[:len(prefix)] == prefix {
+		return msg[len(prefix):]
+	}
+	if msg == "invalid argument" {
+		return "invalid argument"
+	}
+	// If wrapping preserved a useful suffix via %w, still avoid leaking nested upstream text.
+	return "invalid argument"
 }

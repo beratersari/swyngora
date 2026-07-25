@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -25,11 +27,19 @@ func main() {
 
 	httpClient := &http.Client{Timeout: cfg.HTTPClientTimeout}
 
-	candleCache := cache.New[[]domain.Candle](cfg.CandleCacheTTL)
-	tickerCache := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
-	// Long-lived supply snapshot (daily refresh + safety TTL).
+	// Shared short TTL caches are per-adapter (keys would collide across venues).
+	binanceCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
+	binanceTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	binanceSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	coinbaseCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
+	coinbaseTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	coinbaseSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	bybitCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
+	bybitTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	bybitSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+
+	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
-	spotMarketCache := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 
 	stopCleanup := make(chan struct{})
 	go func() {
@@ -38,34 +48,61 @@ func main() {
 		for {
 			select {
 			case <-t.C:
-				candleCache.Cleanup()
-				tickerCache.Cleanup()
+				binanceCandles.Cleanup()
+				binanceTickers.Cleanup()
+				binanceSpot.Cleanup()
+				coinbaseCandles.Cleanup()
+				coinbaseTickers.Cleanup()
+				coinbaseSpot.Cleanup()
+				bybitCandles.Cleanup()
+				bybitTickers.Cleanup()
+				bybitSpot.Cleanup()
 				supplyCache.Cleanup()
-				spotMarketCache.Cleanup()
 			case <-stopCleanup:
 				return
 			}
 		}
 	}()
 
-	// Single Binance client: Spot REST (candles/ticker/spot) + product catalog (circulating supply).
 	binanceClient := binance.NewClient(binance.Options{
 		BaseURL:         cfg.BinanceBaseURL,
 		ProductBaseURL:  cfg.BinanceProductBaseURL,
 		HTTPClient:      httpClient,
-		CandleCache:     candleCache,
-		TickerCache:     tickerCache,
-		SpotMarketCache: spotMarketCache,
+		CandleCache:     binanceCandles,
+		TickerCache:     binanceTickers,
+		SpotMarketCache: binanceSpot,
 		SupplyCache:     supplyCache,
 	})
+	coinbaseClient := coinbase.NewClient(coinbase.Options{
+		BaseURL:         cfg.CoinbaseBaseURL,
+		ExchangeURL:     cfg.CoinbaseExchangeURL,
+		HTTPClient:      httpClient,
+		CandleCache:     coinbaseCandles,
+		TickerCache:     coinbaseTickers,
+		SpotMarketCache: coinbaseSpot,
+	})
+	bybitClient := bybit.NewClient(bybit.Options{
+		BaseURL:         cfg.BybitBaseURL,
+		HTTPClient:      httpClient,
+		CandleCache:     bybitCandles,
+		TickerCache:     bybitTickers,
+		SpotMarketCache: bybitSpot,
+	})
 
-	marketSvc := market.New(binanceClient, binanceClient)
-	handler := httpx.NewRouter(marketSvc)
+	marketSvc := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  binanceClient,
+		domain.ExchangeCoinbase: coinbaseClient,
+		domain.ExchangeBybit:    bybitClient,
+	}, binanceClient)
+
+	handler := httpx.NewRouterWithOptions(marketSvc, httpx.RouterOptions{
+		RateLimitRPS:   cfg.RateLimitRPS,
+		RateLimitBurst: cfg.RateLimitBurst,
+	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// Daily supply snapshot from Binance product catalog (default 03:00 UTC). Requests are cache-only.
 	job := &supplyjob.Runner{
 		Supply:     binanceClient,
 		Hour:       cfg.SupplyRefreshHour,
@@ -81,12 +118,12 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      60 * time.Second, // list+enrich can be larger
+		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
-		logger.Info("server listening", "addr", cfg.HTTPAddr)
+		logger.Info("server listening", "addr", cfg.HTTPAddr, "exchanges", []string{"binance", "coinbase", "bybit"})
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server failed", "err", err)
 			os.Exit(1)

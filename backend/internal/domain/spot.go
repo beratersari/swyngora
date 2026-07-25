@@ -14,6 +14,8 @@ const (
 	SpotSortMarketCapCirculating  SpotSortField = "marketCapCirculating"
 	SpotSortMarketCapTotal        SpotSortField = "marketCapTotal"
 	SpotSortMarketCapMax          SpotSortField = "marketCapMax"
+	// SpotSortTags orders by primary tag (lexicographic join of tags); empty tags last.
+	SpotSortTags SpotSortField = "tags"
 )
 
 // SupportedSpotSortFields lists valid sort query values.
@@ -28,6 +30,7 @@ var SupportedSpotSortFields = []SpotSortField{
 	SpotSortMarketCapCirculating,
 	SpotSortMarketCapTotal,
 	SpotSortMarketCapMax,
+	SpotSortTags,
 }
 
 // IsValidSpotSortField reports whether s is a supported sort field.
@@ -73,6 +76,10 @@ type SpotMarket struct {
 	QuoteVolume string
 	TradeCount  int64
 
+	// Tags are Binance product-catalog labels for the base asset
+	// (e.g. "Meme", "Layer1_Layer2", "defi"). Empty when unknown.
+	Tags []string
+
 	// Supply snapshot (from Binance product catalog circulating supply).
 	CirculatingSupply *float64
 	TotalSupply       *float64
@@ -97,9 +104,12 @@ type SpotListQuery struct {
 	BaseAsset string
 	// Status filters exchange status (e.g. TRADING). Empty = all statuses.
 	Status string
+	// Tags filters markets that have at least one of these product tags
+	// (case-insensitive; OR semantics). Empty = no tag filter.
+	Tags []string
 	// SortBy defaults to quoteVolume.
 	SortBy SpotSortField
-	// Order defaults to desc for metrics, asc for symbol/baseAsset when unset by service.
+	// Order defaults to desc for metrics, asc for symbol/baseAsset/tags when unset by service.
 	Order SortOrder
 	// Limit is page size (service applies defaults/max).
 	Limit int
@@ -109,13 +119,16 @@ type SpotListQuery struct {
 
 // SpotListResult is a page of spot markets plus total match count.
 type SpotListResult struct {
-	Items  []SpotMarket
-	Total  int
-	Limit  int
-	Offset int
-	SortBy SpotSortField
-	Order  SortOrder
-	Query  string
+	Items    []SpotMarket
+	Total    int
+	Limit    int
+	Offset   int
+	SortBy   SpotSortField
+	Order    SortOrder
+	Query    string
+	// Tags is the normalized tag filter applied (may be empty).
+	Tags     []string
+	Exchange Exchange
 }
 
 // NeedsSupplyEnrichment reports whether sort requires market-cap fields.

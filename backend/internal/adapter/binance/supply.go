@@ -58,6 +58,7 @@ func cloneSupply(hit *domain.AssetSupply) *domain.AssetSupply {
 
 // Refresh bulk-loads circulating / total / max supply from Binance marketing symbol list.
 // Safe to call from the daily supply job. Returns the number of unique base assets stored.
+// On failure the previous snapshot is left intact (atomic replace only on success).
 func (c *Client) Refresh(ctx context.Context) (int, error) {
 	if c.supply == nil {
 		return 0, fmt.Errorf("%w: supply cache not configured", domain.ErrUpstream)
@@ -67,9 +68,10 @@ func (c *Client) Refresh(ctx context.Context) (int, error) {
 	}
 
 	v, err, _ := c.supplySF.Do("refresh", func() (any, error) {
-		// Detached context: one job cancel mid-flight must not poison shared work
-		// if another refresh waiter exists (same pattern as ListSpotMarkets).
-		return c.fetchAndStoreSupply(context.Background())
+		// Detached context with deadline: shared work must not hang forever.
+		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
+		defer cancel()
+		return c.fetchAndStoreSupply(fetchCtx)
 	})
 	if err != nil {
 		return 0, err
@@ -90,37 +92,50 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return 0, fmt.Errorf("%w: decode marketing symbol list: %v", domain.ErrUpstream, err)
 	}
-	if !envelope.Success && envelope.Code != "" && envelope.Code != "000000" {
-		return 0, fmt.Errorf("%w: binance marketing symbol list code=%s msg=%s",
-			domain.ErrUpstream, envelope.Code, envelope.Message)
+	if !productEnvelopeOK(envelope.Success, envelope.Code) {
+		return 0, fmt.Errorf("%w: binance marketing symbol list code=%s msg=%s success=%v",
+			domain.ErrUpstream, envelope.Code, envelope.Message, envelope.Success)
 	}
 	if len(envelope.Data) == 0 {
 		return 0, fmt.Errorf("%w: empty marketing symbol list", domain.ErrUpstream)
 	}
 
 	asOf := time.Now().UTC()
-	stored := 0
+	// First pass: pick best row per base (prefer USDT-class pairs).
+	type rowScore struct {
+		row   marketingSymbolRow
+		score int
+	}
+	best := map[string]rowScore{}
 	for _, row := range envelope.Data {
-		// Crypto-only: drop tokenized stocks (bStocks) and commodity wrappers.
 		if hasNonCryptoTag(row.Tags) {
 			continue
 		}
 		base := strings.ToUpper(strings.TrimSpace(row.Name))
 		if base == "" {
-			// Fallback: strip quote from pair symbol (e.g. BTCUSDT).
 			base = stripStableQuoteSuffix(strings.ToUpper(strings.TrimSpace(row.Symbol)))
 		}
 		if base == "" {
 			continue
 		}
-
 		circ, hasCirc := parseOptionalFloat(row.CirculatingSupply)
 		total, hasTotal := parseOptionalFloat(row.TotalSupply)
 		max, hasMax := parseOptionalFloat(row.MaxSupply)
-		// Skip rows with no usable supply metrics at all.
 		if (!hasCirc || circ <= 0) && (!hasTotal || total <= 0) && (!hasMax || max <= 0) {
 			continue
 		}
+		score := pairQuoteScore(row.Symbol) + completenessScore(hasCirc && circ > 0, hasTotal && total > 0, hasMax && max > 0)
+		if prev, ok := best[base]; !ok || score > prev.score {
+			best[base] = rowScore{row: row, score: score}
+		}
+	}
+
+	next := make(map[string]*domain.AssetSupply, len(best))
+	for base, rs := range best {
+		row := rs.row
+		circ, hasCirc := parseOptionalFloat(row.CirculatingSupply)
+		total, hasTotal := parseOptionalFloat(row.TotalSupply)
+		max, hasMax := parseOptionalFloat(row.MaxSupply)
 
 		name := strings.TrimSpace(row.FullName)
 		if name == "" {
@@ -155,13 +170,60 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 		if usd != nil {
 			sup.CurrentPriceUSD = usd
 		}
-		c.supply.Set(base, sup)
-		stored++
+		next[base] = sup
 	}
-	if stored == 0 {
+	if len(next) == 0 {
 		return 0, fmt.Errorf("%w: no supply rows stored from marketing symbol list", domain.ErrUpstream)
 	}
-	return stored, nil
+
+	// Atomic swap: only replace previous snapshot after a full successful build.
+	// defaultTTL for supply is configured long; entries also never vanish on failed refresh.
+	c.supply.ReplaceAll(next)
+	return len(next), nil
+}
+
+// pairQuoteScore ranks a marketing pair symbol by preferred USD-stable quote.
+func pairQuoteScore(symbol string) int {
+	u := strings.ToUpper(strings.TrimSpace(symbol))
+	// Longest first.
+	for _, q := range []struct {
+		suffix string
+		score  int
+	}{
+		{"FDUSD", 80},
+		{"USDT", 100},
+		{"USDC", 90},
+		{"BUSD", 70},
+		{"TUSD", 60},
+		{"DAI", 50},
+	} {
+		if strings.HasSuffix(u, q.suffix) && len(u) > len(q.suffix) {
+			return q.score
+		}
+	}
+	return 0
+}
+
+func completenessScore(hasCirc, hasTotal, hasMax bool) int {
+	n := 0
+	if hasCirc {
+		n += 3
+	}
+	if hasTotal {
+		n += 2
+	}
+	if hasMax {
+		n += 1
+	}
+	return n
+}
+
+// productEnvelopeOK requires a clear success signal from Binance bapi envelopes.
+func productEnvelopeOK(success bool, code string) bool {
+	if success {
+		return true
+	}
+	return code == "000000"
 }
 
 func (c *Client) getProduct(ctx context.Context, path string, params url.Values) ([]byte, error) {

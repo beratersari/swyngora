@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -13,15 +15,18 @@ import (
 
 func TestWriteError_Mapping(t *testing.T) {
 	cases := []struct {
-		err    error
-		status int
-		code   string
+		err     error
+		status  int
+		code    string
+		msgPart string
 	}{
-		{fmt.Errorf("%w: x", domain.ErrInvalidArgument), http.StatusBadRequest, "invalid_argument"},
-		{fmt.Errorf("%w: x", domain.ErrNotFound), http.StatusNotFound, "not_found"},
-		{fmt.Errorf("%w: x", domain.ErrRateLimited), http.StatusTooManyRequests, "rate_limited"},
-		{fmt.Errorf("%w: x", domain.ErrUpstream), http.StatusBadGateway, "upstream_error"},
-		{errors.New("boom"), http.StatusInternalServerError, "internal_error"},
+		{fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument), http.StatusBadRequest, "invalid_argument", "symbol"},
+		{fmt.Errorf("%w: x", domain.ErrNotFound), http.StatusNotFound, "not_found", "not found"},
+		{fmt.Errorf("%w: binance 429", domain.ErrRateLimited), http.StatusTooManyRequests, "rate_limited", "try again"},
+		{fmt.Errorf("%w: request failed: dial tcp secret", domain.ErrUpstream), http.StatusBadGateway, "upstream_error", "unavailable"},
+		{errors.New("boom internal stack"), http.StatusInternalServerError, "internal_error", "internal error"},
+		{context.Canceled, http.StatusBadRequest, "canceled", "canceled"},
+		{context.DeadlineExceeded, http.StatusGatewayTimeout, "timeout", "timed out"},
 	}
 	for _, tc := range cases {
 		rr := httptest.NewRecorder()
@@ -35,6 +40,13 @@ func TestWriteError_Mapping(t *testing.T) {
 		}
 		if body.Error.Code != tc.code {
 			t.Fatalf("code %s want %s", body.Error.Code, tc.code)
+		}
+		if !strings.Contains(strings.ToLower(body.Error.Message), strings.ToLower(tc.msgPart)) {
+			t.Fatalf("message %q should contain %q", body.Error.Message, tc.msgPart)
+		}
+		// Upstream secrets must not leak.
+		if strings.Contains(body.Error.Message, "secret") || strings.Contains(body.Error.Message, "dial tcp") {
+			t.Fatalf("leaked upstream detail: %q", body.Error.Message)
 		}
 	}
 }

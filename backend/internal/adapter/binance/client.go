@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,8 @@ import (
 const (
 	exchangeInfoCacheTTL = 10 * time.Minute
 	nonCryptoBasesTTL    = 1 * time.Hour
+	// multiCallTimeout bounds detached singleflight work (spot list / supply refresh).
+	multiCallTimeout = 45 * time.Second
 )
 
 // Client implements domain.MarketDataPort and domain.SupplyPort against Binance.
@@ -35,12 +38,15 @@ type Client struct {
 	spotMarkets    *cache.TTL[[]domain.SpotMarket] // joined list (short TTL → live prices)
 	// Layered meta so a short price refresh does NOT re-download exchangeInfo / product catalog
 	// (those were the main reason the UI saw ~30–40s between real updates).
-	exchangeSpot   *cache.TTL[[]spotSymbolMeta]
-	nonCryptoBases *cache.TTL[[]string]
-	supply         *cache.TTL[*domain.AssetSupply]
+	exchangeSpot *cache.TTL[[]spotSymbolMeta]
+	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
+	productMeta *cache.TTL[*productMetaSnapshot]
+	supply      *cache.TTL[*domain.AssetSupply]
 	spotSF         singleflight.Group
 	supplySF       singleflight.Group
 	metaSF         singleflight.Group
+	candleSF       singleflight.Group
+	tickerSF       singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -75,10 +81,19 @@ func NewClient(opts Options) *Client {
 		candles:        opts.CandleCache,
 		tickers:        opts.TickerCache,
 		spotMarkets:    opts.SpotMarketCache,
-		exchangeSpot:   cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
-		nonCryptoBases: cache.New[[]string](nonCryptoBasesTTL),
-		supply:         opts.SupplyCache,
+		exchangeSpot: cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
+		productMeta:  cache.New[*productMetaSnapshot](nonCryptoBasesTTL),
+		supply:       opts.SupplyCache,
 	}
+}
+
+// productMetaSnapshot is derived from the Binance product catalog (long-lived).
+type productMetaSnapshot struct {
+	NonCryptoBases []string
+	// TagsByBase maps uppercased base asset → sorted unique product tags.
+	TagsByBase map[string][]string
+	// AllTags is the sorted unique set of crypto product tags (for filter UI).
+	AllTags []string
 }
 
 // spotSymbolMeta is the static half of a spot row (from exchangeInfo).
@@ -90,6 +105,8 @@ type spotSymbolMeta struct {
 }
 
 // GetCandles fetches OHLCV klines for the given query.
+// Concurrent cold misses are coalesced via singleflight.
+// Historical range queries (start/end set) are not cached to avoid unbounded keys.
 func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
 	symbol := normalizeSymbol(q.Symbol)
 	if symbol == "" {
@@ -106,52 +123,96 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 		limit = 1000
 	}
 
-	cacheKey := fmt.Sprintf("%s|%s|%d|%d|%d",
-		symbol, q.Interval, limit,
-		q.StartTime.UnixMilli(), q.EndTime.UnixMilli())
-	if c.candles != nil {
+	// Only cache "latest N candles" queries — arbitrary start/end would unbounded-key the cache.
+	cacheable := q.StartTime.IsZero() && q.EndTime.IsZero()
+	cacheKey := fmt.Sprintf("%s|%s|%d", symbol, q.Interval, limit)
+	if cacheable && c.candles != nil {
 		if hit, ok := c.candles.Get(cacheKey); ok {
 			return append([]domain.Candle(nil), hit...), nil
 		}
 	}
 
-	params := url.Values{}
-	params.Set("symbol", symbol)
-	params.Set("interval", string(q.Interval))
-	params.Set("limit", strconv.Itoa(limit))
-	if !q.StartTime.IsZero() {
-		params.Set("startTime", strconv.FormatInt(q.StartTime.UnixMilli(), 10))
-	}
-	if !q.EndTime.IsZero() {
-		params.Set("endTime", strconv.FormatInt(q.EndTime.UnixMilli(), 10))
+	type result struct {
+		candles []domain.Candle
 	}
 
-	body, err := c.get(ctx, "/api/v3/klines", params)
+	doFetch := func() ([]domain.Candle, error) {
+		params := url.Values{}
+		params.Set("symbol", symbol)
+		params.Set("interval", string(q.Interval))
+		params.Set("limit", strconv.Itoa(limit))
+		if !q.StartTime.IsZero() {
+			params.Set("startTime", strconv.FormatInt(q.StartTime.UnixMilli(), 10))
+		}
+		if !q.EndTime.IsZero() {
+			params.Set("endTime", strconv.FormatInt(q.EndTime.UnixMilli(), 10))
+		}
+
+		fetchCtx := ctx
+		if cacheable {
+			// Shared flight must not die with one caller's cancel.
+			var cancel context.CancelFunc
+			fetchCtx, cancel = context.WithTimeout(context.Background(), multiCallTimeout)
+			defer cancel()
+		}
+
+		body, err := c.get(fetchCtx, "/api/v3/klines", params)
+		if err != nil {
+			return nil, err
+		}
+
+		var raw [][]json.RawMessage
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return nil, fmt.Errorf("%w: decode klines: %v", domain.ErrUpstream, err)
+		}
+
+		out := make([]domain.Candle, 0, len(raw))
+		for _, row := range raw {
+			candle, err := parseKline(row)
+			if err != nil {
+				return nil, fmt.Errorf("%w: parse kline: %v", domain.ErrUpstream, err)
+			}
+			out = append(out, candle)
+		}
+
+		if cacheable && c.candles != nil {
+			c.candles.Set(cacheKey, append([]domain.Candle(nil), out...))
+		}
+		return out, nil
+	}
+
+	if !cacheable {
+		out, err := doFetch()
+		if err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+
+	v, err, _ := c.candleSF.Do(cacheKey, func() (any, error) {
+		if c.candles != nil {
+			if hit, ok := c.candles.Get(cacheKey); ok {
+				return result{candles: hit}, nil
+			}
+		}
+		out, err := doFetch()
+		if err != nil {
+			return nil, err
+		}
+		return result{candles: out}, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	var raw [][]json.RawMessage
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("%w: decode klines: %v", domain.ErrUpstream, err)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-
-	out := make([]domain.Candle, 0, len(raw))
-	for _, row := range raw {
-		candle, err := parseKline(row)
-		if err != nil {
-			return nil, fmt.Errorf("%w: parse kline: %v", domain.ErrUpstream, err)
-		}
-		out = append(out, candle)
-	}
-
-	if c.candles != nil {
-		c.candles.Set(cacheKey, append([]domain.Candle(nil), out...))
-	}
-	return out, nil
+	out := v.(result).candles
+	return append([]domain.Candle(nil), out...), nil
 }
 
 // GetTicker24h fetches 24-hour rolling statistics for a symbol.
+// Concurrent cold misses are coalesced via singleflight.
 func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticker24h, error) {
 	symbol = normalizeSymbol(symbol)
 	if symbol == "" {
@@ -160,50 +221,65 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 
 	if c.tickers != nil {
 		if hit, ok := c.tickers.Get(symbol); ok {
-			// Return a copy so callers cannot mutate the cached *Ticker24h.
 			cp := *hit
 			return &cp, nil
 		}
 	}
 
-	params := url.Values{}
-	params.Set("symbol", symbol)
-	body, err := c.get(ctx, "/api/v3/ticker/24hr", params)
+	v, err, _ := c.tickerSF.Do(symbol, func() (any, error) {
+		if c.tickers != nil {
+			if hit, ok := c.tickers.Get(symbol); ok {
+				return hit, nil
+			}
+		}
+		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
+		defer cancel()
+
+		params := url.Values{}
+		params.Set("symbol", symbol)
+		body, err := c.get(fetchCtx, "/api/v3/ticker/24hr", params)
+		if err != nil {
+			return nil, err
+		}
+
+		var raw ticker24hResponse
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return nil, fmt.Errorf("%w: decode ticker: %v", domain.ErrUpstream, err)
+		}
+		if raw.Code != 0 && raw.Msg != "" {
+			return nil, mapBinanceError(raw.Code, raw.Msg)
+		}
+
+		t := &domain.Ticker24h{
+			Symbol:             raw.Symbol,
+			PriceChange:        raw.PriceChange,
+			PriceChangePercent: raw.PriceChangePercent,
+			LastPrice:          raw.LastPrice,
+			OpenPrice:          raw.OpenPrice,
+			HighPrice:          raw.HighPrice,
+			LowPrice:           raw.LowPrice,
+			Volume:             raw.Volume,
+			QuoteVolume:        raw.QuoteVolume,
+			OpenTime:           time.UnixMilli(raw.OpenTime),
+			CloseTime:          time.UnixMilli(raw.CloseTime),
+			TradeCount:         raw.Count,
+		}
+
+		if c.tickers != nil {
+			c.tickers.Set(symbol, t)
+		}
+		return t, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	var raw ticker24hResponse
-	if err := json.Unmarshal(body, &raw); err != nil {
-		return nil, fmt.Errorf("%w: decode ticker: %v", domain.ErrUpstream, err)
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
-	if raw.Code != 0 && raw.Msg != "" {
-		return nil, mapBinanceError(raw.Code, raw.Msg)
-	}
-
-	t := &domain.Ticker24h{
-		Symbol:             raw.Symbol,
-		PriceChange:        raw.PriceChange,
-		PriceChangePercent: raw.PriceChangePercent,
-		LastPrice:          raw.LastPrice,
-		OpenPrice:          raw.OpenPrice,
-		HighPrice:          raw.HighPrice,
-		LowPrice:           raw.LowPrice,
-		Volume:             raw.Volume,
-		QuoteVolume:        raw.QuoteVolume,
-		OpenTime:           time.UnixMilli(raw.OpenTime),
-		CloseTime:          time.UnixMilli(raw.CloseTime),
-		TradeCount:         raw.Count,
-	}
-
-	if c.tickers != nil {
-		c.tickers.Set(symbol, t)
-	}
-	// Return a copy in all cases so that the caller cannot mutate the value stored in cache.
-	cp := *t
+	hit := v.(*domain.Ticker24h)
+	cp := *hit
 	return &cp, nil
 }
-
 
 // ListSpotMarkets returns spot-tradable symbols joined with 24h ticker metrics.
 // Sources: GET /api/v3/exchangeInfo + GET /api/v3/ticker/24hr (all symbols).
@@ -226,10 +302,9 @@ func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, erro
 				return hit, nil
 			}
 		}
-		// Use a detached context for the actual fetch. The work is shared across
-		// callers; a single caller's cancellation (or short timeout) must not
-		// abort the cache fill for other waiters.
-		return c.fetchSpotMarkets(context.Background())
+		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
+		defer cancel()
+		return c.fetchSpotMarkets(fetchCtx)
 	})
 	if err != nil {
 		return nil, err
@@ -249,9 +324,22 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 	if err != nil {
 		return nil, err
 	}
-	nonCrypto, err := c.getNonCryptoBaseSet(ctx)
+	// Product catalog: non-crypto filter + tags. Soft-fail so catalog outage does not take down spot list.
+	meta, err := c.getProductMeta(ctx)
+	nonCrypto := map[string]struct{}{}
+	tagsByBase := map[string][]string{}
 	if err != nil {
-		return nil, err
+		if stale, ok := c.productMeta.GetStale("all"); ok && stale != nil {
+			for _, b := range stale.NonCryptoBases {
+				nonCrypto[b] = struct{}{}
+			}
+			tagsByBase = stale.TagsByBase
+		}
+	} else if meta != nil {
+		for _, b := range meta.NonCryptoBases {
+			nonCrypto[b] = struct{}{}
+		}
+		tagsByBase = meta.TagsByBase
 	}
 
 	tickerBody, err := c.get(ctx, "/api/v3/ticker/24hr", nil)
@@ -279,6 +367,9 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 			QuoteAsset: s.QuoteAsset,
 			Status:     s.Status,
 		}
+		if tags, ok := tagsByBase[base]; ok && len(tags) > 0 {
+			m.Tags = append([]string(nil), tags...)
+		}
 		if t, ok := bySymbol[s.Symbol]; ok {
 			m.LastPrice = t.LastPrice
 			m.PriceChange = t.PriceChange
@@ -296,6 +387,22 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		c.spotMarkets.Set(cacheKey, append([]domain.SpotMarket(nil), out...))
 	}
 	return out, nil
+}
+
+// ListProductTags returns sorted unique Binance product-catalog tags for crypto bases.
+func (c *Client) ListProductTags(ctx context.Context) ([]string, error) {
+	meta, err := c.getProductMeta(ctx)
+	if err != nil {
+		// Last-good tags if catalog is temporarily down.
+		if stale, ok := c.productMeta.GetStale("all"); ok && stale != nil && len(stale.AllTags) > 0 {
+			return append([]string(nil), stale.AllTags...), nil
+		}
+		return nil, err
+	}
+	if meta == nil {
+		return []string{}, nil
+	}
+	return append([]string(nil), meta.AllTags...), nil
 }
 
 // getExchangeSpotSymbols returns SPOT-tradable symbols (not yet filtered by bStocks).
@@ -347,29 +454,17 @@ func (c *Client) getExchangeSpotSymbols(ctx context.Context) ([]spotSymbolMeta, 
 	return v.([]spotSymbolMeta), nil
 }
 
-// getNonCryptoBaseSet returns bases tagged bStocks / tCommodities (long-lived cache).
-func (c *Client) getNonCryptoBaseSet(ctx context.Context) (map[string]struct{}, error) {
-	bases, err := c.getNonCryptoBaseList(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string]struct{}, len(bases))
-	for _, b := range bases {
-		out[b] = struct{}{}
-	}
-	return out, nil
-}
-
-func (c *Client) getNonCryptoBaseList(ctx context.Context) ([]string, error) {
+// getProductMeta returns cached product-catalog meta (non-crypto bases + tags).
+func (c *Client) getProductMeta(ctx context.Context) (*productMetaSnapshot, error) {
 	const key = "all"
-	if c.nonCryptoBases != nil {
-		if hit, ok := c.nonCryptoBases.Get(key); ok {
+	if c.productMeta != nil {
+		if hit, ok := c.productMeta.Get(key); ok {
 			return hit, nil
 		}
 	}
-	v, err, _ := c.metaSF.Do("nonCryptoBases", func() (any, error) {
-		if c.nonCryptoBases != nil {
-			if hit, ok := c.nonCryptoBases.Get(key); ok {
+	v, err, _ := c.metaSF.Do("productMeta", func() (any, error) {
+		if c.productMeta != nil {
+			if hit, ok := c.productMeta.Get(key); ok {
 				return hit, nil
 			}
 		}
@@ -383,35 +478,81 @@ func (c *Client) getNonCryptoBaseList(ctx context.Context) ([]string, error) {
 		if err := json.Unmarshal(body, &envelope); err != nil {
 			return nil, fmt.Errorf("%w: decode product catalog: %v", domain.ErrUpstream, err)
 		}
-		if !envelope.Success && envelope.Code != "" && envelope.Code != "000000" {
-			return nil, fmt.Errorf("%w: binance product catalog code=%s msg=%s",
-				domain.ErrUpstream, envelope.Code, envelope.Message)
+		if !productEnvelopeOK(envelope.Success, envelope.Code) {
+			return nil, fmt.Errorf("%w: binance product catalog code=%s msg=%s success=%v",
+				domain.ErrUpstream, envelope.Code, envelope.Message, envelope.Success)
 		}
-		seen := map[string]struct{}{}
-		var out []string
-		for _, row := range envelope.Data {
-			if !hasNonCryptoTag(row.Tags) {
-				continue
-			}
-			base := strings.ToUpper(strings.TrimSpace(row.BaseAsset))
-			if base == "" {
-				continue
-			}
-			if _, ok := seen[base]; ok {
-				continue
-			}
-			seen[base] = struct{}{}
-			out = append(out, base)
+		if len(envelope.Data) == 0 {
+			// Fail closed: never cache an empty catalog (would include equities/commodities).
+			return nil, fmt.Errorf("%w: empty product catalog", domain.ErrUpstream)
 		}
-		if c.nonCryptoBases != nil {
-			c.nonCryptoBases.Set(key, append([]string(nil), out...))
+		snap := buildProductMetaSnapshot(envelope.Data)
+		if c.productMeta != nil {
+			c.productMeta.Set(key, snap)
 		}
-		return out, nil
+		return snap, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return v.([]string), nil
+	return v.(*productMetaSnapshot), nil
+}
+
+// buildProductMetaSnapshot extracts non-crypto bases and crypto tags from catalog rows.
+func buildProductMetaSnapshot(rows []productCatalogRow) *productMetaSnapshot {
+	nonCryptoSeen := map[string]struct{}{}
+	var nonCrypto []string
+	// tag sets per base (crypto only)
+	tagSets := map[string]map[string]struct{}{}
+	globalTags := map[string]struct{}{}
+
+	for _, row := range rows {
+		base := strings.ToUpper(strings.TrimSpace(row.BaseAsset))
+		if base == "" {
+			continue
+		}
+		if hasNonCryptoTag(row.Tags) {
+			if _, ok := nonCryptoSeen[base]; !ok {
+				nonCryptoSeen[base] = struct{}{}
+				nonCrypto = append(nonCrypto, base)
+			}
+			continue
+		}
+		if tagSets[base] == nil {
+			tagSets[base] = map[string]struct{}{}
+		}
+		for _, raw := range row.Tags {
+			t := strings.TrimSpace(raw)
+			if t == "" {
+				continue
+			}
+			// Preserve original casing from first sighting; match case-insensitively via lower key.
+			// Store display form as-is from Binance.
+			tagSets[base][t] = struct{}{}
+			globalTags[t] = struct{}{}
+		}
+	}
+
+	tagsByBase := make(map[string][]string, len(tagSets))
+	for base, set := range tagSets {
+		tags := make([]string, 0, len(set))
+		for t := range set {
+			tags = append(tags, t)
+		}
+		sort.Strings(tags)
+		tagsByBase[base] = tags
+	}
+	allTags := make([]string, 0, len(globalTags))
+	for t := range globalTags {
+		allTags = append(allTags, t)
+	}
+	sort.Strings(allTags)
+
+	return &productMetaSnapshot{
+		NonCryptoBases: nonCrypto,
+		TagsByBase:     tagsByBase,
+		AllTags:        allTags,
+	}
 }
 
 // productCatalogResponse is the www.binance.com product list envelope.

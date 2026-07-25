@@ -9,6 +9,9 @@ type MarketDataPort interface {
 	GetTicker24h(ctx context.Context, symbol string) (*Ticker24h, error)
 	// ListSpotMarkets returns all spot-tradable pairs joined with 24h metrics.
 	ListSpotMarkets(ctx context.Context) ([]SpotMarket, error)
+	// ListProductTags returns unique Binance product-catalog tags for crypto spot bases
+	// (sorted), used for UI filters. Cached with the product catalog meta.
+	ListProductTags(ctx context.Context) ([]string, error)
 }
 
 // SupplyPort serves asset supply / mcap inputs for user requests.

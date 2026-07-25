@@ -20,6 +20,10 @@ func (stubMarketData) ListSpotMarkets(context.Context) ([]SpotMarket, error) {
 	return nil, nil
 }
 
+func (stubMarketData) ListProductTags(context.Context) ([]string, error) {
+	return nil, nil
+}
+
 type stubSupplyPort struct{}
 
 func (stubSupplyPort) GetSupply(context.Context, string) (*AssetSupply, error) {

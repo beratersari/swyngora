@@ -1,12 +1,12 @@
 # Swyngora Backend
 
-Go HTTP API for market data: **Binance** candles, 24h volume/ticker, spot list, and **circulating supply** from the Binance product catalog.
+Go HTTP API for market data across **Binance**, **Coinbase**, and **Bybit** (spot). Circulating supply remains from the Binance daily snapshot (asset-level mcap enrichment for all venues).
 
 ## Architecture (N-layered)
 
 | Layer | Path | Role |
 |---|---|---|
-| Transport | `internal/transport/http` | HTTP handlers, CORS, JSON mapping |
+| Transport | `internal/transport/http` | HTTP handlers, CORS, rate limit, JSON mapping |
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
 | Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache |
@@ -19,8 +19,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | Liveness |
-| `GET` | `/api/v1/market/intervals` | Supported candle intervals |
-| `GET` | `/api/v1/market/spot?q=btc&quote=USDT&sort=quoteVolume` | List/search/sort spot markets |
+| `GET` | `/api/v1/market/exchanges` | Supported venues |
+| `GET` | `/api/v1/market/intervals` | Candle intervals (per `exchange`) |
+| `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
+| `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -29,7 +31,9 @@ Intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, 
 
 Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
-**Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only**. Max is null when Binance does not define a hard cap (max mcap may show as infinite).
+**Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (stale bases removed; last-good retained on failure). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first) so multi-quote clones do not dominate rankings. Empty supply snapshot → market-cap sort returns `502` rather than a fake ranking.
+
+**Hardening:** per-IP rate limits; sanitized public error messages; candle/ticker singleflight; bounded candle cache; non-crypto product filter fails closed on empty/soft envelopes and soft-fails spot list when the catalog host is down (uses last-good exclusion set).
 
 ## Run
 
@@ -46,16 +50,22 @@ go run ./cmd/server
 | `HTTP_ADDR` | `:8080` | Listen address |
 | `BINANCE_BASE_URL` | `https://api.binance.com` | Binance Spot REST base |
 | `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
+| `COINBASE_BASE_URL` | `https://api.coinbase.com` | Coinbase public market products |
+| `COINBASE_EXCHANGE_URL` | `https://api.exchange.coinbase.com` | Coinbase public candles |
+| `BYBIT_BASE_URL` | `https://api.bybit.com` | Bybit v5 public market API |
 | `HTTP_CLIENT_TIMEOUT` | `15s` | Upstream HTTP timeout |
-| `CANDLE_CACHE_TTL` | `30s` | Candle response TTL |
+| `CANDLE_CACHE_TTL` | `30s` | Candle response TTL (latest-N queries only; ranges not cached) |
+| `CANDLE_CACHE_MAX_ENTRIES` | `512` | Max candle cache keys (memory bound) |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
-| `SUPPLY_CACHE_TTL` | `26h` | Safety TTL for daily supply snapshot |
+| `SUPPLY_CACHE_TTL` | `0` (never expire) | Optional safety TTL; default keeps last-good until successful replace |
 | `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |
 | `SUPPLY_REFRESH_HOUR` | `3` | Daily product-catalog snapshot hour (local to TZ) |
 | `SUPPLY_REFRESH_MINUTE` | `0` | Daily snapshot minute |
-| `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule |
+| `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule (DST-safe calendar math) |
 | `SUPPLY_REFRESH_ON_STARTUP` | `true` | Run one snapshot load on process start |
-| `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup |
+| `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup (must be > 0) |
+| `RATE_LIMIT_RPS` | `20` | Per-IP request rate (0 disables) |
+| `RATE_LIMIT_BURST` | `40` | Per-IP burst size |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 
@@ -77,7 +87,7 @@ Unit tests mock upstream HTTP; they do not call live Binance.
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go` |
-| Transport middleware | `internal/transport/http/middleware` | `cors_test.go` |
+| Transport middleware | `internal/transport/http/middleware` | `cors_test.go`, `ratelimit_test.go` |
 | Transport router | `internal/transport/http` | `router_test.go` |
 | Platform | `internal/platform/config` | `config_test.go` |
 | Entrypoint | `cmd/server` | No unit tests — process wiring only; covered by router + adapter tests |

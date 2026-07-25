@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Multi-exchange spot data: **Coinbase** + **Bybit** via `?exchange=`; `GET /api/v1/market/exchanges`
+- Binance product-catalog **tags** on spot markets: `tags` field, `tag`/`tags` filter (OR), `sort=tags`, and `GET /api/v1/market/tags`
+- Simple frontend tag filter dropdown and Tags column
+
+### Fixed
+- Market-cap ranking: nulls last, no infinite max without price, collapse multi-quote pairs, refuse empty-supply mcap sorts
+- Supply snapshot: atomic replace, USDT-pair preference, strict bapi success checks, last-good retained on failure
+- Non-crypto filter: fail-closed on empty/soft catalog; soft-fail spot list with last-good exclusion set
+- Candle/ticker thundering herd (singleflight); unbounded candle cache keys (range queries uncached + max entries)
+- Ingress per-IP rate limit; sanitized public API errors; zero-duration config footguns
+- Simple frontend XSS via unescaped formatters; show supply `asOf` / daily-snapshot cues
+
+
 ### Changed
 
 - Supply (circulating / total / max) comes **only from Binance** marketing symbol list; CoinGecko adapter removed

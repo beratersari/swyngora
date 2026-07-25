@@ -30,6 +30,28 @@ paths:
                   time:
                     type: string
                     format: date-time
+  /api/v1/market/exchanges:
+    get:
+      summary: List supported spot exchanges
+      operationId: listExchanges
+      tags: [Market]
+      responses:
+        '200':
+          description: Configured venues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exchanges:
+                    type: array
+                    items:
+                      type: string
+                    example: ["binance", "coinbase", "bybit"]
+                  default:
+                    type: string
+                    example: binance
+
   /api/v1/market/intervals:
     get:
       summary: List supported candle intervals
@@ -52,6 +74,33 @@ paths:
                       type: string
                     example: ["1m", "5m", "1h", "1d"]
 
+  /api/v1/market/tags:
+    get:
+      summary: List Binance product-catalog tags
+      description: |
+        Unique crypto product tags from Binance product catalog (e.g. Meme, defi, Layer1_Layer2).
+        Used to power spot list tag filters. Non-crypto tags (bStocks, tCommodities) are excluded.
+      operationId: listProductTags
+      tags: [Market]
+      responses:
+        '200':
+          description: Sorted unique tags
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exchange:
+                    type: string
+                    example: binance
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    example: ["AI", "Layer1_Layer2", "Meme", "defi"]
+        '502':
+          $ref: '#/components/responses/Error'
+
   /api/v1/market/spot:
     get:
       summary: List Binance spot markets with search and sort
@@ -62,6 +111,14 @@ paths:
       operationId: listSpotMarkets
       tags: [Market]
       parameters:
+        - name: exchange
+          in: query
+          required: false
+          description: Venue id (binance | coinbase | bybit). Default binance.
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit]
         - name: q
           in: query
           required: false
@@ -89,6 +146,22 @@ paths:
           schema:
             type: string
             example: TRADING
+        - name: tag
+          in: query
+          required: false
+          description: |
+            Filter by Binance product-catalog tag (case-insensitive).
+            Comma-separated or repeated `tag` params use OR semantics (has any).
+            Examples: `Meme`, `defi,AI`, `Layer1_Layer2`.
+          schema:
+            type: string
+            example: Meme
+        - name: tags
+          in: query
+          required: false
+          description: Alias of `tag` (comma-separated product tags, OR match)
+          schema:
+            type: string
         - name: sort
           in: query
           required: false
@@ -96,7 +169,7 @@ paths:
           schema:
             type: string
             default: quoteVolume
-            enum: [quoteVolume, volume, priceChangePercent, lastPrice, tradeCount, symbol, baseAsset, marketCapCirculating, marketCapTotal, marketCapMax]
+            enum: [quoteVolume, volume, priceChangePercent, lastPrice, tradeCount, symbol, baseAsset, marketCapCirculating, marketCapTotal, marketCapMax, tags]
         - name: order
           in: query
           required: false
@@ -140,10 +213,17 @@ paths:
       operationId: getCandles
       tags: [Market]
       parameters:
+        - name: exchange
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [binance, coinbase, bybit]
+            default: binance
         - name: symbol
           in: query
           required: true
-          description: Binance trading pair (e.g. BTCUSDT)
+          description: Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD)
           schema:
             type: string
             example: BTCUSDT
@@ -384,6 +464,9 @@ components:
           type: string
         query:
           type: string
+        tag:
+          type: string
+          description: Echo of applied tag filter (comma-separated)
         sort:
           type: string
         order:
@@ -420,6 +503,12 @@ components:
         tradeCount:
           type: integer
           format: int64
+        tags:
+          type: array
+          items:
+            type: string
+          description: Binance product-catalog tags for the base asset
+          example: ["Layer1_Layer2", "pos"]
         circulatingSupply:
           type: number
           nullable: true

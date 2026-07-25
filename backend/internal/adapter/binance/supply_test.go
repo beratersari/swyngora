@@ -270,3 +270,86 @@ func TestRefresh_UpstreamError(t *testing.T) {
 }
 
 func ptrF(f float64) *float64 { return &f }
+
+func TestRefresh_PrefersUSDTPairAndAtomicReplace(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": "000000", "success": true,
+			"data": []map[string]any{
+				{
+					"name": "BTC", "fullName": "Bitcoin", "symbol": "BTCUSDC",
+					"circulatingSupply": 19_000_000, "totalSupply": 19_000_000, "maxSupply": 21_000_000,
+					"price": 1.0,
+				},
+				{
+					"name": "BTC", "fullName": "Bitcoin", "symbol": "BTCUSDT",
+					"circulatingSupply": 19_800_000, "totalSupply": 19_800_000, "maxSupply": 21_000_000,
+					"price": 64000.0,
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	supCache := cache.New[*domain.AssetSupply](0)
+	// Pre-seed stale asset that must disappear after atomic replace.
+	old := &domain.AssetSupply{Asset: "GONE", CirculatingSupply: ptrF(1)}
+	supCache.Set("GONE", old)
+
+	c := NewClient(Options{
+		ProductBaseURL: srv.URL,
+		HTTPClient:     srv.Client(),
+		SupplyCache:    supCache,
+	})
+	n, err := c.Refresh(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("unique bases=%d", n)
+	}
+	if _, err := c.GetSupply(context.Background(), "GONE"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("GONE should be removed, err=%v", err)
+	}
+	sup, err := c.GetSupply(context.Background(), "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sup.CurrentPriceUSD == nil || *sup.CurrentPriceUSD != 64000 {
+		t.Fatalf("want USDT price 64000, got %v", sup.CurrentPriceUSD)
+	}
+	if sup.CirculatingSupply == nil || *sup.CirculatingSupply != 19_800_000 {
+		t.Fatalf("circ=%v", sup.CirculatingSupply)
+	}
+}
+
+func TestRefresh_SoftFailEnvelopeRejected(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": false,
+			"code":    "",
+			"data": []map[string]any{
+				{"name": "BTC", "symbol": "BTCUSDT", "circulatingSupply": 1, "price": 1},
+			},
+		})
+	}))
+	defer srv.Close()
+	supCache := cache.New[*domain.AssetSupply](0)
+	good := &domain.AssetSupply{Asset: "BTC", CirculatingSupply: ptrF(99)}
+	supCache.Set("BTC", good)
+
+	c := NewClient(Options{
+		ProductBaseURL: srv.URL,
+		HTTPClient:     srv.Client(),
+		SupplyCache:    supCache,
+	})
+	_, err := c.Refresh(context.Background())
+	if err == nil {
+		t.Fatal("expected error on soft-fail envelope")
+	}
+	// Previous snapshot retained.
+	sup, err := c.GetSupply(context.Background(), "BTC")
+	if err != nil || sup.CirculatingSupply == nil || *sup.CirculatingSupply != 99 {
+		t.Fatalf("last-good lost: %+v err=%v", sup, err)
+	}
+}

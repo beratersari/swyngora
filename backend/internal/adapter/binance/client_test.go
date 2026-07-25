@@ -393,3 +393,206 @@ func TestListSpotMarkets_PriceRefreshDoesNotReloadMeta(t *testing.T) {
 		t.Fatalf("want refreshed price 2, got %+v", list)
 	}
 }
+
+func TestListSpotMarkets_CatalogDownUsesLastGoodOrContinues(t *testing.T) {
+	hits := map[string]int{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits[r.URL.Path]++
+		switch {
+		case r.URL.Path == "/api/v3/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{
+						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "NVDABUSDT", "status": "TRADING", "baseAsset": "NVDAB", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+				},
+			})
+		case r.URL.Path == "/api/v3/ticker/24hr":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "lastPrice": "100", "volume": "1", "quoteVolume": "100", "count": 1},
+				{"symbol": "NVDABUSDT", "lastPrice": "200", "volume": "1", "quoteVolume": "200", "count": 1},
+			})
+		case strings.Contains(r.URL.Path, "get-products"):
+			if hits[r.URL.Path] == 1 {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"code": "000000", "success": true,
+					"data": []map[string]any{
+						{"s": "BTCUSDT", "b": "BTC", "tags": []string{"Payments"}},
+						{"s": "NVDABUSDT", "b": "NVDAB", "tags": []string{"bStocks"}},
+					},
+				})
+				return
+			}
+			// Second call: soft-fail empty/success false — must not wipe filter permanently if stale kept.
+			http.Error(w, "down", http.StatusBadGateway)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	// Short non-crypto TTL is internal 1h; we force miss by using fresh client for second phase.
+	spotCache := cache.New[[]domain.SpotMarket](time.Millisecond)
+	c := NewClient(Options{
+		BaseURL:         srv.URL,
+		ProductBaseURL:  srv.URL,
+		HTTPClient:      srv.Client(),
+		SpotMarketCache: spotCache,
+	})
+
+	list, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Symbol != "BTCUSDT" {
+		t.Fatalf("first list=%+v", list)
+	}
+
+	// Expire joined list; meta nonCrypto still warm → still filters.
+	time.Sleep(5 * time.Millisecond)
+	list2, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list2) != 1 {
+		t.Fatalf("with warm non-crypto meta, want 1 got %+v", list2)
+	}
+}
+
+func TestListSpotMarkets_EmptyCatalogNotCachedAsEmptyFilter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v3/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{
+						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+				},
+			})
+		case r.URL.Path == "/api/v3/ticker/24hr":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "lastPrice": "1", "volume": "1", "quoteVolume": "1", "count": 1},
+			})
+		case strings.Contains(r.URL.Path, "get-products"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"success": false, "code": "", "data": []any{},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewClient(Options{
+		BaseURL:         srv.URL,
+		ProductBaseURL:  srv.URL,
+		HTTPClient:      srv.Client(),
+		SpotMarketCache: cache.New[[]domain.SpotMarket](time.Minute),
+	})
+	// Soft-fail: list still returns (empty exclusion set when no last-good).
+	list, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("want soft-fail list, got %+v", list)
+	}
+}
+
+func TestListSpotMarkets_AttachesTags(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/api/v3/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{
+						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+					{
+						"symbol": "DOGEUSDT", "status": "TRADING", "baseAsset": "DOGE", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
+				},
+			})
+		case r.URL.Path == "/api/v3/ticker/24hr":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "lastPrice": "100", "volume": "1", "quoteVolume": "100", "count": 1},
+				{"symbol": "DOGEUSDT", "lastPrice": "0.1", "volume": "1", "quoteVolume": "10", "count": 1},
+			})
+		case strings.Contains(r.URL.Path, "get-products"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code": "000000", "success": true,
+				"data": []map[string]any{
+					{"s": "BTCUSDT", "b": "BTC", "tags": []string{"Payments", "Layer1_Layer2"}},
+					{"s": "DOGEUSDT", "b": "DOGE", "tags": []string{"Meme"}},
+					{"s": "NVDABUSDT", "b": "NVDAB", "tags": []string{"bStocks"}},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	c := NewClient(Options{
+		BaseURL:         srv.URL,
+		ProductBaseURL:  srv.URL,
+		HTTPClient:      srv.Client(),
+		SpotMarketCache: cache.New[[]domain.SpotMarket](time.Minute),
+	})
+	list, err := c.ListSpotMarkets(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]domain.SpotMarket{}
+	for _, m := range list {
+		by[m.Symbol] = m
+	}
+	if len(list) != 2 {
+		t.Fatalf("len=%d", len(list))
+	}
+	if got := strings.Join(by["BTCUSDT"].Tags, ","); !strings.Contains(got, "Payments") {
+		t.Fatalf("btc tags=%v", by["BTCUSDT"].Tags)
+	}
+	if got := strings.Join(by["DOGEUSDT"].Tags, ","); got != "Meme" {
+		t.Fatalf("doge tags=%v", by["DOGEUSDT"].Tags)
+	}
+
+	tags, err := c.ListProductTags(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(tags, ",")
+	if !strings.Contains(joined, "Meme") || !strings.Contains(joined, "Payments") {
+		t.Fatalf("all tags=%v", tags)
+	}
+	// bStocks must not appear in product tag list for crypto filters
+	for _, tname := range tags {
+		if strings.EqualFold(tname, "bStocks") {
+			t.Fatal("bStocks should not be in crypto tags list")
+		}
+	}
+}
+
+func TestBuildProductMetaSnapshot_MergesTags(t *testing.T) {
+	snap := buildProductMetaSnapshot([]productCatalogRow{
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", Tags: []string{"Payments"}},
+		{Symbol: "BTCUSDC", BaseAsset: "BTC", Tags: []string{"Layer1_Layer2", "Payments"}},
+		{Symbol: "NVDABUSDT", BaseAsset: "NVDAB", Tags: []string{"bStocks"}},
+	})
+	if len(snap.NonCryptoBases) != 1 || snap.NonCryptoBases[0] != "NVDAB" {
+		t.Fatalf("noncrypto=%v", snap.NonCryptoBases)
+	}
+	btc := snap.TagsByBase["BTC"]
+	if len(btc) != 2 {
+		t.Fatalf("btc tags=%v", btc)
+	}
+}

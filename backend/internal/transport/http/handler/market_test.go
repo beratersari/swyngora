@@ -33,9 +33,13 @@ func (stubMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.
 
 func (stubMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
 	return []domain.SpotMarket{
-		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1000", LastPrice: "100", TradeCount: 9},
-		{Symbol: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "500", LastPrice: "50", TradeCount: 3},
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1000", LastPrice: "100", TradeCount: 9, Tags: []string{"Payments"}},
+		{Symbol: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "500", LastPrice: "50", TradeCount: 3, Tags: []string{"Layer1_Layer2"}},
 	}, nil
+}
+
+func (stubMarket) ListProductTags(_ context.Context) ([]string, error) {
+	return []string{"Layer1_Layer2", "Payments"}, nil
 }
 
 func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {

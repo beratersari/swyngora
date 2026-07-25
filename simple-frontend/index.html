@@ -14,7 +14,7 @@
         <h1>Coin dashboard</h1>
         <p class="sub">
           Live Binance spot dashboard. Prices auto-refresh (default every 10s); cells flash green/red when values move.
-          Click a column header to sort. Use <strong>column chips</strong> to show, hide, or reorder fields.
+          Click a column header to sort · <strong>drag headers or chips</strong> to reorder columns.
         </p>
       </div>
       <label class="field inline">
@@ -29,8 +29,22 @@
         <input id="spotQ" type="search" value="" placeholder="btc, eth, sol…" spellcheck="false" autocomplete="off" />
       </label>
       <label class="field">
+        <span>Exchange</span>
+        <select id="spotExchange">
+          <option value="binance" selected>Binance</option>
+          <option value="coinbase">Coinbase</option>
+          <option value="bybit">Bybit</option>
+        </select>
+      </label>
+      <label class="field">
         <span>Quote</span>
         <input id="spotQuote" type="text" value="USDT" spellcheck="false" />
+      </label>
+      <label class="field">
+        <span>Tag</span>
+        <select id="spotTag">
+          <option value="">All tags</option>
+        </select>
       </label>
       <label class="field">
         <span>Rows</span>
@@ -58,7 +72,8 @@
         <div>
           <h2 class="columns-editor-title">Table columns</h2>
           <p class="muted columns-editor-help">
-            Click a chip to add or remove it from the table. Drag chips to reorder. Symbol stays on.
+            Click a chip to show/hide. <strong>Drag chips or table headers</strong> to reorder, or use ◀ ▶.
+            Symbol stays first. Layout is saved in this browser.
           </p>
         </div>
         <div class="columns-editor-actions">

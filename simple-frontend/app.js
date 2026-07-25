@@ -8,6 +8,14 @@ const SORT_STORAGE_KEY = "swyngora.simple-frontend.sort.v1";
 /** @type {ColumnDef[]} */
 const COLUMN_DEFS = [
   { id: "symbol", label: "Symbol", sortKey: "symbol", defaultVisible: true, align: "left", format: (m) => m.symbol || "—" },
+  {
+    id: "tags",
+    label: "Tags",
+    sortKey: "tags",
+    defaultVisible: true,
+    align: "left",
+    format: (m) => formatTags(m.tags),
+  },
   { id: "lastPrice", label: "Last", sortKey: "lastPrice", defaultVisible: true, format: (m) => fmtNum(m.lastPrice, 8) },
   { id: "priceChangePercent", label: "Change %", sortKey: "priceChangePercent", defaultVisible: true, format: (m) => fmtChange(m.priceChangePercent) },
   { id: "volume", label: "Volume", sortKey: "volume", defaultVisible: true, format: (m) => fmtNum(m.volume, 4) },
@@ -41,7 +49,9 @@ const els = {
   apiBase: $("apiBase"),
   status: $("status"),
   spotQ: $("spotQ"),
+  spotExchange: $("spotExchange"),
   spotQuote: $("spotQuote"),
+  spotTag: $("spotTag"),
   spotLimit: $("spotLimit"),
   liveInterval: $("liveInterval"),
   liveBadge: $("liveBadge"),
@@ -247,27 +257,27 @@ function baseUrl() {
 function fmtNum(v, digits = 2) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
-  return n.toLocaleString(undefined, { maximumFractionDigits: digits });
+  if (Number.isNaN(n)) return escapeHtml(String(v));
+  return escapeHtml(n.toLocaleString(undefined, { maximumFractionDigits: digits }));
 }
 
 function fmtChange(v) {
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
+  if (Number.isNaN(n)) return escapeHtml(String(v));
   const s = n.toLocaleString(undefined, { maximumFractionDigits: 3 });
-  return `${n > 0 ? "+" : ""}${s}%`;
+  return escapeHtml(`${n > 0 ? "+" : ""}${s}%`);
 }
 
 function fmtMcap(v) {
   if (v === "∞" || v === "Infinity") return "∞";
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
-  if (Number.isNaN(n)) return String(v);
-  if (Math.abs(n) >= 1e12) return (n / 1e12).toFixed(2) + "T";
-  if (Math.abs(n) >= 1e9) return (n / 1e9).toFixed(2) + "B";
-  if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(2) + "M";
-  return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (Number.isNaN(n)) return escapeHtml(String(v));
+  if (Math.abs(n) >= 1e12) return escapeHtml((n / 1e12).toFixed(2) + "T");
+  if (Math.abs(n) >= 1e9) return escapeHtml((n / 1e9).toFixed(2) + "B");
+  if (Math.abs(n) >= 1e6) return escapeHtml((n / 1e6).toFixed(2) + "M");
+  return escapeHtml(n.toLocaleString(undefined, { maximumFractionDigits: 0 }));
 }
 
 function fmtTime(iso) {
@@ -295,6 +305,14 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+/** Format Binance product tags as HTML chips (already escaped). */
+function formatTags(tags) {
+  if (!Array.isArray(tags) || !tags.length) return "—";
+  return tags
+    .map((t) => `<span class="tag-chip">${escapeHtml(t)}</span>`)
+    .join(" ");
 }
 
 async function apiGet(path) {
@@ -353,88 +371,144 @@ function moveColumn(fromId, toId) {
   applyColumnLayout();
 }
 
+/** Move a visible column one step left (-1) or right (+1). Symbol stays first. */
+function nudgeColumn(id, dir) {
+  if (!id || id === "symbol" || !isVisible(id)) return;
+  const idx = columnOrder.indexOf(id);
+  if (idx < 0) return;
+  const target = idx + dir;
+  // Index 0 is always symbol; never move past it or out of bounds.
+  if (target < 1 || target >= columnOrder.length) return;
+  const next = columnOrder.slice();
+  const [item] = next.splice(idx, 1);
+  next.splice(target, 0, item);
+  columnOrder = normalizeOrder(next);
+  applyColumnLayout();
+}
+
+/** Chips: visible columns first (table order), then hidden columns (catalog order). */
+function chipDisplayOrder() {
+  const visible = columnOrder.slice();
+  const hidden = ALL_IDS.filter((id) => !visible.includes(id));
+  return [...visible, ...hidden];
+}
+
+function clearDropTargets() {
+  document.querySelectorAll(".drop-target").forEach((el) => el.classList.remove("drop-target"));
+}
+
+function bindColumnDrag(el, id, { onDrop } = {}) {
+  if (!el || id === "symbol") return;
+  el.addEventListener("dragstart", (e) => {
+    if (!isVisible(id)) {
+      e.preventDefault();
+      return;
+    }
+    dragFromId = id;
+    el.dataset.dragging = "1";
+    el.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+  });
+  el.addEventListener("dragend", () => {
+    el.classList.remove("dragging");
+    setTimeout(() => {
+      el.dataset.dragging = "0";
+    }, 50);
+    dragFromId = null;
+    clearDropTargets();
+  });
+  el.addEventListener("dragover", (e) => {
+    if (!dragFromId || id === "symbol" || !isVisible(id)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    el.classList.add("drop-target");
+  });
+  el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+  el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    el.classList.remove("drop-target");
+    const from = e.dataTransfer.getData("text/plain") || dragFromId;
+    if (onDrop) onDrop(from, id);
+    else moveColumn(from, id);
+    dragFromId = null;
+  });
+}
+
 function renderColumnChips() {
-  // Show all catalog columns: on = active chip, off = muted chip
-  els.columnChips.innerHTML = COLUMN_DEFS.map((col) => {
-    const on = isVisible(col.id);
-    const locked = col.id === "symbol";
-    const classes = [
-      "col-chip",
-      on ? "on" : "off",
-      locked ? "locked" : "",
-      col.sortKey ? "sortable-col" : "display-only",
-    ]
-      .filter(Boolean)
-      .join(" ");
-    const title = locked
-      ? "Symbol is always shown"
-      : on
-        ? `Click to hide “${col.label}”. Drag to reorder when visible.`
-        : `Click to show “${col.label}”.`;
-    const drag = on && !locked ? 'draggable="true"' : "";
-    return `
-      <button type="button" class="${classes}" data-col="${col.id}"
-        role="listitem" title="${escapeAttr(title)}" aria-pressed="${on}" ${drag}>
-        <span class="chip-state">${on ? "✓" : "+"}</span>
-        <span class="chip-label">${escapeHtml(col.label)}</span>
-        ${col.sortKey ? "" : '<span class="chip-tag">view</span>'}
-      </button>`;
-  }).join("");
+  // Visible chips follow table column order; hidden chips follow catalog order.
+  els.columnChips.innerHTML = chipDisplayOrder()
+    .map((colId) => {
+      const col = COL_BY_ID[colId];
+      if (!col) return "";
+      const on = isVisible(col.id);
+      const locked = col.id === "symbol";
+      const visIdx = columnOrder.indexOf(col.id);
+      const canLeft = on && !locked && visIdx > 1;
+      const canRight = on && !locked && visIdx >= 1 && visIdx < columnOrder.length - 1;
+      const classes = [
+        "col-chip",
+        on ? "on" : "off",
+        locked ? "locked" : "",
+        col.sortKey ? "sortable-col" : "display-only",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const title = locked
+        ? "Symbol is always shown first"
+        : on
+          ? `“${col.label}”: click label to hide · drag or use ◀ ▶ to reorder`
+          : `Click to show “${col.label}”.`;
+      const drag = on && !locked ? 'draggable="true"' : "";
+      const moveBtns =
+        on && !locked
+          ? `<span class="chip-move" role="group" aria-label="Reorder ${escapeAttr(col.label)}">
+              <button type="button" class="chip-nudge" data-nudge="-1" data-col="${col.id}" title="Move left" ${canLeft ? "" : "disabled"} aria-label="Move ${escapeAttr(col.label)} left">◀</button>
+              <button type="button" class="chip-nudge" data-nudge="1" data-col="${col.id}" title="Move right" ${canRight ? "" : "disabled"} aria-label="Move ${escapeAttr(col.label)} right">▶</button>
+            </span>`
+          : "";
+      return `
+      <div class="${classes}" data-col="${col.id}" role="listitem" title="${escapeAttr(title)}" ${drag}>
+        <button type="button" class="chip-toggle" data-col="${col.id}" aria-pressed="${on}">
+          <span class="chip-state">${on ? "✓" : "+"}</span>
+          <span class="chip-label">${escapeHtml(col.label)}</span>
+          ${col.sortKey ? "" : '<span class="chip-tag">view</span>'}
+        </button>
+        ${moveBtns}
+      </div>`;
+    })
+    .join("");
 
   const visible = columnOrder.length;
   const total = COLUMN_DEFS.length;
   els.columnSummary.textContent = `${visible} of ${total} columns visible · order: ${columnOrder
     .map((id) => COL_BY_ID[id]?.label || id)
-    .join(" → ")}`;
+    .join(" → ")} · drag chips or headers, or use ◀ ▶`;
 
-  els.columnChips.querySelectorAll(".col-chip").forEach((btn) => {
-    const id = btn.getAttribute("data-col");
-    btn.addEventListener("click", (e) => {
-      // ignore pure drag end noise
-      if (btn.dataset.dragging === "1") {
-        btn.dataset.dragging = "0";
-        return;
-      }
-      e.preventDefault();
-      toggleColumn(id);
-    });
-
-    btn.addEventListener("dragstart", (e) => {
-      if (!isVisible(id) || id === "symbol") {
+  els.columnChips.querySelectorAll(".col-chip").forEach((chip) => {
+    const id = chip.getAttribute("data-col");
+    const toggle = chip.querySelector(".chip-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (chip.dataset.dragging === "1") {
+          chip.dataset.dragging = "0";
+          return;
+        }
+        toggleColumn(id);
+      });
+    }
+    chip.querySelectorAll(".chip-nudge").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         e.preventDefault();
-        return;
-      }
-      dragFromId = id;
-      btn.dataset.dragging = "1";
-      btn.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", id);
-    });
-    btn.addEventListener("dragend", () => {
-      btn.classList.remove("dragging");
-      // keep dragging flag briefly so click does not toggle after drag
-      setTimeout(() => {
-        btn.dataset.dragging = "0";
-      }, 50);
-      dragFromId = null;
-      els.columnChips.querySelectorAll(".col-chip.drop-target").forEach((el) => {
-        el.classList.remove("drop-target");
+        const dir = Number(btn.getAttribute("data-nudge")) || 0;
+        nudgeColumn(id, dir);
       });
     });
-    btn.addEventListener("dragover", (e) => {
-      if (!dragFromId || id === "symbol" || !isVisible(id)) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      btn.classList.add("drop-target");
-    });
-    btn.addEventListener("dragleave", () => btn.classList.remove("drop-target"));
-    btn.addEventListener("drop", (e) => {
-      e.preventDefault();
-      btn.classList.remove("drop-target");
-      const from = e.dataTransfer.getData("text/plain") || dragFromId;
-      moveColumn(from, id);
-      dragFromId = null;
-    });
+    if (isVisible(id) && id !== "symbol") {
+      bindColumnDrag(chip, id);
+    }
   });
 }
 
@@ -445,43 +519,71 @@ function renderHead() {
       const sortable = Boolean(col.sortKey);
       const active = sortable && sortState.sort === col.sortKey;
       const arrow = active ? (sortState.order === "asc" ? " ▲" : " ▼") : "";
+      const locked = col.id === "symbol";
       const cls = [
         col.align === "left" ? "th-left" : "",
         sortable ? "sortable" : "not-sortable",
         active ? "sorted" : "",
+        locked ? "th-locked" : "th-reorder",
       ]
         .filter(Boolean)
         .join(" ");
-      const title = sortable
-        ? `Sort by ${col.label}`
-        : `${col.label} (display only)`;
-      if (sortable) {
-        return `<th class="${cls}" data-sort="${col.sortKey}" title="${escapeAttr(title)}" scope="col" role="columnheader" tabindex="0">${escapeHtml(col.label)}${arrow}</th>`;
-      }
-      return `<th class="${cls}" title="${escapeAttr(title)}" scope="col">${escapeHtml(col.label)}</th>`;
+      const title = locked
+        ? `${col.label} (always first)`
+        : sortable
+          ? `${col.label} — click to sort · drag to reorder`
+          : `${col.label} — drag to reorder`;
+      const drag = locked ? "" : 'draggable="true"';
+      const grip = locked ? "" : '<span class="th-grip" aria-hidden="true" title="Drag to reorder">⋮⋮</span>';
+      const sortAttr = sortable ? `data-sort="${col.sortKey}"` : "";
+      return `<th class="${cls}" data-col="${col.id}" ${sortAttr} title="${escapeAttr(title)}" scope="col" role="columnheader" ${sortable || !locked ? 'tabindex="0"' : ""} ${drag}>${grip}<span class="th-label">${escapeHtml(col.label)}${arrow}</span></th>`;
     })
     .join("");
 
-  els.spotHead.querySelectorAll("th[data-sort]").forEach((th) => {
-    const activate = () => {
-      const key = th.getAttribute("data-sort");
-      if (sortState.sort === key) {
-        sortState.order = sortState.order === "desc" ? "asc" : "desc";
-      } else {
-        sortState.sort = key;
-        sortState.order =
-          key === "symbol" || key === "baseAsset" ? "asc" : "desc";
-      }
-      saveSortState();
-      loadMarkets();
-    };
-    th.addEventListener("click", activate);
-    th.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        activate();
-      }
-    });
+  els.spotHead.querySelectorAll("th").forEach((th) => {
+    const id = th.getAttribute("data-col");
+    const sortKey = th.getAttribute("data-sort");
+
+    if (sortKey) {
+      const activate = () => {
+        if (th.dataset.dragging === "1") {
+          th.dataset.dragging = "0";
+          return;
+        }
+        if (sortState.sort === sortKey) {
+          sortState.order = sortState.order === "desc" ? "asc" : "desc";
+        } else {
+          sortState.sort = sortKey;
+          sortState.order =
+            sortKey === "symbol" || sortKey === "baseAsset" || sortKey === "tags"
+              ? "asc"
+              : "desc";
+        }
+        saveSortState();
+        loadMarkets();
+      };
+      th.addEventListener("click", activate);
+      th.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          activate();
+        }
+      });
+    }
+
+    // Header drag-to-reorder (all non-symbol columns).
+    if (id && id !== "symbol") {
+      bindColumnDrag(th, id);
+      th.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          nudgeColumn(id, -1);
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          nudgeColumn(id, 1);
+        }
+      });
+    }
   });
 }
 
@@ -621,7 +723,11 @@ function renderSpotBody(data, opts = {}) {
 
   const liveNote =
     liveSeconds > 0 ? ` · live ${liveSeconds}s` : " · manual refresh";
-  els.spotMeta.textContent = `· ${data.total} markets · showing ${data.items.length} · sort ${data.sort} ${data.order}${liveNote}`;
+  const mcapNote =
+    data.sort && String(data.sort).startsWith("marketCap")
+      ? " · mcap = price × daily supply snapshot"
+      : " · supply/mcap from daily snapshot";
+  els.spotMeta.textContent = `· ${data.total} markets · showing ${data.items.length} · sort ${data.sort} ${data.order}${liveNote}${mcapNote}`;
 
   if (!data.items.length) {
     els.spotBody.innerHTML = `<tr><td colspan="${colCount}" class="muted">No matches.</td></tr>`;
@@ -686,8 +792,12 @@ async function loadMarkets(opts = {}) {
     const params = new URLSearchParams();
     const q = els.spotQ.value.trim();
     const quote = els.spotQuote.value.trim();
+    const exchange = els.spotExchange?.value || "binance";
+    params.set("exchange", exchange);
     if (q) params.set("q", q);
     if (quote) params.set("quote", quote);
+    const tag = els.spotTag?.value?.trim() || "";
+    if (tag) params.set("tag", tag);
     params.set("sort", sortState.sort);
     params.set("order", sortState.order);
     params.set("limit", els.spotLimit.value || "50");
@@ -737,12 +847,23 @@ async function loadMarkets(opts = {}) {
 async function refreshDetailTickerQuiet() {
   if (!selectedSymbol) return;
   try {
+    const exchange = els.spotExchange?.value || "binance";
     const ticker = await apiGet(
-      `/api/v1/market/ticker/24h?symbol=${encodeURIComponent(selectedSymbol)}`
+      `/api/v1/market/ticker/24h?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(selectedSymbol)}`
     );
     renderTicker(ticker);
-  } catch {
-    /* ignore quiet failures */
+    if (els.ticker) els.ticker.dataset.stale = "0";
+  } catch (err) {
+    if (els.ticker) {
+      els.ticker.dataset.stale = "1";
+      const note = document.createElement("p");
+      note.className = "muted";
+      note.dataset.staleNote = "1";
+      note.textContent = `Ticker may be stale · ${String(err.message || err)}`;
+      // Replace prior note only
+      els.ticker.querySelectorAll("[data-stale-note]").forEach((n) => n.remove());
+      els.ticker.appendChild(note);
+    }
   }
 }
 
@@ -766,13 +887,14 @@ async function loadDetail() {
   const sym = selectedSymbol;
   setStatus(`Loading detail for ${sym}…`);
   try {
+    const exchange = els.spotExchange?.value || "binance";
     const [ticker, supply, candles] = await Promise.all([
-      apiGet(`/api/v1/market/ticker/24h?symbol=${encodeURIComponent(sym)}`),
+      apiGet(`/api/v1/market/ticker/24h?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(sym)}`),
       apiGet(`/api/v1/market/supply?symbol=${encodeURIComponent(sym)}`).catch((e) => ({
         _error: String(e.message || e),
       })),
       apiGet(
-        `/api/v1/market/candles?symbol=${encodeURIComponent(sym)}&interval=${encodeURIComponent(els.interval.value)}&limit=${encodeURIComponent(els.limit.value || "24")}`
+        `/api/v1/market/candles?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(sym)}&interval=${encodeURIComponent(els.interval.value)}&limit=${encodeURIComponent(els.limit.value || "24")}`
       ),
     ]);
     renderTicker(ticker);
@@ -811,6 +933,7 @@ function renderSupply(data) {
     els.supply.innerHTML = `<span class="muted">—</span>`;
     return;
   }
+  const asOf = data.asOf ? fmtTime(data.asOf) : "—";
   els.supply.innerHTML = `
     <dl>
       <dt>Asset</dt><dd>${escapeHtml(data.asset)} <span class="muted">(${escapeHtml(data.name || "—")})</span></dd>
@@ -818,6 +941,7 @@ function renderSupply(data) {
       <dt>Total</dt><dd>${fmtNum(data.totalSupply, 0)}</dd>
       <dt>Max</dt><dd>${fmtNum(data.maxSupply, 0)}</dd>
       <dt>Price USD</dt><dd>${fmtNum(data.currentPriceUsd, 4)}</dd>
+      <dt>As of</dt><dd>${escapeHtml(asOf)} <span class="muted">(daily snapshot, not live)</span></dd>
       <dt>Source</dt><dd>${escapeHtml(data.source || "—")}</dd>
     </dl>
   `;
@@ -858,6 +982,32 @@ els.spotQ.addEventListener("keydown", (e) => {
   }
 });
 els.spotQuote.addEventListener("change", () => loadMarkets());
+if (els.spotTag) els.spotTag.addEventListener("change", () => loadMarkets());
+if (els.spotExchange) {
+  els.spotExchange.addEventListener("change", async () => {
+    const ex = els.spotExchange.value;
+    if (ex === "coinbase" && (els.spotQuote.value === "USDT" || !els.spotQuote.value)) {
+      els.spotQuote.value = "USD";
+    } else if (ex !== "coinbase" && els.spotQuote.value === "USD") {
+      els.spotQuote.value = "USDT";
+    }
+    try {
+      const data = await apiGet(`/api/v1/market/intervals?exchange=${encodeURIComponent(ex)}`);
+      if (Array.isArray(data.intervals) && data.intervals.length && els.interval) {
+        const current = els.interval.value;
+        els.interval.innerHTML = data.intervals
+          .map((iv) => `<option value="${escapeAttr(iv)}">${escapeHtml(iv)}</option>`)
+          .join("");
+        els.interval.value = data.intervals.includes(current) ? current : data.intervals[0];
+      }
+    } catch { /* ignore */ }
+    if (els.spotTag) {
+      els.spotTag.value = "";
+      els.spotTag.disabled = ex !== "binance";
+    }
+    loadMarkets();
+  });
+}
 els.spotLimit.addEventListener("change", () => loadMarkets());
 els.apiBase.addEventListener("change", () => loadMarkets());
 
@@ -911,12 +1061,35 @@ els.limit.addEventListener("change", () => {
     if (Array.isArray(data.intervals) && data.intervals.length) {
       const current = els.interval.value;
       els.interval.innerHTML = data.intervals
-        .map((iv) => `<option value="${iv}">${iv}</option>`)
+        .map((iv) => `<option value="${escapeAttr(iv)}">${escapeHtml(iv)}</option>`)
         .join("");
       els.interval.value = data.intervals.includes(current) ? current : "1h";
     }
   } catch {
     /* backend may not be up yet */
+  }
+  try {
+    const data = await apiGet("/api/v1/market/exchanges");
+    if (els.spotExchange && Array.isArray(data.exchanges) && data.exchanges.length) {
+      const current = els.spotExchange.value || data.default || "binance";
+      els.spotExchange.innerHTML = data.exchanges
+        .map((ex) => `<option value="${escapeAttr(ex)}">${escapeHtml(ex)}</option>`)
+        .join("");
+      els.spotExchange.value = data.exchanges.includes(current) ? current : (data.default || data.exchanges[0]);
+    }
+  } catch { /* optional */ }
+  try {
+    const data = await apiGet("/api/v1/market/tags");
+    if (els.spotTag && Array.isArray(data.tags) && data.tags.length) {
+      const current = els.spotTag.value;
+      const opts = ['<option value="">All tags</option>'].concat(
+        data.tags.map((t) => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`)
+      );
+      els.spotTag.innerHTML = opts.join("");
+      if (current && data.tags.includes(current)) els.spotTag.value = current;
+    }
+  } catch {
+    /* tags optional until backend is up */
   }
 })();
 

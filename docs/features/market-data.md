@@ -14,19 +14,32 @@ Expose first market-data APIs so clients can:
 
 - Lists supported Binance candle intervals used by the candles endpoint.
 
+### Product tags — `GET /api/v1/market/tags`
+
+- Unique crypto tags from Binance product catalog (`get-products`), sorted
+- Used for UI filters; excludes non-crypto tags (`bStocks`, `tCommodities`)
+- Examples: `Meme`, `defi`, `Layer1_Layer2`, `AI`, `Payments`
+
+### Exchanges — `GET /api/v1/market/exchanges`
+
+- Venues: `binance` (default), `coinbase`, `bybit`
+- Pass `exchange` on spot/candles/ticker/intervals/tags
 
 ### Spot markets — `GET /api/v1/market/spot`
 
 - **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded)
 - **Params:**
-  - `q` — search substring (symbol / base / quote)
+  - `q` — search substring (symbol / base / quote / **tag name**)
   - `quote`, `base`, `status` — filters
-  - `sort` — `quoteVolume` (default), `volume`, `priceChangePercent`, `lastPrice`, `tradeCount`, `symbol`, `baseAsset`, mcap fields
-  - `order` — `asc` | `desc` (default `desc` for metrics)
+  - `tag` / `tags` — Binance product-catalog tag filter (comma-separated or repeated; **OR** match, case-insensitive). Examples: `Meme`, `defi,AI`
+  - `sort` — `quoteVolume` (default), `volume`, `priceChangePercent`, `lastPrice`, `tradeCount`, `symbol`, `baseAsset`, mcap fields, **`tags`**
+  - `order` — `asc` | `desc` (default `desc` for metrics; `asc` for symbol/baseAsset/tags)
   - `limit` (default 50, max 500), `offset` (default 0)
-- **Returns:** paged list with `total` match count, 24h metrics, supply, and market caps
+- **Returns:** paged list with `total` match count, 24h metrics, **`tags`**, supply, and market caps
   - `marketCapCirculating` / `marketCapTotal` / `marketCapMax` = USD price × supply
-  - `marketCapMax` is `"∞"` when max supply is undefined
+  - `marketCapMax` is `"∞"` only when max supply is undefined **and** a USD price exists
+  - Market-cap **sorts** collapse to one preferred quote per base (USDT > USDC > …); empty supply snapshot → `502`
+  - Missing mcaps sort last (never treated as zero)
   - Supply/mcap is **not** fetched per user request: daily Binance marketing symbol-list refresh populates cache; requests are cache-only
   - base/quote/status are filter params only (not list columns)
 
@@ -54,9 +67,9 @@ In-memory TTL caches with periodic cleanup:
 
 | Data | Default TTL |
 |---|---|
-| Candles | 30s |
-| Spot markets (joined list) | 30s |
-| Supply snapshot | Daily @ 03:00 UTC (default) + startup; cache TTL 26h |
+| Candles | 30s (latest-N only; max 512 keys; ranges uncached) |
+| Spot markets (joined list) | 5s (default) |
+| Supply snapshot | Daily @ 03:00 UTC (default) + startup; atomic replace; default never-expire last-good |
 | Ticker | 15s |
 
 ## Code locations

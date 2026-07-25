@@ -37,3 +37,12 @@ Swyngora needs candlesticks, 24h volume, spot listings, and supply metrics align
 | Product catalog (`cs` only) | Circulating only; no total/max |
 | Hybrid Binance + CoinGecko | User requested Binance-only |
 | Official Spot-only | No supply fields on documented market endpoints |
+
+
+---
+
+## Amendment (2026-07-25): multi-exchange market data
+
+**Spot market data** (candles, 24h ticker, listings) may now come from **Binance**, **Coinbase**, or **Bybit** public free endpoints, selected via `exchange` query parameter.
+
+**Supply / circulating metrics** remain **Binance marketing symbol list only** (daily snapshot), applied as asset-level enrichment across venues. No CoinGecko; no paid API tiers.

@@ -10,7 +10,7 @@ Lightweight static **coin dashboard** for the Swyngora market API during develop
 - **Live refresh:** auto-poll (default 10s; 5/15/30s or off); pauses when the tab is hidden
 - **Price animations:** cells flash green (up) / red (down) when last price, change %, volume, or mcap moves
 - **Column sort:** click a header to sort via the API (`sort` / `order`)
-- **Column editor:** always-visible chips to show/hide and drag-reorder columns (saved in `localStorage`)
+- **Column editor:** chips to show/hide; **drag chips or table headers** (or ◀ ▶) to reorder; Symbol stays first (saved in `localStorage`)
 - Search + quote filter + row limit
 - Row / symbol click → detail (24h ticker, supply, candles)
 - Crypto-only list (backend excludes `bStocks` / commodities)
