@@ -1,0 +1,293 @@
+openapi: 3.0.3
+info:
+  title: Swyngora Market API
+  description: |
+    Public market data for Swyngora (v0.1).
+
+    - Candles and 24h volume/ticker are sourced from **Binance** public REST APIs.
+    - Circulating / total / max supply is sourced from free **CoinGecko** metadata
+      (Binance market endpoints do not expose supply).
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  time:
+                    type: string
+                    format: date-time
+  /api/v1/market/intervals:
+    get:
+      summary: List supported candle intervals
+      operationId: listIntervals
+      tags: [Market]
+      responses:
+        '200':
+          description: Supported Binance intervals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exchange:
+                    type: string
+                    example: binance
+                  intervals:
+                    type: array
+                    items:
+                      type: string
+                    example: ["1m", "5m", "1h", "1d"]
+  /api/v1/market/candles:
+    get:
+      summary: Fetch OHLCV candlesticks
+      operationId: getCandles
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          description: Binance trading pair (e.g. BTCUSDT)
+          schema:
+            type: string
+            example: BTCUSDT
+        - name: interval
+          in: query
+          required: false
+          description: Candle interval (default 1h)
+          schema:
+            type: string
+            default: 1h
+            enum: [1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M]
+        - name: limit
+          in: query
+          required: false
+          description: Number of candles (1–1000, default 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: startTime
+          in: query
+          required: false
+          description: RFC3339 or Unix milliseconds
+          schema:
+            type: string
+        - name: endTime
+          in: query
+          required: false
+          description: RFC3339 or Unix milliseconds
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Candle series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CandlesResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/ticker/24h:
+    get:
+      summary: 24-hour rolling ticker including volume
+      operationId: getTicker24h
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+            example: BTCUSDT
+      responses:
+        '200':
+          description: 24h statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticker24h'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/supply:
+    get:
+      summary: Asset circulating / total / max supply
+      description: |
+        Supply metadata from CoinGecko (free). Accepts base asset (`BTC`) or
+        a pair (`BTCUSDT`); quote suffixes are stripped for convenience.
+      operationId: getSupply
+      tags: [Market]
+      parameters:
+        - name: asset
+          in: query
+          required: false
+          description: Base asset ticker (preferred). Provide asset or symbol (at least one required).
+          schema:
+            type: string
+            example: BTC
+        - name: symbol
+          in: query
+          required: false
+          description: Alias for asset; may be a pair like BTCUSDT. Provide asset or symbol (at least one required).
+          schema:
+            type: string
+            example: BTCUSDT
+      responses:
+        '200':
+          description: Supply snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Supply'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+components:
+  responses:
+    Error:
+      description: Error payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    CandlesResponse:
+      type: object
+      properties:
+        symbol:
+          type: string
+        interval:
+          type: string
+        exchange:
+          type: string
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Candle'
+    Candle:
+      type: object
+      properties:
+        openTime:
+          type: string
+          format: date-time
+        open:
+          type: string
+        high:
+          type: string
+        low:
+          type: string
+        close:
+          type: string
+        volume:
+          type: string
+        closeTime:
+          type: string
+          format: date-time
+        quoteVolume:
+          type: string
+        tradeCount:
+          type: integer
+          format: int64
+    Ticker24h:
+      type: object
+      properties:
+        exchange:
+          type: string
+        symbol:
+          type: string
+        priceChange:
+          type: string
+        priceChangePercent:
+          type: string
+        lastPrice:
+          type: string
+        openPrice:
+          type: string
+        highPrice:
+          type: string
+        lowPrice:
+          type: string
+        volume:
+          type: string
+          description: Base asset volume (24h)
+        quoteVolume:
+          type: string
+          description: Quote asset volume (24h)
+        openTime:
+          type: string
+          format: date-time
+        closeTime:
+          type: string
+          format: date-time
+        tradeCount:
+          type: integer
+          format: int64
+    Supply:
+      type: object
+      properties:
+        asset:
+          type: string
+        name:
+          type: string
+        providerId:
+          type: string
+        circulatingSupply:
+          type: number
+          nullable: true
+        totalSupply:
+          type: number
+          nullable: true
+        maxSupply:
+          type: number
+          nullable: true
+        currentPriceUsd:
+          type: number
+          nullable: true
+        asOf:
+          type: string
+          format: date-time
+        source:
+          type: string
+        note:
+          type: string
