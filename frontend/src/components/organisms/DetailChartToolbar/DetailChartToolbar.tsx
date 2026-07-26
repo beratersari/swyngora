@@ -1,4 +1,5 @@
 import { Button, Select, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CANDLE_LIMIT_OPTIONS } from './DetailChartToolbar.constants';
 import { Field, ToolbarRow } from './DetailChartToolbar.styles';
@@ -14,6 +15,8 @@ export function DetailChartToolbar({
   onRefresh,
   isFetching,
 }: DetailChartToolbarProps) {
+  const { t } = useTranslation(['detail', 'common']);
+
   const options =
     intervals.length > 0
       ? intervals.map((iv) => ({ value: iv, label: iv }))
@@ -22,8 +25,8 @@ export function DetailChartToolbar({
   return (
     <ToolbarRow>
       <Field>
-        <Text variant="caption" color="steel">
-          Interval
+        <Text variant="caption" color="secondary">
+          {t('detail:chart.interval')}
         </Text>
         <Select
           value={interval}
@@ -36,8 +39,8 @@ export function DetailChartToolbar({
         />
       </Field>
       <Field>
-        <Text variant="caption" color="steel">
-          Bars
+        <Text variant="caption" color="secondary">
+          {t('detail:chart.bars')}
         </Text>
         <Select
           value={limit}
@@ -48,10 +51,10 @@ export function DetailChartToolbar({
       </Field>
       {onRefresh ? (
         <Button onClick={onRefresh} loading={isFetching}>
-          Refresh
+          {t('common:actions.refresh')}
         </Button>
       ) : null}
-      {isFetching ? <Tag color="processing">updating…</Tag> : null}
+      {isFetching ? <Tag color="processing">{t('common:status.updating')}</Tag> : null}
     </ToolbarRow>
   );
 }

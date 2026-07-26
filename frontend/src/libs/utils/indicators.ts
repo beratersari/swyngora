@@ -31,11 +31,21 @@ export function rsiTone(
   return 'secondary';
 }
 
-export function rsiBandLabel(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
+/** Stable band key for i18n (`detail:indicators.band.*`). */
+export type RsiBandKey = 'na' | 'oversold' | 'overbought' | 'neutral';
+
+export function rsiBandKey(value: number | null | undefined): RsiBandKey {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'na';
   if (value < 30) return 'oversold';
   if (value > 70) return 'overbought';
   return 'neutral';
+}
+
+/** English band label (tests / non-UI). Prefer rsiBandKey + t() in components. */
+export function rsiBandLabel(value: number | null | undefined): string {
+  const key = rsiBandKey(value);
+  if (key === 'na') return 'n/a';
+  return key;
 }
 
 /** Map indicator points → RSI line series for Lightweight Charts. */

@@ -9,6 +9,7 @@ import {
   type LineData,
   type Time,
 } from 'lightweight-charts';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { CandleChartHostProps } from './CandleChartHost.types';
 import { DEFAULT_HEIGHT } from './CandleChartHost.constants';
@@ -27,6 +28,7 @@ export function CandleChartHost({
   className,
   isLoading = false,
 }: CandleChartHostProps) {
+  const { t } = useTranslation('common');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -140,7 +142,12 @@ export function CandleChartHost({
 
   if (isLoading) {
     return (
-      <Skeleton variant="chart" height={height} className={className} aria-label="Loading chart" />
+      <Skeleton
+        variant="chart"
+        height={height}
+        className={className}
+        aria-label={t('a11y.loadingChart')}
+      />
     );
   }
 

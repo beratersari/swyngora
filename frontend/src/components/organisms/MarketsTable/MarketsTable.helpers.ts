@@ -13,12 +13,23 @@ export function fromAntdSortOrder(order: SortOrder): SpotSortOrder | null {
   return null;
 }
 
-/** Human-readable "Showing 1–50 of 1,234" for results bar / pagination. */
-export function formatResultsRange(offset: number, limit: number, total: number): string {
-  if (total <= 0) return '0 matches';
+/** Structured range for i18n (UI formats via t('markets:results.range')). */
+export type ResultsRange =
+  | { kind: 'empty' }
+  | { kind: 'range'; from: number; to: number; total: number };
+
+export function getResultsRange(offset: number, limit: number, total: number): ResultsRange {
+  if (total <= 0) return { kind: 'empty' };
   const from = Math.min(offset + 1, total);
   const to = Math.min(offset + limit, total);
-  return `Showing ${from.toLocaleString()}–${to.toLocaleString()} of ${total.toLocaleString()}`;
+  return { kind: 'range', from, to, total };
+}
+
+/** @deprecated Prefer getResultsRange + t() for localization */
+export function formatResultsRange(offset: number, limit: number, total: number): string {
+  const r = getResultsRange(offset, limit, total);
+  if (r.kind === 'empty') return '0 matches';
+  return `Showing ${r.from.toLocaleString()}–${r.to.toLocaleString()} of ${r.total.toLocaleString()}`;
 }
 
 export type TableChangeAction = NonNullable<TableCurrentDataSource<unknown>['action']>;

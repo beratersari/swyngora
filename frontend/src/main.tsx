@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import '@/libs/i18n';
 import { App } from '@/app/App';
 
 const rootEl = document.getElementById('root');

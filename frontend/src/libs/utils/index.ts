@@ -18,12 +18,13 @@ export type { MarketsUrlState } from './spotQuery';
 export {
   formatIndicator,
   rsiTone,
+  rsiBandKey,
   rsiBandLabel,
   indicatorPointsToRsiLine,
   indicatorPointsToEmaLine,
   sortedEmaKeys,
 } from './indicators';
-export type { ChartLinePoint } from './indicators';
+export type { ChartLinePoint, RsiBandKey } from './indicators';
 export {
   DEFAULT_DETAIL_STATE,
   parseExchangeParam,

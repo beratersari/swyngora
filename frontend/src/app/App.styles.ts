@@ -22,6 +22,10 @@ export const HeaderNav = styled.div`
   gap: ${({ theme }) => theme.spacing[4]}px;
 `;
 
+export const HeaderSpacer = styled.div`
+  flex: 1;
+`;
+
 export const AppContent = styled(Layout.Content)`
   padding: ${({ theme }) => theme.spacing[6]}px;
   max-width: 1280px;

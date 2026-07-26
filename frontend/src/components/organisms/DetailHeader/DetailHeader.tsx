@@ -1,4 +1,5 @@
 import { Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { changeTone, formatChangePercent, formatPrice } from '@/libs/utils';
 import {
@@ -20,25 +21,27 @@ export function DetailHeader({
   backTo = '/markets',
   isLoading = false,
 }: DetailHeaderProps) {
+  const { t } = useTranslation('detail');
+
   return (
     <HeaderCard>
       <TopRow>
         <TitleBlock>
-          <BackLink to={backTo}>← Markets</BackLink>
+          <BackLink to={backTo}>{t('backToMarkets')}</BackLink>
           <TitleRow>
-            <Text variant="h2" color="cream" mono isLoading={isLoading} skeletonWidth={140}>
+            <Text variant="h2" color="primary" mono isLoading={isLoading} skeletonWidth={140}>
               {symbol}
             </Text>
             <Tag color="processing">{exchange}</Tag>
             {assetName ? (
-              <Text variant="body" color="steel">
+              <Text variant="body" color="secondary">
                 {assetName}
               </Text>
             ) : null}
           </TitleRow>
         </TitleBlock>
         <PriceBlock>
-          <Text variant="h3" color="cream" mono isLoading={isLoading} skeletonWidth={120}>
+          <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={120}>
             {formatPrice(lastPrice)}
           </Text>
           <Text
@@ -47,7 +50,7 @@ export function DetailHeader({
             isLoading={isLoading}
             skeletonWidth={72}
           >
-            {formatChangePercent(priceChangePercent)} · 24h
+            {t('change24h', { change: formatChangePercent(priceChangePercent) })}
           </Text>
         </PriceBlock>
       </TopRow>

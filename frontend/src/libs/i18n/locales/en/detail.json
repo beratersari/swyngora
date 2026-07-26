@@ -1,0 +1,61 @@
+{
+  "backToMarkets": "← Markets",
+  "change24h": "{{change}} · 24h",
+  "missingSymbolTitle": "Missing symbol",
+  "missingSymbolBody": "No trading pair in the URL.",
+  "chart": {
+    "title": "Price chart",
+    "meta": "{{interval}} · {{bars}} bars · EMA overlay optional",
+    "interval": "Interval",
+    "bars": "Bars",
+    "loadErrorTitle": "Could not load candles",
+    "emptyTitle": "No candle data",
+    "emptyBody": "Empty series for this interval."
+  },
+  "stats": {
+    "open": "Open",
+    "high24h": "High 24h",
+    "low24h": "Low 24h",
+    "baseVol": "Base vol",
+    "quoteVol": "Quote vol",
+    "trades24h": "Trades 24h",
+    "circSupply": "Circ. supply",
+    "totalSupply": "Total supply",
+    "maxSupply": "Max supply",
+    "maxSupplyOpen": "∞ / n/a",
+    "usdSnap": "USD (supply snap)",
+    "tickerTitle": "24h ticker",
+    "supplyTitle": "Supply",
+    "supplySource": "Supply source: {{source}}",
+    "asOf": "as of {{date}}"
+  },
+  "indicators": {
+    "title": "Technical indicators",
+    "subtitle": "RSI({{rsiPeriod}}) · EMA({{emaPeriods}}) · same interval as chart · informational only — not financial advice",
+    "unavailable": "Indicators unavailable",
+    "emaOnChart": "EMA on price chart",
+    "rsiLatest": "RSI({{period}}) latest",
+    "emaLatest": "EMA({{period}}) latest",
+    "rsiBand": "{{band}} (30 / 70 bands)",
+    "rsiSeries": "RSI series",
+    "emaLegend": "EMA legend (price chart):",
+    "emaLabel": "EMA {{period}}",
+    "fallbackNote": "Informational analysis only — not financial advice. RSI uses Wilder smoothing; EMA seeded with SMA.",
+    "band": {
+      "na": "n/a",
+      "oversold": "oversold",
+      "overbought": "overbought",
+      "neutral": "neutral"
+    }
+  },
+  "errors": {
+    "supply404": "Supply snapshot not available for this asset (Binance marketing list coverage)."
+  },
+  "pollingPaused": "Live refresh paused while this tab is hidden.",
+  "resource": {
+    "ticker": "24h ticker",
+    "supply": "supply",
+    "candles": "candles",
+    "indicators": "indicators"
+  }
+}

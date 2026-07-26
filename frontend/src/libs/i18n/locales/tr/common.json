@@ -1,0 +1,46 @@
+{
+  "appName": "Swyngora",
+  "nav": {
+    "markets": "Piyasalar"
+  },
+  "footer": {
+    "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"
+  },
+  "language": {
+    "label": "Dil",
+    "en": "English",
+    "tr": "Türkçe"
+  },
+  "actions": {
+    "retry": "Yeniden dene",
+    "refresh": "Yenile"
+  },
+  "status": {
+    "updating": "güncelleniyor…",
+    "loading": "Yükleniyor…",
+    "pollingPaused": "sekme gizli — yenileme durdu"
+  },
+  "a11y": {
+    "loadingChart": "Grafik yükleniyor",
+    "loadingIndicatorChart": "Gösterge grafiği yükleniyor",
+    "loadingExchanges": "Borsalar yükleniyor",
+    "loadingMarketsTable": "Piyasa tablosu yükleniyor"
+  },
+  "errors": {
+    "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+    "loadFailed": "{{resource}} yüklenemedi.",
+    "loadFailedStatus": "{{resource}} yüklenemedi ({{status}}).",
+    "requestFailed": "İstek başarısız ({{status}}).",
+    "invalidRequest": "Geçersiz istek. Filtreleri kontrol edip tekrar deneyin.",
+    "unauthorized": "Bu işlem için yetkiniz yok.",
+    "forbidden": "Erişim reddedildi.",
+    "notFound": "İstenen kaynak bulunamadı.",
+    "rateLimited": "API hız sınırı aşıldı. Biraz bekleyip tekrar deneyin.",
+    "serverError": "Sunucuda beklenmeyen bir hata oluştu. Kısa süre sonra deneyin.",
+    "upstreamUnavailable": "Üst kaynak şu an kullanılamıyor. Kısa süre sonra deneyin.",
+    "serviceUnavailable": "Servis geçici olarak kullanılamıyor. Kısa süre sonra deneyin.",
+    "network": "API'ye ulaşılamıyor. Backend çalışıyor mu?",
+    "parse": "API'den beklenmeyen bir yanıt alındı.",
+    "timeout": "İstek zaman aşımına uğradı. Tekrar deneyin."
+  }
+}

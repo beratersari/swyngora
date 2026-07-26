@@ -1,0 +1,61 @@
+{
+  "backToMarkets": "← Piyasalar",
+  "change24h": "{{change}} · 24s",
+  "missingSymbolTitle": "Sembol eksik",
+  "missingSymbolBody": "URL'de işlem çifti yok.",
+  "chart": {
+    "title": "Fiyat grafiği",
+    "meta": "{{interval}} · {{bars}} bar · EMA katmanı isteğe bağlı",
+    "interval": "Aralık",
+    "bars": "Bar",
+    "loadErrorTitle": "Mum verisi yüklenemedi",
+    "emptyTitle": "Mum verisi yok",
+    "emptyBody": "Bu aralık için seri boş."
+  },
+  "stats": {
+    "open": "Açılış",
+    "high24h": "Yüksek 24s",
+    "low24h": "Düşük 24s",
+    "baseVol": "Base hacim",
+    "quoteVol": "Quote hacim",
+    "trades24h": "İşlem 24s",
+    "circSupply": "Dolaşımdaki arz",
+    "totalSupply": "Toplam arz",
+    "maxSupply": "Maks. arz",
+    "maxSupplyOpen": "∞ / yok",
+    "usdSnap": "USD (arz anlık)",
+    "tickerTitle": "24s ticker",
+    "supplyTitle": "Arz",
+    "supplySource": "Arz kaynağı: {{source}}",
+    "asOf": "{{date}} itibarıyla"
+  },
+  "indicators": {
+    "title": "Teknik göstergeler",
+    "subtitle": "RSI({{rsiPeriod}}) · EMA({{emaPeriods}}) · grafik ile aynı aralık · yalnızca bilgilendirme — yatırım tavsiyesi değildir",
+    "unavailable": "Göstergeler kullanılamıyor",
+    "emaOnChart": "Fiyat grafiğinde EMA",
+    "rsiLatest": "RSI({{period}}) son",
+    "emaLatest": "EMA({{period}}) son",
+    "rsiBand": "{{band}} (30 / 70 bant)",
+    "rsiSeries": "RSI serisi",
+    "emaLegend": "EMA lejantı (fiyat grafiği):",
+    "emaLabel": "EMA {{period}}",
+    "fallbackNote": "Yalnızca bilgilendirme — yatırım tavsiyesi değildir. RSI Wilder; EMA SMA tohumlu.",
+    "band": {
+      "na": "yok",
+      "oversold": "aşırı satım",
+      "overbought": "aşırı alım",
+      "neutral": "nötr"
+    }
+  },
+  "errors": {
+    "supply404": "Bu varlık için arz anlık görüntüsü yok (Binance pazarlama listesi kapsamı)."
+  },
+  "pollingPaused": "Sekme gizliyken canlı yenileme duraklatıldı.",
+  "resource": {
+    "ticker": "24s ticker",
+    "supply": "arz",
+    "candles": "mumlar",
+    "indicators": "göstergeler"
+  }
+}

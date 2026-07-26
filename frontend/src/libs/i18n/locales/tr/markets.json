@@ -1,0 +1,44 @@
+{
+  "title": "Piyasalar",
+  "subtitle": "Binance, Coinbase ve Bybit spot piyasaları. API üzerinden sıralama, filtre ve sayfalama — sekme görünürken liste her {{seconds}} sn yenilenir. Grafik ve göstergeler için bir satıra tıklayın.",
+  "search": {
+    "placeholder": "Sembol, base, quote ara…",
+    "ariaLabel": "Piyasalarda ara"
+  },
+  "filters": {
+    "quoteAria": "Quote varlık",
+    "tagAria": "Ürün etiketi",
+    "tagPlaceholder": "Etiket",
+    "allTags": "Tüm etiketler"
+  },
+  "results": {
+    "loading": "Piyasalar yükleniyor…",
+    "match_one": "eşleşme",
+    "match_other": "eşleşme",
+    "range": "{{from}}–{{to}} / {{total}} gösteriliyor",
+    "emptyMatches": "0 eşleşme",
+    "loadFailed": "Eşleşmeler yüklenemedi",
+    "noneYet": "Henüz sonuç yok",
+    "meta": "Quote {{quote}} · sıralama {{sort}} {{order}}",
+    "page": "sayfa {{page}}"
+  },
+  "table": {
+    "symbol": "Sembol",
+    "last": "Son",
+    "change24h": "24s %",
+    "quoteVol": "Quote hacim",
+    "circMcap": "Dolaşım mcap",
+    "trades": "İşlem",
+    "tags": "Etiketler",
+    "loadErrorTitle": "Piyasalar yüklenemedi",
+    "emptyTitle": "Filtrelere uyan piyasa yok",
+    "emptyHint": "Başka borsa, quote, etiket veya arama deneyin",
+    "openDetail": "{{symbol}} detayını aç"
+  },
+  "errors": {
+    "mcapWarmupTitle": "Piyasa değeri verisi ısınıyor olabilir",
+    "mcapWarmupBody": "Arz anlık görüntüsü boşsa mcap sıralaması başarısız olabilir. Quote hacim sıralamasına geçin veya tekrar deneyin.",
+    "upstreamMcap": "Üst kaynak veya arz anlık görüntüsü yok. Mcap sıralaması için ılık arz önbelleği gerekir — quote hacim deneyin."
+  },
+  "resource": "piyasalar"
+}

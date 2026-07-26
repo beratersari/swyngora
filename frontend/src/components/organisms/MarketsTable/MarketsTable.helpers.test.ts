@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatResultsRange,
+  getResultsRange,
   paginationChanged,
   resolveTableChangeAction,
 } from './MarketsTable.helpers';
 
-describe('formatResultsRange', () => {
+describe('getResultsRange', () => {
+  it('returns empty and range parts', () => {
+    expect(getResultsRange(0, 50, 0)).toEqual({ kind: 'empty' });
+    expect(getResultsRange(0, 50, 120)).toEqual({ kind: 'range', from: 1, to: 50, total: 120 });
+    expect(getResultsRange(100, 50, 120)).toEqual({ kind: 'range', from: 101, to: 120, total: 120 });
+  });
+});
+
+describe('formatResultsRange (legacy English)', () => {
   it('formats empty and first page', () => {
     expect(formatResultsRange(0, 50, 0)).toBe('0 matches');
     expect(formatResultsRange(0, 50, 120)).toBe('Showing 1–50 of 120');
-  });
-
-  it('formats later pages and clamps end', () => {
-    expect(formatResultsRange(50, 50, 120)).toBe('Showing 51–100 of 120');
-    expect(formatResultsRange(100, 50, 120)).toBe('Showing 101–120 of 120');
   });
 });
 

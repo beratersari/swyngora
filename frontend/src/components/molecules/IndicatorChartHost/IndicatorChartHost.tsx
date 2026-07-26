@@ -7,6 +7,7 @@ import {
   type LineData,
   type Time,
 } from 'lightweight-charts';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { palette, semanticColors } from '@/styles/tokens';
 import {
@@ -28,6 +29,7 @@ export function IndicatorChartHost({
   isLoading = false,
   bands = DEFAULT_BANDS,
 }: IndicatorChartHostProps) {
+  const { t } = useTranslation('common');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Line'> | null>(null);
@@ -116,7 +118,7 @@ export function IndicatorChartHost({
         variant="chart"
         height={height}
         className={className}
-        aria-label="Loading indicator chart"
+        aria-label={t('a11y.loadingIndicatorChart')}
       />
     );
   }

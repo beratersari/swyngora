@@ -19,7 +19,7 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 | Data | RTK Query + OpenAPI (`src/libs/api`) |
 | Layout of non-UI code | `src/libs/{api,hooks,utils}` |
 
-See `decisions/001-antd-and-lightweight-charts.md`, `decisions/002-no-features-folder-atomic-only.md`.
+See `decisions/001-antd-and-lightweight-charts.md`, `decisions/002-no-features-folder-atomic-only.md`, `decisions/003-i18n-i18next.md`.
 
 ## Work order
 

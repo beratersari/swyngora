@@ -1,0 +1,46 @@
+{
+  "appName": "Swyngora",
+  "nav": {
+    "markets": "Markets"
+  },
+  "footer": {
+    "disclaimer": "{{appName}} · informational market data · not financial advice"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "tr": "Türkçe"
+  },
+  "actions": {
+    "retry": "Retry",
+    "refresh": "Refresh"
+  },
+  "status": {
+    "updating": "updating…",
+    "loading": "Loading…",
+    "pollingPaused": "polling paused"
+  },
+  "a11y": {
+    "loadingChart": "Loading chart",
+    "loadingIndicatorChart": "Loading indicator chart",
+    "loadingExchanges": "Loading exchanges",
+    "loadingMarketsTable": "Loading markets table"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "loadFailed": "Could not load {{resource}}.",
+    "loadFailedStatus": "Failed to load {{resource}} ({{status}}).",
+    "requestFailed": "Request failed ({{status}}).",
+    "invalidRequest": "Invalid request. Check filters and try again.",
+    "unauthorized": "You are not authorized to perform this action.",
+    "forbidden": "Access denied.",
+    "notFound": "The requested resource was not found.",
+    "rateLimited": "Rate limited by the API. Slow down and retry in a moment.",
+    "serverError": "The server hit an unexpected error. Try again shortly.",
+    "upstreamUnavailable": "Upstream data is unavailable right now. Retry shortly.",
+    "serviceUnavailable": "Service temporarily unavailable. Retry shortly.",
+    "network": "Could not reach the API. Is the backend running?",
+    "parse": "Received an unexpected response from the API.",
+    "timeout": "The request timed out. Try again."
+  }
+}

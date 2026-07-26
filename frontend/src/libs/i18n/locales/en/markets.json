@@ -1,0 +1,44 @@
+{
+  "title": "Markets",
+  "subtitle": "Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API — list refreshes every {{seconds}}s while this tab is visible. Click a row for chart and indicators.",
+  "search": {
+    "placeholder": "Search symbol, base, quote…",
+    "ariaLabel": "Search markets"
+  },
+  "filters": {
+    "quoteAria": "Quote asset",
+    "tagAria": "Product tag",
+    "tagPlaceholder": "Tag",
+    "allTags": "All tags"
+  },
+  "results": {
+    "loading": "Loading markets…",
+    "match_one": "match",
+    "match_other": "matches",
+    "range": "Showing {{from}}–{{to}} of {{total}}",
+    "emptyMatches": "0 matches",
+    "loadFailed": "Could not load matches",
+    "noneYet": "No results yet",
+    "meta": "Quote {{quote}} · sort {{sort}} {{order}}",
+    "page": "page {{page}}"
+  },
+  "table": {
+    "symbol": "Symbol",
+    "last": "Last",
+    "change24h": "24h %",
+    "quoteVol": "Quote vol",
+    "circMcap": "Circ. mcap",
+    "trades": "Trades",
+    "tags": "Tags",
+    "loadErrorTitle": "Could not load markets",
+    "emptyTitle": "No markets match filters",
+    "emptyHint": "Try another exchange, quote, tag, or search",
+    "openDetail": "Open {{symbol}} detail"
+  },
+  "errors": {
+    "mcapWarmupTitle": "Market-cap data may be warming up",
+    "mcapWarmupBody": "If the supply snapshot is empty, mcap sorts can fail. Switch sort to Quote volume or retry.",
+    "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly."
+  },
+  "resource": "markets"
+}

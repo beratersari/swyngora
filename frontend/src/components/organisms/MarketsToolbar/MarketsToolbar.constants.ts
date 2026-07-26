@@ -1,3 +1,4 @@
+/** Quote asset codes — labels are identifiers, not translated UI copy. */
 export const QUOTE_OPTIONS = [
   { value: 'USDT', label: 'USDT' },
   { value: 'USD', label: 'USD' },
@@ -5,5 +6,3 @@ export const QUOTE_OPTIONS = [
   { value: 'BTC', label: 'BTC' },
   { value: 'EUR', label: 'EUR' },
 ] as const;
-
-export const SEARCH_PLACEHOLDER = 'Search symbol, base, quote…';

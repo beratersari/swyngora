@@ -2,6 +2,7 @@ import type { KeyboardEvent } from 'react';
 import { Alert, Button, Empty, Space, Tag } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { SpotMarket, SpotSortField } from '@/libs/api';
@@ -14,7 +15,7 @@ import {
 } from '@/libs/utils';
 import { COLUMN_SORT, PAGE_SIZE_OPTIONS } from './MarketsTable.constants';
 import {
-  formatResultsRange,
+  getResultsRange,
   fromAntdSortOrder,
   paginationChanged,
   resolveTableChangeAction,
@@ -30,9 +31,9 @@ import {
 } from './MarketsTable.styles';
 import type { MarketsTableProps } from './MarketsTable.types';
 
-function MarketsTableSkeleton({ rows = 8 }: { rows?: number }) {
+function MarketsTableSkeleton({ rows = 8, label }: { rows?: number; label: string }) {
   return (
-    <TableSkeletonWrap aria-label="Loading markets table" role="status">
+    <TableSkeletonWrap aria-label={label} role="status">
       <SkeletonRow>
         {Array.from({ length: 7 }).map((_, i) => (
           <Skeleton key={`h-${i}`} variant="text" height={14} width="80%" active />
@@ -64,6 +65,8 @@ export function MarketsTable({
   onRetry,
   onRowOpen,
 }: MarketsTableProps) {
+  const { t } = useTranslation(['markets', 'common']);
+
   if (errorMessage) {
     return (
       <TableCard>
@@ -71,12 +74,12 @@ export function MarketsTable({
           <Alert
             type="error"
             showIcon
-            message="Could not load markets"
+            message={t('markets:table.loadErrorTitle')}
             description={errorMessage}
             action={
               onRetry ? (
                 <Button size="small" type="primary" onClick={onRetry}>
-                  Retry
+                  {t('common:actions.retry')}
                 </Button>
               ) : undefined
             }
@@ -86,18 +89,20 @@ export function MarketsTable({
     );
   }
 
-  // Initial load only — keep previous rows visible while paging/refetching
   if (isLoading && items.length === 0) {
     return (
       <TableCard>
-        <MarketsTableSkeleton rows={Math.min(10, Math.max(6, limit > 20 ? 10 : 8))} />
+        <MarketsTableSkeleton
+          rows={Math.min(10, Math.max(6, limit > 20 ? 10 : 8))}
+          label={t('common:a11y.loadingMarketsTable')}
+        />
       </TableCard>
     );
   }
 
   const columns: ColumnsType<SpotMarket> = [
     {
-      title: 'Symbol',
+      title: t('markets:table.symbol'),
       dataIndex: 'symbol',
       key: 'symbol',
       sorter: true,
@@ -109,7 +114,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: 'Last',
+      title: t('markets:table.last'),
       dataIndex: 'lastPrice',
       key: 'lastPrice',
       align: 'right',
@@ -122,7 +127,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: '24h %',
+      title: t('markets:table.change24h'),
       dataIndex: 'priceChangePercent',
       key: 'priceChangePercent',
       align: 'right',
@@ -135,7 +140,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: 'Quote vol',
+      title: t('markets:table.quoteVol'),
       dataIndex: 'quoteVolume',
       key: 'quoteVolume',
       align: 'right',
@@ -148,7 +153,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: 'Circ. mcap',
+      title: t('markets:table.circMcap'),
       dataIndex: 'marketCapCirculating',
       key: 'marketCapCirculating',
       align: 'right',
@@ -161,7 +166,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: 'Trades',
+      title: t('markets:table.trades'),
       dataIndex: 'tradeCount',
       key: 'tradeCount',
       align: 'right',
@@ -174,7 +179,7 @@ export function MarketsTable({
       ),
     },
     {
-      title: 'Tags',
+      title: t('markets:table.tags'),
       dataIndex: 'tags',
       key: 'tags',
       sorter: true,
@@ -182,8 +187,8 @@ export function MarketsTable({
       render: (tags: string[] | undefined) =>
         tags && tags.length > 0 ? (
           <TagList>
-            {tags.slice(0, 4).map((t) => (
-              <Tag key={t}>{t}</Tag>
+            {tags.slice(0, 4).map((tag) => (
+              <Tag key={tag}>{tag}</Tag>
             ))}
             {tags.length > 4 ? <Tag>+{tags.length - 4}</Tag> : null}
           </TagList>
@@ -195,14 +200,21 @@ export function MarketsTable({
     },
   ];
 
+  const range = getResultsRange(offset, limit, total);
   const pagination: TablePaginationConfig = {
     current: limit > 0 ? Math.floor(offset / limit) + 1 : 1,
     pageSize: limit,
     total,
     showSizeChanger: true,
     pageSizeOptions: [...PAGE_SIZE_OPTIONS],
-    showTotal: () => formatResultsRange(offset, limit, total),
-    // Keep pager usable with large totals
+    showTotal: () =>
+      range.kind === 'empty'
+        ? t('markets:results.emptyMatches')
+        : t('markets:results.range', {
+            from: range.from.toLocaleString(),
+            to: range.to.toLocaleString(),
+            total: range.total.toLocaleString(),
+          }),
     showQuickJumper: total > limit * 5,
     hideOnSinglePage: false,
     position: ['bottomCenter'],
@@ -238,7 +250,6 @@ export function MarketsTable({
       return;
     }
 
-    // Last resort: if page moved, page; if sort moved, sort
     if (pageInfo.changed) {
       onPageChange(pageInfo.nextOffset, pageInfo.nextLimit);
       return;
@@ -271,7 +282,9 @@ export function MarketsTable({
           },
           tabIndex: onRowOpen && record.symbol ? 0 : undefined,
           role: onRowOpen ? 'link' : undefined,
-          'aria-label': record.symbol ? `Open ${record.symbol} detail` : undefined,
+          'aria-label': record.symbol
+            ? t('markets:table.openDetail', { symbol: record.symbol })
+            : undefined,
         })}
         locale={{
           emptyText: (
@@ -280,10 +293,10 @@ export function MarketsTable({
               description={
                 <Space direction="vertical" size={4}>
                   <Text variant="body" color="secondary">
-                    No markets match filters
+                    {t('markets:table.emptyTitle')}
                   </Text>
                   <Text variant="caption" color="secondary">
-                    Try another exchange, quote, tag, or search
+                    {t('markets:table.emptyHint')}
                   </Text>
                 </Space>
               }

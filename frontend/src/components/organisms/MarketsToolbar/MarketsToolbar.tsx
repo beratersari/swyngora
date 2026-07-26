@@ -1,6 +1,7 @@
 import { Input } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
-import { QUOTE_OPTIONS, SEARCH_PLACEHOLDER } from './MarketsToolbar.constants';
+import { useTranslation } from 'react-i18next';
+import { QUOTE_OPTIONS } from './MarketsToolbar.constants';
 import { FieldWrap, QuoteSelect, SearchWrap, TagSelect, ToolbarRow } from './MarketsToolbar.styles';
 import type { MarketsToolbarProps } from './MarketsToolbar.types';
 
@@ -14,9 +15,11 @@ export function MarketsToolbar({
   onQuoteChange,
   onTagChange,
 }: MarketsToolbarProps) {
+  const { t } = useTranslation('markets');
+
   const tagOptions = [
-    { value: '', label: 'All tags' },
-    ...tags.map((t) => ({ value: t, label: t })),
+    { value: '', label: t('filters.allTags') },
+    ...tags.map((item) => ({ value: item, label: item })),
   ];
 
   return (
@@ -25,10 +28,10 @@ export function MarketsToolbar({
         <Input
           allowClear
           prefix={<SearchOutlined />}
-          placeholder={SEARCH_PLACEHOLDER}
+          placeholder={t('search.placeholder')}
           value={q}
           onChange={(e) => onQChange(e.target.value)}
-          aria-label="Search markets"
+          aria-label={t('search.ariaLabel')}
         />
       </SearchWrap>
       <FieldWrap>
@@ -36,7 +39,7 @@ export function MarketsToolbar({
           value={quote}
           options={[...QUOTE_OPTIONS]}
           onChange={(v) => onQuoteChange(String(v))}
-          aria-label="Quote asset"
+          aria-label={t('filters.quoteAria')}
         />
       </FieldWrap>
       <FieldWrap>
@@ -47,8 +50,8 @@ export function MarketsToolbar({
           onChange={(v) => onTagChange(v != null ? String(v) : '')}
           showSearch
           optionFilterProp="label"
-          aria-label="Product tag"
-          placeholder="Tag"
+          aria-label={t('filters.tagAria')}
+          placeholder={t('filters.tagPlaceholder')}
         />
       </FieldWrap>
     </ToolbarRow>

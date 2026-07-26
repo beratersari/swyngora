@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert } from 'antd';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import type { CandleChartOverlay } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
@@ -40,6 +41,7 @@ import { ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
  * Route: /markets/:exchange/:symbol
  */
 export function CoinDetailPage() {
+  const { t } = useTranslation(['detail', 'common']);
   const { exchange: exchangeParam, symbol: symbolParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
@@ -54,7 +56,6 @@ export function CoinDetailPage() {
   const supportedIntervals = intervalsQuery.data?.intervals;
   const intervalsReady = Boolean(supportedIntervals?.length);
 
-  // Clamp interval to venue-supported set once intervals load (DET-A §5.4)
   const interval = resolveInterval(urlState.interval, supportedIntervals);
   const limit = urlState.limit;
 
@@ -69,7 +70,6 @@ export function CoinDetailPage() {
   }, [supportedIntervals, urlState.interval, urlState.limit, setSearchParams]);
 
   const skip = !symbol;
-  /** Avoid candles/indicators 400 on venue-invalid interval before A1 resolves */
   const skipSeries = skip || !intervalsReady;
 
   const tickerQuery = useGetTicker24hQuery(
@@ -117,7 +117,6 @@ export function CoinDetailPage() {
 
   const chartData = useMemo(() => {
     const raw = candlesQuery.data?.candles ?? [];
-    // DET-A: OHLCV mapping requires openTime + OHLC; volume optional for chart bars
     return apiCandlesToChart(
       raw.flatMap((c) =>
         c.openTime && c.open && c.high && c.low && c.close
@@ -142,11 +141,11 @@ export function CoinDetailPage() {
     const keys = sortedEmaKeys(indicatorsQuery.data?.latest?.ema);
     return keys.map((key, i) => ({
       id: `ema-${key}`,
-      title: `EMA ${key}`,
+      title: t('detail:indicators.emaLabel', { period: key }),
       color: emaColor(key, i),
       data: indicatorPointsToEmaLine(indicatorsQuery.data?.points, key),
     }));
-  }, [showEma, indicatorsQuery.data]);
+  }, [showEma, indicatorsQuery.data, t]);
 
   const patchUrl = (patch: Partial<{ interval: string; limit: number }>) => {
     setSearchParams(
@@ -168,7 +167,12 @@ export function CoinDetailPage() {
   if (!symbol) {
     return (
       <PageStack>
-        <Alert type="error" showIcon message="Missing symbol" description="No trading pair in the URL." />
+        <Alert
+          type="error"
+          showIcon
+          message={t('detail:missingSymbolTitle')}
+          description={t('detail:missingSymbolBody')}
+        />
       </PageStack>
     );
   }
@@ -198,15 +202,17 @@ export function CoinDetailPage() {
         isLoading={statsLoading}
         tickerError={
           tickerQuery.isError
-            ? rtkErrorMessage(tickerQuery.error, { resource: '24h ticker' })
+            ? rtkErrorMessage(tickerQuery.error, {
+                resource: t('detail:resource.ticker'),
+              })
             : null
         }
         supplyError={
           supplyQuery.isError
             ? rtkErrorMessage(supplyQuery.error, {
-                resource: 'supply',
+                resource: t('detail:resource.supply'),
                 statusMessages: {
-                  404: 'Supply snapshot not available for this asset (Binance marketing list coverage).',
+                  404: t('detail:errors.supply404'),
                 },
               })
             : null
@@ -215,11 +221,11 @@ export function CoinDetailPage() {
 
       <ChartCard>
         <ChartTitleRow>
-          <Text variant="h4" color="cream">
-            Price chart
+          <Text variant="h4" color="primary">
+            {t('detail:chart.title')}
           </Text>
-          <Text variant="caption" color="steel">
-            {interval} · {limit} bars · EMA overlay optional
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.meta', { interval, bars: limit })}
           </Text>
         </ChartTitleRow>
 
@@ -238,11 +244,18 @@ export function CoinDetailPage() {
           <Alert
             type="error"
             showIcon
-            message="Could not load candles"
-            description={rtkErrorMessage(candlesQuery.error, { resource: 'candles' })}
+            message={t('detail:chart.loadErrorTitle')}
+            description={rtkErrorMessage(candlesQuery.error, {
+              resource: t('detail:resource.candles'),
+            })}
           />
         ) : !seriesLoading && candlesQuery.isSuccess && chartData.length === 0 ? (
-          <Alert type="info" showIcon message="No candle data" description="Empty series for this interval." />
+          <Alert
+            type="info"
+            showIcon
+            message={t('detail:chart.emptyTitle')}
+            description={t('detail:chart.emptyBody')}
+          />
         ) : (
           <CandleChartHost
             data={chartData}
@@ -258,7 +271,9 @@ export function CoinDetailPage() {
         isLoading={indicatorsQuery.isLoading && !indicatorsQuery.data}
         errorMessage={
           indicatorsQuery.isError
-            ? rtkErrorMessage(indicatorsQuery.error, { resource: 'indicators' })
+            ? rtkErrorMessage(indicatorsQuery.error, {
+                resource: t('detail:resource.indicators'),
+              })
             : null
         }
         showEmaOnChart={showEma}
@@ -267,7 +282,7 @@ export function CoinDetailPage() {
 
       {!visible ? (
         <Text variant="caption" color="secondary">
-          Live refresh paused while this tab is hidden.
+          {t('detail:pollingPaused')}
         </Text>
       ) : null}
     </PageStack>

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { MarketsTable } from '@/components/organisms/MarketsTable';
-import { formatResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
+import { getResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
 import {
   rtkErrorMessage,
   useListExchangesQuery,
@@ -39,6 +40,7 @@ import {
 
 /** Multi-exchange spot markets dashboard (Epic B). */
 export function MarketsPage() {
+  const { t } = useTranslation(['markets', 'common']);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const visible = useDocumentVisible();
@@ -81,13 +83,11 @@ export function MarketsPage() {
     ? exchangesQuery.data.exchanges
     : ['binance', 'coinbase', 'bybit'];
 
-  // Hold last successful page while the next offset loads (smoother paging only)
   const [cachedItems, setCachedItems] = useState<SpotMarket[]>([]);
   const [cachedTotal, setCachedTotal] = useState(0);
   const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}|${state.sort}|${state.order}`;
 
   useEffect(() => {
-    // Drop stale rows when filters/sort change (not when only paging)
     setCachedItems([]);
     setCachedTotal(0);
   }, [filterKey]);
@@ -103,9 +103,9 @@ export function MarketsPage() {
   const total = spotQuery.data?.total ?? cachedTotal;
   const errorMessage = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {
-        resource: 'markets',
+        resource: t('markets:resource'),
         statusMessages: {
-          502: 'Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly.',
+          502: t('markets:errors.upstreamMcap'),
         },
       })
     : null;
@@ -120,7 +120,6 @@ export function MarketsPage() {
 
   const onPageChange = useCallback(
     (offset: number, limit: number) => {
-      // Always write offset/limit so page 2+ is reflected in the URL
       const next: MarketsUrlState = {
         ...state,
         q: qInput,
@@ -132,20 +131,27 @@ export function MarketsPage() {
     [state, qInput, setSearchParams],
   );
 
-  const rangeLabel = formatResultsRange(state.offset, state.limit, total);
+  const range = getResultsRange(state.offset, state.limit, total);
+  const rangeLabel =
+    range.kind === 'empty'
+      ? t('markets:results.emptyMatches')
+      : t('markets:results.range', {
+          from: range.from.toLocaleString(),
+          to: range.to.toLocaleString(),
+          total: range.total.toLocaleString(),
+        });
   const isInitialLoading = spotQuery.isLoading && items.length === 0;
   const isRefreshing = spotQuery.isFetching && items.length > 0;
+  const pageNum = Math.floor(state.offset / state.limit) + 1;
 
   return (
     <PageStack>
       <PageIntro>
         <Text variant="h2" color="primary">
-          Markets
+          {t('markets:title')}
         </Text>
         <Text variant="body" color="secondary">
-          Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API —
-          list refreshes every {DEFAULT_SPOT_POLL_MS / 1000}s while this tab is visible. Click a row
-          for chart and indicators.
+          {t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })}
         </Text>
       </PageIntro>
 
@@ -171,32 +177,38 @@ export function MarketsPage() {
         <MetaLeft>
           {isInitialLoading ? (
             <ResultsBadge>
-              <ResultsLabel>Loading markets…</ResultsLabel>
+              <ResultsLabel>{t('markets:results.loading')}</ResultsLabel>
             </ResultsBadge>
           ) : spotQuery.isSuccess || items.length > 0 ? (
             <ResultsBadge>
               <ResultsCount>{total.toLocaleString()}</ResultsCount>
               <ResultsLabel>
-                {total === 1 ? 'match' : 'matches'}
+                {t('markets:results.match', { count: total })}
                 {total > 0 ? ` · ${rangeLabel}` : null}
               </ResultsLabel>
             </ResultsBadge>
           ) : spotQuery.isError ? (
             <ResultsBadge>
-              <ResultsLabel>Could not load matches</ResultsLabel>
+              <ResultsLabel>{t('markets:results.loadFailed')}</ResultsLabel>
             </ResultsBadge>
           ) : (
             <ResultsBadge>
-              <ResultsLabel>No results yet</ResultsLabel>
+              <ResultsLabel>{t('markets:results.noneYet')}</ResultsLabel>
             </ResultsBadge>
           )}
-          {isRefreshing ? <Tag color="processing">updating…</Tag> : null}
-          {!visible ? <Tag color="default">polling paused</Tag> : null}
+          {isRefreshing ? <Tag color="processing">{t('common:status.updating')}</Tag> : null}
+          {!visible ? <Tag color="default">{t('common:status.pollingPaused')}</Tag> : null}
         </MetaLeft>
         <MetaRight>
           <Text variant="caption" color="secondary">
-            Quote {state.quote || DEFAULT_MARKETS_STATE.quote} · sort {state.sort} {state.order}
-            {state.offset > 0 ? ` · page ${Math.floor(state.offset / state.limit) + 1}` : null}
+            {t('markets:results.meta', {
+              quote: state.quote || DEFAULT_MARKETS_STATE.quote,
+              sort: state.sort,
+              order: state.order,
+            })}
+            {state.offset > 0
+              ? ` · ${t('markets:results.page', { page: pageNum })}`
+              : null}
           </Text>
         </MetaRight>
       </MetaRow>
@@ -205,8 +217,8 @@ export function MarketsPage() {
         <McapHintAlert
           type="warning"
           showIcon
-          message="Market-cap data may be warming up"
-          description="If the supply snapshot is empty, mcap sorts can fail. Switch sort to Quote volume or retry."
+          message={t('markets:errors.mcapWarmupTitle')}
+          description={t('markets:errors.mcapWarmupBody')}
         />
       ) : null}
 

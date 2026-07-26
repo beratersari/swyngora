@@ -1,5 +1,6 @@
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query';
 import type { SerializedError } from '@reduxjs/toolkit';
+import { i18n } from '@/libs/i18n';
 
 export type RtkErrorMessageOptions = {
   /**
@@ -20,20 +21,23 @@ type ApiErrorBody = {
   message?: string;
 };
 
-const DEFAULT_STATUS_MESSAGES: Record<number | string, string> = {
-  400: 'Invalid request. Check filters and try again.',
-  401: 'You are not authorized to perform this action.',
-  403: 'Access denied.',
-  404: 'The requested resource was not found.',
-  429: 'Rate limited by the API. Slow down and retry in a moment.',
-  500: 'The server hit an unexpected error. Try again shortly.',
-  502: 'Upstream data is unavailable right now. Retry shortly.',
-  503: 'Service temporarily unavailable. Retry shortly.',
-  FETCH_ERROR: 'Could not reach the API. Is the backend running?',
-  PARSING_ERROR: 'Received an unexpected response from the API.',
-  TIMEOUT_ERROR: 'The request timed out. Try again.',
-  CUSTOM_ERROR: 'Request failed.',
-};
+function defaultStatusMessage(status: number | string): string | undefined {
+  const map: Record<number | string, string> = {
+    400: i18n.t('common:errors.invalidRequest'),
+    401: i18n.t('common:errors.unauthorized'),
+    403: i18n.t('common:errors.forbidden'),
+    404: i18n.t('common:errors.notFound'),
+    429: i18n.t('common:errors.rateLimited'),
+    500: i18n.t('common:errors.serverError'),
+    502: i18n.t('common:errors.upstreamUnavailable'),
+    503: i18n.t('common:errors.serviceUnavailable'),
+    FETCH_ERROR: i18n.t('common:errors.network'),
+    PARSING_ERROR: i18n.t('common:errors.parse'),
+    TIMEOUT_ERROR: i18n.t('common:errors.timeout'),
+    CUSTOM_ERROR: i18n.t('common:errors.requestFailed', { status: 'error' }),
+  };
+  return map[status];
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -65,7 +69,6 @@ export function getRtkErrorRawMessage(error: unknown): string | undefined {
   }
 
   if (typeof error.error === 'string' && error.error.trim() && error.status !== 'FETCH_ERROR') {
-    // FETCH_ERROR's `error` field is often a low-level TypeError string — prefer status copy
     return error.error.trim();
   }
   if (typeof error.message === 'string' && error.message.trim()) return error.message.trim();
@@ -75,12 +78,7 @@ export function getRtkErrorRawMessage(error: unknown): string | undefined {
 
 /**
  * Map any RTK Query / mutation `error` value to a user-facing string.
- *
- * Priority:
- * 1. Call-site `statusMessages` override
- * 2. API / SerializedError message body
- * 3. Built-in status defaults (429, 502, FETCH_ERROR, …)
- * 4. Generic fallback (optionally with `resource`)
+ * Default status copy is localized via i18n.
  */
 export function rtkErrorMessage(error: unknown, options: RtkErrorMessageOptions = {}): string {
   const resource = options.resource?.trim();
@@ -93,19 +91,20 @@ export function rtkErrorMessage(error: unknown, options: RtkErrorMessageOptions 
   const raw = getRtkErrorRawMessage(error);
   if (raw) return raw;
 
-  if (status !== undefined && DEFAULT_STATUS_MESSAGES[status]) {
-    return DEFAULT_STATUS_MESSAGES[status]!;
+  if (status !== undefined) {
+    const mapped = defaultStatusMessage(status);
+    if (mapped) return mapped;
   }
 
   if (status !== undefined) {
     return resource
-      ? `Failed to load ${resource} (${String(status)}).`
-      : `Request failed (${String(status)}).`;
+      ? i18n.t('common:errors.loadFailedStatus', { resource, status: String(status) })
+      : i18n.t('common:errors.requestFailed', { status: String(status) });
   }
 
   return resource
-    ? `Could not load ${resource}. Please try again.`
-    : 'Something went wrong. Please try again.';
+    ? i18n.t('common:errors.loadFailed', { resource })
+    : i18n.t('common:errors.generic');
 }
 
 /** Type guard for RTK fetch errors (optional use in callers). */

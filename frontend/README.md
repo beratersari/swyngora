@@ -68,6 +68,13 @@ frontend/
 
 **Layout policy:** Option A — domain UI in `organisms/`, screens in `pages/`, shared logic in `libs/`. No `src/features/`.
 
+### Localization
+
+- **i18next** catalogs: `src/libs/i18n/locales/{en,tr}/`
+- Namespaces: `common`, `markets`, `detail`
+- Language switcher in the app header (persists to `localStorage`)
+- Add a language: new locale folder + register in `libs/i18n/resources.ts` + `SUPPORTED_LOCALES`
+
 ## Run (local)
 
 ```bash
