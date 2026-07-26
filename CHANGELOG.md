@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Product mobile scaffold** (`mobile/`): React Native (no Expo) + **react-native-web** for Chrome (`npm run web` → http://localhost:5180); Atomic components; modules own pages with View+ViewModel; RTK Query + OpenAPI codegen; brand tokens shared with frontend
+
+
+### Added
 - **Frontend i18n:** i18next + react-i18next with `en`/`tr` catalogs (`libs/i18n/`), language switcher, Ant Design locale sync; UI copy moved off hard-coded English
 
 ### Changed

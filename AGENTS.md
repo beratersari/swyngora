@@ -25,7 +25,7 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 |---|---|---|
 | Simple frontend | Static HTML/JS | **Test harness only** under `simple-frontend/` — not Atomic Design / RTK Query |
 | Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **Ant Design**; **Lightweight Charts**; **RTK Query**; OpenAPI types (§6.9); libs under `src/libs/` |
-| Mobile app | React Native | Same as product web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
+| Mobile app | React Native | `mobile/`; Atomic Design + **modules/pages + ViewModel**; **no Expo**; **Chrome via react-native-web** (`npm run web`); **RTK Query** + OpenAPI (§6.8 / §6.9); brand tokens match frontend |
 | Messaging | Telegram bot | Optional transport under `backend/internal/transport/telegram` (same process as HTTP API; no AI) |
 
 ### Backend and AI
@@ -724,9 +724,11 @@ python3 -m http.server 5173   # open http://localhost:5173
 # npm run codegen:api
 # npm test && npm run lint && npm run build
 
-# Mobile — from mobile/
-# npm run codegen:api   # same OpenAPI source as frontend when configured
-# follow React Native project scripts once scaffolded
+# Mobile (React Native + react-native-web) — from mobile/
+# npm install
+# npm run web           # Chrome → http://localhost:5180 (primary; no simulator required)
+# npm test && npm run lint && npm run typecheck
+# npm run codegen:api   # same OpenAPI source as frontend
 ```
 
 CI should run the relevant subset of the above on every MR/PR to `develop` and `main`.

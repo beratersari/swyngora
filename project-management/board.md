@@ -1,12 +1,26 @@
-# Frontend board
+# Product client board
 
-## Stack (locked)
+Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues are fully wired.
+
+## Frontend stack (locked)
 
 - UI: **Ant Design**
 - Charts: **TradingView Lightweight Charts**
 - Data: RTK Query + OpenAPI in `libs/api`
+- Colors: `frontend/src/styles/tokens/colors.ts`
 
-## Epic A — Project initialization (P0)
+## Mobile stack (locked)
+
+- Runtime: **React Native CLI** (**no Expo**)
+- UI: Atomic atoms + StyleSheet (no antd)
+- Architecture: **`modules/*/pages`** + **ViewModel**; components never hold pages
+- Data: RTK Query + OpenAPI in `libs/api`
+- **Colors: same tokens as frontend** (`navy` `#111844`, `indigo` `#4B5694`, `steel` `#7288AE`, `cream` `#EAE0CF`)
+- Decision: `decisions/002-react-native-cli-modules-viewmodel.md`
+
+---
+
+## Epic A — Frontend project initialization (P0, done)
 
 | ID | Task | Status |
 |---|---|---|
@@ -32,35 +46,36 @@
 | MKT-6 | Live poll + visibility pause | done |
 | MKT-7 | Empty/error UX + tests | done |
 
-## Epic C — Coin detail + technical indicators (P1)
+## Epic C — Mobile project initialization (P0 mobile, **next**)
 
-**Epic:** `epics/coin-detail-and-indicators.md`  
-**Analysis doc:** `docs/features/coin-detail.md`  
-**Process:** analysis tasks first (DET-A/B); implementation (DET-1…4) only after acceptance.
-
-### Analysis (no code) — full field-level specs
+**Plan:** `docs/design/mobile-project-initialization.md`  
+**System design:** `docs/design/mobile-system-design.md`  
+**Epic:** `epics/mobile-project-initialization.md`
 
 | ID | Task | Status |
 |---|---|---|
-| DET-A | Coin detail: route + intervals/ticker/supply/candles (all fields + logic) | done |
-| DET-B | Indicators: GET /indicators (+ batch out-of-scope), RSI/EMA mapping | done |
+| MINIT-1 | Scaffold React Native CLI TypeScript app (no Expo) | done |
+| MINIT-2 | Lint, format, Jest, path aliases | done |
+| MINIT-3 | libs + Atomic + modules skeleton + boundary ESLint | done |
+| MINIT-4 | libs/api store + RTK baseApi + env | done |
+| MINIT-5 | OpenAPI codegen → libs/api/generated | done |
+| MINIT-6 | Navigation shell + AppState hook + providers | done |
+| MINIT-7 | Color tokens (match frontend) + core atoms + ScreenTemplate | done |
+| MINIT-8 | Home + Markets stub pages with ViewModels | done |
+| MINIT-9 | Package docs + root AGENTS/README + changelog | done |
 
-See `tasks/DET-A.md` and `tasks/DET-B.md` for complete contracts.
-
-### Implementation (DET-A + DET-B applied)
-
-| ID | Task | Status |
-|---|---|---|
-| DET-1 | RTK detail endpoints (candles, ticker, supply, intervals, indicators) | done |
-| DET-2 | Coin detail page shell + header/stats + route from Markets | done |
-| DET-3 | Candle chart + interval/limit toolbar | done |
-| DET-4 | RSI/EMA panel + EMA overlay + tests | done |
+**Suggested order:** MINIT-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9  
+**MR grouping:** (1–3) · (4–5) · (6–7) · (8–9)
 
 ## Later (not started)
 
 | ID | Task | Status |
 |---|---|---|
-| WL-1 | Watchlist UI | backlog |
+| DET-1 | Coin detail page + Lightweight Charts candle view (web) | backlog |
+| DET-2 | RSI/EMA series on/near chart (web) | backlog |
+| WL-1 | Watchlist UI (web) | backlog |
+| MMKT-1 | Mobile multi-exchange spot markets list | backlog |
+| MDET-1 | Mobile coin detail + charts | backlog |
 
 ## Status legend
 

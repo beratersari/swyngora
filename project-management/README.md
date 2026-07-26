@@ -5,10 +5,10 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 
 | Path | Purpose |
 |---|---|
-| `board.md` | Status overview (todo / in progress / done) |
+| `board.md` | Status overview (todo / in progress / done) for frontend **and** mobile |
 | `epics/` | Epic definitions |
-| `tasks/` | Individual tasks (INIT-*, MKT-*, …) |
-| `decisions/` | Stack/product decisions (ADRs-lite for frontend PM) |
+| `tasks/` | Individual tasks (`INIT-*`, `MKT-*`, `MINIT-*`, …) |
+| `decisions/` | Stack/product decisions (ADRs-lite for client PM) |
 
 ## Active frontend stack (decided)
 
@@ -18,18 +18,35 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 | Charts | **TradingView Lightweight Charts** (`lightweight-charts`) |
 | Data | RTK Query + OpenAPI (`src/libs/api`) |
 | Layout of non-UI code | `src/libs/{api,hooks,utils}` |
+| Colors | `frontend/src/styles/tokens/colors.ts` |
 
-See `decisions/001-antd-and-lightweight-charts.md`, `decisions/002-no-features-folder-atomic-only.md`, `decisions/003-i18n-i18next.md`.
+See `decisions/001-antd-and-lightweight-charts.md`.
+
+## Active mobile stack (decided)
+
+| Layer | Choice |
+|---|---|
+| Runtime | **React Native CLI** — **no Expo** |
+| UI | Atomic Design + StyleSheet; custom atoms first |
+| Structure | `components/` Atomic only; **`modules/*/pages` + ViewModel** |
+| Data | RTK Query + OpenAPI (`src/libs/api`) |
+| **Colors** | **Same as frontend** (`navy` / `indigo` / `steel` / `cream`) |
+
+See `decisions/002-react-native-cli-modules-viewmodel.md`.
 
 ## Work order
 
 1. Epic A — Frontend project initialization (`epics/frontend-project-initialization.md`) — **done**
 2. Epic B — Multi-exchange spot markets (`epics/multi-exchange-spot-markets.md`) — **done**
-3. Epic C — Coin detail + indicators (`epics/coin-detail-and-indicators.md`) — **done**
-   - DET-A / DET-B analysis + DET-1…4 implementation applied
-4. Later — Watchlist (WL-1)
+3. **Epic C — Mobile project initialization** (`epics/mobile-project-initialization.md`) — **next**
+4. Later — mobile markets / detail (`MMKT-*`, `MDET-*` on board)
 
-**Rule:** create PM tasks + analysis before implementation. Do not mark impl tasks done without an explicit implement request.
+### Mobile init designs
+
+| Doc | Role |
+|---|---|
+| `docs/design/mobile-project-initialization.md` | Init plan (checklist, tasks, acceptance) |
+| `docs/design/mobile-system-design.md` | Full architecture (modules, ViewModel, nav, PR plan) |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
