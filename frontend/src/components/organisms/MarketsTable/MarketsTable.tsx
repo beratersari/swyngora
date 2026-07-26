@@ -1,6 +1,7 @@
+import type { KeyboardEvent } from 'react';
 import { Alert, Button, Empty, Space, Tag } from 'antd';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
-import type { FilterValue, SorterResult } from 'antd/es/table/interface';
+import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import { Text } from '@/components/atoms/Text';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { SpotMarket, SpotSortField } from '@/libs/api';
@@ -12,9 +13,41 @@ import {
   formatTradeCount,
 } from '@/libs/utils';
 import { COLUMN_SORT, PAGE_SIZE_OPTIONS } from './MarketsTable.constants';
-import { fromAntdSortOrder, toAntdSortOrder } from './MarketsTable.helpers';
-import { EmptyWrap, StyledTable, TableCard, TagList } from './MarketsTable.styles';
+import {
+  formatResultsRange,
+  fromAntdSortOrder,
+  paginationChanged,
+  resolveTableChangeAction,
+  toAntdSortOrder,
+} from './MarketsTable.helpers';
+import {
+  EmptyWrap,
+  SkeletonRow,
+  StyledTable,
+  TableCard,
+  TableSkeletonWrap,
+  TagList,
+} from './MarketsTable.styles';
 import type { MarketsTableProps } from './MarketsTable.types';
+
+function MarketsTableSkeleton({ rows = 8 }: { rows?: number }) {
+  return (
+    <TableSkeletonWrap aria-label="Loading markets table" role="status">
+      <SkeletonRow>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={`h-${i}`} variant="text" height={14} width="80%" active />
+        ))}
+      </SkeletonRow>
+      {Array.from({ length: rows }).map((_, r) => (
+        <SkeletonRow key={`r-${r}`}>
+          {Array.from({ length: 7 }).map((_, c) => (
+            <Skeleton key={`c-${r}-${c}`} variant="text" height={18} width="90%" active />
+          ))}
+        </SkeletonRow>
+      ))}
+    </TableSkeletonWrap>
+  );
+}
 
 export function MarketsTable({
   items,
@@ -29,6 +62,7 @@ export function MarketsTable({
   onSortChange,
   onPageChange,
   onRetry,
+  onRowOpen,
 }: MarketsTableProps) {
   if (errorMessage) {
     return (
@@ -41,7 +75,7 @@ export function MarketsTable({
             description={errorMessage}
             action={
               onRetry ? (
-                <Button size="small" onClick={onRetry}>
+                <Button size="small" type="primary" onClick={onRetry}>
                   Retry
                 </Button>
               ) : undefined
@@ -52,12 +86,11 @@ export function MarketsTable({
     );
   }
 
+  // Initial load only — keep previous rows visible while paging/refetching
   if (isLoading && items.length === 0) {
     return (
       <TableCard>
-        <EmptyWrap>
-          <Skeleton variant="card" height={320} active aria-label="Loading markets table" />
-        </EmptyWrap>
+        <MarketsTableSkeleton rows={Math.min(10, Math.max(6, limit > 20 ? 10 : 8))} />
       </TableCard>
     );
   }
@@ -70,7 +103,7 @@ export function MarketsTable({
       sorter: true,
       sortOrder: toAntdSortOrder(order, sort === 'symbol'),
       render: (symbol: string | undefined) => (
-        <Text variant="label" color="cream" mono>
+        <Text variant="label" color="primary" mono>
           {symbol ?? '—'}
         </Text>
       ),
@@ -163,43 +196,83 @@ export function MarketsTable({
   ];
 
   const pagination: TablePaginationConfig = {
-    current: Math.floor(offset / limit) + 1,
+    current: limit > 0 ? Math.floor(offset / limit) + 1 : 1,
     pageSize: limit,
     total,
     showSizeChanger: true,
     pageSizeOptions: [...PAGE_SIZE_OPTIONS],
-    showTotal: (t) => `${t.toLocaleString()} markets`,
+    showTotal: () => formatResultsRange(offset, limit, total),
+    // Keep pager usable with large totals
+    showQuickJumper: total > limit * 5,
+    hideOnSinglePage: false,
+    position: ['bottomCenter'],
   };
 
   const handleChange = (
     pag: TablePaginationConfig,
     _filters: Record<string, FilterValue | null>,
     sorter: SorterResult<SpotMarket> | SorterResult<SpotMarket>[],
+    extra: TableCurrentDataSource<SpotMarket>,
   ) => {
     const s = Array.isArray(sorter) ? sorter[0] : sorter;
-    if (s?.columnKey && s.order) {
-      const field = COLUMN_SORT[String(s.columnKey)];
-      const nextOrder = fromAntdSortOrder(s.order);
+    const field = s?.columnKey ? COLUMN_SORT[String(s.columnKey)] : undefined;
+    const nextOrder = fromAntdSortOrder(s?.order ?? null);
+    const sortChanged = Boolean(
+      field && nextOrder && (field !== sort || nextOrder !== order),
+    );
+    const pageInfo = paginationChanged(pag, offset, limit);
+
+    const action = resolveTableChangeAction(extra?.action, sortChanged, pageInfo.changed);
+
+    if (action === 'sort') {
       if (field && nextOrder) {
         onSortChange(field as SpotSortField, nextOrder);
-        return;
       }
+      return;
     }
 
-    const pageSize = pag.pageSize ?? limit;
-    const page = pag.current ?? 1;
-    onPageChange((page - 1) * pageSize, pageSize);
+    if (action === 'paginate' || action === 'filter') {
+      if (pageInfo.changed) {
+        onPageChange(pageInfo.nextOffset, pageInfo.nextLimit);
+      }
+      return;
+    }
+
+    // Last resort: if page moved, page; if sort moved, sort
+    if (pageInfo.changed) {
+      onPageChange(pageInfo.nextOffset, pageInfo.nextLimit);
+      return;
+    }
+    if (sortChanged && field && nextOrder) {
+      onSortChange(field as SpotSortField, nextOrder);
+    }
   };
 
   return (
     <TableCard>
       <StyledTable<SpotMarket>
-        rowKey={(row) => row.symbol ?? String(Math.random())}
+        rowKey={(row, index) => row.symbol ?? `row-${index}`}
         columns={columns}
         dataSource={items}
         loading={isLoading && items.length > 0}
         pagination={pagination}
         onChange={handleChange}
+        onRow={(record) => ({
+          className: onRowOpen && record.symbol ? 'markets-row-clickable' : undefined,
+          onClick: () => {
+            if (onRowOpen && record.symbol) onRowOpen(record.symbol);
+          },
+          onKeyDown: (e: KeyboardEvent) => {
+            if (!onRowOpen || !record.symbol) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onRowOpen(record.symbol);
+            }
+          },
+          tabIndex: onRowOpen && record.symbol ? 0 : undefined,
+          role: onRowOpen ? 'link' : undefined,
+          'aria-label': record.symbol ? `Open ${record.symbol} detail` : undefined,
+        })}
         locale={{
           emptyText: (
             <Empty

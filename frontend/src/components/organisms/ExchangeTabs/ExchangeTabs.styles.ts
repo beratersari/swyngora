@@ -15,6 +15,6 @@ export const StyledTabs = styled(Tabs)`
   }
 
   .ant-tabs-ink-bar {
-    background: ${({ theme }) => theme.colors.cream};
+    background: ${({ theme }) => theme.colors.caribbeanGreen};
   }
 `;

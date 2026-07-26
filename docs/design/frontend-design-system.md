@@ -26,35 +26,60 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 
 ## 2. Color palette (brand)
 
+### Primary
+
 | Token | Hex | Role |
 |---|---|---|
-| **navy** | `#111844` | Canvas / page background, header, chart bg |
-| **indigo** | `#4B5694` | Elevated surfaces, primary actions, borders |
-| **steel** | `#7288AE` | Secondary text, muted icons, grid |
-| **cream** | `#EAE0CF` | Primary text on dark, accents, focus |
+| **richBlack** | `#000F0F` | Deepest canvas / app chrome |
+| **darkGreen** | `#032221` | Page / muted card background |
+| **bangladeshGreen** | `#03624C` | Primary actions, table headers, strong borders |
+| **mountainMeadow** | `#4FD4A5` | Accents, links, success / chart up secondary |
+| **caribbeanGreen** | `#00FF81` | High-emphasis accent, focus, chart up, tab ink |
+| **antiFlashWhite** | `#F1F7F6` | Primary text on dark |
+
+### Secondary
+
+| Token | Hex | Role |
+|---|---|---|
+| **pine** | `#063028` | Deep elevated / tag bg |
+| **basil** | `#0B453A` | Elevated surfaces, Ant elevated |
+| **forest** | `#095544` | Mid elevation |
+| **frog** | `#17876D` | Hover primary, EMA slow |
+| **mint** | `#74F9BC` | Soft accent, link hover |
+
+### Neutral
+
+| Token | Hex | Role |
+|---|---|---|
+| **stone** | `#707D7D` | Secondary text, muted icons |
+| **pistachio** | `#AACBC4` | Soft borders / info / secondary labels |
 
 ### Semantic mapping
 
 | Semantic | Maps to |
 |---|---|
-| `bg.canvas` | navy |
-| `bg.elevated` | indigo |
-| `bg.muted` | `#1A2250` (derived navy lift for cards) |
-| `text.primary` | cream |
-| `text.secondary` | steel |
-| `text.inverse` | navy |
-| `action.primary` | indigo |
-| `status.success / warning / error` | brand-adjacent greens / ambers / reds |
-| `chart.up / down` | success / error tones |
+| `bg.canvas` | richBlack |
+| `bg.elevated` | basil |
+| `bg.muted` | darkGreen |
+| `text.primary` | antiFlashWhite |
+| `text.secondary` | stone |
+| `text.inverse` | richBlack |
+| `text.link` | mountainMeadow |
+| `action.primary` | bangladeshGreen |
+| `action.primaryHover` | frog |
+| `status.success` | mountainMeadow |
+| `chart.up` | caribbeanGreen |
+| `chart.down` | `#E07A7A` (readable red; not in brand set) |
 
 **Rules**
 
-1. Import colors from `@/styles/tokens` — do not hardcode hex in features.
-2. Prefer **cream on navy** for primary reading; **steel** for secondary.
-3. Status colors are for deltas (price up/down), not decoration.
+1. Import from `@/styles/tokens` (`palette`, `semanticColors`) — do not hardcode hex in features.
+2. Prefer **anti-flash white on rich black / dark green** for reading; **stone** for secondary.
+3. Status / chart up-down colors are for deltas, not decoration.
+4. Legacy aliases `navy` / `indigo` / `steel` / `cream` still exist on `colors` for old call sites; prefer named palette keys.
 
 ```ts
-import { colors, semanticColors } from '@/styles/tokens';
+import { palette, semanticColors } from '@/styles/tokens';
 ```
 
 styled-components:
@@ -63,7 +88,7 @@ styled-components:
 import styled from 'styled-components';
 
 export const Panel = styled.div`
-  background: ${({ theme }) => theme.colors.navy};
+  background: ${({ theme }) => theme.semantic.bg.canvas};
   color: ${({ theme }) => theme.semantic.text.primary};
 `;
 ```
@@ -106,8 +131,8 @@ Loaded via Google Fonts in `global.css` with system fallbacks.
 ```tsx
 import { Text } from '@/components/atoms/Text';
 
-<Text variant="h2" color="cream">Markets</Text>
-<Text variant="body" color="steel">Secondary description</Text>
+<Text variant="h2" color="primary">Markets</Text>
+<Text variant="body" color="secondary">Secondary description</Text>
 <Text variant="numeric" color="success">+2.4%</Text>
 <Text variant="body" isLoading skeletonWidth={120} />
 ```
@@ -115,7 +140,7 @@ import { Text } from '@/components/atoms/Text';
 | Prop | Description |
 |---|---|
 | `variant` | Type scale key |
-| `color` | `primary` \| `secondary` \| `inverse` \| `cream` \| `steel` \| `success` \| `warning` \| `error` |
+| `color` | `primary` \| `secondary` \| `inverse` \| `cream`* \| `steel`* \| `success` \| `warning` \| `error` (*legacy aliases → primary/secondary) |
 | `as` | Polymorphic element |
 | `truncate` | Ellipsis |
 | `mono` | Force mono stack |
@@ -204,23 +229,24 @@ Radii: `sm` 4 · `md` 8 · `lg` 12 · `pill` 999.
 
 `ConfigProvider` uses `antdTheme` derived from tokens (`app/providers.tsx`).
 
-- Primary = indigo  
-- Text base = cream  
-- Layout / cards = navy / muted navy  
+- Primary = bangladeshGreen  
+- Text base = antiFlashWhite  
+- Layout / cards = richBlack / darkGreen  
 - Skeleton gradients = brand skeleton tokens  
 
 Prefer **Atomic wrappers** (`Text`, `Button`) over raw `Typography` in new UI.
 
 ---
 
-## 7. Atomic Design map
+## 7. Atomic Design map (Option A — no `features/`)
 
 ```text
 atoms/      Text, Button, Skeleton
-molecules/  CandleChartHost (+ isLoading)
-organisms/  MarketsTable (future) — must support isLoading
-templates/  page chrome
-pages/      MarketsPage
+molecules/  CandleChartHost, IndicatorChartHost (+ isLoading)
+organisms/  MarketsTable, MarketsToolbar, ExchangeTabs,
+            DetailHeader, DetailStats, DetailChartToolbar, IndicatorPanel
+templates/  page chrome (when needed)
+pages/      MarketsPage, CoinDetailPage  ← RTK only here
 ```
 
 ---
@@ -229,10 +255,10 @@ pages/      MarketsPage
 
 | Do | Don’t |
 |---|---|
-| Import `@/styles/tokens` | Scatter `#111844` hex in features |
+| Import `@/styles/tokens` / `palette` | Scatter raw hex in features |
 | Use `<Text variant="numeric">` for prices | Use default browser fonts for tables |
 | Pass `isLoading` from RTK `isLoading` / `isFetching` | Leave empty boxes while data loads |
-| Keep cream-on-navy contrast for body text | Light gray on navy that fails contrast |
+| Keep anti-flash white on rich black / dark green | Low-contrast gray-on-green body text |
 
 ---
 
@@ -258,6 +284,7 @@ pages/      MarketsPage
 
 ## 11. Changelog note
 
-Introduced brand palette (styled-components, no CSS files).  `#111844` / `#4B5694` / `#7288AE` / `#EAE0CF`, type scale (DM Sans + JetBrains Mono), Text + Skeleton atoms, and `isLoading` contract.
+- Introduced brand palette (styled-components). Type scale (DM Sans + JetBrains Mono), Text + Skeleton, `isLoading`.
+- **2026-07-26:** Palette replaced navy/indigo blues with green system — rich black, dark/bangladesh greens, mountain meadow, caribbean green, anti-flash white, secondary pine–mint, neutrals stone/pistachio.
 
 **Last updated:** 2026-07-26

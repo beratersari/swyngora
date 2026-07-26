@@ -1,8 +1,20 @@
 # components/
 
-Shared Atomic Design UI (atoms → molecules → organisms → templates → pages).
+Atomic Design UI only (no `src/features/` tree — **Option A**).
 
-- No RTK Query / backend fetch inside **atoms** or **molecules**
-- Pages and feature containers import `@/libs/api` hooks and pass props down
+```text
+atoms → molecules → organisms → templates → pages
+```
 
-See `frontend/AGENTS.md` and `docs/design/frontend-system-design.md`.
+| Level | Role |
+|---|---|
+| **atoms** | Design-system primitives (`Text`, `Button`, `Skeleton`) |
+| **molecules** | Small compositions / chart hosts |
+| **organisms** | Domain sections (tables, detail panels) — props only |
+| **templates** | Layout shells without data |
+| **pages** | Route screens — **only place that uses RTK Query** |
+
+- No RTK / `fetch` inside **atoms**, **molecules**, or **organisms**
+- Pages import `@/libs/api` and pass props down
+
+See `organisms/README.md`, `frontend/AGENTS.md`, `docs/design/frontend-system-design.md`.

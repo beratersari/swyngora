@@ -22,24 +22,29 @@ React SPA that talks to the Go backend via **OpenAPI-described HTTP**. Not `simp
 | Bundle             | Vite + React + TypeScript                                                                                                       |
 | Design system      | Tokens + Text + Skeleton — `docs/design/frontend-design-system.md`                                                              |
 | Styling            | **styled-components only** — colocate `*.styles.ts` (no CSS/CSS modules)                                                        |
-| Brand colors       | `#111844` navy · `#4B5694` indigo · `#7288AE` steel · `#EAE0CF` cream                                                           |
+| Brand colors       | Green system: `#000F0F` / `#032221` / `#03624C` / `#4FD4A5` / `#00FF81` / `#F1F7F6` + secondary pine–mint + stone/pistachio — see `styles/tokens/colors.ts` |
 | Loading            | All content components support `isLoading` → Skeleton                                                                           |
 
 **Decision record:** `project-management/decisions/001-antd-and-lightweight-charts.md`  
 **Design system:** `docs/design/frontend-design-system.md`
 
-## 3. Folder map
+## 3. Folder map (Option A — no `features/`)
 
-| Path                   | Role                                                          |
-| ---------------------- | ------------------------------------------------------------- |
-| `src/components/`      | Shared Atomic Design UI (often wrapping `antd` / chart hosts) |
-| `src/features/<name>/` | Feature UI composition only                                   |
-| `src/libs/api/`        | baseApi, store, endpoints, OpenAPI generated                  |
-| `src/libs/hooks/`      | Shared React hooks                                            |
-| `src/libs/utils/`      | Pure helpers (incl. candle → chart mappers)                   |
-| `src/libs/types/`      | Shared view/re-export types                                   |
-| `src/app/`             | Providers (Redux, Ant `ConfigProvider`), router               |
-| `src/config/`          | Env + app constants                                           |
+| Path | Role |
+| --- | --- |
+| `src/components/atoms` | Design-system primitives |
+| `src/components/molecules` | Small compositions / chart hosts |
+| `src/components/organisms` | Domain UI sections (markets table, detail panels) — **props only** |
+| `src/components/templates` | Layout shells without data |
+| `src/components/pages` | Route screens — **RTK Query only here** |
+| `src/libs/api/` | baseApi, store, endpoints, OpenAPI generated |
+| `src/libs/hooks/` | Shared React hooks |
+| `src/libs/utils/` | Pure helpers (incl. candle → chart mappers) |
+| `src/libs/types/` | Shared view/re-export types |
+| `src/app/` | Providers (Redux, Ant `ConfigProvider`), router |
+| `src/config/` | Env + app constants |
+
+**Do not use `src/features/`** for product UI. Domain widgets live under **organisms**; screens under **pages**. Revisit feature folders only when multiple product areas need isolation (e.g. markets + watchlist + paper + AI).
 
 Full design: `docs/design/frontend-system-design.md`.  
 Local tasks: `project-management/`.
@@ -75,7 +80,7 @@ App-level config may use `src/config/constants.ts` (not a component).
 ## 4. Ant Design rules
 
 1. App-wide theme via `ConfigProvider` in `app/providers.tsx` (INIT-8).
-2. Prefer **Atomic wrappers** (`components/atoms/Button`, etc.) over raw `antd` imports deep in features — features may use antd Table/Form when building organisms if wrappers do not exist yet; promote wrappers as patterns stabilize.
+2. Prefer **Atomic wrappers** (`components/atoms/Button`, etc.) over raw `antd` deep in the tree — **organisms** may use antd Table/Form when wrappers do not exist yet; promote wrappers as patterns stabilize.
 3. Use Ant Design **Table, Tabs, Form, Select, Input, Layout, Typography, Tag, Pagination, Spin, Alert** for markets UI.
 4. Do not mix a second full UI kit (MUI, Chakra, etc.) without a decision doc.
 
@@ -89,16 +94,17 @@ App-level config may use `src/config/constants.ts` (not a component).
 
 ## 6. Hard rules
 
-1. **API layer only under `libs/api`** — no `features/*/api` for backend REST.
+1. **API layer only under `libs/api`** — never under components or a `features/*/api` tree.
 2. **Shared hooks under `libs/hooks`**.
 3. **Shared pure code under `libs/utils`**.
-4. **Do not** call `fetch`/`axios` from atoms or molecules for backend data.
+4. **Do not** call `fetch`/`axios` / RTK from atoms, molecules, or organisms — **pages only**.
 5. **Do not** hand-edit `libs/api/generated/`.
 6. **Do not** hand-maintain long-term API DTOs that duplicate OpenAPI.
-7. **libs must not import** `features/*` or page components.
-8. No upward Atomic imports.
-9. Features land with tests and docs when user-visible.
-10. Keep this file and `README.md` accurate after structural/stack changes.
+7. **libs must not import** pages or organisms.
+8. No upward Atomic imports (atoms must not import organisms/pages).
+9. **No `src/features/`** unless the team explicitly revisits Option B (feature-owned pages).
+10. User-visible work lands with tests and docs.
+11. Keep this file and `README.md` accurate after structural/stack changes.
 
 ## 7. Preferred imports
 
@@ -106,7 +112,8 @@ App-level config may use `src/config/constants.ts` (not a component).
 import { useListSpotMarketsQuery } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { formatPrice } from '@/libs/utils';
-import { Button } from '@/components/atoms/Button'; // wraps antd when present
+import { Button } from '@/components/atoms/Button';
+import { MarketsTable } from '@/components/organisms/MarketsTable';
 ```
 
 ## 8. First epics

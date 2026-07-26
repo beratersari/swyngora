@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Tag } from 'antd';
 import { Text } from '@/components/atoms/Text';
-import { ExchangeTabs } from '@/features/markets/components/ExchangeTabs';
-import { MarketsToolbar } from '@/features/markets/components/MarketsToolbar';
-import { MarketsTable } from '@/features/markets/components/MarketsTable';
+import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
+import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
+import { MarketsTable } from '@/components/organisms/MarketsTable';
+import { formatResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
 import {
   rtkErrorMessage,
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
   type MarketExchange,
+  type SpotMarket,
   type SpotSortField,
   type SpotSortOrder,
 } from '@/libs/api';
@@ -23,11 +25,22 @@ import {
   type MarketsUrlState,
 } from '@/libs/utils';
 import { DEFAULT_SPOT_POLL_MS } from '@/config/constants';
-import { McapHintAlert, MetaRow, PageIntro, PageStack } from './MarketsPage.styles';
+import {
+  McapHintAlert,
+  MetaLeft,
+  MetaRight,
+  MetaRow,
+  PageIntro,
+  PageStack,
+  ResultsBadge,
+  ResultsCount,
+  ResultsLabel,
+} from './MarketsPage.styles';
 
 /** Multi-exchange spot markets dashboard (Epic B). */
 export function MarketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const visible = useDocumentVisible();
 
   const state = useMemo(() => parseMarketsSearchParams(searchParams), [searchParams]);
@@ -68,8 +81,26 @@ export function MarketsPage() {
     ? exchangesQuery.data.exchanges
     : ['binance', 'coinbase', 'bybit'];
 
-  const items = spotQuery.data?.items ?? [];
-  const total = spotQuery.data?.total ?? 0;
+  // Hold last successful page while the next offset loads (smoother paging only)
+  const [cachedItems, setCachedItems] = useState<SpotMarket[]>([]);
+  const [cachedTotal, setCachedTotal] = useState(0);
+  const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}|${state.sort}|${state.order}`;
+
+  useEffect(() => {
+    // Drop stale rows when filters/sort change (not when only paging)
+    setCachedItems([]);
+    setCachedTotal(0);
+  }, [filterKey]);
+
+  useEffect(() => {
+    if (spotQuery.data?.items) {
+      setCachedItems(spotQuery.data.items);
+      setCachedTotal(spotQuery.data.total ?? spotQuery.data.items.length);
+    }
+  }, [spotQuery.data]);
+
+  const items = spotQuery.data?.items ?? cachedItems;
+  const total = spotQuery.data?.total ?? cachedTotal;
   const errorMessage = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {
         resource: 'markets',
@@ -87,19 +118,34 @@ export function MarketsPage() {
     patchState({ sort, order, offset: 0 });
   };
 
-  const onPageChange = (offset: number, limit: number) => {
-    patchState({ offset, limit });
-  };
+  const onPageChange = useCallback(
+    (offset: number, limit: number) => {
+      // Always write offset/limit so page 2+ is reflected in the URL
+      const next: MarketsUrlState = {
+        ...state,
+        q: qInput,
+        offset,
+        limit,
+      };
+      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+    },
+    [state, qInput, setSearchParams],
+  );
+
+  const rangeLabel = formatResultsRange(state.offset, state.limit, total);
+  const isInitialLoading = spotQuery.isLoading && items.length === 0;
+  const isRefreshing = spotQuery.isFetching && items.length > 0;
 
   return (
     <PageStack>
       <PageIntro>
-        <Text variant="h2" color="cream">
+        <Text variant="h2" color="primary">
           Markets
         </Text>
-        <Text variant="body" color="steel">
+        <Text variant="body" color="secondary">
           Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API —
-          list refreshes every {DEFAULT_SPOT_POLL_MS / 1000}s while this tab is visible.
+          list refreshes every {DEFAULT_SPOT_POLL_MS / 1000}s while this tab is visible. Click a row
+          for chart and indicators.
         </Text>
       </PageIntro>
 
@@ -122,16 +168,37 @@ export function MarketsPage() {
       />
 
       <MetaRow>
-        {spotQuery.isFetching ? <Tag color="processing">updating…</Tag> : null}
-        {spotQuery.isSuccess ? (
-          <Tag color="success">
-            {total.toLocaleString()} match{total === 1 ? '' : 'es'}
-          </Tag>
-        ) : null}
-        {!visible ? <Tag>polling paused (tab hidden)</Tag> : null}
-        <Text variant="caption" color="secondary">
-          Default quote {DEFAULT_MARKETS_STATE.quote} · sort {state.sort} {state.order}
-        </Text>
+        <MetaLeft>
+          {isInitialLoading ? (
+            <ResultsBadge>
+              <ResultsLabel>Loading markets…</ResultsLabel>
+            </ResultsBadge>
+          ) : spotQuery.isSuccess || items.length > 0 ? (
+            <ResultsBadge>
+              <ResultsCount>{total.toLocaleString()}</ResultsCount>
+              <ResultsLabel>
+                {total === 1 ? 'match' : 'matches'}
+                {total > 0 ? ` · ${rangeLabel}` : null}
+              </ResultsLabel>
+            </ResultsBadge>
+          ) : spotQuery.isError ? (
+            <ResultsBadge>
+              <ResultsLabel>Could not load matches</ResultsLabel>
+            </ResultsBadge>
+          ) : (
+            <ResultsBadge>
+              <ResultsLabel>No results yet</ResultsLabel>
+            </ResultsBadge>
+          )}
+          {isRefreshing ? <Tag color="processing">updating…</Tag> : null}
+          {!visible ? <Tag color="default">polling paused</Tag> : null}
+        </MetaLeft>
+        <MetaRight>
+          <Text variant="caption" color="secondary">
+            Quote {state.quote || DEFAULT_MARKETS_STATE.quote} · sort {state.sort} {state.order}
+            {state.offset > 0 ? ` · page ${Math.floor(state.offset / state.limit) + 1}` : null}
+          </Text>
+        </MetaRight>
       </MetaRow>
 
       {spotQuery.isError && state.sort.startsWith('marketCap') ? (
@@ -156,6 +223,9 @@ export function MarketsPage() {
         onSortChange={onSortChange}
         onPageChange={onPageChange}
         onRetry={() => void spotQuery.refetch()}
+        onRowOpen={(symbol) =>
+          navigate(`/markets/${encodeURIComponent(state.exchange)}/${encodeURIComponent(symbol)}`)
+        }
       />
     </PageStack>
   );

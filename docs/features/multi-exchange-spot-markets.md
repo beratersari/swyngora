@@ -85,16 +85,16 @@ OpenAPI: `backend/api/openapi/openapi.yaml`
 
 | Area | Path |
 |---|---|
-| Page | `frontend/src/components/pages/MarketsPage/` (or feature export) |
-| Feature UI | `frontend/src/features/markets/components/` |
+| Page | `frontend/src/components/pages/MarketsPage/` |
+| Domain UI (organisms) | `frontend/src/components/organisms/` (MarketsTable, MarketsToolbar, ExchangeTabs) |
 | RTK endpoints | **`frontend/src/libs/api/endpoints/marketApi.ts`** |
 | Generated types | **`frontend/src/libs/api/generated/`** |
 | Shared hooks | **`frontend/src/libs/hooks/`** (e.g. visibility, debounce) |
 | Shared utils | **`frontend/src/libs/utils/`** (price format, exchange symbols) |
 | System design | `docs/design/frontend-system-design.md` |
 
-Atomic rules for UI folders: types → `*.types.ts`, constants → `constants.ts`, helpers → `helpers.ts`.  
-**Do not** add `features/markets/api` for backend REST — use `libs/api`.
+Atomic rules: prefixed `Name.types.ts` / `Name.constants.ts` / `Name.helpers.ts`.  
+**No `src/features/`** — domain UI is organisms; REST only in `libs/api`.
 
 ---
 

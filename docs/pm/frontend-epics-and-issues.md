@@ -110,11 +110,11 @@ INIT-1
 
 ```markdown
 ## Summary
-Ensure committed folder tree matches system design: `libs/{api,hooks,utils}`, Atomic components, `features/markets` UI only.
+Ensure committed folder tree matches system design: `libs/{api,hooks,utils}`, Atomic `components/` (organisms for domain UI; no `src/features/`).
 
 ## Tasks
 - [ ] Keep/align `frontend/src/libs/{api,hooks,utils,types}`
-- [ ] Atomic `components/` + `features/markets/components`
+- [ ] Atomic `components/` (atoms → organisms → pages; no `features/`)
 - [ ] No feature-level backend `api/` modules
 - [ ] README stubs per libs package
 

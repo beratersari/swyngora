@@ -13,4 +13,6 @@ export type MarketsTableProps = WithLoadingProps & {
   onSortChange: (sort: SpotSortField, order: SpotSortOrder) => void;
   onPageChange: (offset: number, limit: number) => void;
   onRetry?: () => void;
+  /** Navigate to coin detail when a row is activated */
+  onRowOpen?: (symbol: string) => void;
 };

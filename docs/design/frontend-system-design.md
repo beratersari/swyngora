@@ -49,14 +49,14 @@ Supporting: `/exchanges`, `/tags`, `/intervals`.
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  app/  +  components/pages  +  features/*                   │
-│  route entry, composition, feature UI                       │
+│  app/  +  components/pages                                  │
+│  route entry, RTK wiring, composition                       │
 └───────────────────────────┬─────────────────────────────────┘
                             │ import
 ┌───────────────────────────▼─────────────────────────────────┐
-│  components/  (Atomic Design UI only)                       │
+│  components/  (Atomic Design UI only — Option A)            │
 │  atoms → molecules → organisms → templates → pages          │
-│  presentational; no RTK inside atoms/molecules              │
+│  RTK only in pages; organisms/molecules/atoms are props-only│
 └───────────────────────────┬─────────────────────────────────┘
                             │ import
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -81,14 +81,16 @@ Supporting: `/exchanges`, `/tags`, `/intervals`.
 **Dependency direction**
 
 ```text
-app / features / components/pages
+app / components/pages
+        →  components/organisms|molecules|atoms
         →  libs/hooks  →  libs/api  →  backend
         →  libs/utils
-components (atoms/molecules)  →  libs/utils only (optional)
+atoms/molecules  →  libs/utils only (optional)
 ```
 
-- **libs must not import** `features/*` or page components.
-- **features** import `libs/*` for data and shared behavior; keep feature-local UI under `features/<name>/components/`.
+- **No `src/features/`** — domain UI lives in `components/organisms/`.
+- **libs must not import** pages or organisms.
+- Revisit feature-sliced folders only when multiple product areas need isolation.
 
 ---
 
@@ -114,18 +116,12 @@ frontend/
     ├── config/
     │   ├── constants.ts
     │   └── env.ts
-    ├── components/              # Shared Atomic Design UI
+    ├── components/              # Atomic Design UI (Option A — no features/)
     │   ├── atoms/
     │   ├── molecules/
-    │   ├── organisms/
+    │   ├── organisms/           # domain sections (MarketsTable, Detail*, …)
     │   ├── templates/
-    │   └── pages/
-    ├── features/
-    │   └── markets/             # Multi-exchange spot UI (Epic B)
-    │       ├── components/      # Feature UI (Atomic-split files)
-    │       ├── constants.ts
-    │       ├── markets.types.ts
-    │       └── helpers.ts       # feature-only view mappers (optional)
+    │   └── pages/               # MarketsPage, CoinDetailPage (RTK here)
     ├── libs/                    # ★ shared layers (api / hooks / utils)
     │   ├── api/
     │   │   ├── baseApi.ts
@@ -140,7 +136,7 @@ frontend/
     └── styles/
 ```
 
-### 4.1 What lives in `libs/` vs feature folders
+### 4.1 What lives where (Option A)
 
 | Concern | Location |
 |---|---|
@@ -151,11 +147,12 @@ frontend/
 | Typed store hooks | `libs/api/hooks.ts` |
 | Shared React hooks | `libs/hooks/` |
 | Pure formatters / query builders | `libs/utils/` |
-| Feature table UI, filters chrome | `features/markets/components/` |
-| Page route composition | `components/pages/MarketsPage` (or feature export) |
-| Component-local pure helpers | component folder `helpers.ts` (Atomic rule) |
+| Domain table / filters / detail panels | `components/organisms/` |
+| Page route composition + RTK | `components/pages/*` |
+| Component-local pure helpers | `Name.helpers.ts` in that component folder |
 
-**Do not** put backend REST modules under `features/*/api` — extend `libs/api/endpoints/` instead.
+**Do not** put backend REST under UI folders — extend `libs/api/endpoints/` instead.  
+**Do not** add `src/features/` unless the team revisits feature-sliced layout.
 
 ### 4.2 Component folder rule (unchanged Atomic split)
 

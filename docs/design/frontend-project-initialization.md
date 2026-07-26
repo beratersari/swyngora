@@ -21,7 +21,7 @@
 1. Vite + React 18+ + TypeScript project under `frontend/`
 2. ESLint, Prettier (or biome if chosen), Vitest + Testing Library
 3. Path aliases (`@/` → `src/`)
-4. Folder skeleton with **`src/libs/{api,hooks,utils,types}`** + Atomic `components/` + `features/markets`
+4. Folder skeleton with **`src/libs/{api,hooks,utils,types}`** + Atomic `components/` (organisms for domain UI; no `features/` — Option A)
 5. Redux Toolkit store + RTK Query `baseApi` under **`src/libs/api/`**
 6. OpenAPI codegen into **`src/libs/api/generated/`**
 7. App providers (Redux + **Ant Design ConfigProvider**), React Router, empty Markets route placeholder

@@ -2,8 +2,8 @@
 
 Production React application for Swyngora.
 
-> **Status:** Project initialization scaffold is live on branch `feature/frontend-init`.  
-> Track work in **`project-management/`**. Design: `docs/design/frontend-project-initialization.md`.  
+> **Status:** Markets list + **coin detail / RSI·EMA** live on this branch.  
+> Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 
 ## Stack (decided)
@@ -20,11 +20,16 @@ Design system: [`docs/design/frontend-design-system.md`](../docs/design/frontend
 
 ### Brand palette
 
-| Navy      | Indigo    | Steel     | Cream     |
-| --------- | --------- | --------- | --------- |
-| `#111844` | `#4B5694` | `#7288AE` | `#EAE0CF` |
+| Primary | HEX | Secondary | HEX | Neutral | HEX |
+| --- | --- | --- | --- | --- | --- |
+| Rich Black | `#000F0F` | Pine | `#063028` | Stone | `#707D7D` |
+| Dark Green | `#032221` | Basil | `#0B453A` | Pistachio | `#AACBC4` |
+| Bangladesh Green | `#03624C` | Forest | `#095544` | | |
+| Mountain Meadow | `#4FD4A5` | Frog | `#17876D` | | |
+| Caribbean Green | `#00FF81` | Mint | `#74F9BC` | | |
+| Anti-Flash White | `#F1F7F6` | | | | |
 
-Tokens: `src/styles/tokens/` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
+Tokens: `src/styles/tokens/colors.ts` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
 
 **Styling:** styled-components only. Colocate `ComponentName.styles.ts` — do not add `.css` / CSS modules.
 
@@ -35,7 +40,7 @@ Tokens: `src/styles/tokens/` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `
 | Package agent rules | `frontend/AGENTS.md`                    |
 | System design       | `docs/design/frontend-system-design.md` |
 | Local tasks / board | `project-management/board.md`           |
-| First feature       | Multi-exchange spot markets             |
+| Features            | Markets list · coin detail + indicators |
 
 ## Intended layout
 
@@ -47,8 +52,12 @@ frontend/
 └── src/
     ├── app/                 # ConfigProvider (antd), Redux, router
     ├── config/
-    ├── components/          # Atomic UI (wrap antd / chart hosts)
-    ├── features/markets/    # spot markets UI
+    ├── components/          # Atomic UI only (no features/)
+    │   ├── atoms/
+    │   ├── molecules/
+    │   ├── organisms/       # domain sections (table, detail panels)
+    │   ├── templates/
+    │   └── pages/           # MarketsPage, CoinDetailPage (RTK here)
     ├── libs/
     │   ├── api/             # RTK + generated OpenAPI
     │   ├── hooks/
@@ -56,6 +65,8 @@ frontend/
     │   └── types/
     └── styles/
 ```
+
+**Layout policy:** Option A — domain UI in `organisms/`, screens in `pages/`, shared logic in `libs/`. No `src/features/`.
 
 ## Run (local)
 
