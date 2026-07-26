@@ -10,8 +10,9 @@ AI-powered cryptocurrency (and stock) analysis platform — market data, analyti
 |---|---|
 | [`backend/`](backend/) | Go HTTP API — multi-exchange market data, supply, indicators, watchlist |
 | [`simple-frontend/`](simple-frontend/) | Static test UI for the API (not the product app) |
-| [`frontend/`](frontend/) | Reserved for the production web UI |
-| [`docs/`](docs/) | Feature notes and ADRs |
+| [`frontend/`](frontend/) | Production web UI (Ant Design + Lightweight Charts; init epic first) |
+| [`project-management/`](project-management/) | Local frontend epics, tasks, board |
+| [`docs/`](docs/) | Feature notes, ADRs, frontend design, GitLab PM defs |
 | [`AGENTS.md`](AGENTS.md) | Team & coding-agent conventions |
 
 ## Quick start
@@ -69,6 +70,22 @@ After editing tokens in `.env`, **restart the server**. See [`docs/features/tele
 | Circulating / total / max supply | Binance marketing symbol list | Daily snapshot @ 03:00 UTC (cache-only requests); max null when undefined |
 
 See [docs/features/market-data.md](docs/features/market-data.md) and [docs/adr/0001-binance-and-coingecko-market-sources.md](docs/adr/0001-binance-and-coingecko-market-sources.md).
+
+## Product frontend (design phase)
+
+| Doc | Purpose |
+|---|---|
+| [`docs/design/frontend-system-design.md`](docs/design/frontend-system-design.md) | Frontend architecture |
+| [`docs/design/frontend-project-initialization.md`](docs/design/frontend-project-initialization.md) | **Epic A (first):** project init |
+| [`docs/features/multi-exchange-spot-markets.md`](docs/features/multi-exchange-spot-markets.md) | **Epic B:** multi-exchange spot markets |
+| [`docs/pm/frontend-epics-and-issues.md`](docs/pm/frontend-epics-and-issues.md) | GitLab epic/issue definitions |
+| [`docs/pm/create-gitlab-epics.sh`](docs/pm/create-gitlab-epics.sh) | Create epics/issues via GitLab API |
+| [`docs/pm/gitlab-mcp-setup.md`](docs/pm/gitlab-mcp-setup.md) | Configure GitLab project-management MCP in Grok |
+| [`project-management/`](project-management/) | Local task board (INIT/MKT tasks) |
+| [`project-management/decisions/001-antd-and-lightweight-charts.md`](project-management/decisions/001-antd-and-lightweight-charts.md) | UI kit + charts decision |
+| [`docs/design/frontend-design-system.md`](docs/design/frontend-design-system.md) | Color, type, Text, Skeleton, isLoading |
+
+Work order: **initialize `frontend/` toolchain** → then multi-exchange spot UI. Folder skeleton already lives under `frontend/src/`.
 
 ## API contract
 

@@ -24,7 +24,7 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 | Surface | Stack | Notes |
 |---|---|---|
 | Simple frontend | Static HTML/JS | **Test harness only** under `simple-frontend/` — not Atomic Design / RTK Query |
-| Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **RTK Query**; OpenAPI types (§6.9) |
+| Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **Ant Design**; **Lightweight Charts**; **RTK Query**; OpenAPI types (§6.9); libs under `src/libs/` |
 | Mobile app | React Native | Same as product web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
 | Messaging | Telegram bot | Optional transport under `backend/internal/transport/telegram` (same process as HTTP API; no AI) |
 
@@ -60,6 +60,7 @@ swyngora/
 ├── mobile/                   # React Native (Atomic Design — §6.8)
 ├── bot/                      # (unused) Telegram lives in backend/internal/transport/telegram
 ├── packages/                 # Shared libs (schemas, clients, types) if needed
+├── project-management/       # Local epics/tasks/board (frontend work tracking)
 └── scripts/                  # Dev, release, and CI helpers
 ```
 
@@ -307,7 +308,7 @@ Example: `[backend] Add exchange market-cap ranking API`
 | Go backend | Idiomatic Go; **always N-layered architecture** (§6.7); **OpenAPI** as source of truth for public HTTP contracts (§6.9); context-aware handlers; structured logging; no panics in request paths |
 | Python AI | Typed where practical; LangChain patterns consistent with existing agents; isolate prompts and tool schemas; **Ollama + Grok only** (§6.5) |
 | MCP tools | Explicit schemas, least-privilege access, timeouts, no secret leakage in tool responses |
-| React / RN | Atomic Design + file split (§6.8); **RTK Query** for API data; **OpenAPI-generated** request/response types (§6.9); background refresh + cache hygiene (§6.6) |
+| React / RN | Atomic Design + file split (§6.8); product web uses **Ant Design** + **Lightweight Charts**; **RTK Query** for API data; **OpenAPI-generated** types (§6.9); non-UI code in **`frontend/src/libs/`**; background refresh + cache hygiene (§6.6) |
 | APIs | Versioned public contracts via **OpenAPI**; validate input; never trust client-provided market “truth” without server-side checks |
 | External data APIs | Prefer free/public endpoints; **do not build around paid pricing tiers or paid plan “choices”** (§6.5) |
 | Caching | TTL, invalidation, and cleanup—especially for background runs (§6.6) |
@@ -564,7 +565,7 @@ Within a component folder (or module folder), split concerns into dedicated file
 
 - Types: always suffix with `.types.ts` (e.g. `WatchlistTable.types.ts`, `priceChart.types.ts`). Never bury exported interfaces/types only inside the `.tsx` when they are shared or non-trivial—prefer `.types.ts`.
 - Constants: file is always named **`constants.ts`** (not `const.ts`, not `contants.ts`).
-- Helpers: file is always named **`helpers.ts`** (not `utils.ts` inside a component folder—use `helpers.ts` for consistency; app-wide shared pure utils may live under `src/helpers/` or `src/lib/` still as `helpers.ts` modules).
+- Helpers: file is always named **`helpers.ts`** (not `utils.ts` inside a component folder—use `helpers.ts` for consistency). App-wide shared pure utils for the product web app live under **`frontend/src/libs/utils/`** (see package `AGENTS.md`); component-local pure helpers stay as `helpers.ts`.
 - One primary component per folder when practical; name the folder after the component.
 
 **What belongs where**
@@ -588,6 +589,7 @@ Within a component folder (or module folder), split concerns into dedicated file
 3. **No upward imports** across Atomic levels.
 4. **Web and mobile share the same conventions**; platform-specific components get platform folders or `.native.tsx` / `.web.tsx` only when required, still under the correct Atomic level.
 5. When adding a new atoms/molecules package tree, document it in the package `README.md` (§8.1 / §8.2).
+6. **Product web (`frontend/`)** standard UI kit is **Ant Design**; financial charts use **TradingView Lightweight Charts**. Do not add a second UI kit or chart library without a decision under `project-management/decisions/` (or ADR). Prefer wrapping `antd` in Atomic components. Shared API/hooks/utils live in **`frontend/src/libs/`**. Local task board: **`project-management/`**.
 
 #### Anti-patterns (reject in review)
 
@@ -628,26 +630,31 @@ Do not land a client feature that talks to a backend route **without** an OpenAP
 | Define APIs with `createApi` / `injectEndpoints` (or codegen output) | Scatter raw `fetch` / `axios` calls across components for backend REST |
 | Use generated or hand-written endpoints that consume **OpenAPI-derived types** | Hand-roll parallel TS interfaces that drift from the spec |
 | Prefer cache tags, `providesTags` / `invalidatesTags`, and fixed cache lifetimes aligned with §6.6 | Infinite stale market data with no invalidation |
-| Colocate feature endpoints under e.g. `src/store/api/` or `src/services/api/` | Put RTK Query endpoint definitions inside atoms/molecules |
+| Colocate domain endpoints under `src/libs/api/endpoints/` (product web) | Put RTK Query endpoint definitions inside atoms/molecules or `features/*/api` for backend REST |
 | Use RTK Query hooks in pages, screens, or feature containers; pass data down as props | Import `useGetXQuery` deep inside pure presentational atoms |
 
-**Suggested client layout (data layer)**
+**Suggested client layout (product web `frontend/` — libs-first)**
 
 ```text
 src/
-├── store/
-│   ├── index.ts              # configureStore — include API middleware & reducer
-│   ├── hooks.ts              # typed useAppDispatch / useAppSelector
-│   └── api/
-│       ├── baseApi.ts        # createApi base (baseUrl, auth headers)
-│       ├── generated/        # OpenAPI codegen output (DO NOT hand-edit)
-│       └── <feature>Api.ts   # injectEndpoints if not fully codegen'd
-├── types/
-│   └── api/                  # optional re-exports of generated OpenAPI types
+├── libs/
+│   ├── api/
+│   │   ├── baseApi.ts        # createApi base (baseUrl, auth headers)
+│   │   ├── store.ts          # configureStore — API middleware & reducer
+│   │   ├── hooks.ts          # typed useAppDispatch / useAppSelector
+│   │   ├── endpoints/        # injectEndpoints per domain (marketApi, …)
+│   │   ├── generated/        # OpenAPI codegen output (DO NOT hand-edit)
+│   │   └── index.ts
+│   ├── hooks/                # shared React hooks (visibility, debounce, …)
+│   ├── utils/                # pure helpers (formatters, query builders)
+│   └── types/                # optional re-exports / view types (not hand DTOs)
+├── components/               # Atomic Design UI
+├── features/                 # feature UI only (no backend REST modules)
 └── ...
 ```
 
-- Treat `generated/` (or equivalent) as **read-only**; fix the OpenAPI spec and re-run codegen instead of patching generated files.
+- Product frontend: **API + shared hooks + utils live under `src/libs/`** — do not put backend REST under `features/*/api`.
+- Treat `libs/api/generated/` (or equivalent) as **read-only**; fix the OpenAPI spec and re-run codegen instead of patching generated files.
 - Map OpenAPI schemas into UI-only view models in `*.types.ts` / `helpers.ts` when the screen needs a different shape—do not “fix” the generated API types in place.
 - Background refresh and cache hygiene (§6.6) must use RTK Query invalidation, refetch-on-focus, and polling options where appropriate—not a second ad-hoc cache.
 
@@ -840,8 +847,9 @@ Docs:           Folder README for new packages; feature/API/ADR docs for new cap
 After code:     Update related AGENTS.md + README.md in the same MR (§8.2)
 Background:     Refresh stale data + clean/invalidate cache when needed (§6.6)
 Backend:        Always N-layered (transport → application → domain ← infrastructure) (§6.7)
-Client UI:      Atomic Design; types → *.types.ts, constants → constants.ts, helpers → helpers.ts (§6.8)
+Client UI:      Atomic Design; product web: Ant Design + Lightweight Charts; libs/ for api·hooks·utils (§6.8)
 Client data:    RTK Query + types/endpoints from OpenAPI codegen (§6.9)
+Local PM:       project-management/ (epics, tasks, board) until GitLab fully used
 LLMs:           Local Ollama + Grok (xAI) only — no other commercial LLM defaults
 External APIs:  No paid pricing-tier choices; prefer free/public/self-hosted data sources
 Default branch for integration: develop
@@ -856,5 +864,5 @@ Push:           git pushboth <ref>  # both remotes (§3.8)
 
 This project is early. When stack choices solidify (module paths, package managers, CI jobs, deploy targets), update **§2**, **§7**, nested package `AGENTS.md`, and related `README.md` files in the same change set (see §8.2). Stale agent docs are worse than short ones.
 
-**Last updated:** 2026-07-25  
+**Last updated:** 2026-07-26 (frontend: antd + lightweight-charts + project-management/)  
 **Initial product version target:** `0.1.0` (pre-release development)
