@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MMKT-3 |
 | **Epic** | mobile-multi-exchange-spot-markets |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 
 ## Summary

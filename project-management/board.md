@@ -67,7 +67,7 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 **Suggested order:** MINIT-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9  
 **MR grouping:** (1–3) · (4–5) · (6–7) · (8–9)
 
-## Epic D — Mobile multi-exchange spot markets / dashboard (P0 mobile, **next**)
+## Epic D — Mobile multi-exchange spot markets / dashboard (P0 mobile, **done**)
 
 **Plan:** `docs/design/mobile-markets-dashboard.md`  
 **Feature:** `docs/features/mobile-multi-exchange-spot-markets.md`  
@@ -76,14 +76,14 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 | ID | Task | Status |
 |---|---|---|
-| MMKT-1 | RTK marketApi: exchanges, tags, spot | todo |
-| MMKT-2 | Formatters + spot query helpers | todo |
-| MMKT-3 | ExchangeChips + MarketsFilterBar | todo |
-| MMKT-4 | MarketRow + MarketsList | todo |
-| MMKT-5 | MarketsPage ViewModel (filters, poll, pagination) | todo |
-| MMKT-6 | MarketsPage View + pull-to-refresh | todo |
-| MMKT-7 | Empty/error/loading UX + tests | todo |
-| MMKT-8 | Docs + board + changelog closeout | todo |
+| MMKT-1 | RTK marketApi: exchanges, tags, spot | done |
+| MMKT-2 | Formatters + spot query helpers | done |
+| MMKT-3 | ExchangeChips + MarketsFilterBar | done |
+| MMKT-4 | MarketRow + MarketsList | done |
+| MMKT-5 | MarketsPage ViewModel (filters, poll, pagination) | done |
+| MMKT-6 | MarketsPage View + pull-to-refresh | done |
+| MMKT-7 | Empty/error/loading UX + tests | done |
+| MMKT-8 | Docs + board + changelog closeout | done |
 
 **MR grouping:** (1–2) · (3–4) · (5–6) · (7–8)
 

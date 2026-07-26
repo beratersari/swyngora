@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { setupListeners } from '@reduxjs/toolkit/query';
 import { baseApi } from './baseApi';
 import './endpoints/healthApi';
+import './endpoints/marketApi';
 
 export const store = configureStore({
   reducer: {
@@ -12,7 +13,6 @@ export const store = configureStore({
 
 // Note: browser focus listeners from setupListeners are incomplete on RN.
 // Mobile uses AppState pollingInterval in ViewModels (refetchOnFocus: false).
-// Keep setupListeners for reconnect / web visibility where available.
 setupListeners(store.dispatch);
 
 export type RootState = ReturnType<typeof store.getState>;

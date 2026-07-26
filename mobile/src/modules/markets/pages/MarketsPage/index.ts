@@ -1,2 +1,2 @@
 export { MarketsPage } from './MarketsPage';
-export type { MarketsPageProps, MarketsPageViewModel } from './MarketsPage.types';
+export type { MarketsPageProps, MarketsPageViewModel, MarketRowViewModel } from './MarketsPage.types';

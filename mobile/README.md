@@ -52,6 +52,29 @@ src/
 
 See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 
+
+## Multi-exchange markets dashboard
+
+The **Markets** tab loads live spot markets from the backend:
+
+- Exchange chips: Binance / Coinbase / Bybit
+- Search, quote, tags, sort, pagination (page size 30)
+- ~10s polling while the tab is focused and the document is visible
+- Pull-to-refresh
+
+```bash
+# terminal 1
+cd backend && go run ./cmd/server
+
+# terminal 2
+cd mobile && npm run web
+# open Markets tab in Chrome
+```
+
+Architecture: `src/modules/markets/` (View + ViewModel + module components).  
+Data: `src/libs/api/endpoints/marketApi.ts`.  
+Design: `docs/design/mobile-markets-dashboard.md`.
+
 ## Color tokens
 
 Copied from frontend:

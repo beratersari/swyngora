@@ -1,7 +1,7 @@
 # Epic D: Mobile multi-exchange spot markets (dashboard)
 
 **Priority:** P0 (mobile track, after init)  
-**Status:** todo  
+**Status:** done  
 **Blocks:** mobile coin detail  
 **Depends on:** Epic C mobile init (MR !15 / `feature/mobile-init`)  
 **Design plan:** `docs/design/mobile-markets-dashboard.md`  
@@ -20,7 +20,7 @@ Ship the primary **mobile markets dashboard** in Chrome (react-native-web): brow
 
 ## Tasks
 
-- [ ] MMKT-1 … MMKT-8 (see `project-management/board.md` and `tasks/MMKT-*.md`)
+- [x] MMKT-1 … MMKT-8 (see `project-management/board.md` and `tasks/MMKT-*.md`)
 
 ## Acceptance
 

@@ -1,6 +1,6 @@
 # Design: Mobile markets dashboard (multi-exchange spot)
 
-**Status:** Ready for implementation  
+**Status:** Implemented  
 **Epic:** `mobile` · `epic::mobile-markets`  
 **Priority:** P0 mobile track (after init MR)  
 **Branch:** `feature/mobile-spot-markets`  
@@ -300,12 +300,12 @@ Handle 502 on cold mcap sort: show `errorMessage` + Retry (same as web).
 
 ## 12. Definition of done
 
-- [ ] Markets tab shows live spot data for at least Binance  
-- [ ] Exchange / search / quote / tags / sort / pagination work  
-- [ ] Polling pauses when document hidden or app inactive  
-- [ ] View has zero RTK imports  
-- [ ] `npm test`, `typecheck`, `lint` green  
-- [ ] `npm run web` demo works in Chrome with backend up  
-- [ ] Design + tasks + board updated  
+- [x] Markets tab shows live spot data for at least Binance  
+- [x] Exchange / search / quote / tags / sort / pagination work  
+- [x] Polling pauses when document hidden or app inactive  
+- [x] View has zero RTK imports  
+- [x] `npm test`, `typecheck`, `lint` green  
+- [x] `npm run web` demo works in Chrome with backend up  
+- [x] Design + tasks + board updated  
 
 **Last updated:** 2026-07-26

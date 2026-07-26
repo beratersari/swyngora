@@ -57,3 +57,10 @@ modules/<m>/pages/FooPage/
 - `docs/design/mobile-project-initialization.md`
 - `docs/design/mobile-system-design.md`
 - `project-management/decisions/002-react-native-cli-modules-viewmodel.md`
+
+## Markets module
+
+- Endpoints: `libs/api/endpoints/marketApi.ts` (`listExchanges`, `listProductTags`, `listSpotMarkets`)
+- Page: `modules/markets/pages/MarketsPage/` — View must not import RTK
+- Module UI: `modules/markets/components/` (flat)
+- Polling: `pollingInterval` from `useAppStateActive() && useIsFocused()`; `refetchOnFocus: false`

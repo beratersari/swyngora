@@ -1,0 +1,10 @@
+export type MarketRowViewModel = {
+  id: string;
+  symbol: string;
+  lastPriceLabel: string;
+  changePercentLabel: string;
+  changeTone: 'success' | 'error' | 'secondary';
+  quoteVolumeLabel: string;
+  marketCapLabel: string;
+  tagsLabel: string;
+};

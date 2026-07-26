@@ -15,6 +15,7 @@ export const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    minHeight: 0,
     padding: spacing[4],
     gap: spacing[3],
   },

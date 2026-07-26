@@ -1,6 +1,6 @@
 # Feature: Multi-exchange spot markets (mobile)
 
-**Status:** Planned  
+**Status:** Implemented (Epic D)  
 **Surface:** Product mobile (`mobile/`) — Chrome via react-native-web  
 **Backend:** Already implemented  
 **Epic:** `project-management/epics/mobile-multi-exchange-spot-markets.md`  
