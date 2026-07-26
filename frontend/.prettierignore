@@ -1,0 +1,18 @@
+# Build / deps
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# Generated — do not reformat by hand
+src/libs/api/generated
+
+# Lockfiles & env
+package-lock.json
+.env
+.env.*
+
+# Static / misc
+public
+*.min.js
+*.min.css
