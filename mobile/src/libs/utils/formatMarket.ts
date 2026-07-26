@@ -34,3 +34,24 @@ export function formatCompactUsd(value: string | number | null | undefined): str
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)}K`;
   return formatPrice(n);
 }
+
+export function formatTradeCount(
+  value: number | null | undefined,
+  exchange: string | undefined,
+): string {
+  if (value === null || value === undefined) return '—';
+  if (value === 0 && exchange && exchange !== 'binance') return '—';
+  if (value === 0) return '0';
+  return value.toLocaleString();
+}
+
+export function formatSupplyNum(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '—';
+  const abs = Math.abs(v);
+  const sign = v < 0 ? '-' : '';
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}M`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)}K`;
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}

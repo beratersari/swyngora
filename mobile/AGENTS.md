@@ -67,3 +67,11 @@ modules/<m>/pages/FooPage/
 - `docs/design/mobile-project-initialization.md`
 - `docs/design/mobile-system-design.md`
 - `project-management/decisions/002-react-native-cli-modules-viewmodel.md`
+
+## Coin detail
+
+- Page: `modules/markets/pages/CoinDetailPage/`
+- Navigate: `MarketsScreens.Detail` `{ exchange, symbol }`
+- Organisms: CoinDetailHeader, CoinDetailStats, IntervalToolbar, CandleChart, IndicatorRsiPane
+- RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
+- Chart: `lightweight-charts` on react-native-web only

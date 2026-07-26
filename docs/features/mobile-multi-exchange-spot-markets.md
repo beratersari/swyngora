@@ -5,7 +5,7 @@
 **Backend:** Already implemented  
 **Epic:** `project-management/epics/mobile-multi-exchange-spot-markets.md`  
 **Design plan:** `docs/design/mobile-markets-dashboard.md`  
-**Local tasks:** `project-management/tasks/MMKT-*.md`
+**Local tasks:** `project-management/tasks/mobile/markets/MMKT-*.md`
 
 ---
 
@@ -22,7 +22,7 @@ Mobile users need the same multi-exchange spot browse experience as web: list, f
 5. Search (`q`, debounced), quote picker, tag multi-select, sort control.
 6. While app/document active and Markets focused, poll ~10s.
 7. Pull-to-refresh forces refetch.
-8. Row tap → **later** coin detail (out of this epic; may show disabled/toast in MMKT).
+8. Row tap → coin detail (Epic E / MDET; toast until detail ships).
 
 ## 3. APIs
 

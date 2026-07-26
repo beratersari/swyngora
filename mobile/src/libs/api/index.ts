@@ -9,6 +9,11 @@ export {
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
+  useListIntervalsQuery,
+  useGetCandlesQuery,
+  useGetTicker24hQuery,
+  useGetSupplyQuery,
+  useGetIndicatorsQuery,
   compactParams,
 } from './endpoints/marketApi';
 export type {
@@ -20,5 +25,16 @@ export type {
   MarketExchange,
   ExchangesResponse,
   ProductTagsResponse,
+  CandlesResponse,
+  Candle,
+  Ticker24h,
+  Supply,
+  CandlesQuery,
+  Ticker24hQuery,
+  SupplyQuery,
+  IntervalsQuery,
+  IndicatorsQuery,
+  IntervalsResponse,
+  IndicatorsResponse,
 } from './endpoints/marketApi';
 export { rtkErrorMessage } from './rtkErrorMessage';

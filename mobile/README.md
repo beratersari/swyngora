@@ -53,6 +53,21 @@ src/
 See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 
 
+
+## Coin detail
+
+Tap a market row to open **Coin detail**:
+
+- Header + 24h change
+- Stats (OHLC, volume, supply)
+- Interval chips + EMA toggle
+- OHLCV chart (Lightweight Charts on web) + RSI pane
+
+```text
+modules/markets/pages/CoinDetailPage/
+components/organisms/{CoinDetailHeader,CoinDetailStats,IntervalToolbar,CandleChart,IndicatorRsiPane}
+```
+
 ## Multi-exchange markets dashboard
 
 The **Markets** tab loads live spot markets from the backend:

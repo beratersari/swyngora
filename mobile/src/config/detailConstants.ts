@@ -1,0 +1,6 @@
+export const DEFAULT_DETAIL_INTERVAL = '1h';
+export const DEFAULT_DETAIL_CANDLE_LIMIT = 100;
+export const DEFAULT_RSI_PERIOD = 14;
+export const DEFAULT_EMA_PERIODS = '12,26';
+export const DETAIL_TICKER_POLL_MS = 15_000;
+export const DETAIL_SERIES_POLL_MS = 30_000;

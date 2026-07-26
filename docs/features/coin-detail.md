@@ -11,8 +11,8 @@
 
 | Task | Content |
 |---|---|
-| **[DET-A](../project-management/tasks/DET-A.md)** | Coin detail: route, orchestration, **intervals / ticker / supply / candles** — every query + response field, mapping, polling, UI binding matrix |
-| **[DET-B](../project-management/tasks/DET-B.md)** | Indicators: **GET /indicators** (all fields) + why **batch** is out; RSI/EMA mapping, bands, overlays, binding matrix |
+| **[DET-A](../project-management/tasks/frontend/detail/DET-A.md)** | Coin detail: route, orchestration, **intervals / ticker / supply / candles** — every query + response field, mapping, polling, UI binding matrix |
+| **[DET-B](../project-management/tasks/frontend/detail/DET-B.md)** | Indicators: **GET /indicators** (all fields) + why **batch** is out; RSI/EMA mapping, bands, overlays, binding matrix |
 
 This file is a short index. **Do not implement from this summary alone** — use DET-A / DET-B.
 

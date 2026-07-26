@@ -7,8 +7,18 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 |---|---|
 | `board.md` | Status overview (todo / in progress / done) for frontend **and** mobile |
 | `epics/` | Epic definitions |
-| `tasks/` | Individual tasks (`INIT-*`, `MKT-*`, `MINIT-*`, …) |
+| `tasks/` | Tasks in **subfolders by surface × epic** (see `tasks/README.md`) |
 | `decisions/` | Stack/product decisions (ADRs-lite for client PM) |
+
+## Tasks layout
+
+```text
+tasks/
+├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
+└── mobile/init|markets|detail     # MINIT-*, MMKT-*, MDET-*
+```
+
+**Do not add new task files to `tasks/` root.** Use the matching subfolder.
 
 ## Active frontend stack (decided)
 
@@ -26,29 +36,31 @@ See `decisions/001-antd-and-lightweight-charts.md`.
 
 | Layer | Choice |
 |---|---|
-| Runtime | **React Native CLI** — **no Expo** |
-| UI | Atomic Design + StyleSheet; custom atoms first |
-| Structure | `components/` Atomic only; **`modules/*/pages` + ViewModel** |
+| Runtime | **React Native** — **no Expo**; Chrome via **react-native-web** |
+| UI | **Atomic Design only** under `src/components/` (no module feature components) |
+| Structure | `modules/*/pages` + ViewModel + context |
 | Data | RTK Query + OpenAPI (`src/libs/api`) |
-| **Colors** | **Same as frontend** (`navy` / `indigo` / `steel` / `cream`) |
+| Colors | Same brand tokens as frontend |
 
 See `decisions/002-react-native-cli-modules-viewmodel.md`.
 
 ## Work order
 
-1. Epic A — Frontend project initialization (`epics/frontend-project-initialization.md`) — **done**
-2. Epic B — Multi-exchange spot markets (`epics/multi-exchange-spot-markets.md`) — **done**
-3. Epic C — Mobile project initialization (`epics/mobile-project-initialization.md`) — **done** (MR !15)
-4. **Epic D — Mobile multi-exchange spot markets / dashboard** (`epics/mobile-multi-exchange-spot-markets.md`) — **next** (`feature/mobile-spot-markets`)
-5. Later — mobile coin detail (`MDET-*` on board)
+1. Epic A — Frontend project initialization — **done** (`tasks/frontend/init/`)
+2. Epic B — Multi-exchange spot markets (web) — **done** (`tasks/frontend/markets/`)
+3. Frontend coin detail — **done** (`tasks/frontend/detail/`)
+4. Epic C — Mobile project initialization — **done** (`tasks/mobile/init/`)
+5. Epic D — Mobile markets dashboard — **done** (`tasks/mobile/markets/`)
+6. Epic E — Mobile coin detail — **done** (`tasks/mobile/detail/`, `epics/mobile-coin-detail.md`)
 
-### Mobile init designs
+### Mobile designs
 
 | Doc | Role |
 |---|---|
-| `docs/design/mobile-project-initialization.md` | Init plan (checklist, tasks, acceptance) |
-| `docs/design/mobile-system-design.md` | Full architecture (modules, ViewModel, nav, PR plan) |
-| `docs/design/mobile-markets-dashboard.md` | Multi-exchange markets dashboard (Epic D) |
+| `docs/design/mobile-project-initialization.md` | Init plan |
+| `docs/design/mobile-system-design.md` | Architecture |
+| `docs/design/mobile-markets-dashboard.md` | Markets dashboard |
+| `docs/design/mobile-coin-detail.md` | Coin detail + indicators |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 

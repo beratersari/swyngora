@@ -6,7 +6,7 @@
 **Epic:** `frontend` · multi-exchange spot markets  
 **UI kit:** Ant Design (Table, Tabs, Form controls)  
 **Charts:** Not required for list phase; detail later uses Lightweight Charts  
-**Local tasks:** `project-management/tasks/MKT-*.md`
+**Local tasks:** `project-management/tasks/frontend/markets/MKT-*.md`
 
 ---
 

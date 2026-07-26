@@ -20,7 +20,7 @@ Ship the primary **mobile markets dashboard** in Chrome (react-native-web): brow
 
 ## Tasks
 
-- [x] MMKT-1 … MMKT-8 (see `project-management/board.md` and `tasks/MMKT-*.md`)
+- [x] MMKT-1 … MMKT-8 (see `project-management/board.md` and `tasks/mobile/markets/MMKT-*.md`)
 
 ## Acceptance
 

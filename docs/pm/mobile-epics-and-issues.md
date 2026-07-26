@@ -71,7 +71,7 @@ See MINIT-1 … MINIT-9.
 | MINIT-8 | Home + Markets stub pages with ViewModels |
 | MINIT-9 | Package docs + root links + changelog |
 
-Full task text: `project-management/tasks/MINIT-*.md`.
+Full task text: `project-management/tasks/mobile/init/MINIT-*.md`.
 
 
 ---
@@ -99,4 +99,29 @@ Full task text: `project-management/tasks/MINIT-*.md`.
 | MMKT-7 | Empty/error/loading UX + tests |
 | MMKT-8 | Docs + board closeout |
 
-Full task text: `project-management/tasks/MMKT-*.md`.
+Full task text: `project-management/tasks/mobile/markets/MMKT-*.md`.
+
+
+---
+
+## Epic E — Mobile coin detail + indicators
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Coin detail + indicators` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-coin-detail.md` |
+| **Tasks** | `project-management/tasks/mobile/detail/MDET-*.md` |
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MDET-1 | RTK detail endpoints |
+| MDET-2 | Navigation CoinDetail + row press |
+| MDET-3 | CoinDetailPage shell + header/stats |
+| MDET-4 | Interval toolbar + candle chart |
+| MDET-5 | RSI/EMA organisms |
+| MDET-6 | Loading/error/polling tests |
+| MDET-7 | Docs closeout |

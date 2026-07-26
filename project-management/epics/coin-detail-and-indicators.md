@@ -37,8 +37,8 @@ Optional later: `POST /api/v1/market/indicators/batch` (list columns, not detail
 
 | ID | Task | Status | Detail level |
 |---|---|---|---|
-| DET-A | Coin detail page analysis | done | Full: every endpoint query/response field, mapping, orchestration, UI matrix → `tasks/DET-A.md` |
-| DET-B | Technical indicators on detail analysis | done | Full: GET indicators + batch (not used), RSI/EMA logic, bands, overlays → `tasks/DET-B.md` |
+| DET-A | Coin detail page analysis | done | Full: every endpoint query/response field, mapping, orchestration, UI matrix → `tasks/frontend/detail/DET-A.md` |
+| DET-B | Technical indicators on detail analysis | done | Full: GET indicators + batch (not used), RSI/EMA logic, bands, overlays → `tasks/frontend/detail/DET-B.md` |
 
 ### Implementation (after analysis accepted)
 

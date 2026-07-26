@@ -63,7 +63,6 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   const [offset, setOffset] = useState(0);
   const [rows, setRows] = useState<MarketRowViewModel[]>([]);
   const [total, setTotal] = useState(0);
-  const [detailHint, setDetailHint] = useState<string | null>(null);
 
   // Reset pagination when filter revision changes
   useEffect(() => {
@@ -172,9 +171,15 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     [markets],
   );
 
-  const onPressRow = useCallback((symbol: string) => {
-    setDetailHint(`${symbol}: coin detail coming soon`);
-  }, []);
+  const onPressRow = useCallback(
+    (symbol: string) => {
+      navigation.navigate(MarketsScreens.Detail, {
+        exchange: markets.exchange,
+        symbol,
+      });
+    },
+    [navigation, markets.exchange],
+  );
 
   const summaryLabel =
     total > 0
@@ -218,7 +223,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     errorMessage,
     emptyMessage,
     summaryLabel,
-    detailHint,
+    detailHint: null,
 
     onLoadMore,
     onRetry,

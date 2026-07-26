@@ -2,6 +2,8 @@
 
 Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues are fully wired.
 
+**Tasks live under subfolders** — see `tasks/README.md` (do not add new files to `tasks/` root).
+
 ## Frontend stack (locked)
 
 - UI: **Ant Design**
@@ -11,16 +13,18 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 ## Mobile stack (locked)
 
-- Runtime: **React Native CLI** (**no Expo**)
-- UI: Atomic atoms + StyleSheet (no antd)
-- Architecture: **`modules/*/pages`** + **ViewModel**; components never hold pages
+- Runtime: **React Native** (**no Expo**); Chrome via **react-native-web**
+- UI: **Atomic Design only** under `src/components/` (no `modules/*/components`)
+- Architecture: **`modules/*/pages` + ViewModel + module context**
 - Data: RTK Query + OpenAPI in `libs/api`
-- **Colors: same tokens as frontend** (`navy` `#111844`, `indigo` `#4B5694`, `steel` `#7288AE`, `cream` `#EAE0CF`)
+- Colors: same tokens as frontend
 - Decision: `decisions/002-react-native-cli-modules-viewmodel.md`
 
 ---
 
 ## Epic A — Frontend project initialization (P0, done)
+
+**Tasks:** `tasks/frontend/init/`
 
 | ID | Task | Status |
 |---|---|---|
@@ -36,6 +40,8 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 ## Epic B — Multi-exchange spot markets (P1, done)
 
+**Tasks:** `tasks/frontend/markets/`
+
 | ID | Task | Status |
 |---|---|---|
 | MKT-1 | RTK market endpoints in libs/api | done |
@@ -46,11 +52,23 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 | MKT-6 | Live poll + visibility pause | done |
 | MKT-7 | Empty/error UX + tests | done |
 
-## Epic C — Mobile project initialization (P0 mobile, **done** — MR !15)
+## Epic — Frontend coin detail (done)
 
-**Plan:** `docs/design/mobile-project-initialization.md`  
-**System design:** `docs/design/mobile-system-design.md`  
-**Epic:** `epics/mobile-project-initialization.md`
+**Tasks:** `tasks/frontend/detail/` · Feature: `docs/features/coin-detail.md`
+
+| ID | Task | Status |
+|---|---|---|
+| DET-A | Analysis: detail APIs field matrix | done |
+| DET-B | Analysis: indicators field matrix | done |
+| DET-1 | RTK detail endpoints | done |
+| DET-2 | Page shell + route + header/stats | done |
+| DET-3 | Candles + toolbar | done |
+| DET-4 | Indicator panel + overlays + tests | done |
+
+## Epic C — Mobile project initialization (P0, done — MR !15)
+
+**Tasks:** `tasks/mobile/init/`  
+**Plan:** `docs/design/mobile-project-initialization.md`
 
 | ID | Task | Status |
 |---|---|---|
@@ -64,14 +82,10 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 | MINIT-8 | Home + Markets stub pages with ViewModels | done |
 | MINIT-9 | Package docs + root AGENTS/README + changelog | done |
 
-**Suggested order:** MINIT-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9  
-**MR grouping:** (1–3) · (4–5) · (6–7) · (8–9)
+## Epic D — Mobile multi-exchange spot markets / dashboard (done)
 
-## Epic D — Mobile multi-exchange spot markets / dashboard (P0 mobile, **done**)
-
+**Tasks:** `tasks/mobile/markets/`  
 **Plan:** `docs/design/mobile-markets-dashboard.md`  
-**Feature:** `docs/features/mobile-multi-exchange-spot-markets.md`  
-**Epic:** `epics/mobile-multi-exchange-spot-markets.md`  
 **Branch:** `feature/mobile-spot-markets`
 
 | ID | Task | Status |
@@ -85,16 +99,31 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 | MMKT-7 | Empty/error/loading UX + tests | done |
 | MMKT-8 | Docs + board + changelog closeout | done |
 
-**MR grouping:** (1–2) · (3–4) · (5–6) · (7–8)
+## Epic E — Mobile coin detail + indicators (**done**)
+
+**Tasks:** `tasks/mobile/detail/`  
+**Epic:** `epics/mobile-coin-detail.md`  
+**Plan:** `docs/design/mobile-coin-detail.md`  
+**Feature:** `docs/features/mobile-coin-detail.md`  
+**Branch:** `feature/mobile-coin-detail` (after / stacked on markets)
+
+| ID | Task | Status |
+|---|---|---|
+| MDET-1 | RTK detail endpoints (intervals, ticker, supply, candles, indicators) | done |
+| MDET-2 | Navigation: CoinDetail route + markets row press | done |
+| MDET-3 | CoinDetailPage shell + header/stats organisms + ViewModel | done |
+| MDET-4 | Interval toolbar + candle chart organism | done |
+| MDET-5 | RSI/EMA indicator organisms + series mapping | done |
+| MDET-6 | Section loading/error, polling pause, tests | done |
+| MDET-7 | Docs + board + changelog closeout | done |
+
+**MR grouping:** (1–2) · (3) · (4–5) · (6–7)
 
 ## Later (not started)
 
 | ID | Task | Status |
 |---|---|---|
-| DET-1 | Coin detail page + Lightweight Charts candle view (web) | backlog |
-| DET-2 | RSI/EMA series on/near chart (web) | backlog |
 | WL-1 | Watchlist UI (web) | backlog |
-| MDET-1 | Mobile coin detail + charts | backlog |
 
 ## Status legend
 

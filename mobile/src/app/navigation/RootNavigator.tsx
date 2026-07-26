@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomePage } from '@/modules/app';
 import {
+  CoinDetailPage,
   MarketsFilterPage,
   MarketsPage,
   MarketsProvider,
@@ -54,6 +55,7 @@ function MarketsStackNavigator() {
       <MarketsStack.Navigator screenOptions={stackScreenOptions}>
         <MarketsStack.Screen name={MarketsScreens.List} component={MarketsPage} />
         <MarketsStack.Screen name={MarketsScreens.Filters} component={MarketsFilterPage} />
+        <MarketsStack.Screen name={MarketsScreens.Detail} component={CoinDetailPage} />
       </MarketsStack.Navigator>
     </MarketsProvider>
   );
