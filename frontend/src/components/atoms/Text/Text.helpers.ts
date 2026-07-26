@@ -22,8 +22,10 @@ const COLOR_MAP: Record<TextColor, string> = {
   primary: semanticColors.text.primary,
   secondary: semanticColors.text.secondary,
   inverse: semanticColors.text.inverse,
-  cream: '#EAE0CF',
-  steel: '#7288AE',
+  /** @deprecated Prefer `primary` — maps to Anti-Flash White */
+  cream: semanticColors.text.primary,
+  /** @deprecated Prefer `secondary` — maps to Stone */
+  steel: semanticColors.text.secondary,
   success: semanticColors.status.success,
   warning: semanticColors.status.warning,
   error: semanticColors.status.error,

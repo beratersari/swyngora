@@ -24,7 +24,7 @@ export const GlobalStyle = createGlobalStyle`
     font-family: ${({ theme }) => theme.fontFamilies.sans};
     font-size: ${({ theme }) => theme.typeScale.body.fontSize}px;
     line-height: ${({ theme }) => theme.typeScale.body.lineHeight};
-    background: ${({ theme }) => theme.colors.navy};
+    background: ${({ theme }) => theme.semantic.bg.canvas};
     color: ${({ theme }) => theme.semantic.text.primary};
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

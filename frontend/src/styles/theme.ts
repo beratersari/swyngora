@@ -1,5 +1,6 @@
 import {
   colors,
+  palette,
   semanticColors,
   fontFamilies,
   fontWeights,
@@ -11,6 +12,7 @@ import {
 /** App theme for styled-components ThemeProvider */
 export const appTheme = {
   colors,
+  palette,
   semantic: semanticColors,
   fontFamilies,
   fontWeights,

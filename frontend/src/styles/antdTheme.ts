@@ -1,28 +1,28 @@
 import type { ThemeConfig } from 'antd';
-import { colors, semanticColors, fontFamilies, radii } from '@/styles/tokens';
+import { palette, semanticColors, fontFamilies, radii } from '@/styles/tokens';
 
-/** Ant Design theme derived from Swyngora design tokens */
+/** Ant Design theme derived from Swyngora green design tokens */
 export const antdTheme: ThemeConfig = {
-  // Custom dark palette — do not use default darkAlgorithm (wrong blues)
+  // Custom dark green palette — do not use default darkAlgorithm
   token: {
-    colorPrimary: colors.indigo,
-    colorInfo: colors.steel,
+    colorPrimary: palette.bangladeshGreen,
+    colorInfo: palette.frog,
     colorSuccess: semanticColors.status.success,
     colorWarning: semanticColors.status.warning,
     colorError: semanticColors.status.error,
-    colorTextBase: colors.cream,
-    colorBgBase: colors.navy,
+    colorTextBase: palette.antiFlashWhite,
+    colorBgBase: palette.richBlack,
     colorBgContainer: semanticColors.bg.muted,
-    colorBgElevated: colors.indigo,
-    colorBgLayout: colors.navy,
+    colorBgElevated: palette.basil,
+    colorBgLayout: palette.richBlack,
     colorBorder: semanticColors.border.default,
-    colorBorderSecondary: 'rgba(114, 136, 174, 0.2)',
+    colorBorderSecondary: 'rgba(170, 203, 196, 0.18)',
     colorText: semanticColors.text.primary,
     colorTextSecondary: semanticColors.text.secondary,
     colorTextTertiary: semanticColors.text.disabled,
     colorTextQuaternary: semanticColors.text.disabled,
-    colorLink: colors.cream,
-    colorLinkHover: colors.steel,
+    colorLink: palette.mountainMeadow,
+    colorLinkHover: palette.mint,
     borderRadius: radii.md,
     borderRadiusLG: radii.lg,
     borderRadiusSM: radii.sm,
@@ -33,26 +33,32 @@ export const antdTheme: ThemeConfig = {
   },
   components: {
     Layout: {
-      headerBg: colors.navy,
-      bodyBg: colors.navy,
-      footerBg: colors.navy,
+      headerBg: palette.richBlack,
+      bodyBg: palette.richBlack,
+      footerBg: palette.richBlack,
       siderBg: semanticColors.bg.muted,
-      triggerBg: colors.indigo,
+      triggerBg: palette.bangladeshGreen,
     },
     Card: {
       colorBgContainer: semanticColors.bg.muted,
       colorBorderSecondary: semanticColors.border.default,
     },
     Table: {
-      headerBg: 'rgba(75, 86, 148, 0.35)',
-      rowHoverBg: 'rgba(75, 86, 148, 0.25)',
+      headerBg: 'rgba(3, 98, 76, 0.35)',
+      rowHoverBg: 'rgba(23, 135, 109, 0.22)',
       borderColor: semanticColors.border.default,
     },
     Button: {
       primaryShadow: 'none',
       defaultBg: 'transparent',
-      defaultBorderColor: colors.steel,
-      defaultColor: colors.cream,
+      defaultBorderColor: palette.stone,
+      defaultColor: palette.antiFlashWhite,
+    },
+    Tabs: {
+      inkBarColor: palette.caribbeanGreen,
+      itemSelectedColor: palette.antiFlashWhite,
+      itemColor: palette.stone,
+      itemHoverColor: palette.mint,
     },
     Skeleton: {
       gradientFromColor: semanticColors.skeleton.base,
@@ -62,6 +68,10 @@ export const antdTheme: ThemeConfig = {
       colorText: semanticColors.text.primary,
       colorTextDescription: semanticColors.text.secondary,
       colorTextHeading: semanticColors.text.primary,
+    },
+    Tag: {
+      defaultBg: palette.pine,
+      defaultColor: palette.pistachio,
     },
   },
 };
