@@ -1,0 +1,15 @@
+# libs/hooks
+
+Shared React hooks used by multiple features/pages.
+
+Examples (init / markets epics):
+
+| Hook                 | Purpose                       |
+| -------------------- | ----------------------------- |
+| `useDocumentVisible` | Pause polling when tab hidden |
+| `useDebouncedValue`  | Debounce search `q`           |
+| `useMediaQuery`      | Responsive layout (later)     |
+
+Feature-specific composition hooks may live next to the feature **only if** they are not reusable; prefer promoting shared ones here.
+
+**Do not** put RTK endpoint definitions here — those belong in `libs/api`.
