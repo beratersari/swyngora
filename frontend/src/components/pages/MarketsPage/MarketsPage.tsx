@@ -1,20 +1,95 @@
-import { Alert, Tag } from 'antd';
-import { useGetHealthQuery } from '@/libs/api';
-import { CandleChartHost } from '@/components/molecules/CandleChartHost';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Tag } from 'antd';
 import { Text } from '@/components/atoms/Text';
-import { Skeleton } from '@/components/atoms/Skeleton';
-import { APP_NAME } from '@/config/constants';
-import { env } from '@/config/env';
-import { BlockSpacer, PageIntro, PageStack, PanelCard, StatusRow } from './MarketsPage.styles';
+import { ExchangeTabs } from '@/features/markets/components/ExchangeTabs';
+import { MarketsToolbar } from '@/features/markets/components/MarketsToolbar';
+import { MarketsTable } from '@/features/markets/components/MarketsTable';
+import {
+  rtkErrorMessage,
+  useListExchangesQuery,
+  useListProductTagsQuery,
+  useListSpotMarketsQuery,
+  type MarketExchange,
+  type SpotSortField,
+  type SpotSortOrder,
+} from '@/libs/api';
+import { useDebouncedValue, useDocumentVisible } from '@/libs/hooks';
+import {
+  DEFAULT_MARKETS_STATE,
+  marketsStateToSearchParams,
+  parseMarketsSearchParams,
+  toSpotListQuery,
+  type MarketsUrlState,
+} from '@/libs/utils';
+import { DEFAULT_SPOT_POLL_MS } from '@/config/constants';
+import { McapHintAlert, MetaRow, PageIntro, PageStack } from './MarketsPage.styles';
 
-/** Placeholder Markets route — full spot table is Epic B. */
+/** Multi-exchange spot markets dashboard (Epic B). */
 export function MarketsPage() {
-  const { data, error, isLoading, isFetching } = useGetHealthQuery(undefined, {
-    pollingInterval: 30_000,
+  const [searchParams, setSearchParams] = useSearchParams();
+  const visible = useDocumentVisible();
+
+  const state = useMemo(() => parseMarketsSearchParams(searchParams), [searchParams]);
+  const [qInput, setQInput] = useState(state.q);
+  const debouncedQ = useDebouncedValue(qInput, 300);
+
+  useEffect(() => {
+    setQInput(state.q);
+  }, [state.q]);
+
+  const patchState = useCallback(
+    (patch: Partial<MarketsUrlState>) => {
+      const next: MarketsUrlState = { ...state, ...patch };
+      if (patch.q === undefined) {
+        next.q = qInput;
+      }
+      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+    },
+    [state, qInput, setSearchParams],
+  );
+
+  useEffect(() => {
+    if (debouncedQ === state.q) return;
+    const next = { ...state, q: debouncedQ, offset: 0 };
+    setSearchParams(marketsStateToSearchParams(next), { replace: true });
+  }, [debouncedQ, state, setSearchParams]);
+
+  const exchangesQuery = useListExchangesQuery();
+  const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
+  const spotArgs = useMemo(() => toSpotListQuery(state, debouncedQ), [state, debouncedQ]);
+
+  const spotQuery = useListSpotMarketsQuery(spotArgs, {
+    pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
+    refetchOnFocus: true,
   });
 
-  const apiOk = data?.status === 'ok';
-  const statusLoading = isLoading && !data;
+  const exchanges = exchangesQuery.data?.exchanges?.length
+    ? exchangesQuery.data.exchanges
+    : ['binance', 'coinbase', 'bybit'];
+
+  const items = spotQuery.data?.items ?? [];
+  const total = spotQuery.data?.total ?? 0;
+  const errorMessage = spotQuery.isError
+    ? rtkErrorMessage(spotQuery.error, {
+        resource: 'markets',
+        statusMessages: {
+          502: 'Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly.',
+        },
+      })
+    : null;
+
+  const onExchangeChange = (exchange: MarketExchange) => {
+    patchState({ exchange, offset: 0, tag: '' });
+  };
+
+  const onSortChange = (sort: SpotSortField, order: SpotSortOrder) => {
+    patchState({ sort, order, offset: 0 });
+  };
+
+  const onPageChange = (offset: number, limit: number) => {
+    patchState({ offset, limit });
+  };
 
   return (
     <PageStack>
@@ -23,99 +98,65 @@ export function MarketsPage() {
           Markets
         </Text>
         <Text variant="body" color="steel">
-          Multi-exchange spot markets UI ships in Epic B. This shell confirms the app, design system
-          (styled-components), Ant Design, RTK Query, and Lightweight Charts.
+          Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API —
+          list refreshes every {DEFAULT_SPOT_POLL_MS / 1000}s while this tab is visible.
         </Text>
       </PageIntro>
 
-      <PanelCard
-        title={
-          <Text variant="h4" color="cream" as="span">
-            API status
-          </Text>
-        }
-        size="small"
-      >
-        <StatusRow>
-          <Text variant="bodySm" color="steel" as="span">
-            API:{' '}
-            <Text
-              variant="code"
-              color="cream"
-              as="span"
-              isLoading={statusLoading}
-              skeletonWidth={140}
-            >
-              {env.apiBaseUrlLabel}
-            </Text>
-          </Text>
-          {isLoading || isFetching ? <Tag color="processing">checking…</Tag> : null}
-          {apiOk ? <Tag color="success">backend ok</Tag> : null}
-          {error ? <Tag color="error">backend unreachable</Tag> : null}
-        </StatusRow>
-        {error ? (
-          <BlockSpacer>
-            <Alert
-              type="warning"
-              showIcon
-              message="Cannot reach backend"
-              description={
-                'Start the API in WSL: cd backend && go run ./cmd/server. ' +
-                'Dev UI uses a Vite proxy to 127.0.0.1:8080 — restart `npm run dev` after .env changes. ' +
-                'Do not set VITE_API_BASE_URL=http://localhost:8080 when opening the app via a WSL IP from Windows.'
-              }
-            />
-          </BlockSpacer>
-        ) : null}
-        {statusLoading ? (
-          <BlockSpacer>
-            <Skeleton variant="text" rows={2} active />
-          </BlockSpacer>
-        ) : null}
-        {apiOk ? (
-          <BlockSpacer>
-            <Text variant="body" color="primary">
-              Health:{' '}
-              <Text variant="label" color="success" as="span">
-                {data?.status}
-              </Text>
-              {data?.time ? (
-                <>
-                  {' '}
-                  at{' '}
-                  <Text variant="code" color="steel" as="span">
-                    {data.time}
-                  </Text>
-                </>
-              ) : null}
-            </Text>
-          </BlockSpacer>
-        ) : null}
-      </PanelCard>
+      <ExchangeTabs
+        exchanges={exchanges}
+        value={state.exchange}
+        onChange={onExchangeChange}
+        isLoading={exchangesQuery.isLoading}
+      />
 
-      <PanelCard
-        title={
-          <Text variant="h4" color="cream" as="span">
-            Chart host (stub sample)
-          </Text>
-        }
-        size="small"
-      >
-        <Text variant="bodySm" color="steel">
-          Sample candles for {APP_NAME} Lightweight Charts integration (not live data).
+      <MarketsToolbar
+        q={qInput}
+        quote={state.quote}
+        tag={state.tag}
+        tags={tagsQuery.data?.tags ?? []}
+        tagsLoading={tagsQuery.isFetching}
+        onQChange={(q) => setQInput(q)}
+        onQuoteChange={(quote) => patchState({ quote, offset: 0 })}
+        onTagChange={(tag) => patchState({ tag, offset: 0 })}
+      />
+
+      <MetaRow>
+        {spotQuery.isFetching ? <Tag color="processing">updating…</Tag> : null}
+        {spotQuery.isSuccess ? (
+          <Tag color="success">
+            {total.toLocaleString()} match{total === 1 ? '' : 'es'}
+          </Tag>
+        ) : null}
+        {!visible ? <Tag>polling paused (tab hidden)</Tag> : null}
+        <Text variant="caption" color="secondary">
+          Default quote {DEFAULT_MARKETS_STATE.quote} · sort {state.sort} {state.order}
         </Text>
-        <BlockSpacer>
-          <CandleChartHost
-            data={[
-              { time: 1_700_000_000, open: 100, high: 110, low: 95, close: 105 },
-              { time: 1_700_000_300, open: 105, high: 112, low: 102, close: 108 },
-              { time: 1_700_000_600, open: 108, high: 115, low: 107, close: 111 },
-              { time: 1_700_000_900, open: 111, high: 111, low: 100, close: 102 },
-              { time: 1_700_001_200, open: 102, high: 120, low: 101, close: 118 },
-            ]}
-          />
-        </BlockSpacer>
-      </PanelCard>
+      </MetaRow>
+
+      {spotQuery.isError && state.sort.startsWith('marketCap') ? (
+        <McapHintAlert
+          type="warning"
+          showIcon
+          message="Market-cap data may be warming up"
+          description="If the supply snapshot is empty, mcap sorts can fail. Switch sort to Quote volume or retry."
+        />
+      ) : null}
+
+      <MarketsTable
+        items={items}
+        exchange={state.exchange}
+        sort={state.sort}
+        order={state.order}
+        total={total}
+        limit={state.limit}
+        offset={state.offset}
+        isLoading={spotQuery.isLoading || spotQuery.isFetching}
+        errorMessage={errorMessage}
+        onSortChange={onSortChange}
+        onPageChange={onPageChange}
+        onRetry={() => void spotQuery.refetch()}
+      />
     </PageStack>
   );
 }

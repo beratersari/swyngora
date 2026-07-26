@@ -1,6 +1,6 @@
 # Feature: Multi-exchange spot markets (frontend)
 
-**Status:** Designed — blocked on Frontend project initialization  
+**Status:** Implemented (Epic B)  
 **Surface:** Product web (`frontend/`)  
 **Backend:** Already implemented  
 **Epic:** `frontend` · multi-exchange spot markets  

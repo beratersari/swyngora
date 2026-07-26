@@ -1,7 +1,7 @@
 # Epic B: Multi-exchange spot markets
 
 **Priority:** P1  
-**Status:** todo (Epic A init complete — ready to start)  
+**Status:** done  
 **Design:** `docs/features/multi-exchange-spot-markets.md`  
 **UI:** Ant Design Table / Tabs / Form controls  
 **Charts:** not required for phase 1 list (candles on detail later)
@@ -18,4 +18,4 @@ Browse Binance / Coinbase / Bybit spot markets with search, filters, sort, pagin
 
 ## Tasks
 
-- [ ] MKT-1 … MKT-7 (see `project-management/board.md` and `tasks/`)
+- [x] MKT-1 … MKT-7 (see `project-management/board.md` and `tasks/`)

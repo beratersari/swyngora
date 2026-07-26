@@ -1,0 +1,100 @@
+import type { SpotListQuery, SpotSortField, SpotSortOrder, MarketExchange } from '@/libs/api';
+
+export type MarketsUrlState = {
+  exchange: MarketExchange;
+  q: string;
+  quote: string;
+  tag: string;
+  sort: SpotSortField;
+  order: SpotSortOrder;
+  limit: number;
+  offset: number;
+};
+
+export const DEFAULT_MARKETS_STATE: MarketsUrlState = {
+  exchange: 'binance',
+  q: '',
+  quote: 'USDT',
+  tag: '',
+  sort: 'quoteVolume',
+  order: 'desc',
+  limit: 50,
+  offset: 0,
+};
+
+const EXCHANGES = new Set(['binance', 'coinbase', 'bybit']);
+const SORTS = new Set<SpotSortField>([
+  'quoteVolume',
+  'volume',
+  'priceChangePercent',
+  'lastPrice',
+  'tradeCount',
+  'symbol',
+  'baseAsset',
+  'marketCapCirculating',
+  'marketCapTotal',
+  'marketCapMax',
+  'tags',
+]);
+
+function parseIntParam(raw: string | null, fallback: number, min: number, max: number): number {
+  if (raw === null || raw === '') return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(n)));
+}
+
+/** Parse /markets URL search params into state with defaults. */
+export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlState {
+  const exchangeRaw = params.get('exchange') ?? DEFAULT_MARKETS_STATE.exchange;
+  const exchange = (
+    EXCHANGES.has(exchangeRaw) ? exchangeRaw : DEFAULT_MARKETS_STATE.exchange
+  ) as MarketExchange;
+
+  const sortRaw = (params.get('sort') ?? DEFAULT_MARKETS_STATE.sort) as SpotSortField;
+  const sort = SORTS.has(sortRaw) ? sortRaw : DEFAULT_MARKETS_STATE.sort;
+
+  const orderRaw = params.get('order') ?? DEFAULT_MARKETS_STATE.order;
+  const order: SpotSortOrder =
+    orderRaw === 'asc' || orderRaw === 'desc' ? orderRaw : DEFAULT_MARKETS_STATE.order;
+
+  return {
+    exchange,
+    q: params.get('q') ?? '',
+    quote: params.get('quote') ?? DEFAULT_MARKETS_STATE.quote,
+    tag: params.get('tag') ?? '',
+    sort,
+    order,
+    limit: parseIntParam(params.get('limit'), DEFAULT_MARKETS_STATE.limit, 1, 500),
+    offset: parseIntParam(params.get('offset'), DEFAULT_MARKETS_STATE.offset, 0, 1_000_000),
+  };
+}
+
+/** Serialize state to URLSearchParams (omit defaults where sensible). */
+export function marketsStateToSearchParams(state: MarketsUrlState): URLSearchParams {
+  const p = new URLSearchParams();
+  if (state.exchange !== DEFAULT_MARKETS_STATE.exchange) p.set('exchange', state.exchange);
+  if (state.q.trim()) p.set('q', state.q.trim());
+  if (state.quote && state.quote !== DEFAULT_MARKETS_STATE.quote) p.set('quote', state.quote);
+  if (state.tag.trim()) p.set('tag', state.tag.trim());
+  if (state.sort !== DEFAULT_MARKETS_STATE.sort) p.set('sort', state.sort);
+  if (state.order !== DEFAULT_MARKETS_STATE.order) p.set('order', state.order);
+  if (state.limit !== DEFAULT_MARKETS_STATE.limit) p.set('limit', String(state.limit));
+  if (state.offset !== DEFAULT_MARKETS_STATE.offset) p.set('offset', String(state.offset));
+  return p;
+}
+
+/** Build RTK listSpotMarkets args from UI state + debounced q. */
+export function toSpotListQuery(state: MarketsUrlState, debouncedQ: string): SpotListQuery {
+  return {
+    exchange: state.exchange,
+    q: debouncedQ.trim() || undefined,
+    quote: state.quote || undefined,
+    tag: state.tag.trim() || undefined,
+    sort: state.sort,
+    order: state.order,
+    limit: state.limit,
+    offset: state.offset,
+    status: 'TRADING',
+  };
+}

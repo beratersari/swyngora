@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MKT-1 |
 | **Epic** | multi-exchange-spot-markets |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | frontend |
 
 ## Summary

@@ -20,17 +20,17 @@
 | INIT-8 | Install/configure Ant Design + theme tokens | done |
 | INIT-9 | Add lightweight-charts + thin chart wrapper atom/molecule | done |
 
-## Epic B — Multi-exchange spot markets (P1, ready — Epic A done)
+## Epic B — Multi-exchange spot markets (P1, done)
 
 | ID | Task | Status |
 |---|---|---|
-| MKT-1 | RTK market endpoints in libs/api | todo |
-| MKT-2 | Markets page shell + ExchangeTabs (Ant) | todo |
-| MKT-3 | MarketsTable (Ant Table) + formatters | todo |
-| MKT-4 | Toolbar filters (search, quote, tags, sort) | todo |
-| MKT-5 | Pagination + URL query sync | todo |
-| MKT-6 | Live poll + visibility pause | todo |
-| MKT-7 | Empty/error UX + tests | todo |
+| MKT-1 | RTK market endpoints in libs/api | done |
+| MKT-2 | Markets page shell + ExchangeTabs (Ant) | done |
+| MKT-3 | MarketsTable (Ant Table) + formatters | done |
+| MKT-4 | Toolbar filters (search, quote, tags, sort) | done |
+| MKT-5 | Pagination + URL query sync | done |
+| MKT-6 | Live poll + visibility pause | done |
+| MKT-7 | Empty/error UX + tests | done |
 
 ## Later (not started)
 
