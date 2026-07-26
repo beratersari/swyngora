@@ -9,6 +9,11 @@ export {
   useListProductTagsQuery,
   useListSpotMarketsQuery,
   useLazyListSpotMarketsQuery,
+  useListIntervalsQuery,
+  useGetCandlesQuery,
+  useGetTicker24hQuery,
+  useGetSupplyQuery,
+  useGetIndicatorsQuery,
 } from './endpoints/marketApi';
 export type {
   SpotMarket,
@@ -19,6 +24,17 @@ export type {
   MarketExchange,
   ExchangesResponse,
   ProductTagsResponse,
+  CandlesResponse,
+  Candle,
+  Ticker24h,
+  Supply,
+  CandlesQuery,
+  Ticker24hQuery,
+  SupplyQuery,
+  IntervalsQuery,
+  IntervalsResponse,
+  IndicatorsQuery,
+  IndicatorsResponse,
 } from './endpoints/marketApi';
 export {
   rtkErrorMessage,

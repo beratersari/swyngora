@@ -15,9 +15,20 @@ libs/api/
 ## Usage
 
 ```ts
-// feature or page
+// markets list
 import { useListSpotMarketsQuery } from '@/libs/api';
+
+// coin detail
+import {
+  useGetCandlesQuery,
+  useGetTicker24hQuery,
+  useGetSupplyQuery,
+  useListIntervalsQuery,
+  useGetIndicatorsQuery,
+} from '@/libs/api';
 ```
+
+Endpoints live in `endpoints/marketApi.ts` and `endpoints/healthApi.ts`.
 
 ## Codegen
 

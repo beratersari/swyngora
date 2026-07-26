@@ -8,6 +8,41 @@ export type SpotSortField = NonNullable<SpotListQuery['sort']>;
 export type SpotSortOrder = NonNullable<SpotListQuery['order']>;
 export type MarketExchange = NonNullable<SpotListQuery['exchange']>;
 
+export type CandlesResponse = components['schemas']['CandlesResponse'];
+export type Candle = components['schemas']['Candle'];
+export type Ticker24h = components['schemas']['Ticker24h'];
+export type Supply = components['schemas']['Supply'];
+
+export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
+export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;
+export type SupplyQuery = NonNullable<operations['getSupply']['parameters']['query']>;
+export type IntervalsQuery = NonNullable<operations['listIntervals']['parameters']['query']>;
+export type IndicatorsQuery = NonNullable<operations['getIndicators']['parameters']['query']>;
+
+export type IntervalsResponse = {
+  exchange: string;
+  intervals: string[];
+};
+
+export type IndicatorsResponse = {
+  exchange?: string;
+  symbol?: string;
+  interval?: string;
+  rsiPeriod?: number;
+  emaPeriods?: number[];
+  latest?: {
+    rsi?: number | null;
+    ema?: Record<string, number>;
+  };
+  points?: {
+    openTime?: string;
+    close?: number;
+    rsi?: number | null;
+    ema?: Record<string, number>;
+  }[];
+  note?: string;
+};
+
 export type ExchangesResponse = {
   exchanges: string[];
   default: string;
@@ -75,6 +110,78 @@ export const marketApi = baseApi.injectEndpoints({
       }),
       providesTags: ['SpotList'],
     }),
+
+    listIntervals: build.query<IntervalsResponse, IntervalsQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/intervals',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      transformResponse: (
+        raw: { exchange?: string; intervals?: string[] },
+        _meta,
+        arg,
+      ): IntervalsResponse => ({
+        exchange:
+          raw.exchange ??
+          (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
+        intervals: raw.intervals ?? [],
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Interval' as const,
+          id: arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance',
+        },
+      ],
+    }),
+
+    getCandles: build.query<CandlesResponse, CandlesQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/candles',
+        params: compactParams({ ...arg }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Candle' as const,
+          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}`,
+        },
+      ],
+    }),
+
+    getTicker24h: build.query<Ticker24h, Ticker24hQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/ticker/24h',
+        params: compactParams({ ...arg }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        { type: 'Ticker' as const, id: `${arg.exchange ?? 'binance'}:${arg.symbol}` },
+      ],
+    }),
+
+    getSupply: build.query<Supply, SupplyQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/supply',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Supply' as const,
+          id: (arg && (arg.asset || arg.symbol)) || 'unknown',
+        },
+      ],
+    }),
+
+    getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/indicators',
+        params: compactParams({ ...arg }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Indicator' as const,
+          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}:${arg.rsiPeriod ?? 14}:${arg.emaPeriods ?? '12,26'}`,
+        },
+      ],
+    }),
   }),
 });
 
@@ -83,4 +190,9 @@ export const {
   useListProductTagsQuery,
   useListSpotMarketsQuery,
   useLazyListSpotMarketsQuery,
+  useListIntervalsQuery,
+  useGetCandlesQuery,
+  useGetTicker24hQuery,
+  useGetSupplyQuery,
+  useGetIndicatorsQuery,
 } = marketApi;

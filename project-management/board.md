@@ -32,12 +32,34 @@
 | MKT-6 | Live poll + visibility pause | done |
 | MKT-7 | Empty/error UX + tests | done |
 
+## Epic C — Coin detail + technical indicators (P1)
+
+**Epic:** `epics/coin-detail-and-indicators.md`  
+**Analysis doc:** `docs/features/coin-detail.md`  
+**Process:** analysis tasks first (DET-A/B); implementation (DET-1…4) only after acceptance.
+
+### Analysis (no code) — full field-level specs
+
+| ID | Task | Status |
+|---|---|---|
+| DET-A | Coin detail: route + intervals/ticker/supply/candles (all fields + logic) | done |
+| DET-B | Indicators: GET /indicators (+ batch out-of-scope), RSI/EMA mapping | done |
+
+See `tasks/DET-A.md` and `tasks/DET-B.md` for complete contracts.
+
+### Implementation (DET-A + DET-B applied)
+
+| ID | Task | Status |
+|---|---|---|
+| DET-1 | RTK detail endpoints (candles, ticker, supply, intervals, indicators) | done |
+| DET-2 | Coin detail page shell + header/stats + route from Markets | done |
+| DET-3 | Candle chart + interval/limit toolbar | done |
+| DET-4 | RSI/EMA panel + EMA overlay + tests | done |
+
 ## Later (not started)
 
 | ID | Task | Status |
 |---|---|---|
-| DET-1 | Coin detail page + Lightweight Charts candle view | backlog |
-| DET-2 | RSI/EMA series on/near chart | backlog |
 | WL-1 | Watchlist UI | backlog |
 
 ## Status legend
