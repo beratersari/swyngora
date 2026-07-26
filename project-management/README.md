@@ -38,8 +38,9 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 
 1. Epic A — Frontend project initialization (`epics/frontend-project-initialization.md`) — **done**
 2. Epic B — Multi-exchange spot markets (`epics/multi-exchange-spot-markets.md`) — **done**
-3. **Epic C — Mobile project initialization** (`epics/mobile-project-initialization.md`) — **next**
-4. Later — mobile markets / detail (`MMKT-*`, `MDET-*` on board)
+3. Epic C — Mobile project initialization (`epics/mobile-project-initialization.md`) — **done** (MR !15)
+4. **Epic D — Mobile multi-exchange spot markets / dashboard** (`epics/mobile-multi-exchange-spot-markets.md`) — **next** (`feature/mobile-spot-markets`)
+5. Later — mobile coin detail (`MDET-*` on board)
 
 ### Mobile init designs
 
@@ -47,6 +48,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 |---|---|
 | `docs/design/mobile-project-initialization.md` | Init plan (checklist, tasks, acceptance) |
 | `docs/design/mobile-system-design.md` | Full architecture (modules, ViewModel, nav, PR plan) |
+| `docs/design/mobile-markets-dashboard.md` | Multi-exchange markets dashboard (Epic D) |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 

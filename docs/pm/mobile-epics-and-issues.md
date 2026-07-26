@@ -72,3 +72,31 @@ See MINIT-1 … MINIT-9.
 | MINIT-9 | Package docs + root links + changelog |
 
 Full task text: `project-management/tasks/MINIT-*.md`.
+
+
+---
+
+## Epic D — Mobile multi-exchange spot markets / dashboard
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Multi-exchange spot markets dashboard` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p0` |
+| **Design** | `docs/design/mobile-markets-dashboard.md` |
+| **Branch** | `feature/mobile-spot-markets` |
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MMKT-1 | RTK marketApi: exchanges, tags, spot |
+| MMKT-2 | Formatters + spot query helpers |
+| MMKT-3 | ExchangeChips + MarketsFilterBar |
+| MMKT-4 | MarketRow + MarketsList |
+| MMKT-5 | MarketsPage ViewModel |
+| MMKT-6 | MarketsPage View + pull-to-refresh |
+| MMKT-7 | Empty/error/loading UX + tests |
+| MMKT-8 | Docs + board closeout |
+
+Full task text: `project-management/tasks/MMKT-*.md`.

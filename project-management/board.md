@@ -46,7 +46,7 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 | MKT-6 | Live poll + visibility pause | done |
 | MKT-7 | Empty/error UX + tests | done |
 
-## Epic C — Mobile project initialization (P0 mobile, **next**)
+## Epic C — Mobile project initialization (P0 mobile, **done** — MR !15)
 
 **Plan:** `docs/design/mobile-project-initialization.md`  
 **System design:** `docs/design/mobile-system-design.md`  
@@ -67,6 +67,26 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 **Suggested order:** MINIT-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9  
 **MR grouping:** (1–3) · (4–5) · (6–7) · (8–9)
 
+## Epic D — Mobile multi-exchange spot markets / dashboard (P0 mobile, **next**)
+
+**Plan:** `docs/design/mobile-markets-dashboard.md`  
+**Feature:** `docs/features/mobile-multi-exchange-spot-markets.md`  
+**Epic:** `epics/mobile-multi-exchange-spot-markets.md`  
+**Branch:** `feature/mobile-spot-markets`
+
+| ID | Task | Status |
+|---|---|---|
+| MMKT-1 | RTK marketApi: exchanges, tags, spot | todo |
+| MMKT-2 | Formatters + spot query helpers | todo |
+| MMKT-3 | ExchangeChips + MarketsFilterBar | todo |
+| MMKT-4 | MarketRow + MarketsList | todo |
+| MMKT-5 | MarketsPage ViewModel (filters, poll, pagination) | todo |
+| MMKT-6 | MarketsPage View + pull-to-refresh | todo |
+| MMKT-7 | Empty/error/loading UX + tests | todo |
+| MMKT-8 | Docs + board + changelog closeout | todo |
+
+**MR grouping:** (1–2) · (3–4) · (5–6) · (7–8)
+
 ## Later (not started)
 
 | ID | Task | Status |
@@ -74,7 +94,6 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 | DET-1 | Coin detail page + Lightweight Charts candle view (web) | backlog |
 | DET-2 | RSI/EMA series on/near chart (web) | backlog |
 | WL-1 | Watchlist UI (web) | backlog |
-| MMKT-1 | Mobile multi-exchange spot markets list | backlog |
 | MDET-1 | Mobile coin detail + charts | backlog |
 
 ## Status legend
