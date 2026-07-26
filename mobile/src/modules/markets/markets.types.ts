@@ -1,10 +1,2 @@
-export type MarketRowViewModel = {
-  id: string;
-  symbol: string;
-  lastPriceLabel: string;
-  changePercentLabel: string;
-  changeTone: 'success' | 'error' | 'secondary';
-  quoteVolumeLabel: string;
-  marketCapLabel: string;
-  tagsLabel: string;
-};
+/** Re-export presentational row shape from Atomic organism. */
+export type { MarketRowViewModel } from '@/components/organisms/MarketRow';

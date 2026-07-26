@@ -2,20 +2,32 @@ import { FlatList, RefreshControl, View } from 'react-native';
 import { Button } from '@/components/atoms/Button';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
+import { MarketRow } from '@/components/organisms/MarketRow';
 import { semanticColors } from '@/styles/tokens';
-import { MarketRow } from '../MarketRow';
 import type { MarketsListProps } from './MarketsList.types';
 import { styles } from './MarketsList.styles';
+
+function LoadMoreSkeleton() {
+  return (
+    <View style={styles.skeletonStack} accessibilityLabel="Loading more markets">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Skeleton key={i} height={72} width="100%" />
+      ))}
+    </View>
+  );
+}
 
 export function MarketsList({
   rows,
   isLoading,
+  isLoadingMore = false,
+  hasMore = false,
   emptyMessage,
   errorMessage,
   onRetry,
   onPressRow,
+  onLoadMore,
   ListHeaderComponent,
-  ListFooterComponent,
   refreshing = false,
   onRefresh,
 }: MarketsListProps) {
@@ -40,7 +52,23 @@ export function MarketsList({
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => <MarketRow row={item} onPress={onPressRow} />}
       ListHeaderComponent={ListHeaderComponent}
-      ListFooterComponent={ListFooterComponent}
+      ListFooterComponent={
+        isLoadingMore ? (
+          <LoadMoreSkeleton />
+        ) : hasMore ? (
+          <View style={styles.center}>
+            <Text variant="caption" color="steel">
+              Scroll for more
+            </Text>
+          </View>
+        ) : rows.length > 0 ? (
+          <View style={styles.center}>
+            <Text variant="caption" color="steel">
+              End of list
+            </Text>
+          </View>
+        ) : null
+      }
       ListEmptyComponent={
         <View style={styles.center}>
           {errorMessage ? (
@@ -57,6 +85,12 @@ export function MarketsList({
           )}
         </View>
       }
+      onEndReached={() => {
+        if (hasMore && !isLoadingMore) {
+          onLoadMore?.();
+        }
+      }}
+      onEndReachedThreshold={0.35}
       refreshControl={
         onRefresh ? (
           <RefreshControl

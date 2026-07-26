@@ -1,14 +1,25 @@
+import { View, StyleSheet } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { HomePage } from '@/modules/app';
-import { MarketsPage } from '@/modules/markets';
+import {
+  MarketsFilterPage,
+  MarketsPage,
+  MarketsProvider,
+  MarketsScreens,
+} from '@/modules/markets';
 import { colors, semanticColors } from '@/styles/tokens';
 import type { HomeTabParamList, MainTabParamList, MarketsTabParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeTabParamList>();
 const MarketsStack = createNativeStackNavigator<MarketsTabParamList>();
+
+const fill = StyleSheet.create({
+  root: { flex: 1, height: '100%', width: '100%' },
+  scene: { flex: 1, height: '100%', backgroundColor: colors.navy },
+});
 
 const navTheme = {
   ...DarkTheme,
@@ -23,9 +34,15 @@ const navTheme = {
   },
 };
 
+const stackScreenOptions = {
+  headerShown: false,
+  contentStyle: fill.scene,
+  animation: 'none' as const,
+};
+
 function HomeStackNavigator() {
   return (
-    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+    <HomeStack.Navigator screenOptions={stackScreenOptions}>
       <HomeStack.Screen name="Home" component={HomePage} />
     </HomeStack.Navigator>
   );
@@ -33,9 +50,12 @@ function HomeStackNavigator() {
 
 function MarketsStackNavigator() {
   return (
-    <MarketsStack.Navigator screenOptions={{ headerShown: false }}>
-      <MarketsStack.Screen name="MarketsList" component={MarketsPage} />
-    </MarketsStack.Navigator>
+    <MarketsProvider>
+      <MarketsStack.Navigator screenOptions={stackScreenOptions}>
+        <MarketsStack.Screen name={MarketsScreens.List} component={MarketsPage} />
+        <MarketsStack.Screen name={MarketsScreens.Filters} component={MarketsFilterPage} />
+      </MarketsStack.Navigator>
+    </MarketsProvider>
   );
 }
 
@@ -44,6 +64,7 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        sceneStyle: fill.scene,
         tabBarStyle: {
           backgroundColor: colors.navy,
           borderTopColor: semanticColors.border.default,
@@ -68,8 +89,10 @@ function MainTabs() {
 
 export function RootNavigator() {
   return (
-    <NavigationContainer theme={navTheme}>
-      <MainTabs />
-    </NavigationContainer>
+    <View style={fill.root}>
+      <NavigationContainer theme={navTheme}>
+        <MainTabs />
+      </NavigationContainer>
+    </View>
   );
 }

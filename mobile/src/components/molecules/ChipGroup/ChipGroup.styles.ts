@@ -4,13 +4,13 @@ import { spacing } from '@/styles/tokens';
 export const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     gap: spacing[2],
-    paddingVertical: spacing[2],
+    alignItems: 'center',
   },
-  range: {
-    flex: 1,
-    textAlign: 'center',
+  skeletonRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing[2],
   },
 });

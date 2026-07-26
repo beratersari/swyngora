@@ -12,18 +12,10 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
     exchangesLoading: false,
     search: '',
     onSearchChange: vi.fn(),
-    quote: 'USDT',
-    quoteOptions: ['USDT', 'USD'],
-    onQuoteChange: vi.fn(),
-    availableTags: [],
-    selectedTags: [],
-    onToggleTag: vi.fn(),
-    onClearTags: vi.fn(),
-    sort: 'quoteVolume',
-    order: 'desc',
-    sortOptions: [{ value: 'quoteVolume', label: 'Quote vol' }],
-    onSortChange: vi.fn(),
-    onOrderChange: vi.fn(),
+    isSearchDebouncing: false,
+    activeFilterCount: 0,
+    filterSummary: null,
+    onOpenFilters: vi.fn(),
     rows: [
       {
         id: 'BTCUSDT',
@@ -37,19 +29,16 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
       },
     ],
     total: 1,
-    offset: 0,
-    limit: 30,
-    onNextPage: vi.fn(),
-    onPrevPage: vi.fn(),
-    canNext: false,
-    canPrev: false,
+    hasMore: false,
     isLoading: false,
+    isLoadingMore: false,
     isRefreshing: false,
     isPollingPaused: false,
     errorMessage: null,
     emptyMessage: null,
-    lastUpdatedLabel: null,
-    summaryLabel: '1–1 of 1',
+    summaryLabel: 'Showing 1 of 1',
+    detailHint: null,
+    onLoadMore: vi.fn(),
     onRetry: vi.fn(),
     onRefresh: vi.fn(),
     onPressRow: vi.fn(),
@@ -58,28 +47,39 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
 }
 
 describe('MarketsPage', () => {
-  it('renders rows from injected view model', () => {
+  it('renders list chrome with filters button', () => {
     render(<MarketsPage viewModel={makeVm()} />);
     expect(screen.getByText('Markets')).toBeTruthy();
     expect(screen.getByText('BTCUSDT')).toBeTruthy();
-    expect(screen.getByText('+1.50%')).toBeTruthy();
+    expect(screen.getByText('Filters')).toBeTruthy();
+    expect(screen.queryByText('Quote')).toBeNull();
   });
 
-  it('renders empty state', () => {
+  it('shows active filter count', () => {
     render(
+      <MarketsPage
+        viewModel={makeVm({
+          activeFilterCount: 2,
+          filterSummary: 'USD · 3 tags',
+        })}
+      />,
+    );
+    expect(screen.getByText('Filters (2)')).toBeTruthy();
+    expect(screen.getByText(/Active: USD/)).toBeTruthy();
+  });
+
+  it('renders empty and error states', () => {
+    const { rerender } = render(
       <MarketsPage
         viewModel={makeVm({
           rows: [],
           emptyMessage: 'No markets match filters',
-          summaryLabel: '0 results',
+          summaryLabel: null,
         })}
       />,
     );
     expect(screen.getByText('No markets match filters')).toBeTruthy();
-  });
-
-  it('renders error with retry', () => {
-    render(
+    rerender(
       <MarketsPage
         viewModel={makeVm({
           rows: [],
@@ -89,6 +89,5 @@ describe('MarketsPage', () => {
       />,
     );
     expect(screen.getByText('Network error')).toBeTruthy();
-    expect(screen.getByText('Retry')).toBeTruthy();
   });
 });

@@ -6,13 +6,14 @@ Closest `AGENTS.md` wins under `mobile/`. Root monorepo rules still apply.
 
 1. **No Expo** — do not add `expo` / `expo-*` packages.
 2. **Pages live under `src/modules/<name>/pages/`** — never `src/components/pages/`.
-3. **Atomic only in `src/components/`** — atoms → molecules → organisms → templates.
-4. **View + ViewModel** for every page:
-   - `Name.tsx` — render from VM; optional injectable `viewModel` prop for tests
+3. **All UI uses Atomic Design under `src/components/`** — atoms → molecules → organisms → templates.
+4. **No feature/module component folders** — do not create `modules/*/components/`.
+5. **View + ViewModel** for every page:
+   - `Name.tsx` — compose Atomic organisms/molecules; optional injectable `viewModel` prop for tests
    - `Name.viewModel.ts` — RTK Query, AppState polling, mapping (no JSX)
-5. **Brand colors** must match `frontend/src/styles/tokens/colors.ts`.
-6. **RTK Query** only under `src/libs/api` — not in atoms/molecules.
-7. **Primary run target:** Chrome via `npm run web` (react-native-web). Do not require a simulator for day-to-day work.
+6. **Brand colors** must match `frontend/src/styles/tokens/colors.ts` (mobile tokens copy).
+7. **RTK Query** only under `src/libs/api` — not in atoms/molecules/organisms.
+8. **Primary run target:** Chrome via `npm run web` (react-native-web).
 
 ## Import boundaries (ESLint)
 
@@ -39,7 +40,7 @@ npm run codegen:api  # also regenerate frontend when OpenAPI changes
 
 ```text
 modules/<m>/pages/FooPage/
-  FooPage.tsx
+  FooPage.tsx              # composes @/components/* only
   FooPage.viewModel.ts
   FooPage.types.ts
   FooPage.styles.ts
@@ -47,20 +48,22 @@ modules/<m>/pages/FooPage/
   index.ts
 ```
 
+## Markets module
+
+- Endpoints: `libs/api/endpoints/marketApi.ts`
+- Pages: `modules/markets/pages/*` (View + ViewModel + context)
+- UI: `components/organisms/{ExchangeChips,MarketsToolbar,MarketRow,MarketsList,MarketsFilterForm}`
+- Molecules: `components/molecules/{Chip,SearchField,ChipGroup}`
+- State: `MarketsProvider` in `modules/markets/context/`
+- Infinite scroll + filter screen; search debounce 300ms
+
 ## Data / freshness
 
 - Use `useAppStateActive()` and set `pollingInterval` to `0` when inactive.
-- Prefer `refetchOnFocus: false` (do not rely on browser focus alone for RN parity).
+- Prefer `refetchOnFocus: false`.
 
 ## Related docs
 
 - `docs/design/mobile-project-initialization.md`
 - `docs/design/mobile-system-design.md`
 - `project-management/decisions/002-react-native-cli-modules-viewmodel.md`
-
-## Markets module
-
-- Endpoints: `libs/api/endpoints/marketApi.ts` (`listExchanges`, `listProductTags`, `listSpotMarkets`)
-- Page: `modules/markets/pages/MarketsPage/` — View must not import RTK
-- Module UI: `modules/markets/components/` (flat)
-- Polling: `pollingInterval` from `useAppStateActive() && useIsFocused()`; `refetchOnFocus: false`

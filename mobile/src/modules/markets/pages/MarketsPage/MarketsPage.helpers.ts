@@ -5,7 +5,7 @@ import {
   formatCompactUsd,
   formatPrice,
 } from '@/libs/utils';
-import type { MarketRowViewModel } from '../../markets.types';
+import type { MarketRowViewModel } from '@/components/organisms/MarketRow';
 
 export function mapSpotMarketToRow(item: SpotMarket): MarketRowViewModel {
   const symbol = item.symbol ?? '—';

@@ -1,208 +1,226 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useIsFocused } from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   rtkErrorMessage,
   useListExchangesQuery,
-  useListProductTagsQuery,
   useListSpotMarketsQuery,
-  type MarketExchange,
-  type SpotSortField,
-  type SpotSortOrder,
+  type SpotMarket,
 } from '@/libs/api';
 import { useAppStateActive, useDebouncedValue } from '@/libs/hooks';
-import {
-  DEFAULT_MARKETS_FILTER,
-  isSpotSortField,
-  normalizeExchange,
-  toSpotListQuery,
-} from '@/libs/utils';
+import { toSpotListQuery } from '@/libs/utils';
+import { useMarketsContext } from '../../context';
+import { MarketsScreens, type MarketsStackParamList } from '../../navigation';
 import {
   DEFAULT_LIMIT,
+  DEFAULT_ORDER,
+  DEFAULT_QUOTE,
+  DEFAULT_SORT,
   FALLBACK_EXCHANGES,
-  QUOTE_OPTIONS,
   SEARCH_DEBOUNCE_MS,
-  SORT_OPTIONS,
   SPOT_POLL_MS,
 } from './MarketsPage.constants';
-import { mapSpotMarketToRow, pageRangeLabel } from './MarketsPage.helpers';
+import { mapSpotMarketToRow } from './MarketsPage.helpers';
+import type { MarketRowViewModel } from '@/components/organisms/MarketRow';
 import type { MarketsPageViewModel } from './MarketsPage.types';
 
+function mergeUniqueRows(
+  prev: MarketRowViewModel[],
+  nextItems: SpotMarket[],
+): MarketRowViewModel[] {
+  const seen = new Set(prev.map((r) => r.id));
+  const appended: MarketRowViewModel[] = [];
+  for (const item of nextItems) {
+    const row = mapSpotMarketToRow(item);
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      appended.push(row);
+    }
+  }
+  return appended.length === 0 ? prev : [...prev, ...appended];
+}
+
 export function useMarketsPageViewModel(): MarketsPageViewModel {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
+  const markets = useMarketsContext();
   const active = useAppStateActive();
   const focused = useIsFocused();
-  const pollingEnabled = active && focused;
 
-  const [exchange, setExchange] = useState<MarketExchange>(DEFAULT_MARKETS_FILTER.exchange);
-  const [search, setSearch] = useState('');
-  const [quote, setQuote] = useState(DEFAULT_MARKETS_FILTER.quote);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [sort, setSort] = useState<SpotSortField>(DEFAULT_MARKETS_FILTER.sort);
-  const [order, setOrder] = useState<SpotSortOrder>(DEFAULT_MARKETS_FILTER.order);
+  const debouncedSearch = useDebouncedValue(markets.search, SEARCH_DEBOUNCE_MS);
+  const isSearchDebouncing = markets.search.trim() !== debouncedSearch.trim();
+
+  // Reset list when debounced search settles to a new value
+  const lastDebouncedRef = useRef(debouncedSearch);
+  useEffect(() => {
+    if (lastDebouncedRef.current !== debouncedSearch) {
+      lastDebouncedRef.current = debouncedSearch;
+      markets.notifyFiltersChanged();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when debounced search changes
+  }, [debouncedSearch]);
+
   const [offset, setOffset] = useState(0);
+  const [rows, setRows] = useState<MarketRowViewModel[]>([]);
+  const [total, setTotal] = useState(0);
   const [detailHint, setDetailHint] = useState<string | null>(null);
 
-  const debouncedQ = useDebouncedValue(search, SEARCH_DEBOUNCE_MS);
-
-  const exchangesQuery = useListExchangesQuery();
-  const tagsQuery = useListProductTagsQuery({ exchange });
+  // Reset pagination when filter revision changes
+  useEffect(() => {
+    setOffset(0);
+    setRows([]);
+    setTotal(0);
+  }, [markets.filterRevision]);
 
   const filterState = useMemo(
     () => ({
-      exchange,
-      q: search,
-      quote,
-      tags: selectedTags,
-      sort,
-      order,
+      exchange: markets.exchange,
+      q: markets.search,
+      quote: markets.quote,
+      tags: markets.selectedTags,
+      sort: markets.sort,
+      order: markets.order,
       limit: DEFAULT_LIMIT,
       offset,
     }),
-    [exchange, search, quote, selectedTags, sort, order, offset],
+    [
+      markets.exchange,
+      markets.search,
+      markets.quote,
+      markets.selectedTags,
+      markets.sort,
+      markets.order,
+      offset,
+    ],
   );
 
   const spotArgs = useMemo(
-    () => toSpotListQuery(filterState, debouncedQ),
-    [filterState, debouncedQ],
+    () => toSpotListQuery(filterState, debouncedSearch),
+    [filterState, debouncedSearch],
   );
+
+  // Poll only the first page while user has not scrolled into more pages
+  const pollingEnabled = active && focused && offset === 0 && rows.length <= DEFAULT_LIMIT;
 
   const spotQuery = useListSpotMarketsQuery(spotArgs, {
     pollingInterval: pollingEnabled ? SPOT_POLL_MS : 0,
     refetchOnFocus: false,
   });
 
+  const exchangesQuery = useListExchangesQuery();
+
+  // Merge query results into accumulated rows
+  useEffect(() => {
+    if (!spotQuery.data || spotQuery.isError) return;
+    const items = spotQuery.data.items ?? [];
+    const nextTotal = spotQuery.data.total ?? 0;
+    setTotal(nextTotal);
+
+    if (offset === 0) {
+      setRows(items.map(mapSpotMarketToRow));
+    } else {
+      setRows((prev) => mergeUniqueRows(prev, items));
+    }
+  }, [spotQuery.data, spotQuery.isError, offset]);
+
   const exchanges =
     exchangesQuery.data?.exchanges?.length
       ? exchangesQuery.data.exchanges
       : FALLBACK_EXCHANGES;
 
-  const rows = useMemo(
-    () => (spotQuery.data?.items ?? []).map(mapSpotMarketToRow),
-    [spotQuery.data?.items],
-  );
-
-  const total = spotQuery.data?.total ?? 0;
-  const limit = spotQuery.data?.limit ?? DEFAULT_LIMIT;
-  const canPrev = offset > 0;
-  const canNext = offset + limit < total;
-
-  const isLoading = spotQuery.isLoading || (spotQuery.isFetching && rows.length === 0);
-  const isRefreshing = spotQuery.isFetching && rows.length > 0;
+  const hasMore = rows.length < total;
+  const isLoading =
+    (spotQuery.isLoading || spotQuery.isFetching) && rows.length === 0 && !isSearchDebouncing;
+  const isLoadingMore =
+    spotQuery.isFetching && offset > 0 && rows.length > 0;
+  const isRefreshing =
+    spotQuery.isFetching && offset === 0 && rows.length > 0;
 
   const errorMessage = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, { resource: 'markets' })
     : null;
 
   const emptyMessage =
-    !errorMessage && !isLoading && rows.length === 0
+    !errorMessage && !isLoading && !isSearchDebouncing && rows.length === 0
       ? 'No markets match filters'
       : null;
 
-  const onSelectExchange = useCallback((next: string) => {
-    setExchange(normalizeExchange(next));
-    setOffset(0);
-    setSelectedTags([]);
-  }, []);
-
-  const onQuoteChange = useCallback((next: string) => {
-    setQuote(next);
-    setOffset(0);
-  }, []);
-
-  const onToggleTag = useCallback((tag: string) => {
-    setSelectedTags((prev) => {
-      if (prev.includes(tag)) return prev.filter((t) => t !== tag);
-      return [...prev, tag];
-    });
-    setOffset(0);
-  }, []);
-
-  const onClearTags = useCallback(() => {
-    setSelectedTags([]);
-    setOffset(0);
-  }, []);
-
-  const onSortChange = useCallback((next: string) => {
-    if (isSpotSortField(next)) {
-      setSort(next);
-      setOffset(0);
-    }
-  }, []);
-
-  const onOrderChange = useCallback((next: 'asc' | 'desc') => {
-    setOrder(next);
-    setOffset(0);
-  }, []);
-
-  const onNextPage = useCallback(() => {
+  const onLoadMore = useCallback(() => {
+    if (!hasMore || spotQuery.isFetching || isLoading || isSearchDebouncing) return;
     setOffset((prev) => prev + DEFAULT_LIMIT);
-  }, []);
+  }, [hasMore, spotQuery.isFetching, isLoading, isSearchDebouncing]);
 
-  const onPrevPage = useCallback(() => {
-    setOffset((prev) => Math.max(0, prev - DEFAULT_LIMIT));
-  }, []);
+  const onRefresh = useCallback(() => {
+    setOffset(0);
+    markets.notifyFiltersChanged();
+    void spotQuery.refetch();
+  }, [markets, spotQuery]);
 
   const onRetry = useCallback(() => {
     void spotQuery.refetch();
-    void tagsQuery.refetch();
     void exchangesQuery.refetch();
-  }, [spotQuery, tagsQuery, exchangesQuery]);
+  }, [spotQuery, exchangesQuery]);
 
-  const onRefresh = useCallback(() => {
-    void spotQuery.refetch();
-    void tagsQuery.refetch();
-  }, [spotQuery, tagsQuery]);
+  const onOpenFilters = useCallback(() => {
+    navigation.navigate(MarketsScreens.Filters);
+  }, [navigation]);
+
+  const onSearchChange = useCallback(
+    (q: string) => {
+      markets.setSearch(q);
+    },
+    [markets],
+  );
 
   const onPressRow = useCallback((symbol: string) => {
     setDetailHint(`${symbol}: coin detail coming soon`);
   }, []);
 
-  const onSearchChange = useCallback((q: string) => {
-    setSearch(q);
-    setOffset(0);
-  }, []);
+  const summaryLabel =
+    total > 0
+      ? `Showing ${rows.length} of ${total}`
+      : rows.length === 0
+        ? null
+        : `${rows.length} markets`;
+
+  const filterSummaryParts: string[] = [];
+  if (markets.quote !== DEFAULT_QUOTE) filterSummaryParts.push(markets.quote);
+  if (markets.sort !== DEFAULT_SORT) filterSummaryParts.push(markets.sort);
+  if (markets.order !== DEFAULT_ORDER) filterSummaryParts.push(markets.order);
+  if (markets.selectedTags.length > 0) {
+    filterSummaryParts.push(`${markets.selectedTags.length} tags`);
+  }
+  const filterSummary =
+    filterSummaryParts.length > 0 ? filterSummaryParts.join(' · ') : null;
 
   return {
     title: 'Markets',
     exchanges,
-    selectedExchange: exchange,
-    onSelectExchange,
+    selectedExchange: markets.exchange,
+    onSelectExchange: markets.setExchange,
     exchangesLoading: exchangesQuery.isLoading,
 
-    search,
+    search: markets.search,
     onSearchChange,
+    isSearchDebouncing,
 
-    quote,
-    quoteOptions: [...QUOTE_OPTIONS],
-    onQuoteChange,
-
-    availableTags: tagsQuery.data?.tags ?? [],
-    selectedTags,
-    onToggleTag,
-    onClearTags,
-
-    sort,
-    order,
-    sortOptions: SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
-    onSortChange,
-    onOrderChange,
+    activeFilterCount: markets.activeFilterCount,
+    filterSummary,
+    onOpenFilters,
 
     rows,
     total,
-    offset,
-    limit,
-    onNextPage,
-    onPrevPage,
-    canNext,
-    canPrev,
-
+    hasMore,
     isLoading,
+    isLoadingMore,
     isRefreshing,
     isPollingPaused: !pollingEnabled,
     errorMessage,
     emptyMessage,
-    lastUpdatedLabel: detailHint,
-    summaryLabel: pageRangeLabel(offset, limit, total),
+    summaryLabel,
+    detailHint,
 
+    onLoadMore,
     onRetry,
     onRefresh,
     onPressRow,

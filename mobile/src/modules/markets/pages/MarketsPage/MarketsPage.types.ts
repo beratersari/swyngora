@@ -1,4 +1,4 @@
-import type { MarketRowViewModel } from '../../markets.types';
+import type { MarketRowViewModel } from '@/components/organisms/MarketRow';
 
 export type { MarketRowViewModel };
 
@@ -11,39 +11,25 @@ export type MarketsPageViewModel = {
 
   search: string;
   onSearchChange: (q: string) => void;
+  isSearchDebouncing: boolean;
 
-  quote: string;
-  quoteOptions: string[];
-  onQuoteChange: (quote: string) => void;
-
-  availableTags: string[];
-  selectedTags: string[];
-  onToggleTag: (tag: string) => void;
-  onClearTags: () => void;
-
-  sort: string;
-  order: 'asc' | 'desc';
-  sortOptions: { value: string; label: string }[];
-  onSortChange: (sort: string) => void;
-  onOrderChange: (order: 'asc' | 'desc') => void;
+  activeFilterCount: number;
+  filterSummary: string | null;
+  onOpenFilters: () => void;
 
   rows: MarketRowViewModel[];
   total: number;
-  offset: number;
-  limit: number;
-  onNextPage: () => void;
-  onPrevPage: () => void;
-  canNext: boolean;
-  canPrev: boolean;
-
+  hasMore: boolean;
   isLoading: boolean;
+  isLoadingMore: boolean;
   isRefreshing: boolean;
   isPollingPaused: boolean;
   errorMessage: string | null;
   emptyMessage: string | null;
-  lastUpdatedLabel: string | null;
   summaryLabel: string | null;
+  detailHint: string | null;
 
+  onLoadMore: () => void;
   onRetry: () => void;
   onRefresh: () => void;
   onPressRow: (symbol: string) => void;

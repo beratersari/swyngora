@@ -15,7 +15,7 @@ export function Providers({ children }: ProvidersProps) {
   return (
     <GestureHandlerRootView style={styles.root}>
       <Provider store={store}>
-        <SafeAreaProvider>
+        <SafeAreaProvider style={styles.root}>
           {children ?? <RootNavigator />}
         </SafeAreaProvider>
       </Provider>
@@ -26,6 +26,9 @@ export function Providers({ children }: ProvidersProps) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+    // Explicit height for Chrome/react-native-web (flex alone is not enough)
+    height: '100%',
+    width: '100%',
     backgroundColor: semanticColors.bg.canvas,
   },
 });

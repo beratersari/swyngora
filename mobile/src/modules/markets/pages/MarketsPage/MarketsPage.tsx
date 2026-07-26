@@ -1,10 +1,9 @@
 import { View } from 'react-native';
 import { Text } from '@/components/atoms/Text';
+import { ExchangeChips } from '@/components/organisms/ExchangeChips';
+import { MarketsList } from '@/components/organisms/MarketsList';
+import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { ScreenTemplate } from '@/components/templates/ScreenTemplate';
-import { ExchangeChips } from '../../components/ExchangeChips';
-import { MarketsFilterBar } from '../../components/MarketsFilterBar';
-import { MarketsList } from '../../components/MarketsList';
-import { MarketsPagination } from '../../components/MarketsPagination';
 import type { MarketsPageProps, MarketsPageViewModel } from './MarketsPage.types';
 import { useMarketsPageViewModel } from './MarketsPage.viewModel';
 import { styles } from './MarketsPage.styles';
@@ -18,46 +17,30 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
         onSelect={vm.onSelectExchange}
         isLoading={vm.exchangesLoading}
       />
-      <MarketsFilterBar
+      <MarketsToolbar
         search={vm.search}
         onSearchChange={vm.onSearchChange}
-        quote={vm.quote}
-        quoteOptions={vm.quoteOptions}
-        onQuoteChange={vm.onQuoteChange}
-        availableTags={vm.availableTags}
-        selectedTags={vm.selectedTags}
-        onToggleTag={vm.onToggleTag}
-        onClearTags={vm.onClearTags}
-        sort={vm.sort}
-        order={vm.order}
-        sortOptions={vm.sortOptions}
-        onSortChange={vm.onSortChange}
-        onOrderChange={vm.onOrderChange}
+        isSearchDebouncing={vm.isSearchDebouncing}
+        activeFilterCount={vm.activeFilterCount}
+        onOpenFilters={vm.onOpenFilters}
       />
+      {vm.filterSummary ? (
+        <Text variant="caption" color="steel" style={styles.hint}>
+          Active: {vm.filterSummary}
+        </Text>
+      ) : null}
       {vm.summaryLabel ? (
         <Text variant="caption" color="secondary" style={styles.summary}>
           {vm.summaryLabel}
-          {vm.isPollingPaused ? ' · polling paused' : ''}
+          {vm.isPollingPaused ? ' · live refresh paused' : ''}
         </Text>
       ) : null}
-      {vm.lastUpdatedLabel ? (
+      {vm.detailHint ? (
         <Text variant="caption" color="steel" style={styles.hint}>
-          {vm.lastUpdatedLabel}
+          {vm.detailHint}
         </Text>
       ) : null}
     </View>
-  );
-
-  const footer = (
-    <MarketsPagination
-      offset={vm.offset}
-      limit={vm.limit}
-      total={vm.total}
-      canPrev={vm.canPrev}
-      canNext={vm.canNext}
-      onPrev={vm.onPrevPage}
-      onNext={vm.onNextPage}
-    />
   );
 
   return (
@@ -65,12 +48,14 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
       <MarketsList
         rows={vm.rows}
         isLoading={vm.isLoading}
+        isLoadingMore={vm.isLoadingMore}
+        hasMore={vm.hasMore}
         emptyMessage={vm.emptyMessage}
         errorMessage={vm.errorMessage}
         onRetry={vm.onRetry}
         onPressRow={vm.onPressRow}
+        onLoadMore={vm.onLoadMore}
         ListHeaderComponent={header}
-        ListFooterComponent={footer}
         refreshing={vm.isRefreshing}
         onRefresh={vm.onRefresh}
       />

@@ -58,9 +58,12 @@ See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 The **Markets** tab loads live spot markets from the backend:
 
 - Exchange chips: Binance / Coinbase / Bybit
-- Search, quote, tags, sort, pagination (page size 30)
-- ~10s polling while the tab is focused and the document is visible
-- Pull-to-refresh
+- Search (300ms debounce), quote, sort, infinite scroll (page size 30)
+- **Filter tags** on a dedicated screen (Filter by tags)
+- Skeleton footer while loading the next page on scroll
+- Module **React context** for shared filter state (`MarketsProvider`)
+- ~10s polling on the first page while focused
+- Pull-to-refresh resets the list
 
 ```bash
 # terminal 1
