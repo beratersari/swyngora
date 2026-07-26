@@ -1,0 +1,23 @@
+# AGENTS.md — `ai/`
+
+Closest wins for files under `ai/`.
+
+## Scope
+
+Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only.
+
+## Rules
+
+1. Do not add OpenAI/Anthropic/Gemini SDKs as defaults.
+2. Market numbers come from Swyngora tools (HTTP/MCP), never hallucinated.
+3. New backend capabilities that AI should use must ship with MCP tools in the same change (`backend/internal/transport/mcp`).
+4. Tests required for new tools, routing helpers, and prompts that change behaviour.
+5. User-facing answers must avoid absolute financial guarantees; keep disclaimer.
+6. Prefer free/public search; no paid data-vendor plan switches.
+
+## Commands
+
+```bash
+cd ai && pip install -e ".[dev]" && pytest -q
+swyngora-ai "your question"
+```

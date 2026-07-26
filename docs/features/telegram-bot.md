@@ -2,65 +2,56 @@
 
 ## Problem / goal
 
-Use Swyngora market data from Telegram with a small command set (**no AI**): prices, spot lists, lowest mcap, supply, RSI/EMA, and a personal watchlist.
+Use Swyngora market data **and the multi-agent AI** from Telegram: prices, spot lists, lowest mcap, supply, RSI/EMA, watchlist, and natural-language `/ask`.
 
 ## Architecture
 
-The bot is an **optional transport** inside the Go backend process (not a separate binary):
-
 ```text
-Telegram long-poll → transport/telegram → service/market + service/watchlist → adapters
-HTTP API           → transport/http     → (same services)
+Telegram long-poll → transport/telegram
+                       ├─ market / watchlist services (in-process)
+                       └─ /ask → AI HTTP client → Python multi-agent (port 8090)
+HTTP API           → same services + POST /api/v1/ai/chat + /mcp
 ```
 
-Enabled when `TELEGRAM_BOT_TOKEN` is set. Empty token → API-only server.
-
-### Allowlist (fail closed)
-
-| Config | Behavior |
-|--------|----------|
-| `TELEGRAM_CHAT_ID` and/or `TELEGRAM_ALLOWED_CHAT_IDS` | Only those chats may use the bot |
-| Neither set, and `TELEGRAM_ALLOW_ALL` unset/false | **Bot does not start** (logged error) |
-| `TELEGRAM_ALLOW_ALL=true` with empty allowlist | Public bot (any chat) — opt-in only |
+One backend process (`cmd/server`) can auto-start the Python AI child when `AI_AUTOSTART=true`.
 
 ## Commands
 
-See `backend/README.md` (includes `/lowmcap` and `/lowmcap all`).
+| Command | Purpose |
+|---------|---------|
+| `/price`, `/spot`, `/lowmcap`, `/mcap`, `/rsi`, `/exchanges` | Market data |
+| `/watch` … | Watchlist |
+| **`/ask <question>`** | Multi-agent AI (market tools + web + X) |
+| **`/ai <question>`** | Alias of `/ask` |
 
-Free-text messages are **not** treated as `/price` (use explicit commands).
-
-## Where the code lives
-
-| Area | Path |
-|------|------|
-| Long-poll runner | `backend/internal/transport/telegram/bot.go` |
-| Commands | `backend/internal/transport/telegram/commands.go` |
-| Telegram HTTP API | `backend/internal/transport/telegram/client.go` |
-| Formatters | `backend/internal/transport/telegram/format.go` |
-| Wiring | `backend/cmd/server/main.go` |
-| Config | `backend/internal/platform/config` |
-
-## How to run
+## AI setup
 
 ```bash
-cd backend
-cp .env.example .env   # set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
-go run ./cmd/server    # starts HTTP :8080 + Telegram poller
+# 1) Install AI package once
+cd ai && python3 -m venv .venv && source .venv/bin/activate && pip install -e .
+
+# 2) backend/.env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+AI_AUTOSTART=true
+AI_PYTHON=/absolute/path/to/swyngora/ai/.venv/bin/python
+AI_WORKDIR=../ai          # when running from backend/
+AI_SERVICE_URL=http://127.0.0.1:8090
+XAI_API_KEY=...           # if AI_LLM_PROVIDER=grok
+# or Ollama running locally with AI_LLM_PROVIDER=ollama
+
+# 3) Start backend (restarts AI child if configured)
+cd backend && go run ./cmd/server
 ```
 
-## After changing tokens
+Then in Telegram:
 
-**Restart the backend process** (Ctrl+C, then `go run ./cmd/server`). Env is loaded only at startup (`.env` / `backend/.env`).
+```text
+/ask What is BTC price and RSI on binance?
+```
 
 ## Tests
 
 ```bash
-cd backend && go test ./internal/transport/telegram/...
+cd backend && go test ./internal/transport/telegram/... ./internal/service/aiagent/...
 ```
-
-## Limitations
-
-- No alerts / push (v1)
-- No AI
-- Watchlist is in-memory (lost on process restart)
-- Single process should run long-poll for a given bot token

@@ -2,7 +2,9 @@ package httpx
 
 import (
 	"net/http"
+	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
@@ -16,6 +18,11 @@ type RouterOptions struct {
 	RateLimitBurst int
 	// CORSAllowOrigins: empty or ["*"] = any origin; otherwise exact match list.
 	CORSAllowOrigins []string
+	// MCPHandler mounts streamable MCP (typically at /mcp) in the same process.
+	MCPHandler http.Handler
+	// AI client for POST /api/v1/ai/chat (optional).
+	AI        *aiagent.Client
+	AITimeout time.Duration
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -43,6 +50,8 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/spot", mh.ListSpotMarkets)
 	mux.HandleFunc("GET /api/v1/market/indicators", mh.GetIndicators)
 	mux.HandleFunc("POST /api/v1/market/indicators/batch", mh.PostIndicatorsBatch)
+	mux.HandleFunc("GET /api/v1/market/pumps", mh.GetPumpEvents)
+	mux.HandleFunc("GET /api/v1/market/pumps/scan", mh.ScanPumpEvents)
 
 	if watchSvc != nil {
 		wh := handler.NewWatchlistHandler(watchSvc)
@@ -50,6 +59,18 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("PUT /api/v1/watchlist", wh.Replace)
 		mux.HandleFunc("POST /api/v1/watchlist/items", wh.Add)
 		mux.HandleFunc("DELETE /api/v1/watchlist/items", wh.Remove)
+	}
+
+	// MCP streamable HTTP — same process as REST API (no second server).
+	if opts.MCPHandler != nil {
+		mux.Handle("/mcp", opts.MCPHandler)
+		mux.Handle("/mcp/", opts.MCPHandler)
+	}
+
+	// AI chat proxy → Python multi-agent service (may be auto-started by cmd/server).
+	if opts.AI != nil {
+		ah := handler.NewAIHandler(opts.AI, opts.AITimeout)
+		mux.HandleFunc("POST /api/v1/ai/chat", ah.Chat)
 	}
 
 	var h http.Handler = mux

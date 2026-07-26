@@ -1,0 +1,33 @@
+"""LLM provider factory — Ollama (local) and Grok (xAI) only."""
+
+from __future__ import annotations
+
+from langchain_core.language_models.chat_models import BaseChatModel
+
+from swyngora_ai.config import Settings, get_settings
+
+
+def build_chat_model(settings: Settings | None = None) -> BaseChatModel:
+    """Return a chat model based on AI_LLM_PROVIDER."""
+    cfg = settings or get_settings()
+    if cfg.llm_provider == "grok":
+        if not cfg.xai_api_key:
+            raise ValueError(
+                "AI_LLM_PROVIDER=grok requires XAI_API_KEY. "
+                "Or set AI_LLM_PROVIDER=ollama for local inference."
+            )
+        from langchain_xai import ChatXAI
+
+        return ChatXAI(
+            model=cfg.grok_model,
+            api_key=cfg.xai_api_key,
+            temperature=cfg.temperature,
+        )
+
+    from langchain_ollama import ChatOllama
+
+    return ChatOllama(
+        model=cfg.ollama_model,
+        base_url=cfg.ollama_base_url,
+        temperature=cfg.temperature,
+    )

@@ -401,6 +401,11 @@ func HelpText() string {
 	b.WriteString(cmdLine("/exchanges", "", "list venues"))
 	b.WriteString("\n")
 
+	b.WriteString(bold("AI assistant") + "\n")
+	b.WriteString(cmdLine("/ask", "<question>", "multi-agent AI (market + web + X)"))
+	b.WriteString(cmdLine("/ai", "<question>", "alias of /ask"))
+	b.WriteString("\n")
+
 	b.WriteString(bold("Watchlist") + "\n")
 	b.WriteString(cmdLine("/watch", "", "show list"))
 	b.WriteString(cmdLine("/watch add", "<symbol> [exchange]", "add pair"))
@@ -414,6 +419,7 @@ func HelpText() string {
 	b.WriteString("  " + code("/lowmcap all 5") + "\n")
 	b.WriteString("  " + code("/spot bybit SOL") + "\n")
 	b.WriteString("  " + code("/rsi ETHUSDT 1h") + "\n")
+	b.WriteString("  " + code("/ask What is BTC RSI and recent news?") + "\n")
 	b.WriteString("\n")
 	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit"))
 	b.WriteString(footer())
@@ -425,6 +431,192 @@ func cmdLine(cmd, args, desc string) string {
 		return fmt.Sprintf("  %s\n    %s\n", code(cmd), italic(desc))
 	}
 	return fmt.Sprintf("  %s %s\n    %s\n", code(cmd), italic(args), italic(desc))
+}
+
+// Main specialist agents shown in Telegram progress (not leaf tools).
+var mainAIAgentNames = []string{
+	"market_agent",
+	"web_agent",
+	"x_agent",
+	"analyst_agent",
+}
+
+// IsMainAITool reports orchestrator-level specialists only (hides get_ticker, etc.).
+func IsMainAITool(line string) bool {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return false
+	}
+	// Nested leaf calls look like "market_agent → get_ticker(...)" or "↳ get_ticker".
+	if strings.Contains(line, "→") || strings.Contains(line, "↳") {
+		return false
+	}
+	lower := strings.ToLower(line)
+	for _, name := range mainAIAgentNames {
+		if strings.Contains(lower, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// ShortMainToolLabel maps a tool event line to a short human label for Telegram.
+func ShortMainToolLabel(line string) string {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	switch {
+	case strings.Contains(lower, "market_agent"):
+		return "Market"
+	case strings.Contains(lower, "web_agent"):
+		return "Web"
+	case strings.Contains(lower, "x_agent"):
+		return "X / social"
+	case strings.Contains(lower, "analyst_agent"):
+		return "Analyst"
+	default:
+		return clipRunes(strings.TrimSpace(line), 40)
+	}
+}
+
+// FilterMainAITools keeps unique main-agent labels in order (max a few).
+func FilterMainAITools(tools []string) []string {
+	var out []string
+	seen := map[string]struct{}{}
+	for _, t := range tools {
+		if !IsMainAITool(t) {
+			// Allow already-short labels from live stream.
+			label := strings.TrimSpace(t)
+			switch strings.ToLower(label) {
+			case "market", "web", "x / social", "x/social", "analyst":
+				// keep
+			default:
+				continue
+			}
+		} else {
+			label := ShortMainToolLabel(t)
+			if _, ok := seen[label]; ok {
+				continue
+			}
+			seen[label] = struct{}{}
+			out = append(out, label)
+			if len(out) >= 6 {
+				break
+			}
+			continue
+		}
+		label := ShortMainToolLabel(t)
+		// normalize short labels
+		switch strings.ToLower(label) {
+		case "x/social":
+			label = "X / social"
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		out = append(out, label)
+		if len(out) >= 6 {
+			break
+		}
+	}
+	return out
+}
+
+// IsMainAIStatus keeps progress status readable (planning / specialist / done).
+func IsMainAIStatus(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	lower := strings.ToLower(s)
+	if strings.Contains(lower, "planning") ||
+		strings.Contains(lower, "compos") ||
+		strings.Contains(lower, "orchestrat") ||
+		strings.Contains(lower, "synthes") {
+		return true
+	}
+	for _, name := range mainAIAgentNames {
+		if strings.Contains(lower, name) {
+			return true
+		}
+	}
+	// Short human status lines we set ourselves
+	for _, p := range []string{"market", "web", "social", "analyst", "running"} {
+		if strings.Contains(lower, p) && len(s) < 80 {
+			return true
+		}
+	}
+	return false
+}
+
+// FormatAIProgress is a live status card (HTML; all dynamic text is escaped).
+// tools should already be main-agent labels only (Market, Web, …).
+func FormatAIProgress(status string, tools []string) string {
+	tools = FilterMainAITools(tools)
+	var b strings.Builder
+	b.WriteString(header("⏳", "Swyngora AI · working"))
+	b.WriteString(divider())
+	if status != "" {
+		b.WriteString(italic(status) + "\n")
+	}
+	if len(tools) > 0 {
+		b.WriteString("\n" + bold("Agents") + "\n")
+		for _, t := range tools {
+			fmt.Fprintf(&b, "  • %s\n", code(t))
+		}
+	} else {
+		b.WriteString("\n" + italic("Planning which agents to run…") + "\n")
+	}
+	return b.String()
+}
+
+// FormatAIAnswer is the final answer card (HTML; dynamic content escaped).
+// Only main agents are listed (not every leaf tool).
+func FormatAIAnswer(reply string, thinking, tools []string) string {
+	var b strings.Builder
+	b.WriteString(header("🤖", "Swyngora AI"))
+	b.WriteString(divider())
+	body := stripLightMarkdown(strings.TrimSpace(reply))
+	if body == "" {
+		body = "No answer produced. Try rephrasing your question."
+	}
+	// Escaped plain body keeps Telegram HTML valid even if the model used < or &.
+	b.WriteString(esc(body))
+	main := FilterMainAITools(tools)
+	if len(main) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(divider())
+		b.WriteString(italic("Agents: ") + code(strings.Join(main, ", ")))
+		b.WriteString("\n")
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+// stripLightMarkdown removes common markdown markers so plain/HTML cards stay clean.
+func stripLightMarkdown(s string) string {
+	repl := strings.NewReplacer(
+		"**", "",
+		"__", "",
+		"```", "",
+		"``", "",
+		"`", "",
+		"### ", "",
+		"## ", "",
+		"# ", "",
+		"~~", "",
+	)
+	return strings.TrimSpace(repl.Replace(s))
+}
+
+func clipRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	if max < 2 {
+		return string(r[:max])
+	}
+	return string(r[:max-1]) + "…"
 }
 
 func ptrFloat(v *float64, frac int) string {

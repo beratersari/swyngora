@@ -4,6 +4,8 @@
 !.env.example
 backend/.env
 !backend/.env.example
+ai/.env
+!ai/.env.example
 
 # OS / IDE
 .DS_Store
@@ -30,3 +32,15 @@ build/
 coverage/
 *.log
 
+
+# Python AI
+ai/.venv/
+ai/**/__pycache__/
+*.egg-info/
+.pytest_cache/
+
+
+# Local env secrets
+.env
+backend/.env
+ai/.env

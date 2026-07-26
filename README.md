@@ -8,7 +8,8 @@ AI-powered cryptocurrency (and stock) analysis platform — market data, analyti
 
 | Package | Purpose |
 |---|---|
-| [`backend/`](backend/) | Go HTTP API — multi-exchange market data, supply, indicators, watchlist |
+| [`backend/`](backend/) | Go HTTP API — multi-exchange market data, supply, indicators, watchlist; **MCP** server (`cmd/mcp`) |
+| [`ai/`](ai/) | Python multi-agent assistant (LangGraph orchestrator + market/web/X/analyst specialists) |
 | [`simple-frontend/`](simple-frontend/) | Static test UI for the API (not the product app) |
 | [`frontend/`](frontend/) | Production web UI (Ant Design + Lightweight Charts; init epic first) |
 | [`project-management/`](project-management/) | Local frontend epics, tasks, board |
@@ -47,6 +48,23 @@ cd simple-frontend
 python3 -m http.server 5173
 # open http://localhost:5173 — set API base to http://localhost:8080 if needed
 ```
+
+### AI assistant
+
+```bash
+# terminal 1 — API + MCP on the same process (:8080 REST, :8080/mcp)
+cd backend && go run ./cmd/server
+
+# terminal 2 — multi-agent CLI (Ollama default)
+cd ai
+python3 -m venv .venv && source .venv/bin/activate   # or reuse existing .venv
+pip install -e ".[dev]"
+export AI_LLM_PROVIDER=ollama
+export SWYNGORA_API_URL=http://localhost:8080
+swyngora-ai "What is BTC price and RSI on binance?"
+```
+
+See [`ai/README.md`](ai/README.md) and [`docs/features/ai-assistant.md`](docs/features/ai-assistant.md). LLM providers: **Ollama** or **Grok (xAI)** only.
 
 ### Telegram bot (integrated in backend)
 

@@ -77,16 +77,14 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, pollTimeoutSec in
 	return updates, nil
 }
 
-// SendMessage sends a text message. parseMode is "HTML", "Markdown", or "" for plain.
-func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) error {
+// SendMessage sends HTML text; returns Telegram message_id (0 on parse failure of id).
+func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) (int64, error) {
 	return c.SendMessageMode(ctx, chatID, text, "HTML")
 }
 
-// SendMessageMode sends with an explicit parse_mode (empty = plain text).
-func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseMode string) error {
-	if len(text) > 4000 {
-		text = text[:3990] + "…"
-	}
+// SendMessageMode sends with parse_mode (empty = plain text). Returns message_id.
+func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseMode string) (int64, error) {
+	text = clipTelegram(text)
 	form := url.Values{}
 	form.Set("chat_id", strconv.FormatInt(chatID, 10))
 	form.Set("text", text)
@@ -94,7 +92,41 @@ func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseM
 		form.Set("parse_mode", parseMode)
 	}
 	form.Set("disable_web_page_preview", "true")
-	return c.call(ctx, "sendMessage", nil, form, nil)
+	var msg struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := c.call(ctx, "sendMessage", nil, form, &msg); err != nil {
+		return 0, err
+	}
+	return msg.MessageID, nil
+}
+
+// EditMessageText edits an existing message (plain or HTML).
+func (c *Client) EditMessageText(ctx context.Context, chatID, messageID int64, text, parseMode string) error {
+	text = clipTelegram(text)
+	form := url.Values{}
+	form.Set("chat_id", strconv.FormatInt(chatID, 10))
+	form.Set("message_id", strconv.FormatInt(messageID, 10))
+	form.Set("text", text)
+	if parseMode != "" {
+		form.Set("parse_mode", parseMode)
+	}
+	form.Set("disable_web_page_preview", "true")
+	return c.call(ctx, "editMessageText", nil, form, nil)
+}
+
+func clipTelegram(text string) string {
+	// Telegram hard limit 4096; leave margin for parse mode.
+	const max = 4000
+	if len(text) <= max {
+		return text
+	}
+	// Prefer rune-safe cut
+	r := []rune(text)
+	if len(r) <= max {
+		return text
+	}
+	return string(r[:max-1]) + "…"
 }
 
 // GetMe verifies the token.

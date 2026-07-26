@@ -129,6 +129,22 @@ func TestAllowAllRequiredWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestAsk_RequiresAI(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 20, 20, "/ask what is btc")
+	if !strings.Contains(strings.ToLower(out), "ai") {
+		t.Fatalf("want AI not configured message: %s", out)
+	}
+}
+
+func TestAsk_UsageWhenEmpty(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 21, 21, "/ask")
+	if !strings.Contains(out, "Usage") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestHelp(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 1, 1, "/help")

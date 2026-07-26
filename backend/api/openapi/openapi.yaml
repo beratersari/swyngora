@@ -445,6 +445,130 @@ paths:
         '502':
           $ref: '#/components/responses/Error'
 
+  /api/v1/market/pumps:
+    get:
+      summary: Detect pump/dump events on one symbol
+      description: |
+        Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
+        Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
+        Informational only — not financial advice.
+      operationId: getPumpEvents
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: interval
+          in: query
+          schema: { type: string, default: 1h }
+        - name: lookbackHours
+          in: query
+          schema: { type: number }
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: minReturnPct
+          in: query
+          schema: { type: number, default: 5 }
+        - name: windowBars
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [close_return, candle_body, high_from_low], default: close_return }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [up, down, both], default: up }
+        - name: minVolumeRatio
+          in: query
+          schema: { type: number }
+        - name: maxEvents
+          in: query
+          schema: { type: integer }
+        - name: startTime
+          in: query
+          schema: { type: string, format: date-time }
+        - name: endTime
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Pump events for the symbol
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  symbol: { type: string }
+                  exchange: { type: string }
+                  interval: { type: string }
+                  eventCount: { type: integer }
+                  events: { type: array, items: { type: object } }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/market/pumps/scan:
+    get:
+      summary: Scan top-volume symbols for recent pumps
+      description: |
+        Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
+        Informational only — not financial advice.
+      operationId: scanPumpEvents
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: interval
+          in: query
+          schema: { type: string, default: 15m }
+        - name: lookbackHours
+          in: query
+          schema: { type: number, default: 24 }
+        - name: minReturnPct
+          in: query
+          schema: { type: number, default: 8 }
+        - name: windowBars
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: mode
+          in: query
+          schema: { type: string, enum: [close_return, candle_body, high_from_low] }
+        - name: direction
+          in: query
+          schema: { type: string, enum: [up, down, both] }
+        - name: minVolumeRatio
+          in: query
+          schema: { type: number }
+        - name: symbolLimit
+          in: query
+          schema: { type: integer, default: 15, maximum: 40 }
+      responses:
+        '200':
+          description: Ranked pump hits
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hitCount: { type: integer }
+                  hits: { type: array, items: { type: object } }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+
   /api/v1/market/indicators/batch:
     post:
       summary: Latest RSI/EMA for many symbols (one exchange)

@@ -33,9 +33,9 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 | Layer | Stack | Notes |
 |---|---|---|
 | API / services | **Go** | N-layered (§6.7); public HTTP API described by **OpenAPI** for client codegen (§6.9) |
-| AI assistant | **Python** + **LangChain** | Conversational agent with memory |
+| AI assistant | **Python** + **LangGraph/LangChain** | Multi-agent orchestrator under `ai/` (market, web, X, analyst specialists) |
 | LLM providers | **Local Ollama** and **Grok (xAI)** only | See §6.5 — do not integrate other commercial LLM APIs as defaults |
-| Tooling for AI | Custom **MCP** (Model Context Protocol) tools | Give the assistant access to market data, user context, and backend services when needed |
+| Tooling for AI | Custom **MCP** (Go server `backend/cmd/mcp`) | Market/watchlist tools for agents; mirror HTTP OpenAPI (§6.5) |
 
 **Product goals:** fast, smart, easy-to-use analysis with modern AI.
 
@@ -300,6 +300,7 @@ Example: `[backend] Add exchange market-cap ranking API`
 5. Ask before destructive git operations, force-pushes, or changing shared CI/infra.
 6. Plan **tests** and **docs** with the feature—not as an afterthought after the MR is open.
 7. After any code change, update related **`AGENTS.md`** and **`README.md`** files (see §8.2)—same change set, not a follow-up.
+8. **Restart the running backend yourself** after changes that affect `cmd/server` / transport / services (kill port `:8080` process and start `go run ./cmd/server`). Do not only print restart instructions for the user when you have shell access. Same for MCP: it is served by that single process at `/mcp`.
 
 ### 6.2 Implementation defaults
 
@@ -395,6 +396,21 @@ When fetching market or other data from third-party APIs:
 - Prefer calling backend services through controlled tools rather than giving the model raw DB credentials.
 - When in doubt, fail closed (refuse the tool call) rather than expose sensitive data.
 - Tool implementations that need an LLM must call through the Ollama/Grok abstraction—not ad-hoc HTTP to other model vendors.
+
+#### Mandatory: new features get MCP tools
+
+**Rule: when you add a user-facing or agent-useful product feature (API endpoint group, analytics capability, watchlist action, alert type, portfolio view, etc.), you must expose it as an MCP tool in the same MR/PR so the AI assistant can use it.**
+
+| Requirement | Detail |
+|---|---|
+| Where | Register tools in `backend/internal/transport/mcp` (and `backend/cmd/mcp`); keep names/schemas stable |
+| Contract | Prefer calling existing N-layered services or the public HTTP API — do not reimplement business logic in the MCP adapter |
+| Python | If the assistant needs a first-class tool binding, update `ai/src/swyngora_ai/tools/` (HTTP mirror and/or MCP client) in the same change |
+| Docs | Document the tool in `backend/internal/transport/mcp/README.md` and `docs/features/ai-assistant.md` (or the feature doc) |
+| Tests | MCP tool behavior tests (mocked API) + AI tool wiring tests when the Python surface changes |
+| Exceptions | Pure internals with no agent value (e.g. cache cleanup ticks) may skip MCP — state why in the MR |
+
+Do **not** ship a feature AI users would expect to ask about while leaving it unreachable from tools.
 
 ### 6.6 Background runtime: refresh and cache hygiene
 
@@ -687,13 +703,16 @@ golangci-lint run   # when configured
 # swagger-cli validate api/openapi/*.yaml   # example
 
 # AI (Python) — from ai/
-# prefer project venv / uv / poetry once chosen
-pytest
-ruff check .
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+# swyngora-ai "What is BTC RSI on binance?"   # needs Ollama or XAI_API_KEY + API up
 
 # Backend (implemented) — from backend/
 go test ./...
-go run ./cmd/server   # :8080 — see backend/README.md for env vars
+go run ./cmd/server   # :8080 REST + /mcp (streamable MCP) in one process
+# go run ./cmd/mcp    # optional stdio-only MCP (not required)
+go test ./internal/transport/mcp/...
 
 # Telegram bot is integrated in backend (optional): set TELEGRAM_BOT_TOKEN then go run ./cmd/server
 # go test ./internal/transport/telegram/...
@@ -831,6 +850,7 @@ Whenever you edit production or tooling code, ask: *did this make any README or 
 - Change public HTTP APIs **without updating OpenAPI** and regenerating clients (§6.9).
 - Wire **non-Ollama / non-Grok** commercial LLM providers as defaults or “pricing options.”
 - Add external data-API integrations that require **paid pricing-tier choices** without an ADR and team approval.
+- Ship a **new agent-useful feature without an MCP tool** (and Python tool binding when applicable) — see §6.5 “Mandatory: new features get MCP tools.”
 
 ---
 
@@ -851,6 +871,8 @@ Client UI:      Atomic Design; product web: Ant Design + Lightweight Charts; lib
 Client data:    RTK Query + types/endpoints from OpenAPI codegen (§6.9)
 Local PM:       project-management/ (epics, tasks, board) until GitLab fully used
 LLMs:           Local Ollama + Grok (xAI) only — no other commercial LLM defaults
+AI:             ai/ LangGraph orchestrator + specialists; backend/cmd/mcp tools
+New features:   Add MCP tool (+ AI tool binding) in the same MR when agent-useful (§6.5)
 External APIs:  No paid pricing-tier choices; prefer free/public/self-hosted data sources
 Default branch for integration: develop
 Production branch: main
@@ -864,5 +886,5 @@ Push:           git pushboth <ref>  # both remotes (§3.8)
 
 This project is early. When stack choices solidify (module paths, package managers, CI jobs, deploy targets), update **§2**, **§7**, nested package `AGENTS.md`, and related `README.md` files in the same change set (see §8.2). Stale agent docs are worse than short ones.
 
-**Last updated:** 2026-07-26 (frontend: antd + lightweight-charts + project-management/)  
+**Last updated:** 2026-07-26 (frontend UI + multi-agent AI/MCP)  
 **Initial product version target:** `0.1.0` (pre-release development)

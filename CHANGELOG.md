@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-agent AI assistant** (`ai/`): LangGraph orchestrator with market, web, X/Twitter-signal, and analyst specialists; Ollama + Grok only
+- **Go MCP** embedded in `cmd/server` at `/mcp` (in-process tools); optional stdio `cmd/mcp`
+- **Telegram `/ask` and `/ai`** plus `POST /api/v1/ai/chat` proxy; optional AI auto-start child process
+- AGENTS.md rule: new agent-useful features must ship with MCP tools in the same MR; restart backend after server changes
+- Docs: `docs/features/ai-assistant.md`, ADR 0002 multi-agent + MCP
+
 ### Fixed
 - Watchlist `Add` max-items race (enforced under store lock); reject empty/`default` clientId
 - Indicator series no longer collapses bad closes (fail instead of inventing RSI/EMA gaps)

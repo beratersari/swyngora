@@ -15,11 +15,14 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
+	mcpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/mcp"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/telegram"
 )
 
@@ -104,14 +107,38 @@ func main() {
 
 	watchSvc := watchlist.New(watchliststore.NewMemory())
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Optional: start Python multi-agent HTTP as a child of this process.
+	aiProc, err := aistart.Start(ctx, aistart.Options{
+		Enabled: cfg.AIAutoStart,
+		Python:  cfg.AIPython,
+		WorkDir: cfg.AIWorkDir,
+		Host:    cfg.AIListenHost,
+		Port:    cfg.AIListenPort,
+		Logger:  logger,
+	})
+	if err != nil {
+		logger.Error("AI auto-start failed", "err", err)
+	} else if aiProc != nil {
+		defer aiProc.Stop()
+	}
+
+	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
+
+	// MCP tools run in-process (same binary / same port as REST). No second server.
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc)
+	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
+
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
 		RateLimitRPS:     cfg.RateLimitRPS,
 		RateLimitBurst:   cfg.RateLimitBurst,
 		CORSAllowOrigins: cfg.CORSAllowOrigins,
+		MCPHandler:       mcpHTTP,
+		AI:              aiClient,
+		AITimeout:       cfg.AITimeout,
 	})
-
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
 
 	job := &supplyjob.Runner{
 		Supply:     binanceClient,
@@ -135,6 +162,8 @@ func main() {
 				LowMcapLimit:    cfg.TelegramLowMcapLimit,
 				AllowedChatIDs:  cfg.TelegramAllowedChats,
 				AllowAll:        cfg.TelegramAllowAll,
+				AI:              aiClient,
+				AITimeout:       cfg.AITimeout,
 			})
 			bot := &telegram.Bot{
 				Client:      tgClient,
@@ -157,12 +186,18 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      60 * time.Second,
+		// AI chat can take longer than market endpoints.
+		WriteTimeout:      180 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
-		logger.Info("server listening", "addr", cfg.HTTPAddr, "exchanges", []string{"binance", "coinbase", "bybit"})
+		logger.Info("server listening",
+			"addr", cfg.HTTPAddr,
+			"exchanges", []string{"binance", "coinbase", "bybit"},
+			"mcp", "/mcp",
+			"ai_service", cfg.AIServiceURL,
+		)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("server failed", "err", err)
 			os.Exit(1)

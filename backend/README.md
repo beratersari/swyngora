@@ -111,10 +111,29 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 
+## MCP (AI tools) — same process as HTTP
+
+MCP is **integrated into `cmd/server`**. Starting the backend exposes:
+
+| Surface | URL |
+|---------|-----|
+| REST API | `http://localhost:8080/api/v1/...` |
+| MCP (streamable HTTP) | `http://localhost:8080/mcp` |
+
+```bash
+go run ./cmd/server   # both REST and MCP
+```
+
+Package: `internal/transport/mcp` (in-process tools → market/watchlist services).  
+Optional stdio-only binary: `go run ./cmd/mcp` (not required for normal use).
+
+**Rule:** new agent-useful features must add MCP tools in the same change (root `AGENTS.md` §6.5).
+
 ## Test
 
 ```bash
 go test ./...
+go test ./internal/transport/mcp/...
 go vet ./...
 ```
 

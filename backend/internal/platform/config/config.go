@@ -47,6 +47,15 @@ type Config struct {
 	TelegramDefaultExchange string
 	TelegramPollTimeout     time.Duration
 	TelegramLowMcapLimit    int
+
+	// AI multi-agent service (Python). Telegram /ask and POST /api/v1/ai/chat.
+	AIServiceURL   string
+	AITimeout      time.Duration
+	AIAutoStart    bool
+	AIPython       string // interpreter for auto-start, e.g. ai/.venv/bin/python
+	AIWorkDir      string // cwd for auto-start (repo ai/ package)
+	AIListenHost   string
+	AIListenPort   int
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -86,6 +95,16 @@ func Load() Config {
 		TelegramDefaultExchange: strings.ToLower(strings.TrimSpace(getenv("BOT_DEFAULT_EXCHANGE", "binance"))),
 		TelegramPollTimeout:     positiveDurationEnv("BOT_POLL_TIMEOUT", 30*time.Second),
 		TelegramLowMcapLimit:    clampInt(positiveIntEnv("BOT_LOWMCAP_LIMIT", 10), 1, 25),
+
+		AIServiceURL: getenv("AI_SERVICE_URL", "http://127.0.0.1:8090"),
+		// Multi-agent /ask (market + web + X) often needs >2 minutes.
+		AITimeout: positiveDurationEnv("AI_TIMEOUT", 300*time.Second),
+		// Auto-start Python AI with the backend when true (default true if AI_PYTHON is set, else false).
+		AIAutoStart:  boolEnv("AI_AUTOSTART", false),
+		AIPython:     strings.TrimSpace(os.Getenv("AI_PYTHON")),
+		AIWorkDir:    strings.TrimSpace(getenv("AI_WORKDIR", "ai")),
+		AIListenHost: getenv("AI_LISTEN_HOST", "127.0.0.1"),
+		AIListenPort: positiveIntEnv("AI_LISTEN_PORT", 8090),
 	}
 }
 

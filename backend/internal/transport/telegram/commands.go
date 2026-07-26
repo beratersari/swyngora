@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
@@ -23,12 +24,17 @@ type Options struct {
 	// AllowAll permits every chat when AllowedChatIDs is empty.
 	// When both empty and AllowAll is false, Allowed rejects everyone (fail closed).
 	AllowAll bool
+	// AI is optional multi-agent assistant (Python service).
+	AI *aiagent.Client
+	// AITimeout bounds /ask orchestration (default 120s).
+	AITimeout time.Duration
 }
 
 // Router dispatches Telegram text commands to application services.
 type Router struct {
 	market *market.Service
 	watch  *watchlist.Service
+	ai     *aiagent.Client
 	opts   Options
 	now    func() time.Time
 	mu     sync.Mutex
@@ -46,9 +52,13 @@ func NewRouter(marketSvc *market.Service, watchSvc *watchlist.Service, opts Opti
 	if opts.LowMcapLimit > 25 {
 		opts.LowMcapLimit = 25
 	}
+	if opts.AITimeout <= 0 {
+		opts.AITimeout = 120 * time.Second
+	}
 	return &Router{
 		market: marketSvc,
 		watch:  watchSvc,
+		ai:     opts.AI,
 		opts:   opts,
 		now:    time.Now,
 		lastAt: map[int64]time.Time{},
@@ -103,13 +113,80 @@ func (r *Router) Handle(ctx context.Context, chatID, userID int64, text string) 
 		return r.cmdExchanges()
 	case "/watch":
 		return r.cmdWatch(ctx, userID, args)
+	case "/ask", "/ai":
+		return r.cmdAsk(ctx, userID, args)
 	default:
 		if strings.HasPrefix(cmd, "/") {
 			return "Unknown command. Try /help"
 		}
-		// Free-text is not treated as /price (avoids group chatter hammering upstreams).
-		return "Send a command, e.g. /price BTCUSDT — try /help"
+		// Free-text → AI when configured (e.g. "deep analysis for JUV").
+		if r.ai != nil {
+			return r.runAI(ctx, userID, text)
+		}
+		return "Send a command, e.g. /price BTCUSDT or /ask what is BTC RSI? — try /help"
 	}
+}
+
+// cmdAsk routes natural-language questions to the multi-agent AI service.
+func (r *Router) cmdAsk(ctx context.Context, userID int64, args []string) string {
+	q := strings.TrimSpace(strings.Join(args, " "))
+	if q == "" {
+		return "Usage: /ask <question>\nExample: /ask What is BTC RSI on binance 1h and any recent news?"
+	}
+	return r.runAI(ctx, userID, q)
+}
+
+func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
+	if r.ai == nil {
+		return "AI is not configured. Set AI_SERVICE_URL / AI_AUTOSTART + AI_PYTHON, then restart the backend."
+	}
+	session := fmt.Sprintf("tg-%d", userID)
+	aiCtx, cancel := context.WithTimeout(ctx, r.opts.AITimeout)
+	defer cancel()
+	res, err := r.ai.Chat(aiCtx, q, session)
+	if err != nil {
+		return "AI unavailable: " + esc(err.Error()) + "\n\nEnsure the AI service is running (backend can auto-start it) and try again."
+	}
+	return FormatAIAnswer(res.Reply, res.Thinking, res.Tools)
+}
+
+
+// IsAIRequest reports whether text should be handled by the multi-agent AI path.
+func (r *Router) IsAIRequest(text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return false
+	}
+	parts := strings.Fields(text)
+	cmd := strings.ToLower(parts[0])
+	if i := strings.IndexByte(cmd, '@'); i > 0 {
+		cmd = cmd[:i]
+	}
+	if cmd == "/ask" || cmd == "/ai" {
+		return true
+	}
+	// Free-text questions go to AI when configured.
+	return !strings.HasPrefix(cmd, "/") && r.ai != nil
+}
+
+// AIQuestion extracts the user question from /ask|/ai args or free-text.
+func (r *Router) AIQuestion(text string) string {
+	text = strings.TrimSpace(text)
+	parts := strings.Fields(text)
+	if len(parts) == 0 {
+		return ""
+	}
+	cmd := strings.ToLower(parts[0])
+	if i := strings.IndexByte(cmd, '@'); i > 0 {
+		cmd = cmd[:i]
+	}
+	if cmd == "/ask" || cmd == "/ai" {
+		return strings.TrimSpace(strings.Join(parts[1:], " "))
+	}
+	if strings.HasPrefix(cmd, "/") {
+		return ""
+	}
+	return text
 }
 
 func (r *Router) allowRate(chatID int64) bool {
