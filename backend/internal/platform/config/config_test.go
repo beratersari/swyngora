@@ -105,3 +105,29 @@ func TestSupplyTTL_ZeroAllowed(t *testing.T) {
 		t.Fatalf("want 0, got %v", cfg.SupplyCacheTTL)
 	}
 }
+
+func TestTelegramChatIDs(t *testing.T) {
+	t.Setenv("TELEGRAM_BOT_TOKEN", "tok")
+	t.Setenv("TELEGRAM_CHAT_ID", "42")
+	t.Setenv("TELEGRAM_ALLOWED_CHAT_IDS", "100,200")
+	cfg := Load()
+	if cfg.TelegramBotToken != "tok" {
+		t.Fatalf("token=%q", cfg.TelegramBotToken)
+	}
+	if _, ok := cfg.TelegramAllowedChats[42]; !ok {
+		t.Fatal("missing chat 42")
+	}
+	if _, ok := cfg.TelegramAllowedChats[100]; !ok {
+		t.Fatal("missing chat 100")
+	}
+}
+
+func TestTelegramDisabledByDefault(t *testing.T) {
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Setenv("TELEGRAM_CHAT_ID", "")
+	t.Setenv("TELEGRAM_ALLOWED_CHAT_IDS", "")
+	cfg := Load()
+	if cfg.TelegramBotToken != "" {
+		t.Fatal("expected empty token")
+	}
+}

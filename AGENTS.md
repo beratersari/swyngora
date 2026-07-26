@@ -26,7 +26,7 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 | Simple frontend | Static HTML/JS | **Test harness only** under `simple-frontend/` — not Atomic Design / RTK Query |
 | Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **RTK Query**; OpenAPI types (§6.9) |
 | Mobile app | React Native | Same as product web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
-| Messaging | Telegram bot | Not a React UI; follow bot package conventions when scaffolded |
+| Messaging | Telegram bot | Optional transport under `backend/internal/transport/telegram` (same process as HTTP API; no AI) |
 
 ### Backend and AI
 
@@ -58,7 +58,7 @@ swyngora/
 ├── frontend/                 # Production web UI (reserved; Atomic Design when scaffolded)
 ├── web/                      # Optional alias/legacy name — prefer frontend/ for product UI
 ├── mobile/                   # React Native (Atomic Design — §6.8)
-├── bot/                      # Telegram bot
+├── bot/                      # (unused) Telegram lives in backend/internal/transport/telegram
 ├── packages/                 # Shared libs (schemas, clients, types) if needed
 └── scripts/                  # Dev, release, and CI helpers
 ```
@@ -687,6 +687,9 @@ ruff check .
 # Backend (implemented) — from backend/
 go test ./...
 go run ./cmd/server   # :8080 — see backend/README.md for env vars
+
+# Telegram bot is integrated in backend (optional): set TELEGRAM_BOT_TOKEN then go run ./cmd/server
+# go test ./internal/transport/telegram/...
 
 # Simple frontend (test harness) — from simple-frontend/
 python3 -m http.server 5173   # open http://localhost:5173

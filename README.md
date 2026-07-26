@@ -8,7 +8,7 @@ AI-powered cryptocurrency (and stock) analysis platform — market data, analyti
 
 | Package | Purpose |
 |---|---|
-| [`backend/`](backend/) | Go HTTP API — Binance candles & 24h volume, supply metadata |
+| [`backend/`](backend/) | Go HTTP API — multi-exchange market data, supply, indicators, watchlist |
 | [`simple-frontend/`](simple-frontend/) | Static test UI for the API (not the product app) |
 | [`frontend/`](frontend/) | Reserved for the production web UI |
 | [`docs/`](docs/) | Feature notes and ADRs |
@@ -46,6 +46,18 @@ cd simple-frontend
 python3 -m http.server 5173
 # open http://localhost:5173 — set API base to http://localhost:8080 if needed
 ```
+
+### Telegram bot (integrated in backend)
+
+Optional transport in the same process as the HTTP API (no separate binary).
+
+```bash
+cd backend
+cp .env.example .env   # set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+go run ./cmd/server    # :8080 + Telegram long-poll when token is set
+```
+
+After editing tokens in `.env`, **restart the server**. See [`docs/features/telegram-bot.md`](docs/features/telegram-bot.md) and `backend/README.md`.
 
 ## Data sources
 

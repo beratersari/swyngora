@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Telegram bot** integrated in backend (`transport/telegram`): market commands, watchlist, `/lowmcap` / `/lowmcap all` (no AI; enabled via `TELEGRAM_BOT_TOKEN`)
 - Technical indicators: **RSI** (Wilder) and **EMA** via `GET /api/v1/market/indicators`
 - OpenAPI for **`POST /api/v1/market/indicators/batch`**; document `exchange` on ticker/intervals/tags
 - **Watchlist** API (`/api/v1/watchlist`) + dashboard stars / filter (client id + localStorage)

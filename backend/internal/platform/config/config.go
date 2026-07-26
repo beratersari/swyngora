@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bufio"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +33,13 @@ type Config struct {
 	// Ingress rate limit (per client IP). 0 disables.
 	RateLimitRPS   float64
 	RateLimitBurst int
+
+	// Telegram bot (optional). Empty token disables the bot.
+	TelegramBotToken        string
+	TelegramAllowedChats    map[int64]struct{}
+	TelegramDefaultExchange string
+	TelegramPollTimeout     time.Duration
+	TelegramLowMcapLimit    int
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -51,7 +59,7 @@ func Load() Config {
 		TickerCacheTTL:        positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
 		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
 		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
-		SupplyCacheTTL: durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
+		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
 		CacheCleanupEvery:  positiveDurationEnv("CACHE_CLEANUP_EVERY", 1*time.Minute),
 		SpotMarketCacheTTL: positiveDurationEnv("SPOT_MARKET_CACHE_TTL", 5*time.Second),
 
@@ -62,6 +70,12 @@ func Load() Config {
 
 		RateLimitRPS:   floatEnv("RATE_LIMIT_RPS", 40),
 		RateLimitBurst: positiveIntEnv("RATE_LIMIT_BURST", 80),
+
+		TelegramBotToken:        strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
+		TelegramAllowedChats:    parseTelegramChatIDs(),
+		TelegramDefaultExchange: strings.ToLower(strings.TrimSpace(getenv("BOT_DEFAULT_EXCHANGE", "binance"))),
+		TelegramPollTimeout:     positiveDurationEnv("BOT_POLL_TIMEOUT", 30*time.Second),
+		TelegramLowMcapLimit:    clampInt(positiveIntEnv("BOT_LOWMCAP_LIMIT", 10), 1, 25),
 	}
 }
 
@@ -170,4 +184,70 @@ func loadLocation(name string) *time.Location {
 		return time.UTC
 	}
 	return loc
+}
+
+func parseTelegramChatIDs() map[int64]struct{} {
+	out := map[int64]struct{}{}
+	add := func(raw string) {
+		for _, part := range strings.Split(raw, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			id, err := strconv.ParseInt(part, 10, 64)
+			if err != nil {
+				continue
+			}
+			out[id] = struct{}{}
+		}
+	}
+	add(os.Getenv("TELEGRAM_ALLOWED_CHAT_IDS"))
+	add(os.Getenv("TELEGRAM_CHAT_ID"))
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func clampInt(n, min, max int) int {
+	if n < min {
+		return min
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
+// LoadDotEnv loads KEY=VALUE from path without overriding existing env vars.
+func LoadDotEnv(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "export ") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
+		}
+		i := strings.IndexByte(line, '=')
+		if i <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:i])
+		val := strings.TrimSpace(line[i+1:])
+		if len(val) >= 2 {
+			if (val[0] == '"' && val[len(val)-1] == '"') || (val[0] == '\'' && val[len(val)-1] == '\'') {
+				val = val[1 : len(val)-1]
+			}
+		}
+		if os.Getenv(key) == "" {
+			_ = os.Setenv(key, val)
+		}
+	}
 }

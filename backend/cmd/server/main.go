@@ -13,16 +13,21 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/telegram"
 )
 
 func main() {
+	// Optional local secrets (does not override existing env).
+	config.LoadDotEnv(".env")
+	config.LoadDotEnv("backend/.env")
+
 	cfg := config.Load()
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -116,6 +121,26 @@ func main() {
 		Logger:     logger,
 	}
 	go job.Start(ctx)
+
+	// Optional Telegram bot transport (same process, in-process services).
+	if cfg.TelegramBotToken != "" {
+		tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.HTTPClientTimeout+cfg.TelegramPollTimeout+10*time.Second)
+		router := telegram.NewRouter(marketSvc, watchSvc, telegram.Options{
+			DefaultExchange: cfg.TelegramDefaultExchange,
+			LowMcapLimit:    cfg.TelegramLowMcapLimit,
+			AllowedChatIDs:  cfg.TelegramAllowedChats,
+		})
+		bot := &telegram.Bot{
+			Client:      tgClient,
+			Router:      router,
+			Logger:      logger,
+			PollTimeout: cfg.TelegramPollTimeout,
+		}
+		go bot.Start(ctx)
+		logger.Info("telegram bot enabled", "allowlist", len(cfg.TelegramAllowedChats))
+	} else {
+		logger.Info("telegram bot disabled (set TELEGRAM_BOT_TOKEN to enable)")
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

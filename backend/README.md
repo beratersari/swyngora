@@ -7,6 +7,7 @@ Go HTTP API for market data across **Binance**, **Coinbase**, and **Bybit** (spo
 | Layer | Path | Role |
 |---|---|---|
 | Transport | `internal/transport/http` | HTTP handlers, CORS, rate limit, JSON mapping |
+| Transport | `internal/transport/telegram` | Optional Telegram bot (long-poll → same services) |
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
 | Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache |
@@ -47,13 +48,45 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 # from backend/
 go run ./cmd/server
 # listens on :8080 by default
+# optional Telegram bot starts when TELEGRAM_BOT_TOKEN is set
 ```
+
+Optional local secrets (gitignored):
+
+```bash
+cp .env.example .env   # or place .env at repo root
+# set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID
+go run ./cmd/server
+```
+
+After editing `.env` / bot tokens, **restart the server** so config reloads.
+
+### Telegram bot commands
+
+Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market** and **watchlist** services in-process (no HTTP hop).
+
+| Command | Description |
+|---------|-------------|
+| `/price <symbol> [exchange]` | 24h ticker |
+| `/spot [exchange] [query]` | Top by quote volume |
+| `/lowmcap [exchange\|all] [n]` | Lowest circulating market cap |
+| `/mcap <asset\|pair>` | Supply snapshot |
+| `/rsi <symbol> [interval] [exchange]` | RSI + EMA |
+| `/exchanges` | Venues |
+| `/watch` · `add` · `del` · `top` | Per-user watchlist (`tg-<user_id>`) |
+
+See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 
 ### Environment
 
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
+| `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |
+| `TELEGRAM_CHAT_ID` | — | Allowed chat id (or use `TELEGRAM_ALLOWED_CHAT_IDS`) |
+| `BOT_DEFAULT_EXCHANGE` | `binance` | Default venue for bot commands |
+| `BOT_POLL_TIMEOUT` | `30s` | Telegram long-poll wait |
+| `BOT_LOWMCAP_LIMIT` | `10` | Default `/lowmcap` size (max 25) |
 | `BINANCE_BASE_URL` | `https://api.binance.com` | Binance Spot REST base |
 | `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
 | `COINBASE_BASE_URL` | `https://api.coinbase.com` | Coinbase public market products |
