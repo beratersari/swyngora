@@ -11,6 +11,8 @@ const {
   filterPageByWatchlist,
   sortSpotItemsClient,
   assembleWatchlistView,
+  mergeWatchlists,
+  fmtNum,
 } = require("./watchlist-logic.js");
 
 const sixWatch = [
@@ -30,6 +32,38 @@ const topByVolumePage = [
   { symbol: "RANDOM1", lastPrice: "1", quoteVolume: "7000" },
   { symbol: "RANDOM2", lastPrice: "2", quoteVolume: "6000" },
 ];
+
+describe("mergeWatchlists", () => {
+  test("unions local and server without wiping offline adds", () => {
+    const local = [
+      { exchange: "binance", symbol: "BTCUSDT" },
+      { exchange: "coinbase", symbol: "ETH-USD" },
+    ];
+    const server = [{ exchange: "binance", symbol: "BTCUSDT" }];
+    const m = mergeWatchlists(local, server);
+    assert.equal(m.length, 2);
+    assert.ok(m.some((x) => x.exchange === "coinbase" && x.symbol === "ETH-USD"));
+  });
+
+  test("empty server does not clear local", () => {
+    const local = [{ exchange: "binance", symbol: "SOLUSDT" }];
+    const m = mergeWatchlists(local, []);
+    assert.equal(m.length, 1);
+    assert.equal(m[0].symbol, "SOLUSDT");
+  });
+});
+
+describe("fmtNum", () => {
+  test("does not collapse tiny non-zero prices to 0", () => {
+    const s = fmtNum("1e-9", 8);
+    assert.notEqual(s, "0");
+    assert.ok(s.includes("e") || s.includes("E") || Number(s) > 0);
+  });
+
+  test("zero stays zero", () => {
+    assert.equal(fmtNum(0, 8), "0");
+  });
+});
 
 describe("filterWatchlistTargets", () => {
   test("keeps all 6 entries", () => {

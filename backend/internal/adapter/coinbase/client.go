@@ -73,8 +73,14 @@ func NewClient(opts Options) *Client {
 }
 
 // ListProductTags is not available from Coinbase public product catalog.
+// Service layer may fall back to the Binance catalog for the filter UI.
 func (c *Client) ListProductTags(context.Context) ([]string, error) {
 	return []string{}, nil
+}
+
+// TagsByBase — Coinbase has no product-tag catalog (service enriches from Binance).
+func (c *Client) TagsByBase(context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
 }
 
 // ListSpotMarkets returns online SPOT products with 24h metrics.
@@ -158,6 +164,11 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 }
 
 // GetTicker24h returns 24h stats for a Coinbase product id (e.g. BTC-USD).
+//
+// Advanced Trade public products expose last price / volume / % change, but
+// high_24h and low_24h are typically empty on that endpoint. We fill high/low/open
+// from the classic Exchange public stats API (api.exchange.coinbase.com), which
+// does publish those fields.
 func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticker24h, error) {
 	symbol = normalizeProductID(symbol)
 	if symbol == "" {
@@ -177,7 +188,8 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 		}
 		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
 		defer cancel()
-		// Prefer product from list cache path: single product query.
+
+		// Product row: last, %, base/quote volume (Advanced Trade public).
 		params := url.Values{}
 		params.Set("product_ids", symbol)
 		body, err := c.get(fetchCtx, c.baseURL, productsPath, params)
@@ -198,6 +210,7 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 		if p == nil {
 			return nil, fmt.Errorf("%w: product %s", domain.ErrNotFound, symbol)
 		}
+
 		now := time.Now().UTC()
 		t := &domain.Ticker24h{
 			Symbol:             p.ProductID,
@@ -205,11 +218,46 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 			PriceChangePercent: p.PricePercentageChange24h,
 			Volume:             p.Volume24h,
 			QuoteVolume:        p.ApproximateQuote24hVolume,
-			HighPrice:          p.High24h,
-			LowPrice:           p.Low24h,
-			OpenTime:           now.Add(-24 * time.Hour),
-			CloseTime:          now,
+			// high/low often empty on Advanced Trade public products — fill from stats.
+			HighPrice: strings.TrimSpace(p.High24h),
+			LowPrice:  strings.TrimSpace(p.Low24h),
+			OpenTime:  now.Add(-24 * time.Hour),
+			CloseTime: now,
 		}
+
+		// Exchange stats: open, high, low, last, volume (public, no auth).
+		statsPath := "/products/" + url.PathEscape(symbol) + "/stats"
+		statsBody, statsErr := c.get(fetchCtx, c.exchangeURL, statsPath, nil)
+		if statsErr == nil {
+			var st productStats
+			if err := json.Unmarshal(statsBody, &st); err == nil {
+				if st.High != "" {
+					t.HighPrice = st.High
+				}
+				if st.Low != "" {
+					t.LowPrice = st.Low
+				}
+				if st.Open != "" {
+					t.OpenPrice = st.Open
+				}
+				if st.Last != "" {
+					t.LastPrice = st.Last
+				}
+				if st.Volume != "" {
+					t.Volume = st.Volume
+				}
+			}
+		}
+		// If % change empty but open+last known, derive approximate 24h change.
+		if t.PriceChangePercent == "" && t.OpenPrice != "" && t.LastPrice != "" {
+			if open, e1 := strconv.ParseFloat(t.OpenPrice, 64); e1 == nil && open != 0 {
+				if last, e2 := strconv.ParseFloat(t.LastPrice, 64); e2 == nil {
+					t.PriceChangePercent = strconv.FormatFloat((last-open)/open*100, 'f', -1, 64)
+					t.PriceChange = strconv.FormatFloat(last-open, 'f', -1, 64)
+				}
+			}
+		}
+
 		if c.tickers != nil {
 			c.tickers.Set(symbol, t)
 		}
@@ -403,19 +451,30 @@ type productsResponse struct {
 }
 
 type productRow struct {
-	ProductID                   string `json:"product_id"`
-	Price                       string `json:"price"`
-	PricePercentageChange24h    string `json:"price_percentage_change_24h"`
-	Volume24h                   string `json:"volume_24h"`
-	ApproximateQuote24hVolume   string `json:"approximate_quote_24h_volume"`
-	BaseCurrencyID              string `json:"base_currency_id"`
-	QuoteCurrencyID             string `json:"quote_currency_id"`
-	Status                      string `json:"status"`
-	TradingDisabled             bool   `json:"trading_disabled"`
-	IsDisabled                  bool   `json:"is_disabled"`
-	ProductType                 string `json:"product_type"`
-	High24h                     string `json:"high_24h"`
-	Low24h                      string `json:"low_24h"`
+	ProductID                 string `json:"product_id"`
+	Price                     string `json:"price"`
+	PricePercentageChange24h  string `json:"price_percentage_change_24h"`
+	Volume24h                 string `json:"volume_24h"`
+	ApproximateQuote24hVolume string `json:"approximate_quote_24h_volume"`
+	BaseCurrencyID            string `json:"base_currency_id"`
+	QuoteCurrencyID           string `json:"quote_currency_id"`
+	Status                    string `json:"status"`
+	TradingDisabled           bool   `json:"trading_disabled"`
+	IsDisabled                bool   `json:"is_disabled"`
+	ProductType               string `json:"product_type"`
+	// High24h / Low24h are documented on Advanced Trade products but often empty
+	// for unauthenticated public market endpoints — use productStats instead.
+	High24h string `json:"high_24h"`
+	Low24h  string `json:"low_24h"`
+}
+
+// productStats is Coinbase Exchange public GET /products/{id}/stats.
+type productStats struct {
+	Open   string `json:"open"`
+	High   string `json:"high"`
+	Low    string `json:"low"`
+	Last   string `json:"last"`
+	Volume string `json:"volume"`
 }
 
 func unmarshalFloat(raw json.RawMessage) (float64, error) {

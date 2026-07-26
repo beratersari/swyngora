@@ -38,6 +38,10 @@ func (stubMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error
 	}, nil
 }
 
+func (stubMarket) TagsByBase(_ context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 func (stubMarket) ListProductTags(_ context.Context) ([]string, error) {
 	return []string{"Layer1_Layer2", "Payments"}, nil
 }

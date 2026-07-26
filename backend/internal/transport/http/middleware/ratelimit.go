@@ -8,17 +8,30 @@ import (
 	"time"
 )
 
+// defaultMaxBuckets caps distinct IP buckets to bound memory under unique-IP floods.
+const defaultMaxBuckets = 100_000
+
 // RateLimit returns middleware that limits requests per client IP using a token bucket.
 // rps is tokens per second; burst is the maximum burst size.
 // When rps <= 0, the middleware is a no-op.
 func RateLimit(rps float64, burst int) func(http.Handler) http.Handler {
+	return RateLimitWithMaxBuckets(rps, burst, defaultMaxBuckets)
+}
+
+// RateLimitWithMaxBuckets is like RateLimit but allows tests to set a small bucket cap.
+func RateLimitWithMaxBuckets(rps float64, burst, maxBuckets int) func(http.Handler) http.Handler {
 	if rps <= 0 || burst <= 0 {
 		return func(next http.Handler) http.Handler { return next }
 	}
+	if maxBuckets <= 0 {
+		maxBuckets = defaultMaxBuckets
+	}
 	lim := &ipLimiter{
-		rps:   rps,
-		burst: float64(burst),
-		buckets: make(map[string]*bucket),
+		rps:        rps,
+		burst:      float64(burst),
+		buckets:    make(map[string]*bucket),
+		maxBuckets: maxBuckets,
+		idleAfter:  10 * time.Minute,
 	}
 	// Periodic cleanup of idle buckets.
 	go lim.cleanupLoop()
@@ -49,10 +62,12 @@ type bucket struct {
 }
 
 type ipLimiter struct {
-	mu      sync.Mutex
-	rps     float64
-	burst   float64
-	buckets map[string]*bucket
+	mu         sync.Mutex
+	rps        float64
+	burst      float64
+	buckets    map[string]*bucket
+	maxBuckets int
+	idleAfter  time.Duration
 }
 
 func (l *ipLimiter) allow(ip string) bool {
@@ -61,6 +76,13 @@ func (l *ipLimiter) allow(ip string) bool {
 	defer l.mu.Unlock()
 	b, ok := l.buckets[ip]
 	if !ok {
+		if len(l.buckets) >= l.maxBuckets {
+			l.evictIdleLocked(now)
+		}
+		if len(l.buckets) >= l.maxBuckets {
+			// Still full: refuse new IPs rather than grow unbounded.
+			return false
+		}
 		l.buckets[ip] = &bucket{tokens: l.burst - 1, last: now}
 		return true
 	}
@@ -77,17 +99,21 @@ func (l *ipLimiter) allow(ip string) bool {
 	return true
 }
 
+func (l *ipLimiter) evictIdleLocked(now time.Time) {
+	cutoff := now.Add(-l.idleAfter)
+	for ip, b := range l.buckets {
+		if b.last.Before(cutoff) {
+			delete(l.buckets, ip)
+		}
+	}
+}
+
 func (l *ipLimiter) cleanupLoop() {
 	t := time.NewTicker(5 * time.Minute)
 	defer t.Stop()
 	for range t.C {
 		l.mu.Lock()
-		cutoff := time.Now().Add(-10 * time.Minute)
-		for ip, b := range l.buckets {
-			if b.last.Before(cutoff) {
-				delete(l.buckets, ip)
-			}
-		}
+		l.evictIdleLocked(time.Now())
 		l.mu.Unlock()
 	}
 }

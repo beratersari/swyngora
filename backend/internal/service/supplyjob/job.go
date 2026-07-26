@@ -9,6 +9,17 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/schedule"
 )
 
+// Default retry backoffs after a failed refresh (before the next daily slot).
+// First entry 0 = attempt immediately.
+var defaultRetryBackoffs = []time.Duration{
+	0,
+	1 * time.Minute,
+	5 * time.Minute,
+	15 * time.Minute,
+	30 * time.Minute,
+	1 * time.Hour,
+}
+
 // Runner periodically refreshes the supply/mcap snapshot into cache.
 type Runner struct {
 	Supply domain.SupplyPort
@@ -18,6 +29,8 @@ type Runner struct {
 	// RunOnStart triggers one refresh shortly after Start (so the cache is warm before 03:00).
 	RunOnStart bool
 	Logger     *slog.Logger
+	// RetryBackoffs overrides defaultRetryBackoffs (tests may inject short delays).
+	RetryBackoffs []time.Duration
 	// now is injectable for tests.
 	now func() time.Time
 	// sleep is injectable for tests.
@@ -40,7 +53,7 @@ func (r *Runner) Start(ctx context.Context) {
 	}
 
 	if r.RunOnStart {
-		r.runOnce(ctx, "startup")
+		r.runWithRetry(ctx, "startup")
 	}
 
 	for {
@@ -55,26 +68,56 @@ func (r *Runner) Start(ctx context.Context) {
 			r.Logger.Info("supply refresh scheduler stopped", "err", err)
 			return
 		}
-		r.runOnce(ctx, "daily")
+		r.runWithRetry(ctx, "daily")
 	}
 }
 
-func (r *Runner) runOnce(ctx context.Context, reason string) {
+// runWithRetry attempts a refresh with backoff so a single transient failure
+// does not leave supply/mcap stale until the next calendar day.
+func (r *Runner) runWithRetry(ctx context.Context, reason string) {
+	backoffs := r.RetryBackoffs
+	if len(backoffs) == 0 {
+		backoffs = defaultRetryBackoffs
+	}
+	for i, wait := range backoffs {
+		if ctx.Err() != nil {
+			return
+		}
+		if wait > 0 {
+			if err := r.sleep(ctx, wait); err != nil {
+				return
+			}
+		}
+		if r.runOnce(ctx, reason) {
+			return
+		}
+		r.Logger.Info("supply refresh will retry",
+			"reason", reason,
+			"attempt", i+1,
+			"maxAttempts", len(backoffs),
+		)
+	}
+	r.Logger.Error("supply refresh exhausted retries", "reason", reason, "attempts", len(backoffs))
+}
+
+// runOnce performs one refresh. Returns true on success.
+func (r *Runner) runOnce(ctx context.Context, reason string) bool {
 	if r.Supply == nil {
 		r.Logger.Error("supply refresh skipped: nil SupplyPort")
-		return
+		return false
 	}
 	start := r.now()
 	n, err := r.Supply.Refresh(ctx)
 	if err != nil {
 		r.Logger.Error("supply refresh failed", "reason", reason, "err", err, "stored", n)
-		return
+		return false
 	}
 	r.Logger.Info("supply refresh completed",
 		"reason", reason,
 		"stored", n,
 		"duration", r.now().Sub(start).String(),
 	)
+	return true
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

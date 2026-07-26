@@ -12,11 +12,12 @@ Expose first market-data APIs so clients can:
 
 ### Intervals — `GET /api/v1/market/intervals`
 
-- Lists supported Binance candle intervals used by the candles endpoint.
+- Lists supported candle intervals for `?exchange=` (Binance / Coinbase / Bybit sets differ).
 
 ### Product tags — `GET /api/v1/market/tags`
 
 - Unique crypto tags from Binance product catalog (`get-products`), sorted
+- Optional `exchange` (tags only for Binance; other venues return empty)
 - Used for UI filters; excludes non-crypto tags (`bStocks`, `tCommodities`)
 - Examples: `Meme`, `defi`, `Layer1_Layer2`, `AI`, `Payments`
 
@@ -24,10 +25,13 @@ Expose first market-data APIs so clients can:
 
 - Venues: `binance` (default), `coinbase`, `bybit`
 - Pass `exchange` on spot/candles/ticker/intervals/tags
+- **Product tags** come from the Binance marketing catalog and are **applied cross-venue by base asset** (Coinbase/Bybit rows get the same tags as Binance when the base matches)
+- **24h trade count** is only available from Binance public APIs; Coinbase/Bybit return 0 / UI shows "—"
+- **Coinbase high/low:** Advanced Trade public `products` leaves `high_24h`/`low_24h` empty; detail ticker fills them from Exchange `GET /products/{id}/stats`
 
 ### Spot markets — `GET /api/v1/market/spot`
 
-- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded)
+- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded). Product catalog is **required** for the filter: without a warm or stale catalog snapshot, the spot list returns `502` rather than listing non-crypto products.
 - **Params:**
   - `q` — search substring (symbol / base / quote / **tag name**)
   - `quote`, `base`, `status` — filters
@@ -45,14 +49,14 @@ Expose first market-data APIs so clients can:
 
 ### Candles — `GET /api/v1/market/candles`
 
-- **Source:** Binance `GET /api/v3/klines`
-- **Params:** `symbol` (required), `interval` (default `1h`), `limit` (default 100, max 1000), optional `startTime` / `endTime`
-- **Intervals:** `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, `1d`, `3d`, `1w`, `1M`
+- **Source:** venue klines (Binance / Coinbase / Bybit)
+- **Params:** `exchange`, `symbol` (required), `interval` (default `1h`), `limit` (default 100, max 1000), optional `startTime` / `endTime`
+- **Intervals:** exchange-specific — use `/intervals?exchange=`; Binance supports the full set (`1m`…`1M`); Coinbase/Bybit are stricter
 
 ### 24h ticker / volume — `GET /api/v1/market/ticker/24h`
 
-- **Source:** Binance `GET /api/v3/ticker/24hr`
-- **Params:** `symbol` (required)
+- **Source:** venue 24h ticker APIs
+- **Params:** `exchange`, `symbol` (required)
 - **Returns:** last/open/high/low, base `volume`, quote `quoteVolume`, change %, trade count
 
 ### Supply — `GET /api/v1/market/supply`
@@ -60,6 +64,12 @@ Expose first market-data APIs so clients can:
 - **Source:** Binance marketing symbol list (`circulatingSupply`, `totalSupply`, `maxSupply`); not Spot REST kline/ticker APIs
 - **Params:** `asset` or `symbol` (e.g. `BTC` or `BTCUSDT`)
 - **Returns:** circulating / total / max (max null when undefined), optional USD price, `source: binance`
+
+### Indicators batch — `POST /api/v1/market/indicators/batch`
+
+- Body: `{ exchange, interval, symbols[], rsiPeriod?, emaPeriods? }` (max 50 symbols)
+- Returns latest RSI/EMA per symbol; per-symbol failures redacted as `error: unavailable`
+- Process-wide upstream concurrency cap (plus per-request limit)
 
 ### Caching
 
@@ -69,7 +79,7 @@ In-memory TTL caches with periodic cleanup:
 |---|---|
 | Candles | 30s (latest-N only; max 512 keys; ranges uncached) |
 | Spot markets (joined list) | 5s (default) |
-| Supply snapshot | Daily @ 03:00 UTC (default) + startup; atomic replace; default never-expire last-good |
+| Supply snapshot | Daily @ 03:00 UTC + startup + failure retries; atomic replace; **48h safety TTL** (env) |
 | Ticker | 15s |
 
 ## Code locations

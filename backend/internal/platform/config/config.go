@@ -49,9 +49,9 @@ func Load() Config {
 		CandleCacheTTL:        positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
 		CandleCacheMaxEntries: positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
 		TickerCacheTTL:        positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
-		// 0 = never expire supply entries; ReplaceAll on successful refresh only.
-		// A positive SUPPLY_CACHE_TTL still works as a safety TTL if set.
-		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 0),
+		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
+		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
+		SupplyCacheTTL: durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
 		CacheCleanupEvery:  positiveDurationEnv("CACHE_CLEANUP_EVERY", 1*time.Minute),
 		SpotMarketCacheTTL: positiveDurationEnv("SPOT_MARKET_CACHE_TTL", 5*time.Second),
 

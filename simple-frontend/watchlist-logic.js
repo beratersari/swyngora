@@ -19,6 +19,61 @@
   }
 
   /**
+   * Format a number for display without collapsing tiny non-zero values to "0".
+   * Uses max fraction digits when |n| is large enough; otherwise exponential.
+   */
+  function fmtNum(v, digits = 2) {
+    if (v === null || v === undefined || v === "") return "—";
+    if (v === "∞" || v === "Infinity") return "∞";
+    const n = Number(v);
+    if (!Number.isFinite(n)) return String(v);
+    if (n === 0) return "0";
+    const maxFrac = Math.max(0, Number(digits) || 0);
+    const abs = Math.abs(n);
+    // Below the smallest unit that toLocaleString would keep with maxFrac digits → scientific.
+    const threshold = Math.pow(10, -maxFrac);
+    if (abs > 0 && abs < threshold) {
+      return n.toExponential(Math.min(4, Math.max(2, maxFrac)));
+    }
+    return n.toLocaleString(undefined, {
+      maximumFractionDigits: maxFrac,
+      minimumFractionDigits: 0,
+    });
+  }
+
+  function watchKey(exchange, symbol) {
+    return (
+      String(exchange || "binance").toLowerCase() +
+      "|" +
+      String(symbol || "").toUpperCase()
+    );
+  }
+
+  /**
+   * Merge server + local watchlists (union by exchange|symbol).
+   * Prefer local fields when both present so offline optimistic adds are not wiped
+   * by an empty or lagging server list.
+   * @param {{exchange:string,symbol:string}[]} local
+   * @param {{exchange:string,symbol:string}[]} server
+   */
+  function mergeWatchlists(local, server) {
+    const map = new Map();
+    for (const w of Array.isArray(server) ? server : []) {
+      const ex = String(w.exchange || "binance").toLowerCase();
+      const sym = String(w.symbol || "").toUpperCase();
+      if (!sym) continue;
+      map.set(watchKey(ex, sym), { exchange: ex, symbol: sym });
+    }
+    for (const w of Array.isArray(local) ? local : []) {
+      const ex = String(w.exchange || "binance").toLowerCase();
+      const sym = String(w.symbol || "").toUpperCase();
+      if (!sym) continue;
+      map.set(watchKey(ex, sym), { exchange: ex, symbol: sym });
+    }
+    return Array.from(map.values());
+  }
+
+  /**
    * Which watchlist entries should be loaded.
    * @param {{exchange:string,symbol:string}[]} watchlist
    * @param {{ currentExchangeOnly?: boolean, currentExchange?: string, search?: string }} opts
@@ -169,6 +224,9 @@
 
   return {
     toNum,
+    fmtNum,
+    watchKey,
+    mergeWatchlists,
     filterWatchlistTargets,
     pickExactSymbol,
     buildWatchlistRows,

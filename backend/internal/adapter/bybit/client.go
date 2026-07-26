@@ -63,8 +63,14 @@ func NewClient(opts Options) *Client {
 }
 
 // ListProductTags — Bybit does not expose Binance-style product tags.
+// Service layer may fall back to the Binance catalog for the filter UI.
 func (c *Client) ListProductTags(context.Context) ([]string, error) {
 	return []string{}, nil
+}
+
+// TagsByBase — Bybit has no product-tag catalog (service enriches from Binance).
+func (c *Client) TagsByBase(context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
 }
 
 // ListSpotMarkets joins instruments-info + tickers for spot category.

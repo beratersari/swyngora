@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Technical indicators: **RSI** (Wilder) and **EMA** via `GET /api/v1/market/indicators`
+- OpenAPI for **`POST /api/v1/market/indicators/batch`**; document `exchange` on ticker/intervals/tags
 - **Watchlist** API (`/api/v1/watchlist`) + dashboard stars / filter (client id + localStorage)
 - Multi-exchange spot data: **Coinbase** + **Bybit** via `?exchange=`; `GET /api/v1/market/exchanges`
 - Binance product-catalog **tags** on spot markets: `tags` field, `tag`/`tags` filter (OR), `sort=tags`, and `GET /api/v1/market/tags`
@@ -16,11 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Market-cap ranking: nulls last, no infinite max without price, collapse multi-quote pairs, refuse empty-supply mcap sorts
-- Supply snapshot: atomic replace, USDT-pair preference, strict bapi success checks, last-good retained on failure
-- Non-crypto filter: fail-closed on empty/soft catalog; soft-fail spot list with last-good exclusion set
+- Supply snapshot: atomic replace, USDT-pair preference, strict bapi success checks, last-good retained on failure; **retry with backoff** on failed refresh; default **48h safety TTL**
+- Non-crypto filter: fail-closed on empty/soft catalog **and** when catalog is down with no last-good snapshot (spot list errors instead of listing equities)
 - Candle/ticker thundering herd (singleflight); unbounded candle cache keys (range queries uncached + max entries)
-- Ingress per-IP rate limit; sanitized public API errors; zero-duration config footguns
-- Simple frontend XSS via unescaped formatters; show supply `asOf` / daily-snapshot cues
+- Ingress per-IP rate limit with **max bucket map**; watchlist **Add max items** + **max clients**; indicator batch **process-wide** upstream semaphore
+- Sanitized public API errors; zero-duration config footguns
+- Simple frontend: detail-page load race (stale symbol paint); watchlist **merge** sync (no wipe after offline adds); multi-exchange star paint vs click; tiny prices no longer format as `0`; XSS formatters; supply `asOf` cues
 
 
 ### Changed

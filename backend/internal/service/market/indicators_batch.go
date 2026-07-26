@@ -8,12 +8,16 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// Process-wide cap on concurrent upstream candle fetches from all batch requests.
+// Prevents ingress RPS × per-request fan-out from storming exchange APIs.
+var batchUpstreamSem = make(chan struct{}, 24)
+
 // IndicatorSnapshot is the latest RSI/EMA values for one symbol (list enrichment).
 type IndicatorSnapshot struct {
-	Symbol    string
-	RSI       *float64
-	EMA       map[int]*float64
-	Error     string
+	Symbol string
+	RSI    *float64
+	EMA    map[int]*float64
+	Error  string
 }
 
 // GetIndicatorsBatch computes latest RSI/EMA for up to maxBatchSymbols on one exchange.
@@ -80,7 +84,8 @@ func (s *Service) GetIndicatorsBatch(
 
 	out := make([]IndicatorSnapshot, len(list))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 8) // bound upstream concurrency
+	// Per-request concurrency (8) × process-wide semaphore (24).
+	reqSem := make(chan struct{}, 8)
 	for i, sym := range list {
 		wg.Add(1)
 		go func(i int, sym string) {
@@ -89,9 +94,22 @@ func (s *Service) GetIndicatorsBatch(
 			case <-ctx.Done():
 				out[i] = IndicatorSnapshot{Symbol: sym, Error: ctx.Err().Error()}
 				return
-			case sem <- struct{}{}:
+			case reqSem <- struct{}{}:
 			}
-			defer func() { <-sem }()
+			defer func() { <-reqSem }()
+
+			select {
+			case <-ctx.Done():
+				out[i] = IndicatorSnapshot{Symbol: sym, Error: ctx.Err().Error()}
+				return
+			case batchUpstreamSem <- struct{}{}:
+			}
+			defer func() { <-batchUpstreamSem }()
+
+			if ctx.Err() != nil {
+				out[i] = IndicatorSnapshot{Symbol: sym, Error: ctx.Err().Error()}
+				return
+			}
 
 			ser, err := s.GetIndicators(ctx, string(ex), sym, interval, fetchLimit, rsiPeriod, emaPeriods)
 			if err != nil {

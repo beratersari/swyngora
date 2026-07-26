@@ -2,21 +2,31 @@ package watchliststore
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// DefaultMaxClients bounds distinct client IDs in the in-memory store.
+const DefaultMaxClients = 10_000
+
 // Memory is an in-process watchlist store (no auth; keyed by client id).
 type Memory struct {
-	mu   sync.RWMutex
-	data map[string]*domain.Watchlist
+	mu         sync.RWMutex
+	data       map[string]*domain.Watchlist
+	maxClients int
 }
 
-// NewMemory constructs an empty store.
+// NewMemory constructs an empty store with DefaultMaxClients.
 func NewMemory() *Memory {
-	return &Memory{data: map[string]*domain.Watchlist{}}
+	return NewMemoryWithMaxClients(DefaultMaxClients)
+}
+
+// NewMemoryWithMaxClients constructs a store with an explicit client cap (0 = unlimited; tests only).
+func NewMemoryWithMaxClients(maxClients int) *Memory {
+	return &Memory{data: map[string]*domain.Watchlist{}, maxClients: maxClients}
 }
 
 // Get returns a copy of the watchlist (empty items if unknown client).
@@ -37,6 +47,9 @@ func (m *Memory) Get(_ context.Context, clientID string) (*domain.Watchlist, err
 func (m *Memory) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.ensureClientLocked(clientID); err != nil {
+		return nil, err
+	}
 	wl := &domain.Watchlist{
 		ClientID: clientID,
 		Items:    append([]domain.WatchlistItem(nil), items...),
@@ -50,6 +63,9 @@ func (m *Memory) Set(_ context.Context, clientID string, items []domain.Watchlis
 func (m *Memory) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if err := m.ensureClientLocked(clientID); err != nil {
+		return nil, err
+	}
 	wl := m.data[clientID]
 	if wl == nil {
 		wl = &domain.Watchlist{ClientID: clientID, Items: nil}
@@ -75,6 +91,17 @@ func (m *Memory) Add(ctx context.Context, clientID string, item domain.Watchlist
 	out := &domain.Watchlist{ClientID: clientID, Items: items, Updated: time.Now().UTC()}
 	m.data[clientID] = out
 	return cloneWL(out), nil
+}
+
+// ensureClientLocked rejects new client IDs when at capacity. Caller holds write lock.
+func (m *Memory) ensureClientLocked(clientID string) error {
+	if _, ok := m.data[clientID]; ok {
+		return nil
+	}
+	if m.maxClients > 0 && len(m.data) >= m.maxClients {
+		return fmt.Errorf("%w: watchlist client capacity reached", domain.ErrInvalidArgument)
+	}
+	return nil
 }
 
 // Remove deletes one item.

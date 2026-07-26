@@ -57,9 +57,18 @@ paths:
       summary: List supported candle intervals
       operationId: listIntervals
       tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          required: false
+          description: Venue id (binance | coinbase | bybit). Default binance. Interval sets differ per venue.
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit]
       responses:
         '200':
-          description: Supported Binance intervals
+          description: Supported intervals for the selected exchange
           content:
             application/json:
               schema:
@@ -80,8 +89,18 @@ paths:
       description: |
         Unique crypto product tags from Binance product catalog (e.g. Meme, defi, Layer1_Layer2).
         Used to power spot list tag filters. Non-crypto tags (bStocks, tCommodities) are excluded.
+        Tags are only populated for Binance; other exchanges return an empty list.
       operationId: listProductTags
       tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          required: false
+          description: Venue id (binance | coinbase | bybit). Default binance.
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit]
       responses:
         '200':
           description: Sorted unique tags
@@ -230,11 +249,14 @@ paths:
         - name: interval
           in: query
           required: false
-          description: Candle interval (default 1h)
+          description: |
+            Candle interval (default 1h). Supported values are exchange-specific —
+            call GET /api/v1/market/intervals?exchange=… for the authoritative list.
+            Coinbase/Bybit reject many Binance-only intervals with 400.
           schema:
             type: string
             default: 1h
-            enum: [1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M]
+            example: 1h
         - name: limit
           in: query
           required: false
@@ -277,6 +299,14 @@ paths:
       operationId: getTicker24h
       tags: [Market]
       parameters:
+        - name: exchange
+          in: query
+          required: false
+          description: Venue id (binance | coinbase | bybit). Default binance.
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit]
         - name: symbol
           in: query
           required: true
@@ -407,6 +437,74 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/market/indicators/batch:
+    post:
+      summary: Latest RSI/EMA for many symbols (one exchange)
+      description: |
+        Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
+        Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
+        Upstream concurrency is bounded process-wide. Informational only — not financial advice.
+      operationId: postIndicatorsBatch
+      tags: [Market]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbols]
+              properties:
+                exchange:
+                  type: string
+                  enum: [binance, coinbase, bybit]
+                  default: binance
+                interval:
+                  type: string
+                  default: 1h
+                  description: Exchange-specific; use /intervals?exchange=
+                symbols:
+                  type: array
+                  items: { type: string }
+                  maxItems: 50
+                  example: [BTCUSDT, ETHUSDT]
+                rsiPeriod:
+                  type: integer
+                  default: 14
+                  minimum: 2
+                  maximum: 500
+                emaPeriods:
+                  type: string
+                  default: "12,26"
+                  description: Comma-separated EMA periods
+      responses:
+        '200':
+          description: Per-symbol indicator snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exchange: { type: string }
+                  interval: { type: string }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        symbol: { type: string }
+                        rsi: { type: number, nullable: true }
+                        ema:
+                          type: object
+                          additionalProperties: { type: number }
+                        error: { type: string, description: Present when symbol failed (redacted) }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '429':
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'

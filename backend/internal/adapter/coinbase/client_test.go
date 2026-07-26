@@ -49,6 +49,57 @@ func TestListSpotMarkets_OK(t *testing.T) {
 	}
 }
 
+func TestGetTicker24h_UsesExchangeStatsForHighLow(t *testing.T) {
+	// Advanced Trade products return empty high/low; Exchange /stats fills them.
+	var productsHits, statsHits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/stats") {
+			statsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"open": "90", "high": "110", "low": "85", "last": "100", "volume": "12",
+			})
+			return
+		}
+		// Advanced Trade public products (path contains product list API).
+		if strings.Contains(r.URL.Path, "products") {
+			productsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"products": []map[string]any{
+					{
+						"product_id": "BTC-USD", "price": "99", "price_percentage_change_24h": "1.5",
+						"volume_24h": "10", "approximate_quote_24h_volume": "1000",
+						"high_24h": "", "low_24h": "",
+					},
+				},
+			})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+
+	c := NewClient(Options{
+		BaseURL: srv.URL, ExchangeURL: srv.URL, HTTPClient: srv.Client(),
+		TickerCache: cache.New[*domain.Ticker24h](time.Minute),
+	})
+	tkr, err := c.GetTicker24h(context.Background(), "BTC-USD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tkr.HighPrice != "110" || tkr.LowPrice != "85" {
+		t.Fatalf("want high/low from stats, got high=%q low=%q", tkr.HighPrice, tkr.LowPrice)
+	}
+	if tkr.OpenPrice != "90" {
+		t.Fatalf("open=%q", tkr.OpenPrice)
+	}
+	if tkr.LastPrice != "100" {
+		t.Fatalf("last from stats=%q", tkr.LastPrice)
+	}
+	if productsHits < 1 || statsHits < 1 {
+		t.Fatalf("productsHits=%d statsHits=%d", productsHits, statsHits)
+	}
+}
+
 func TestGetCandles_OK(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.URL.Path, "candles") {

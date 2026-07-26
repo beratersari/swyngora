@@ -9,9 +9,13 @@ type MarketDataPort interface {
 	GetTicker24h(ctx context.Context, symbol string) (*Ticker24h, error)
 	// ListSpotMarkets returns all spot-tradable pairs joined with 24h metrics.
 	ListSpotMarkets(ctx context.Context) ([]SpotMarket, error)
-	// ListProductTags returns unique Binance product-catalog tags for crypto spot bases
-	// (sorted), used for UI filters. Cached with the product catalog meta.
+	// ListProductTags returns unique product-catalog tags for crypto spot bases
+	// (sorted), used for UI filters. Empty when the venue has no catalog.
 	ListProductTags(ctx context.Context) ([]string, error)
+	// TagsByBase returns product-catalog tags keyed by uppercased base asset.
+	// Used to enrich Coinbase/Bybit spot rows with Binance marketing tags.
+	// Empty map when the venue has no catalog (never an error for "unsupported").
+	TagsByBase(ctx context.Context) (map[string][]string, error)
 }
 
 // SupplyPort serves asset supply / mcap inputs for user requests.

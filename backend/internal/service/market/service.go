@@ -158,7 +158,8 @@ func (s *Service) ListIntervals(exchange string) ([]domain.CandleInterval, error
 	return out, nil
 }
 
-// ListProductTags returns unique product tags for filter UI (Binance catalog only).
+// ListProductTags returns unique product tags for filter UI.
+// Coinbase/Bybit have no native catalog — fall back to Binance tags so filters stay useful.
 func (s *Service) ListProductTags(ctx context.Context, exchange string) ([]string, error) {
 	ex, err := s.ResolveExchange(exchange)
 	if err != nil {
@@ -168,7 +169,19 @@ func (s *Service) ListProductTags(ctx context.Context, exchange string) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	return p.ListProductTags(ctx)
+	tags, err := p.ListProductTags(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(tags) > 0 || ex == domain.ExchangeBinance {
+		return tags, nil
+	}
+	// Cross-venue: reuse Binance marketing tags for the dropdown.
+	bp, berr := s.port(domain.ExchangeBinance)
+	if berr != nil {
+		return tags, nil
+	}
+	return bp.ListProductTags(ctx)
 }
 
 // normalizeSymbolForExchange uppercases symbols; Coinbase keeps a single hyphen (BTC-USD).
@@ -223,6 +236,10 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 		return nil, err
 	}
 
+	// Attach Binance product tags by base when the venue has none (Coinbase/Bybit).
+	// Must run before tag filters so ?tag=Meme works on every exchange.
+	s.enrichProductTags(ctx, all)
+
 	filtered := filterSpotMarkets(all, q)
 
 	// Mcap sorts need supply on the full filtered set before ordering.
@@ -258,6 +275,44 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 		Tags:     q.Tags,
 		Exchange: ex,
 	}, nil
+}
+
+// enrichProductTags fills empty Tags from the Binance product catalog by base asset.
+// No-op when Binance is not configured or the catalog is unavailable.
+func (s *Service) enrichProductTags(ctx context.Context, items []domain.SpotMarket) {
+	if len(items) == 0 {
+		return
+	}
+	need := false
+	for i := range items {
+		if len(items[i].Tags) == 0 {
+			need = true
+			break
+		}
+	}
+	if !need {
+		return
+	}
+	bp, err := s.port(domain.ExchangeBinance)
+	if err != nil {
+		return
+	}
+	byBase, err := bp.TagsByBase(ctx)
+	if err != nil || len(byBase) == 0 {
+		return
+	}
+	for i := range items {
+		if len(items[i].Tags) > 0 {
+			continue
+		}
+		base := strings.ToUpper(strings.TrimSpace(items[i].BaseAsset))
+		if base == "" {
+			continue
+		}
+		if tags, ok := byBase[base]; ok && len(tags) > 0 {
+			items[i].Tags = append([]string(nil), tags...)
+		}
+	}
 }
 
 // enrichSpotMarkets fills supply + market-cap from the daily supply cache only (no live fetch).

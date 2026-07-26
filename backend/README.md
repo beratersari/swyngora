@@ -24,6 +24,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
+| `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/watchlist` | Get watchlist (`clientId` / `X-Client-Id`) |
 | `POST` | `/api/v1/watchlist/items` | Add symbol to watchlist |
 | `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove from watchlist |
@@ -36,9 +37,9 @@ Intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, 
 
 Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
-**Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (stale bases removed; last-good retained on failure). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first) so multi-quote clones do not dominate rankings. Empty supply snapshot → market-cap sort returns `502` rather than a fake ranking.
+**Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). Failed refreshes **retry with backoff** (1m→1h) before waiting for the next daily slot. User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (last-good retained on failure until safety TTL). Default **`SUPPLY_CACHE_TTL=48h`** so entries cannot live forever after a long outage (set `0` to never expire). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first). Empty supply snapshot → market-cap sort returns `502`.
 
-**Hardening:** per-IP rate limits; sanitized public error messages; candle/ticker singleflight; bounded candle cache; non-crypto product filter fails closed on empty/soft envelopes and soft-fails spot list when the catalog host is down (uses last-good exclusion set).
+**Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
 ## Run
 
@@ -62,15 +63,15 @@ go run ./cmd/server
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL (latest-N queries only; ranges not cached) |
 | `CANDLE_CACHE_MAX_ENTRIES` | `512` | Max candle cache keys (memory bound) |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
-| `SUPPLY_CACHE_TTL` | `0` (never expire) | Optional safety TTL; default keeps last-good until successful replace |
+| `SUPPLY_CACHE_TTL` | `48h` | Safety TTL for supply snapshot (`0` = never expire until successful replace) |
 | `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |
 | `SUPPLY_REFRESH_HOUR` | `3` | Daily product-catalog snapshot hour (local to TZ) |
 | `SUPPLY_REFRESH_MINUTE` | `0` | Daily snapshot minute |
 | `SUPPLY_REFRESH_TZ` | `UTC` | Timezone for daily schedule (DST-safe calendar math) |
 | `SUPPLY_REFRESH_ON_STARTUP` | `true` | Run one snapshot load on process start |
 | `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup (must be > 0) |
-| `RATE_LIMIT_RPS` | `20` | Per-IP request rate (0 disables) |
-| `RATE_LIMIT_BURST` | `40` | Per-IP burst size |
+| `RATE_LIMIT_RPS` | `40` | Per-IP request rate (0 disables) |
+| `RATE_LIMIT_BURST` | `80` | Per-IP burst size |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 

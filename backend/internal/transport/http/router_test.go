@@ -25,6 +25,10 @@ func (routerMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, err
 	return []domain.SpotMarket{{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1", Tags: []string{"Payments"}}}, nil
 }
 
+func (routerMarket) TagsByBase(_ context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 func (routerMarket) ListProductTags(_ context.Context) ([]string, error) {
 	return []string{"Meme", "Payments"}, nil
 }

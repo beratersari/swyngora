@@ -20,6 +20,10 @@ func (stubMarketData) ListSpotMarkets(context.Context) ([]SpotMarket, error) {
 	return nil, nil
 }
 
+func (stubMarketData) TagsByBase(context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 func (stubMarketData) ListProductTags(context.Context) ([]string, error) {
 	return nil, nil
 }

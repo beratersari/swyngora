@@ -58,6 +58,18 @@ func (f *fakeMarket) ListProductTags(_ context.Context) ([]string, error) {
 	return []string{"Layer1_Layer2", "Meme", "Payments", "pos"}, nil
 }
 
+func (f *fakeMarket) TagsByBase(_ context.Context) (map[string][]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return map[string][]string{
+		"BTC":  {"Payments", "Layer1_Layer2"},
+		"ETH":  {"Layer1_Layer2", "pos"},
+		"DOGE": {"Meme"},
+		"XRP":  {"Payments"},
+	}, nil
+}
+
 type fakeSupply struct {
 	sup    *domain.AssetSupply
 	byAsset map[string]*domain.AssetSupply
@@ -290,6 +302,73 @@ func TestListSpotMarkets_SortByTags(t *testing.T) {
 	if len(res.Items) == 0 {
 		t.Fatal("empty")
 	}
+}
+
+func TestListSpotMarkets_EnrichesTagsFromBinance(t *testing.T) {
+	// Coinbase-like rows with no tags; Binance catalog provides tags by base.
+	coinbase := &fakeMarket{
+		spot: []domain.SpotMarket{
+			{Symbol: "BTC-USD", BaseAsset: "BTC", QuoteAsset: "USD", Status: "TRADING", QuoteVolume: "100", LastPrice: "100"},
+			{Symbol: "DOGE-USD", BaseAsset: "DOGE", QuoteAsset: "USD", Status: "TRADING", QuoteVolume: "10", LastPrice: "0.1"},
+		},
+	}
+	// Override ListProductTags empty for coinbase-only path; TagsByBase used from binance port.
+	binance := &fakeMarket{}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  binance,
+		domain.ExchangeCoinbase: coinbase,
+	}, &fakeSupply{})
+	res, err := svc.ListSpotMarkets(context.Background(), "coinbase", domain.SpotListQuery{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]domain.SpotMarket{}
+	for _, m := range res.Items {
+		by[m.Symbol] = m
+	}
+	if len(by["BTC-USD"].Tags) == 0 || by["BTC-USD"].Tags[0] != "Payments" {
+		t.Fatalf("btc tags=%v", by["BTC-USD"].Tags)
+	}
+	if len(by["DOGE-USD"].Tags) == 0 || by["DOGE-USD"].Tags[0] != "Meme" {
+		t.Fatalf("doge tags=%v", by["DOGE-USD"].Tags)
+	}
+	// Tag filter works after enrichment.
+	res, err = svc.ListSpotMarkets(context.Background(), "coinbase", domain.SpotListQuery{Tags: []string{"Meme"}, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Total != 1 || res.Items[0].Symbol != "DOGE-USD" {
+		t.Fatalf("meme filter: %+v", res)
+	}
+}
+
+func TestListProductTags_FallsBackToBinance(t *testing.T) {
+	emptyTags := &fakeMarket{spot: []domain.SpotMarket{}}
+	// coinbase-style empty tags list
+	emptyTagsTags := &tagsEmptyMarket{fakeMarket: emptyTags}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{},
+		domain.ExchangeCoinbase: emptyTagsTags,
+	}, &fakeSupply{})
+	tags, err := svc.ListProductTags(context.Background(), "coinbase")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) == 0 {
+		t.Fatal("expected Binance tag fallback")
+	}
+}
+
+type tagsEmptyMarket struct {
+	*fakeMarket
+}
+
+func (t *tagsEmptyMarket) ListProductTags(context.Context) ([]string, error) {
+	return []string{}, nil
+}
+
+func (t *tagsEmptyMarket) TagsByBase(context.Context) (map[string][]string, error) {
+	return map[string][]string{}, nil
 }
 
 func TestListProductTags(t *testing.T) {

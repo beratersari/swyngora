@@ -76,8 +76,10 @@ type SpotMarket struct {
 	QuoteVolume string
 	TradeCount  int64
 
-	// Tags are Binance product-catalog labels for the base asset
-	// (e.g. "Meme", "Layer1_Layer2", "defi"). Empty when unknown.
+	// Tags are product-catalog labels for the base asset
+	// (e.g. "Meme", "Layer1_Layer2", "defi"), sourced from Binance catalog
+	// and applied cross-venue by base when other venues lack tags.
+	// Empty when unknown.
 	Tags []string
 
 	// Supply snapshot (from Binance product catalog circulating supply).

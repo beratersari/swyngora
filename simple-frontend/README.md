@@ -10,8 +10,9 @@ Lightweight static **coin dashboard** for the Swyngora market API during develop
 - **Live refresh:** auto-poll (default 10s; 5/15/30s or off); pauses when the tab is hidden
 - **Price animations:** cells flash green (up) / red (down) when last price, change %, volume, or mcap moves
 - **Column sort:** click a header to sort via the API (`sort` / `order`)
-- **Watchlist:** star rows (★); chips panel; optional “watchlist only” filter; localStorage + API sync
-- **Indicators:** RSI(14) + EMA(12/26) on the **detail page** only (`/api/v1/market/indicators`)
+- **Watchlist:** star rows (★); chips panel; optional “watchlist only” filter; localStorage + API **union merge** (offline adds are not wiped; local-only items re-POSTed)
+- **Indicators:** RSI(14) + EMA(12/26) on the **detail page** only (`/api/v1/market/indicators`); detail loads ignore stale in-flight responses
+- **Prices:** tiny non-zero last prices use scientific notation instead of rounding to `0`
 - **Column editor:** chips to show/hide; **drag chips or table headers** (or ◀ ▶) to reorder; Symbol stays first (saved in `localStorage`)
 - Search + row limit (quote fixed to **USDT**)
 - **Double-click** a symbol → `detail.html` (ticker, supply, RSI/EMA, candles)
@@ -25,7 +26,7 @@ Lightweight static **coin dashboard** for the Swyngora market API during develop
 | Backend joined **prices** cache | **5s** (`SPOT_MARKET_CACHE_TTL`) |
 | Backend exchangeInfo | ~**10 min** (in-adapter) |
 | Backend product tags (crypto filter) | ~**1 hour** (in-adapter) |
-| Supply / mcap snapshot | daily (+ startup), not tick-by-tick |
+| Supply / mcap snapshot | daily (+ startup + failure retries); 48h safety TTL on backend |
 
 Earlier, every price refresh also re-downloaded exchangeInfo + product catalog, so real updates often took **30–40s**. Meta is now cached separately so the 10s poll can show new prices.
 
@@ -36,7 +37,7 @@ Earlier, every price refresh also re-downloaded exchangeInfo + product catalog, 
 node --test simple-frontend/watchlist-logic.test.js
 ```
 
-Covers: full membership (6 coins), regression of “filter top-N page”, sort does not change count, exact symbol pick, placeholders for missing markets.
+Covers: full membership (6 coins), regression of “filter top-N page”, sort does not change count, exact symbol pick, placeholders for missing markets, watchlist merge, fmtNum for tiny prices.
 
 ## Run
 
@@ -62,7 +63,8 @@ Default API base is `http://localhost:8080` (editable in the header).
 |---|---|
 | `index.html` | Dashboard shell |
 | `styles.css` | Dark dashboard styling |
-| `app.js` | Auto-load, sort, columns, detail panel |
-
+| `app.js` | Dashboard: markets, sort, columns, watchlist, live poll |
+| `detail.js` | Coin detail page (ticker, supply, indicators, candles) |
+| `watchlist-logic.js` | Pure helpers (merge, fmtNum, watchlist assembly) + unit tests |
 
 - **Detail page:** double-click a symbol → `detail.html?symbol=…&exchange=…`

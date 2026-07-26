@@ -72,6 +72,26 @@ func (s *Service) Add(ctx context.Context, clientID string, exchange, symbol, no
 	if err != nil {
 		return nil, err
 	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	// Enforce maxItems on Add (Replace already uses normalizeItems).
+	cur, err := s.store.Get(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	isNew := true
+	if cur != nil {
+		for _, it := range cur.Items {
+			if it.Exchange == item.Exchange && it.Symbol == item.Symbol {
+				isNew = false
+				break
+			}
+		}
+		if isNew && len(cur.Items) >= maxItems {
+			return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
+		}
+	}
 	return s.store.Add(ctx, clientID, item)
 }
 

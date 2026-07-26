@@ -53,12 +53,55 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Format prices without collapsing tiny non-zero values to "0". */
 function fmtNum(v, digits = 2) {
+  if (typeof globalThis.WatchlistLogic?.fmtNum === "function") {
+    return escapeHtml(globalThis.WatchlistLogic.fmtNum(v, digits));
+  }
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
   if (Number.isNaN(n)) return escapeHtml(String(v));
-  return escapeHtml(n.toLocaleString(undefined, { maximumFractionDigits: digits }));
+  if (n === 0) return escapeHtml("0");
+  const abs = Math.abs(n);
+  if (abs > 0 && abs < Math.pow(10, -digits)) {
+    return escapeHtml(n.toExponential(Math.min(4, digits)));
+  }
+  return escapeHtml(
+    n.toLocaleString(undefined, {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: 0,
+    })
+  );
 }
+
+/** Current venue from the detail form (binance | coinbase | bybit). */
+function currentExchange() {
+  return String(els.exchange?.value || "binance").toLowerCase();
+}
+
+/**
+ * 24h / per-bar trade counts are only published by Binance public APIs.
+ * Bybit and Coinbase always send 0 — show em dash so detail matches the dashboard.
+ */
+function fmtTradeCount(v, exchange) {
+  const ex = String(exchange || currentExchange()).toLowerCase();
+  const n = Number(v);
+  if (ex === "bybit" || ex === "coinbase") {
+    if (!Number.isFinite(n) || n === 0) return "—";
+  }
+  if (v === null || v === undefined || v === "") return "—";
+  return fmtNum(v, 0);
+}
+
+/** High/low pair; empty strings render as em dash (e.g. before Coinbase stats fill). */
+function fmtRange(high, low) {
+  const h = high === null || high === undefined || high === "" ? "—" : fmtNum(high, 8);
+  const l = low === null || low === undefined || low === "" ? "—" : fmtNum(low, 8);
+  return `${h} / ${l}`;
+}
+
+/** Monotonic load generation — ignore stale responses after rapid symbol/exchange changes. */
+let detailSeq = 0;
 
 function fmtChange(v) {
   if (v === null || v === undefined || v === "") return "—";
@@ -206,10 +249,10 @@ function renderTicker(data) {
     <dl>
       <dt>Last</dt><dd>${fmtNum(data.lastPrice, 8)}</dd>
       <dt>Change 24h</dt><dd class="${changeClass(data.priceChangePercent)}">${fmtChange(data.priceChangePercent)}</dd>
-      <dt>High / Low</dt><dd>${fmtNum(data.highPrice, 8)} / ${fmtNum(data.lowPrice, 8)}</dd>
+      <dt>High / Low</dt><dd>${fmtRange(data.highPrice, data.lowPrice)}</dd>
       <dt>Volume</dt><dd>${fmtNum(data.volume, 4)}</dd>
       <dt>Quote vol</dt><dd>${fmtNum(data.quoteVolume, 2)}</dd>
-      <dt>Trades</dt><dd>${fmtNum(data.tradeCount, 0)}</dd>
+      <dt>Trades</dt><dd>${fmtTradeCount(data.tradeCount, data.exchange || currentExchange())}</dd>
     </dl>
   `;
 }
@@ -276,7 +319,7 @@ function renderCandles(data) {
         <td>${fmtNum(c.close, 8)}</td>
         <td>${fmtNum(c.volume, 4)}</td>
         <td>${fmtNum(c.quoteVolume, 2)}</td>
-        <td>${fmtNum(c.tradeCount, 0)}</td>
+        <td>${fmtTradeCount(c.tradeCount)}</td>
       </tr>`
     )
     .join("");
@@ -296,6 +339,7 @@ function syncUrl() {
 }
 
 async function loadDetail() {
+  const seq = ++detailSeq;
   const exchange = els.exchange.value || "binance";
   const sym = (els.symbol.value || "").trim().toUpperCase();
   if (!sym) {
@@ -308,12 +352,12 @@ async function loadDetail() {
   paintWatchBtn();
   setStatus(`Loading ${sym}…`);
   const lim = els.limit.value || "48";
-  const iv = els.interval.value || "1h";
   const indLimit = Math.max(Number(lim) || 48, 60);
   try {
     // Load venue intervals once
     try {
       const ivs = await apiGet(`/api/v1/market/intervals?exchange=${encodeURIComponent(exchange)}`);
+      if (seq !== detailSeq) return;
       if (Array.isArray(ivs.intervals) && ivs.intervals.length) {
         const cur = els.interval.value;
         els.interval.innerHTML = ivs.intervals
@@ -322,6 +366,8 @@ async function loadDetail() {
         els.interval.value = ivs.intervals.includes(cur) ? cur : ivs.intervals.includes("1h") ? "1h" : ivs.intervals[0];
       }
     } catch { /* ignore */ }
+
+    if (seq !== detailSeq) return;
 
     const [ticker, supply, candles, indicators] = await Promise.all([
       apiGet(
@@ -337,12 +383,14 @@ async function loadDetail() {
         `/api/v1/market/indicators?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(sym)}&interval=${encodeURIComponent(els.interval.value)}&limit=${encodeURIComponent(indLimit)}&rsiPeriod=14&emaPeriods=12,26`
       ).catch((e) => ({ _error: String(e.message || e) })),
     ]);
+    if (seq !== detailSeq) return;
     renderTicker(ticker);
     renderSupply(supply);
     renderIndicators(indicators);
     renderCandles(candles);
     setStatus(`Ready · ${sym} · ${exchange}`, "ok");
   } catch (err) {
+    if (seq !== detailSeq) return;
     console.error(err);
     setStatus(String(err.message || err), "error");
   }

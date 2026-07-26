@@ -20,7 +20,21 @@ const COLUMN_DEFS = [
   { id: "priceChangePercent", label: "Change %", sortKey: "priceChangePercent", defaultVisible: true, format: (m) => fmtChange(m.priceChangePercent) },
   { id: "volume", label: "Volume", sortKey: "volume", defaultVisible: true, format: (m) => fmtNum(m.volume, 4) },
   { id: "quoteVolume", label: "Quote vol", sortKey: "quoteVolume", defaultVisible: true, format: (m) => fmtNum(m.quoteVolume, 2) },
-  { id: "tradeCount", label: "Trades", sortKey: "tradeCount", defaultVisible: false, format: (m) => fmtNum(m.tradeCount, 0) },
+  {
+    id: "tradeCount",
+    label: "Trades",
+    sortKey: "tradeCount",
+    defaultVisible: false,
+    format: (m) => {
+      // Bybit/Coinbase public APIs do not publish 24h trade counts — show em dash, not fake 0.
+      const ex = String(m._watchExchange || els.spotExchange?.value || "binance").toLowerCase();
+      const n = Number(m.tradeCount);
+      if ((ex === "bybit" || ex === "coinbase") && (!Number.isFinite(n) || n === 0)) {
+        return "—";
+      }
+      return fmtNum(m.tradeCount, 0);
+    },
+  },
   { id: "circulatingSupply", label: "Circ. supply", sortKey: null, defaultVisible: false, format: (m) => fmtNum(m.circulatingSupply, 0) },
   { id: "totalSupply", label: "Total supply", sortKey: null, defaultVisible: false, format: (m) => fmtNum(m.totalSupply, 0) },
   { id: "maxSupply", label: "Max supply", sortKey: null, defaultVisible: false, format: (m) => fmtNum(m.maxSupply, 0) },
@@ -135,12 +149,29 @@ async function syncWatchlistFromApi() {
   try {
     const data = await apiGet(`/api/v1/watchlist?clientId=${encodeURIComponent(clientId())}`);
     if (Array.isArray(data.items)) {
-      watchlist = data.items.map((x) => ({
+      const server = data.items.map((x) => ({
         exchange: String(x.exchange || "binance").toLowerCase(),
         symbol: String(x.symbol).toUpperCase(),
       }));
+      // Union merge: never wipe offline optimistic adds with an empty/lagging server list.
+      const merge =
+        typeof globalThis.WatchlistLogic?.mergeWatchlists === "function"
+          ? globalThis.WatchlistLogic.mergeWatchlists
+          : (local, remote) => {
+              const map = new Map();
+              for (const w of [...(remote || []), ...(local || [])]) {
+                const ex = String(w.exchange || "binance").toLowerCase();
+                const sym = String(w.symbol || "").toUpperCase();
+                if (!sym) continue;
+                map.set(`${ex}|${sym}`, { exchange: ex, symbol: sym });
+              }
+              return Array.from(map.values());
+            };
+      watchlist = merge(watchlist, server);
       saveWatchlistLocal();
       renderWatchlist();
+      // Push local-only items to server in background so they survive the next cold GET.
+      pushLocalOnlyWatchlist(server);
     }
   } catch {
     /* offline / backend down — keep local */
@@ -148,11 +179,35 @@ async function syncWatchlistFromApi() {
   }
 }
 
+/** Best-effort POST for items present locally but missing from server response. */
+function pushLocalOnlyWatchlist(serverItems) {
+  const serverKeys = new Set(
+    (serverItems || []).map(
+      (w) =>
+        `${String(w.exchange || "binance").toLowerCase()}|${String(w.symbol || "").toUpperCase()}`
+    )
+  );
+  for (const w of watchlist) {
+    const k = `${String(w.exchange || "binance").toLowerCase()}|${String(w.symbol || "").toUpperCase()}`;
+    if (serverKeys.has(k)) continue;
+    apiSend("POST", "/api/v1/watchlist/items", {
+      clientId: clientId(),
+      exchange: w.exchange,
+      symbol: w.symbol,
+    }).catch((e) => console.warn("watchlist re-sync api", e));
+  }
+}
+
 /** Update ★ buttons in the open table without rebuilding all rows. */
 function paintStarButtons() {
-  const ex = els.spotExchange?.value || "binance";
   els.spotBody?.querySelectorAll("[data-star]").forEach((btn) => {
     const sym = btn.getAttribute("data-star");
+    const tr = btn.closest("tr[data-exchange]");
+    const ex =
+      tr?.getAttribute("data-exchange") ||
+      btn.getAttribute("data-star-exchange") ||
+      els.spotExchange?.value ||
+      "binance";
     const on = isWatched(ex, sym);
     btn.classList.toggle("on", on);
     btn.textContent = on ? "★" : "☆";
@@ -190,13 +245,18 @@ function removeWatch(exchange, symbol) {
   saveWatchlistLocal();
   renderWatchlist();
   paintStarButtons();
-  // If "watchlist only" is on, drop the row immediately from the table.
+  // If "watchlist only" is on, drop only this exchange|symbol row.
   if (els.watchOnly?.checked && lastSpotData?.items) {
     lastSpotData = {
       ...lastSpotData,
-      items: lastSpotData.items.filter(
-        (m) => String(m.symbol || "").toUpperCase() !== symbol
-      ),
+      items: lastSpotData.items.filter((m) => {
+        const mEx = String(m._watchExchange || m.exchange || "").toLowerCase();
+        const mSym = String(m.symbol || "").toUpperCase();
+        if (mSym !== symbol) return true;
+        // Drop when row exchange matches (or unknown exchange on row).
+        if (!mEx || mEx === exchange) return false;
+        return true;
+      }),
       total: Math.max(0, (lastSpotData.total || 0) - 1),
     };
     renderSpotBody(lastSpotData, { forceFull: true });
@@ -472,10 +532,23 @@ function openDetailPage(sym, exchange) {
 }
 
 function fmtNum(v, digits = 2) {
+  if (typeof globalThis.WatchlistLogic?.fmtNum === "function") {
+    return escapeHtml(globalThis.WatchlistLogic.fmtNum(v, digits));
+  }
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
   if (Number.isNaN(n)) return escapeHtml(String(v));
-  return escapeHtml(n.toLocaleString(undefined, { maximumFractionDigits: digits }));
+  if (n === 0) return escapeHtml("0");
+  const abs = Math.abs(n);
+  if (abs > 0 && abs < Math.pow(10, -digits)) {
+    return escapeHtml(n.toExponential(Math.min(4, digits)));
+  }
+  return escapeHtml(
+    n.toLocaleString(undefined, {
+      maximumFractionDigits: digits,
+      minimumFractionDigits: 0,
+    })
+  );
 }
 
 function fmtChange(v) {
@@ -1009,11 +1082,11 @@ function renderSpotBody(data, opts = {}) {
       const cells = cols
         .map((col) => {
           if (col.id === "symbol") {
-            const ex = els.spotExchange?.value || "binance";
+            const ex = m._watchExchange || els.spotExchange?.value || "binance";
             const on = isWatched(ex, m.symbol) ? "on" : "";
             const star = on ? "★" : "☆";
             return `<td class="td-left">
-              <button type="button" class="star-btn ${on}" data-star="${escapeAttr(m.symbol)}" title="Toggle watchlist" aria-label="Watch ${escapeAttr(m.symbol)}">${star}</button>
+              <button type="button" class="star-btn ${on}" data-star="${escapeAttr(m.symbol)}" data-star-exchange="${escapeAttr(ex)}" title="Toggle watchlist" aria-label="Watch ${escapeAttr(m.symbol)}">${star}</button>
               <button type="button" class="linkish" data-pick="${escapeAttr(m.symbol)}">${escapeHtml(m.symbol)}</button>
             </td>`;
           }

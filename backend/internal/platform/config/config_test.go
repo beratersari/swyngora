@@ -30,8 +30,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BinanceProductBaseURL != "https://www.binance.com" {
 		t.Fatalf("product base=%q", cfg.BinanceProductBaseURL)
 	}
-	if cfg.SupplyCacheTTL != 0 {
-		t.Fatalf("supply ttl default want 0 (never expire), got %v", cfg.SupplyCacheTTL)
+	if cfg.SupplyCacheTTL != 48*time.Hour {
+		t.Fatalf("supply ttl default want 48h safety TTL, got %v", cfg.SupplyCacheTTL)
 	}
 	if cfg.CandleCacheMaxEntries != 512 {
 		t.Fatalf("candle max entries=%d", cfg.CandleCacheMaxEntries)

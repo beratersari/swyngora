@@ -474,11 +474,16 @@ func TestListSpotMarkets_EmptyCatalogNotCachedAsEmptyFilter(t *testing.T) {
 						"symbol": "BTCUSDT", "status": "TRADING", "baseAsset": "BTC", "quoteAsset": "USDT",
 						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
 					},
+					{
+						"symbol": "NVDABUSDT", "status": "TRADING", "baseAsset": "NVDAB", "quoteAsset": "USDT",
+						"isSpotTradingAllowed": true, "permissions": []string{"SPOT"},
+					},
 				},
 			})
 		case r.URL.Path == "/api/v3/ticker/24hr":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"symbol": "BTCUSDT", "lastPrice": "1", "volume": "1", "quoteVolume": "1", "count": 1},
+				{"symbol": "NVDABUSDT", "lastPrice": "2", "volume": "1", "quoteVolume": "2", "count": 1},
 			})
 		case strings.Contains(r.URL.Path, "get-products"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -496,13 +501,13 @@ func TestListSpotMarkets_EmptyCatalogNotCachedAsEmptyFilter(t *testing.T) {
 		HTTPClient:      srv.Client(),
 		SpotMarketCache: cache.New[[]domain.SpotMarket](time.Minute),
 	})
-	// Soft-fail: list still returns (empty exclusion set when no last-good).
-	list, err := c.ListSpotMarkets(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	// Fail closed: no last-good catalog → do not list equities as crypto.
+	_, err := c.ListSpotMarkets(context.Background())
+	if err == nil {
+		t.Fatal("expected error when product catalog unavailable without stale meta")
 	}
-	if len(list) != 1 {
-		t.Fatalf("want soft-fail list, got %+v", list)
+	if !errors.Is(err, domain.ErrUpstream) {
+		t.Fatalf("want ErrUpstream, got %v", err)
 	}
 }
 

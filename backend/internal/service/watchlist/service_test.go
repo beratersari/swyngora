@@ -3,6 +3,7 @@ package watchlist
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -106,6 +107,28 @@ func TestWatchlist_SixItems_StableMembership(t *testing.T) {
 	}
 }
 
+func TestWatchlist_AddEnforcesMaxItems(t *testing.T) {
+	svc := New(newMem())
+	ctx := context.Background()
+	for i := 0; i < maxItems; i++ {
+		sym := "SYM" + strconv.Itoa(i) + "USDT"
+		if _, err := svc.Add(ctx, "cap", "binance", sym, ""); err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+	}
+	_, err := svc.Add(ctx, "cap", "binance", "OVERFLOWUSDT", "")
+	if err == nil {
+		t.Fatal("expected max items error")
+	}
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want invalid argument, got %v", err)
+	}
+	// Upsert existing must still work.
+	if _, err := svc.Add(ctx, "cap", "binance", "SYM0USDT", "note"); err != nil {
+		t.Fatalf("upsert existing: %v", err)
+	}
+}
+
 func TestWatchlist_MultiExchange(t *testing.T) {
 	svc := New(newMem())
 	ctx := context.Background()
@@ -197,26 +220,12 @@ func TestWatchlist_MaxItems(t *testing.T) {
 	}
 	// use unique symbols
 	for i := range items {
-		items[i].Symbol = "SYM" + itoa(i)
+		items[i].Symbol = "SYM" + strconv.Itoa(i)
 	}
 	_, err := svc.Replace(context.Background(), "u", items)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
 	}
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b [12]byte
-	i := len(b)
-	for n > 0 {
-		i--
-		b[i] = byte('0' + n%10)
-		n /= 10
-	}
-	return string(b[i:])
 }
 
 func TestWatchlist_AddIdempotent(t *testing.T) {

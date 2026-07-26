@@ -79,3 +79,22 @@ func TestMemory_ConcurrentAdds(t *testing.T) {
 		t.Fatalf("want 50 concurrent unique adds, got %d", len(wl.Items))
 	}
 }
+
+func TestMemory_MaxClients(t *testing.T) {
+	m := NewMemoryWithMaxClients(2)
+	ctx := context.Background()
+	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Add(ctx, "c2", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := m.Add(ctx, "c3", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"})
+	if err == nil {
+		t.Fatal("expected capacity error for third client")
+	}
+	// Existing client still writable.
+	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}); err != nil {
+		t.Fatalf("existing client should work: %v", err)
+	}
+}

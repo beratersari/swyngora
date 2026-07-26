@@ -324,7 +324,8 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 	if err != nil {
 		return nil, err
 	}
-	// Product catalog: non-crypto filter + tags. Soft-fail so catalog outage does not take down spot list.
+	// Product catalog: non-crypto filter + tags. Fail closed without a warm/stale snapshot
+	// so bStocks / commodities never appear as crypto when the catalog is unavailable.
 	meta, err := c.getProductMeta(ctx)
 	nonCrypto := map[string]struct{}{}
 	tagsByBase := map[string][]string{}
@@ -334,6 +335,8 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 				nonCrypto[b] = struct{}{}
 			}
 			tagsByBase = stale.TagsByBase
+		} else {
+			return nil, fmt.Errorf("%w: product catalog unavailable (non-crypto filter required)", domain.ErrUpstream)
 		}
 	} else if meta != nil {
 		for _, b := range meta.NonCryptoBases {
@@ -387,6 +390,32 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		c.spotMarkets.Set(cacheKey, append([]domain.SpotMarket(nil), out...))
 	}
 	return out, nil
+}
+
+// TagsByBase returns product-catalog tags keyed by uppercased base asset.
+func (c *Client) TagsByBase(ctx context.Context) (map[string][]string, error) {
+	meta, err := c.getProductMeta(ctx)
+	if err != nil {
+		if stale, ok := c.productMeta.GetStale("all"); ok && stale != nil && len(stale.TagsByBase) > 0 {
+			return copyTagsByBase(stale.TagsByBase), nil
+		}
+		return nil, err
+	}
+	if meta == nil {
+		return map[string][]string{}, nil
+	}
+	return copyTagsByBase(meta.TagsByBase), nil
+}
+
+func copyTagsByBase(in map[string][]string) map[string][]string {
+	if len(in) == 0 {
+		return map[string][]string{}
+	}
+	out := make(map[string][]string, len(in))
+	for k, v := range in {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
 }
 
 // ListProductTags returns sorted unique Binance product-catalog tags for crypto bases.
