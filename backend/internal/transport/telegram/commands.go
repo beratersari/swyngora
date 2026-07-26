@@ -18,8 +18,11 @@ import (
 type Options struct {
 	DefaultExchange string
 	LowMcapLimit    int
-	// AllowedChatIDs empty = allow all chats.
+	// AllowedChatIDs restricts chats when non-empty.
 	AllowedChatIDs map[int64]struct{}
+	// AllowAll permits every chat when AllowedChatIDs is empty.
+	// When both empty and AllowAll is false, Allowed rejects everyone (fail closed).
+	AllowAll bool
 }
 
 // Router dispatches Telegram text commands to application services.
@@ -53,9 +56,10 @@ func NewRouter(marketSvc *market.Service, watchSvc *watchlist.Service, opts Opti
 }
 
 // Allowed reports whether chatID may use the bot.
+// Fail closed: empty allowlist only permits traffic when AllowAll is true.
 func (r *Router) Allowed(chatID int64) bool {
 	if len(r.opts.AllowedChatIDs) == 0 {
-		return true
+		return r.opts.AllowAll
 	}
 	_, ok := r.opts.AllowedChatIDs[chatID]
 	return ok
@@ -103,7 +107,8 @@ func (r *Router) Handle(ctx context.Context, chatID, userID int64, text string) 
 		if strings.HasPrefix(cmd, "/") {
 			return "Unknown command. Try /help"
 		}
-		return r.cmdPrice(ctx, parts)
+		// Free-text is not treated as /price (avoids group chatter hammering upstreams).
+		return "Send a command, e.g. /price BTCUSDT — try /help"
 	}
 }
 
@@ -254,20 +259,18 @@ func (r *Router) cmdMcap(ctx context.Context, args []string) string {
 
 func (r *Router) cmdRSI(ctx context.Context, args []string) string {
 	if len(args) < 1 {
-		return "Usage: /rsi <symbol> [interval] [exchange]\nExample: /rsi BTCUSDT 1h binance"
+		return "Usage: /rsi <symbol> [interval] [exchange]\nExample: /rsi BTCUSDT 1h binance\nExample: /rsi BTCUSDT binance 1h"
 	}
 	symbol := strings.ToUpper(args[0])
 	interval := "1h"
 	exchange := r.defaultExchange()
-	if len(args) >= 2 {
-		if isExchange(args[1]) {
-			exchange = strings.ToLower(args[1])
-		} else {
-			interval = args[1]
+	// Accept [interval] [exchange], [exchange] [interval], or either alone.
+	for _, a := range args[1:] {
+		if isExchange(a) {
+			exchange = strings.ToLower(a)
+			continue
 		}
-	}
-	if len(args) >= 3 {
-		exchange = strings.ToLower(args[2])
+		interval = a
 	}
 	ser, err := r.market.GetIndicators(ctx, exchange, symbol, interval, 60, 14, []int{12, 26})
 	if err != nil {
@@ -390,8 +393,9 @@ func friendlyErr(err error) string {
 	case errors.Is(err, domain.ErrUpstream):
 		return "Upstream market data unavailable — try again later."
 	case errors.Is(err, domain.ErrInvalidArgument):
-		return "Error: " + err.Error()
+		// esc() so HTML parse_mode cannot be broken by validation text.
+		return "Error: " + esc(err.Error())
 	default:
-		return "Error: " + err.Error()
+		return "Error: " + esc(err.Error())
 	}
 }

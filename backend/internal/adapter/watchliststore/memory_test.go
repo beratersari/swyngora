@@ -3,6 +3,7 @@ package watchliststore
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -96,5 +97,34 @@ func TestMemory_MaxClients(t *testing.T) {
 	// Existing client still writable.
 	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}); err != nil {
 		t.Fatalf("existing client should work: %v", err)
+	}
+}
+
+func TestMemory_MaxItemsEnforced(t *testing.T) {
+	m := NewMemory()
+	ctx := context.Background()
+	for i := 0; i < domain.MaxWatchlistItems; i++ {
+		_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "S" + strconv.Itoa(i)})
+		if err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+	}
+	_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "OVERFLOW"})
+	if err == nil {
+		t.Fatal("expected max items error")
+	}
+	// concurrent overflow
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "X" + strconv.Itoa(i)})
+		}(i)
+	}
+	wg.Wait()
+	wl, _ := m.Get(ctx, "c")
+	if len(wl.Items) > domain.MaxWatchlistItems {
+		t.Fatalf("len=%d", len(wl.Items))
 	}
 }

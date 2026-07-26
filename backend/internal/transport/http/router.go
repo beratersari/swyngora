@@ -14,6 +14,8 @@ type RouterOptions struct {
 	// RateLimitRPS is tokens/sec per IP; 0 disables.
 	RateLimitRPS   float64
 	RateLimitBurst int
+	// CORSAllowOrigins: empty or ["*"] = any origin; otherwise exact match list.
+	CORSAllowOrigins []string
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -52,6 +54,6 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	var h http.Handler = mux
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
-	h = middleware.CORS(h)
+	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h
 }

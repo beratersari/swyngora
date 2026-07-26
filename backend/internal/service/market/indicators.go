@@ -30,7 +30,10 @@ func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval 
 	if rsiPeriod < domain.MinIndicatorPeriod || rsiPeriod > domain.MaxIndicatorPeriod {
 		return nil, fmt.Errorf("%w: rsiPeriod must be between %d and %d", domain.ErrInvalidArgument, domain.MinIndicatorPeriod, domain.MaxIndicatorPeriod)
 	}
-	emaPeriods = domain.NormalizeEMAPeriods(emaPeriods)
+	emaPeriods, err = domain.ValidateAndNormalizeEMAPeriods(emaPeriods)
+	if err != nil {
+		return nil, err
+	}
 
 	if limit < 0 {
 		return nil, fmt.Errorf("%w: limit must be >= 0", domain.ErrInvalidArgument)
@@ -62,7 +65,13 @@ func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval 
 		return nil, fmt.Errorf("%w: no candles for indicators", domain.ErrNotFound)
 	}
 
-	points := domain.BuildIndicatorSeries(candles, rsiPeriod, emaPeriods)
+	points, err := domain.BuildIndicatorSeries(candles, rsiPeriod, emaPeriods)
+	if err != nil {
+		return nil, err
+	}
+	if len(points) == 0 {
+		return nil, fmt.Errorf("%w: no candles for indicators", domain.ErrNotFound)
+	}
 	// Trim to last `limit` points for the response.
 	if len(points) > limit {
 		points = points[len(points)-limit:]
@@ -106,10 +115,11 @@ func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval 
 }
 
 // ParseEMAPeriodsCSV parses "12,26" into ints.
-func ParseEMAPeriodsCSV(raw string) []int {
+// Returns an error when any non-empty token is not an integer (fail loud).
+func ParseEMAPeriodsCSV(raw string) ([]int, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil
+		return nil, nil
 	}
 	var out []int
 	for _, part := range strings.Split(raw, ",") {
@@ -119,9 +129,9 @@ func ParseEMAPeriodsCSV(raw string) []int {
 		}
 		n, err := strconv.Atoi(part)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("%w: emaPeriods must be comma-separated integers", domain.ErrInvalidArgument)
 		}
 		out = append(out, n)
 	}
-	return out
+	return out, nil
 }

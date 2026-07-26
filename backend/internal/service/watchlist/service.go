@@ -5,17 +5,20 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 const (
-	maxItems       = 200
-	defaultClient  = "default"
+	maxItems       = domain.MaxWatchlistItems
 	maxClientIDLen = 128
+	maxNoteRunes   = 200
 )
 
 // Service orchestrates watchlist use cases.
+// Client IDs are opaque client-supplied tenancy keys (no server auth yet).
+// Empty clientId is rejected — there is no shared "default" bucket.
 type Service struct {
 	store domain.WatchlistPort
 }
@@ -50,6 +53,9 @@ func (s *Service) Replace(ctx context.Context, clientID string, items []domain.W
 	if err != nil {
 		return nil, err
 	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
 	norm, err := normalizeItems(items)
 	if err != nil {
 		return nil, err
@@ -57,7 +63,7 @@ func (s *Service) Replace(ctx context.Context, clientID string, items []domain.W
 	return s.store.Set(ctx, clientID, norm)
 }
 
-// Add appends or updates one item.
+// Add appends or updates one item. Max items is enforced in the store under lock.
 func (s *Service) Add(ctx context.Context, clientID string, exchange, symbol, note string) (*domain.Watchlist, error) {
 	clientID, err := normalizeClientID(clientID)
 	if err != nil {
@@ -75,23 +81,6 @@ func (s *Service) Add(ctx context.Context, clientID string, exchange, symbol, no
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
 	}
-	// Enforce maxItems on Add (Replace already uses normalizeItems).
-	cur, err := s.store.Get(ctx, clientID)
-	if err != nil {
-		return nil, err
-	}
-	isNew := true
-	if cur != nil {
-		for _, it := range cur.Items {
-			if it.Exchange == item.Exchange && it.Symbol == item.Symbol {
-				isNew = false
-				break
-			}
-		}
-		if isNew && len(cur.Items) >= maxItems {
-			return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
-		}
-	}
 	return s.store.Add(ctx, clientID, item)
 }
 
@@ -101,11 +90,20 @@ func (s *Service) Remove(ctx context.Context, clientID, exchange, symbol string)
 	if err != nil {
 		return nil, err
 	}
-	ex := domain.ParseExchange(exchange)
-	if ex == "" {
-		return nil, fmt.Errorf("%w: exchange must be one of %v", domain.ErrInvalidArgument, domain.SupportedExchanges)
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
 	}
-	symbol = normalizeSymbol(ex, symbol)
+	rawEx := strings.TrimSpace(exchange)
+	var ex domain.Exchange
+	if rawEx == "" {
+		ex = domain.DefaultExchange
+	} else {
+		if !domain.IsValidExchange(rawEx) {
+			return nil, fmt.Errorf("%w: exchange must be one of %v", domain.ErrInvalidArgument, domain.SupportedExchanges)
+		}
+		ex = domain.ParseExchange(rawEx)
+	}
+	symbol = domain.NormalizeSymbol(ex, symbol)
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
@@ -115,12 +113,15 @@ func (s *Service) Remove(ctx context.Context, clientID, exchange, symbol string)
 func normalizeClientID(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		id = defaultClient
+		return "", fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument)
 	}
 	if len(id) > maxClientIDLen {
 		return "", fmt.Errorf("%w: clientId too long", domain.ErrInvalidArgument)
 	}
-	// allow simple ids only
+	// Reject the historical shared bucket name explicitly.
+	if strings.EqualFold(id, "default") {
+		return "", fmt.Errorf("%w: clientId must not be the shared name \"default\"", domain.ErrInvalidArgument)
+	}
 	for _, r := range id {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
 			continue
@@ -152,22 +153,25 @@ func normalizeItems(items []domain.WatchlistItem) ([]domain.WatchlistItem, error
 }
 
 func normalizeItem(it domain.WatchlistItem) (domain.WatchlistItem, error) {
-	ex := domain.ParseExchange(string(it.Exchange))
-	if ex == "" {
-		// empty exchange → default
-		if strings.TrimSpace(string(it.Exchange)) == "" {
-			ex = domain.DefaultExchange
-		} else {
+	rawEx := strings.TrimSpace(string(it.Exchange))
+	var ex domain.Exchange
+	if rawEx == "" {
+		ex = domain.DefaultExchange
+	} else {
+		if !domain.IsValidExchange(rawEx) {
 			return it, fmt.Errorf("%w: exchange must be one of %v", domain.ErrInvalidArgument, domain.SupportedExchanges)
 		}
+		ex = domain.ParseExchange(rawEx)
 	}
-	sym := normalizeSymbol(ex, it.Symbol)
+	sym := domain.NormalizeSymbol(ex, it.Symbol)
 	if sym == "" {
 		return it, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
 	note := strings.TrimSpace(it.Note)
-	if len(note) > 200 {
-		note = note[:200]
+	if utf8.RuneCountInString(note) > maxNoteRunes {
+		// Truncate by runes, not bytes.
+		runes := []rune(note)
+		note = string(runes[:maxNoteRunes])
 	}
 	added := it.AddedAt
 	if added.IsZero() {
@@ -179,15 +183,4 @@ func normalizeItem(it domain.WatchlistItem) (domain.WatchlistItem, error) {
 		Note:     note,
 		AddedAt:  added.UTC(),
 	}, nil
-}
-
-func normalizeSymbol(ex domain.Exchange, symbol string) string {
-	symbol = strings.TrimSpace(symbol)
-	if symbol == "" {
-		return ""
-	}
-	if ex == domain.ExchangeCoinbase {
-		return strings.ToUpper(symbol)
-	}
-	return strings.ToUpper(strings.ReplaceAll(symbol, "-", ""))
 }

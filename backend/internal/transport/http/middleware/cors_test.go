@@ -55,3 +55,26 @@ func TestCORS_OPTIONS_Preflight(t *testing.T) {
 		t.Fatalf("ACA-Origin=%q", got)
 	}
 }
+
+func TestCORS_Allowlist(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := CORSWithOrigins([]string{"http://localhost:5173"})(inner)
+
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Fatalf("allowed origin=%q", got)
+	}
+
+	req2 := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req2.Header.Set("Origin", "https://evil.example")
+	rr2 := httptest.NewRecorder()
+	h.ServeHTTP(rr2, req2)
+	if got := rr2.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("evil origin should not be allowed, got %q", got)
+	}
+}

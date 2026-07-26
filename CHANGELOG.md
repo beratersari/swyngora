@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Watchlist `Add` max-items race (enforced under store lock); reject empty/`default` clientId
+- Indicator series no longer collapses bad closes (fail instead of inventing RSI/EMA gaps)
+- Coinbase symbol normalization shared with watchlist (`BTCUSD` → `BTC-USD`)
+- Empty/unparseable volumes sort nulls-last (not as zero); tag sort uses sorted tag join
+- Binance product-meta/exchangeInfo singleflight detaches caller context
+- Bybit: only `Trading` instruments; candle `CloseTime` from interval; safer error mapping
+- Coinbase: hard-fail invalid OHLC rows; error if product pagination hits safety cap
+- Telegram: fail-closed without allowlist; `/rsi` accepts either arg order; escape HTML errors; free-text not `/price`
+- JSON POST/PUT body size capped (1 MiB); CORS origin allowlist via `CORS_ALLOW_ORIGINS`
+- Simple frontend: Coinbase dashboard uses `quote=USD`; watchlist DELETE tombstones prevent re-merge
+
+### Security
+- Telegram bot does not start with token alone unless `TELEGRAM_ALLOW_ALL=true` or chat allowlist is set
+- Configurable CORS (default `*` for local dev; restrict in production)
+
 ### Added
 - **Telegram bot** integrated in backend (`transport/telegram`): market commands, watchlist, `/lowmcap` / `/lowmcap all` (no AI; enabled via `TELEGRAM_BOT_TOKEN`)
 - Technical indicators: **RSI** (Wilder) and **EMA** via `GET /api/v1/market/indicators`

@@ -56,7 +56,7 @@ func IsValidSortOrder(s string) bool {
 	return s == string(SortAsc) || s == string(SortDesc)
 }
 
-// SpotMarket is a Binance spot trading pair with optional 24h metrics and mcap.
+// SpotMarket is a venue-agnostic spot trading pair with optional 24h metrics and mcap.
 //
 // BaseAsset / QuoteAsset / Status are retained for server-side filtering and
 // enrichment; they are not always exposed on the public list DTO.
@@ -133,7 +133,8 @@ type SpotListResult struct {
 	Exchange Exchange
 }
 
-// NeedsSupplyEnrichment reports whether sort requires market-cap fields.
+// NeedsSupplyEnrichment is true when sort order depends on mcap fields before pagination
+// (full filtered set must be enriched). Display enrichment of a single page is separate.
 func (f SpotSortField) NeedsSupplyEnrichment() bool {
 	switch f {
 	case SpotSortMarketCapCirculating, SpotSortMarketCapTotal, SpotSortMarketCapMax:

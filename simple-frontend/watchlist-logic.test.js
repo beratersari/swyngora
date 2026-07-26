@@ -207,3 +207,23 @@ describe("buildWatchlistRows", () => {
     assert.equal(rows.filter((r) => r._missing).length, 5);
   });
 });
+
+describe("mergeWatchlists with tombstone filter (app-layer contract)", () => {
+  test("filtering server by pendingDeletes before merge keeps local delete", () => {
+    const local = [{ exchange: "binance", symbol: "ETHUSDT" }];
+    const server = [
+      { exchange: "binance", symbol: "BTCUSDT" },
+      { exchange: "binance", symbol: "ETHUSDT" },
+    ];
+    const pendingDeletes = new Set(["binance|BTCUSDT"]);
+    const filteredServer = server.filter(
+      (w) => !pendingDeletes.has(`${w.exchange}|${w.symbol}`)
+    );
+    const m = mergeWatchlists(local, filteredServer).filter(
+      (w) => !pendingDeletes.has(`${w.exchange}|${w.symbol}`)
+    );
+    assert.equal(m.length, 1);
+    assert.equal(m[0].symbol, "ETHUSDT");
+    assert.ok(!m.some((x) => x.symbol === "BTCUSDT"));
+  });
+});

@@ -15,9 +15,19 @@ HTTP API           → transport/http     → (same services)
 
 Enabled when `TELEGRAM_BOT_TOKEN` is set. Empty token → API-only server.
 
+### Allowlist (fail closed)
+
+| Config | Behavior |
+|--------|----------|
+| `TELEGRAM_CHAT_ID` and/or `TELEGRAM_ALLOWED_CHAT_IDS` | Only those chats may use the bot |
+| Neither set, and `TELEGRAM_ALLOW_ALL` unset/false | **Bot does not start** (logged error) |
+| `TELEGRAM_ALLOW_ALL=true` with empty allowlist | Public bot (any chat) — opt-in only |
+
 ## Commands
 
 See `backend/README.md` (includes `/lowmcap` and `/lowmcap all`).
+
+Free-text messages are **not** treated as `/price` (use explicit commands).
 
 ## Where the code lives
 

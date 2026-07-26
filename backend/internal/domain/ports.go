@@ -3,7 +3,7 @@ package domain
 import "context"
 
 // MarketDataPort fetches exchange market data (candles, 24h stats, spot listings).
-// Implemented by the Binance adapter.
+// Implemented by venue adapters (Binance, Coinbase, Bybit).
 type MarketDataPort interface {
 	GetCandles(ctx context.Context, q CandleQuery) ([]Candle, error)
 	GetTicker24h(ctx context.Context, symbol string) (*Ticker24h, error)

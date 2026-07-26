@@ -114,12 +114,17 @@ curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&limit=20' | jq '.it
 ### Indicators — `GET /api/v1/market/indicators`
 
 - Computes **RSI** (Wilder's smoothing, default period 14) and **EMA** (default 12, 26) from exchange candles
-- Params: `exchange`, `symbol`, `interval`, `limit`, `rsiPeriod`, `emaPeriods` (comma-separated)
+- Params: `exchange`, `symbol`, `interval`, `limit`, `rsiPeriod`, `emaPeriods` (comma-separated integers)
+- Invalid closes fail the request (gaps are not collapsed — that would corrupt RSI/EMA)
+- Out-of-range `emaPeriods` are rejected (not silently defaulted)
 - Returns point series + `latest` snapshot; warm-up bars may have null indicator values
 - **Not financial advice** — informational analysis only
 
 ### Watchlist — `/api/v1/watchlist`
 
-- No auth: scoped by `clientId` query or `X-Client-Id` header (simple frontend generates a browser id)
+- **No server auth** (demo only): scoped by client-supplied `clientId` query or `X-Client-Id` header
+- `clientId` is **required** (non-empty); the shared name `default` is rejected
+- Simple frontend generates an unguessable browser id in `localStorage`
 - `GET` list, `POST /items` add, `DELETE /items` remove, `PUT` replace
-- In-memory store (process lifetime); UI also persists to `localStorage`
+- In-memory store (process lifetime, max 200 items/client, max 10k clients); UI also persists to `localStorage`
+- Not suitable for multi-tenant production without real authentication

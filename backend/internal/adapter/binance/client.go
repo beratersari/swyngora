@@ -449,7 +449,9 @@ func (c *Client) getExchangeSpotSymbols(ctx context.Context) ([]spotSymbolMeta, 
 				return hit, nil
 			}
 		}
-		infoBody, err := c.get(ctx, "/api/v3/exchangeInfo", nil)
+		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
+		defer cancel()
+		infoBody, err := c.get(fetchCtx, "/api/v3/exchangeInfo", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -480,6 +482,9 @@ func (c *Client) getExchangeSpotSymbols(ctx context.Context) ([]spotSymbolMeta, 
 	if err != nil {
 		return nil, err
 	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	return v.([]spotSymbolMeta), nil
 }
 
@@ -497,9 +502,12 @@ func (c *Client) getProductMeta(ctx context.Context) (*productMetaSnapshot, erro
 				return hit, nil
 			}
 		}
+		// Detach from caller ctx so a cancelled request cannot poison concurrent waiters.
+		fetchCtx, cancel := context.WithTimeout(context.Background(), multiCallTimeout)
+		defer cancel()
 		params := url.Values{}
 		params.Set("includeEtf", "true")
-		body, err := c.getProduct(ctx, productCatalogPath, params)
+		body, err := c.getProduct(fetchCtx, productCatalogPath, params)
 		if err != nil {
 			return nil, err
 		}
@@ -523,6 +531,9 @@ func (c *Client) getProductMeta(ctx context.Context) (*productMetaSnapshot, erro
 	})
 	if err != nil {
 		return nil, err
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	return v.(*productMetaSnapshot), nil
 }

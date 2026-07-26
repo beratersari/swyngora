@@ -84,6 +84,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `HTTP_ADDR` | `:8080` | Listen address |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |
 | `TELEGRAM_CHAT_ID` | — | Allowed chat id (or use `TELEGRAM_ALLOWED_CHAT_IDS`) |
+| `TELEGRAM_ALLOWED_CHAT_IDS` | — | Comma-separated allowed chat ids |
+| `TELEGRAM_ALLOW_ALL` | `false` | If true and allowlist empty, bot is public; otherwise token without allowlist **does not start** |
+| `CORS_ALLOW_ORIGINS` | `*` | Comma-separated browser origins (`*` = any; set exact origins in production) |
 | `BOT_DEFAULT_EXCHANGE` | `binance` | Default venue for bot commands |
 | `BOT_POLL_TIMEOUT` | `30s` | Telegram long-poll wait |
 | `BOT_LOWMCAP_LIMIT` | `10` | Default `/lowmcap` size (max 25) |

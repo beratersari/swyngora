@@ -19,6 +19,9 @@ type errorDetail struct {
 	Message string `json:"message"`
 }
 
+// DefaultMaxJSONBody is the max request body size for JSON POST/PUT handlers.
+const DefaultMaxJSONBody = 1 << 20 // 1 MiB
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -27,6 +30,19 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	if err := enc.Encode(v); err != nil {
 		slog.Error("encode response", "err", err)
 	}
+}
+
+// decodeJSON reads at most maxBytes from r.Body into dst.
+func decodeJSON(r *http.Request, dst any, maxBytes int64) error {
+	if maxBytes <= 0 {
+		maxBytes = DefaultMaxJSONBody
+	}
+	r.Body = http.MaxBytesReader(nil, r.Body, maxBytes)
+	dec := json.NewDecoder(r.Body)
+	if err := dec.Decode(dst); err != nil {
+		return err
+	}
+	return nil
 }
 
 func writeError(w http.ResponseWriter, err error) {

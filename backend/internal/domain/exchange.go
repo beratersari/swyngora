@@ -21,9 +21,19 @@ var SupportedExchanges = []Exchange{
 // DefaultExchange is used when the client omits ?exchange=.
 const DefaultExchange = ExchangeBinance
 
-// IsValidExchange reports whether s is a known venue id.
+// IsValidExchange reports whether s is an explicitly known venue id.
+// Empty/whitespace is not valid (use ParseExchange when defaulting is intended).
 func IsValidExchange(s string) bool {
-	return ParseExchange(s) != ""
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return false
+	}
+	for _, e := range SupportedExchanges {
+		if string(e) == s {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseExchange normalizes an exchange id; empty input yields DefaultExchange.
@@ -43,6 +53,7 @@ func ParseExchange(s string) Exchange {
 
 // SupportedIntervalsFor returns candle intervals supported for the exchange.
 // Coinbase public candles only support a subset of granularities.
+// Unknown exchange ids return nil (fail closed). Zero-value Exchange is treated as Binance.
 func SupportedIntervalsFor(ex Exchange) []CandleInterval {
 	switch ex {
 	case ExchangeCoinbase:
@@ -55,8 +66,10 @@ func SupportedIntervalsFor(ex Exchange) []CandleInterval {
 			Interval1h, Interval2h, Interval4h, Interval6h, Interval12h,
 			Interval1d, Interval1w, Interval1M,
 		}
-	default: // binance
+	case ExchangeBinance, "":
 		return append([]CandleInterval(nil), SupportedIntervals...)
+	default:
+		return nil
 	}
 }
 

@@ -184,28 +184,9 @@ func (s *Service) ListProductTags(ctx context.Context, exchange string) ([]strin
 	return bp.ListProductTags(ctx)
 }
 
-// normalizeSymbolForExchange uppercases symbols; Coinbase keeps a single hyphen (BTC-USD).
+// normalizeSymbolForExchange delegates to domain.NormalizeSymbol (shared with watchlist).
 func normalizeSymbolForExchange(ex domain.Exchange, symbol string) string {
-	symbol = strings.TrimSpace(symbol)
-	if symbol == "" {
-		return ""
-	}
-	if ex == domain.ExchangeCoinbase {
-		symbol = strings.ToUpper(symbol)
-		// Accept BTCUSD → BTC-USD when clearly a USD pair without hyphen.
-		if !strings.Contains(symbol, "-") {
-			for _, q := range []string{"USDT", "USDC", "USD", "EUR", "GBP", "BTC", "ETH"} {
-				if strings.HasSuffix(symbol, q) && len(symbol) > len(q) {
-					base := strings.TrimSuffix(symbol, q)
-					if base != "" {
-						return base + "-" + q
-					}
-				}
-			}
-		}
-		return symbol
-	}
-	return strings.ToUpper(strings.ReplaceAll(symbol, "-", ""))
+	return domain.NormalizeSymbol(ex, symbol)
 }
 
 const (
@@ -451,7 +432,16 @@ func betterPrimaryPair(a, b domain.SpotMarket) bool {
 		return pa > pb
 	}
 	// Prefer higher quote volume as a liquidity signal among equal quote class.
-	return cmpFloatString(a.QuoteVolume, b.QuoteVolume) > 0
+	// Missing volume loses to a known positive volume.
+	fa, erra := parseFloat(a.QuoteVolume)
+	fb, errb := parseFloat(b.QuoteVolume)
+	if erra != nil {
+		return false
+	}
+	if errb != nil {
+		return true
+	}
+	return fa > fb
 }
 
 func normalizeSpotListQuery(q domain.SpotListQuery) (domain.SpotListQuery, error) {
@@ -592,11 +582,11 @@ func sortSpotMarkets(items []domain.SpotMarket, by domain.SpotSortField, order d
 		case domain.SpotSortTradeCount:
 			cmp = cmpInt64(a.TradeCount, b.TradeCount)
 		case domain.SpotSortVolume:
-			cmp = cmpFloatString(a.Volume, b.Volume)
+			cmp = cmpFloatStringNullsLast(a.Volume, b.Volume, desc)
 		case domain.SpotSortPriceChangePercent:
-			cmp = cmpFloatString(a.PriceChangePercent, b.PriceChangePercent)
+			cmp = cmpFloatStringNullsLast(a.PriceChangePercent, b.PriceChangePercent, desc)
 		case domain.SpotSortLastPrice:
-			cmp = cmpFloatString(a.LastPrice, b.LastPrice)
+			cmp = cmpFloatStringNullsLast(a.LastPrice, b.LastPrice, desc)
 		case domain.SpotSortMarketCapCirculating:
 			cmp = cmpOptionalFloatNullsLast(a.MarketCapCirculating, b.MarketCapCirculating, desc)
 		case domain.SpotSortMarketCapTotal:
@@ -606,7 +596,7 @@ func sortSpotMarkets(items []domain.SpotMarket, by domain.SpotSortField, order d
 		case domain.SpotSortTags:
 			cmp = cmpTags(a.Tags, b.Tags, desc)
 		default: // quoteVolume
-			cmp = cmpFloatString(a.QuoteVolume, b.QuoteVolume)
+			cmp = cmpFloatStringNullsLast(a.QuoteVolume, b.QuoteVolume, desc)
 		}
 		if cmp == 0 {
 			// Always break ties by symbol ascending for stable pages.
@@ -641,9 +631,26 @@ func cmpInt64(a, b int64) int {
 	}
 }
 
-func cmpFloatString(a, b string) int {
-	fa, _ := parseFloat(a)
-	fb, _ := parseFloat(b)
+// cmpFloatStringNullsLast compares decimal strings. Unparseable/empty values sort
+// last for both asc and desc (never equated to zero).
+func cmpFloatStringNullsLast(a, b string, desc bool) int {
+	fa, erra := parseFloat(a)
+	fb, errb := parseFloat(b)
+	if erra != nil && errb != nil {
+		return 0
+	}
+	if erra != nil {
+		if desc {
+			return -1
+		}
+		return 1
+	}
+	if errb != nil {
+		if desc {
+			return 1
+		}
+		return -1
+	}
 	switch {
 	case fa < fb:
 		return -1
@@ -652,6 +659,11 @@ func cmpFloatString(a, b string) int {
 	default:
 		return 0
 	}
+}
+
+// cmpFloatString is kept for tests / callers that do not need nulls-last.
+func cmpFloatString(a, b string) int {
+	return cmpFloatStringNullsLast(a, b, false)
 }
 
 func parseFloat(s string) (float64, error) {
@@ -710,9 +722,17 @@ func cmpTags(a, b []string, desc bool) int {
 		}
 		return -1
 	}
-	sa := strings.ToLower(strings.Join(a, ","))
-	sb := strings.ToLower(strings.Join(b, ","))
+	sa := strings.ToLower(strings.Join(sortedCopyTags(a), ","))
+	sb := strings.ToLower(strings.Join(sortedCopyTags(b), ","))
 	return strings.Compare(sa, sb)
+}
+
+func sortedCopyTags(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Slice(out, func(i, j int) bool {
+		return strings.ToLower(out[i]) < strings.ToLower(out[j])
+	})
+	return out
 }
 
 // cmpMcapMax ranks: finite values by size; infinite (known uncapped with price) above all finite;

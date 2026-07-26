@@ -111,7 +111,12 @@ function clientId() {
     }
     return id;
   } catch {
-    return "default";
+    // Never use shared "default" — backend rejects it. Session-scoped fallback.
+    if (!globalThis.__swyngoraClientId) {
+      globalThis.__swyngoraClientId =
+        "web-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    }
+    return globalThis.__swyngoraClientId;
   }
 }
 
@@ -145,14 +150,19 @@ function isWatched(exchange, symbol) {
   return watchlist.some((w) => watchKey(w.exchange, w.symbol) === k);
 }
 
+/** Pending DELETEs that must not be re-merged from server until confirmed. */
+const pendingDeletes = new Set(); // exchange|symbol
+
 async function syncWatchlistFromApi() {
   try {
     const data = await apiGet(`/api/v1/watchlist?clientId=${encodeURIComponent(clientId())}`);
     if (Array.isArray(data.items)) {
-      const server = data.items.map((x) => ({
+      let server = data.items.map((x) => ({
         exchange: String(x.exchange || "binance").toLowerCase(),
         symbol: String(x.symbol).toUpperCase(),
       }));
+      // Do not reintroduce symbols we optimistically deleted.
+      server = server.filter((w) => !pendingDeletes.has(watchKey(w.exchange, w.symbol)));
       // Union merge: never wipe offline optimistic adds with an empty/lagging server list.
       const merge =
         typeof globalThis.WatchlistLogic?.mergeWatchlists === "function"
@@ -167,11 +177,22 @@ async function syncWatchlistFromApi() {
               }
               return Array.from(map.values());
             };
-      watchlist = merge(watchlist, server);
+      watchlist = merge(watchlist, server).filter(
+        (w) => !pendingDeletes.has(watchKey(w.exchange, w.symbol))
+      );
       saveWatchlistLocal();
       renderWatchlist();
       // Push local-only items to server in background so they survive the next cold GET.
       pushLocalOnlyWatchlist(server);
+      // Re-DELETE anything still pending (server still has them).
+      for (const key of pendingDeletes) {
+        const [ex, sym] = key.split("|");
+        const still = server.some((w) => watchKey(w.exchange, w.symbol) === key);
+        if (still) {
+          const q = new URLSearchParams({ clientId: clientId(), exchange: ex, symbol: sym });
+          apiSend("DELETE", `/api/v1/watchlist/items?${q.toString()}`).catch(() => {});
+        }
+      }
     }
   } catch {
     /* offline / backend down — keep local */
@@ -241,7 +262,9 @@ function addWatch(exchange, symbol) {
 function removeWatch(exchange, symbol) {
   exchange = String(exchange || "binance").toLowerCase();
   symbol = String(symbol || "").toUpperCase();
-  watchlist = watchlist.filter((w) => watchKey(w.exchange, w.symbol) !== watchKey(exchange, symbol));
+  const key = watchKey(exchange, symbol);
+  pendingDeletes.add(key);
+  watchlist = watchlist.filter((w) => watchKey(w.exchange, w.symbol) !== key);
   saveWatchlistLocal();
   renderWatchlist();
   paintStarButtons();
@@ -266,9 +289,11 @@ function removeWatch(exchange, symbol) {
     exchange,
     symbol,
   });
-  apiSend("DELETE", `/api/v1/watchlist/items?${q.toString()}`).catch((e) =>
-    console.warn("watchlist remove api", e)
-  );
+  apiSend("DELETE", `/api/v1/watchlist/items?${q.toString()}`)
+    .then(() => {
+      pendingDeletes.delete(key);
+    })
+    .catch((e) => console.warn("watchlist remove api", e));
 }
 
 function toggleWatch(exchange, symbol) {
@@ -1285,8 +1310,8 @@ async function loadMarkets(opts = {}) {
     } else {
       const params = new URLSearchParams();
       params.set("exchange", exchange);
-      // Quote is fixed to USDT for the dashboard (no UI control).
-      params.set("quote", "USDT");
+      // Default quote per venue: Coinbase is primarily USD books.
+      params.set("quote", exchange === "coinbase" ? "USD" : "USDT");
       const q = els.spotQ.value.trim();
       if (q) params.set("q", q);
       const tag = els.spotTag?.value?.trim() || "";

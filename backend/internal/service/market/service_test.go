@@ -558,6 +558,56 @@ func TestApplySupplyAndMcap_NoPriceNotInfinite(t *testing.T) {
 	}
 }
 
+func TestCmpFloatStringNullsLast_EmptyNotZero(t *testing.T) {
+	// Empty / bad strings must sort last under both orders, never as zero.
+	items := []domain.SpotMarket{
+		{Symbol: "A", QuoteVolume: ""},
+		{Symbol: "B", QuoteVolume: "100"},
+		{Symbol: "C", QuoteVolume: "0"},
+		{Symbol: "D", QuoteVolume: "bad"},
+	}
+	sortSpotMarkets(items, domain.SpotSortQuoteVolume, domain.SortDesc)
+	if items[0].Symbol != "B" {
+		t.Fatalf("want B first, order=%v", symbolsOf(items))
+	}
+	// Defined zeros before missing: C then A,D (ties by symbol among missing)
+	if items[1].Symbol != "C" {
+		t.Fatalf("zero before missing, got %v", symbolsOf(items))
+	}
+	if items[2].Symbol != "A" || items[3].Symbol != "D" {
+		t.Fatalf("missing last by symbol: %v", symbolsOf(items))
+	}
+
+	// Asc: defined first, missing last
+	items = []domain.SpotMarket{
+		{Symbol: "A", QuoteVolume: ""},
+		{Symbol: "B", QuoteVolume: "100"},
+		{Symbol: "C", QuoteVolume: "0"},
+	}
+	sortSpotMarkets(items, domain.SpotSortQuoteVolume, domain.SortAsc)
+	if items[0].Symbol != "C" || items[1].Symbol != "B" || items[2].Symbol != "A" {
+		t.Fatalf("asc nulls last: %v", symbolsOf(items))
+	}
+}
+
+func TestCmpTags_OrderIndependent(t *testing.T) {
+	// Same tag set in different order must compare equal (sorted join).
+	a := []string{"Meme", "defi"}
+	b := []string{"defi", "Meme"}
+	if cmpTags(a, b, false) != 0 {
+		t.Fatal("tag order must not affect sort key")
+	}
+}
+
+func TestNormalizeSymbolForExchange_Coinbase(t *testing.T) {
+	if got := normalizeSymbolForExchange(domain.ExchangeCoinbase, "btcusd"); got != "BTC-USD" {
+		t.Fatalf("got %q", got)
+	}
+	if got := normalizeSymbolForExchange(domain.ExchangeBinance, "btc-usdt"); got != "BTCUSDT" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func symbolsOf(items []domain.SpotMarket) []string {
 	out := make([]string, len(items))
 	for i, m := range items {

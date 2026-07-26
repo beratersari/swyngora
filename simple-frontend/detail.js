@@ -173,7 +173,11 @@ function clientId() {
     }
     return id;
   } catch {
-    return "default";
+    if (!globalThis.__swyngoraClientId) {
+      globalThis.__swyngoraClientId =
+        "web-" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    }
+    return globalThis.__swyngoraClientId;
   }
 }
 
@@ -335,7 +339,8 @@ function syncUrl() {
   history.replaceState(null, "", `detail.html?${q.toString()}`);
   document.title = `Swyngora · ${els.symbol.value || "detail"}`;
   els.pageTitle.textContent = els.symbol.value || "Coin detail";
-  els.pageSub.textContent = `${els.exchange.value} · ${els.interval.value} · USDT quote markets`;
+  const qHint = els.exchange.value === "coinbase" ? "USD quote markets" : "USDT quote markets";
+  els.pageSub.textContent = `${els.exchange.value} · ${els.interval.value} · ${qHint}`;
 }
 
 async function loadDetail() {

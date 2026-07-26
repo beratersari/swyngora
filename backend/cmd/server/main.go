@@ -105,8 +105,9 @@ func main() {
 	watchSvc := watchlist.New(watchliststore.NewMemory())
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
-		RateLimitRPS:   cfg.RateLimitRPS,
-		RateLimitBurst: cfg.RateLimitBurst,
+		RateLimitRPS:     cfg.RateLimitRPS,
+		RateLimitBurst:   cfg.RateLimitBurst,
+		CORSAllowOrigins: cfg.CORSAllowOrigins,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -123,21 +124,30 @@ func main() {
 	go job.Start(ctx)
 
 	// Optional Telegram bot transport (same process, in-process services).
+	// Fail closed: token without allowlist and without TELEGRAM_ALLOW_ALL does not start.
 	if cfg.TelegramBotToken != "" {
-		tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.HTTPClientTimeout+cfg.TelegramPollTimeout+10*time.Second)
-		router := telegram.NewRouter(marketSvc, watchSvc, telegram.Options{
-			DefaultExchange: cfg.TelegramDefaultExchange,
-			LowMcapLimit:    cfg.TelegramLowMcapLimit,
-			AllowedChatIDs:  cfg.TelegramAllowedChats,
-		})
-		bot := &telegram.Bot{
-			Client:      tgClient,
-			Router:      router,
-			Logger:      logger,
-			PollTimeout: cfg.TelegramPollTimeout,
+		if len(cfg.TelegramAllowedChats) == 0 && !cfg.TelegramAllowAll {
+			logger.Error("telegram bot NOT started: set TELEGRAM_CHAT_ID or TELEGRAM_ALLOWED_CHAT_IDS, or explicitly TELEGRAM_ALLOW_ALL=true (public bot)")
+		} else {
+			tgClient := telegram.NewClient(cfg.TelegramBotToken, cfg.HTTPClientTimeout+cfg.TelegramPollTimeout+10*time.Second)
+			router := telegram.NewRouter(marketSvc, watchSvc, telegram.Options{
+				DefaultExchange: cfg.TelegramDefaultExchange,
+				LowMcapLimit:    cfg.TelegramLowMcapLimit,
+				AllowedChatIDs:  cfg.TelegramAllowedChats,
+				AllowAll:        cfg.TelegramAllowAll,
+			})
+			bot := &telegram.Bot{
+				Client:      tgClient,
+				Router:      router,
+				Logger:      logger,
+				PollTimeout: cfg.TelegramPollTimeout,
+			}
+			go bot.Start(ctx)
+			logger.Info("telegram bot enabled",
+				"allowlist", len(cfg.TelegramAllowedChats),
+				"allow_all", cfg.TelegramAllowAll,
+			)
 		}
-		go bot.Start(ctx)
-		logger.Info("telegram bot enabled", "allowlist", len(cfg.TelegramAllowedChats))
 	} else {
 		logger.Info("telegram bot disabled (set TELEGRAM_BOT_TOKEN to enable)")
 	}

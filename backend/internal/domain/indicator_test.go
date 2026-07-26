@@ -55,7 +55,10 @@ func TestBuildIndicatorSeries(t *testing.T) {
 			Close:    fmt.Sprintf("%g", 100+float64(i)*0.5),
 		}
 	}
-	pts := BuildIndicatorSeries(candles, 14, []int{12, 26})
+	pts, err := BuildIndicatorSeries(candles, 14, []int{12, 26})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(pts) != 30 {
 		t.Fatalf("len=%d", len(pts))
 	}
@@ -74,5 +77,37 @@ func TestNormalizeEMAPeriods(t *testing.T) {
 	got := NormalizeEMAPeriods([]int{26, 12, 12, 1, 9999})
 	if len(got) != 2 || got[0] != 12 || got[1] != 26 {
 		t.Fatalf("%v", got)
+	}
+}
+
+func TestValidateAndNormalizeEMAPeriods_RejectsInvalid(t *testing.T) {
+	_, err := ValidateAndNormalizeEMAPeriods([]int{12, 1})
+	if err == nil {
+		t.Fatal("expected error for period 1")
+	}
+	got, err := ValidateAndNormalizeEMAPeriods([]int{26, 12, 12})
+	if err != nil || len(got) != 2 || got[0] != 12 || got[1] != 26 {
+		t.Fatalf("got=%v err=%v", got, err)
+	}
+}
+
+func TestBuildIndicatorSeries_InvalidCloseErrors(t *testing.T) {
+	candles := []Candle{
+		{OpenTime: time.Unix(1, 0).UTC(), Close: "10"},
+		{OpenTime: time.Unix(2, 0).UTC(), Close: "bad"},
+		{OpenTime: time.Unix(3, 0).UTC(), Close: "12"},
+	}
+	_, err := BuildIndicatorSeries(candles, 2, []int{2})
+	if err == nil {
+		t.Fatal("expected error for invalid close (must not collapse gaps)")
+	}
+}
+
+func TestNormalizeSymbol_Coinbase(t *testing.T) {
+	if got := NormalizeSymbol(ExchangeCoinbase, "btcusd"); got != "BTC-USD" {
+		t.Fatalf("got %q", got)
+	}
+	if got := NormalizeSymbol(ExchangeBinance, "btc-usdt"); got != "BTCUSDT" {
+		t.Fatalf("got %q", got)
 	}
 }

@@ -114,7 +114,8 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 	}
 	var instruments []inst
 	cursor := ""
-	for page := 0; page < 20; page++ {
+	const maxPages = 20
+	for page := 0; page < maxPages; page++ {
 		params := url.Values{}
 		params.Set("category", "spot")
 		params.Set("limit", "1000")
@@ -143,6 +144,9 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		if resp.Result.NextPageCursor == "" {
 			break
 		}
+		if page == maxPages-1 {
+			return nil, fmt.Errorf("%w: bybit instruments pagination exceeded %d pages", domain.ErrUpstream, maxPages)
+		}
 		cursor = resp.Result.NextPageCursor
 	}
 
@@ -165,10 +169,10 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 
 	out := make([]domain.SpotMarket, 0, len(instruments))
 	for _, in := range instruments {
-		// Bybit uses "Trading" status for active spot.
-		status := strings.ToUpper(in.Status)
-		if status == "TRADING" {
-			status = "TRADING"
+		// Bybit uses "Trading" for active spot — skip halted/delisted instruments.
+		status := strings.ToUpper(strings.TrimSpace(in.Status))
+		if status != "TRADING" {
+			continue
 		}
 		m := domain.SpotMarket{
 			Symbol:     in.Symbol,
@@ -334,7 +338,7 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 				return nil, fmt.Errorf("%w: kline time: %v", domain.ErrUpstream, err)
 			}
 			openTime := time.UnixMilli(ms).UTC()
-			// close time approx by interval length — use open for display consistency when unknown
+			closeTime := openTime.Add(intervalDuration(q.Interval)).Add(-time.Millisecond)
 			out = append(out, domain.Candle{
 				OpenTime:    openTime,
 				Open:        row[1],
@@ -343,7 +347,7 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 				Close:       row[4],
 				Volume:      row[5],
 				QuoteVolume: row[6],
-				CloseTime:   openTime,
+				CloseTime:   closeTime,
 			})
 		}
 		// Chronological oldest-first
@@ -410,6 +414,40 @@ func intervalToBybit(iv domain.CandleInterval) (string, bool) {
 	}
 }
 
+// intervalDuration is used for CloseTime approximation on Bybit klines.
+func intervalDuration(iv domain.CandleInterval) time.Duration {
+	switch iv {
+	case domain.Interval1m:
+		return time.Minute
+	case domain.Interval3m:
+		return 3 * time.Minute
+	case domain.Interval5m:
+		return 5 * time.Minute
+	case domain.Interval15m:
+		return 15 * time.Minute
+	case domain.Interval30m:
+		return 30 * time.Minute
+	case domain.Interval1h:
+		return time.Hour
+	case domain.Interval2h:
+		return 2 * time.Hour
+	case domain.Interval4h:
+		return 4 * time.Hour
+	case domain.Interval6h:
+		return 6 * time.Hour
+	case domain.Interval12h:
+		return 12 * time.Hour
+	case domain.Interval1d:
+		return 24 * time.Hour
+	case domain.Interval1w:
+		return 7 * 24 * time.Hour
+	case domain.Interval1M:
+		return 30 * 24 * time.Hour
+	default:
+		return time.Hour
+	}
+}
+
 func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byte, error) {
 	u := c.baseURL + path
 	if len(params) > 0 {
@@ -444,7 +482,9 @@ func mapBybitError(code int, msg string) error {
 	switch {
 	case code == 10006 || strings.Contains(lower, "too many"):
 		return fmt.Errorf("%w: %s", domain.ErrRateLimited, msg)
-	case strings.Contains(lower, "not exist") || strings.Contains(lower, "invalid symbol") || code == 10001:
+	case strings.Contains(lower, "not exist") || strings.Contains(lower, "invalid symbol"):
+		return fmt.Errorf("%w: %s", domain.ErrNotFound, msg)
+	case code == 10001 && (strings.Contains(lower, "symbol") || strings.Contains(lower, "not exist")):
 		return fmt.Errorf("%w: %s", domain.ErrNotFound, msg)
 	default:
 		return fmt.Errorf("%w: bybit %d: %s", domain.ErrUpstream, code, msg)

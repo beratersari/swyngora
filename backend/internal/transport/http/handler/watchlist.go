@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -80,7 +79,7 @@ type replaceBody struct {
 // Replace handles PUT /api/v1/watchlist
 func (h *WatchlistHandler) Replace(w http.ResponseWriter, r *http.Request) {
 	var body replaceBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
@@ -114,7 +113,7 @@ type addBody struct {
 // Add handles POST /api/v1/watchlist/items
 func (h *WatchlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 	var body addBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}

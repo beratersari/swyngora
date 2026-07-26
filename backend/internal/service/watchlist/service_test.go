@@ -3,11 +3,13 @@ package watchlist
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -34,6 +36,9 @@ func (m *mem) Get(_ context.Context, clientID string) (*domain.Watchlist, error)
 func (m *mem) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if len(items) > maxItems {
+		return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
+	}
 	wl := &domain.Watchlist{ClientID: clientID, Items: append([]domain.WatchlistItem(nil), items...), Updated: time.Now().UTC()}
 	m.data[clientID] = wl
 	cp := *wl
@@ -42,19 +47,32 @@ func (m *mem) Set(_ context.Context, clientID string, items []domain.WatchlistIt
 }
 
 func (m *mem) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
-	wl, _ := m.Get(ctx, clientID)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	wl := m.data[clientID]
+	if wl == nil {
+		wl = &domain.Watchlist{ClientID: clientID}
+	}
+	items := append([]domain.WatchlistItem(nil), wl.Items...)
 	found := false
-	for i, it := range wl.Items {
+	for i, it := range items {
 		if it.Exchange == item.Exchange && it.Symbol == item.Symbol {
-			wl.Items[i] = item
+			items[i] = item
 			found = true
 			break
 		}
 	}
 	if !found {
-		wl.Items = append(wl.Items, item)
+		if len(items) >= maxItems {
+			return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
+		}
+		items = append(items, item)
 	}
-	return m.Set(ctx, clientID, wl.Items)
+	out := &domain.Watchlist{ClientID: clientID, Items: items, Updated: time.Now().UTC()}
+	m.data[clientID] = out
+	cp := *out
+	cp.Items = append([]domain.WatchlistItem(nil), items...)
+	return &cp, nil
 }
 
 func (m *mem) Remove(ctx context.Context, clientID string, exchange domain.Exchange, symbol string) (*domain.Watchlist, error) {
@@ -182,14 +200,58 @@ func TestWatchlist_InvalidClientID(t *testing.T) {
 	}
 }
 
-func TestWatchlist_DefaultClientID(t *testing.T) {
+func TestWatchlist_EmptyClientIDRejected(t *testing.T) {
 	svc := New(newMem())
-	wl, err := svc.Get(context.Background(), "")
+	_, err := svc.Get(context.Background(), "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("empty clientId must be rejected, got %v", err)
+	}
+	_, err = svc.Add(context.Background(), "default", "binance", "BTCUSDT", "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("shared default name must be rejected, got %v", err)
+	}
+}
+
+func TestWatchlist_CoinbaseSymbolNormalized(t *testing.T) {
+	svc := New(newMem())
+	wl, err := svc.Add(context.Background(), "c1", "coinbase", "BTCUSD", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if wl.ClientID != "default" {
-		t.Fatalf("client=%s", wl.ClientID)
+	if wl.Items[0].Symbol != "BTC-USD" {
+		t.Fatalf("want BTC-USD, got %q", wl.Items[0].Symbol)
+	}
+}
+
+func TestWatchlist_ConcurrentAddRespectsMax(t *testing.T) {
+	// Real memory store enforces max under one lock (no TOCTOU).
+	svc := New(watchliststore.NewMemory())
+	ctx := context.Background()
+	items := make([]domain.WatchlistItem, 0, maxItems-1)
+	for i := 0; i < maxItems-1; i++ {
+		items = append(items, domain.WatchlistItem{
+			Exchange: domain.ExchangeBinance,
+			Symbol:   "S" + strconv.Itoa(i) + "USDT",
+		})
+	}
+	if _, err := svc.Replace(ctx, "raceclient", items); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _ = svc.Add(ctx, "raceclient", "binance", "X"+strconv.Itoa(i)+"USDT", "")
+		}(i)
+	}
+	wg.Wait()
+	wl, err := svc.Get(ctx, "raceclient")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wl.Items) > maxItems {
+		t.Fatalf("exceeded maxItems: %d > %d", len(wl.Items), maxItems)
 	}
 }
 

@@ -13,10 +13,12 @@ import (
 const DefaultMaxClients = 10_000
 
 // Memory is an in-process watchlist store (no auth; keyed by client id).
+// Enforces domain.MaxWatchlistItems under the write lock.
 type Memory struct {
 	mu         sync.RWMutex
 	data       map[string]*domain.Watchlist
 	maxClients int
+	maxItems   int
 }
 
 // NewMemory constructs an empty store with DefaultMaxClients.
@@ -26,7 +28,11 @@ func NewMemory() *Memory {
 
 // NewMemoryWithMaxClients constructs a store with an explicit client cap (0 = unlimited; tests only).
 func NewMemoryWithMaxClients(maxClients int) *Memory {
-	return &Memory{data: map[string]*domain.Watchlist{}, maxClients: maxClients}
+	return &Memory{
+		data:       map[string]*domain.Watchlist{},
+		maxClients: maxClients,
+		maxItems:   domain.MaxWatchlistItems,
+	}
 }
 
 // Get returns a copy of the watchlist (empty items if unknown client).
@@ -43,12 +49,15 @@ func (m *Memory) Get(_ context.Context, clientID string) (*domain.Watchlist, err
 	}, nil
 }
 
-// Set replaces the list.
+// Set replaces the list. Rejects when len(items) > maxItems.
 func (m *Memory) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ensureClientLocked(clientID); err != nil {
 		return nil, err
+	}
+	if m.maxItems > 0 && len(items) > m.maxItems {
+		return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, m.maxItems)
 	}
 	wl := &domain.Watchlist{
 		ClientID: clientID,
@@ -59,7 +68,7 @@ func (m *Memory) Set(_ context.Context, clientID string, items []domain.Watchlis
 	return cloneWL(wl), nil
 }
 
-// Add upserts one item.
+// Add upserts one item. Enforces maxItems under the same lock (no TOCTOU).
 func (m *Memory) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -83,6 +92,9 @@ func (m *Memory) Add(ctx context.Context, clientID string, item domain.Watchlist
 		}
 	}
 	if !found {
+		if m.maxItems > 0 && len(items) >= m.maxItems {
+			return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, m.maxItems)
+		}
 		if item.AddedAt.IsZero() {
 			item.AddedAt = time.Now().UTC()
 		}

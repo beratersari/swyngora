@@ -128,6 +128,49 @@ func TestGetCandles_OK(t *testing.T) {
 	}
 }
 
+func TestGetCandles_BadOHLCErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "candles") {
+			http.NotFound(w, r)
+			return
+		}
+		// invalid close (null) — must not be swallowed into empty string candle
+		_ = json.NewEncoder(w).Encode([][]any{
+			{1700000000, 1.0, 2.0, 1.0, nil, 5.0},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{
+		BaseURL: srv.URL, ExchangeURL: srv.URL, HTTPClient: srv.Client(),
+		CandleCache: cache.New[[]domain.Candle](time.Minute),
+	})
+	_, err := c.GetCandles(context.Background(), domain.CandleQuery{
+		Symbol: "BTC-USD", Interval: domain.Interval1h, Limit: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid OHLC")
+	}
+}
+
+func TestGetCandles_ShortRowErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([][]any{
+			{1700000000, 1.0}, // too short
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{
+		BaseURL: srv.URL, ExchangeURL: srv.URL, HTTPClient: srv.Client(),
+		CandleCache: cache.New[[]domain.Candle](time.Minute),
+	})
+	_, err := c.GetCandles(context.Background(), domain.CandleQuery{
+		Symbol: "BTC-USD", Interval: domain.Interval1h, Limit: 10,
+	})
+	if err == nil {
+		t.Fatal("expected error for short candle row")
+	}
+}
+
 func TestListProductTags_Empty(t *testing.T) {
 	c := NewClient(Options{})
 	tags, err := c.ListProductTags(context.Background())

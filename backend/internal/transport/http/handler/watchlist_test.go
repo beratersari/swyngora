@@ -131,3 +131,70 @@ func TestWatchlistHTTP_BadJSON(t *testing.T) {
 		t.Fatalf("status=%d", rr.Code)
 	}
 }
+
+func TestWatchlistHTTP_EmptyClientIDRejected(t *testing.T) {
+	h := newWatchHandler()
+	// No clientId in body or header.
+	body, _ := json.Marshal(map[string]string{"exchange": "binance", "symbol": "BTCUSDT"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("empty clientId status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// Explicit shared name "default" rejected.
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "default", "exchange": "binance", "symbol": "BTCUSDT",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("default clientId status=%d body=%s", rr.Code, rr.Body.String())
+	}
+
+	// GET without clientId rejected.
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist", nil)
+	rr = httptest.NewRecorder()
+	h.Get(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("get empty clientId status=%d", rr.Code)
+	}
+}
+
+func TestWatchlistHTTP_CoinbaseSymbolNormalized(t *testing.T) {
+	h := newWatchHandler()
+	body, _ := json.Marshal(map[string]string{
+		"clientId": "coin-client", "exchange": "coinbase", "symbol": "BTCUSD",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	var got watchlistDTO
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if len(got.Items) != 1 || got.Items[0].Symbol != "BTC-USD" {
+		t.Fatalf("want BTC-USD stored, got %+v", got.Items)
+	}
+}
+
+func TestWatchlistHTTP_BodyTooLarge(t *testing.T) {
+	h := newWatchHandler()
+	// > 1 MiB body should fail decode
+	big := bytes.Repeat([]byte("x"), DefaultMaxJSONBody+100)
+	payload := append([]byte(`{"clientId":"c","items":[{"symbol":"`), big...)
+	payload = append(payload, []byte(`"}]}`)...)
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/watchlist", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Replace(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("oversized body status=%d", rr.Code)
+	}
+}

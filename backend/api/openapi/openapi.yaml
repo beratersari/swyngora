@@ -4,9 +4,13 @@ info:
   description: |
     Public market data for Swyngora (v0.1).
 
-    - Candles, 24h volume/ticker, and spot market listing are sourced from **Binance** public Spot REST APIs.
+    - Candles, 24h volume/ticker, and spot market listing support **binance**, **coinbase**,
+      and **bybit** (select with `?exchange=`).
     - Circulating / total / max supply is sourced from the **Binance** public marketing
-      symbol list, refreshed on a daily schedule. Max supply is null when undefined.
+      symbol list (asset-level, used for all venues' mcap enrichment), refreshed daily.
+      Max supply is null when undefined.
+    - Watchlist is unauthenticated demo state keyed by client-supplied `clientId`
+      (must be non-empty; not for multi-tenant production without real auth).
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -517,10 +521,12 @@ paths:
       parameters:
         - name: clientId
           in: query
-          schema: { type: string }
+          description: Required non-empty client tenancy key (not the shared name "default")
+          schema: { type: string, minLength: 1 }
         - name: X-Client-Id
           in: header
-          schema: { type: string }
+          description: Preferred alternative to clientId query
+          schema: { type: string, minLength: 1 }
       responses:
         '200':
           description: Watchlist
@@ -528,6 +534,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
     put:
       summary: Replace entire watchlist
       operationId: putWatchlist

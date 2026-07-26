@@ -22,6 +22,8 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("SUPPLY_REFRESH_ON_STARTUP", "")
 	t.Setenv("RATE_LIMIT_RPS", "")
 	t.Setenv("RATE_LIMIT_BURST", "")
+	t.Setenv("CORS_ALLOW_ORIGINS", "")
+	t.Setenv("TELEGRAM_ALLOW_ALL", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":8080" {
@@ -47,6 +49,13 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.RateLimitRPS != 40 || cfg.RateLimitBurst != 80 {
 		t.Fatalf("rate limit %v/%d", cfg.RateLimitRPS, cfg.RateLimitBurst)
+	}
+	// Empty CORS_ALLOW_ORIGINS falls back to getenv default "*"
+	if len(cfg.CORSAllowOrigins) != 1 || cfg.CORSAllowOrigins[0] != "*" {
+		t.Fatalf("CORS default=%v", cfg.CORSAllowOrigins)
+	}
+	if cfg.TelegramAllowAll {
+		t.Fatal("TelegramAllowAll default false")
 	}
 }
 
@@ -129,5 +138,29 @@ func TestTelegramDisabledByDefault(t *testing.T) {
 	cfg := Load()
 	if cfg.TelegramBotToken != "" {
 		t.Fatal("expected empty token")
+	}
+}
+
+func TestCORSAllowOrigins_Parse(t *testing.T) {
+	t.Setenv("CORS_ALLOW_ORIGINS", "http://localhost:5173, https://app.example.com")
+	cfg := Load()
+	if len(cfg.CORSAllowOrigins) != 2 {
+		t.Fatalf("got %v", cfg.CORSAllowOrigins)
+	}
+	if cfg.CORSAllowOrigins[0] != "http://localhost:5173" || cfg.CORSAllowOrigins[1] != "https://app.example.com" {
+		t.Fatalf("%v", cfg.CORSAllowOrigins)
+	}
+}
+
+func TestTelegramAllowAll(t *testing.T) {
+	t.Setenv("TELEGRAM_ALLOW_ALL", "true")
+	t.Setenv("TELEGRAM_CHAT_ID", "")
+	t.Setenv("TELEGRAM_ALLOWED_CHAT_IDS", "")
+	cfg := Load()
+	if !cfg.TelegramAllowAll {
+		t.Fatal("want TelegramAllowAll true")
+	}
+	if cfg.TelegramAllowedChats != nil {
+		t.Fatalf("empty allowlist want nil, got %v", cfg.TelegramAllowedChats)
 	}
 }

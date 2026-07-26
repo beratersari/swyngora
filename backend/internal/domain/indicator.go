@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -41,17 +42,18 @@ const (
 )
 
 // ParseClosePrices extracts close prices from candles (chronological).
-// Invalid/empty closes are skipped (gap); better than panicking.
-func ParseClosePrices(candles []Candle) []float64 {
+// Returns an error if any close is empty, unparseable, NaN, or Inf — callers
+// must not drop bars and recompute RSI/EMA across invented gaps.
+func ParseClosePrices(candles []Candle) ([]float64, error) {
 	out := make([]float64, 0, len(candles))
-	for _, c := range candles {
+	for i, c := range candles {
 		v, err := parseClose(c.Close)
-		if err != nil {
-			continue
+		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
+			return nil, fmt.Errorf("%w: invalid close at candle index %d", ErrUpstream, i)
 		}
 		out = append(out, v)
 	}
-	return out
+	return out, nil
 }
 
 func parseClose(s string) (float64, error) {
@@ -133,21 +135,19 @@ func EMA(closes []float64, period int) []*float64 {
 }
 
 // BuildIndicatorSeries aligns RSI and EMA series onto candle timestamps.
-// candles must be chronological (oldest first). closes should match candle order
-// when all closes parse; if some skips occurred, alignment uses min length.
-func BuildIndicatorSeries(candles []Candle, rsiPeriod int, emaPeriods []int) []IndicatorPoint {
+// candles must be chronological (oldest first). Every close must parse; invalid
+// closes return an error rather than collapsing gaps (which would corrupt RSI/EMA).
+func BuildIndicatorSeries(candles []Candle, rsiPeriod int, emaPeriods []int) ([]IndicatorPoint, error) {
 	if len(candles) == 0 {
-		return nil
+		return nil, nil
 	}
-	closes := make([]float64, 0, len(candles))
-	times := make([]time.Time, 0, len(candles))
-	for _, c := range candles {
+	closes := make([]float64, len(candles))
+	for i, c := range candles {
 		v, err := parseClose(c.Close)
 		if err != nil || math.IsNaN(v) || math.IsInf(v, 0) {
-			continue
+			return nil, fmt.Errorf("%w: invalid close at candle index %d", ErrUpstream, i)
 		}
-		closes = append(closes, v)
-		times = append(times, c.OpenTime)
+		closes[i] = v
 	}
 	rsi := RSIWilder(closes, rsiPeriod)
 	emaSeries := make(map[int][]*float64, len(emaPeriods))
@@ -155,10 +155,10 @@ func BuildIndicatorSeries(candles []Candle, rsiPeriod int, emaPeriods []int) []I
 		emaSeries[p] = EMA(closes, p)
 	}
 
-	out := make([]IndicatorPoint, len(closes))
-	for i := range closes {
+	out := make([]IndicatorPoint, len(candles))
+	for i := range candles {
 		pt := IndicatorPoint{
-			OpenTime: times[i],
+			OpenTime: candles[i].OpenTime,
 			Close:    closes[i],
 			RSI:      rsi[i],
 			EMA:      make(map[int]*float64, len(emaPeriods)),
@@ -170,7 +170,7 @@ func BuildIndicatorSeries(candles []Candle, rsiPeriod int, emaPeriods []int) []I
 		}
 		out[i] = pt
 	}
-	return out
+	return out, nil
 }
 
 func ptr(f float64) *float64 {
@@ -179,16 +179,33 @@ func ptr(f float64) *float64 {
 	return &v
 }
 
-// NormalizeEMAPeriods dedupes, sorts ascending, and clamps invalid periods.
+// NormalizeEMAPeriods dedupes, sorts ascending, and drops invalid periods.
+// Empty input or all-invalid input yields the default fast/slow pair.
+// Prefer ValidateAndNormalizeEMAPeriods for user-supplied query params.
 func NormalizeEMAPeriods(periods []int) []int {
+	out, _ := validateEMAPeriods(periods, true)
+	return out
+}
+
+// ValidateAndNormalizeEMAPeriods validates user-supplied EMA periods.
+// Empty input → defaults. Any out-of-range or non-positive period → error.
+// Duplicates are removed; order is ascending.
+func ValidateAndNormalizeEMAPeriods(periods []int) ([]int, error) {
+	return validateEMAPeriods(periods, false)
+}
+
+func validateEMAPeriods(periods []int, soft bool) ([]int, error) {
 	if len(periods) == 0 {
-		return []int{DefaultEMAFast, DefaultEMASlow}
+		return []int{DefaultEMAFast, DefaultEMASlow}, nil
 	}
 	seen := map[int]struct{}{}
 	var out []int
 	for _, p := range periods {
 		if p < MinIndicatorPeriod || p > MaxIndicatorPeriod {
-			continue
+			if soft {
+				continue
+			}
+			return nil, fmt.Errorf("%w: emaPeriod must be between %d and %d", ErrInvalidArgument, MinIndicatorPeriod, MaxIndicatorPeriod)
 		}
 		if _, ok := seen[p]; ok {
 			continue
@@ -197,9 +214,11 @@ func NormalizeEMAPeriods(periods []int) []int {
 		out = append(out, p)
 	}
 	if len(out) == 0 {
-		return []int{DefaultEMAFast, DefaultEMASlow}
+		if soft {
+			return []int{DefaultEMAFast, DefaultEMASlow}, nil
+		}
+		return nil, fmt.Errorf("%w: emaPeriods required", ErrInvalidArgument)
 	}
-	// insertion sort small
 	for i := 1; i < len(out); i++ {
 		j := i
 		for j > 0 && out[j-1] > out[j] {
@@ -207,5 +226,5 @@ func NormalizeEMAPeriods(periods []int) []int {
 			j--
 		}
 	}
-	return out
+	return out, nil
 }

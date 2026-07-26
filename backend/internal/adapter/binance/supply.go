@@ -253,7 +253,7 @@ func (c *Client) getProduct(ctx context.Context, path string, params url.Values)
 		return nil, fmt.Errorf("%w: binance product status %d", domain.ErrRateLimited, resp.StatusCode)
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("%w: marketing symbol list", domain.ErrNotFound)
+		return nil, fmt.Errorf("%w: binance product path not found (%s)", domain.ErrNotFound, path)
 	}
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("%w: product status %d: %s", domain.ErrUpstream, resp.StatusCode, truncate(string(body), 200))

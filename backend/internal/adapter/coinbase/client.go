@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -117,7 +118,8 @@ func (c *Client) ListSpotMarkets(ctx context.Context) ([]domain.SpotMarket, erro
 func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, error) {
 	var out []domain.SpotMarket
 	cursor := ""
-	for page := 0; page < 20; page++ { // safety cap
+	const maxPages = 20
+	for page := 0; page < maxPages; page++ {
 		params := url.Values{}
 		params.Set("product_type", "SPOT")
 		params.Set("limit", "250")
@@ -154,6 +156,9 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 		}
 		if !resp.Pagination.HasNext || resp.Pagination.NextCursor == "" {
 			break
+		}
+		if page == maxPages-1 {
+			return nil, fmt.Errorf("%w: coinbase products pagination exceeded %d pages", domain.ErrUpstream, maxPages)
 		}
 		cursor = resp.Pagination.NextCursor
 	}
@@ -326,19 +331,34 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 		}
 		// Coinbase: [time, low, high, open, close, volume] newest first.
 		out := make([]domain.Candle, 0, len(raw))
-		for _, row := range raw {
+		for i, row := range raw {
 			if len(row) < 6 {
-				continue
+				return nil, fmt.Errorf("%w: coinbase candle row %d too short", domain.ErrUpstream, i)
 			}
 			ts, err := unmarshalFloat(row[0])
 			if err != nil {
 				return nil, fmt.Errorf("%w: candle time: %v", domain.ErrUpstream, err)
 			}
-			low, _ := unmarshalStringNum(row[1])
-			high, _ := unmarshalStringNum(row[2])
-			open, _ := unmarshalStringNum(row[3])
-			closePx, _ := unmarshalStringNum(row[4])
-			vol, _ := unmarshalStringNum(row[5])
+			low, err := unmarshalStringNum(row[1])
+			if err != nil {
+				return nil, fmt.Errorf("%w: candle low: %v", domain.ErrUpstream, err)
+			}
+			high, err := unmarshalStringNum(row[2])
+			if err != nil {
+				return nil, fmt.Errorf("%w: candle high: %v", domain.ErrUpstream, err)
+			}
+			open, err := unmarshalStringNum(row[3])
+			if err != nil {
+				return nil, fmt.Errorf("%w: candle open: %v", domain.ErrUpstream, err)
+			}
+			closePx, err := unmarshalStringNum(row[4])
+			if err != nil {
+				return nil, fmt.Errorf("%w: candle close: %v", domain.ErrUpstream, err)
+			}
+			vol, err := unmarshalStringNum(row[5])
+			if err != nil {
+				return nil, fmt.Errorf("%w: candle volume: %v", domain.ErrUpstream, err)
+			}
 			openTime := time.Unix(int64(ts), 0).UTC()
 			closeTime := openTime.Add(time.Duration(gran) * time.Second).Add(-time.Millisecond)
 			out = append(out, domain.Candle{
@@ -490,13 +510,29 @@ func unmarshalFloat(raw json.RawMessage) (float64, error) {
 }
 
 func unmarshalStringNum(raw json.RawMessage) (string, error) {
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s, nil
+	// Reject JSON null / empty explicitly (do not treat as zero candle).
+	trim := strings.TrimSpace(string(raw))
+	if trim == "" || trim == "null" {
+		return "", fmt.Errorf("not a number: %s", string(raw))
 	}
 	var f float64
 	if err := json.Unmarshal(raw, &f); err == nil {
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return "", fmt.Errorf("not a finite number: %s", string(raw))
+		}
 		return strconv.FormatFloat(f, 'f', -1, 64), nil
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return "", fmt.Errorf("empty number string")
+		}
+		// Must be a real number string — reject "not-a-number".
+		if _, err := strconv.ParseFloat(s, 64); err != nil {
+			return "", fmt.Errorf("not a number: %q", s)
+		}
+		return s, nil
 	}
 	return "", fmt.Errorf("not a number: %s", string(raw))
 }

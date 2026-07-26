@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -38,7 +37,11 @@ func (h *MarketHandler) GetIndicators(w http.ResponseWriter, r *http.Request) {
 		}
 		rsiPeriod = n
 	}
-	emaPeriods := market.ParseEMAPeriodsCSV(q.Get("emaPeriods"))
+	emaPeriods, err := market.ParseEMAPeriodsCSV(q.Get("emaPeriods"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 
 	ser, err := h.svc.GetIndicators(r.Context(), exchange, symbol, interval, limit, rsiPeriod, emaPeriods)
 	if err != nil {
@@ -98,14 +101,23 @@ func (h *MarketHandler) PostIndicatorsBatch(w http.ResponseWriter, r *http.Reque
 		RSIPeriod  int      `json:"rsiPeriod"`
 		EMAPeriods string   `json:"emaPeriods"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
 	if body.Interval == "" {
 		body.Interval = "1h"
 	}
-	emaPeriods := market.ParseEMAPeriodsCSV(body.EMAPeriods)
+	emaPeriods, err := market.ParseEMAPeriodsCSV(body.EMAPeriods)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// Bound body work: service also caps, but reject absurd arrays early.
+	if len(body.Symbols) > 500 {
+		writeError(w, fmt.Errorf("%w: too many symbols (max 500 in request)", domain.ErrInvalidArgument))
+		return
+	}
 	snaps, err := h.svc.GetIndicatorsBatch(r.Context(), body.Exchange, body.Interval, body.Symbols, body.RSIPeriod, emaPeriods)
 	if err != nil {
 		writeError(w, err)

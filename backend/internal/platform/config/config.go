@@ -34,9 +34,16 @@ type Config struct {
 	RateLimitRPS   float64
 	RateLimitBurst int
 
+	// CORSAllowOrigins: empty or ["*"] allows any origin (local dev default).
+	// Set comma-separated exact origins for production, e.g. https://app.example.com
+	CORSAllowOrigins []string
+
 	// Telegram bot (optional). Empty token disables the bot.
 	TelegramBotToken        string
 	TelegramAllowedChats    map[int64]struct{}
+	// TelegramAllowAll permits any chat when the allowlist is empty.
+	// Default false: token without allowlist refuses to start the bot (fail closed).
+	TelegramAllowAll        bool
 	TelegramDefaultExchange string
 	TelegramPollTimeout     time.Duration
 	TelegramLowMcapLimit    int
@@ -71,12 +78,31 @@ func Load() Config {
 		RateLimitRPS:   floatEnv("RATE_LIMIT_RPS", 40),
 		RateLimitBurst: positiveIntEnv("RATE_LIMIT_BURST", 80),
 
+		CORSAllowOrigins: parseCSVList(getenv("CORS_ALLOW_ORIGINS", "*")),
+
 		TelegramBotToken:        strings.TrimSpace(os.Getenv("TELEGRAM_BOT_TOKEN")),
 		TelegramAllowedChats:    parseTelegramChatIDs(),
+		TelegramAllowAll:        boolEnv("TELEGRAM_ALLOW_ALL", false),
 		TelegramDefaultExchange: strings.ToLower(strings.TrimSpace(getenv("BOT_DEFAULT_EXCHANGE", "binance"))),
 		TelegramPollTimeout:     positiveDurationEnv("BOT_POLL_TIMEOUT", 30*time.Second),
 		TelegramLowMcapLimit:    clampInt(positiveIntEnv("BOT_LOWMCAP_LIMIT", 10), 1, 25),
 	}
+}
+
+// parseCSVList splits a comma-separated env value; empty → nil.
+func parseCSVList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }
 
 func getenv(key, def string) string {

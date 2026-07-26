@@ -22,6 +22,7 @@ type IndicatorSnapshot struct {
 
 // GetIndicatorsBatch computes latest RSI/EMA for up to maxBatchSymbols on one exchange.
 // Used to fill table columns without N+1 browser requests.
+// Fetches only warm-up history (not a full output series) per symbol.
 func (s *Service) GetIndicatorsBatch(
 	ctx context.Context,
 	exchange, interval string,
@@ -42,13 +43,21 @@ func (s *Service) GetIndicatorsBatch(
 	if rsiPeriod < domain.MinIndicatorPeriod || rsiPeriod > domain.MaxIndicatorPeriod {
 		return nil, fmt.Errorf("%w: rsiPeriod must be between %d and %d", domain.ErrInvalidArgument, domain.MinIndicatorPeriod, domain.MaxIndicatorPeriod)
 	}
-	emaPeriods = domain.NormalizeEMAPeriods(emaPeriods)
+	emaPeriods, err = domain.ValidateAndNormalizeEMAPeriods(emaPeriods)
+	if err != nil {
+		return nil, err
+	}
 
-	// Dedupe + cap
+	// Dedupe + cap (do not iterate unbounded junk arrays into work).
 	const maxBatch = 50
+	const maxSymbolScan = 500
 	seen := map[string]struct{}{}
 	var list []string
-	for _, raw := range symbols {
+	scan := symbols
+	if len(scan) > maxSymbolScan {
+		scan = scan[:maxSymbolScan]
+	}
+	for _, raw := range scan {
 		sym := normalizeSymbolForExchange(ex, raw)
 		if sym == "" {
 			continue
@@ -66,14 +75,13 @@ func (s *Service) GetIndicatorsBatch(
 		return nil, fmt.Errorf("%w: symbols required", domain.ErrInvalidArgument)
 	}
 
-	// Candle limit for warm-up only (not full series).
+	// Candle limit for warm-up only (latest values) — not a full series response.
 	warm := rsiPeriod
 	for _, p := range emaPeriods {
 		if p > warm {
 			warm = p
 		}
 	}
-	// Enough history for RSI(14)/EMA(26) even with a few bad closes.
 	fetchLimit := warm + 20
 	if fetchLimit < 60 {
 		fetchLimit = 60
@@ -111,28 +119,54 @@ func (s *Service) GetIndicatorsBatch(
 				return
 			}
 
-			ser, err := s.GetIndicators(ctx, string(ex), sym, interval, fetchLimit, rsiPeriod, emaPeriods)
+			// Fetch warm-up candles only; compute series in-domain (avoid double warm-up).
+			candles, err := s.GetCandles(ctx, string(ex), sym, interval, fetchLimit, nil, nil)
+			if err != nil {
+				out[i] = IndicatorSnapshot{Symbol: sym, Error: err.Error()}
+				return
+			}
+			if len(candles) == 0 {
+				out[i] = IndicatorSnapshot{Symbol: sym, Error: "no candles"}
+				return
+			}
+			points, err := domain.BuildIndicatorSeries(candles, rsiPeriod, emaPeriods)
 			if err != nil {
 				out[i] = IndicatorSnapshot{Symbol: sym, Error: err.Error()}
 				return
 			}
 			snap := IndicatorSnapshot{
 				Symbol: sym,
-				RSI:    ser.LatestRSI,
 				EMA:    map[int]*float64{},
 			}
-			for k, v := range ser.LatestEMA {
-				if v != nil {
-					vv := *v
-					snap.EMA[k] = &vv
+			for j := len(points) - 1; j >= 0; j-- {
+				if snap.RSI == nil && points[j].RSI != nil {
+					v := *points[j].RSI
+					snap.RSI = &v
+				}
+				for _, p := range emaPeriods {
+					if snap.EMA[p] == nil && points[j].EMA != nil && points[j].EMA[p] != nil {
+						v := *points[j].EMA[p]
+						snap.EMA[p] = &v
+					}
+				}
+				if snap.RSI != nil {
+					all := true
+					for _, p := range emaPeriods {
+						if snap.EMA[p] == nil {
+							all = false
+							break
+						}
+					}
+					if all {
+						break
+					}
 				}
 			}
 			out[i] = snap
 		}(i, sym)
 	}
 	wg.Wait()
-	if ctx.Err() != nil {
-		return out, ctx.Err()
-	}
+	// Always return per-symbol results; cancelled work is marked on items.
+	// Do not fail the whole batch solely because ctx ended (partial results are useful).
 	return out, nil
 }

@@ -91,7 +91,42 @@ func newTestRouter(t *testing.T) *Router {
 		domain.ExchangeBybit:    fm,
 	}, fakeSupply{})
 	ws := watchlist.New(newMemWatch())
-	return NewRouter(ms, ws, Options{DefaultExchange: "binance", LowMcapLimit: 10})
+	return NewRouter(ms, ws, Options{DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true})
+}
+
+func TestRSIArgOrder_EitherWay(t *testing.T) {
+	r := newTestRouter(t)
+	// Allow rate limit by using different chats.
+	out1 := r.Handle(context.Background(), 10, 10, "/rsi BTCUSDT 1h binance")
+	out2 := r.Handle(context.Background(), 11, 11, "/rsi BTCUSDT binance 1h")
+	if !strings.Contains(out1, "RSI") && !strings.Contains(out1, "50") {
+		t.Fatalf("interval,exchange failed: %s", out1)
+	}
+	if strings.Contains(strings.ToLower(out2), "error") {
+		t.Fatalf("exchange,interval should work: %s", out2)
+	}
+}
+
+func TestFreeTextNotPrice(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 12, 12, "hello there")
+	// Must not render a ticker card (FormatTicker uses 📈).
+	if strings.Contains(out, "📈") || strings.Contains(out, "Last") {
+		t.Fatalf("free text should not be /price: %s", out)
+	}
+	if !strings.Contains(strings.ToLower(out), "command") && !strings.Contains(out, "/help") {
+		t.Fatalf("want help hint: %s", out)
+	}
+}
+
+func TestAllowAllRequiredWhenEmpty(t *testing.T) {
+	fm := &fakeMarket{}
+	ms := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{domain.ExchangeBinance: fm}, fakeSupply{})
+	r := NewRouter(ms, nil, Options{DefaultExchange: "binance"}) // no allowlist, AllowAll false
+	out := r.Handle(context.Background(), 1, 1, "/help")
+	if !strings.Contains(out, "private") {
+		t.Fatalf("fail closed expected: %s", out)
+	}
 }
 
 func TestHelp(t *testing.T) {
