@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   detailStateToSearchParams,
+  marketsBackPath,
   parseDetailSearchParams,
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
+  toSupplyAsset,
 } from './detailQuery';
 
 describe('parseExchangeParam', () => {
@@ -39,5 +41,33 @@ describe('resolveInterval', () => {
     expect(resolveInterval('15m', ['1m', '15m', '1h'])).toBe('15m');
     expect(resolveInterval('3m', ['1h', '1d'])).toBe('1h');
     expect(resolveInterval('3m', ['5m', '15m'])).toBe('5m');
+  });
+});
+
+describe('toSupplyAsset', () => {
+  it('strips Coinbase hyphen quotes to base', () => {
+    expect(toSupplyAsset('BTC-USD')).toBe('BTC');
+    expect(toSupplyAsset('eth-usdt')).toBe('ETH');
+  });
+
+  it('strips unhyphenated stable suffixes', () => {
+    expect(toSupplyAsset('BTCUSDT')).toBe('BTC');
+    expect(toSupplyAsset('ETHUSDC')).toBe('ETH');
+  });
+
+  it('keeps bare base tickers and USD-named bases', () => {
+    expect(toSupplyAsset('BTC')).toBe('BTC');
+    expect(toSupplyAsset('RLUSD')).toBe('RLUSD');
+  });
+});
+
+describe('marketsBackPath', () => {
+  it('defaults binance to bare /markets', () => {
+    expect(marketsBackPath('binance')).toBe('/markets');
+  });
+
+  it('preserves non-default exchange', () => {
+    expect(marketsBackPath('coinbase')).toBe('/markets?exchange=coinbase');
+    expect(marketsBackPath('bybit')).toBe('/markets?exchange=bybit');
   });
 });

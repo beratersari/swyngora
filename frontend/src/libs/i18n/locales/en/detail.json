@@ -9,6 +9,7 @@
     "interval": "Interval",
     "bars": "Bars",
     "loadErrorTitle": "Could not load candles",
+    "intervalsErrorTitle": "Could not load intervals",
     "emptyTitle": "No candle data",
     "emptyBody": "Empty series for this interval."
   },
@@ -56,6 +57,7 @@
     "ticker": "24h ticker",
     "supply": "supply",
     "candles": "candles",
-    "indicators": "indicators"
+    "indicators": "indicators",
+    "intervals": "intervals"
   }
 }

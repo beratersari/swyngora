@@ -13,11 +13,11 @@ import {
   formatPrice,
   formatTradeCount,
 } from '@/libs/utils';
-import { COLUMN_SORT, PAGE_SIZE_OPTIONS } from './MarketsTable.constants';
+import { COLUMN_SORT, PAGE_SIZE_OPTIONS, SORT_DIRECTIONS } from './MarketsTable.constants';
 import {
   getResultsRange,
-  fromAntdSortOrder,
   paginationChanged,
+  resolveSortChange,
   resolveTableChangeAction,
   toAntdSortOrder,
 } from './MarketsTable.helpers';
@@ -100,12 +100,16 @@ export function MarketsTable({
     );
   }
 
+  // Server-side sort only (sorter: true). Never allow Ant Design's third-click
+  // "clear sort" — that sets order=null while our URL still holds a sort, which
+  // fights controlled sortOrder and makes the header feel unstable.
   const columns: ColumnsType<SpotMarket> = [
     {
       title: t('markets:table.symbol'),
       dataIndex: 'symbol',
       key: 'symbol',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'symbol'),
       render: (symbol: string | undefined) => (
         <Text variant="label" color="primary" mono>
@@ -119,6 +123,7 @@ export function MarketsTable({
       key: 'lastPrice',
       align: 'right',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'lastPrice'),
       render: (v: string | undefined) => (
         <Text variant="numeric" color="primary">
@@ -132,6 +137,7 @@ export function MarketsTable({
       key: 'priceChangePercent',
       align: 'right',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'priceChangePercent'),
       render: (v: string | undefined) => (
         <Text variant="numeric" color={changeTone(v)}>
@@ -145,6 +151,7 @@ export function MarketsTable({
       key: 'quoteVolume',
       align: 'right',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'quoteVolume'),
       render: (v: string | undefined) => (
         <Text variant="numeric" color="secondary">
@@ -158,6 +165,7 @@ export function MarketsTable({
       key: 'marketCapCirculating',
       align: 'right',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'marketCapCirculating'),
       render: (v: number | null | undefined) => (
         <Text variant="numeric" color="secondary">
@@ -171,6 +179,7 @@ export function MarketsTable({
       key: 'tradeCount',
       align: 'right',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'tradeCount'),
       render: (v: number | undefined) => (
         <Text variant="numeric" color="secondary">
@@ -183,6 +192,7 @@ export function MarketsTable({
       dataIndex: 'tags',
       key: 'tags',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'tags'),
       render: (tags: string[] | undefined) =>
         tags && tags.length > 0 ? (
@@ -227,18 +237,23 @@ export function MarketsTable({
     extra: TableCurrentDataSource<SpotMarket>,
   ) => {
     const s = Array.isArray(sorter) ? sorter[0] : sorter;
-    const field = s?.columnKey ? COLUMN_SORT[String(s.columnKey)] : undefined;
-    const nextOrder = fromAntdSortOrder(s?.order ?? null);
-    const sortChanged = Boolean(
-      field && nextOrder && (field !== sort || nextOrder !== order),
-    );
+    const sortResult = resolveSortChange({
+      columnKey: s?.columnKey as string | number | undefined,
+      field: s?.field as string | number | undefined,
+      antdOrder: s?.order ?? null,
+      action: extra?.action,
+      activeSort: sort,
+      activeOrder: order,
+      columnSortMap: COLUMN_SORT,
+    });
+    const sortChanged = sortResult.type === 'sort';
     const pageInfo = paginationChanged(pag, offset, limit);
 
     const action = resolveTableChangeAction(extra?.action, sortChanged, pageInfo.changed);
 
     if (action === 'sort') {
-      if (field && nextOrder) {
-        onSortChange(field as SpotSortField, nextOrder);
+      if (sortResult.type === 'sort') {
+        onSortChange(sortResult.field as SpotSortField, sortResult.order);
       }
       return;
     }
@@ -254,8 +269,8 @@ export function MarketsTable({
       onPageChange(pageInfo.nextOffset, pageInfo.nextLimit);
       return;
     }
-    if (sortChanged && field && nextOrder) {
-      onSortChange(field as SpotSortField, nextOrder);
+    if (sortResult.type === 'sort') {
+      onSortChange(sortResult.field as SpotSortField, sortResult.order);
     }
   };
 
@@ -267,6 +282,8 @@ export function MarketsTable({
         dataSource={items}
         loading={isLoading && items.length > 0}
         pagination={pagination}
+        // Table-level directions (same as columns) — avoid antd default cycle ending in clear.
+        sortDirections={[...SORT_DIRECTIONS]}
         onChange={handleChange}
         onRow={(record) => ({
           className: onRowOpen && record.symbol ? 'markets-row-clickable' : undefined,

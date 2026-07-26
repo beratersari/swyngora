@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Tag } from 'antd';
+import { Alert, Button, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
@@ -53,22 +53,34 @@ export function MarketsPage() {
     setQInput(state.q);
   }, [state.q]);
 
+  /**
+   * Functional URL updates — always merge from the latest search params so sort /
+   * pagination / search debounce never overwrite each other with a stale `state`.
+   */
   const patchState = useCallback(
     (patch: Partial<MarketsUrlState>) => {
-      const next: MarketsUrlState = { ...state, ...patch };
-      if (patch.q === undefined) {
-        next.q = qInput;
-      }
-      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+      setSearchParams(
+        (prev) => {
+          const current = parseMarketsSearchParams(prev);
+          return marketsStateToSearchParams({ ...current, ...patch });
+        },
+        { replace: true },
+      );
     },
-    [state, qInput, setSearchParams],
+    [setSearchParams],
   );
 
+  // Search q is owned by the debounce effect only (not injected into every patch).
   useEffect(() => {
-    if (debouncedQ === state.q) return;
-    const next = { ...state, q: debouncedQ, offset: 0 };
-    setSearchParams(marketsStateToSearchParams(next), { replace: true });
-  }, [debouncedQ, state, setSearchParams]);
+    setSearchParams(
+      (prev) => {
+        const current = parseMarketsSearchParams(prev);
+        if (debouncedQ === current.q) return prev;
+        return marketsStateToSearchParams({ ...current, q: debouncedQ, offset: 0 });
+      },
+      { replace: true },
+    );
+  }, [debouncedQ, setSearchParams]);
 
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
@@ -85,7 +97,10 @@ export function MarketsPage() {
 
   const [cachedItems, setCachedItems] = useState<SpotMarket[]>([]);
   const [cachedTotal, setCachedTotal] = useState(0);
-  const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}|${state.sort}|${state.order}`;
+
+  // Only wipe the table when the *filter set* changes — not on sort/order/page.
+  // Clearing on sort forced an empty skeleton and made the sort UI feel broken.
+  const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}`;
 
   useEffect(() => {
     setCachedItems([]);
@@ -99,9 +114,11 @@ export function MarketsPage() {
     }
   }, [spotQuery.data]);
 
+  // Prefer current query data; while a new sort/page is loading keep last rows.
   const items = spotQuery.data?.items ?? cachedItems;
   const total = spotQuery.data?.total ?? cachedTotal;
-  const errorMessage = spotQuery.isError
+  const hasRows = items.length > 0;
+  const loadErrorText = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {
         resource: t('markets:resource'),
         statusMessages: {
@@ -109,6 +126,9 @@ export function MarketsPage() {
         },
       })
     : null;
+  // Full-table error only when there is nothing to show. Poll/refetch failures
+  // keep last rows (RTK keeps data on reject) so sort/paging stay usable.
+  const tableErrorMessage = hasRows ? null : loadErrorText;
 
   const onExchangeChange = (exchange: MarketExchange) => {
     patchState({ exchange, offset: 0, tag: '' });
@@ -120,15 +140,9 @@ export function MarketsPage() {
 
   const onPageChange = useCallback(
     (offset: number, limit: number) => {
-      const next: MarketsUrlState = {
-        ...state,
-        q: qInput,
-        offset,
-        limit,
-      };
-      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+      patchState({ offset, limit });
     },
-    [state, qInput, setSearchParams],
+    [patchState],
   );
 
   const range = getResultsRange(state.offset, state.limit, total);
@@ -140,7 +154,9 @@ export function MarketsPage() {
           to: range.to.toLocaleString(),
           total: range.total.toLocaleString(),
         });
-  const isInitialLoading = spotQuery.isLoading && items.length === 0;
+  // Full-table skeleton only on first paint for a filter set (no rows yet).
+  const isInitialLoading = items.length === 0 && (spotQuery.isLoading || spotQuery.isFetching);
+  // In-table spinner for sort/page/poll refreshes while previous rows stay mounted.
   const isRefreshing = spotQuery.isFetching && items.length > 0;
   const pageNum = Math.floor(state.offset / state.limit) + 1;
 
@@ -222,6 +238,20 @@ export function MarketsPage() {
         />
       ) : null}
 
+      {loadErrorText && hasRows ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('markets:errors.refreshFailed')}
+          description={loadErrorText}
+          action={
+            <Button size="small" type="primary" onClick={() => void spotQuery.refetch()}>
+              {t('common:actions.retry')}
+            </Button>
+          }
+        />
+      ) : null}
+
       <MarketsTable
         items={items}
         exchange={state.exchange}
@@ -230,8 +260,8 @@ export function MarketsPage() {
         total={total}
         limit={state.limit}
         offset={state.offset}
-        isLoading={spotQuery.isLoading || spotQuery.isFetching}
-        errorMessage={errorMessage}
+        isLoading={isInitialLoading || isRefreshing}
+        errorMessage={tableErrorMessage}
         onSortChange={onSortChange}
         onPageChange={onPageChange}
         onRetry={() => void spotQuery.refetch()}

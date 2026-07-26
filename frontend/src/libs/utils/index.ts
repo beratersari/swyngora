@@ -13,6 +13,7 @@ export {
   parseMarketsSearchParams,
   marketsStateToSearchParams,
   toSpotListQuery,
+  effectiveMarketsStateForQuery,
 } from './spotQuery';
 export type { MarketsUrlState } from './spotQuery';
 export {
@@ -32,5 +33,7 @@ export {
   parseDetailSearchParams,
   detailStateToSearchParams,
   resolveInterval,
+  toSupplyAsset,
+  marketsBackPath,
 } from './detailQuery';
 export type { DetailUrlState } from './detailQuery';

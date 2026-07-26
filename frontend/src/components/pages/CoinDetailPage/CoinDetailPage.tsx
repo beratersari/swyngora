@@ -22,11 +22,13 @@ import {
   apiCandlesToChart,
   detailStateToSearchParams,
   indicatorPointsToEmaLine,
+  marketsBackPath,
   parseDetailSearchParams,
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
   sortedEmaKeys,
+  toSupplyAsset,
 } from '@/libs/utils';
 import {
   DEFAULT_DETAIL_SERIES_POLL_MS,
@@ -52,9 +54,16 @@ export function CoinDetailPage() {
 
   const [showEma, setShowEma] = useState(true);
 
+  const skip = !symbol;
   const intervalsQuery = useListIntervalsQuery({ exchange });
   const supportedIntervals = intervalsQuery.data?.intervals;
-  const intervalsReady = Boolean(supportedIntervals?.length);
+  // Only block series on the first intervals load. On error, fall through with
+  // resolveInterval defaults so candles are not stuck on skeleton forever.
+  const waitingForIntervals =
+    !skip &&
+    !supportedIntervals?.length &&
+    intervalsQuery.isLoading &&
+    !intervalsQuery.isError;
 
   const interval = resolveInterval(urlState.interval, supportedIntervals);
   const limit = urlState.limit;
@@ -69,8 +78,8 @@ export function CoinDetailPage() {
     );
   }, [supportedIntervals, urlState.interval, urlState.limit, setSearchParams]);
 
-  const skip = !symbol;
-  const skipSeries = skip || !intervalsReady;
+  const skipSeries = skip || waitingForIntervals;
+  const supplyAsset = toSupplyAsset(symbol);
 
   const tickerQuery = useGetTicker24hQuery(
     { exchange, symbol },
@@ -82,9 +91,9 @@ export function CoinDetailPage() {
   );
 
   const supplyQuery = useGetSupplyQuery(
-    { symbol },
+    { asset: supplyAsset },
     {
-      skip,
+      skip: skip || !supplyAsset,
       pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
       refetchOnFocus: true,
     },
@@ -136,16 +145,18 @@ export function CoinDetailPage() {
     );
   }, [candlesQuery.data?.candles]);
 
+  const indicatorPoints = indicatorsQuery.data?.points;
+  const latestEma = indicatorsQuery.data?.latest?.ema;
   const overlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
-    const keys = sortedEmaKeys(indicatorsQuery.data?.latest?.ema);
+    const keys = sortedEmaKeys(latestEma);
     return keys.map((key, i) => ({
       id: `ema-${key}`,
       title: t('detail:indicators.emaLabel', { period: key }),
       color: emaColor(key, i),
-      data: indicatorPointsToEmaLine(indicatorsQuery.data?.points, key),
+      data: indicatorPointsToEmaLine(indicatorPoints, key),
     }));
-  }, [showEma, indicatorsQuery.data, t]);
+  }, [showEma, latestEma, indicatorPoints, t]);
 
   const patchUrl = (patch: Partial<{ interval: string; limit: number }>) => {
     setSearchParams(
@@ -158,11 +169,14 @@ export function CoinDetailPage() {
   };
 
   const refreshAll = () => {
+    void intervalsQuery.refetch();
     void tickerQuery.refetch();
     void supplyQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
   };
+
+  const backTo = marketsBackPath(exchange);
 
   if (!symbol) {
     return (
@@ -178,11 +192,19 @@ export function CoinDetailPage() {
   }
 
   const headerLoading = tickerQuery.isLoading && !tickerQuery.data;
-  const statsLoading = (tickerQuery.isLoading || supplyQuery.isLoading) && !tickerQuery.data;
+  // Keep supply fields in loading state until supply resolves (do not treat
+  // "no maxSupply yet" as open/∞ while ticker alone has arrived).
+  const statsLoading =
+    (tickerQuery.isLoading && !tickerQuery.data) ||
+    (supplyQuery.isLoading && !supplyQuery.data);
   const seriesLoading =
-    (candlesQuery.isLoading || indicatorsQuery.isLoading) && chartData.length === 0;
+    ((candlesQuery.isLoading || indicatorsQuery.isLoading) && chartData.length === 0) ||
+    waitingForIntervals;
   const seriesFetching =
-    candlesQuery.isFetching || indicatorsQuery.isFetching || tickerQuery.isFetching;
+    candlesQuery.isFetching ||
+    indicatorsQuery.isFetching ||
+    tickerQuery.isFetching ||
+    intervalsQuery.isFetching;
 
   return (
     <PageStack>
@@ -192,6 +214,7 @@ export function CoinDetailPage() {
         lastPrice={tickerQuery.data?.lastPrice}
         priceChangePercent={tickerQuery.data?.priceChangePercent}
         assetName={supplyQuery.data?.name}
+        backTo={backTo}
         isLoading={headerLoading}
       />
 
@@ -233,12 +256,23 @@ export function CoinDetailPage() {
           intervals={supportedIntervals ?? []}
           interval={interval}
           limit={limit}
-          intervalsLoading={intervalsQuery.isLoading}
+          intervalsLoading={intervalsQuery.isLoading && !supportedIntervals?.length}
           onIntervalChange={(iv) => patchUrl({ interval: iv })}
           onLimitChange={(n) => patchUrl({ limit: n })}
           onRefresh={refreshAll}
           isFetching={seriesFetching}
         />
+
+        {intervalsQuery.isError && !supportedIntervals?.length ? (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('detail:chart.intervalsErrorTitle')}
+            description={rtkErrorMessage(intervalsQuery.error, {
+              resource: t('detail:resource.intervals'),
+            })}
+          />
+        ) : null}
 
         {candlesQuery.isError ? (
           <Alert
@@ -260,7 +294,7 @@ export function CoinDetailPage() {
           <CandleChartHost
             data={chartData}
             overlays={overlays}
-            isLoading={seriesLoading || skipSeries}
+            isLoading={seriesLoading || waitingForIntervals}
             height={360}
           />
         )}

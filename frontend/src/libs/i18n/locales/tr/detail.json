@@ -9,6 +9,7 @@
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",
+    "intervalsErrorTitle": "Aralık listesi yüklenemedi",
     "emptyTitle": "Mum verisi yok",
     "emptyBody": "Bu aralık için seri boş."
   },
@@ -56,6 +57,7 @@
     "ticker": "24s ticker",
     "supply": "arz",
     "candles": "mumlar",
-    "indicators": "göstergeler"
+    "indicators": "göstergeler",
+    "intervals": "aralıklar"
   }
 }

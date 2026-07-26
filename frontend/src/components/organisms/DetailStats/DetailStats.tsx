@@ -6,6 +6,7 @@ import {
   formatPrice,
   formatTradeCount,
 } from '@/libs/utils';
+import { formatMaxSupply } from './DetailStats.helpers';
 import { StatCard, StatsGrid, StatsSection } from './DetailStats.styles';
 import type { DetailStatsProps } from './DetailStats.types';
 
@@ -91,11 +92,7 @@ export function DetailStats({
         />
         <Stat
           label={t('stats.maxSupply')}
-          value={
-            supply?.maxSupply === null || supply?.maxSupply === undefined
-              ? t('stats.maxSupplyOpen')
-              : formatSupplyNum(supply.maxSupply)
-          }
+          value={formatMaxSupply(supply, t('stats.maxSupplyOpen'), formatSupplyNum)}
           isLoading={isLoading}
         />
         <Stat

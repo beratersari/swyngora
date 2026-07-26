@@ -38,7 +38,8 @@
   "errors": {
     "mcapWarmupTitle": "Piyasa değeri verisi ısınıyor olabilir",
     "mcapWarmupBody": "Arz anlık görüntüsü boşsa mcap sıralaması başarısız olabilir. Quote hacim sıralamasına geçin veya tekrar deneyin.",
-    "upstreamMcap": "Üst kaynak veya arz anlık görüntüsü yok. Mcap sıralaması için ılık arz önbelleği gerekir — quote hacim deneyin."
+    "upstreamMcap": "Üst kaynak veya arz anlık görüntüsü yok. Mcap sıralaması için ılık arz önbelleği gerekir — quote hacim deneyin.",
+    "refreshFailed": "Piyasalar yenilenemedi — son başarılı veri gösteriliyor."
   },
   "resource": "piyasalar"
 }

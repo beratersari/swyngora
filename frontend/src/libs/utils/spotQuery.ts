@@ -84,17 +84,33 @@ export function marketsStateToSearchParams(state: MarketsUrlState): URLSearchPar
   return p;
 }
 
+/**
+ * Align list query with debounced search: when `debouncedQ` is ahead of URL `q`,
+ * force `offset: 0` so the first RTK request is not page N of the new query.
+ * (URL offset is reset in a later effect — without this, render uses stale offset.)
+ */
+export function effectiveMarketsStateForQuery(
+  state: MarketsUrlState,
+  debouncedQ: string,
+): MarketsUrlState {
+  if (debouncedQ === state.q) {
+    return state;
+  }
+  return { ...state, q: debouncedQ, offset: 0 };
+}
+
 /** Build RTK listSpotMarkets args from UI state + debounced q. */
 export function toSpotListQuery(state: MarketsUrlState, debouncedQ: string): SpotListQuery {
+  const effective = effectiveMarketsStateForQuery(state, debouncedQ);
   return {
-    exchange: state.exchange,
+    exchange: effective.exchange,
     q: debouncedQ.trim() || undefined,
-    quote: state.quote || undefined,
-    tag: state.tag.trim() || undefined,
-    sort: state.sort,
-    order: state.order,
-    limit: state.limit,
-    offset: state.offset,
+    quote: effective.quote || undefined,
+    tag: effective.tag.trim() || undefined,
+    sort: effective.sort,
+    order: effective.order,
+    limit: effective.limit,
+    offset: effective.offset,
     status: 'TRADING',
   };
 }

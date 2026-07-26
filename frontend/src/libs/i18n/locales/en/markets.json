@@ -38,7 +38,8 @@
   "errors": {
     "mcapWarmupTitle": "Market-cap data may be warming up",
     "mcapWarmupBody": "If the supply snapshot is empty, mcap sorts can fail. Switch sort to Quote volume or retry.",
-    "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly."
+    "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly.",
+    "refreshFailed": "Could not refresh markets — showing last successful data."
   },
   "resource": "markets"
 }

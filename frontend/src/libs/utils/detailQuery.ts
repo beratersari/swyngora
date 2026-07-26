@@ -36,6 +36,42 @@ export function parseSymbolParam(raw: string | undefined): string {
   }
 }
 
+/**
+ * Map a trading pair symbol to the supply-cache asset key (base ticker).
+ * Backend supply is asset-level (e.g. BTC); it strips unhyphenated stables
+ * (BTCUSDT → BTC) but not Coinbase-style `BASE-QUOTE` (BTC-USD stays as-is → 404).
+ * Longest stable first so USDT/FDUSD win over shorter tails.
+ */
+const SUPPLY_STABLE_QUOTES = ['FDUSD', 'USDT', 'USDC', 'BUSD', 'TUSD', 'DAI'] as const;
+
+export function toSupplyAsset(symbol: string): string {
+  const s = symbol.trim().toUpperCase();
+  if (!s) return '';
+  // Coinbase / unified: BASE-QUOTE
+  if (s.includes('-')) {
+    const base = s.split('-')[0]?.trim() ?? '';
+    return base || s;
+  }
+  for (const q of SUPPLY_STABLE_QUOTES) {
+    if (s.length > q.length && s.endsWith(q)) {
+      const base = s.slice(0, -q.length);
+      if (base && base !== q) return base;
+    }
+  }
+  return s;
+}
+
+/** Markets list URL that preserves the venue the user was browsing. */
+export function marketsBackPath(exchange: string): string {
+  const p = new URLSearchParams();
+  const ex = (exchange || '').toLowerCase();
+  if (ex && ex !== 'binance') {
+    p.set('exchange', ex);
+  }
+  const qs = p.toString();
+  return qs ? `/markets?${qs}` : '/markets';
+}
+
 export function parseDetailSearchParams(params: URLSearchParams): DetailUrlState {
   const interval = params.get('interval')?.trim() || DEFAULT_DETAIL_STATE.interval;
   const limitRaw = Number(params.get('limit'));

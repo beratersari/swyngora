@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_MARKETS_STATE,
+  effectiveMarketsStateForQuery,
   marketsStateToSearchParams,
   parseMarketsSearchParams,
   toSpotListQuery,
@@ -31,5 +32,18 @@ describe('spotQuery', () => {
     expect(q.q).toBe('eth');
     expect(q.status).toBe('TRADING');
     expect(q.exchange).toBe('binance');
+  });
+
+  it('resets offset when debounced q is ahead of URL q', () => {
+    const state = { ...DEFAULT_MARKETS_STATE, q: '', offset: 100 };
+    expect(effectiveMarketsStateForQuery(state, 'btc').offset).toBe(0);
+    expect(toSpotListQuery(state, 'btc').offset).toBe(0);
+    expect(toSpotListQuery(state, 'btc').q).toBe('btc');
+  });
+
+  it('keeps offset when debounced q matches URL q', () => {
+    const state = { ...DEFAULT_MARKETS_STATE, q: 'btc', offset: 100 };
+    expect(effectiveMarketsStateForQuery(state, 'btc').offset).toBe(100);
+    expect(toSpotListQuery(state, 'btc').offset).toBe(100);
   });
 });
