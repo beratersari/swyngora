@@ -18,7 +18,7 @@ describe('defaultPumpScanFilters', () => {
     const f = defaultPumpScanFilters('binance');
     expect(f.interval).toBe('15m');
     expect(f.lookbackHours).toBe(24);
-    expect(f.minReturnPct).toBe(8);
+    expect(f.minReturnPct).toBe(5);
     expect(f.direction).toBe('up');
     expect(f.symbolLimit).toBe(15);
   });

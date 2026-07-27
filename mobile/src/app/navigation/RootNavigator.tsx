@@ -156,7 +156,11 @@ function MainTabsInner() {
       <Tab.Screen
         name="PumpsTab"
         component={PumpsStackNavigator}
-        options={{ title: 'Pumps' }}
+        options={{
+          title: 'Pumps',
+          tabBarLabel: 'Pumps',
+          tabBarAccessibilityLabel: 'Pumps radar',
+        }}
       />
       {showFavoritesTab ? (
         <Tab.Screen

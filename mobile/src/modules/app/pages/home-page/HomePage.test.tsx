@@ -12,6 +12,8 @@ const stubVm: HomePageViewModel = {
   isPollingPaused: false,
   errorMessage: null,
   onRetry: () => undefined,
+  onOpenMarkets: () => undefined,
+  onOpenPumps: () => undefined,
 };
 
 describe('HomePage', () => {

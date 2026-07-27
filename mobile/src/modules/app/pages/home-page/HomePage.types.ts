@@ -8,6 +8,8 @@ export type HomePageViewModel = {
   isPollingPaused: boolean;
   errorMessage: string | null;
   onRetry: () => void;
+  onOpenMarkets: () => void;
+  onOpenPumps: () => void;
 };
 
 export type HomePageProps = {

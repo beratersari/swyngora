@@ -11,8 +11,21 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
   return (
     <ScreenTemplate title={vm.title}>
       <Text variant="body" color="secondary">
-        React Native mobile client — open in Chrome via Vite + react-native-web.
+        Mobile client (Chrome). Use the bottom tabs: Markets · Pumps · Favorites.
       </Text>
+
+      <View style={styles.card}>
+        <Text variant="label" color="secondary">
+          Features
+        </Text>
+        <View style={styles.actions}>
+          <Button label="Open Markets" onPress={vm.onOpenMarkets} />
+          <Button label="Open Pumps radar" onPress={vm.onOpenPumps} variant="secondary" />
+        </View>
+        <Text variant="caption" color="steel">
+          Pumps scans top-volume pairs for rapid moves (may take a few seconds).
+        </Text>
+      </View>
 
       <View style={styles.card}>
         <View style={styles.row}>

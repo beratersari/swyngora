@@ -2,7 +2,8 @@
 
 export const DEFAULT_PUMP_SCAN_INTERVAL = '15m';
 export const DEFAULT_PUMP_SCAN_LOOKBACK_HOURS = 24;
-export const DEFAULT_PUMP_SCAN_MIN_RETURN_PCT = 8;
+/** Slightly below service default (8) so the tab is less often empty in quiet markets. */
+export const DEFAULT_PUMP_SCAN_MIN_RETURN_PCT = 5;
 export const DEFAULT_PUMP_SCAN_DIRECTION = 'up' as const;
 export const DEFAULT_PUMP_SCAN_MODE = 'close_return' as const;
 export const DEFAULT_PUMP_SCAN_SYMBOL_LIMIT = 15;
