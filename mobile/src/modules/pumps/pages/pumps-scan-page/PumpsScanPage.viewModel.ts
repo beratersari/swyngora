@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import {
   rtkErrorMessage,
   useListExchangesQuery,
@@ -30,13 +31,16 @@ import type { PumpsScanPageViewModel } from './PumpsScanPage.types';
 
 const FALLBACK_EXCHANGES = ['binance', 'coinbase', 'bybit'];
 
-function mapHitToRow(hit: {
-  symbol?: string;
-  exchange?: string;
-  interval?: string;
-  bestReturnPct?: number;
-  events?: { volumeRatio?: number }[];
-}): PumpHitRowViewModel {
+function mapHitToRow(
+  hit: {
+    symbol?: string;
+    exchange?: string;
+    interval?: string;
+    bestReturnPct?: number;
+    events?: { volumeRatio?: number }[];
+  },
+  eventsLabel: string,
+): PumpHitRowViewModel {
   const symbol = hit.symbol ?? '—';
   const exchange = (hit.exchange ?? 'binance').toLowerCase();
   const events = hit.events ?? [];
@@ -48,12 +52,13 @@ function mapHitToRow(hit: {
     exchange,
     bestReturnLabel: formatPumpReturnPct(hit.bestReturnPct),
     bestReturnTone: pumpReturnTone(hit.bestReturnPct),
-    eventsLabel: `${events.length} event${events.length === 1 ? '' : 's'}`,
+    eventsLabel,
     metaLabel: [hit.interval, vol].filter(Boolean).join(' · '),
   };
 }
 
 export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
+  const { t } = useTranslation(['pumps', 'common']);
   const navigation =
     useNavigation<NativeStackNavigationProp<PumpsStackParamList>>();
   const active = useAppStateActive();
@@ -80,8 +85,15 @@ export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
   });
 
   const rows = useMemo(
-    () => (scanQuery.data?.hits ?? []).map(mapHitToRow),
-    [scanQuery.data?.hits],
+    () =>
+      (scanQuery.data?.hits ?? []).map((hit) => {
+        const count = hit.events?.length ?? 0;
+        return mapHitToRow(
+          hit,
+          t('pumps:events', { count }),
+        );
+      }),
+    [scanQuery.data?.hits, t],
   );
 
   const isLoading = scanQuery.isLoading || (scanQuery.isFetching && rows.length === 0);
@@ -91,21 +103,21 @@ export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
     : null;
   const emptyMessage =
     !errorMessage && !isLoading && rows.length === 0
-      ? 'No pumps matched — try lower threshold or longer lookback'
+      ? t('pumps:empty')
       : null;
 
   const summaryLabel = useMemo(() => {
     const parts = [
       filters.quote,
       filters.interval,
-      `${filters.lookbackHours}h`,
-      `≥${filters.minReturnPct}%`,
+      t('pumps:hours', { hours: filters.lookbackHours }),
+      t('pumps:threshold', { pct: filters.minReturnPct }),
       filters.direction,
     ];
     const count = scanQuery.data?.hitCount;
-    if (typeof count === 'number') parts.push(`${count} hits`);
+    if (typeof count === 'number') parts.push(String(count));
     return parts.join(' · ');
-  }, [filters, scanQuery.data?.hitCount]);
+  }, [filters, scanQuery.data?.hitCount, t]);
 
   const onSelectExchange = useCallback((exchange: string) => {
     const ex: MarketExchange = isMarketExchange(exchange) ? exchange : 'binance';
@@ -154,7 +166,7 @@ export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
   );
 
   return {
-    title: 'Pumps',
+    title: t('pumps:title'),
     exchanges,
     selectedExchange: filters.exchange,
     onSelectExchange,
@@ -176,13 +188,15 @@ export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
     onSelectDirection,
 
     summaryLabel,
-    disclaimer: scanQuery.data?.note ?? PUMP_DISCLAIMER,
+    disclaimer:
+      scanQuery.data?.note ??
+      t('common:disclaimer.pumps', { defaultValue: PUMP_DISCLAIMER }),
 
     rows,
     isLoading: skip ? false : isLoading,
     isRefreshing: skip ? false : isRefreshing,
     errorMessage: skip ? null : errorMessage,
-    emptyMessage: skip ? 'Refresh paused while app is in background' : emptyMessage,
+    emptyMessage: skip ? t('pumps:paused') : emptyMessage,
 
     onRetry,
     onRefresh,

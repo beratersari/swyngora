@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { ChipGroup } from '@/components/molecules/chip-group';
 import type { PumpScanFiltersProps } from './PumpScanFilters.types';
@@ -20,6 +21,7 @@ export function PumpScanFilters({
   onSelectDirection,
   summaryLabel,
 }: PumpScanFiltersProps) {
+  const { t } = useTranslation('pumps');
   return (
     <View style={styles.root}>
       <View style={styles.block}>
@@ -36,10 +38,13 @@ export function PumpScanFilters({
 
       <View style={styles.block}>
         <Text variant="caption" color="secondary">
-          Lookback
+          {t('lookback')}
         </Text>
         <ChipGroup
-          options={lookbackOptions.map((h) => ({ value: String(h), label: `${h}h` }))}
+          options={lookbackOptions.map((h) => ({
+            value: String(h),
+            label: t('hours', { hours: h }),
+          }))}
           selected={String(lookbackHours)}
           onSelect={(v) => onSelectLookback(Number(v))}
           mode="single"
@@ -50,10 +55,13 @@ export function PumpScanFilters({
 
       <View style={styles.block}>
         <Text variant="caption" color="secondary">
-          Min return
+          {t('minReturn')}
         </Text>
         <ChipGroup
-          options={thresholdOptions.map((p) => ({ value: String(p), label: `≥${p}%` }))}
+          options={thresholdOptions.map((p) => ({
+            value: String(p),
+            label: t('threshold', { pct: p }),
+          }))}
           selected={String(minReturnPct)}
           onSelect={(v) => onSelectThreshold(Number(v))}
           mode="single"
@@ -64,7 +72,7 @@ export function PumpScanFilters({
 
       <View style={styles.block}>
         <Text variant="caption" color="secondary">
-          Direction
+          {t('direction')}
         </Text>
         <ChipGroup
           options={directionOptions.map((d) => ({ value: d.value, label: d.label }))}

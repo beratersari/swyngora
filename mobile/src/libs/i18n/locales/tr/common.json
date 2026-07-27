@@ -1,0 +1,40 @@
+{
+  "appName": "Swyngora",
+  "nav": {
+    "home": "Ana sayfa",
+    "markets": "Piyasalar",
+    "pumps": "Pump",
+    "favorites": "Favoriler",
+    "pumpsA11y": "Pump radarı"
+  },
+  "language": {
+    "label": "Dil",
+    "en": "English",
+    "tr": "Türkçe"
+  },
+  "actions": {
+    "retry": "Yeniden dene",
+    "refresh": "Yenile",
+    "cancel": "İptal",
+    "apply": "Uygula",
+    "openMarkets": "Piyasalara git",
+    "retryIndicators": "Göstergeleri yenile"
+  },
+  "status": {
+    "loading": "Yükleniyor…",
+    "checking": "Kontrol ediliyor…",
+    "ok": "Tamam",
+    "error": "Hata",
+    "pollingActive": "aktif",
+    "pollingPaused": "duraklatıldı (arka plan)",
+    "liveRefreshPaused": "canlı yenileme durdu"
+  },
+  "disclaimer": {
+    "indicators": "RSI/EMA yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir.",
+    "pumps": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Mekanik eşik eşlemesi; işlem sinyali değildir."
+  },
+  "errors": {
+    "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+    "network": "API'ye ulaşılamıyor. Backend çalışıyor mu?"
+  }
+}

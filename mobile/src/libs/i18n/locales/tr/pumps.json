@@ -1,0 +1,12 @@
+{
+  "title": "Pump",
+  "lookback": "Geriye bakış",
+  "minReturn": "Min getiri",
+  "direction": "Yön",
+  "empty": "Eşleşen pump yok — eşiği düşürün veya süreyi uzatın",
+  "paused": "Uygulama arka plandayken yenileme duraklatıldı",
+  "events_one": "{{count}} olay",
+  "events_other": "{{count}} olay",
+  "hours": "{{hours}}s",
+  "threshold": "≥%{{pct}}"
+}

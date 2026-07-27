@@ -1,0 +1,15 @@
+{
+  "title": "Piyasalar",
+  "filters": "Filtreler",
+  "summary": "{{total}} içinden {{count}} gösteriliyor",
+  "summaryCount": "{{count}} piyasa",
+  "empty": "Filtrelere uyan piyasa yok",
+  "favoritesOnlyHint": "Yalnızca favoriler — kaldırmak için ★ simgesine dokunun",
+  "favoritesSummary": "Favoriler: {{count}} gösteriliyor",
+  "favoritesEmpty": "Bu borsada favori yok — bir satırda ★ simgesine dokunun",
+  "indicatorsPrefix": "Göstergeler: {{message}}",
+  "activeFilters": "Aktif: {{summary}}",
+  "searchPlaceholder": "Sembol ara…",
+  "vol": "Hac {{value}}",
+  "mcap": "Piy. değ. {{value}}"
+}

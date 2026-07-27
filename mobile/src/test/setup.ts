@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { vi } from 'vitest';
 import React from 'react';
+import { initI18n } from '@/libs/i18n';
+
+// Ensure translations resolve in unit tests (default en).
+initI18n();
 
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

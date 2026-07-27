@@ -8,6 +8,7 @@ import {
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import { HomePage } from '@/modules/app';
 import {
   CoinDetailPage,
@@ -127,6 +128,7 @@ function PumpsStackNavigator() {
 }
 
 function MainTabsInner() {
+  const { t } = useTranslation('common');
   const { count, isReady } = useWatchlist();
   const showFavoritesTab = isReady && count > 0;
 
@@ -146,20 +148,20 @@ function MainTabsInner() {
       <Tab.Screen
         name="HomeTab"
         component={HomeStackNavigator}
-        options={{ title: 'Home' }}
+        options={{ title: t('nav.home'), tabBarLabel: t('nav.home') }}
       />
       <Tab.Screen
         name="MarketsTab"
         component={MarketsStackNavigator}
-        options={{ title: 'Markets' }}
+        options={{ title: t('nav.markets'), tabBarLabel: t('nav.markets') }}
       />
       <Tab.Screen
         name="PumpsTab"
         component={PumpsStackNavigator}
         options={{
-          title: 'Pumps',
-          tabBarLabel: 'Pumps',
-          tabBarAccessibilityLabel: 'Pumps radar',
+          title: t('nav.pumps'),
+          tabBarLabel: t('nav.pumps'),
+          tabBarAccessibilityLabel: t('nav.pumpsA11y'),
         }}
       />
       {showFavoritesTab ? (
@@ -167,7 +169,8 @@ function MainTabsInner() {
           name="WatchlistTab"
           component={WatchlistStackNavigator}
           options={{
-            title: 'Favorites',
+            title: t('nav.favorites'),
+            tabBarLabel: t('nav.favorites'),
             tabBarBadge: count,
             tabBarBadgeStyle: {
               backgroundColor: '#F5C542',

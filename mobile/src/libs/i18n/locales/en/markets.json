@@ -1,0 +1,15 @@
+{
+  "title": "Markets",
+  "filters": "Filters",
+  "summary": "Showing {{count}} of {{total}}",
+  "summaryCount": "{{count}} markets",
+  "empty": "No markets match filters",
+  "favoritesOnlyHint": "Showing favorites only — tap ★ again to remove",
+  "favoritesSummary": "Favorites: {{count}} shown",
+  "favoritesEmpty": "No favorites on this exchange yet — tap ★ on a row",
+  "indicatorsPrefix": "Indicators: {{message}}",
+  "activeFilters": "Active: {{summary}}",
+  "searchPlaceholder": "Search symbol…",
+  "vol": "Vol {{value}}",
+  "mcap": "Mcap {{value}}"
+}

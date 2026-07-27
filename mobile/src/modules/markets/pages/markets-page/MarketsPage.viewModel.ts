@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 // favorites filter is client-side over loaded rows
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import {
   rtkErrorMessage,
   useListExchangesQuery,
@@ -60,6 +61,7 @@ function mergeUniqueRows(
 }
 
 export function useMarketsPageViewModel(): MarketsPageViewModel {
+  const { t } = useTranslation(['markets', 'common']);
   const navigation =
     useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
   const markets = useMarketsContext();
@@ -162,7 +164,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
 
   const emptyMessage =
     !errorMessage && !isLoading && !isSearchDebouncing && rows.length === 0
-      ? 'No markets match filters'
+      ? t('markets:empty')
       : null;
 
   const onLoadMore = useCallback(() => {
@@ -204,10 +206,10 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
 
   const summaryLabel =
     total > 0
-      ? `Showing ${rows.length} of ${total}`
+      ? t('markets:summary', { count: rows.length, total })
       : rows.length === 0
         ? null
-        : `${rows.length} markets`;
+        : t('markets:summaryCount', { count: rows.length });
 
   const filterSummaryParts: string[] = [];
   if (markets.quote !== DEFAULT_QUOTE) filterSummaryParts.push(markets.quote);
@@ -281,11 +283,13 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   }, [displayRowsBase, batchQuery.data, batchQuery.isLoading, batchQuery.isFetching]);
 
   const indicatorsError = batchQuery.isError
-    ? rtkErrorMessage(batchQuery.error, { resource: 'indicators' })
+    ? t('markets:indicatorsPrefix', {
+        message: rtkErrorMessage(batchQuery.error, { resource: 'indicators' }),
+      })
     : null;
   const indicatorsDisclaimer =
     displayRowsBase.length > 0
-      ? (batchQuery.data?.note ?? BATCH_INDICATORS_DISCLAIMER)
+      ? (batchQuery.data?.note ?? t('common:disclaimer.indicators', { defaultValue: BATCH_INDICATORS_DISCLAIMER }))
       : null;
 
   const onRefreshWithBatch = useCallback(() => {
@@ -298,17 +302,22 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     if (batchArg.symbols.length > 0) void batchQuery.refetch();
   }, [onRetry, batchArg.symbols.length, batchQuery]);
 
-  const displayEmpty =
-    favoritesEmptyMessage(favoritesOnly, errorMessage, isLoading, displayRows.length) ??
-    emptyMessage;
-  const displaySummary = favoritesSummaryLabel(
+  const favoritesEmpty = favoritesEmptyMessage(
     favoritesOnly,
+    errorMessage,
+    isLoading,
     displayRows.length,
-    summaryLabel,
   );
+  const localizedDisplayEmpty = favoritesEmpty
+    ? t('markets:favoritesEmpty')
+    : emptyMessage;
+  const localizedDisplaySummary =
+    favoritesOnly && displayRows.length > 0
+      ? t('markets:favoritesSummary', { count: displayRows.length })
+      : favoritesSummaryLabel(favoritesOnly, displayRows.length, summaryLabel);
 
   return {
-    title: 'Markets',
+    title: t('markets:title'),
     exchanges,
     selectedExchange: markets.exchange,
     onSelectExchange: markets.setExchange,
@@ -334,11 +343,9 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     isRefreshing,
     isPollingPaused: !pollingEnabled,
     errorMessage,
-    emptyMessage: displayEmpty,
-    summaryLabel: displaySummary,
-    detailHint: favoritesOnly
-      ? 'Showing favorites only — tap ★ again to remove'
-      : null,
+    emptyMessage: localizedDisplayEmpty,
+    summaryLabel: localizedDisplaySummary,
+    detailHint: favoritesOnly ? t('markets:favoritesOnlyHint') : null,
     actionError: watchlist.actionError,
     indicatorsError,
     indicatorsDisclaimer,

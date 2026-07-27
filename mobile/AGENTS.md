@@ -79,6 +79,16 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
 - Chart: `lightweight-charts` on react-native-web only
 
+## Localization (i18n)
+
+- Stack: **i18next** + **react-i18next** under `src/libs/i18n/`
+- Locales: `en` (default) + `tr` — extend via `SUPPORTED_LOCALES` + `locales/<code>/*.json` + `resources.ts`
+- Namespaces: `common`, `home`, `markets`, `watchlist`, `pumps`, `detail` (add names in `config.ts`)
+- Persist: `swyngora.mobile.locale.v1` (localStorage on web)
+- Switcher: `components/molecules/language-switcher` (Home screen)
+- Init: `initI18n()` in `index.web.tsx` and test setup
+- Docs: `src/libs/i18n/README.md`
+
 ## Batch indicators (list RSI)
 
 - Endpoint: `POST /api/v1/market/indicators/batch` via `usePostIndicatorsBatchQuery` in `marketApi.ts`

@@ -1,0 +1,15 @@
+{
+  "title": "Coin detayı",
+  "pumpsSection": "Pump / dump olayları",
+  "stats": {
+    "open": "Açılış",
+    "high24h": "Yüksek 24s",
+    "low24h": "Düşük 24s",
+    "baseVol": "Baz hacim",
+    "quoteVol": "Kotasyon hacmi",
+    "trades": "İşlem",
+    "circSupply": "Dolaşımdaki arz",
+    "totalSupply": "Toplam arz",
+    "circMcap": "Dolaşım piyasa değeri"
+  }
+}

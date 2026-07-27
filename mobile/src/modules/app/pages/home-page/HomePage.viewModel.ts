@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import { HEALTH_POLL_MS } from '@/config/constants';
 import { env } from '@/config/env';
 import { useGetHealthQuery, rtkErrorMessage } from '@/libs/api';
@@ -10,6 +11,7 @@ import type { HomePageViewModel } from './HomePage.types';
 type TabNav = BottomTabNavigationProp<Record<string, object | undefined>>;
 
 export function useHomePageViewModel(): HomePageViewModel {
+  const { t } = useTranslation(['home', 'common']);
   const navigation = useNavigation();
   const active = useAppStateActive();
   const healthQuery = useGetHealthQuery(undefined, {
@@ -30,7 +32,7 @@ export function useHomePageViewModel(): HomePageViewModel {
   }, [navigation]);
 
   return {
-    title: 'Swyngora',
+    title: t('home:title'),
     apiBaseUrlLabel: env.apiBaseUrlLabel,
     healthStatus,
     healthDetail: healthQuery.data?.status ?? healthQuery.data?.time ?? null,

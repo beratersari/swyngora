@@ -48,8 +48,16 @@ src/
     markets/pages/     # markets-page, coin-detail-page, …
     watchlist/pages/   # watchlist-page (Favorites tab)
   libs/api/            # RTK Query + OpenAPI
+  libs/i18n/           # i18next catalogs (en/tr), useLocale, LanguageSwitcher
   styles/tokens/       # same brand hex as frontend
 ```
+
+## Localization
+
+- **i18next** + **react-i18next**; languages **en** + **tr** (extensible)
+- Catalogs: `src/libs/i18n/locales/<lng>/{common,home,markets,watchlist,pumps,detail}.json`
+- Switch language on **Home** via Language chips (persisted in localStorage)
+- Add a locale: new folder + register in `resources.ts` + `SUPPORTED_LOCALES` (see `libs/i18n/README.md`)
 
 See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 

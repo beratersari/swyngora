@@ -1,0 +1,40 @@
+{
+  "appName": "Swyngora",
+  "nav": {
+    "home": "Home",
+    "markets": "Markets",
+    "pumps": "Pumps",
+    "favorites": "Favorites",
+    "pumpsA11y": "Pumps radar"
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "tr": "Türkçe"
+  },
+  "actions": {
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "cancel": "Cancel",
+    "apply": "Apply",
+    "openMarkets": "Open Markets",
+    "retryIndicators": "Retry indicators"
+  },
+  "status": {
+    "loading": "Loading…",
+    "checking": "Checking…",
+    "ok": "OK",
+    "error": "Error",
+    "pollingActive": "active",
+    "pollingPaused": "paused (background)",
+    "liveRefreshPaused": "live refresh paused"
+  },
+  "disclaimer": {
+    "indicators": "RSI/EMA are informational only — not financial advice.",
+    "pumps": "Informational only — not financial advice. Mechanical threshold matching, not a trade signal."
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again.",
+    "network": "Could not reach the API. Is the backend running?"
+  }
+}

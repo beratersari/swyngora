@@ -1,0 +1,15 @@
+{
+  "title": "Coin detail",
+  "pumpsSection": "Pump / dump events",
+  "stats": {
+    "open": "Open",
+    "high24h": "High 24h",
+    "low24h": "Low 24h",
+    "baseVol": "Base vol",
+    "quoteVol": "Quote vol",
+    "trades": "Trades",
+    "circSupply": "Circ. supply",
+    "totalSupply": "Total supply",
+    "circMcap": "Circ. mcap"
+  }
+}

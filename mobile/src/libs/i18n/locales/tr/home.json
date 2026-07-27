@@ -1,0 +1,14 @@
+{
+  "title": "Swyngora",
+  "intro": "Mobil istemci (Chrome). Alt sekmeleri kullanın: Piyasalar · Pump · Favoriler.",
+  "features": "Özellikler",
+  "openMarkets": "Piyasalara git",
+  "openPumps": "Pump radarını aç",
+  "pumpsHint": "Pump, yüksek hacimli çiftlerde hızlı hareketleri tarar (birkaç saniye sürebilir).",
+  "apiBase": "API adresi",
+  "backendHealth": "Backend sağlığı",
+  "healthOk": "Tamam",
+  "healthOkDetail": "Tamam ({{detail}})",
+  "polling": "Yenileme {{state}}",
+  "retryHealth": "Sağlığı yenile"
+}

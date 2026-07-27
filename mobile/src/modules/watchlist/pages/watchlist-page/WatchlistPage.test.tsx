@@ -57,7 +57,7 @@ describe('WatchlistPage (Favorites)', () => {
           emptyMessage: null,
           countLabel: '1 favorite',
           pairs: [{ exchange: 'binance', symbol: 'BTCUSDT' }],
-          indicatorsError: 'Request failed (502)',
+          indicatorsError: 'Indicators: Request failed (502)',
           indicatorsDisclaimer: 'RSI/EMA are informational only — not financial advice.',
         }}
       />,

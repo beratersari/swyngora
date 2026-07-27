@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { ExchangeChips } from '@/components/organisms/exchange-chips';
 import { MarketsList } from '@/components/organisms/markets-list';
@@ -9,6 +10,7 @@ import { useMarketsPageViewModel } from './MarketsPage.viewModel';
 import { styles } from './MarketsPage.styles';
 
 function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
+  const { t } = useTranslation(['markets', 'common']);
   const header = (
     <View style={styles.headerBlock}>
       <ExchangeChips
@@ -29,13 +31,13 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
       />
       {vm.filterSummary ? (
         <Text variant="caption" color="steel" style={styles.hint}>
-          Active: {vm.filterSummary}
+          {t('markets:activeFilters', { summary: vm.filterSummary })}
         </Text>
       ) : null}
       {vm.summaryLabel ? (
         <Text variant="caption" color="secondary" style={styles.summary}>
           {vm.summaryLabel}
-          {vm.isPollingPaused ? ' · live refresh paused' : ''}
+          {vm.isPollingPaused ? ` · ${t('common:status.liveRefreshPaused')}` : ''}
         </Text>
       ) : null}
       {vm.detailHint ? (
@@ -50,7 +52,7 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
       ) : null}
       {vm.indicatorsError ? (
         <Text variant="caption" color="error" style={styles.hint}>
-          Indicators: {vm.indicatorsError}
+          {vm.indicatorsError}
         </Text>
       ) : null}
       {vm.indicatorsDisclaimer ? (

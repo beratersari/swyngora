@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useTranslation } from 'react-i18next';
 import {
   useAppStateActive,
   useMultiExchangeBatchIndicators,
@@ -19,6 +20,7 @@ import type { WatchlistPageViewModel } from './WatchlistPage.types';
 type TabNav = BottomTabNavigationProp<Record<string, object | undefined>>;
 
 export function useWatchlistPageViewModel(): WatchlistPageViewModel {
+  const { t } = useTranslation(['watchlist', 'common']);
   const navigation =
     useNavigation<NativeStackNavigationProp<WatchlistStackParamList>>();
   const watchlist = useWatchlist();
@@ -78,14 +80,14 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
 
   const emptyMessage =
     watchlist.isReady && watchlist.items.length === 0 && !watchlist.error
-      ? 'No favorites yet — open Markets and tap ★ on a pair'
+      ? t('watchlist:empty')
       : null;
 
   return {
-    title: 'Favorites',
+    title: t('watchlist:title'),
     countLabel:
       watchlist.count > 0
-        ? `${watchlist.count} favorite${watchlist.count === 1 ? '' : 's'}`
+        ? t('watchlist:count', { count: watchlist.count })
         : null,
     isLoading: !watchlist.isReady,
     isRefreshing: false,
@@ -93,10 +95,15 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
     errorMessage: watchlist.error,
     emptyMessage,
     actionError: watchlist.actionError,
-    indicatorsError: batch.errorMessage,
+    indicatorsError: batch.errorMessage
+      ? t('watchlist:indicatorsPrefix', { message: batch.errorMessage })
+      : null,
     indicatorsDisclaimer:
       batchPairs.length > 0
-        ? (batch.disclaimer ?? BATCH_INDICATORS_DISCLAIMER)
+        ? (batch.disclaimer ??
+          t('common:disclaimer.indicators', {
+            defaultValue: BATCH_INDICATORS_DISCLAIMER,
+          }))
         : null,
     pairs,
     onRetry,

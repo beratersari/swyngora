@@ -1,4 +1,5 @@
 import { FlatList, RefreshControl, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/button';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
@@ -68,12 +69,13 @@ function EnrichedWatchlistRow({
 }
 
 function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
+  const { t } = useTranslation(['watchlist', 'common']);
   const header = (
     <View style={styles.headerBlock}>
       {vm.countLabel ? (
         <Text variant="caption" color="secondary">
           {vm.countLabel}
-          {vm.isPollingPaused ? ' · live refresh paused' : ''}
+          {vm.isPollingPaused ? ` · ${t('common:status.liveRefreshPaused')}` : ''}
         </Text>
       ) : null}
       {vm.actionError ? (
@@ -84,9 +86,13 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
       {vm.indicatorsError ? (
         <View style={styles.hint}>
           <Text variant="caption" color="error">
-            Indicators: {vm.indicatorsError}
+            {vm.indicatorsError}
           </Text>
-          <Button label="Retry indicators" variant="secondary" onPress={vm.onRetry} />
+          <Button
+            label={t('common:actions.retryIndicators')}
+            variant="secondary"
+            onPress={vm.onRetry}
+          />
         </View>
       ) : null}
       {vm.indicatorsDisclaimer ? (
@@ -95,7 +101,11 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
         </Text>
       ) : null}
       {vm.emptyMessage ? (
-        <Button label="Open Markets" variant="secondary" onPress={vm.onOpenMarkets} />
+        <Button
+          label={t('watchlist:openMarkets')}
+          variant="secondary"
+          onPress={vm.onOpenMarkets}
+        />
       ) : null}
     </View>
   );
@@ -131,7 +141,7 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
               </>
             ) : (
               <Text variant="body" color="secondary">
-                {vm.emptyMessage ?? 'No watched pairs yet'}
+                {vm.emptyMessage ?? t('watchlist:emptyList')}
               </Text>
             )}
           </View>
