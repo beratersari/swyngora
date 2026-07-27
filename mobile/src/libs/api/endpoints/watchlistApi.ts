@@ -20,9 +20,26 @@ export type ReplaceWatchlistArg = {
   items: { exchange?: string; symbol: string; note?: string }[];
 };
 
-function withClientIdQuery(extra?: Record<string, string>): Record<string, string> {
+export function withClientIdQuery(extra?: Record<string, string>): Record<string, string> {
   const clientId = getOrCreateClientId();
   return { clientId, ...(extra ?? {}) };
+}
+
+
+export function buildAddWatchlistBody(arg: AddWatchlistItemArg) {
+  return {
+    clientId: getOrCreateClientId(),
+    exchange: arg.exchange ?? 'binance',
+    symbol: arg.symbol,
+    ...(arg.note ? { note: arg.note } : {}),
+  };
+}
+
+export function buildReplaceWatchlistBody(arg: ReplaceWatchlistArg) {
+  return {
+    clientId: getOrCreateClientId(),
+    items: arg.items,
+  };
 }
 
 export const watchlistApi = baseApi.injectEndpoints({
@@ -42,12 +59,7 @@ export const watchlistApi = baseApi.injectEndpoints({
       query: (arg) => ({
         url: '/api/v1/watchlist/items',
         method: 'POST',
-        body: {
-          clientId: getOrCreateClientId(),
-          exchange: arg.exchange ?? 'binance',
-          symbol: arg.symbol,
-          ...(arg.note ? { note: arg.note } : {}),
-        },
+        body: buildAddWatchlistBody(arg),
       }),
       invalidatesTags: [{ type: 'Watchlist', id: 'LIST' }],
     }),
@@ -68,10 +80,7 @@ export const watchlistApi = baseApi.injectEndpoints({
       query: (arg) => ({
         url: '/api/v1/watchlist',
         method: 'PUT',
-        body: {
-          clientId: getOrCreateClientId(),
-          items: arg.items,
-        },
+        body: buildReplaceWatchlistBody(arg),
       }),
       invalidatesTags: [{ type: 'Watchlist', id: 'LIST' }],
     }),

@@ -67,14 +67,46 @@ export function compactParams<T extends Record<string, unknown>>(
   return out;
 }
 
+
+export function transformExchangesResponse(raw: {
+  exchanges?: string[];
+  default?: string;
+}): ExchangesResponse {
+  return {
+    exchanges: raw.exchanges ?? [],
+    default: raw.default ?? 'binance',
+  };
+}
+
+export function transformProductTagsResponse(
+  raw: { exchange?: string; tags?: string[] },
+  arg?: { exchange?: MarketExchange } | void,
+): ProductTagsResponse {
+  return {
+    exchange:
+      raw.exchange ??
+      (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
+    tags: raw.tags ?? [],
+  };
+}
+
+export function transformIntervalsResponse(
+  raw: { exchange?: string; intervals?: string[] },
+  arg?: IntervalsQuery | void,
+): IntervalsResponse {
+  return {
+    exchange:
+      raw.exchange ??
+      (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
+    intervals: raw.intervals ?? [],
+  };
+}
+
 export const marketApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     listExchanges: build.query<ExchangesResponse, void>({
       query: () => '/api/v1/market/exchanges',
-      transformResponse: (raw: { exchanges?: string[]; default?: string }): ExchangesResponse => ({
-        exchanges: raw.exchanges ?? [],
-        default: raw.default ?? 'binance',
-      }),
+      transformResponse: transformExchangesResponse,
       providesTags: ['Exchange'],
     }),
 
@@ -85,16 +117,7 @@ export const marketApi = baseApi.injectEndpoints({
           exchange: arg && typeof arg === 'object' && 'exchange' in arg ? arg.exchange : undefined,
         }),
       }),
-      transformResponse: (
-        raw: { exchange?: string; tags?: string[] },
-        _meta,
-        arg,
-      ): ProductTagsResponse => ({
-        exchange:
-          raw.exchange ??
-          (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
-        tags: raw.tags ?? [],
-      }),
+      transformResponse: (raw, _meta, arg) => transformProductTagsResponse(raw, arg),
       providesTags: (_r, _e, arg) => [
         {
           type: 'ProductTag' as const,
@@ -116,16 +139,7 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/intervals',
         params: compactParams({ ...(arg ?? {}) }),
       }),
-      transformResponse: (
-        raw: { exchange?: string; intervals?: string[] },
-        _meta,
-        arg,
-      ): IntervalsResponse => ({
-        exchange:
-          raw.exchange ??
-          (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
-        intervals: raw.intervals ?? [],
-      }),
+      transformResponse: (raw, _meta, arg) => transformIntervalsResponse(raw, arg),
       providesTags: (_r, _e, arg) => [
         {
           type: 'Interval' as const,
