@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
+import { StarButton } from '@/components/molecules/StarButton';
 import type { CoinDetailHeaderProps } from './CoinDetailHeader.types';
 import { styles } from './CoinDetailHeader.styles';
 
@@ -12,14 +13,27 @@ export function CoinDetailHeader({
   changeTone,
   isLoading,
   onBack,
+  watched,
+  onStarPress,
 }: CoinDetailHeaderProps) {
   return (
     <View style={styles.card}>
-      <Pressable onPress={onBack} accessibilityRole="button">
-        <Text variant="caption" color="steel">
-          ← Markets
-        </Text>
-      </Pressable>
+      <View style={styles.topBar}>
+        <Pressable onPress={onBack} accessibilityRole="button">
+          <Text variant="caption" color="steel">
+            ← Back
+          </Text>
+        </Pressable>
+        {onStarPress != null ? (
+          <StarButton
+            watched={Boolean(watched)}
+            onPress={onStarPress}
+            accessibilityLabel={
+              watched ? `Remove ${symbol} from favorites` : `Add ${symbol} to favorites`
+            }
+          />
+        ) : null}
+      </View>
       <View style={styles.top}>
         <View style={styles.left}>
           {isLoading ? (

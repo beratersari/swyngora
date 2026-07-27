@@ -38,10 +38,16 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
     emptyMessage: null,
     summaryLabel: 'Showing 1 of 1',
     detailHint: null,
+    actionError: null,
+    favoritesOnly: false,
+    favoritesCount: 0,
+    onToggleFavoritesOnly: vi.fn(),
     onLoadMore: vi.fn(),
     onRetry: vi.fn(),
     onRefresh: vi.fn(),
     onPressRow: vi.fn(),
+    isWatched: () => false,
+    onStarPress: vi.fn(),
     ...overrides,
   };
 }

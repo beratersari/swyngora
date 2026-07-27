@@ -23,7 +23,15 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           changeTone={vm.changeTone}
           isLoading={vm.headerLoading}
           onBack={vm.onBack}
+          watched={vm.watched}
+          onStarPress={vm.onStarPress}
         />
+
+        {vm.actionError ? (
+          <Text variant="caption" color="error">
+            {vm.actionError}
+          </Text>
+        ) : null}
 
         <CoinDetailStats
           items={vm.statsItems}

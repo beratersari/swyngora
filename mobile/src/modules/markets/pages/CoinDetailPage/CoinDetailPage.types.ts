@@ -9,6 +9,9 @@ export type CoinDetailPageViewModel = {
   changePercentLabel: string;
   changeTone: 'success' | 'error' | 'secondary';
   headerLoading: boolean;
+  watched: boolean;
+  onStarPress: () => void;
+  actionError: string | null;
 
   statsItems: { label: string; value: string }[];
   statsLoading: boolean;

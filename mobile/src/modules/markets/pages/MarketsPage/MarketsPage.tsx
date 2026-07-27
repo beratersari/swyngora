@@ -23,6 +23,9 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
         isSearchDebouncing={vm.isSearchDebouncing}
         activeFilterCount={vm.activeFilterCount}
         onOpenFilters={vm.onOpenFilters}
+        favoritesOnly={vm.favoritesOnly}
+        onToggleFavoritesOnly={vm.onToggleFavoritesOnly}
+        favoritesCount={vm.favoritesCount}
       />
       {vm.filterSummary ? (
         <Text variant="caption" color="steel" style={styles.hint}>
@@ -38,6 +41,11 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
       {vm.detailHint ? (
         <Text variant="caption" color="steel" style={styles.hint}>
           {vm.detailHint}
+        </Text>
+      ) : null}
+      {vm.actionError ? (
+        <Text variant="caption" color="error" style={styles.hint}>
+          {vm.actionError}
         </Text>
       ) : null}
     </View>
@@ -58,6 +66,8 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
         ListHeaderComponent={header}
         refreshing={vm.isRefreshing}
         onRefresh={vm.onRefresh}
+        isWatched={vm.isWatched}
+        onStarPress={vm.onStarPress}
       />
     </ScreenTemplate>
   );

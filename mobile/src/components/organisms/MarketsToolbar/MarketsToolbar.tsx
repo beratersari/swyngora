@@ -10,6 +10,9 @@ export function MarketsToolbar({
   isSearchDebouncing = false,
   activeFilterCount,
   onOpenFilters,
+  favoritesOnly = false,
+  onToggleFavoritesOnly,
+  favoritesCount = 0,
 }: MarketsToolbarProps) {
   const hasFilters = activeFilterCount > 0;
   return (
@@ -34,6 +37,25 @@ export function MarketsToolbar({
           </Text>
         </Pressable>
       </View>
+      {onToggleFavoritesOnly ? (
+        <View style={styles.row}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected: favoritesOnly }}
+            accessibilityLabel={
+              favoritesOnly ? 'Show all markets' : 'Show favorites only'
+            }
+            onPress={onToggleFavoritesOnly}
+            style={[styles.favBtn, favoritesOnly && styles.favBtnActive]}
+          >
+            <Text variant="label" color={favoritesOnly ? 'cream' : 'secondary'}>
+              {favoritesOnly
+                ? `★ Favorites only (${favoritesCount})`
+                : `☆ Favorites${favoritesCount > 0 ? ` (${favoritesCount})` : ''}`}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
       {isSearchDebouncing ? (
         <Text variant="caption" color="steel">
           Searching…

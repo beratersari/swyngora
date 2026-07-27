@@ -10,6 +10,11 @@ export const styles = StyleSheet.create({
     padding: spacing[4],
     gap: spacing[2],
   },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',

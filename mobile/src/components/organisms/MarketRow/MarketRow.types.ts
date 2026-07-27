@@ -12,4 +12,7 @@ export type MarketRowViewModel = {
 export type MarketRowProps = {
   row: MarketRowViewModel;
   onPress?: (symbol: string) => void;
+  /** When set, shows star control */
+  watched?: boolean;
+  onStarPress?: (symbol: string) => void;
 };

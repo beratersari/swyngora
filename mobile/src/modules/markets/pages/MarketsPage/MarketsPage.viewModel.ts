@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// favorites filter is client-side over loaded rows
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
@@ -10,6 +11,7 @@ import {
 import { useAppStateActive, useDebouncedValue } from '@/libs/hooks';
 import { toSpotListQuery } from '@/libs/utils';
 import { useMarketsContext } from '../../context';
+import { useWatchlist } from '@/modules/watchlist';
 import { MarketsScreens, type MarketsStackParamList } from '../../navigation';
 import {
   DEFAULT_LIMIT,
@@ -44,6 +46,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   const navigation =
     useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
   const markets = useMarketsContext();
+  const watchlist = useWatchlist();
   const active = useAppStateActive();
   const focused = useIsFocused();
 
@@ -63,6 +66,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   const [offset, setOffset] = useState(0);
   const [rows, setRows] = useState<MarketRowViewModel[]>([]);
   const [total, setTotal] = useState(0);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
 
   // Reset pagination when filter revision changes
   useEffect(() => {
@@ -198,6 +202,63 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   const filterSummary =
     filterSummaryParts.length > 0 ? filterSummaryParts.join(' · ') : null;
 
+  const isWatched = useCallback(
+    (symbol: string) => watchlist.isWatched(markets.exchange, symbol),
+    [watchlist, markets.exchange],
+  );
+
+  const onStarPress = useCallback(
+    (symbol: string) => {
+      void watchlist.toggle(markets.exchange, symbol);
+    },
+    [watchlist, markets.exchange],
+  );
+
+  const onToggleFavoritesOnly = useCallback(() => {
+    setFavoritesOnly((v) => !v);
+  }, []);
+
+  /** Favorites for the active exchange (badge + filter). */
+  const favoritesOnExchange = useMemo(
+    () =>
+      watchlist.items.filter(
+        (i) => i.exchange.toLowerCase() === String(markets.exchange).toLowerCase(),
+      ),
+    [watchlist.items, markets.exchange],
+  );
+
+  const displayRows = useMemo(() => {
+    if (!favoritesOnly) return rows;
+    // Always surface every favorite for this exchange (not only loaded spot pages)
+    const bySym = new Map(rows.map((r) => [r.symbol.toUpperCase(), r]));
+    return favoritesOnExchange.map((f) => {
+      const existing = bySym.get(f.symbol.toUpperCase());
+      if (existing) return existing;
+      return {
+        id: `${f.exchange}|${f.symbol}`,
+        symbol: f.symbol,
+        lastPriceLabel: '—',
+        changePercentLabel: '—',
+        changeTone: 'secondary' as const,
+        quoteVolumeLabel: '—',
+        marketCapLabel: '—',
+        tagsLabel: 'Favorite',
+      };
+    });
+  }, [favoritesOnly, rows, favoritesOnExchange]);
+
+  const favEmpty =
+    favoritesOnly && !errorMessage && !isLoading && displayRows.length === 0
+      ? 'No favorites on this exchange yet — tap ★ on a row'
+      : null;
+
+  const displayEmpty = favEmpty ?? emptyMessage;
+  const displaySummary = favoritesOnly
+    ? displayRows.length > 0
+      ? `Favorites: ${displayRows.length} shown`
+      : null
+    : summaryLabel;
+
   return {
     title: 'Markets',
     exchanges,
@@ -213,21 +274,30 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     filterSummary,
     onOpenFilters,
 
-    rows,
-    total,
-    hasMore,
+    favoritesOnly,
+    favoritesCount: favoritesOnExchange.length,
+    onToggleFavoritesOnly,
+
+    rows: displayRows,
+    total: favoritesOnly ? displayRows.length : total,
+    hasMore: favoritesOnly ? false : hasMore,
     isLoading,
-    isLoadingMore,
+    isLoadingMore: favoritesOnly ? false : isLoadingMore,
     isRefreshing,
     isPollingPaused: !pollingEnabled,
     errorMessage,
-    emptyMessage,
-    summaryLabel,
-    detailHint: null,
+    emptyMessage: displayEmpty,
+    summaryLabel: displaySummary,
+    detailHint: favoritesOnly
+      ? 'Showing favorites only — tap ★ again to remove'
+      : null,
+    actionError: watchlist.actionError,
 
     onLoadMore,
     onRetry,
     onRefresh,
     onPressRow,
+    isWatched,
+    onStarPress,
   };
 }

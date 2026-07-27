@@ -6,4 +6,6 @@ export type CoinDetailHeaderProps = {
   changeTone: 'success' | 'error' | 'secondary';
   isLoading?: boolean;
   onBack: () => void;
+  watched?: boolean;
+  onStarPress?: () => void;
 };

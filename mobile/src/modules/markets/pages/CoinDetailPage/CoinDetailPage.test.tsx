@@ -11,6 +11,9 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     changePercentLabel: '+1.50%',
     changeTone: 'success',
     headerLoading: false,
+    watched: false,
+    onStarPress: vi.fn(),
+    actionError: null,
     statsItems: [
       { label: 'Open', value: '66,000' },
       { label: 'High 24h', value: '68,000' },
@@ -47,7 +50,7 @@ describe('CoinDetailPage', () => {
     expect(screen.getAllByText('BTCUSDT').length).toBeGreaterThan(0);
     expect(screen.getByText('67,000')).toBeTruthy();
     expect(screen.getByText('Open')).toBeTruthy();
-    fireEvent.click(screen.getByText('← Markets'));
+    fireEvent.click(screen.getByText('← Back'));
     expect(onBack).toHaveBeenCalled();
   });
 

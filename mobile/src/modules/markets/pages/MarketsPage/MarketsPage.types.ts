@@ -17,6 +17,10 @@ export type MarketsPageViewModel = {
   filterSummary: string | null;
   onOpenFilters: () => void;
 
+  favoritesOnly: boolean;
+  favoritesCount: number;
+  onToggleFavoritesOnly: () => void;
+
   rows: MarketRowViewModel[];
   total: number;
   hasMore: boolean;
@@ -28,11 +32,14 @@ export type MarketsPageViewModel = {
   emptyMessage: string | null;
   summaryLabel: string | null;
   detailHint: string | null;
+  actionError: string | null;
 
   onLoadMore: () => void;
   onRetry: () => void;
   onRefresh: () => void;
   onPressRow: (symbol: string) => void;
+  isWatched: (symbol: string) => boolean;
+  onStarPress: (symbol: string) => void;
 };
 
 export type MarketsPageProps = {

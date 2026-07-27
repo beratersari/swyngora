@@ -29,6 +29,7 @@ import {
   sortedEmaKeys,
 } from '@/libs/utils';
 import type { MarketsStackParamList } from '../../navigation';
+import { useOptionalWatchlist } from '@/modules/watchlist';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
   DEFAULT_DETAIL_INTERVAL,
@@ -45,6 +46,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   const route = useRoute<RouteProp<MarketsStackParamList, 'CoinDetail'>>();
   const active = useAppStateActive();
   const focused = useIsFocused();
+  const watchlist = useOptionalWatchlist();
   const polling = active && focused;
 
   const rawExchange = route.params?.exchange ?? 'binance';
@@ -211,6 +213,11 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     setInterval(next);
   }, []);
 
+  const watched = watchlist?.isWatched(exchange, symbol) ?? false;
+  const onStarPress = useCallback(() => {
+    void watchlist?.toggle(exchange, symbol);
+  }, [watchlist, exchange, symbol]);
+
   return {
     symbol,
     exchange,
@@ -218,6 +225,9 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     changePercentLabel: formatChangePercent(ticker?.priceChangePercent),
     changeTone: changeTone(ticker?.priceChangePercent),
     headerLoading: tickerQuery.isLoading,
+    watched,
+    onStarPress,
+    actionError: watchlist?.actionError ?? null,
 
     statsItems,
     statsLoading: tickerQuery.isLoading || supplyQuery.isLoading,

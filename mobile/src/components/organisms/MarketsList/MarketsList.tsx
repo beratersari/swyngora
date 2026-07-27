@@ -30,6 +30,8 @@ export function MarketsList({
   ListHeaderComponent,
   refreshing = false,
   onRefresh,
+  isWatched,
+  onStarPress,
 }: MarketsListProps) {
   if (isLoading && rows.length === 0) {
     return (
@@ -50,7 +52,14 @@ export function MarketsList({
       contentContainerStyle={styles.content}
       data={rows}
       keyExtractor={(item) => item.id}
-      renderItem={({ item }) => <MarketRow row={item} onPress={onPressRow} />}
+      renderItem={({ item }) => (
+        <MarketRow
+          row={item}
+          onPress={onPressRow}
+          watched={isWatched?.(item.symbol)}
+          onStarPress={onStarPress}
+        />
+      )}
       ListHeaderComponent={ListHeaderComponent}
       ListFooterComponent={
         isLoadingMore ? (

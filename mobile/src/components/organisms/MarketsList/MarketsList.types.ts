@@ -14,4 +14,6 @@ export type MarketsListProps = {
   ListHeaderComponent?: ReactElement | null;
   refreshing?: boolean;
   onRefresh?: () => void;
+  isWatched?: (symbol: string) => boolean;
+  onStarPress?: (symbol: string) => void;
 };

@@ -25,4 +25,16 @@ export const styles = StyleSheet.create({
     borderColor: semanticColors.border.focus,
     backgroundColor: semanticColors.action.primary,
   },
+  favBtn: {
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: semanticColors.border.default,
+    backgroundColor: semanticColors.bg.muted,
+  },
+  favBtnActive: {
+    borderColor: '#F5C542',
+    backgroundColor: 'rgba(245, 197, 66, 0.15)',
+  },
 });

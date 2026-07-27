@@ -4,4 +4,8 @@ export type MarketsToolbarProps = {
   isSearchDebouncing?: boolean;
   activeFilterCount: number;
   onOpenFilters: () => void;
+  /** Show only favorited pairs (client-side) */
+  favoritesOnly?: boolean;
+  onToggleFavoritesOnly?: () => void;
+  favoritesCount?: number;
 };
