@@ -31,8 +31,13 @@ import {
   useGetIndicatorsQuery,
 } from '@/libs/api';
 
-// pumps (OpenAPI-backed; optional UI later)
-import { useGetPumpEventsQuery, useScanPumpEventsQuery } from '@/libs/api';
+// pumps / watchlist
+import {
+  useGetPumpEventsQuery,
+  useScanPumpEventsQuery,
+  useGetWatchlistQuery,
+  useAddWatchlistItemMutation,
+} from '@/libs/api';
 ```
 
 ### Cache tags

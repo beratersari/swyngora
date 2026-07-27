@@ -1,7 +1,9 @@
 {
   "appName": "Swyngora",
   "nav": {
-    "markets": "Piyasalar"
+    "markets": "Piyasalar",
+    "watchlist": "İzleme",
+    "pumps": "Pump"
   },
   "footer": {
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"

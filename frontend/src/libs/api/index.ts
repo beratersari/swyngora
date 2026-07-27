@@ -16,6 +16,7 @@ export {
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useScanPumpEventsQuery,
+  usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
 export type {
   SpotMarket,
@@ -42,6 +43,12 @@ export type {
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
 } from './endpoints/marketApi';
+export {
+  useGetWatchlistQuery,
+  useAddWatchlistItemMutation,
+  useRemoveWatchlistItemMutation,
+} from './endpoints/watchlistApi';
+export type { Watchlist, WatchlistItem } from './endpoints/watchlistApi';
 export {
   rtkErrorMessage,
   getRtkErrorStatus,

@@ -12,6 +12,8 @@ describe('App shell navigation', () => {
     expect(screen.getByRole('navigation')).toBeInTheDocument();
     const links = screen.getAllByRole('link');
     expect(links.some((a) => a.getAttribute('href') === '/markets')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/watchlist')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/pumps')).toBe(true);
     expect(screen.getByTestId('routes')).toBeInTheDocument();
   });
 });

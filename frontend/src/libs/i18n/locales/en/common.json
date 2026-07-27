@@ -1,7 +1,9 @@
 {
   "appName": "Swyngora",
   "nav": {
-    "markets": "Markets"
+    "markets": "Markets",
+    "watchlist": "Watchlist",
+    "pumps": "Pumps"
   },
   "footer": {
     "disclaimer": "{{appName}} · informational market data · not financial advice"

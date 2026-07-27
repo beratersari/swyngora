@@ -7,4 +7,7 @@ export type DetailHeaderProps = WithLoadingProps & {
   priceChangePercent?: string | number | null;
   assetName?: string | null;
   backTo?: string;
+  watched?: boolean;
+  onToggleWatch?: () => void;
+  watchLoading?: boolean;
 };

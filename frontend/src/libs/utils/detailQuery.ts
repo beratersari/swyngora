@@ -7,6 +7,10 @@ import {
 
 export type DetailUrlState = {
   interval: string;
+  /**
+   * @deprecated Bars are no longer URL-controlled; progressive load owns limit.
+   * Still parsed if present for old links, then ignored by the page.
+   */
   limit: number;
 };
 
@@ -16,7 +20,8 @@ export const DEFAULT_DETAIL_STATE: DetailUrlState = {
 };
 
 const LIMIT_MIN = 20;
-const LIMIT_MAX = 500;
+/** Align with API max used by progressive chart loading. */
+const LIMIT_MAX = 1000;
 
 export function parseExchangeParam(raw: string | undefined): SupportedExchange {
   const v = (raw ?? '').toLowerCase();
@@ -87,13 +92,13 @@ export function parseDetailSearchParams(params: URLSearchParams): DetailUrlState
   return { interval, limit };
 }
 
-export function detailStateToSearchParams(state: DetailUrlState): URLSearchParams {
+/** Serialize detail URL state. Limit is not written (scroll-loads history in-app). */
+export function detailStateToSearchParams(
+  state: Pick<DetailUrlState, 'interval'> & Partial<Pick<DetailUrlState, 'limit'>>,
+): URLSearchParams {
   const p = new URLSearchParams();
   if (state.interval && state.interval !== DEFAULT_DETAIL_STATE.interval) {
     p.set('interval', state.interval);
-  }
-  if (state.limit !== DEFAULT_DETAIL_STATE.limit) {
-    p.set('limit', String(state.limit));
   }
   return p;
 }

@@ -1,0 +1,16 @@
+{
+  "title": "İzleme listesi",
+  "subtitle": "İzlediğiniz çiftler için canlı fiyat, 24s değişim, hacim ve mcap. Bu tarayıcı istemcisine kaydedilir.",
+  "emptyTitle": "Henüz çift yok",
+  "emptyHint": "Piyasalar tablosunda yıldızlayın veya coin detayından ekleyin.",
+  "remove": "Kaldır",
+  "open": "{{symbol}} aç",
+  "exchange": "Borsa",
+  "symbol": "Çift",
+  "added": "Eklendi",
+  "add": "İzleme listesine ekle",
+  "addedToast": "İzleme listesine eklendi",
+  "removedToast": "İzleme listesinden çıkarıldı",
+  "loadFailed": "İzleme listesi yüklenemedi",
+  "resource": "izleme listesi"
+}

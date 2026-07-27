@@ -35,8 +35,8 @@ export const env = {
     return base === '' ? '(same origin / Vite proxy)' : base;
   })(),
   /**
-   * Optional client id for watchlist (`X-Client-Id`). Empty when unset.
-   * Set `VITE_CLIENT_ID` to enable header injection via baseApi prepareHeaders.
+   * Optional fixed client id for watchlist (`X-Client-Id`).
+   * When empty, runtime generates/persists one via getOrCreateClientId().
    */
   clientId: resolveClientId(),
 } as const;

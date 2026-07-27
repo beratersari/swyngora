@@ -26,14 +26,28 @@
     "symbol": "Symbol",
     "last": "Last",
     "change24h": "24h %",
+    "changeAbs": "24h Δ",
+    "high": "High",
+    "low": "Low",
+    "baseVol": "Base vol",
     "quoteVol": "Quote vol",
     "circMcap": "Circ. mcap",
+    "totalMcap": "Total mcap",
+    "maxMcap": "Max mcap",
     "trades": "Trades",
     "tags": "Tags",
     "loadErrorTitle": "Could not load markets",
     "emptyTitle": "No markets match filters",
     "emptyHint": "Try another exchange, quote, tag, or search",
     "openDetail": "Open {{symbol}} detail"
+  },
+  "columns": {
+    "button": "Columns",
+    "aria": "Choose and reorder metric columns",
+    "reset": "Reset",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "dragHint": "Drag rows or use arrows to change column order. Order is saved for this browser."
   },
   "errors": {
     "mcapWarmupTitle": "Market-cap data may be warming up",

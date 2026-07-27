@@ -1,4 +1,5 @@
-import { Tag } from 'antd';
+import { Button, Tag } from 'antd';
+import { StarFilled, StarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { changeTone, formatChangePercent, formatPrice, formatSymbolDisplay } from '@/libs/utils';
@@ -20,8 +21,11 @@ export function DetailHeader({
   assetName,
   backTo = '/markets',
   isLoading = false,
+  watched = false,
+  onToggleWatch,
+  watchLoading = false,
 }: DetailHeaderProps) {
-  const { t } = useTranslation('detail');
+  const { t } = useTranslation(['detail', 'watchlist']);
 
   return (
     <HeaderCard>
@@ -33,6 +37,16 @@ export function DetailHeader({
               {formatSymbolDisplay(symbol)}
             </Text>
             <Tag color="processing">{exchange}</Tag>
+            {onToggleWatch ? (
+              <Button
+                type="text"
+                size="small"
+                loading={watchLoading}
+                icon={watched ? <StarFilled /> : <StarOutlined />}
+                onClick={onToggleWatch}
+                aria-label={watched ? t('watchlist:remove') : t('watchlist:add')}
+              />
+            ) : null}
             {assetName ? (
               <Text variant="body" color="secondary">
                 {assetName}

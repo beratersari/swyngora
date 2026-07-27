@@ -5,13 +5,19 @@
   "missingSymbolBody": "No trading pair in the URL.",
   "chart": {
     "title": "Price chart",
-    "meta": "{{interval}} · {{bars}} bars · EMA overlay optional",
+    "meta": "{{interval}} · {{bars}} bars loaded · pan left for older history",
     "interval": "Interval",
     "bars": "Bars",
     "loadErrorTitle": "Could not load candles",
     "intervalsErrorTitle": "Could not load intervals",
     "emptyTitle": "No candle data",
-    "emptyBody": "Empty series for this interval."
+    "emptyBody": "Empty series for this interval.",
+    "pumpThreshold": "Pump threshold",
+    "pumpPresets": "Preset",
+    "pumpMarkers": "Pump markers",
+    "pumpOn": "On",
+    "pumpOff": "Off",
+    "pumpHint": "Markers when |return| ≥ threshold (informational only)"
   },
   "stats": {
     "open": "Open",

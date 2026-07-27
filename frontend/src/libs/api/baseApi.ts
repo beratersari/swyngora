@@ -1,15 +1,13 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { env } from '@/config/env';
+import { getOrCreateClientId } from '@/libs/utils/clientId';
 
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
     baseUrl: env.apiBaseUrl,
     prepareHeaders: (headers) => {
-      // Watchlist OpenAPI uses X-Client-Id; optional for local/dev.
-      if (env.clientId) {
-        headers.set('X-Client-Id', env.clientId);
-      }
+      headers.set('X-Client-Id', getOrCreateClientId());
       return headers;
     },
   }),

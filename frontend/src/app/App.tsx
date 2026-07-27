@@ -32,6 +32,16 @@ function AppShell() {
               {t('nav.markets')}
             </Text>
           </NavLink>
+          <NavLink to="/watchlist">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.watchlist')}
+            </Text>
+          </NavLink>
+          <NavLink to="/pumps">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.pumps')}
+            </Text>
+          </NavLink>
         </HeaderNav>
         <HeaderSpacer />
         <LanguageSwitcher />

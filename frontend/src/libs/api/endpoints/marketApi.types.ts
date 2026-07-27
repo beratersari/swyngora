@@ -57,19 +57,50 @@ export type ProductTagsResponse = {
   tags: string[];
 };
 
+/** Single-bar pump event from GET /pumps (and nested under scan hits). */
+export type PumpEventDto = {
+  index?: number;
+  openTime?: string;
+  closeTime?: string;
+  startPrice?: number;
+  endPrice?: number;
+  returnPct?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+  volumeRatio?: number;
+  mode?: string;
+  windowBars?: number;
+};
+
 export type PumpEventsResponse = {
   symbol?: string;
   exchange?: string;
   interval?: string;
   eventCount?: number;
-  events?: Record<string, unknown>[];
+  events?: PumpEventDto[];
   note?: string;
+  barsAnalyzed?: number;
+  minReturnPct?: number;
+  mode?: string;
+  direction?: string;
+};
+
+/** One symbol row from GET /pumps/scan — return/vol/time live on events[]. */
+export type PumpScanHitDto = {
+  symbol?: string;
+  exchange?: string;
+  interval?: string;
+  bestReturnPct?: number;
+  events?: PumpEventDto[];
 };
 
 export type ScanPumpEventsResponse = {
   exchange?: string;
   interval?: string;
-  scanned?: number;
-  results?: Record<string, unknown>[];
+  lookbackHours?: number;
+  minReturnPct?: number;
+  hitCount?: number;
+  hits?: PumpScanHitDto[];
   note?: string;
 };

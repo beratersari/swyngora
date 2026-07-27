@@ -9,6 +9,12 @@ vi.mock('@/components/pages/MarketsPage', () => ({
 vi.mock('@/components/pages/CoinDetailPage', () => ({
   CoinDetailPage: () => <div data-testid="detail-page">Detail</div>,
 }));
+vi.mock('@/components/pages/WatchlistPage', () => ({
+  WatchlistPage: () => <div data-testid="watchlist-page">Watchlist</div>,
+}));
+vi.mock('@/components/pages/PumpsPage', () => ({
+  PumpsPage: () => <div data-testid="pumps-page">Pumps</div>,
+}));
 
 describe('AppRoutes', () => {
   it('redirects / to /markets', () => {
@@ -26,6 +32,13 @@ describe('AppRoutes', () => {
       routerEntries: ['/markets/binance/BTCUSDT'],
     });
     expect(screen.getByTestId('detail-page')).toBeInTheDocument();
+  });
+
+  it('renders watchlist and pumps pages', () => {
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/watchlist'] });
+    expect(screen.getByTestId('watchlist-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/pumps'] });
+    expect(screen.getByTestId('pumps-page')).toBeInTheDocument();
   });
 
   it('redirects unknown paths to markets', () => {

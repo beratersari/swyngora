@@ -178,6 +178,33 @@ export const marketApi = baseApi.injectEndpoints({
         },
       ],
     }),
+
+    postIndicatorsBatch: build.mutation<
+      {
+        exchange?: string;
+        interval?: string;
+        items?: {
+          symbol?: string;
+          rsi?: number | null;
+          ema?: Record<string, number>;
+          error?: string;
+        }[];
+        note?: string;
+      },
+      {
+        exchange?: string;
+        interval?: string;
+        symbols: string[];
+        rsiPeriod?: number;
+        emaPeriods?: string;
+      }
+    >({
+      query: (body) => ({
+        url: '/api/v1/market/indicators/batch',
+        method: 'POST',
+        body,
+      }),
+    }),
   }),
 });
 
@@ -193,4 +220,5 @@ export const {
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useScanPumpEventsQuery,
+  usePostIndicatorsBatchMutation,
 } = marketApi;

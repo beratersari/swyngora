@@ -6,6 +6,10 @@ const remove = vi.fn();
 const setData = vi.fn();
 const applyOptions = vi.fn();
 const fitContent = vi.fn();
+const subscribeVisibleLogicalRangeChange = vi.fn();
+const unsubscribeVisibleLogicalRangeChange = vi.fn();
+const getVisibleLogicalRange = vi.fn(() => null);
+const setVisibleLogicalRange = vi.fn();
 const addSeries = vi.fn(() => ({
   setData,
   applyOptions,
@@ -17,9 +21,17 @@ vi.mock('lightweight-charts', () => ({
     addSeries,
     applyOptions,
     remove,
-    timeScale: () => ({ fitContent, applyOptions: vi.fn() }),
+    timeScale: () => ({
+      fitContent,
+      applyOptions: vi.fn(),
+      subscribeVisibleLogicalRangeChange,
+      unsubscribeVisibleLogicalRangeChange,
+      getVisibleLogicalRange,
+      setVisibleLogicalRange,
+    }),
     priceScale: () => ({ applyOptions: vi.fn() }),
   })),
+  createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn(), markers: () => [] })),
   CandlestickSeries: 'CandlestickSeries',
   LineSeries: 'LineSeries',
   CrosshairMode: { Normal: 0, Magnet: 1 },
@@ -45,5 +57,6 @@ describe('CandleChartHost', () => {
       />,
     );
     expect(screen.getByTestId('candle-chart-host')).toBeInTheDocument();
+    expect(subscribeVisibleLogicalRangeChange).toHaveBeenCalled();
   });
 });

@@ -1,19 +1,15 @@
-import type { KeyboardEvent } from 'react';
-import { Alert, Button, Empty, Space, Tag } from 'antd';
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { useMemo } from 'react';
+import { Alert, Button, Empty, Space } from 'antd';
+import { StarFilled, StarOutlined } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { SpotMarket, SpotSortField } from '@/libs/api';
-import {
-  changeTone,
-  formatChangePercent,
-  formatCompactUsd,
-  formatPrice,
-  formatSymbolDisplay,
-  formatTradeCount,
-} from '@/libs/utils';
+import { SpotMetricValue } from '@/components/molecules/SpotMetricValue';
+import { defaultMetricIds, formatSymbolDisplay, resolveMetricDefs } from '@/libs/utils';
 import { COLUMN_SORT, PAGE_SIZE_OPTIONS, SORT_DIRECTIONS } from './MarketsTable.constants';
 import {
   getResultsRange,
@@ -28,7 +24,6 @@ import {
   StyledTable,
   TableCard,
   TableSkeletonWrap,
-  TagList,
 } from './MarketsTable.styles';
 import type { MarketsTableProps } from './MarketsTable.types';
 
@@ -65,8 +60,16 @@ export function MarketsTable({
   onPageChange,
   onRetry,
   onRowOpen,
+  watchedKeys,
+  onToggleWatch,
+  metrics: metricsProp,
 }: MarketsTableProps) {
-  const { t } = useTranslation(['markets', 'common']);
+  const { t } = useTranslation(['markets', 'common', 'watchlist']);
+
+  const metrics = useMemo(
+    () => metricsProp ?? resolveMetricDefs('markets', defaultMetricIds('markets')),
+    [metricsProp],
+  );
 
   if (errorMessage) {
     return (
@@ -104,7 +107,36 @@ export function MarketsTable({
   // Server-side sort only (sorter: true). Never allow Ant Design's third-click
   // "clear sort" — that sets order=null while our URL still holds a sort, which
   // fights controlled sortOrder and makes the header feel unstable.
+  // Metric columns come from the shared catalog + column picker selection.
   const columns: ColumnsType<SpotMarket> = [
+    ...(onToggleWatch
+      ? [
+          {
+            title: '',
+            key: 'watch',
+            width: 44,
+            render: (_: unknown, row: SpotMarket) => {
+              const sym = row.symbol ?? '';
+              const key = `${exchange}:${sym}`;
+              const watched = watchedKeys?.has(key) ?? false;
+              return (
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={
+                    watched ? t('watchlist:remove') : t('watchlist:add')
+                  }
+                  icon={watched ? <StarFilled /> : <StarOutlined />}
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation();
+                    if (sym) onToggleWatch(sym, watched);
+                  }}
+                />
+              );
+            },
+          } as ColumnsType<SpotMarket>[number],
+        ]
+      : []),
     {
       title: t('markets:table.symbol'),
       dataIndex: 'symbol',
@@ -119,97 +151,25 @@ export function MarketsTable({
         </Text>
       ),
     },
-    {
-      title: t('markets:table.last'),
-      dataIndex: 'lastPrice',
-      key: 'lastPrice',
-      align: 'right',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'lastPrice'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color="primary">
-          {formatPrice(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.change24h'),
-      dataIndex: 'priceChangePercent',
-      key: 'priceChangePercent',
-      align: 'right',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'priceChangePercent'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color={changeTone(v)}>
-          {formatChangePercent(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.quoteVol'),
-      dataIndex: 'quoteVolume',
-      key: 'quoteVolume',
-      align: 'right',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'quoteVolume'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatCompactUsd(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.circMcap'),
-      dataIndex: 'marketCapCirculating',
-      key: 'marketCapCirculating',
-      align: 'right',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'marketCapCirculating'),
-      render: (v: number | null | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatCompactUsd(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.trades'),
-      dataIndex: 'tradeCount',
-      key: 'tradeCount',
-      align: 'right',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'tradeCount'),
-      render: (v: number | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatTradeCount(v, exchange)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.tags'),
-      dataIndex: 'tags',
-      key: 'tags',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'tags'),
-      render: (tags: string[] | undefined) =>
-        tags && tags.length > 0 ? (
-          <TagList>
-            {tags.slice(0, 4).map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-            {tags.length > 4 ? <Tag>+{tags.length - 4}</Tag> : null}
-          </TagList>
-        ) : (
-          <Text variant="caption" color="secondary">
-            —
-          </Text>
+    ...metrics.map((def) => {
+      const sortable = Boolean(def.sortField);
+      return {
+        title: t(`markets:table.${def.labelKey}`),
+        dataIndex: def.field,
+        key: def.id,
+        align: def.align ?? 'right',
+        ...(sortable
+          ? {
+              sorter: true as const,
+              sortDirections: [...SORT_DIRECTIONS],
+              sortOrder: toAntdSortOrder(order, sort === def.sortField),
+            }
+          : {}),
+        render: (_: unknown, row: SpotMarket) => (
+          <SpotMetricValue metric={def} spot={row} exchange={exchange} />
         ),
-    },
+      } as ColumnsType<SpotMarket>[number];
+    }),
   ];
 
   const range = getResultsRange(offset, limit, total);

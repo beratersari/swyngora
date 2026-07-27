@@ -9,15 +9,19 @@ import { MarketsTable } from '@/components/organisms/MarketsTable';
 import { getResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
 import {
   rtkErrorMessage,
+  useAddWatchlistItemMutation,
+  useGetWatchlistQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
+  useRemoveWatchlistItemMutation,
   type MarketExchange,
   type SpotMarket,
   type SpotSortField,
   type SpotSortOrder,
 } from '@/libs/api';
-import { useDebouncedValue, useDocumentVisible } from '@/libs/hooks';
+import { MetricColumnPicker } from '@/components/molecules/MetricColumnPicker';
+import { useDebouncedValue, useDocumentVisible, useSpotMetricColumns } from '@/libs/hooks';
 import {
   defaultQuoteForExchange,
   marketsStateToSearchParams,
@@ -44,6 +48,7 @@ export function MarketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const visible = useDocumentVisible();
+  const metricColumns = useSpotMetricColumns('markets');
 
   const state = useMemo(() => parseMarketsSearchParams(searchParams), [searchParams]);
   const [qInput, setQInput] = useState(state.q);
@@ -85,11 +90,22 @@ export function MarketsPage() {
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
   const spotArgs = useMemo(() => toSpotListQuery(state, debouncedQ), [state, debouncedQ]);
+  const watchlistQuery = useGetWatchlistQuery();
+  const [addWatch] = useAddWatchlistItemMutation();
+  const [removeWatch] = useRemoveWatchlistItemMutation();
 
   const spotQuery = useListSpotMarketsQuery(spotArgs, {
     pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
     refetchOnFocus: true,
   });
+
+  const watchedKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of watchlistQuery.data?.items ?? []) {
+      if (it.exchange && it.symbol) set.add(`${it.exchange}:${it.symbol}`);
+    }
+    return set;
+  }, [watchlistQuery.data?.items]);
 
   const exchanges = exchangesQuery.data?.exchanges?.length
     ? exchangesQuery.data.exchanges
@@ -196,6 +212,21 @@ export function MarketsPage() {
         onQChange={(q) => setQInput(q)}
         onQuoteChange={(quote) => patchState({ quote, offset: 0 })}
         onTagChange={(tag) => patchState({ tag, offset: 0 })}
+        trailing={
+          <MetricColumnPicker
+            available={metricColumns.available}
+            value={metricColumns.metricIds}
+            onChange={metricColumns.setMetricIds}
+            onReset={metricColumns.resetToDefaults}
+            getLabel={(key) => t(`markets:table.${key}`)}
+            ariaLabel={t('markets:columns.aria')}
+            buttonLabel={t('markets:columns.button')}
+            resetLabel={t('markets:columns.reset')}
+            moveUpLabel={t('markets:columns.moveUp')}
+            moveDownLabel={t('markets:columns.moveDown')}
+            dragHintLabel={t('markets:columns.dragHint')}
+          />
+        }
       />
 
       <MetaRow>
@@ -277,6 +308,15 @@ export function MarketsPage() {
         onRowOpen={(symbol) =>
           navigate(`/markets/${encodeURIComponent(state.exchange)}/${encodeURIComponent(symbol)}`)
         }
+        watchedKeys={watchedKeys}
+        onToggleWatch={(symbol, watched) => {
+          if (watched) {
+            void removeWatch({ exchange: state.exchange, symbol });
+          } else {
+            void addWatch({ exchange: state.exchange, symbol });
+          }
+        }}
+        metrics={metricColumns.metrics}
       />
     </PageStack>
   );

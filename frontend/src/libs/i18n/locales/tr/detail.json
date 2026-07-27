@@ -5,13 +5,19 @@
   "missingSymbolBody": "URL'de işlem çifti yok.",
   "chart": {
     "title": "Fiyat grafiği",
-    "meta": "{{interval}} · {{bars}} bar · EMA katmanı isteğe bağlı",
+    "meta": "{{interval}} · {{bars}} bar yüklü · geçmiş için sola kaydırın",
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",
     "intervalsErrorTitle": "Aralık listesi yüklenemedi",
     "emptyTitle": "Mum verisi yok",
-    "emptyBody": "Bu aralık için seri boş."
+    "emptyBody": "Bu aralık için seri boş.",
+    "pumpThreshold": "Pump eşiği",
+    "pumpPresets": "Hazır",
+    "pumpMarkers": "Pump işaretleri",
+    "pumpOn": "Açık",
+    "pumpOff": "Kapalı",
+    "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)"
   },
   "stats": {
     "open": "Açılış",

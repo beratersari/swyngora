@@ -12,9 +12,7 @@ describe('DetailChartToolbar', () => {
       <DetailChartToolbar
         intervals={['1h', '4h']}
         interval="1h"
-        limit={100}
         onIntervalChange={() => undefined}
-        onLimitChange={() => undefined}
         onRefresh={onRefresh}
       />,
     );
@@ -27,13 +25,29 @@ describe('DetailChartToolbar', () => {
       <DetailChartToolbar
         intervals={['1h']}
         interval="1h"
-        limit={100}
         onIntervalChange={() => undefined}
-        onLimitChange={() => undefined}
         onRefresh={() => undefined}
         isFetching
       />,
     );
     expect(screen.getByText(/updating/i)).toBeInTheDocument();
+  });
+
+  it('exposes a single pump threshold select (not dual inputs)', () => {
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        pumpThresholdPct={5}
+        onPumpThresholdChange={() => undefined}
+        showPumpMarkers
+        onShowPumpMarkersChange={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/pump threshold|pump eşiği/i)).toBeInTheDocument();
+    // One switch for markers, no spinbutton number field
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.getByRole('switch')).toBeInTheDocument();
   });
 });

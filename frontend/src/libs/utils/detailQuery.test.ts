@@ -41,8 +41,8 @@ describe('detail search params', () => {
     const s = parseDetailSearchParams(new URLSearchParams('interval=4h&limit=200'));
     expect(s).toEqual({ interval: '4h', limit: 200 });
     expect(parseDetailSearchParams(new URLSearchParams('limit=5')).limit).toBe(100);
-    expect(parseDetailSearchParams(new URLSearchParams('limit=501')).limit).toBe(100);
-    // Floor then clamp: 500.1 → 500 (not default)
+    // API-aligned max 1000; out of range falls back to default
+    expect(parseDetailSearchParams(new URLSearchParams('limit=1001')).limit).toBe(100);
     expect(parseDetailSearchParams(new URLSearchParams('limit=500.1')).limit).toBe(500);
     expect(parseDetailSearchParams(new URLSearchParams('limit=19.9')).limit).toBe(100);
     expect(parseDetailSearchParams(new URLSearchParams('limit=abc')).limit).toBe(100);
@@ -51,12 +51,12 @@ describe('detail search params', () => {
     );
   });
 
-  it('omits defaults when serializing', () => {
+  it('serializes interval only (limit is progressive / not in URL)', () => {
     const p = detailStateToSearchParams({ interval: '1h', limit: 100 });
     expect(p.toString()).toBe('');
     const p2 = detailStateToSearchParams({ interval: '4h', limit: 200 });
     expect(p2.get('interval')).toBe('4h');
-    expect(p2.get('limit')).toBe('200');
+    expect(p2.get('limit')).toBeNull();
   });
 });
 

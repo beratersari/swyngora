@@ -1,19 +1,21 @@
-import { Button, Select, Tag } from 'antd';
+import { Button, Select, Switch, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { CANDLE_LIMIT_OPTIONS } from './DetailChartToolbar.constants';
-import { Field, ToolbarRow } from './DetailChartToolbar.styles';
+import { DETAIL_PUMP_THRESHOLD_OPTIONS } from '@/config/constants';
+import { Field, InlineField, ToolbarRow } from './DetailChartToolbar.styles';
 import type { DetailChartToolbarProps } from './DetailChartToolbar.types';
 
 export function DetailChartToolbar({
   intervals,
   interval,
-  limit,
   intervalsLoading,
   onIntervalChange,
-  onLimitChange,
   onRefresh,
   isFetching,
+  pumpThresholdPct,
+  onPumpThresholdChange,
+  showPumpMarkers = true,
+  onShowPumpMarkersChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -22,6 +24,13 @@ export function DetailChartToolbar({
       ? intervals.map((iv) => ({ value: iv, label: iv }))
       : [{ value: interval, label: interval }];
 
+  // Keep current value in the list even if it was set outside presets (defensive).
+  const thresholdOptions = Array.from(
+    new Set([...DETAIL_PUMP_THRESHOLD_OPTIONS, pumpThresholdPct].filter((n): n is number => n != null)),
+  )
+    .sort((a, b) => a - b)
+    .map((n) => ({ value: n, label: `±${n}%` }));
+
   return (
     <ToolbarRow>
       <Field>
@@ -29,28 +38,49 @@ export function DetailChartToolbar({
           {t('detail:chart.interval')}
         </Text>
         <Select
+          size="small"
           value={interval}
           options={options}
           loading={intervalsLoading}
           onChange={onIntervalChange}
-          style={{ minWidth: 120 }}
+          style={{ minWidth: 100 }}
           showSearch
           optionFilterProp="label"
         />
       </Field>
-      <Field>
-        <Text variant="caption" color="secondary">
-          {t('detail:chart.bars')}
-        </Text>
-        <Select
-          value={limit}
-          options={CANDLE_LIMIT_OPTIONS.map((n) => ({ value: n, label: String(n) }))}
-          onChange={onLimitChange}
-          style={{ minWidth: 100 }}
-        />
-      </Field>
+
+      {onPumpThresholdChange != null && pumpThresholdPct != null ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.pumpThreshold')}
+          </Text>
+          <Select
+            size="small"
+            value={pumpThresholdPct}
+            options={thresholdOptions}
+            onChange={(v) => onPumpThresholdChange(Number(v))}
+            style={{ minWidth: 88 }}
+            aria-label={t('detail:chart.pumpThreshold')}
+          />
+        </Field>
+      ) : null}
+
+      {onShowPumpMarkersChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.pumpMarkers')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showPumpMarkers}
+            onChange={onShowPumpMarkersChange}
+            aria-label={t('detail:chart.pumpMarkers')}
+          />
+        </InlineField>
+      ) : null}
+
       {onRefresh ? (
-        <Button onClick={onRefresh} loading={isFetching}>
+        <Button size="small" onClick={onRefresh} loading={isFetching}>
           {t('common:actions.refresh')}
         </Button>
       ) : null}

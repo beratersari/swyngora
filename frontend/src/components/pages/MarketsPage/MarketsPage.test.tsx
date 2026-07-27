@@ -15,6 +15,9 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useListExchangesQuery: () => mockExchanges(),
     useListProductTagsQuery: () => mockTags(),
     useListSpotMarketsQuery: () => mockSpot(),
+    useGetWatchlistQuery: () => ({ data: { items: [] }, isLoading: false }),
+    useAddWatchlistItemMutation: () => [vi.fn(), { isLoading: false }],
+    useRemoveWatchlistItemMutation: () => [vi.fn(), { isLoading: false }],
   };
 });
 

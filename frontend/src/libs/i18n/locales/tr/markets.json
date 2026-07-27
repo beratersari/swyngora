@@ -26,14 +26,28 @@
     "symbol": "Sembol",
     "last": "Son",
     "change24h": "24s %",
+    "changeAbs": "24s Δ",
+    "high": "Yüksek",
+    "low": "Düşük",
+    "baseVol": "Base hacim",
     "quoteVol": "Quote hacim",
     "circMcap": "Dolaşım mcap",
+    "totalMcap": "Toplam mcap",
+    "maxMcap": "Maks mcap",
     "trades": "İşlem",
     "tags": "Etiketler",
     "loadErrorTitle": "Piyasalar yüklenemedi",
     "emptyTitle": "Filtrelere uyan piyasa yok",
     "emptyHint": "Başka borsa, quote, etiket veya arama deneyin",
     "openDetail": "{{symbol}} detayını aç"
+  },
+  "columns": {
+    "button": "Sütunlar",
+    "aria": "Metrik sütunlarını seç ve sırala",
+    "reset": "Sıfırla",
+    "moveUp": "Yukarı taşı",
+    "moveDown": "Aşağı taşı",
+    "dragHint": "Sıralamak için satırları sürükleyin veya okları kullanın. Sıra bu tarayıcıda saklanır."
   },
   "errors": {
     "mcapWarmupTitle": "Piyasa değeri verisi ısınıyor olabilir",

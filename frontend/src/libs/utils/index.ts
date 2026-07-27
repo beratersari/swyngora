@@ -1,6 +1,7 @@
 export { formatPrice } from './formatPrice';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
+export { getOrCreateClientId } from './clientId';
 export { apiCandlesToChart } from './candles';
 export type { ApiCandle, ChartCandle } from './candles';
 export {
@@ -40,3 +41,15 @@ export {
   marketsBackPath,
 } from './detailQuery';
 export type { DetailUrlState } from './detailQuery';
+export {
+  SPOT_METRICS,
+  getSpotMetric,
+  metricsForSurface,
+  defaultMetricIds,
+  columnSortMap,
+  normalizeMetricIds,
+  loadMetricIds,
+  saveMetricIds,
+  resolveMetricDefs,
+} from './spotMetrics';
+export type { SpotMetricId, SpotMetricDef, SpotMetricSurface, SpotMetricFormat } from './spotMetrics';

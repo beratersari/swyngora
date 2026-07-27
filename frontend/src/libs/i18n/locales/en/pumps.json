@@ -1,0 +1,23 @@
+{
+  "title": "Pump scanner",
+  "subtitle": "Mechanical threshold scan over top-volume spot symbols. Informational only — not financial advice.",
+  "scan": "Scan",
+  "exchange": "Exchange",
+  "quote": "Quote",
+  "interval": "Interval",
+  "hits": "{{count}} hits",
+  "emptyTitle": "No hits",
+  "emptyHint": "Try a lower min return, different interval, or another quote.",
+  "symbol": "Pair",
+  "returnPct": "Return %",
+  "volumeRatio": "Vol ratio",
+  "time": "Time",
+  "openDetail": "Open {{symbol}}",
+  "note": "Informational only — not financial advice.",
+  "loadFailed": "Scan failed",
+  "resource": "pump scan",
+  "chartEvents": "Pump events on chart",
+  "markerUp": "pump",
+  "markerDown": "dump",
+  "events": "Events"
+}

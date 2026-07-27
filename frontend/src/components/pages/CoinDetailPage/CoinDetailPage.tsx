@@ -1,21 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'antd';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
-import type { CandleChartOverlay } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
+import type {
+  CandleChartMarker,
+  CandleChartOverlay,
+} from '@/components/molecules/CandleChartHost/CandleChartHost.types';
 import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
   rtkErrorMessage,
+  useAddWatchlistItemMutation,
   useGetCandlesQuery,
   useGetIndicatorsQuery,
+  useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetTicker24hQuery,
+  useGetWatchlistQuery,
   useListIntervalsQuery,
+  useRemoveWatchlistItemMutation,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import {
@@ -31,15 +38,21 @@ import {
   toSupplyAsset,
 } from '@/libs/utils';
 import {
+  DEFAULT_DETAIL_CANDLE_LIMIT,
+  DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
   DEFAULT_DETAIL_SERIES_POLL_MS,
   DEFAULT_DETAIL_TICKER_POLL_MS,
   DEFAULT_EMA_PERIODS,
   DEFAULT_RSI_PERIOD,
+  DETAIL_CANDLE_MAX_LIMIT,
+  DETAIL_CANDLE_PAGE_SIZE,
 } from '@/config/constants';
+import { palette } from '@/styles/tokens';
 import { ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
 
 /**
  * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis.
+ * Candle history grows automatically as the user pans left on the chart.
  * Route: /markets/:exchange/:symbol
  */
 export function CoinDetailPage() {
@@ -53,6 +66,13 @@ export function CoinDetailPage() {
   const urlState = useMemo(() => parseDetailSearchParams(searchParams), [searchParams]);
 
   const [showEma, setShowEma] = useState(true);
+  /** Progressive bar count — not a user control; grows when chart scrolls left. */
+  const [candleLimit, setCandleLimit] = useState(DEFAULT_DETAIL_CANDLE_LIMIT);
+  /** |return %| threshold for pump/dump markers on the chart. */
+  const [pumpThresholdPct, setPumpThresholdPct] = useState(
+    DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
+  );
+  const [showPumpMarkers, setShowPumpMarkers] = useState(true);
 
   const skip = !symbol;
   const intervalsQuery = useListIntervalsQuery({ exchange });
@@ -66,20 +86,45 @@ export function CoinDetailPage() {
     !intervalsQuery.isError;
 
   const interval = resolveInterval(urlState.interval, supportedIntervals);
-  const limit = urlState.limit;
+
+  // New pair / interval → start from a fresh window of bars.
+  useEffect(() => {
+    setCandleLimit(DEFAULT_DETAIL_CANDLE_LIMIT);
+  }, [exchange, symbol, interval]);
 
   useEffect(() => {
     if (!supportedIntervals?.length) return;
     if (supportedIntervals.includes(urlState.interval)) return;
     const next = resolveInterval(urlState.interval, supportedIntervals);
-    setSearchParams(
-      detailStateToSearchParams({ interval: next, limit: urlState.limit }),
-      { replace: true },
-    );
-  }, [supportedIntervals, urlState.interval, urlState.limit, setSearchParams]);
+    setSearchParams(detailStateToSearchParams({ interval: next }), { replace: true });
+  }, [supportedIntervals, urlState.interval, setSearchParams]);
 
   const skipSeries = skip || waitingForIntervals;
   const supplyAsset = toSupplyAsset(symbol);
+  const seriesKey = `${exchange}|${symbol}|${interval}`;
+
+  const watchlistQuery = useGetWatchlistQuery();
+  const [addWatch, addWatchState] = useAddWatchlistItemMutation();
+  const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
+  const watched = Boolean(
+    watchlistQuery.data?.items?.some(
+      (it) => it.exchange === exchange && it.symbol === symbol,
+    ),
+  );
+
+  // Use the same bar count as the chart so event times land inside loaded candles.
+  const pumpsQuery = useGetPumpEventsQuery(
+    {
+      exchange,
+      symbol,
+      interval,
+      limit: candleLimit,
+      minReturnPct: pumpThresholdPct,
+      direction: 'both',
+      maxEvents: 40,
+    },
+    { skip: skipSeries || !showPumpMarkers },
+  );
 
   const tickerQuery = useGetTicker24hQuery(
     { exchange, symbol },
@@ -100,7 +145,7 @@ export function CoinDetailPage() {
   );
 
   const candlesQuery = useGetCandlesQuery(
-    { exchange, symbol, interval, limit },
+    { exchange, symbol, interval, limit: candleLimit },
     {
       skip: skipSeries,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
@@ -113,7 +158,7 @@ export function CoinDetailPage() {
       exchange,
       symbol,
       interval,
-      limit,
+      limit: candleLimit,
       rsiPeriod: DEFAULT_RSI_PERIOD,
       emaPeriods: DEFAULT_EMA_PERIODS,
     },
@@ -145,6 +190,23 @@ export function CoinDetailPage() {
     );
   }, [candlesQuery.data?.candles]);
 
+  const returnedBars = candlesQuery.data?.candles?.length ?? 0;
+  // If we asked for N and got fewer, the venue has no older history in this window.
+  const hasMoreHistory =
+    candleLimit < DETAIL_CANDLE_MAX_LIMIT &&
+    returnedBars >= candleLimit &&
+    candlesQuery.isSuccess;
+
+  const isLoadingMore =
+    candlesQuery.isFetching && chartData.length > 0 && candleLimit > DEFAULT_DETAIL_CANDLE_LIMIT;
+
+  const onNeedMoreHistory = useCallback(() => {
+    setCandleLimit((prev) => {
+      if (prev >= DETAIL_CANDLE_MAX_LIMIT) return prev;
+      return Math.min(DETAIL_CANDLE_MAX_LIMIT, prev + DETAIL_CANDLE_PAGE_SIZE);
+    });
+  }, []);
+
   const indicatorPoints = indicatorsQuery.data?.points;
   const latestEma = indicatorsQuery.data?.latest?.ema;
   const overlays: CandleChartOverlay[] = useMemo(() => {
@@ -158,11 +220,36 @@ export function CoinDetailPage() {
     }));
   }, [showEma, latestEma, indicatorPoints, t]);
 
-  const patchUrl = (patch: Partial<{ interval: string; limit: number }>) => {
+  const chartMarkers: CandleChartMarker[] = useMemo(() => {
+    if (!showPumpMarkers) return [];
+    // API events have signed returnPct (no direction field on the DTO).
+    const events =
+      (pumpsQuery.data as { events?: { openTime?: string; returnPct?: number }[] } | undefined)
+        ?.events ?? [];
+    const out: CandleChartMarker[] = [];
+    for (const ev of events) {
+      if (!ev.openTime) continue;
+      const ms = Date.parse(ev.openTime);
+      if (!Number.isFinite(ms)) continue;
+      const ret = Number(ev.returnPct);
+      // Extra client filter if API returns near-threshold noise.
+      if (Number.isFinite(ret) && Math.abs(ret) < pumpThresholdPct) continue;
+      const up = !Number.isFinite(ret) || ret >= 0;
+      out.push({
+        time: Math.floor(ms / 1000),
+        position: up ? 'belowBar' : 'aboveBar',
+        color: up ? palette.mountainMeadow : '#E07A7A',
+        shape: up ? 'arrowUp' : 'arrowDown',
+        text: up ? `↑${Number.isFinite(ret) ? ret.toFixed(1) : ''}` : `↓${Number.isFinite(ret) ? Math.abs(ret).toFixed(1) : ''}`,
+      });
+    }
+    return out;
+  }, [pumpsQuery.data, showPumpMarkers, pumpThresholdPct]);
+
+  const patchUrl = (patch: Partial<{ interval: string }>) => {
     setSearchParams(
       detailStateToSearchParams({
         interval: patch.interval ?? interval,
-        limit: patch.limit ?? limit,
       }),
       { replace: true },
     );
@@ -192,8 +279,6 @@ export function CoinDetailPage() {
   }
 
   const headerLoading = tickerQuery.isLoading && !tickerQuery.data;
-  // Keep supply fields in loading state until supply resolves (do not treat
-  // "no maxSupply yet" as open/∞ while ticker alone has arrived).
   const statsLoading =
     (tickerQuery.isLoading && !tickerQuery.data) ||
     (supplyQuery.isLoading && !supplyQuery.data);
@@ -216,6 +301,15 @@ export function CoinDetailPage() {
         assetName={supplyQuery.data?.name}
         backTo={backTo}
         isLoading={headerLoading}
+        watched={watched}
+        watchLoading={addWatchState.isLoading || removeWatchState.isLoading}
+        onToggleWatch={() => {
+          if (watched) {
+            void removeWatch({ exchange, symbol });
+          } else {
+            void addWatch({ exchange, symbol });
+          }
+        }}
       />
 
       <DetailStats
@@ -248,19 +342,24 @@ export function CoinDetailPage() {
             {t('detail:chart.title')}
           </Text>
           <Text variant="caption" color="secondary">
-            {t('detail:chart.meta', { interval, bars: limit })}
+            {t('detail:chart.meta', {
+              interval,
+              bars: chartData.length || candleLimit,
+            })}
           </Text>
         </ChartTitleRow>
 
         <DetailChartToolbar
           intervals={supportedIntervals ?? []}
           interval={interval}
-          limit={limit}
           intervalsLoading={intervalsQuery.isLoading && !supportedIntervals?.length}
           onIntervalChange={(iv) => patchUrl({ interval: iv })}
-          onLimitChange={(n) => patchUrl({ limit: n })}
+          pumpThresholdPct={pumpThresholdPct}
+          onPumpThresholdChange={setPumpThresholdPct}
+          showPumpMarkers={showPumpMarkers}
+          onShowPumpMarkersChange={setShowPumpMarkers}
           onRefresh={refreshAll}
-          isFetching={seriesFetching}
+          isFetching={seriesFetching || (showPumpMarkers && pumpsQuery.isFetching)}
         />
 
         {intervalsQuery.isError && !supportedIntervals?.length ? (
@@ -305,7 +404,12 @@ export function CoinDetailPage() {
             <CandleChartHost
               data={chartData}
               overlays={overlays}
+              markers={chartMarkers}
               isLoading={seriesLoading || waitingForIntervals}
+              seriesKey={seriesKey}
+              isLoadingMore={isLoadingMore}
+              hasMoreHistory={hasMoreHistory}
+              onNeedMoreHistory={onNeedMoreHistory}
               height={360}
             />
           </>

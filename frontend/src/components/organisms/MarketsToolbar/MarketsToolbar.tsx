@@ -14,6 +14,7 @@ export function MarketsToolbar({
   onQChange,
   onQuoteChange,
   onTagChange,
+  trailing,
 }: MarketsToolbarProps) {
   const { t } = useTranslation('markets');
 
@@ -54,6 +55,7 @@ export function MarketsToolbar({
           placeholder={t('filters.tagPlaceholder')}
         />
       </FieldWrap>
+      {trailing ? <FieldWrap>{trailing}</FieldWrap> : null}
     </ToolbarRow>
   );
 }
