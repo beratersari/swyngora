@@ -10,12 +10,13 @@ export const SEARCH_DEBOUNCE_MS = 300;
 
 export const QUOTE_OPTIONS = ['USDT', 'USD', 'BTC', 'EUR'] as const;
 
-export const SORT_OPTIONS: { value: SpotSortField; label: string }[] = [
-  { value: 'quoteVolume', label: 'Quote vol' },
-  { value: 'priceChangePercent', label: '24h %' },
-  { value: 'lastPrice', label: 'Price' },
-  { value: 'marketCapCirculating', label: 'Mcap' },
-  { value: 'symbol', label: 'Symbol' },
+/** Sort field values — labels come from i18n `markets:sortFields.*`. */
+export const SORT_OPTIONS: { value: SpotSortField }[] = [
+  { value: 'quoteVolume' },
+  { value: 'priceChangePercent' },
+  { value: 'lastPrice' },
+  { value: 'marketCapCirculating' },
+  { value: 'symbol' },
 ];
 
 export const FALLBACK_EXCHANGES = ['binance', 'coinbase', 'bybit'];

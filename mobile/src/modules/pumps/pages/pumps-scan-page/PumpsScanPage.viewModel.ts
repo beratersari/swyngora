@@ -183,7 +183,7 @@ export function usePumpsScanPageViewModel(): PumpsScanPageViewModel {
     direction: filters.direction,
     directionOptions: PUMP_DIRECTION_OPTIONS.map((d) => ({
       value: d.value,
-      label: d.label,
+      label: t(`pumps:directions.${d.value}`),
     })),
     onSelectDirection,
 

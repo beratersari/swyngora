@@ -4,9 +4,15 @@
   "minReturn": "Min return",
   "direction": "Direction",
   "empty": "No pumps matched — try lower threshold or longer lookback",
+  "emptyList": "No pumps matched thresholds",
   "paused": "Refresh paused while app is in background",
   "events_one": "{{count}} event",
   "events_other": "{{count}} events",
   "hours": "{{hours}}h",
-  "threshold": "≥{{pct}}%"
+  "threshold": "≥{{pct}}%",
+  "directions": {
+    "up": "Up",
+    "down": "Down",
+    "both": "Both"
+  }
 }

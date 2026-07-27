@@ -16,6 +16,7 @@ import {
   useRemoveWatchlistItemMutation,
   useReplaceWatchlistMutation,
 } from '@/libs/api';
+import { i18n } from '@/libs/i18n';
 import {
   appStorage,
   getOrCreateClientId,
@@ -121,7 +122,7 @@ export function WatchlistProvider({ children }: { children: ReactNode }) {
       setActionError(null);
 
       if (!currently && isAtMaxItems(items, MAX_WATCHLIST_ITEMS)) {
-        setActionError(`Watchlist full (${MAX_WATCHLIST_ITEMS})`);
+        setActionError(i18n.t('watchlist:full', { max: MAX_WATCHLIST_ITEMS }));
         return;
       }
 

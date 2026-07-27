@@ -137,7 +137,7 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
                 <Text variant="body" color="error">
                   {vm.errorMessage}
                 </Text>
-                <Button label="Retry" onPress={vm.onRetry} />
+                <Button label={t('common:actions.retry')} onPress={vm.onRetry} />
               </>
             ) : (
               <Text variant="body" color="secondary">

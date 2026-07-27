@@ -18,7 +18,12 @@
     "cancel": "Cancel",
     "apply": "Apply",
     "openMarkets": "Open Markets",
-    "retryIndicators": "Retry indicators"
+    "retryIndicators": "Retry indicators",
+    "retryAll": "Retry all",
+    "back": "← Back",
+    "clearTags": "Clear tags",
+    "selectVisible": "Select visible",
+    "resetAllFilters": "Reset all filters"
   },
   "status": {
     "loading": "Loading…",
@@ -27,7 +32,9 @@
     "error": "Error",
     "pollingActive": "active",
     "pollingPaused": "paused (background)",
-    "liveRefreshPaused": "live refresh paused"
+    "liveRefreshPaused": "live refresh paused",
+    "searching": "Searching…",
+    "loadingMore": "Loading more…"
   },
   "disclaimer": {
     "indicators": "RSI/EMA are informational only — not financial advice.",
@@ -35,6 +42,14 @@
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
-    "network": "Could not reach the API. Is the backend running?"
+    "network": "Network error — is the backend running?",
+    "requestFailed": "Request failed",
+    "requestFailedStatus": "Request failed ({{status}})",
+    "failedToLoad": "Failed to load {{resource}}"
+  },
+  "a11y": {
+    "addFavorite": "Add {{symbol}} to favorites",
+    "removeFavorite": "Remove {{symbol}} from favorites",
+    "loadingMoreMarkets": "Loading more markets"
   }
 }

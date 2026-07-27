@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Platform, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { LineSeries, createChart, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
@@ -14,7 +15,9 @@ export function IndicatorRsiPane({
   errorMessage,
   height = 140,
 }: IndicatorRsiPaneProps) {
+  const { t } = useTranslation('detail');
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const rsiTitle = t('rsiTitle');
 
   useEffect(() => {
     if (Platform.OS !== 'web' || !hostRef.current || !data.length || isLoading) return;
@@ -36,7 +39,7 @@ export function IndicatorRsiPane({
     const series = chart.addSeries(LineSeries, {
       color: '#74F9BC',
       lineWidth: 2,
-      title: 'RSI',
+      title: rsiTitle,
     });
     series.setData(
       data.map((p) => ({
@@ -62,7 +65,7 @@ export function IndicatorRsiPane({
     });
     chart.timeScale().fitContent();
     return () => chart.remove();
-  }, [data, height, isLoading]);
+  }, [data, height, isLoading, rsiTitle]);
 
   const latestLabel =
     latestRsi !== null && Number.isFinite(latestRsi) ? latestRsi.toFixed(2) : '—';
@@ -70,7 +73,7 @@ export function IndicatorRsiPane({
   return (
     <View style={styles.card}>
       <Text variant="label" color="secondary">
-        RSI (14) · latest {latestLabel}
+        {t('rsiLatest', { value: latestLabel })}
       </Text>
       {isLoading && !data.length ? (
         <View style={styles.center}>
@@ -82,17 +85,17 @@ export function IndicatorRsiPane({
         </Text>
       ) : !data.length ? (
         <Text variant="caption" color="secondary">
-          No RSI data
+          {t('rsiEmpty')}
         </Text>
       ) : Platform.OS === 'web' ? (
         <div ref={hostRef} style={{ width: '100%', height }} />
       ) : (
         <Text variant="caption" color="secondary">
-          RSI chart requires web
+          {t('rsiWebOnly')}
         </Text>
       )}
       <Text variant="caption" color="steel">
-        Bands 30 / 70 are reference only (not trading signals).
+        {t('rsiBandsHint')}
       </Text>
     </View>
   );

@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
 import { StarButton } from '@/components/molecules/star-button';
@@ -16,12 +17,13 @@ export function CoinDetailHeader({
   watched,
   onStarPress,
 }: CoinDetailHeaderProps) {
+  const { t } = useTranslation('common');
   return (
     <View style={styles.card}>
       <View style={styles.topBar}>
         <Pressable onPress={onBack} accessibilityRole="button">
           <Text variant="caption" color="steel">
-            ← Back
+            {t('actions.back')}
           </Text>
         </Pressable>
         {onStarPress != null ? (
@@ -29,7 +31,9 @@ export function CoinDetailHeader({
             watched={Boolean(watched)}
             onPress={onStarPress}
             accessibilityLabel={
-              watched ? `Remove ${symbol} from favorites` : `Add ${symbol} to favorites`
+              watched
+                ? t('a11y.removeFavorite', { symbol })
+                : t('a11y.addFavorite', { symbol })
             }
           />
         ) : null}

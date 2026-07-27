@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
 import {
   rtkErrorMessage,
   useListProductTagsQuery,
@@ -23,6 +24,7 @@ import type { MarketsFilterPageViewModel } from './MarketsFilterPage.types';
 const TAG_SEARCH_DEBOUNCE_MS = 200;
 
 export function useMarketsFilterPageViewModel(): MarketsFilterPageViewModel {
+  const { t } = useTranslation(['markets', 'common']);
   const navigation = useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
   const markets = useMarketsContext();
   const tagsQuery = useListProductTagsQuery({ exchange: markets.exchange });
@@ -93,13 +95,16 @@ export function useMarketsFilterPageViewModel(): MarketsFilterPageViewModel {
   }, [navigation]);
 
   return {
-    title: 'Filters',
+    title: t('markets:filters'),
     quote,
     quoteOptions: [...QUOTE_OPTIONS],
     onQuoteChange,
     sort,
     order,
-    sortOptions: SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+    sortOptions: SORT_OPTIONS.map((o) => ({
+      value: o.value,
+      label: t(`markets:sortFields.${o.value}` as 'markets:sortFields.quoteVolume'),
+    })),
     onSortChange,
     onOrderChange,
     availableTags: visibleTags,

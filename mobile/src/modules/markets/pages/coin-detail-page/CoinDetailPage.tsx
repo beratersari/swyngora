@@ -1,4 +1,5 @@
 import { ScrollView, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/button';
 import { Text } from '@/components/atoms/text';
 import { CandleChart } from '@/components/organisms/candle-chart';
@@ -13,8 +14,9 @@ import { useCoinDetailPageViewModel } from './CoinDetailPage.viewModel';
 import { styles } from './CoinDetailPage.styles';
 
 function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
+  const { t } = useTranslation(['detail', 'common']);
   return (
-    <ScreenTemplate title={vm.symbol || 'Detail'}>
+    <ScreenTemplate title={vm.symbol || t('detail:title')}>
       <ScrollView contentContainerStyle={styles.stack}>
         <CoinDetailHeader
           symbol={vm.symbol}
@@ -51,7 +53,7 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
         />
 
         <Text variant="label" color="secondary">
-          Price (OHLCV)
+          {t('detail:priceOhlcv')}
         </Text>
         <CandleChart
           candles={vm.candles}
@@ -74,15 +76,17 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
         />
 
         <PumpEventList
+          title={t('detail:pumpsSection')}
           rows={vm.pumpEventRows}
           isLoading={vm.pumpEventsLoading}
           errorMessage={vm.pumpEventsError}
+          emptyMessage={t('detail:pumpEventsEmpty')}
           subtitle={vm.pumpEventsSubtitle}
           disclaimer={vm.pumpDisclaimer}
         />
 
         <View style={styles.retry}>
-          <Button label="Retry all" variant="secondary" onPress={vm.onRetry} />
+          <Button label={t('detail:retryAll')} variant="secondary" onPress={vm.onRetry} />
         </View>
       </ScrollView>
     </ScreenTemplate>

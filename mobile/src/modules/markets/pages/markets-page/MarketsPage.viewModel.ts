@@ -302,19 +302,14 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     if (batchArg.symbols.length > 0) void batchQuery.refetch();
   }, [onRetry, batchArg.symbols.length, batchQuery]);
 
-  const favoritesEmpty = favoritesEmptyMessage(
+  const localizedDisplayEmpty =
+    favoritesEmptyMessage(favoritesOnly, errorMessage, isLoading, displayRows.length) ??
+    emptyMessage;
+  const localizedDisplaySummary = favoritesSummaryLabel(
     favoritesOnly,
-    errorMessage,
-    isLoading,
     displayRows.length,
+    summaryLabel,
   );
-  const localizedDisplayEmpty = favoritesEmpty
-    ? t('markets:favoritesEmpty')
-    : emptyMessage;
-  const localizedDisplaySummary =
-    favoritesOnly && displayRows.length > 0
-      ? t('markets:favoritesSummary', { count: displayRows.length })
-      : favoritesSummaryLabel(favoritesOnly, displayRows.length, summaryLabel);
 
   return {
     title: t('markets:title'),

@@ -1,4 +1,5 @@
 import { FlatList, RefreshControl, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/button';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
@@ -19,6 +20,7 @@ export function WatchlistList({
   refreshing = false,
   onRefresh,
 }: WatchlistListProps) {
+  const { t } = useTranslation(['watchlist', 'common']);
   if (isLoading && rows.length === 0) {
     return (
       <View style={styles.list}>
@@ -49,11 +51,11 @@ export function WatchlistList({
               <Text variant="body" color="error">
                 {errorMessage}
               </Text>
-              <Button label="Retry" onPress={onRetry} />
+              <Button label={t('common:actions.retry')} onPress={onRetry} />
             </>
           ) : (
             <Text variant="body" color="secondary">
-              {emptyMessage ?? 'No watched pairs yet'}
+              {emptyMessage ?? t('watchlist:emptyList')}
             </Text>
           )}
         </View>

@@ -16,10 +16,11 @@ export const DEFAULT_PUMP_DETAIL_MAX_EVENTS = 10;
 
 export const PUMP_LOOKBACK_OPTIONS = [6, 12, 24, 48] as const;
 export const PUMP_THRESHOLD_OPTIONS = [5, 8, 10, 15, 20] as const;
+/** Values only — labels from i18n `pumps:directions.*`. */
 export const PUMP_DIRECTION_OPTIONS = [
-  { value: 'up', label: 'Up' },
-  { value: 'down', label: 'Down' },
-  { value: 'both', label: 'Both' },
+  { value: 'up' },
+  { value: 'down' },
+  { value: 'both' },
 ] as const;
 
 export const PUMP_DISCLAIMER =

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Platform } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import {
   CandlestickSeries,
   LineSeries,
@@ -24,8 +25,10 @@ export function CandleChart({
   height = 260,
   isLoading,
   errorMessage,
-  emptyMessage = 'No candle data',
+  emptyMessage,
 }: CandleChartProps) {
+  const { t } = useTranslation('detail');
+  const resolvedEmpty = emptyMessage ?? t('noCandleData');
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -150,7 +153,7 @@ export function CandleChart({
       <View style={styles.card}>
         <View style={styles.center}>
           <Text variant="body" color="secondary">
-            {emptyMessage}
+            {resolvedEmpty}
           </Text>
         </View>
       </View>
@@ -162,7 +165,7 @@ export function CandleChart({
       <View style={styles.card}>
         <View style={styles.center}>
           <Text variant="body" color="secondary">
-            Chart requires web runtime
+            {t('chartWebOnly')}
           </Text>
         </View>
       </View>

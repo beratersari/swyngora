@@ -1,4 +1,5 @@
 import { Pressable, ScrollView, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
 import { ChipGroup } from '@/components/molecules/chip-group';
@@ -26,11 +27,12 @@ export function MarketsFilterForm({
   onSelectAllVisible,
   onResetAll,
 }: MarketsFilterFormProps) {
+  const { t } = useTranslation(['markets', 'common']);
   return (
     <View style={styles.root}>
       <View style={styles.section}>
         <Text variant="label" color="secondary" style={styles.sectionTitle}>
-          Quote
+          {t('markets:quote')}
         </Text>
         <ChipGroup
           options={quoteOptions.map((q) => ({ value: q, label: q }))}
@@ -43,7 +45,7 @@ export function MarketsFilterForm({
 
       <View style={styles.section}>
         <Text variant="label" color="secondary" style={styles.sectionTitle}>
-          Sort
+          {t('markets:sort')}
         </Text>
         <View style={styles.actions}>
           <ChipGroup
@@ -57,7 +59,7 @@ export function MarketsFilterForm({
             options={[
               {
                 value: order,
-                label: order === 'desc' ? 'Desc' : 'Asc',
+                label: order === 'desc' ? t('markets:orderDesc') : t('markets:orderAsc'),
               },
             ]}
             selected={order}
@@ -70,28 +72,30 @@ export function MarketsFilterForm({
 
       <View style={styles.section}>
         <Text variant="label" color="secondary" style={styles.sectionTitle}>
-          Tags {selectedTags.length > 0 ? `(${selectedTags.length})` : ''}
+          {selectedTags.length > 0
+            ? t('markets:tagsWithCount', { count: selectedTags.length })
+            : t('markets:tags')}
         </Text>
         <SearchField
           value={tagSearch}
           onChangeText={onTagSearchChange}
-          placeholder="Search tags…"
-          accessibilityLabel="Search tags"
+          placeholder={t('markets:searchTagsPlaceholder')}
+          accessibilityLabel={t('markets:searchTagsA11y')}
         />
         <View style={styles.actions}>
           <Pressable onPress={onClearTags}>
             <Text variant="caption" color="steel">
-              Clear tags
+              {t('common:actions.clearTags')}
             </Text>
           </Pressable>
           <Pressable onPress={onSelectAllVisible}>
             <Text variant="caption" color="steel">
-              Select visible
+              {t('common:actions.selectVisible')}
             </Text>
           </Pressable>
           <Pressable onPress={onResetAll}>
             <Text variant="caption" color="steel">
-              Reset all filters
+              {t('common:actions.resetAllFilters')}
             </Text>
           </Pressable>
         </View>
@@ -109,12 +113,12 @@ export function MarketsFilterForm({
         ) : (
           <ScrollView style={styles.tagsScroll} contentContainerStyle={styles.tagRow}>
             <ChipGroup
-              options={availableTags.map((t) => ({ value: t, label: t }))}
+              options={availableTags.map((tag) => ({ value: tag, label: tag }))}
               selected={selectedTags}
               onSelect={onToggleTag}
               mode="multi"
               shape="pill"
-              emptyLabel="No tags match"
+              emptyLabel={t('markets:noTagsMatch')}
             />
           </ScrollView>
         )}

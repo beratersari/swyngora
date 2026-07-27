@@ -1,3 +1,5 @@
+import { i18n } from '@/libs/i18n';
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -6,15 +8,16 @@ export function rtkErrorMessage(
   error: unknown,
   options?: { resource?: string },
 ): string {
+  const t = i18n.t.bind(i18n);
   if (!error) {
     return options?.resource
-      ? `Failed to load ${options.resource}`
-      : 'Request failed';
+      ? t('common:errors.failedToLoad', { resource: options.resource })
+      : t('common:errors.requestFailed');
   }
 
   if (isRecord(error)) {
     if ('status' in error && error.status === 'FETCH_ERROR') {
-      return 'Network error — is the backend running?';
+      return t('common:errors.network');
     }
     if ('data' in error && isRecord(error.data)) {
       const data = error.data;
@@ -30,11 +33,11 @@ export function rtkErrorMessage(
       return error.message;
     }
     if ('status' in error && typeof error.status === 'number') {
-      return `Request failed (${error.status})`;
+      return t('common:errors.requestFailedStatus', { status: error.status });
     }
   }
 
   return options?.resource
-    ? `Failed to load ${options.resource}`
-    : 'Request failed';
+    ? t('common:errors.failedToLoad', { resource: options.resource })
+    : t('common:errors.requestFailed');
 }

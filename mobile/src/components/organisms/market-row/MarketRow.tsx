@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { RsiBadge } from '@/components/molecules/rsi-badge';
 import { StarButton } from '@/components/molecules/star-button';
@@ -6,6 +7,7 @@ import type { MarketRowProps } from './MarketRow.types';
 import { styles } from './MarketRow.styles';
 
 export function MarketRow({ row, onPress, watched, onStarPress }: MarketRowProps) {
+  const { t } = useTranslation(['common', 'markets']);
   return (
     <View style={styles.row}>
       {onStarPress != null ? (
@@ -14,7 +16,9 @@ export function MarketRow({ row, onPress, watched, onStarPress }: MarketRowProps
           size="sm"
           onPress={() => onStarPress(row.symbol)}
           accessibilityLabel={
-            watched ? `Remove ${row.symbol} from favorites` : `Add ${row.symbol} to favorites`
+            watched
+              ? t('common:a11y.removeFavorite', { symbol: row.symbol })
+              : t('common:a11y.addFavorite', { symbol: row.symbol })
           }
         />
       ) : null}
@@ -42,10 +46,10 @@ export function MarketRow({ row, onPress, watched, onStarPress }: MarketRowProps
             {row.changePercentLabel}
           </Text>
           <Text variant="caption" color="secondary">
-            Vol {row.quoteVolumeLabel}
+            {t('markets:vol', { value: row.quoteVolumeLabel })}
           </Text>
           <Text variant="caption" color="secondary">
-            Mcap {row.marketCapLabel}
+            {t('markets:mcap', { value: row.marketCapLabel })}
           </Text>
         </View>
         {row.tagsLabel ? (

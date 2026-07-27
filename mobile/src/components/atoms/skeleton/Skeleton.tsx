@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import type { SkeletonProps } from './Skeleton.types';
 import { styles } from './Skeleton.styles';
 
@@ -7,9 +8,11 @@ export function Skeleton({
   height = 16,
   borderRadius,
 }: SkeletonProps) {
+  const { t } = useTranslation('common');
   return (
     <View
-      accessibilityLabel="Loading"
+      accessibilityLabel={t('status.loading')}
+      accessibilityRole="progressbar"
       style={[
         styles.base,
         {

@@ -1,11 +1,12 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
 import type { PumpEventListProps } from './PumpEventList.types';
 import { styles } from './PumpEventList.styles';
 
 export function PumpEventList({
-  title = 'Pump / dump events',
+  title,
   subtitle,
   rows,
   isLoading,
@@ -13,10 +14,12 @@ export function PumpEventList({
   emptyMessage,
   disclaimer,
 }: PumpEventListProps) {
+  const { t } = useTranslation('detail');
+  const resolvedTitle = title ?? t('pumpsSection');
   return (
     <View style={styles.section}>
       <Text variant="label" color="secondary">
-        {title}
+        {resolvedTitle}
       </Text>
       {subtitle ? (
         <Text variant="caption" color="steel">
@@ -32,7 +35,7 @@ export function PumpEventList({
         </Text>
       ) : rows.length === 0 ? (
         <Text variant="caption" color="secondary">
-          {emptyMessage ?? 'No events matched thresholds'}
+          {emptyMessage ?? t('pumpEventsEmpty')}
         </Text>
       ) : (
         rows.map((row) => (

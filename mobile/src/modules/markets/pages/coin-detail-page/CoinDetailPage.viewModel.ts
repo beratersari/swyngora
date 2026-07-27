@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 import type { CandleChartOverlay } from '@/components/organisms/candle-chart';
 import {
   rtkErrorMessage,
@@ -55,6 +56,7 @@ import {
 import type { CoinDetailPageViewModel } from './CoinDetailPage.types';
 
 export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
+  const { t } = useTranslation(['detail', 'common', 'pumps']);
   const navigation =
     useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
   const route = useRoute<RouteProp<MarketsStackParamList, 'CoinDetail'>>();
@@ -157,11 +159,11 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     const keys = sortedEmaKeys(indicatorsQuery.data?.latest?.ema);
     return keys.map((key, i) => ({
       id: `ema-${key}`,
-      title: `EMA ${key}`,
+      title: t('detail:emaTitle', { period: key }),
       color: emaColor(key, i),
       data: indicatorPointsToEmaLine(indicatorsQuery.data?.points, key),
     }));
-  }, [showEma, indicatorsQuery.data]);
+  }, [showEma, indicatorsQuery.data, t]);
 
   const rsiPoints = useMemo(
     () => indicatorPointsToRsi(indicatorsQuery.data?.points),
@@ -173,27 +175,35 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   const emaLatestLabels = useMemo(() => {
     const ema = indicatorsQuery.data?.latest?.ema;
     if (!ema) return [];
-    return sortedEmaKeys(ema).map((k) => `EMA ${k}: ${formatPrice(ema[k])}`);
-  }, [indicatorsQuery.data?.latest?.ema]);
+    return sortedEmaKeys(ema).map((k) =>
+      t('detail:emaLatest', { period: k, value: formatPrice(ema[k]) }),
+    );
+  }, [indicatorsQuery.data?.latest?.ema, t]);
 
   const ticker = tickerQuery.data;
   const supply = supplyQuery.data;
 
   const statsItems = useMemo(
     () => [
-      { label: 'Open', value: formatPrice(ticker?.openPrice) },
-      { label: 'High 24h', value: formatPrice(ticker?.highPrice) },
-      { label: 'Low 24h', value: formatPrice(ticker?.lowPrice) },
-      { label: 'Base vol', value: formatCompactUsd(ticker?.volume) },
-      { label: 'Quote vol', value: formatCompactUsd(ticker?.quoteVolume) },
+      { label: t('detail:stats.open'), value: formatPrice(ticker?.openPrice) },
+      { label: t('detail:stats.high24h'), value: formatPrice(ticker?.highPrice) },
+      { label: t('detail:stats.low24h'), value: formatPrice(ticker?.lowPrice) },
+      { label: t('detail:stats.baseVol'), value: formatCompactUsd(ticker?.volume) },
+      { label: t('detail:stats.quoteVol'), value: formatCompactUsd(ticker?.quoteVolume) },
       {
-        label: 'Trades',
+        label: t('detail:stats.trades'),
         value: formatTradeCount(ticker?.tradeCount, exchange),
       },
-      { label: 'Circ. supply', value: formatSupplyNum(supply?.circulatingSupply) },
-      { label: 'Total supply', value: formatSupplyNum(supply?.totalSupply) },
       {
-        label: 'Circ. mcap',
+        label: t('detail:stats.circSupply'),
+        value: formatSupplyNum(supply?.circulatingSupply),
+      },
+      {
+        label: t('detail:stats.totalSupply'),
+        value: formatSupplyNum(supply?.totalSupply),
+      },
+      {
+        label: t('detail:stats.circMcap'),
         value: formatCompactUsd(
           supply?.circulatingSupply != null && ticker?.lastPrice
             ? Number(ticker.lastPrice) * Number(supply.circulatingSupply)
@@ -201,14 +211,14 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
         ),
       },
     ],
-    [ticker, supply, exchange],
+    [ticker, supply, exchange, t],
   );
 
   const supplyError =
     supplyQuery.isError && (supplyQuery.error as { status?: number })?.status !== 404
       ? rtkErrorMessage(supplyQuery.error, { resource: 'supply' })
       : supplyQuery.isError
-        ? 'Supply not available for this asset'
+        ? t('detail:supplyUnavailable')
         : null;
 
   const onBack = useCallback(() => {
@@ -253,15 +263,17 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   const pumpEventsSubtitle = useMemo(() => {
     if (!pumpQuery.data) return null;
     const parts = [
-      `≥${pumpQuery.data.minReturnPct ?? DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT}%`,
+      t('pumps:threshold', {
+        pct: pumpQuery.data.minReturnPct ?? DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT,
+      }),
       pumpQuery.data.direction ?? DEFAULT_PUMP_DETAIL_DIRECTION,
       pumpQuery.data.interval ?? resolvedInterval,
     ];
     if (pumpQuery.data.eventCount != null) {
-      parts.push(`${pumpQuery.data.eventCount} events`);
+      parts.push(t('detail:pumpEventsCount', { count: pumpQuery.data.eventCount }));
     }
     return parts.join(' · ');
-  }, [pumpQuery.data, resolvedInterval]);
+  }, [pumpQuery.data, resolvedInterval, t]);
 
   const onRetry = useCallback(() => {
     void tickerQuery.refetch();
@@ -334,7 +346,9 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       ? rtkErrorMessage(pumpQuery.error, { resource: 'pump events' })
       : null,
     pumpEventsSubtitle,
-    pumpDisclaimer: pumpQuery.data?.note ?? PUMP_DISCLAIMER,
+    pumpDisclaimer:
+      pumpQuery.data?.note ??
+      t('common:disclaimer.pumps', { defaultValue: PUMP_DISCLAIMER }),
 
     onBack,
     onRetry,

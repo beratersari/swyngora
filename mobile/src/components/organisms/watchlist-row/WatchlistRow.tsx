@@ -1,4 +1,5 @@
 import { Pressable, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { RsiBadge } from '@/components/molecules/rsi-badge';
 import { StarButton } from '@/components/molecules/star-button';
@@ -6,6 +7,7 @@ import type { WatchlistRowProps } from './WatchlistRow.types';
 import { styles } from './WatchlistRow.styles';
 
 export function WatchlistRow({ row, onPress, onUnstar }: WatchlistRowProps) {
+  const { t } = useTranslation('common');
   return (
     <View style={styles.row}>
       <Pressable
@@ -40,7 +42,7 @@ export function WatchlistRow({ row, onPress, onUnstar }: WatchlistRowProps) {
         watched
         size="sm"
         onPress={() => onUnstar?.(row.exchange, row.symbol)}
-        accessibilityLabel={`Remove ${row.symbol} from favorites`}
+        accessibilityLabel={t('a11y.removeFavorite', { symbol: row.symbol })}
       />
     </View>
   );

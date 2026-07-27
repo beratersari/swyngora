@@ -5,5 +5,6 @@
   "empty": "No favorites yet — open Markets and tap ★ on a pair",
   "emptyList": "No watched pairs yet",
   "indicatorsPrefix": "Indicators: {{message}}",
-  "openMarkets": "Open Markets"
+  "openMarkets": "Open Markets",
+  "full": "Watchlist full ({{max}})"
 }

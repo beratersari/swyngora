@@ -1,4 +1,5 @@
 import type { SpotMarket } from '@/libs/api';
+import { i18n } from '@/libs/i18n';
 import {
   changeTone,
   formatChangePercent,
@@ -57,11 +58,12 @@ export function buildFavoritesOnlyRows(
       changeTone: 'secondary',
       quoteVolumeLabel: '—',
       marketCapLabel: '—',
-      tagsLabel: 'Favorite',
+      tagsLabel: i18n.t('markets:favoriteTag'),
     };
   });
 }
 
+/** Returns true when favorites-only mode should show the empty-favorites message. */
 export function favoritesEmptyMessage(
   favoritesOnly: boolean,
   errorMessage: string | null,
@@ -69,7 +71,7 @@ export function favoritesEmptyMessage(
   displayCount: number,
 ): string | null {
   if (!favoritesOnly || errorMessage || isLoading || displayCount > 0) return null;
-  return 'No favorites on this exchange yet — tap ★ on a row';
+  return i18n.t('markets:favoritesEmpty');
 }
 
 export function favoritesSummaryLabel(
@@ -78,5 +80,7 @@ export function favoritesSummaryLabel(
   defaultSummary: string | null,
 ): string | null {
   if (!favoritesOnly) return defaultSummary;
-  return displayCount > 0 ? `Favorites: ${displayCount} shown` : null;
+  return displayCount > 0
+    ? i18n.t('markets:favoritesSummary', { count: displayCount })
+    : null;
 }

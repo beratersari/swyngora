@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { ChipGroup } from '@/components/molecules/chip-group';
 import type { IntervalToolbarProps } from './IntervalToolbar.types';
@@ -12,10 +13,11 @@ export function IntervalToolbar({
   showEma,
   onToggleEma,
 }: IntervalToolbarProps) {
+  const { t } = useTranslation('detail');
   return (
     <View style={styles.root}>
       <Text variant="label" color="secondary">
-        Interval
+        {t('interval')}
       </Text>
       <View style={styles.row}>
         <ChipGroup
@@ -28,7 +30,9 @@ export function IntervalToolbar({
           isLoading={isLoading}
         />
         <ChipGroup
-          options={[{ value: 'ema', label: showEma ? 'EMA on' : 'EMA off' }]}
+          options={[
+            { value: 'ema', label: showEma ? t('emaOn') : t('emaOff') },
+          ]}
           selected={showEma ? 'ema' : ''}
           onSelect={onToggleEma}
           mode="single"
