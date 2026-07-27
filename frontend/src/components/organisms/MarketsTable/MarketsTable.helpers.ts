@@ -109,9 +109,10 @@ export type ResultsRange =
   | { kind: 'range'; from: number; to: number; total: number };
 
 export function getResultsRange(offset: number, limit: number, total: number): ResultsRange {
-  if (total <= 0) return { kind: 'empty' };
-  const from = Math.min(offset + 1, total);
-  const to = Math.min(offset + limit, total);
+  if (total <= 0 || limit <= 0) return { kind: 'empty' };
+  const safeOffset = Math.max(0, offset);
+  const from = Math.min(safeOffset + 1, total);
+  const to = Math.min(safeOffset + limit, total);
   return { kind: 'range', from, to, total };
 }
 

@@ -143,15 +143,19 @@ npm run codegen:api
 # output: src/libs/api/generated/
 ```
 
-## 11. Format / lint
+## 11. Format / lint / test
 
 ```bash
 npm run format         # Prettier write
 npm run format:check   # CI check
 npm run lint           # ESLint (+ eslint-config-prettier)
+npm test               # Vitest
+npm run test:coverage  # Vitest + @vitest/coverage-v8 (line + branch)
 ```
 
 Config: `.prettierrc.json` · ignore: `.prettierignore`  
 Do not format `src/libs/api/generated/`.
 
-**Last updated:** 2026-07-26
+**Env (optional):** `VITE_API_BASE_URL`, `VITE_CLIENT_ID` (watchlist `X-Client-Id`).
+
+**Last updated:** 2026-07-27

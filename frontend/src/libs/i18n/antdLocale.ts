@@ -9,8 +9,8 @@ const ANTD_LOCALES: Record<AppLocale, Locale> = {
 };
 
 /** Map app locale → Ant Design ConfigProvider locale pack. */
-export function getAntdLocale(lng: string): Locale {
-  const base = lng.split('-')[0] ?? 'en';
+export function getAntdLocale(lng: string | null | undefined): Locale {
+  const base = (lng ?? 'en').split('-')[0] ?? 'en';
   if (base in ANTD_LOCALES) {
     return ANTD_LOCALES[base as AppLocale];
   }

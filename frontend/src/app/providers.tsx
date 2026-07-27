@@ -9,6 +9,7 @@ import { getAntdLocale } from '@/libs/i18n';
 import { antdTheme } from '@/styles/antdTheme';
 import { appTheme } from '@/styles/theme';
 import { GlobalStyle } from '@/styles/GlobalStyle';
+import { ErrorBoundary } from './ErrorBoundary';
 
 type ProvidersProps = {
   children: ReactNode;
@@ -41,7 +42,9 @@ export function Providers({ children }: ProvidersProps) {
       <ThemeProvider theme={appTheme}>
         <GlobalStyle />
         <AntdLocaleBridge>
-          <BrowserRouter>{children}</BrowserRouter>
+          <ErrorBoundary>
+            <BrowserRouter>{children}</BrowserRouter>
+          </ErrorBoundary>
         </AntdLocaleBridge>
       </ThemeProvider>
     </ReduxProvider>

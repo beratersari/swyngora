@@ -11,6 +11,7 @@ import {
   formatChangePercent,
   formatCompactUsd,
   formatPrice,
+  formatSymbolDisplay,
   formatTradeCount,
 } from '@/libs/utils';
 import { COLUMN_SORT, PAGE_SIZE_OPTIONS, SORT_DIRECTIONS } from './MarketsTable.constants';
@@ -111,9 +112,10 @@ export function MarketsTable({
       sorter: true,
       sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'symbol'),
+      // Display BASE/QUOTE consistently; row navigation still uses native `symbol`.
       render: (symbol: string | undefined) => (
         <Text variant="label" color="primary" mono>
-          {symbol ?? '—'}
+          {formatSymbolDisplay(symbol)}
         </Text>
       ),
     },
@@ -300,7 +302,7 @@ export function MarketsTable({
           tabIndex: onRowOpen && record.symbol ? 0 : undefined,
           role: onRowOpen ? 'link' : undefined,
           'aria-label': record.symbol
-            ? t('markets:table.openDetail', { symbol: record.symbol })
+            ? t('markets:table.openDetail', { symbol: formatSymbolDisplay(record.symbol) })
             : undefined,
         })}
         locale={{

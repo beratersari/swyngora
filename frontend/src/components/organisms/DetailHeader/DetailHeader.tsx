@@ -1,7 +1,7 @@
 import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { changeTone, formatChangePercent, formatPrice } from '@/libs/utils';
+import { changeTone, formatChangePercent, formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import {
   BackLink,
   HeaderCard,
@@ -30,7 +30,7 @@ export function DetailHeader({
           <BackLink to={backTo}>{t('backToMarkets')}</BackLink>
           <TitleRow>
             <Text variant="h2" color="primary" mono isLoading={isLoading} skeletonWidth={140}>
-              {symbol}
+              {formatSymbolDisplay(symbol)}
             </Text>
             <Tag color="processing">{exchange}</Tag>
             {assetName ? (

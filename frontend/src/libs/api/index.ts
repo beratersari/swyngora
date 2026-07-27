@@ -14,6 +14,8 @@ export {
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
+  useGetPumpEventsQuery,
+  useScanPumpEventsQuery,
 } from './endpoints/marketApi';
 export type {
   SpotMarket,
@@ -35,6 +37,10 @@ export type {
   IntervalsResponse,
   IndicatorsQuery,
   IndicatorsResponse,
+  PumpEventsQuery,
+  PumpEventsResponse,
+  ScanPumpEventsQuery,
+  ScanPumpEventsResponse,
 } from './endpoints/marketApi';
 export {
   rtkErrorMessage,

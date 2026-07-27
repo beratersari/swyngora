@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { Layout } from 'antd';
 
@@ -16,10 +17,19 @@ export const AppHeader = styled(Layout.Header)`
   line-height: 1;
 `;
 
-export const HeaderNav = styled.div`
+export const HeaderNav = styled.nav`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing[4]}px;
+`;
+
+export const BrandLink = styled(Link)`
+  text-decoration: none;
+`;
+
+export const NavLink = styled(Link)`
+  text-decoration: none;
+  color: inherit;
 `;
 
 export const HeaderSpacer = styled.div`

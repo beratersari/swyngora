@@ -75,10 +75,15 @@ export function marketsBackPath(exchange: string): string {
 export function parseDetailSearchParams(params: URLSearchParams): DetailUrlState {
   const interval = params.get('interval')?.trim() || DEFAULT_DETAIL_STATE.interval;
   const limitRaw = Number(params.get('limit'));
-  const limit =
-    Number.isFinite(limitRaw) && limitRaw >= LIMIT_MIN && limitRaw <= LIMIT_MAX
-      ? Math.floor(limitRaw)
-      : DEFAULT_DETAIL_STATE.limit;
+  // Floor first, then clamp — same pattern as markets parseIntParam
+  // so limit=500.1 → 500 (not default), limit=19.9 → default (below min after floor).
+  let limit = DEFAULT_DETAIL_STATE.limit;
+  if (Number.isFinite(limitRaw)) {
+    const floored = Math.floor(limitRaw);
+    if (floored >= LIMIT_MIN && floored <= LIMIT_MAX) {
+      limit = floored;
+    }
+  }
   return { interval, limit };
 }
 

@@ -1,4 +1,6 @@
 export { formatPrice } from './formatPrice';
+export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
+export type { ParsedTradingPair } from './formatSymbol';
 export { apiCandlesToChart } from './candles';
 export type { ApiCandle, ChartCandle } from './candles';
 export {
@@ -10,6 +12,7 @@ export {
 } from './formatMarket';
 export {
   DEFAULT_MARKETS_STATE,
+  defaultQuoteForExchange,
   parseMarketsSearchParams,
   marketsStateToSearchParams,
   toSpotListQuery,

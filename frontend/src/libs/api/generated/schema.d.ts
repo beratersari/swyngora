@@ -179,6 +179,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/pumps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Detect pump/dump events on one symbol
+         * @description Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
+         *     Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
+         *     Informational only — not financial advice.
+         */
+        get: operations["getPumpEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/pumps/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan top-volume symbols for recent pumps
+         * @description Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
+         *     Informational only — not financial advice.
+         */
+        get: operations["scanPumpEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/indicators/batch": {
         parameters: {
             query?: never;
@@ -700,6 +743,86 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getPumpEvents: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                interval?: string;
+                lookbackHours?: number;
+                limit?: number;
+                minReturnPct?: number;
+                windowBars?: number;
+                mode?: "close_return" | "candle_body" | "high_from_low";
+                direction?: "up" | "down" | "both";
+                minVolumeRatio?: number;
+                maxEvents?: number;
+                startTime?: string;
+                endTime?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pump events for the symbol */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        interval?: string;
+                        eventCount?: number;
+                        events?: Record<string, never>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanPumpEvents: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "coinbase" | "bybit";
+                quote?: string;
+                interval?: string;
+                lookbackHours?: number;
+                minReturnPct?: number;
+                windowBars?: number;
+                mode?: "close_return" | "candle_body" | "high_from_low";
+                direction?: "up" | "down" | "both";
+                minVolumeRatio?: number;
+                symbolLimit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked pump hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        hitCount?: number;
+                        hits?: Record<string, never>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     postIndicatorsBatch: {
         parameters: {
             query?: never;
@@ -768,9 +891,11 @@ export interface operations {
     getWatchlist: {
         parameters: {
             query?: {
+                /** @description Required non-empty client tenancy key (not the shared name "default") */
                 clientId?: string;
             };
             header?: {
+                /** @description Preferred alternative to clientId query */
                 "X-Client-Id"?: string;
             };
             path?: never;
@@ -787,6 +912,8 @@ export interface operations {
                     "application/json": components["schemas"]["Watchlist"];
                 };
             };
+            400: components["responses"]["Error"];
+            429: components["responses"]["Error"];
         };
     };
     putWatchlist: {

@@ -110,3 +110,64 @@ describe('CandleChartHost helpers', () => {
     expect(fmt.precision).toBeGreaterThanOrEqual(5);
   });
 });
+
+describe('toCandlestickData filters non-finite', () => {
+  it('drops bars with non-finite OHLC or time', () => {
+    expect(
+      toCandlestickData([
+        { time: 1, open: 1, high: 2, low: 0.5, close: 1.5 },
+        { time: 2, open: Number.NaN, high: 2, low: 1, close: 1 },
+        { time: Number.NaN, open: 1, high: 1, low: 1, close: 1 },
+      ]),
+    ).toEqual([{ time: 1, open: 1, high: 2, low: 0.5, close: 1.5 }]);
+  });
+});
+
+describe('candleDataSignature detects middle-bar changes', () => {
+  it('changes when a middle bar OHLC changes with same tips', () => {
+    const a = [
+      { time: 1, open: 1, high: 1, low: 1, close: 1 },
+      { time: 2, open: 2, high: 2, low: 2, close: 2 },
+      { time: 3, open: 3, high: 3, low: 3, close: 3 },
+    ];
+    const b = [
+      { time: 1, open: 1, high: 1, low: 1, close: 1 },
+      { time: 2, open: 9, high: 9, low: 9, close: 9 },
+      { time: 3, open: 3, high: 3, low: 3, close: 3 },
+    ];
+    expect(candleDataSignature(a)).not.toBe(candleDataSignature(b));
+  });
+});
+
+describe('overlaysSignature includes title and color', () => {
+  it('differs when title changes', () => {
+    const base = { id: 'ema-12', color: '#f00', data: [{ time: 1, value: 1 }] };
+    expect(overlaysSignature([{ ...base, title: 'A' }])).not.toBe(
+      overlaysSignature([{ ...base, title: 'B' }]),
+    );
+  });
+});
+
+describe('chartPriceFormatFromCandles edge cases', () => {
+  it('defaults for empty or all-non-finite', () => {
+    expect(chartPriceFormatFromCandles([])).toEqual({
+      type: 'price',
+      precision: 2,
+      minMove: 0.01,
+    });
+    expect(
+      chartPriceFormatFromCandles([
+        { time: 1, open: Number.NaN, high: Number.NaN, low: Number.NaN, close: Number.NaN },
+      ]),
+    ).toEqual({ type: 'price', precision: 2, minMove: 0.01 });
+  });
+});
+
+describe('decimalsForMagnitude edges', () => {
+  it('handles zero and non-finite', () => {
+    expect(decimalsForMagnitude(0)).toBe(2);
+    expect(decimalsForMagnitude(Number.NaN)).toBe(2);
+    expect(decimalsForMagnitude(0.05)).toBe(6);
+    expect(decimalsForMagnitude(0.5)).toBe(5);
+  });
+});

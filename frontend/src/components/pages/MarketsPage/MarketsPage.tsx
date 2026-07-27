@@ -19,7 +19,7 @@ import {
 } from '@/libs/api';
 import { useDebouncedValue, useDocumentVisible } from '@/libs/hooks';
 import {
-  DEFAULT_MARKETS_STATE,
+  defaultQuoteForExchange,
   marketsStateToSearchParams,
   parseMarketsSearchParams,
   toSpotListQuery,
@@ -95,28 +95,30 @@ export function MarketsPage() {
     ? exchangesQuery.data.exchanges
     : ['binance', 'coinbase', 'bybit'];
 
-  const [cachedItems, setCachedItems] = useState<SpotMarket[]>([]);
-  const [cachedTotal, setCachedTotal] = useState(0);
-
-  // Only wipe the table when the *filter set* changes — not on sort/order/page.
-  // Clearing on sort forced an empty skeleton and made the sort UI feel broken.
+  // Keep last rows only for the *current* filter set (sort/page/poll).
+  // Key the cache so a filter change never paints the previous venue's rows
+  // for one frame before a useEffect can clear (stale flash).
   const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}`;
-
-  useEffect(() => {
-    setCachedItems([]);
-    setCachedTotal(0);
-  }, [filterKey]);
+  const [rowCache, setRowCache] = useState<{
+    key: string;
+    items: SpotMarket[];
+    total: number;
+  }>({ key: filterKey, items: [], total: 0 });
 
   useEffect(() => {
     if (spotQuery.data?.items) {
-      setCachedItems(spotQuery.data.items);
-      setCachedTotal(spotQuery.data.total ?? spotQuery.data.items.length);
+      setRowCache({
+        key: filterKey,
+        items: spotQuery.data.items,
+        total: spotQuery.data.total ?? spotQuery.data.items.length,
+      });
     }
-  }, [spotQuery.data]);
+  }, [spotQuery.data, filterKey]);
 
+  const cachedForFilter = rowCache.key === filterKey ? rowCache : null;
   // Prefer current query data; while a new sort/page is loading keep last rows.
-  const items = spotQuery.data?.items ?? cachedItems;
-  const total = spotQuery.data?.total ?? cachedTotal;
+  const items = spotQuery.data?.items ?? cachedForFilter?.items ?? [];
+  const total = spotQuery.data?.total ?? cachedForFilter?.total ?? 0;
   const hasRows = items.length > 0;
   const loadErrorText = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {
@@ -131,7 +133,14 @@ export function MarketsPage() {
   const tableErrorMessage = hasRows ? null : loadErrorText;
 
   const onExchangeChange = (exchange: MarketExchange) => {
-    patchState({ exchange, offset: 0, tag: '' });
+    // Reset quote to the venue's primary book (USDT vs USD) so Coinbase is not
+    // left filtered to a handful of USDT pairs after browsing Binance.
+    patchState({
+      exchange,
+      quote: defaultQuoteForExchange(exchange),
+      offset: 0,
+      tag: '',
+    });
   };
 
   const onSortChange = (sort: SpotSortField, order: SpotSortOrder) => {
@@ -218,7 +227,7 @@ export function MarketsPage() {
         <MetaRight>
           <Text variant="caption" color="secondary">
             {t('markets:results.meta', {
-              quote: state.quote || DEFAULT_MARKETS_STATE.quote,
+              quote: state.quote || defaultQuoteForExchange(state.exchange),
               sort: state.sort,
               order: state.order,
             })}

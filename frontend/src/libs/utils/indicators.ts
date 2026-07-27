@@ -20,6 +20,7 @@ export function formatIndicator(value: number | null | undefined, digits = 2): s
 /**
  * RSI interpretation bands for UI coloring (not trading advice).
  * oversold &lt; 30 · neutral 30–70 · overbought &gt; 70
+ * Aligned with {@link rsiBandKey} so color and band label never disagree.
  */
 export function rsiTone(
   value: number | null | undefined,
@@ -27,8 +28,7 @@ export function rsiTone(
   if (value === null || value === undefined || !Number.isFinite(value)) return 'secondary';
   if (value < 30) return 'success'; // oversold — often highlighted as opportunity (green)
   if (value > 70) return 'error'; // overbought
-  if (value < 40 || value > 60) return 'warning';
-  return 'secondary';
+  return 'secondary'; // neutral 30–70 (includes near-band values)
 }
 
 /** Stable band key for i18n (`detail:indicators.band.*`). */

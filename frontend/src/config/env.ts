@@ -20,6 +20,12 @@ function resolveApiBaseUrl(): string {
   return trimmed.replace(/\/+$/, '');
 }
 
+function resolveClientId(): string {
+  const raw = import.meta.env.VITE_CLIENT_ID;
+  if (raw === undefined || raw === null) return '';
+  return String(raw).trim();
+}
+
 export const env = {
   /** Empty string = relative same-origin requests (use Vite proxy in dev). */
   apiBaseUrl: resolveApiBaseUrl(),
@@ -28,4 +34,9 @@ export const env = {
     const base = resolveApiBaseUrl();
     return base === '' ? '(same origin / Vite proxy)' : base;
   })(),
+  /**
+   * Optional client id for watchlist (`X-Client-Id`). Empty when unset.
+   * Set `VITE_CLIENT_ID` to enable header injection via baseApi prepareHeaders.
+   */
+  clientId: resolveClientId(),
 } as const;

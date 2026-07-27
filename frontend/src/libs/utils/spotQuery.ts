@@ -37,6 +37,16 @@ const SORTS = new Set<SpotSortField>([
   'tags',
 ]);
 
+/**
+ * Primary quote asset for each venue's spot book.
+ * Coinbase is USD-centric; Binance/Bybit are USDT-centric.
+ */
+export function defaultQuoteForExchange(exchange: string): string {
+  const ex = exchange.toLowerCase();
+  if (ex === 'coinbase') return 'USD';
+  return 'USDT';
+}
+
 function parseIntParam(raw: string | null, fallback: number, min: number, max: number): number {
   if (raw === null || raw === '') return fallback;
   const n = Number(raw);
@@ -46,7 +56,7 @@ function parseIntParam(raw: string | null, fallback: number, min: number, max: n
 
 /** Parse /markets URL search params into state with defaults. */
 export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlState {
-  const exchangeRaw = params.get('exchange') ?? DEFAULT_MARKETS_STATE.exchange;
+  const exchangeRaw = (params.get('exchange') ?? DEFAULT_MARKETS_STATE.exchange).toLowerCase();
   const exchange = (
     EXCHANGES.has(exchangeRaw) ? exchangeRaw : DEFAULT_MARKETS_STATE.exchange
   ) as MarketExchange;
@@ -58,10 +68,17 @@ export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlSta
   const order: SpotSortOrder =
     orderRaw === 'asc' || orderRaw === 'desc' ? orderRaw : DEFAULT_MARKETS_STATE.order;
 
+  // Missing quote → venue default (not a global USDT, which starves Coinbase).
+  const quoteParam = params.get('quote');
+  const quote =
+    quoteParam !== null && quoteParam !== ''
+      ? quoteParam
+      : defaultQuoteForExchange(exchange);
+
   return {
     exchange,
     q: params.get('q') ?? '',
-    quote: params.get('quote') ?? DEFAULT_MARKETS_STATE.quote,
+    quote,
     tag: params.get('tag') ?? '',
     sort,
     order,
@@ -75,7 +92,10 @@ export function marketsStateToSearchParams(state: MarketsUrlState): URLSearchPar
   const p = new URLSearchParams();
   if (state.exchange !== DEFAULT_MARKETS_STATE.exchange) p.set('exchange', state.exchange);
   if (state.q.trim()) p.set('q', state.q.trim());
-  if (state.quote && state.quote !== DEFAULT_MARKETS_STATE.quote) p.set('quote', state.quote);
+  // Omit quote when it matches this exchange's primary default.
+  if (state.quote && state.quote !== defaultQuoteForExchange(state.exchange)) {
+    p.set('quote', state.quote);
+  }
   if (state.tag.trim()) p.set('tag', state.tag.trim());
   if (state.sort !== DEFAULT_MARKETS_STATE.sort) p.set('sort', state.sort);
   if (state.order !== DEFAULT_MARKETS_STATE.order) p.set('order', state.order);

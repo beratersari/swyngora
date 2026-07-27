@@ -274,7 +274,7 @@ export function CoinDetailPage() {
           />
         ) : null}
 
-        {candlesQuery.isError ? (
+        {candlesQuery.isError && chartData.length === 0 ? (
           <Alert
             type="error"
             showIcon
@@ -291,12 +291,24 @@ export function CoinDetailPage() {
             description={t('detail:chart.emptyBody')}
           />
         ) : (
-          <CandleChartHost
-            data={chartData}
-            overlays={overlays}
-            isLoading={seriesLoading || waitingForIntervals}
-            height={360}
-          />
+          <>
+            {candlesQuery.isError && chartData.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                message={t('detail:chart.loadErrorTitle')}
+                description={rtkErrorMessage(candlesQuery.error, {
+                  resource: t('detail:resource.candles'),
+                })}
+              />
+            ) : null}
+            <CandleChartHost
+              data={chartData}
+              overlays={overlays}
+              isLoading={seriesLoading || waitingForIntervals}
+              height={360}
+            />
+          </>
         )}
       </ChartCard>
 

@@ -39,7 +39,7 @@ export function formatTradeCount(
   value: number | null | undefined,
   exchange: string | undefined,
 ): string {
-  if (value === null || value === undefined) return DASH;
+  if (value === null || value === undefined || !Number.isFinite(value)) return DASH;
   if (value === 0 && exchange && exchange !== 'binance') return DASH;
   if (value === 0) return '0';
   return value.toLocaleString();

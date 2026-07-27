@@ -86,13 +86,22 @@ export function chartPriceFormatFromCandles(data: ChartCandle[]): ChartPriceForm
 
 /** Map UI candles → Lightweight Charts candlestick series points. */
 export function toCandlestickData(data: ChartCandle[]): CandlestickData<Time>[] {
-  return data.map((d) => ({
-    time: d.time as Time,
-    open: d.open,
-    high: d.high,
-    low: d.low,
-    close: d.close,
-  }));
+  return data
+    .filter(
+      (d) =>
+        Number.isFinite(d.time) &&
+        Number.isFinite(d.open) &&
+        Number.isFinite(d.high) &&
+        Number.isFinite(d.low) &&
+        Number.isFinite(d.close),
+    )
+    .map((d) => ({
+      time: d.time as Time,
+      open: d.open,
+      high: d.high,
+      low: d.low,
+      close: d.close,
+    }));
 }
 
 /**
@@ -118,15 +127,18 @@ export function toLineData(points: ChartLinePoint[]): LineData<Time>[] {
   return out;
 }
 
-/** Stable signature for candle data so we only fitContent when bars actually change. */
+/**
+ * Stable signature for candle data so we only setData/fitContent when bars change.
+ * Includes every bar OHLC — a tip-only signature missed middle-bar updates.
+ */
 export function candleDataSignature(data: ChartCandle[]): string {
   if (!data.length) return '0';
-  const first = data[0]!;
-  const last = data[data.length - 1]!;
-  return `${data.length}:${first.time}:${last.time}:${last.close}`;
+  return data
+    .map((d) => `${d.time},${d.open},${d.high},${d.low},${d.close}`)
+    .join(';');
 }
 
-/** Stable signature for overlays (ids + range + tip value) for change detection. */
+/** Stable signature for overlays (ids + color + title + tip + length). */
 export function overlaysSignature(overlays: CandleChartOverlay[]): string {
   if (!overlays.length) return '';
   return overlays
@@ -135,7 +147,8 @@ export function overlaysSignature(overlays: CandleChartOverlay[]): string {
       const last = o.data[o.data.length - 1];
       const lastTime = last?.time ?? 0;
       const lastValue = last?.value ?? 0;
-      return `${o.id}:${o.color}:${o.data.length}:${first}:${lastTime}:${lastValue}`;
+      const title = o.title ?? '';
+      return `${o.id}:${o.color}:${title}:${o.data.length}:${first}:${lastTime}:${lastValue}`;
     })
     .join('|');
 }

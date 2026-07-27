@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatResultsRange,
+  fromAntdSortOrder,
   getResultsRange,
   paginationChanged,
   resolveNextSortOrder,
   resolveSortChange,
   resolveTableChangeAction,
+  toAntdSortOrder,
   toggleSortOrder,
 } from './MarketsTable.helpers';
 import { COLUMN_SORT } from './MarketsTable.constants';
@@ -139,5 +141,30 @@ describe('resolveSortChange', () => {
         antdOrder: null,
       }),
     ).toEqual({ type: 'none' });
+  });
+});
+
+describe('toAntdSortOrder / fromAntdSortOrder', () => {
+  it('maps active asc/desc and inactive null', () => {
+    expect(toAntdSortOrder('asc', true)).toBe('ascend');
+    expect(toAntdSortOrder('desc', true)).toBe('descend');
+    expect(toAntdSortOrder('asc', false)).toBeNull();
+  });
+
+  it('maps antd orders back and nulls unknown', () => {
+    expect(fromAntdSortOrder('ascend')).toBe('asc');
+    expect(fromAntdSortOrder('descend')).toBe('desc');
+    expect(fromAntdSortOrder(null)).toBeNull();
+  });
+});
+
+describe('getResultsRange edge cases', () => {
+  it('returns empty when limit is zero or negative', () => {
+    expect(getResultsRange(0, 0, 100)).toEqual({ kind: 'empty' });
+    expect(getResultsRange(0, -10, 100)).toEqual({ kind: 'empty' });
+  });
+
+  it('clamps negative offset', () => {
+    expect(getResultsRange(-5, 50, 100)).toEqual({ kind: 'range', from: 1, to: 50, total: 100 });
   });
 });

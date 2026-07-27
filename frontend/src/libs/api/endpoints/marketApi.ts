@@ -1,106 +1,100 @@
 import { baseApi } from '../baseApi';
-import type { components, operations } from '../generated/schema';
+import {
+  candleTagId,
+  compactParams,
+  indicatorTagId,
+  intervalTagId,
+  productTagId,
+  spotListTagId,
+  supplyTagId,
+  tickerTagId,
+  transformExchangesResponse,
+  transformIntervalsResponse,
+  transformProductTagsResponse,
+} from './marketApi.helpers';
+import type {
+  CandlesQuery,
+  CandlesResponse,
+  ExchangesResponse,
+  IndicatorsQuery,
+  IndicatorsResponse,
+  IntervalsQuery,
+  IntervalsResponse,
+  MarketExchange,
+  ProductTagsResponse,
+  PumpEventsQuery,
+  PumpEventsResponse,
+  ScanPumpEventsQuery,
+  ScanPumpEventsResponse,
+  SpotListQuery,
+  SpotListResponse,
+  Supply,
+  SupplyQuery,
+  Ticker24h,
+  Ticker24hQuery,
+} from './marketApi.types';
 
-export type SpotMarket = components['schemas']['SpotMarket'];
-export type SpotListResponse = components['schemas']['SpotListResponse'];
-export type SpotListQuery = NonNullable<operations['listSpotMarkets']['parameters']['query']>;
-export type SpotSortField = NonNullable<SpotListQuery['sort']>;
-export type SpotSortOrder = NonNullable<SpotListQuery['order']>;
-export type MarketExchange = NonNullable<SpotListQuery['exchange']>;
+export type {
+  SpotMarket,
+  SpotListResponse,
+  SpotListQuery,
+  SpotSortField,
+  SpotSortOrder,
+  MarketExchange,
+  CandlesResponse,
+  Candle,
+  Ticker24h,
+  Supply,
+  CandlesQuery,
+  Ticker24hQuery,
+  SupplyQuery,
+  IntervalsQuery,
+  IndicatorsQuery,
+  IntervalsResponse,
+  IndicatorsResponse,
+  ExchangesResponse,
+  ProductTagsResponse,
+  PumpEventsQuery,
+  PumpEventsResponse,
+  ScanPumpEventsQuery,
+  ScanPumpEventsResponse,
+} from './marketApi.types';
 
-export type CandlesResponse = components['schemas']['CandlesResponse'];
-export type Candle = components['schemas']['Candle'];
-export type Ticker24h = components['schemas']['Ticker24h'];
-export type Supply = components['schemas']['Supply'];
-
-export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
-export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;
-export type SupplyQuery = NonNullable<operations['getSupply']['parameters']['query']>;
-export type IntervalsQuery = NonNullable<operations['listIntervals']['parameters']['query']>;
-export type IndicatorsQuery = NonNullable<operations['getIndicators']['parameters']['query']>;
-
-export type IntervalsResponse = {
-  exchange: string;
-  intervals: string[];
-};
-
-export type IndicatorsResponse = {
-  exchange?: string;
-  symbol?: string;
-  interval?: string;
-  rsiPeriod?: number;
-  emaPeriods?: number[];
-  latest?: {
-    rsi?: number | null;
-    ema?: Record<string, number>;
-  };
-  points?: {
-    openTime?: string;
-    close?: number;
-    rsi?: number | null;
-    ema?: Record<string, number>;
-  }[];
-  note?: string;
-};
-
-export type ExchangesResponse = {
-  exchanges: string[];
-  default: string;
-};
-
-export type ProductTagsResponse = {
-  exchange: string;
-  tags: string[];
-};
-
-/** Drop undefined / empty-string query values so RTK does not send noise. */
-function compactParams<T extends Record<string, unknown>>(
-  params: T,
-): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue;
-    if (typeof value === 'string' || typeof value === 'number') {
-      out[key] = value;
-    }
-  }
-  return out;
-}
+export {
+  compactParams,
+  transformExchangesResponse,
+  transformProductTagsResponse,
+  transformIntervalsResponse,
+  spotListTagId,
+  productTagId,
+  intervalTagId,
+  candleTagId,
+  tickerTagId,
+  supplyTagId,
+  indicatorTagId,
+} from './marketApi.helpers';
 
 export const marketApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
     listExchanges: build.query<ExchangesResponse, void>({
       query: () => '/api/v1/market/exchanges',
-      transformResponse: (raw: { exchanges?: string[]; default?: string }): ExchangesResponse => ({
-        exchanges: raw.exchanges ?? [],
-        default: raw.default ?? 'binance',
-      }),
+      transformResponse: transformExchangesResponse,
       providesTags: ['Exchange'],
     }),
 
     listProductTags: build.query<ProductTagsResponse, { exchange?: MarketExchange } | void>({
       query: (arg) => ({
         url: '/api/v1/market/tags',
-        params: compactParams({ exchange: arg && 'exchange' in arg ? arg.exchange : undefined }),
+        params: compactParams({
+          exchange: arg && 'exchange' in arg ? arg.exchange : undefined,
+        }),
       }),
       transformResponse: (
         raw: { exchange?: string; tags?: string[] },
         _meta,
         arg,
-      ): ProductTagsResponse => ({
-        exchange:
-          raw.exchange ??
-          (arg && typeof arg === 'object' && 'exchange' in arg
-            ? (arg.exchange ?? 'binance')
-            : 'binance'),
-        tags: raw.tags ?? [],
-      }),
-      providesTags: (_r, _e, arg) => [
-        {
-          type: 'ProductTag' as const,
-          id: arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance',
-        },
-      ],
+      ): ProductTagsResponse => transformProductTagsResponse(raw, arg),
+      providesTags: (_r, _e, arg) => [{ type: 'ProductTag' as const, id: productTagId(arg) }],
     }),
 
     listSpotMarkets: build.query<SpotListResponse, SpotListQuery | void>({
@@ -108,7 +102,10 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/spot',
         params: compactParams({ ...(arg ?? {}) }),
       }),
-      providesTags: ['SpotList'],
+      providesTags: (_r, _e, arg) => [
+        { type: 'SpotList' as const, id: spotListTagId(arg) },
+        { type: 'SpotList' as const, id: 'LIST' },
+      ],
     }),
 
     listIntervals: build.query<IntervalsResponse, IntervalsQuery | void>({
@@ -120,18 +117,8 @@ export const marketApi = baseApi.injectEndpoints({
         raw: { exchange?: string; intervals?: string[] },
         _meta,
         arg,
-      ): IntervalsResponse => ({
-        exchange:
-          raw.exchange ??
-          (arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance'),
-        intervals: raw.intervals ?? [],
-      }),
-      providesTags: (_r, _e, arg) => [
-        {
-          type: 'Interval' as const,
-          id: arg && typeof arg === 'object' && arg.exchange ? arg.exchange : 'binance',
-        },
-      ],
+      ): IntervalsResponse => transformIntervalsResponse(raw, arg),
+      providesTags: (_r, _e, arg) => [{ type: 'Interval' as const, id: intervalTagId(arg) }],
     }),
 
     getCandles: build.query<CandlesResponse, CandlesQuery>({
@@ -139,12 +126,7 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/candles',
         params: compactParams({ ...arg }),
       }),
-      providesTags: (_r, _e, arg) => [
-        {
-          type: 'Candle' as const,
-          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}`,
-        },
-      ],
+      providesTags: (_r, _e, arg) => [{ type: 'Candle' as const, id: candleTagId(arg) }],
     }),
 
     getTicker24h: build.query<Ticker24h, Ticker24hQuery>({
@@ -152,9 +134,7 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/ticker/24h',
         params: compactParams({ ...arg }),
       }),
-      providesTags: (_r, _e, arg) => [
-        { type: 'Ticker' as const, id: `${arg.exchange ?? 'binance'}:${arg.symbol}` },
-      ],
+      providesTags: (_r, _e, arg) => [{ type: 'Ticker' as const, id: tickerTagId(arg) }],
     }),
 
     getSupply: build.query<Supply, SupplyQuery>({
@@ -162,12 +142,7 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/supply',
         params: compactParams({ ...(arg ?? {}) }),
       }),
-      providesTags: (_r, _e, arg) => [
-        {
-          type: 'Supply' as const,
-          id: (arg && (arg.asset || arg.symbol)) || 'unknown',
-        },
-      ],
+      providesTags: (_r, _e, arg) => [{ type: 'Supply' as const, id: supplyTagId(arg) }],
     }),
 
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
@@ -175,10 +150,31 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/indicators',
         params: compactParams({ ...arg }),
       }),
+      providesTags: (_r, _e, arg) => [{ type: 'Indicator' as const, id: indicatorTagId(arg) }],
+    }),
+
+    getPumpEvents: build.query<PumpEventsResponse, PumpEventsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/pumps',
+        params: compactParams({ ...arg }),
+      }),
       providesTags: (_r, _e, arg) => [
         {
-          type: 'Indicator' as const,
-          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}:${arg.rsiPeriod ?? 14}:${arg.emaPeriods ?? '12,26'}`,
+          type: 'Pump' as const,
+          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}`,
+        },
+      ],
+    }),
+
+    scanPumpEvents: build.query<ScanPumpEventsResponse, ScanPumpEventsQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/pumps/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Pump' as const,
+          id: `scan:${arg && typeof arg === 'object' ? (arg.exchange ?? 'binance') : 'binance'}`,
         },
       ],
     }),
@@ -195,4 +191,6 @@ export const {
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
+  useGetPumpEventsQuery,
+  useScanPumpEventsQuery,
 } = marketApi;
