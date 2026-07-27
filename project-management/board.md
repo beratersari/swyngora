@@ -119,11 +119,32 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (1–2) · (3) · (4–5) · (6–7)
 
+## Epic F — Mobile watchlist (**done**)
+
+**Tasks:** `tasks/mobile/watchlist/`  
+**Epic:** `epics/mobile-watchlist.md`  
+**Plan:** `docs/design/mobile-watchlist.md`  
+**Feature:** `docs/features/mobile-watchlist.md`  
+**Branch:** `feature/mobile-watchlist`
+
+| ID | Task | Status |
+|---|---|---|
+| MWL-1 | clientId + local storage helpers | done |
+| MWL-2 | RTK watchlistApi endpoints | done |
+| MWL-3 | watchKey + merge pure helpers + tests | done |
+| MWL-4 | WatchlistProvider context (hydrate + toggle) | done |
+| MWL-5 | StarButton + Markets / Detail wiring | done |
+| MWL-6 | Watchlist tab + WatchlistPage + list organisms | done |
+| MWL-7 | Quote enrichment + poll + empty/error UX | done |
+| MWL-8 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (1–3) · (4–5) · (6–7) · (8)
+
 ## Later (not started)
 
 | ID | Task | Status |
 |---|---|---|
-| WL-1 | Watchlist UI (web) | backlog |
+| WL-1 | Watchlist UI (web / `frontend/`) | backlog |
 
 ## Status legend
 

@@ -15,7 +15,7 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 ```text
 tasks/
 ├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
-└── mobile/init|markets|detail     # MINIT-*, MMKT-*, MDET-*
+└── mobile/init|markets|detail|watchlist  # MINIT-*, MMKT-*, MDET-*, MWL-*
 ```
 
 **Do not add new task files to `tasks/` root.** Use the matching subfolder.
@@ -52,6 +52,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 4. Epic C — Mobile project initialization — **done** (`tasks/mobile/init/`)
 5. Epic D — Mobile markets dashboard — **done** (`tasks/mobile/markets/`)
 6. Epic E — Mobile coin detail — **done** (`tasks/mobile/detail/`, `epics/mobile-coin-detail.md`)
+7. Epic F — Mobile watchlist — **done** (`tasks/mobile/watchlist/`, `epics/mobile-watchlist.md`)
 
 ### Mobile designs
 
@@ -61,7 +62,8 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 | `docs/design/mobile-system-design.md` | Architecture |
 | `docs/design/mobile-markets-dashboard.md` | Markets dashboard |
 | `docs/design/mobile-coin-detail.md` | Coin detail + indicators |
+| `docs/design/mobile-watchlist.md` | Watchlist (stars + tab) |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-27

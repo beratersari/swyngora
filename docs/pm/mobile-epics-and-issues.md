@@ -125,3 +125,58 @@ Full task text: `project-management/tasks/mobile/markets/MMKT-*.md`.
 | MDET-5 | RSI/EMA organisms |
 | MDET-6 | Loading/error/polling tests |
 | MDET-7 | Docs closeout |
+
+Full task text: `project-management/tasks/mobile/detail/MDET-*.md`.
+
+
+---
+
+## Epic F — Mobile watchlist
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Watchlist` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p0` |
+| **Design** | `docs/design/mobile-watchlist.md` |
+| **Feature** | `docs/features/mobile-watchlist.md` |
+| **Epic file** | `project-management/epics/mobile-watchlist.md` |
+| **Tasks** | `project-management/tasks/mobile/watchlist/MWL-*.md` |
+| **Branch** | `feature/mobile-watchlist` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Mobile watchlist: star/unstar pairs from Markets and Coin detail, dedicated Watchlist tab,
+device-local clientId sync to existing GET/POST/DELETE/PUT `/api/v1/watchlist*`, ticker enrichment.
+
+## Goals
+
+- Star on market rows + coin detail
+- Watchlist tab with list + navigate to detail
+- Optimistic local ∪ server merge (simple-frontend parity)
+- Max 200 items UX; no new backend work
+
+## Out of scope
+
+Auth, alerts, web frontend watchlist, durable server store, pumps/AI.
+
+## Child issues
+
+MWL-1 … MWL-8
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MWL-1 | clientId + local storage helpers |
+| MWL-2 | RTK watchlistApi endpoints |
+| MWL-3 | watchKey + merge pure helpers |
+| MWL-4 | WatchlistProvider context |
+| MWL-5 | StarButton + Markets/Detail wiring |
+| MWL-6 | Watchlist tab + WatchlistPage |
+| MWL-7 | Quote enrichment + poll/empty/error |
+| MWL-8 | Docs + board + changelog closeout |
