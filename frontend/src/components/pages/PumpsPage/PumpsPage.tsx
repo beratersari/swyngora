@@ -10,11 +10,7 @@ import {
   type MarketExchange,
 } from '@/libs/api';
 import { defaultQuoteForExchange, formatSymbolDisplay } from '@/libs/utils';
-import {
-  pumpScanHitsToRows,
-  type PumpScanHitWire,
-  type PumpScanRow,
-} from './PumpsPage.helpers';
+import { pumpScanHitsToRows, type PumpScanRow } from './PumpsPage.helpers';
 import { Field, PageIntro, PageStack, Toolbar } from './PumpsPage.styles';
 
 export function PumpsPage() {
@@ -23,7 +19,8 @@ export function PumpsPage() {
   const [exchange, setExchange] = useState<MarketExchange>('binance');
   const [quote, setQuote] = useState(defaultQuoteForExchange('binance'));
   const [interval, setInterval] = useState('15m');
-  const [scanKey, setScanKey] = useState(0);
+  /** False until the user runs the first scan (skip query until then). */
+  const [hasScanned, setHasScanned] = useState(false);
 
   const scan = useScanPumpEventsQuery(
     {
@@ -34,16 +31,12 @@ export function PumpsPage() {
       // Slightly lower than API default 8 so scans return more usable hits in calm markets.
       minReturnPct: 5,
     },
-    { skip: scanKey === 0 },
+    { skip: !hasScanned },
   );
 
-  const rows = useMemo(() => {
-    const hits = (scan.data as { hits?: PumpScanHitWire[] } | undefined)?.hits;
-    return pumpScanHitsToRows(hits);
-  }, [scan.data]);
+  const rows = useMemo(() => pumpScanHitsToRows(scan.data?.hits), [scan.data]);
 
-  const hitCount =
-    (scan.data as { hitCount?: number } | undefined)?.hitCount ?? rows.length;
+  const hitCount = scan.data?.hitCount ?? rows.length;
 
   const columns: ColumnsType<PumpScanRow> = [
     {
@@ -152,13 +145,20 @@ export function PumpsPage() {
         <Button
           type="primary"
           loading={scan.isFetching}
-          onClick={() => setScanKey((k) => k + 1)}
+          onClick={() => {
+            if (!hasScanned) {
+              setHasScanned(true);
+              return;
+            }
+            // Same filters: force a new network request (RTK cache key is args only).
+            void scan.refetch();
+          }}
         >
           {t('pumps:scan')}
         </Button>
       </Toolbar>
 
-      {scanKey > 0 && scan.isSuccess ? (
+      {hasScanned && scan.isSuccess ? (
         <Text variant="caption" color="secondary">
           {t('pumps:hits', { count: hitCount })} · {t('pumps:note')}
         </Text>
@@ -176,7 +176,7 @@ export function PumpsPage() {
       <Table
         rowKey={(r) => `${r.exchange}:${r.symbol}:${r.openTime ?? r.returnPct}`}
         loading={scan.isFetching}
-        dataSource={scanKey === 0 ? [] : rows}
+        dataSource={hasScanned ? rows : []}
         columns={columns}
         pagination={{ pageSize: 20 }}
         onRow={(record) => ({
@@ -191,7 +191,7 @@ export function PumpsPage() {
           emptyText: (
             <Empty
               description={
-                scanKey === 0 ? t('pumps:emptyHint') : t('pumps:emptyTitle')
+                !hasScanned ? t('pumps:emptyHint') : t('pumps:emptyTitle')
               }
             />
           ),

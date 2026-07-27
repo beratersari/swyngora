@@ -177,14 +177,18 @@ export function CandleChartHost({
   }, [height]);
 
   // New symbol / interval → re-fit on next data, clear length bookkeeping.
-  useEffect(() => {
+  // Must run in useLayoutEffect *before* the data-sync layout effect so the
+  // same commit does not mis-detect history-prepend or skip fitContent.
+  useLayoutEffect(() => {
     if (seriesKeyRef.current === seriesKey) return;
     seriesKeyRef.current = seriesKey;
     hasFittedRef.current = false;
     prevLenRef.current = 0;
     prevFirstTimeRef.current = null;
     lastCandleSigRef.current = '';
+    lastOverlaySigRef.current = '';
     lastMarkersSigRef.current = '';
+    lastPriceFormatKeyRef.current = '';
   }, [seriesKey]);
 
   // Sync candles + overlays when content changes.
@@ -192,6 +196,18 @@ export function CandleChartHost({
     const chart = chartRef.current;
     const candleSeries = seriesRef.current;
     if (!chart || !candleSeries) return;
+
+    // Defensive: if seriesKey changed this commit, bookkeeping already reset above.
+    if (seriesKeyRef.current !== seriesKey) {
+      seriesKeyRef.current = seriesKey;
+      hasFittedRef.current = false;
+      prevLenRef.current = 0;
+      prevFirstTimeRef.current = null;
+      lastCandleSigRef.current = '';
+      lastOverlaySigRef.current = '';
+      lastMarkersSigRef.current = '';
+      lastPriceFormatKeyRef.current = '';
+    }
 
     const candleSig = candleDataSignature(data);
     const overlaySig = overlaysSignature(overlays);
@@ -288,7 +304,7 @@ export function CandleChartHost({
         lastOverlaySigRef.current = overlaySig;
       }
     }
-  }, [data, overlays]);
+  }, [data, overlays, seriesKey]);
 
   /**
    * Markers live in a separate effect so:

@@ -9,7 +9,12 @@ import { Text } from '@/components/atoms/Text';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { SpotMarket, SpotSortField } from '@/libs/api';
 import { SpotMetricValue } from '@/components/molecules/SpotMetricValue';
-import { defaultMetricIds, formatSymbolDisplay, resolveMetricDefs } from '@/libs/utils';
+import {
+  defaultMetricIds,
+  formatSymbolDisplay,
+  metricColumnTitle,
+  resolveMetricDefs,
+} from '@/libs/utils';
 import { COLUMN_SORT, PAGE_SIZE_OPTIONS, SORT_DIRECTIONS } from './MarketsTable.constants';
 import {
   getResultsRange,
@@ -154,7 +159,7 @@ export function MarketsTable({
     ...metrics.map((def) => {
       const sortable = Boolean(def.sortField);
       return {
-        title: t(`markets:table.${def.labelKey}`),
+        title: metricColumnTitle(t, def.labelKey),
         dataIndex: def.field,
         key: def.id,
         align: def.align ?? 'right',

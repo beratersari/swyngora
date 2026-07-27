@@ -5,7 +5,7 @@
   "missingSymbolBody": "URL'de işlem çifti yok.",
   "chart": {
     "title": "Fiyat grafiği",
-    "meta": "{{interval}} · {{bars}} bar yüklü · geçmiş için sola kaydırın",
+    "meta": "{{interval}} · {{bars}} bar yüklü · sola kaydırın (1000+ geçmiş sayfalı)",
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",

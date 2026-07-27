@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  analyticsBarLimit,
   DEFAULT_DETAIL_STATE,
   detailStateToSearchParams,
+  intervalToSeconds,
   marketsBackPath,
   parseDetailSearchParams,
   parseExchangeParam,
@@ -9,7 +11,6 @@ import {
   resolveInterval,
   toSupplyAsset,
 } from './detailQuery';
-
 describe('parseExchangeParam', () => {
   it('accepts known venues (case-insensitive) and defaults unknown', () => {
     expect(parseExchangeParam('coinbase')).toBe('coinbase');
@@ -40,12 +41,20 @@ describe('detail search params', () => {
   it('parses interval and limit with bounds', () => {
     const s = parseDetailSearchParams(new URLSearchParams('interval=4h&limit=200'));
     expect(s).toEqual({ interval: '4h', limit: 200 });
-    expect(parseDetailSearchParams(new URLSearchParams('limit=5')).limit).toBe(100);
-    // API-aligned max 1000; out of range falls back to default
-    expect(parseDetailSearchParams(new URLSearchParams('limit=1001')).limit).toBe(100);
+    expect(parseDetailSearchParams(new URLSearchParams('limit=5')).limit).toBe(
+      DEFAULT_DETAIL_STATE.limit,
+    );
+    // Out of range falls back to default live window
+    expect(parseDetailSearchParams(new URLSearchParams('limit=1001')).limit).toBe(
+      DEFAULT_DETAIL_STATE.limit,
+    );
     expect(parseDetailSearchParams(new URLSearchParams('limit=500.1')).limit).toBe(500);
-    expect(parseDetailSearchParams(new URLSearchParams('limit=19.9')).limit).toBe(100);
-    expect(parseDetailSearchParams(new URLSearchParams('limit=abc')).limit).toBe(100);
+    expect(parseDetailSearchParams(new URLSearchParams('limit=19.9')).limit).toBe(
+      DEFAULT_DETAIL_STATE.limit,
+    );
+    expect(parseDetailSearchParams(new URLSearchParams('limit=abc')).limit).toBe(
+      DEFAULT_DETAIL_STATE.limit,
+    );
     expect(parseDetailSearchParams(new URLSearchParams()).interval).toBe(
       DEFAULT_DETAIL_STATE.interval,
     );
@@ -102,5 +111,30 @@ describe('marketsBackPath', () => {
   it('preserves non-default exchange', () => {
     expect(marketsBackPath('coinbase')).toBe('/markets?exchange=coinbase');
     expect(marketsBackPath('bybit')).toBe('/markets?exchange=bybit');
+  });
+});
+
+describe('intervalToSeconds', () => {
+  it('parses m/h/d/w', () => {
+    expect(intervalToSeconds('15m')).toBe(900);
+    expect(intervalToSeconds('1h')).toBe(3600);
+    expect(intervalToSeconds('4h')).toBe(14400);
+    expect(intervalToSeconds('1d')).toBe(86400);
+    expect(intervalToSeconds('1w')).toBe(604800);
+  });
+
+  it('returns 0 for invalid', () => {
+    expect(intervalToSeconds('')).toBe(0);
+    expect(intervalToSeconds('1M')).toBe(0);
+    expect(intervalToSeconds('foo')).toBe(0);
+  });
+});
+
+describe('analyticsBarLimit', () => {
+  it('floors at minLive and caps at apiMax', () => {
+    expect(analyticsBarLimit(0, 100)).toBe(100);
+    expect(analyticsBarLimit(50, 100)).toBe(100);
+    expect(analyticsBarLimit(250, 100)).toBe(250);
+    expect(analyticsBarLimit(5000, 100, 1000)).toBe(1000);
   });
 });

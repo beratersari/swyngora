@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
+import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
 import type {
   CandleChartMarker,
   CandleChartOverlay,
@@ -21,21 +22,30 @@ import {
   useGetSupplyQuery,
   useGetTicker24hQuery,
   useGetWatchlistQuery,
+  useLazyGetCandlesQuery,
+  useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
   useRemoveWatchlistItemMutation,
+  type PumpEventDto,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import {
   apiCandlesToChart,
   detailStateToSearchParams,
+  filterValidApiCandles,
   indicatorPointsToEmaLine,
+  intervalToSeconds,
   marketsBackPath,
+  mergeCandleHistory,
+  oldestCandleOpenTimeMs,
   parseDetailSearchParams,
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
   sortedEmaKeys,
   toSupplyAsset,
+  trimCandlesToMax,
+  type ApiCandle,
 } from '@/libs/utils';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
@@ -44,15 +54,19 @@ import {
   DEFAULT_DETAIL_TICKER_POLL_MS,
   DEFAULT_EMA_PERIODS,
   DEFAULT_RSI_PERIOD,
+  DETAIL_API_BAR_MAX,
   DETAIL_CANDLE_MAX_LIMIT,
   DETAIL_CANDLE_PAGE_SIZE,
+  DETAIL_INDICATOR_LIMIT,
 } from '@/config/constants';
-import { palette } from '@/styles/tokens';
 import { ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
+import { mergePumpEvents, pumpEventsToChartMarkers } from './CoinDetailPage.helpers';
 
 /**
  * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis.
- * Candle history grows automatically as the user pans left on the chart.
+ * Live candles poll a short window; pan-left pages older bars via endTime.
+ * Pump/dump markers: live window is polled; each history page fetches pumps for
+ * the same endTime range so markers exist on older candles, not only the right edge.
  * Route: /markets/:exchange/:symbol
  */
 export function CoinDetailPage() {
@@ -66,8 +80,12 @@ export function CoinDetailPage() {
   const urlState = useMemo(() => parseDetailSearchParams(searchParams), [searchParams]);
 
   const [showEma, setShowEma] = useState(true);
-  /** Progressive bar count — not a user control; grows when chart scrolls left. */
-  const [candleLimit, setCandleLimit] = useState(DEFAULT_DETAIL_CANDLE_LIMIT);
+  /** Older pages (endTime fetches), merged with the live window for the chart. */
+  const [historyCandles, setHistoryCandles] = useState<ApiCandle[]>([]);
+  /** Pump events for those history pages (live pumps stay on RTK query). */
+  const [historyPumpEvents, setHistoryPumpEvents] = useState<PumpEventDto[]>([]);
+  const [historyExhausted, setHistoryExhausted] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
   /** |return %| threshold for pump/dump markers on the chart. */
   const [pumpThresholdPct, setPumpThresholdPct] = useState(
     DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
@@ -87,9 +105,12 @@ export function CoinDetailPage() {
 
   const interval = resolveInterval(urlState.interval, supportedIntervals);
 
-  // New pair / interval → start from a fresh window of bars.
+  // New pair / interval → drop paged history and restart from the live window.
   useEffect(() => {
-    setCandleLimit(DEFAULT_DETAIL_CANDLE_LIMIT);
+    setHistoryCandles([]);
+    setHistoryPumpEvents([]);
+    setHistoryExhausted(false);
+    setHistoryLoading(false);
   }, [exchange, symbol, interval]);
 
   useEffect(() => {
@@ -106,24 +127,12 @@ export function CoinDetailPage() {
   const watchlistQuery = useGetWatchlistQuery();
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
+  const [fetchOlderCandles] = useLazyGetCandlesQuery();
+  const [fetchOlderPumps] = useLazyGetPumpEventsQuery();
   const watched = Boolean(
     watchlistQuery.data?.items?.some(
       (it) => it.exchange === exchange && it.symbol === symbol,
     ),
-  );
-
-  // Use the same bar count as the chart so event times land inside loaded candles.
-  const pumpsQuery = useGetPumpEventsQuery(
-    {
-      exchange,
-      symbol,
-      interval,
-      limit: candleLimit,
-      minReturnPct: pumpThresholdPct,
-      direction: 'both',
-      maxEvents: 40,
-    },
-    { skip: skipSeries || !showPumpMarkers },
   );
 
   const tickerQuery = useGetTicker24hQuery(
@@ -144,8 +153,9 @@ export function CoinDetailPage() {
     },
   );
 
+  // Live head only — polled. Deeper history is paged with endTime (see onNeedMoreHistory).
   const candlesQuery = useGetCandlesQuery(
-    { exchange, symbol, interval, limit: candleLimit },
+    { exchange, symbol, interval, limit: DEFAULT_DETAIL_CANDLE_LIMIT },
     {
       skip: skipSeries,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
@@ -153,12 +163,43 @@ export function CoinDetailPage() {
     },
   );
 
+  const liveCandles = useMemo(
+    () => filterValidApiCandles(candlesQuery.data?.candles),
+    [candlesQuery.data?.candles],
+  );
+
+  const allCandles = useMemo(
+    () =>
+      trimCandlesToMax(
+        mergeCandleHistory(historyCandles, liveCandles),
+        DETAIL_CANDLE_MAX_LIMIT,
+      ),
+    [historyCandles, liveCandles],
+  );
+
+  const chartData = useMemo(() => apiCandlesToChart(allCandles), [allCandles]);
+
+  // Live pump window matches the polled candle head (API max 1000).
+  const pumpsQuery = useGetPumpEventsQuery(
+    {
+      exchange,
+      symbol,
+      interval,
+      limit: DEFAULT_DETAIL_CANDLE_LIMIT,
+      minReturnPct: pumpThresholdPct,
+      direction: 'both',
+      maxEvents: 40,
+    },
+    { skip: skipSeries || !showPumpMarkers },
+  );
+
   const indicatorsQuery = useGetIndicatorsQuery(
     {
       exchange,
       symbol,
       interval,
-      limit: candleLimit,
+      // Indicators stay on a fixed recent window (not full multi-page history).
+      limit: Math.min(DETAIL_INDICATOR_LIMIT, DETAIL_API_BAR_MAX),
       rsiPeriod: DEFAULT_RSI_PERIOD,
       emaPeriods: DEFAULT_EMA_PERIODS,
     },
@@ -169,43 +210,90 @@ export function CoinDetailPage() {
     },
   );
 
-  const chartData = useMemo(() => {
-    const raw = candlesQuery.data?.candles ?? [];
-    return apiCandlesToChart(
-      raw.flatMap((c) =>
-        c.openTime && c.open && c.high && c.low && c.close
-          ? [
-              {
-                openTime: c.openTime,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close,
-                volume: c.volume ?? '0',
-                closeTime: c.closeTime,
-              },
-            ]
-          : [],
-      ),
-    );
-  }, [candlesQuery.data?.candles]);
-
-  const returnedBars = candlesQuery.data?.candles?.length ?? 0;
-  // If we asked for N and got fewer, the venue has no older history in this window.
   const hasMoreHistory =
-    candleLimit < DETAIL_CANDLE_MAX_LIMIT &&
-    returnedBars >= candleLimit &&
-    candlesQuery.isSuccess;
+    !historyExhausted &&
+    allCandles.length > 0 &&
+    allCandles.length < DETAIL_CANDLE_MAX_LIMIT &&
+    (candlesQuery.isSuccess || historyCandles.length > 0);
 
-  const isLoadingMore =
-    candlesQuery.isFetching && chartData.length > 0 && candleLimit > DEFAULT_DETAIL_CANDLE_LIMIT;
+  const isLoadingMore = historyLoading;
 
   const onNeedMoreHistory = useCallback(() => {
-    setCandleLimit((prev) => {
-      if (prev >= DETAIL_CANDLE_MAX_LIMIT) return prev;
-      return Math.min(DETAIL_CANDLE_MAX_LIMIT, prev + DETAIL_CANDLE_PAGE_SIZE);
-    });
-  }, []);
+    if (historyLoading || historyExhausted || skipSeries || !symbol) return;
+    if (allCandles.length >= DETAIL_CANDLE_MAX_LIMIT) {
+      setHistoryExhausted(true);
+      return;
+    }
+    const oldestMs = oldestCandleOpenTimeMs(allCandles);
+    if (oldestMs == null) return;
+
+    const endTime = new Date(oldestMs - 1).toISOString();
+    setHistoryLoading(true);
+
+    const candleReq = fetchOlderCandles({
+      exchange,
+      symbol,
+      interval,
+      limit: DETAIL_CANDLE_PAGE_SIZE,
+      endTime,
+    }).unwrap();
+
+    // Same time window as the candle page so markers exist on older bars.
+    const pumpReq =
+      showPumpMarkers
+        ? fetchOlderPumps({
+            exchange,
+            symbol,
+            interval,
+            limit: DETAIL_CANDLE_PAGE_SIZE,
+            endTime,
+            minReturnPct: pumpThresholdPct,
+            direction: 'both',
+            maxEvents: 40,
+          })
+            .unwrap()
+            .catch(() => ({ events: [] as PumpEventDto[] }))
+        : Promise.resolve({ events: [] as PumpEventDto[] });
+
+    void Promise.all([candleReq, pumpReq])
+      .then(([candleRes, pumpRes]) => {
+        const batch = filterValidApiCandles(candleRes.candles);
+        if (batch.length === 0) {
+          setHistoryExhausted(true);
+          return;
+        }
+        setHistoryCandles((prev) => {
+          const mergedHist = mergeCandleHistory(batch, prev);
+          const room = Math.max(0, DETAIL_CANDLE_MAX_LIMIT - DEFAULT_DETAIL_CANDLE_LIMIT);
+          return room > 0 ? trimCandlesToMax(mergedHist, room) : mergedHist;
+        });
+        const pageEvents = pumpRes.events ?? [];
+        if (pageEvents.length > 0) {
+          setHistoryPumpEvents((prev) => mergePumpEvents(prev, pageEvents));
+        }
+        if (batch.length < DETAIL_CANDLE_PAGE_SIZE) {
+          setHistoryExhausted(true);
+        }
+      })
+      .catch(() => {
+        // Keep hasMore true so the user can retry by panning again.
+      })
+      .finally(() => {
+        setHistoryLoading(false);
+      });
+  }, [
+    allCandles,
+    exchange,
+    fetchOlderCandles,
+    fetchOlderPumps,
+    historyExhausted,
+    historyLoading,
+    interval,
+    pumpThresholdPct,
+    showPumpMarkers,
+    skipSeries,
+    symbol,
+  ]);
 
   const indicatorPoints = indicatorsQuery.data?.points;
   const latestEma = indicatorsQuery.data?.latest?.ema;
@@ -222,31 +310,20 @@ export function CoinDetailPage() {
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     if (!showPumpMarkers) return [];
-    // API events have signed returnPct (no direction field on the DTO).
-    const events =
-      (pumpsQuery.data as { events?: { openTime?: string; returnPct?: number }[] } | undefined)
-        ?.events ?? [];
-    const out: CandleChartMarker[] = [];
-    for (const ev of events) {
-      if (!ev.openTime) continue;
-      const ms = Date.parse(ev.openTime);
-      if (!Number.isFinite(ms)) continue;
-      const ret = Number(ev.returnPct);
-      // Extra client filter if API returns near-threshold noise.
-      if (Number.isFinite(ret) && Math.abs(ret) < pumpThresholdPct) continue;
-      const up = !Number.isFinite(ret) || ret >= 0;
-      out.push({
-        time: Math.floor(ms / 1000),
-        position: up ? 'belowBar' : 'aboveBar',
-        color: up ? palette.mountainMeadow : '#E07A7A',
-        shape: up ? 'arrowUp' : 'arrowDown',
-        text: up ? `↑${Number.isFinite(ret) ? ret.toFixed(1) : ''}` : `↓${Number.isFinite(ret) ? Math.abs(ret).toFixed(1) : ''}`,
-      });
-    }
-    return out;
-  }, [pumpsQuery.data, showPumpMarkers, pumpThresholdPct]);
-
-  const patchUrl = (patch: Partial<{ interval: string }>) => {
+    // Live (right edge) + history-page pumps (older bars loaded while panning left).
+    const allEvents = mergePumpEvents(pumpsQuery.data?.events, historyPumpEvents);
+    const raw = pumpEventsToChartMarkers(allEvents, pumpThresholdPct);
+    const barSec = intervalToSeconds(interval);
+    const maxDist = barSec > 0 ? barSec * 1.5 : 3600;
+    return snapMarkersToCandleTimes(raw, chartData, { maxDistanceSec: maxDist });
+  }, [
+    showPumpMarkers,
+    pumpsQuery.data?.events,
+    historyPumpEvents,
+    pumpThresholdPct,
+    chartData,
+    interval,
+  ]);  const patchUrl = (patch: Partial<{ interval: string }>) => {
     setSearchParams(
       detailStateToSearchParams({
         interval: patch.interval ?? interval,
@@ -261,6 +338,9 @@ export function CoinDetailPage() {
     void supplyQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
+    if (showPumpMarkers) {
+      void pumpsQuery.refetch();
+    }
   };
 
   const backTo = marketsBackPath(exchange);
@@ -344,7 +424,7 @@ export function CoinDetailPage() {
           <Text variant="caption" color="secondary">
             {t('detail:chart.meta', {
               interval,
-              bars: chartData.length || candleLimit,
+              bars: chartData.length || DEFAULT_DETAIL_CANDLE_LIMIT,
             })}
           </Text>
         </ChartTitleRow>
@@ -359,7 +439,11 @@ export function CoinDetailPage() {
           showPumpMarkers={showPumpMarkers}
           onShowPumpMarkersChange={setShowPumpMarkers}
           onRefresh={refreshAll}
-          isFetching={seriesFetching || (showPumpMarkers && pumpsQuery.isFetching)}
+          isFetching={
+            seriesFetching ||
+            historyLoading ||
+            (showPumpMarkers && pumpsQuery.isFetching)
+          }
         />
 
         {intervalsQuery.isError && !supportedIntervals?.length ? (

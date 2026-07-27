@@ -1,5 +1,12 @@
+import type { ReactNode } from 'react';
 import type { WatchlistItem } from '@/libs/api';
 import type { SpotMetricDef } from '@/libs/utils';
+
+export type WatchlistMetricRenderArgs = {
+  exchange: string;
+  symbol: string;
+  metric: SpotMetricDef;
+};
 
 export type WatchlistTableProps = {
   items: WatchlistItem[];
@@ -12,4 +19,9 @@ export type WatchlistTableProps = {
    * When omitted, uses watchlist defaults.
    */
   metrics?: SpotMetricDef[];
+  /**
+   * Page-owned live metric cell (RTK / polling must stay outside organisms).
+   * When omitted, metric cells show an em dash.
+   */
+  renderMetric?: (args: WatchlistMetricRenderArgs) => ReactNode;
 };

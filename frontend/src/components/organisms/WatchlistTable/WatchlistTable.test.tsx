@@ -2,33 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/render';
+import { SpotMetricValue } from '@/components/molecules/SpotMetricValue';
+import type { SpotMarket } from '@/libs/api';
 import { WatchlistTable } from './WatchlistTable';
 
-vi.mock('@/libs/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/libs/api')>();
-  return {
-    ...actual,
-    useListSpotMarketsQuery: () => ({
-      data: {
-        items: [
-          {
-            symbol: 'ETHUSDT',
-            lastPrice: '3200.5',
-            priceChangePercent: '-0.75',
-            quoteVolume: '500000000',
-            marketCapCirculating: 3.8e11,
-          },
-        ],
-      },
-      isLoading: false,
-      isFetching: false,
-      isError: false,
-    }),
-  };
-});
+const ethSpot: SpotMarket = {
+  symbol: 'ETHUSDT',
+  lastPrice: '3200.5',
+  priceChangePercent: '-0.75',
+  quoteVolume: '500000000',
+  marketCapCirculating: 3.8e11,
+};
 
 describe('WatchlistTable', () => {
-  it('renders live price, change, volume, and mcap columns', async () => {
+  it('renders live price, change, volume, and mcap columns via renderMetric', async () => {
     const onOpen = vi.fn();
     const onRemove = vi.fn();
     renderWithProviders(
@@ -38,6 +25,9 @@ describe('WatchlistTable', () => {
         removeLoading={false}
         onOpen={onOpen}
         onRemove={onRemove}
+        renderMetric={({ exchange, metric }) => (
+          <SpotMetricValue metric={metric} spot={ethSpot} exchange={exchange} />
+        )}
       />,
     );
 

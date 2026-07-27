@@ -3,6 +3,7 @@ import {
   columnSortMap,
   defaultMetricIds,
   loadMetricIds,
+  metricColumnTitle,
   metricsForSurface,
   normalizeMetricIds,
   resolveMetricDefs,
@@ -70,5 +71,12 @@ describe('spotMetrics', () => {
     }
     expect(metricsForSurface('markets').length).toBeGreaterThanOrEqual(6);
     expect(metricsForSurface('watchlist').length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('metricColumnTitle maps known label keys via t()', () => {
+    const t = (key: string) => key;
+    expect(metricColumnTitle(t, 'last')).toBe('markets:table.last');
+    expect(metricColumnTitle(t, 'circMcap')).toBe('markets:table.circMcap');
+    expect(metricColumnTitle(t, 'tags')).toBe('markets:table.tags');
   });
 });

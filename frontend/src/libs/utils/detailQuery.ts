@@ -20,8 +20,47 @@ export const DEFAULT_DETAIL_STATE: DetailUrlState = {
 };
 
 const LIMIT_MIN = 20;
-/** Align with API max used by progressive chart loading. */
+/** Legacy URL limit clamp only (chart history is no longer URL-driven). */
 const LIMIT_MAX = 1000;
+
+/**
+ * Interval string → duration in seconds (e.g. `15m` → 900, `1h` → 3600).
+ * Returns 0 when the token is not a simple m/h/d unit.
+ */
+export function intervalToSeconds(interval: string): number {
+  // Case-sensitive units: `1m` minute vs Binance `1M` month (unsupported here → 0).
+  const m = /^(\d+)([mhdw])$/.exec((interval ?? '').trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  switch (m[2]) {
+    case 'm':
+      return n * 60;
+    case 'h':
+      return n * 3600;
+    case 'd':
+      return n * 86400;
+    case 'w':
+      return n * 604800;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Candle count for pump/indicator APIs: track loaded chart depth up to the
+ * backend max (1000). Never below `minLive` so the first paint still analyzes
+ * a full live window.
+ */
+export function analyticsBarLimit(
+  loadedBars: number,
+  minLive: number,
+  apiMax = 1000,
+): number {
+  const floor = Math.max(1, Math.min(apiMax, minLive));
+  if (!Number.isFinite(loadedBars) || loadedBars <= 0) return floor;
+  return Math.min(apiMax, Math.max(floor, Math.floor(loadedBars)));
+}
 
 export function parseExchangeParam(raw: string | undefined): SupportedExchange {
   const v = (raw ?? '').toLowerCase();

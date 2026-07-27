@@ -2,7 +2,13 @@ export { formatPrice } from './formatPrice';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
-export { apiCandlesToChart } from './candles';
+export {
+  apiCandlesToChart,
+  filterValidApiCandles,
+  mergeCandleHistory,
+  oldestCandleOpenTimeMs,
+  trimCandlesToMax,
+} from './candles';
 export type { ApiCandle, ChartCandle } from './candles';
 export {
   formatChangePercent,
@@ -39,6 +45,8 @@ export {
   resolveInterval,
   toSupplyAsset,
   marketsBackPath,
+  intervalToSeconds,
+  analyticsBarLimit,
 } from './detailQuery';
 export type { DetailUrlState } from './detailQuery';
 export {
@@ -51,5 +59,15 @@ export {
   loadMetricIds,
   saveMetricIds,
   resolveMetricDefs,
+  metricColumnTitle,
+  metricI18nKey,
+  METRIC_I18N_KEYS,
 } from './spotMetrics';
-export type { SpotMetricId, SpotMetricDef, SpotMetricSurface, SpotMetricFormat } from './spotMetrics';
+export type {
+  SpotMetricId,
+  SpotMetricDef,
+  SpotMetricSurface,
+  SpotMetricFormat,
+  SpotMetricLabelKey,
+  MetricI18nKey,
+} from './spotMetrics';

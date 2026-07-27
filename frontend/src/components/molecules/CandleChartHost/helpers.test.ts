@@ -26,6 +26,21 @@ describe('CandleChartHost helpers', () => {
     ).toEqual([{ time: 100, open: 1, high: 2, low: 0.5, close: 1.5 }]);
   });
 
+  it('sorts and dedupes candle points by time', () => {
+    expect(
+      toCandlestickData([
+        { time: 300, open: 3, high: 3, low: 3, close: 3 },
+        { time: 100, open: 1, high: 1, low: 1, close: 1 },
+        { time: 200, open: 2, high: 2, low: 2, close: 2 },
+        { time: 200, open: 9, high: 9, low: 9, close: 9 },
+      ]),
+    ).toEqual([
+      { time: 100, open: 1, high: 1, low: 1, close: 1 },
+      { time: 200, open: 9, high: 9, low: 9, close: 9 },
+      { time: 300, open: 3, high: 3, low: 3, close: 3 },
+    ]);
+  });
+
   it('sorts and dedupes line points by time', () => {
     expect(
       toLineData([
@@ -145,6 +160,28 @@ describe('overlaysSignature includes title and color', () => {
     expect(overlaysSignature([{ ...base, title: 'A' }])).not.toBe(
       overlaysSignature([{ ...base, title: 'B' }]),
     );
+  });
+
+  it('differs when a middle point value changes (same tips and length)', () => {
+    const base = {
+      id: 'ema-12',
+      color: '#0f0',
+      title: 'EMA 12',
+      data: [
+        { time: 1, value: 10 },
+        { time: 2, value: 20 },
+        { time: 3, value: 30 },
+      ],
+    };
+    const mid = {
+      ...base,
+      data: [
+        { time: 1, value: 10 },
+        { time: 2, value: 999 },
+        { time: 3, value: 30 },
+      ],
+    };
+    expect(overlaysSignature([base])).not.toBe(overlaysSignature([mid]));
   });
 });
 

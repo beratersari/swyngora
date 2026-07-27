@@ -11,10 +11,12 @@ export {
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
+  useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
+  useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,
   usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
@@ -40,6 +42,8 @@ export type {
   IndicatorsResponse,
   PumpEventsQuery,
   PumpEventsResponse,
+  PumpEventDto,
+  PumpScanHitDto,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
 } from './endpoints/marketApi';

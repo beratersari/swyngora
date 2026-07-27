@@ -29,6 +29,21 @@ export type SpotMetricFormat =
   | 'tags'
   | 'number';
 
+/** Suffix under `markets:table.*` — keep in sync with locale JSON. */
+export type SpotMetricLabelKey =
+  | 'last'
+  | 'change24h'
+  | 'changeAbs'
+  | 'high'
+  | 'low'
+  | 'baseVol'
+  | 'quoteVol'
+  | 'circMcap'
+  | 'totalMcap'
+  | 'maxMcap'
+  | 'trades'
+  | 'tags';
+
 export type SpotMetricDef = {
   id: SpotMetricId;
   /** Field on SpotMarket used for display (and dataIndex on Markets). */
@@ -37,7 +52,7 @@ export type SpotMetricDef = {
   /** When set, Markets table can sort by this API field. */
   sortField?: SpotSortField;
   /** i18n key under markets:table.* */
-  labelKey: string;
+  labelKey: SpotMetricLabelKey;
   surfaces: readonly SpotMetricSurface[];
   defaultVisible: Partial<Record<SpotMetricSurface, boolean>>;
   align?: 'left' | 'right';
@@ -45,6 +60,42 @@ export type SpotMetricDef = {
   toneFromChange?: boolean;
 };
 
+/**
+ * Full i18n keys for metric columns (strictly typed for i18next `t()`).
+ * Prefer `t(metricI18nKey(labelKey))` over template literals.
+ */
+export const METRIC_I18N_KEYS = {
+  last: 'markets:table.last',
+  change24h: 'markets:table.change24h',
+  changeAbs: 'markets:table.changeAbs',
+  high: 'markets:table.high',
+  low: 'markets:table.low',
+  baseVol: 'markets:table.baseVol',
+  quoteVol: 'markets:table.quoteVol',
+  circMcap: 'markets:table.circMcap',
+  totalMcap: 'markets:table.totalMcap',
+  maxMcap: 'markets:table.maxMcap',
+  trades: 'markets:table.trades',
+  tags: 'markets:table.tags',
+} as const satisfies Record<SpotMetricLabelKey, `markets:table.${SpotMetricLabelKey}`>;
+
+export type MetricI18nKey = (typeof METRIC_I18N_KEYS)[SpotMetricLabelKey];
+
+/** Resolve catalog labelKey → typed i18n resource key. */
+export function metricI18nKey(labelKey: SpotMetricLabelKey): MetricI18nKey {
+  return METRIC_I18N_KEYS[labelKey];
+}
+
+/**
+ * Typed column title for metric catalog keys.
+ * `t` is loosely typed so both free functions and i18next TFunction are accepted.
+ */
+export function metricColumnTitle(
+  t: (key: MetricI18nKey) => string,
+  labelKey: SpotMetricLabelKey,
+): string {
+  return t(metricI18nKey(labelKey));
+}
 /**
  * Single catalog of spot metrics for Markets dashboard + Watchlist.
  * To add a column: append a def, add i18n labels, ship — no table rewrites.

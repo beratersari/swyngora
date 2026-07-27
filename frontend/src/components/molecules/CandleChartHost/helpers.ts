@@ -84,9 +84,13 @@ export function chartPriceFormatFromCandles(data: ChartCandle[]): ChartPriceForm
   return { type: 'price', precision, minMove };
 }
 
-/** Map UI candles → Lightweight Charts candlestick series points. */
+/**
+ * Map UI candles → Lightweight Charts candlestick series points.
+ * Sorts by time and drops duplicate timestamps (library requires strictly ascending times).
+ */
 export function toCandlestickData(data: ChartCandle[]): CandlestickData<Time>[] {
-  return data
+  if (!data.length) return [];
+  const sorted = [...data]
     .filter(
       (d) =>
         Number.isFinite(d.time) &&
@@ -95,13 +99,26 @@ export function toCandlestickData(data: ChartCandle[]): CandlestickData<Time>[] 
         Number.isFinite(d.low) &&
         Number.isFinite(d.close),
     )
-    .map((d) => ({
+    .sort((a, b) => a.time - b.time);
+  const out: CandlestickData<Time>[] = [];
+  let lastTime: number | null = null;
+  for (const d of sorted) {
+    const point: CandlestickData<Time> = {
       time: d.time as Time,
       open: d.open,
       high: d.high,
       low: d.low,
       close: d.close,
-    }));
+    };
+    if (lastTime !== null && d.time === lastTime) {
+      // Keep the later bar for the same timestamp (matches toLineData).
+      out[out.length - 1] = point;
+      continue;
+    }
+    out.push(point);
+    lastTime = d.time;
+  }
+  return out;
 }
 
 /**
@@ -138,17 +155,19 @@ export function candleDataSignature(data: ChartCandle[]): string {
     .join(';');
 }
 
-/** Stable signature for overlays (ids + color + title + tip + length). */
+/**
+ * Stable signature for overlays — include every point so mid-series EMA
+ * recalculations trigger setData (tip-only signatures missed interior updates).
+ */
 export function overlaysSignature(overlays: CandleChartOverlay[]): string {
   if (!overlays.length) return '';
   return overlays
     .map((o) => {
-      const first = o.data[0]?.time ?? 0;
-      const last = o.data[o.data.length - 1];
-      const lastTime = last?.time ?? 0;
-      const lastValue = last?.value ?? 0;
       const title = o.title ?? '';
-      return `${o.id}:${o.color}:${title}:${o.data.length}:${first}:${lastTime}:${lastValue}`;
+      const points = o.data
+        .map((p) => `${p.time},${p.value}`)
+        .join(';');
+      return `${o.id}:${o.color}:${title}:${points}`;
     })
     .join('|');
 }

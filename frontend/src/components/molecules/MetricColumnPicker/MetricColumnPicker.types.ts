@@ -1,4 +1,8 @@
-import type { SpotMetricDef, SpotMetricId } from '@/libs/utils/spotMetrics';
+import type {
+  SpotMetricDef,
+  SpotMetricId,
+  SpotMetricLabelKey,
+} from '@/libs/utils/spotMetrics';
 
 export type MetricColumnPickerProps = {
   /** All metrics the user may toggle for this surface. */
@@ -8,7 +12,7 @@ export type MetricColumnPickerProps = {
   onChange: (ids: SpotMetricId[]) => void;
   onReset?: () => void;
   /** i18n label resolver: metric labelKey → display title */
-  getLabel: (labelKey: string) => string;
+  getLabel: (labelKey: SpotMetricLabelKey) => string;
   ariaLabel?: string;
   resetLabel?: string;
   buttonLabel?: string;

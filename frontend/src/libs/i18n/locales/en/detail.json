@@ -5,7 +5,7 @@
   "missingSymbolBody": "No trading pair in the URL.",
   "chart": {
     "title": "Price chart",
-    "meta": "{{interval}} · {{bars}} bars loaded · pan left for older history",
+    "meta": "{{interval}} · {{bars}} bars loaded · pan left for older history (pages beyond 1000)",
     "interval": "Interval",
     "bars": "Bars",
     "loadErrorTitle": "Could not load candles",

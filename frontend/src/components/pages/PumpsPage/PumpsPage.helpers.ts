@@ -9,24 +9,7 @@
  * Return/vol/time live on the strongest event — not on the hit root.
  */
 
-export type PumpEventWire = {
-  openTime?: string;
-  closeTime?: string;
-  returnPct?: number;
-  volumeRatio?: number;
-  volume?: number;
-  mode?: string;
-  direction?: string;
-  index?: number;
-};
-
-export type PumpScanHitWire = {
-  symbol?: string;
-  exchange?: string;
-  interval?: string;
-  bestReturnPct?: number;
-  events?: PumpEventWire[];
-};
+import type { PumpEventDto, PumpScanHitDto } from '@/libs/api';
 
 export type PumpScanRow = {
   symbol: string;
@@ -39,7 +22,7 @@ export type PumpScanRow = {
 };
 
 /** Prefer event with largest |returnPct|; fall back to first event. */
-export function pickBestEvent(events: PumpEventWire[] | undefined): PumpEventWire | undefined {
+export function pickBestEvent(events: PumpEventDto[] | undefined): PumpEventDto | undefined {
   if (!events?.length) return undefined;
   let best = events[0]!;
   let bestAbs = Math.abs(Number(best.returnPct) || 0);
@@ -54,7 +37,7 @@ export function pickBestEvent(events: PumpEventWire[] | undefined): PumpEventWir
   return best;
 }
 
-export function pumpScanHitToRow(hit: PumpScanHitWire): PumpScanRow | null {
+export function pumpScanHitToRow(hit: PumpScanHitDto): PumpScanRow | null {
   const symbol = (hit.symbol ?? '').trim();
   if (!symbol) return null;
   const best = pickBestEvent(hit.events);
@@ -79,7 +62,7 @@ export function pumpScanHitToRow(hit: PumpScanHitWire): PumpScanRow | null {
   };
 }
 
-export function pumpScanHitsToRows(hits: PumpScanHitWire[] | undefined): PumpScanRow[] {
+export function pumpScanHitsToRows(hits: PumpScanHitDto[] | undefined): PumpScanRow[] {
   if (!hits?.length) return [];
   const rows: PumpScanRow[] = [];
   for (const hit of hits) {

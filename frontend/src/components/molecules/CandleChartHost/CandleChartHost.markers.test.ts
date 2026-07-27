@@ -49,4 +49,15 @@ describe('snapMarkersToCandleTimes', () => {
     expect(snapped).toHaveLength(1);
     expect(snapped[0]!.time).toBe(200);
   });
+
+  it('drops markers farther than maxDistanceSec from any bar', () => {
+    const candles = [1000, 2000].map(bar);
+    const markers: CandleChartMarker[] = [
+      { time: 1005, position: 'belowBar', color: '#0f0', shape: 'arrowUp' },
+      { time: 50, position: 'aboveBar', color: '#f00', shape: 'arrowDown' },
+    ];
+    const snapped = snapMarkersToCandleTimes(markers, candles, { maxDistanceSec: 100 });
+    expect(snapped).toHaveLength(1);
+    expect(snapped[0]!.time).toBe(1000);
+  });
 });

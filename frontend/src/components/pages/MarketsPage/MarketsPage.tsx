@@ -25,6 +25,7 @@ import { useDebouncedValue, useDocumentVisible, useSpotMetricColumns } from '@/l
 import {
   defaultQuoteForExchange,
   marketsStateToSearchParams,
+  metricColumnTitle,
   parseMarketsSearchParams,
   toSpotListQuery,
   type MarketsUrlState,
@@ -218,7 +219,7 @@ export function MarketsPage() {
             value={metricColumns.metricIds}
             onChange={metricColumns.setMetricIds}
             onReset={metricColumns.resetToDefaults}
-            getLabel={(key) => t(`markets:table.${key}`)}
+            getLabel={(key) => metricColumnTitle(t, key)}
             ariaLabel={t('markets:columns.aria')}
             buttonLabel={t('markets:columns.button')}
             resetLabel={t('markets:columns.reset')}

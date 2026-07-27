@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { useMemo } from 'react';
 import { Button, Empty } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
@@ -6,8 +6,12 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import type { WatchlistItem } from '@/libs/api';
-import { defaultMetricIds, resolveMetricDefs } from '@/libs/utils';
-import { WatchlistMetricCell, WatchlistPairCell } from './WatchlistSpotCells';
+import {
+  defaultMetricIds,
+  formatSymbolDisplay,
+  metricColumnTitle,
+  resolveMetricDefs,
+} from '@/libs/utils';
 import { StyledTable, TableCard } from './WatchlistTable.styles';
 import type { WatchlistTableProps } from './WatchlistTable.types';
 
@@ -18,6 +22,7 @@ export function WatchlistTable({
   removeLoading,
   onOpen,
   metrics: metricsProp,
+  renderMetric,
 }: WatchlistTableProps) {
   const { t } = useTranslation(['watchlist', 'markets', 'common']);
 
@@ -30,7 +35,14 @@ export function WatchlistTable({
     {
       title: t('watchlist:symbol'),
       key: 'symbol',
-      render: (_, row) => (row.symbol ? <WatchlistPairCell symbol={row.symbol} /> : '—'),
+      render: (_, row) =>
+        row.symbol ? (
+          <Text variant="label" mono color="primary">
+            {formatSymbolDisplay(row.symbol)}
+          </Text>
+        ) : (
+          '—'
+        ),
     },
     {
       title: t('watchlist:exchange'),
@@ -39,26 +51,25 @@ export function WatchlistTable({
       render: (ex: string | undefined) => <Text variant="label">{ex ?? '—'}</Text>,
     },
     ...metrics.map((def) => ({
-      title: t(`markets:table.${def.labelKey}`),
+      title: metricColumnTitle(t, def.labelKey),
       key: def.id,
       align: (def.align ?? 'right') as 'left' | 'right',
-      render: (_: unknown, row: WatchlistItem) =>
-        row.symbol ? (
-          <WatchlistMetricCell
-            exchange={row.exchange ?? 'binance'}
-            symbol={row.symbol}
-            metric={def}
-          />
-        ) : (
-          '—'
-        ),
+      render: (_: unknown, row: WatchlistItem) => {
+        if (!row.symbol) return '—';
+        if (!renderMetric) return '—';
+        return renderMetric({
+          exchange: row.exchange ?? 'binance',
+          symbol: row.symbol,
+          metric: def,
+        });
+      },
     })),
     {
       title: '',
       key: 'actions',
       width: 48,
-      align: 'center',
-      render: (_, row) => (
+      align: 'center' as const,
+      render: (_: unknown, row: WatchlistItem) => (
         <Button
           type="text"
           size="small"
@@ -89,6 +100,15 @@ export function WatchlistTable({
               onOpen(record.exchange, record.symbol);
             }
           },
+          onKeyDown: (e: KeyboardEvent) => {
+            if (!record.exchange || !record.symbol) return;
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onOpen(record.exchange, record.symbol);
+            }
+          },
+          tabIndex: record.symbol ? 0 : undefined,
+          role: record.symbol ? 'link' : undefined,
           style: { cursor: record.symbol ? 'pointer' : undefined },
         })}
         locale={{

@@ -56,6 +56,8 @@ export type {
   ProductTagsResponse,
   PumpEventsQuery,
   PumpEventsResponse,
+  PumpEventDto,
+  PumpScanHitDto,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
 } from './marketApi.types';
@@ -215,10 +217,12 @@ export const {
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
+  useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
+  useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,
   usePostIndicatorsBatchMutation,
 } = marketApi;
