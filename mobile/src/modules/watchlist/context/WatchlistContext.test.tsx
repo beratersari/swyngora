@@ -2,7 +2,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
-import React from 'react';
 import { WATCHLIST_STORAGE_KEY } from '@/config/watchlistConstants';
 import { serializeLocalWatchlist } from '@/libs/utils';
 import { createTestStorage } from '@/libs/utils/storage';
@@ -150,6 +149,6 @@ describe('WatchlistProvider', () => {
       fireEvent.click(screen.getByText('toggle'));
     });
     await waitFor(() => expect(screen.getByTestId('count').textContent).toBe('0'));
-    expect(screen.getByTestId('action').textContent.length).toBeGreaterThan(0);
+    expect((screen.getByTestId('action').textContent ?? '').length).toBeGreaterThan(0);
   });
 });

@@ -117,7 +117,8 @@ export const marketApi = baseApi.injectEndpoints({
           exchange: arg && typeof arg === 'object' && 'exchange' in arg ? arg.exchange : undefined,
         }),
       }),
-      transformResponse: (raw, _meta, arg) => transformProductTagsResponse(raw, arg),
+      transformResponse: (raw, _meta, arg) =>
+        transformProductTagsResponse(raw as { exchange?: string; tags?: string[] }, arg),
       providesTags: (_r, _e, arg) => [
         {
           type: 'ProductTag' as const,
@@ -139,7 +140,8 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/intervals',
         params: compactParams({ ...(arg ?? {}) }),
       }),
-      transformResponse: (raw, _meta, arg) => transformIntervalsResponse(raw, arg),
+      transformResponse: (raw, _meta, arg) =>
+        transformIntervalsResponse(raw as { exchange?: string; intervals?: string[] }, arg),
       providesTags: (_r, _e, arg) => [
         {
           type: 'Interval' as const,

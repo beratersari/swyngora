@@ -42,18 +42,18 @@ This init targets **browser development** via **react-native-web** so you can us
 ```text
 src/
   app/                 # providers + React Navigation
-  components/          # Atomic ONLY (no pages)
+  components/          # Atomic ONLY (no pages); kebab-case folders
   modules/
-    app/pages/         # HomePage (View + ViewModel)
-    markets/pages/     # Markets + Coin detail
-    watchlist/pages/   # Watchlist tab
+    app/pages/         # home-page (View + ViewModel)
+    markets/pages/     # markets-page, coin-detail-page, …
+    watchlist/pages/   # watchlist-page (Favorites tab)
   libs/api/            # RTK Query + OpenAPI
   styles/tokens/       # same brand hex as frontend
 ```
 
 See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 
-
+**Naming:** component/page **folders** are kebab-case (`star-button/`); **files** stay PascalCase (`StarButton.tsx`).
 
 ## Coin detail
 
@@ -65,8 +65,8 @@ Tap a market row to open **Coin detail**:
 - OHLCV chart (Lightweight Charts on web) + RSI pane
 
 ```text
-modules/markets/pages/CoinDetailPage/
-components/organisms/{CoinDetailHeader,CoinDetailStats,IntervalToolbar,CandleChart,IndicatorRsiPane}
+modules/markets/pages/coin-detail-page/
+components/organisms/{coin-detail-header,coin-detail-stats,interval-toolbar,candle-chart,indicator-rsi-pane}
 ```
 
 ## Multi-exchange markets dashboard
@@ -93,7 +93,7 @@ The **Watchlist** tab lists pairs you starred:
 ```text
 modules/watchlist/
 libs/api/endpoints/watchlistApi.ts
-components/molecules/StarButton
+components/molecules/star-button
 ```
 
 Feature: `docs/features/mobile-watchlist.md`

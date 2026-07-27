@@ -12,7 +12,7 @@ import {
   DEFAULT_ORDER,
   DEFAULT_QUOTE,
   DEFAULT_SORT,
-} from '../pages/MarketsPage/MarketsPage.constants';
+} from '../pages/markets-page/MarketsPage.constants';
 import type { MarketsContextValue, MarketsListFilters } from './MarketsContext.types';
 
 const MarketsContext = createContext<MarketsContextValue | null>(null);

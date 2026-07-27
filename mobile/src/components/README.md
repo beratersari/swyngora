@@ -6,12 +6,14 @@
 
 **Do not put feature UI under modules.** All UI composition belongs here.
 
-| Level | Folder | Examples |
+| Level | Folder | Examples (kebab-case dirs) |
 |-------|--------|----------|
-| Atoms | `atoms/` | `Text`, `Button`, `Skeleton` |
-| Molecules | `molecules/` | `Chip`, `SearchField`, `ChipGroup` |
-| Organisms | `organisms/` | `ExchangeChips`, `MarketsToolbar`, `MarketRow`, `MarketsList`, `MarketsFilterForm` |
-| Templates | `templates/` | `ScreenTemplate` |
+| Atoms | `atoms/` | `text/`, `button/`, `skeleton/` |
+| Molecules | `molecules/` | `chip/`, `search-field/`, `chip-group/`, `star-button/` |
+| Organisms | `organisms/` | `exchange-chips/`, `markets-toolbar/`, `market-row/`, `markets-list/` |
+| Templates | `templates/` | `screen-template/` |
+
+**Folders:** kebab-case. **Files:** PascalCase (`StarButton.tsx` inside `star-button/`).
 
 ## Dependency rules
 
