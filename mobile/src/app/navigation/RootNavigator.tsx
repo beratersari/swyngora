@@ -1,7 +1,13 @@
+import { useEffect, type ComponentType } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  useNavigation,
+} from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { HomePage } from '@/modules/app';
 import {
   CoinDetailPage,
@@ -10,12 +16,24 @@ import {
   MarketsProvider,
   MarketsScreens,
 } from '@/modules/markets';
+import {
+  WatchlistPage,
+  WatchlistProvider,
+  WatchlistScreens,
+  useWatchlist,
+} from '@/modules/watchlist';
 import { colors, semanticColors } from '@/styles/tokens';
-import type { HomeTabParamList, MainTabParamList, MarketsTabParamList } from './types';
+import type {
+  HomeTabParamList,
+  MainTabParamList,
+  MarketsTabParamList,
+  WatchlistTabParamList,
+} from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeTabParamList>();
 const MarketsStack = createNativeStackNavigator<MarketsTabParamList>();
+const WatchlistStack = createNativeStackNavigator<WatchlistTabParamList>();
 
 const fill = StyleSheet.create({
   root: { flex: 1, height: '100%', width: '100%' },
@@ -61,7 +79,53 @@ function MarketsStackNavigator() {
   );
 }
 
-function MainTabs() {
+/**
+ * When the last favorite is removed on this stack, jump to Markets before the
+ * Favorites tab is unmounted.
+ */
+function withExitWhenNoFavorites<P extends object>(Screen: ComponentType<P>) {
+  return function FavoritesGuardedScreen(props: P) {
+    const { count, isReady } = useWatchlist();
+    const navigation = useNavigation();
+
+    useEffect(() => {
+      if (isReady && count === 0) {
+        const parent =
+          navigation.getParent<BottomTabNavigationProp<MainTabParamList>>();
+        parent?.navigate('MarketsTab');
+      }
+    }, [isReady, count, navigation]);
+
+    return <Screen {...props} />;
+  };
+}
+
+const FavoritesListScreen = withExitWhenNoFavorites(WatchlistPage);
+const FavoritesDetailScreen = withExitWhenNoFavorites(CoinDetailPage);
+
+function WatchlistStackNavigator() {
+  return (
+    <WatchlistStack.Navigator screenOptions={stackScreenOptions}>
+      <WatchlistStack.Screen
+        name={WatchlistScreens.List}
+        component={FavoritesListScreen}
+      />
+      <WatchlistStack.Screen
+        name={WatchlistScreens.Detail}
+        component={FavoritesDetailScreen}
+      />
+    </WatchlistStack.Navigator>
+  );
+}
+
+/**
+ * Favorites tab is only mounted when the user has at least one favorite.
+ * Empty watchlist → tab hidden; first star → tab appears with badge.
+ */
+function MainTabsInner() {
+  const { count, isReady } = useWatchlist();
+  const showFavoritesTab = isReady && count > 0;
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -85,7 +149,31 @@ function MainTabs() {
         component={MarketsStackNavigator}
         options={{ title: 'Markets' }}
       />
+      {showFavoritesTab ? (
+        <Tab.Screen
+          name="WatchlistTab"
+          component={WatchlistStackNavigator}
+          options={{
+            title: 'Favorites',
+            tabBarBadge: count,
+            tabBarBadgeStyle: {
+              backgroundColor: '#F5C542',
+              color: colors.navy,
+              fontSize: 11,
+              fontWeight: '700',
+            },
+          }}
+        />
+      ) : null}
     </Tab.Navigator>
+  );
+}
+
+function MainTabs() {
+  return (
+    <WatchlistProvider>
+      <MainTabsInner />
+    </WatchlistProvider>
   );
 }
 
