@@ -75,3 +75,13 @@ modules/<m>/pages/FooPage/
 - Organisms: CoinDetailHeader, CoinDetailStats, IntervalToolbar, CandleChart, IndicatorRsiPane
 - RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
 - Chart: `lightweight-charts` on react-native-web only
+
+## Watchlist
+
+- Module: `modules/watchlist/` (context + WatchlistPage)
+- RTK: `libs/api/endpoints/watchlistApi.ts`
+- Helpers: `libs/utils/clientId.ts`, `watchlistKey.ts`, `watchlistMerge.ts`
+- UI: `StarButton` molecule; stars on `MarketRow` / `CoinDetailHeader`; Watchlist tab
+- clientId: `mobile-<uuid>` in localStorage; header `X-Client-Id`
+- Max items: 200 (backend cap)
+

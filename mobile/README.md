@@ -45,7 +45,8 @@ src/
   components/          # Atomic ONLY (no pages)
   modules/
     app/pages/         # HomePage (View + ViewModel)
-    markets/pages/     # MarketsPage stub
+    markets/pages/     # Markets + Coin detail
+    watchlist/pages/   # Watchlist tab
   libs/api/            # RTK Query + OpenAPI
   styles/tokens/       # same brand hex as frontend
 ```
@@ -78,6 +79,24 @@ The **Markets** tab loads live spot markets from the backend:
 - Skeleton footer while loading the next page on scroll
 - Module **React context** for shared filter state (`MarketsProvider`)
 - ~10s polling on the first page while focused
+- **★ star** on each row to add/remove from the Watchlist tab
+
+## Watchlist
+
+The **Watchlist** tab lists pairs you starred:
+
+- Star/unstar from Markets rows or Coin detail header
+- Device-local `clientId` (`mobile-<uuid>`) + optimistic sync to `GET/POST/DELETE /api/v1/watchlist*`
+- 24h ticker quotes while the tab is focused
+- Local cache survives backend restarts (re-POSTs missing items on hydrate)
+
+```text
+modules/watchlist/
+libs/api/endpoints/watchlistApi.ts
+components/molecules/StarButton
+```
+
+Feature: `docs/features/mobile-watchlist.md`
 - Pull-to-refresh resets the list
 
 ```bash
