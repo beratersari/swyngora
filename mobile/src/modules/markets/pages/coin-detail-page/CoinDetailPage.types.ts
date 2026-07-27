@@ -1,6 +1,11 @@
 import type { CandleChartOverlay } from '@/components/organisms/candle-chart';
 import type { PumpEventRowViewModel } from '@/components/organisms/pump-event-list';
-import type { ChartCandle, ChartLinePoint } from '@/libs/utils';
+import type {
+  ChartCandle,
+  ChartLinePoint,
+  ChartMarker,
+  ChartPriceLine,
+} from '@/libs/utils';
 
 export type CoinDetailPageViewModel = {
   symbol: string;
@@ -25,11 +30,23 @@ export type CoinDetailPageViewModel = {
   onSelectInterval: (interval: string) => void;
   showEma: boolean;
   onToggleEma: () => void;
+  showPumps: boolean;
+  onTogglePumps: () => void;
+  showPumpMargin: boolean;
+  onTogglePumpMargin: () => void;
 
   candles: ChartCandle[];
   candleOverlays: CandleChartOverlay[];
+  chartMarkers: ChartMarker[];
+  chartPriceLines: ChartPriceLine[];
   candlesLoading: boolean;
+  /** Loading bars while panning left (history). */
+  candlesLoadingOlder: boolean;
   candlesError: string | null;
+  chartSeriesKey: string;
+  canLoadOlderHistory: boolean;
+  historyEdgeBars: number;
+  onRequestOlderHistory: () => void;
 
   rsiPoints: ChartLinePoint[];
   latestRsi: number | null;

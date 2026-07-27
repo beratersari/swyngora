@@ -33,4 +33,27 @@ describe('IntervalToolbar', () => {
     fireEvent.click(screen.getByText('EMA off'));
     expect(onToggle).toHaveBeenCalled();
   });
+
+  it('toggles pumps and margin overlay chips', () => {
+    const onPumps = vi.fn();
+    const onMargin = vi.fn();
+    render(
+      <IntervalToolbar
+        intervals={['1h']}
+        selected="1h"
+        onSelect={vi.fn()}
+        showEma
+        onToggleEma={vi.fn()}
+        showPumps
+        onTogglePumps={onPumps}
+        showPumpMargin={false}
+        onTogglePumpMargin={onMargin}
+      />,
+    );
+    expect(screen.getByText('Chart overlays')).toBeTruthy();
+    fireEvent.click(screen.getByText('Pumps on'));
+    expect(onPumps).toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Margin off'));
+    expect(onMargin).toHaveBeenCalled();
+  });
 });

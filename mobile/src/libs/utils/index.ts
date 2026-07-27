@@ -16,6 +16,8 @@ export {
 export type { MarketsFilterState } from './spotQuery';
 export {
   apiCandlesToChart,
+  mergeChartCandles,
+  endTimeBeforeOldestCandle,
   indicatorPointsToEmaLine,
   indicatorPointsToRsi,
   sortedEmaKeys,
@@ -24,6 +26,7 @@ export {
   EMA_LINE_COLORS,
 } from './candles';
 export type { ApiCandle, ChartCandle, ChartLinePoint } from './candles';
+
 export { getOrCreateClientId, peekClientId } from './clientId';
 export { watchKey, normalizePair } from './watchlistKey';
 export type { WatchlistPair } from './watchlistKey';
@@ -55,6 +58,11 @@ export type {
   PumpDirection,
   PumpMode,
 } from './pumpQuery';
+export {
+  pumpEventsToChartMarkers,
+  pumpEventsToMarginLines,
+} from './pumpChart';
+export type { ChartMarker, ChartPriceLine } from './pumpChart';
 export {
   chunkSymbols,
   groupPairsByExchange,

@@ -21,4 +21,7 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing[4],
   },
+  olderHint: {
+    marginTop: 6,
+  },
 });

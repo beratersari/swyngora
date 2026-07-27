@@ -50,6 +50,10 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           isLoading={vm.intervalsLoading}
           showEma={vm.showEma}
           onToggleEma={vm.onToggleEma}
+          showPumps={vm.showPumps}
+          onTogglePumps={vm.onTogglePumps}
+          showPumpMargin={vm.showPumpMargin}
+          onTogglePumpMargin={vm.onTogglePumpMargin}
         />
 
         <Text variant="label" color="secondary">
@@ -58,8 +62,15 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
         <CandleChart
           candles={vm.candles}
           overlays={vm.candleOverlays}
+          markers={vm.chartMarkers}
+          priceLines={vm.chartPriceLines}
           isLoading={vm.candlesLoading}
+          isLoadingOlder={vm.candlesLoadingOlder}
           errorMessage={vm.candlesError}
+          seriesKey={vm.chartSeriesKey}
+          canLoadOlder={vm.canLoadOlderHistory}
+          historyEdgeBars={vm.historyEdgeBars}
+          onRequestOlderHistory={vm.onRequestOlderHistory}
         />
 
         {vm.emaLatestLabels.length > 0 ? (

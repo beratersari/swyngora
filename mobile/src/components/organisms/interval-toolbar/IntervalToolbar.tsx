@@ -12,8 +12,32 @@ export function IntervalToolbar({
   isLoading,
   showEma,
   onToggleEma,
+  showPumps = false,
+  onTogglePumps,
+  showPumpMargin = false,
+  onTogglePumpMargin,
 }: IntervalToolbarProps) {
   const { t } = useTranslation('detail');
+  const overlayOptions = [
+    { value: 'ema', label: showEma ? t('emaOn') : t('emaOff') },
+    ...(onTogglePumps
+      ? [{ value: 'pumps', label: showPumps ? t('pumpsOn') : t('pumpsOff') }]
+      : []),
+    ...(onTogglePumpMargin
+      ? [
+          {
+            value: 'margin',
+            label: showPumpMargin ? t('marginOn') : t('marginOff'),
+          },
+        ]
+      : []),
+  ];
+  const overlaySelected = [
+    ...(showEma ? ['ema'] : []),
+    ...(showPumps && onTogglePumps ? ['pumps'] : []),
+    ...(showPumpMargin && onTogglePumpMargin ? ['margin'] : []),
+  ];
+
   return (
     <View style={styles.root}>
       <Text variant="label" color="secondary">
@@ -29,13 +53,20 @@ export function IntervalToolbar({
           horizontalScroll
           isLoading={isLoading}
         />
+      </View>
+      <Text variant="label" color="secondary">
+        {t('chartOverlays')}
+      </Text>
+      <View style={styles.row}>
         <ChipGroup
-          options={[
-            { value: 'ema', label: showEma ? t('emaOn') : t('emaOff') },
-          ]}
-          selected={showEma ? 'ema' : ''}
-          onSelect={onToggleEma}
-          mode="single"
+          options={overlayOptions}
+          selected={overlaySelected}
+          onSelect={(value) => {
+            if (value === 'ema') onToggleEma();
+            else if (value === 'pumps') onTogglePumps?.();
+            else if (value === 'margin') onTogglePumpMargin?.();
+          }}
+          mode="multi"
           shape="box"
         />
       </View>
