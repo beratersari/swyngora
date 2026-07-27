@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mobile chart pump overlays** (`mobile/`): coin detail chart toggles for pump/dump markers and high–low margin price lines (same pump events as the list section)
+- **Mobile chart history pan** (`mobile/`): coin detail candle chart loads older bars when scrolling left (`endTime` pages, time-range viewport so empty left fills on all intervals; indicators limit follows series length)
 - **Mobile icons** (`mobile/`): Lucide (`lucide-react-native` + `react-native-svg`) with `atoms/icon` wrapper; tab bar, favorites star, filters, back, language
 - **Mobile localization** (`mobile/`): flexible i18next setup (`libs/i18n`) with en/tr catalogs, feature namespaces, language switcher on Home, tab/page copy wired for core screens
 - **Mobile batch indicators** (`mobile/`): Favorites and Markets lists enrich rows with latest RSI via `POST /api/v1/market/indicators/batch` (≤50 symbols/exchange, AppState pause, partial-failure safe); coin detail series unchanged (`docs/features/mobile-batch-indicators.md`)

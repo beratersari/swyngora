@@ -32,7 +32,10 @@ Mobile users need a fast way to see which top-volume pairs **pumped or dumped** 
 
 1. On Coin detail, section loads `GET /api/v1/market/pumps?symbol=&exchange=&…`.  
 2. Timeline lists events with signed `returnPct`, time, optional volume ratio.  
-3. Disclaimer always visible.
+3. Chart overlays (toggle under **Chart overlays**):  
+   - **Pumps on** — arrow markers + return % on the OHLCV chart at each event open time.  
+   - **Margin on** — high/low (and start/end when distinct) price lines for recent events.  
+4. Disclaimer always visible.
 
 ### Empty / error
 
