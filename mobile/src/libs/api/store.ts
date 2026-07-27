@@ -3,6 +3,7 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { baseApi } from './baseApi';
 import './endpoints/healthApi';
 import './endpoints/marketApi';
+import './endpoints/watchlistApi';
 
 export const store = configureStore({
   reducer: {

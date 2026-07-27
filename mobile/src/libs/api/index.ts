@@ -37,4 +37,19 @@ export type {
   IntervalsResponse,
   IndicatorsResponse,
 } from './endpoints/marketApi';
+export {
+  watchlistApi,
+  useGetWatchlistQuery,
+  useLazyGetWatchlistQuery,
+  useAddWatchlistItemMutation,
+  useRemoveWatchlistItemMutation,
+  useReplaceWatchlistMutation,
+} from './endpoints/watchlistApi';
+export type {
+  Watchlist,
+  WatchlistItem,
+  AddWatchlistItemArg,
+  RemoveWatchlistItemArg,
+  ReplaceWatchlistArg,
+} from './endpoints/watchlistApi';
 export { rtkErrorMessage } from './rtkErrorMessage';

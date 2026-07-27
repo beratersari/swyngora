@@ -24,3 +24,14 @@ export {
   EMA_LINE_COLORS,
 } from './candles';
 export type { ApiCandle, ChartCandle, ChartLinePoint } from './candles';
+export { getOrCreateClientId, peekClientId } from './clientId';
+export { watchKey, normalizePair } from './watchlistKey';
+export type { WatchlistPair } from './watchlistKey';
+export {
+  mergeWatchlists,
+  isAtMaxItems,
+  readLocalWatchlist,
+  serializeLocalWatchlist,
+} from './watchlistMerge';
+export { appStorage, createTestStorage } from './storage';
+export type { KeyValueStorage } from './storage';
