@@ -9,6 +9,14 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
+import {
+  ChartCandlestick,
+  House,
+  Star,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react-native';
+import { Icon, ICON_FAVORITE_GOLD } from '@/components/atoms/icon';
 import { HomePage } from '@/modules/app';
 import {
   CoinDetailPage,
@@ -32,6 +40,18 @@ import type {
   PumpsTabParamList,
   WatchlistTabParamList,
 } from './types';
+
+function tabIcon(Lucide: LucideIcon, color: string, size: number, filled = false) {
+  return (
+    <Icon
+      icon={Lucide}
+      size={size}
+      color={color}
+      fill={filled ? color : 'transparent'}
+      strokeWidth={filled ? 1.75 : 2}
+    />
+  );
+}
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeTabParamList>();
@@ -148,12 +168,20 @@ function MainTabsInner() {
       <Tab.Screen
         name="HomeTab"
         component={HomeStackNavigator}
-        options={{ title: t('nav.home'), tabBarLabel: t('nav.home') }}
+        options={{
+          title: t('nav.home'),
+          tabBarLabel: t('nav.home'),
+          tabBarIcon: ({ color, size }) => tabIcon(House, color, size),
+        }}
       />
       <Tab.Screen
         name="MarketsTab"
         component={MarketsStackNavigator}
-        options={{ title: t('nav.markets'), tabBarLabel: t('nav.markets') }}
+        options={{
+          title: t('nav.markets'),
+          tabBarLabel: t('nav.markets'),
+          tabBarIcon: ({ color, size }) => tabIcon(ChartCandlestick, color, size),
+        }}
       />
       <Tab.Screen
         name="PumpsTab"
@@ -162,6 +190,7 @@ function MainTabsInner() {
           title: t('nav.pumps'),
           tabBarLabel: t('nav.pumps'),
           tabBarAccessibilityLabel: t('nav.pumpsA11y'),
+          tabBarIcon: ({ color, size }) => tabIcon(TrendingUp, color, size),
         }}
       />
       {showFavoritesTab ? (
@@ -171,9 +200,16 @@ function MainTabsInner() {
           options={{
             title: t('nav.favorites'),
             tabBarLabel: t('nav.favorites'),
+            tabBarIcon: ({ color, size, focused }) =>
+              tabIcon(
+                Star,
+                focused ? ICON_FAVORITE_GOLD : color,
+                size,
+                focused,
+              ),
             tabBarBadge: count,
             tabBarBadgeStyle: {
-              backgroundColor: '#F5C542',
+              backgroundColor: ICON_FAVORITE_GOLD,
               color: colors.navy,
               fontSize: 11,
               fontWeight: '700',

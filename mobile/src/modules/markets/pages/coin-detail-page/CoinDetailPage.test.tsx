@@ -55,7 +55,7 @@ describe('CoinDetailPage', () => {
     expect(screen.getAllByText('BTCUSDT').length).toBeGreaterThan(0);
     expect(screen.getByText('67,000')).toBeTruthy();
     expect(screen.getByText('Open')).toBeTruthy();
-    fireEvent.click(screen.getByText('← Back'));
+    fireEvent.click(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });
 

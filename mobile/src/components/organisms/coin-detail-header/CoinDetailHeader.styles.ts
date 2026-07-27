@@ -15,6 +15,12 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    marginLeft: -spacing[1],
+  },
   top: {
     flexDirection: 'row',
     justifyContent: 'space-between',

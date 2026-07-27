@@ -52,6 +52,17 @@ src/
   styles/tokens/       # same brand hex as frontend
 ```
 
+## Icons
+
+**Lucide** (`lucide-react-native` + `react-native-svg`) for tab bar, stars, filters, back, language.
+
+```tsx
+import { Star } from 'lucide-react-native';
+import { Icon } from '@/components/atoms/icon';
+
+<Icon icon={Star} size="md" color="#F5C542" fill="#F5C542" />
+```
+
 ## Localization
 
 - **i18next** + **react-i18next**; languages **en** + **tr** (extensible)

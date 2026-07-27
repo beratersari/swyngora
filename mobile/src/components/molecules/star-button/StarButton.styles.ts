@@ -13,18 +13,4 @@ export const styles = StyleSheet.create({
     minWidth: 36,
     minHeight: 36,
   },
-  star: {
-    fontSize: 22,
-    lineHeight: 26,
-  },
-  starSm: {
-    fontSize: 18,
-    lineHeight: 22,
-  },
-  watched: {
-    color: '#F5C542', // gold — classic favorites affordance
-  },
-  idle: {
-    color: '#AACBC4', // pistachio
-  },
 });

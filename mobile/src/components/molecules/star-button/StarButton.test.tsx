@@ -6,13 +6,11 @@ describe('StarButton', () => {
   it('renders add label when not watched', () => {
     render(<StarButton watched={false} onPress={vi.fn()} />);
     expect(screen.getByLabelText('Add to favorites')).toBeTruthy();
-    expect(screen.getByText('☆')).toBeTruthy();
   });
 
   it('renders remove label when watched', () => {
     render(<StarButton watched onPress={vi.fn()} />);
     expect(screen.getByLabelText('Remove from favorites')).toBeTruthy();
-    expect(screen.getByText('★')).toBeTruthy();
   });
 
   it('calls onPress', () => {

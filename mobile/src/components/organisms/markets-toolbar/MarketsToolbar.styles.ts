@@ -37,4 +37,9 @@ export const styles = StyleSheet.create({
     borderColor: '#F5C542',
     backgroundColor: 'rgba(245, 197, 66, 0.15)',
   },
+  btnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
 });

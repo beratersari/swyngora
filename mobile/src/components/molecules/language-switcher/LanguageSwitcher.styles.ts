@@ -5,4 +5,9 @@ export const styles = StyleSheet.create({
   root: {
     gap: spacing[1],
   },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
 });

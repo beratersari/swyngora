@@ -79,6 +79,14 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
 - Chart: `lightweight-charts` on react-native-web only
 
+## Icons
+
+- Library: **Lucide** via `lucide-react-native` + `react-native-svg` (no Expo)
+- Wrapper: `components/atoms/icon` — pass `icon={Star}` from `lucide-react-native`
+- Sizes: `xs`/`sm`/`md`/`lg`/`xl` in `ICON_SIZES`; favorites gold: `ICON_FAVORITE_GOLD`
+- Prefer Lucide over emoji/Unicode (★ ☆ ←) for interactive chrome
+- Tree-shake: import named icons only (`import { Star } from 'lucide-react-native'`)
+
 ## Localization (i18n)
 
 - Stack: **i18next** + **react-i18next** under `src/libs/i18n/`

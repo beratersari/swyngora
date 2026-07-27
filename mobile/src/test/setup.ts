@@ -49,3 +49,67 @@ vi.mock('react-native-safe-area-context', () => {
     },
   };
 });
+
+// lucide-react-native pulls react-native-svg (Flow syntax) — mock icons for Vitest/jsdom.
+vi.mock('react-native-svg', () => {
+  const Stub = ({ children, ...props }: { children?: React.ReactNode }) =>
+    React.createElement('svg', props, children);
+  return {
+    __esModule: true,
+    default: Stub,
+    Svg: Stub,
+    Path: Stub,
+    Circle: Stub,
+    Rect: Stub,
+    G: Stub,
+    Line: Stub,
+    Polyline: Stub,
+    Polygon: Stub,
+  };
+});
+
+vi.mock('lucide-react-native', () => {
+  const makeIcon = (name: string) => {
+    function MockIcon({
+      accessibilityLabel,
+      size: _size,
+      color: _color,
+      strokeWidth: _sw,
+      fill: _fill,
+      ...rest
+    }: {
+      accessibilityLabel?: string;
+      size?: number;
+      color?: string;
+      strokeWidth?: number;
+      fill?: string;
+    }) {
+      return React.createElement('span', {
+        role: 'img',
+        'aria-label': accessibilityLabel ?? name,
+        'data-icon': name,
+        ...rest,
+      });
+    }
+    MockIcon.displayName = name;
+    return MockIcon;
+  };
+
+  // Explicit set — Proxy can hang some Vitest module inspects.
+  const names = [
+    'Star',
+    'House',
+    'Home',
+    'ChartCandlestick',
+    'TrendingUp',
+    'SlidersHorizontal',
+    'ChevronLeft',
+    'Languages',
+    'Search',
+    'Filter',
+    'RefreshCw',
+  ];
+  const exports: Record<string, unknown> = { __esModule: true };
+  for (const n of names) exports[n] = makeIcon(n);
+  return exports;
+});

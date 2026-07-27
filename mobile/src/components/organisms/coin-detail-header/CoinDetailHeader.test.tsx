@@ -16,7 +16,7 @@ describe('CoinDetailHeader', () => {
       />,
     );
     expect(screen.getByText('BTCUSDT')).toBeTruthy();
-    fireEvent.click(screen.getByText('← Back'));
+    fireEvent.click(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });
 

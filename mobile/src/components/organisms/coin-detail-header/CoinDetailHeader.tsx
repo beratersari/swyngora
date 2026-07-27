@@ -1,8 +1,11 @@
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { ChevronLeft } from 'lucide-react-native';
+import { Icon } from '@/components/atoms/icon';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
 import { StarButton } from '@/components/molecules/star-button';
+import { semanticColors } from '@/styles/tokens';
 import type { CoinDetailHeaderProps } from './CoinDetailHeader.types';
 import { styles } from './CoinDetailHeader.styles';
 
@@ -21,7 +24,13 @@ export function CoinDetailHeader({
   return (
     <View style={styles.card}>
       <View style={styles.topBar}>
-        <Pressable onPress={onBack} accessibilityRole="button">
+        <Pressable
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={t('actions.back')}
+          style={styles.backBtn}
+        >
+          <Icon icon={ChevronLeft} size="md" color={semanticColors.text.secondary} />
           <Text variant="caption" color="steel">
             {t('actions.back')}
           </Text>
