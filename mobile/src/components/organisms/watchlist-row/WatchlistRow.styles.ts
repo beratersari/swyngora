@@ -21,6 +21,11 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  topRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
   bottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',

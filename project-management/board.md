@@ -162,6 +162,28 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
 
+## Epic H — Mobile batch indicators (**done**)
+
+**Tasks:** `tasks/mobile/batch-indicators/`  
+**Epic:** `epics/mobile-batch-indicators.md`  
+**Plan:** `docs/design/mobile-batch-indicators.md`  
+**Feature:** `docs/features/mobile-batch-indicators.md`  
+**Analysis:** `tasks/mobile/batch-indicators/MBIND-A.md`  
+**Branch:** `feature/mobile-batch-indicators`
+
+| ID | Task | Status |
+|---|---|---|
+| MBIND-A | API field matrix analysis | done |
+| MBIND-1 | RTK postIndicatorsBatch endpoint | done |
+| MBIND-2 | Chunk/group/format helpers + tests | done |
+| MBIND-3 | RSI badge + row prop extensions | done |
+| MBIND-4 | Favorites batch RSI enrichment (P0) | done |
+| MBIND-5 | Markets list batch RSI enrichment (P1) | done |
+| MBIND-6 | Loading / partial failure / disclaimer | done |
+| MBIND-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
+
 ## Later (not started)
 
 | ID | Task | Status |

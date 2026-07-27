@@ -14,6 +14,7 @@ import {
   formatPrice,
   isMarketExchange,
   watchKey,
+  type RsiRowFields,
 } from '@/libs/utils';
 import { WATCHLIST_QUOTE_POLL_MS } from '@/config/watchlistConstants';
 import { semanticColors } from '@/styles/tokens';
@@ -26,12 +27,14 @@ function EnrichedWatchlistRow({
   exchange,
   symbol,
   pollQuotes,
+  rsi,
   onPress,
   onUnstar,
 }: {
   exchange: string;
   symbol: string;
   pollQuotes: boolean;
+  rsi?: RsiRowFields;
   onPress: (exchange: string, symbol: string) => void;
   onUnstar: (exchange: string, symbol: string) => void;
 }) {
@@ -54,6 +57,9 @@ function EnrichedWatchlistRow({
         changePercentLabel: formatChangePercent(query.data?.priceChangePercent),
         changeTone: changeTone(query.data?.priceChangePercent),
         quoteLoading: query.isLoading || query.isFetching,
+        rsiLabel: rsi?.rsiLabel,
+        rsiTone: rsi?.rsiTone,
+        rsiLoading: rsi?.rsiLoading,
       }}
       onPress={onPress}
       onUnstar={onUnstar}
@@ -73,6 +79,19 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
       {vm.actionError ? (
         <Text variant="caption" color="error" style={styles.hint}>
           {vm.actionError}
+        </Text>
+      ) : null}
+      {vm.indicatorsError ? (
+        <View style={styles.hint}>
+          <Text variant="caption" color="error">
+            Indicators: {vm.indicatorsError}
+          </Text>
+          <Button label="Retry indicators" variant="secondary" onPress={vm.onRetry} />
+        </View>
+      ) : null}
+      {vm.indicatorsDisclaimer ? (
+        <Text variant="caption" color="steel" style={styles.hint}>
+          {vm.indicatorsDisclaimer}
         </Text>
       ) : null}
       {vm.emptyMessage ? (
@@ -122,6 +141,7 @@ function WatchlistPageView({ vm }: { vm: WatchlistPageViewModel }) {
             exchange={item.exchange}
             symbol={item.symbol}
             pollQuotes={vm.pollQuotes}
+            rsi={vm.rsiByKey.get(watchKey(item.exchange, item.symbol))}
             onPress={vm.onPressRow}
             onUnstar={vm.onUnstar}
           />

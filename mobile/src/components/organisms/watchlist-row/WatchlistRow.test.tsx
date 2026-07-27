@@ -31,4 +31,11 @@ describe('WatchlistRow', () => {
     fireEvent.click(screen.getByLabelText('Remove BTCUSDT from favorites'));
     expect(onUnstar).toHaveBeenCalledWith('binance', 'BTCUSDT');
   });
+
+  it('renders optional RSI badge', () => {
+    render(
+      <WatchlistRow row={{ ...row, rsiLabel: 'RSI 28.0', rsiTone: 'success' }} />,
+    );
+    expect(screen.getByText('RSI 28.0')).toBeTruthy();
+  });
 });

@@ -88,16 +88,23 @@ The **Watchlist** tab lists pairs you starred:
 - Star/unstar from Markets rows or Coin detail header
 - Device-local `clientId` (`mobile-<uuid>`) + optimistic sync to `GET/POST/DELETE /api/v1/watchlist*`
 - 24h ticker quotes while the tab is focused
+- **Latest RSI** via batch indicators (`POST /indicators/batch`, multi-exchange split, ≤50 symbols)
 - Local cache survives backend restarts (re-POSTs missing items on hydrate)
 
 ```text
 modules/watchlist/
 libs/api/endpoints/watchlistApi.ts
 components/molecules/star-button
+components/molecules/rsi-badge
 ```
 
-Feature: `docs/features/mobile-watchlist.md`
-- Pull-to-refresh resets the list
+Feature: `docs/features/mobile-watchlist.md` · batch RSI: `docs/features/mobile-batch-indicators.md`
+
+## Batch RSI on lists
+
+- **Favorites** and **Markets** rows show latest RSI from `POST /api/v1/market/indicators/batch`
+- One request per exchange (max 50 symbols); partial item failures show `—`
+- Poll ~45s only when focused + app active; coin detail still uses full `GET /indicators` series
 
 ```bash
 # terminal 1

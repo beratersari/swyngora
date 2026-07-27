@@ -2,7 +2,15 @@ import { useCallback, useMemo } from 'react';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useAppStateActive } from '@/libs/hooks';
+import {
+  useAppStateActive,
+  useMultiExchangeBatchIndicators,
+} from '@/libs/hooks';
+import {
+  BATCH_FAVORITES_ENRICH_CAP,
+  BATCH_INDICATORS_DISCLAIMER,
+  BATCH_INDICATORS_POLL_MS,
+} from '@/config/batchIndicatorsConstants';
 import { WATCHLIST_QUOTE_ENRICH_CAP } from '@/config/watchlistConstants';
 import { useWatchlist } from '../../context';
 import { WatchlistScreens, type WatchlistStackParamList } from '../../navigation';
@@ -27,6 +35,17 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
     [watchlist.items],
   );
 
+  const batchPairs = useMemo(
+    () => pairs.slice(0, BATCH_FAVORITES_ENRICH_CAP),
+    [pairs],
+  );
+
+  const batch = useMultiExchangeBatchIndicators(batchPairs, {
+    enabled: pollQuotes && batchPairs.length > 0,
+    pollingIntervalMs: BATCH_INDICATORS_POLL_MS,
+    enrichCap: BATCH_FAVORITES_ENRICH_CAP,
+  });
+
   const onPressRow = useCallback(
     (exchange: string, symbol: string) => {
       navigation.navigate(WatchlistScreens.Detail, { exchange, symbol });
@@ -43,11 +62,13 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
 
   const onRefresh = useCallback(() => {
     void watchlist.refresh();
-  }, [watchlist]);
+    batch.refetch();
+  }, [watchlist, batch]);
 
   const onRetry = useCallback(() => {
     void watchlist.refresh();
-  }, [watchlist]);
+    batch.refetch();
+  }, [watchlist, batch]);
 
   const onOpenMarkets = useCallback(() => {
     // Jump to Markets tab
@@ -72,6 +93,11 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
     errorMessage: watchlist.error,
     emptyMessage,
     actionError: watchlist.actionError,
+    indicatorsError: batch.errorMessage,
+    indicatorsDisclaimer:
+      batchPairs.length > 0
+        ? (batch.disclaimer ?? BATCH_INDICATORS_DISCLAIMER)
+        : null,
     pairs,
     onRetry,
     onRefresh,
@@ -79,5 +105,6 @@ export function useWatchlistPageViewModel(): WatchlistPageViewModel {
     onUnstar,
     onOpenMarkets,
     pollQuotes,
+    rsiByKey: batch.byKey,
   };
 }

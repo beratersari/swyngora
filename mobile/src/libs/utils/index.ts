@@ -55,3 +55,20 @@ export type {
   PumpDirection,
   PumpMode,
 } from './pumpQuery';
+export {
+  chunkSymbols,
+  groupPairsByExchange,
+  buildBatchIndicatorsArg,
+  buildBatchIndicatorsBody,
+  indexBatchItemsBySymbol,
+  batchItemKey,
+  formatRsi,
+  rsiTone,
+  rsiFieldsFromItem,
+} from './batchIndicators';
+export type {
+  BatchIndicatorsArg,
+  BatchIndicatorItem,
+  BatchIndicatorsResponse,
+  RsiRowFields,
+} from './batchIndicators';

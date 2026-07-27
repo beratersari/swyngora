@@ -6,10 +6,21 @@ import {
   rtkErrorMessage,
   useListExchangesQuery,
   useListSpotMarketsQuery,
+  usePostIndicatorsBatchQuery,
   type SpotMarket,
 } from '@/libs/api';
 import { useAppStateActive, useDebouncedValue } from '@/libs/hooks';
-import { toSpotListQuery } from '@/libs/utils';
+import {
+  buildBatchIndicatorsArg,
+  indexBatchItemsBySymbol,
+  rsiFieldsFromItem,
+  toSpotListQuery,
+} from '@/libs/utils';
+import {
+  BATCH_INDICATORS_DISCLAIMER,
+  BATCH_INDICATORS_POLL_MS,
+  BATCH_MARKETS_ENRICH_CAP,
+} from '@/config/batchIndicatorsConstants';
 import { useMarketsContext } from '../../context';
 import { useWatchlist } from '@/modules/watchlist';
 import { MarketsScreens, type MarketsStackParamList } from '../../navigation';
@@ -230,10 +241,62 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     [watchlist.items, markets.exchange],
   );
 
-  const displayRows = useMemo(() => {
+  const displayRowsBase = useMemo(() => {
     if (!favoritesOnly) return rows;
     return buildFavoritesOnlyRows(favoritesOnExchange, rows);
   }, [favoritesOnly, rows, favoritesOnExchange]);
+
+  // Batch RSI for first page / visible set only (cap), when focused + active.
+  const enrichEnabled = active && focused && displayRowsBase.length > 0;
+  const batchSymbols = useMemo(
+    () => displayRowsBase.slice(0, BATCH_MARKETS_ENRICH_CAP).map((r) => r.symbol),
+    [displayRowsBase],
+  );
+  const batchArg = useMemo(
+    () =>
+      buildBatchIndicatorsArg({
+        exchange: markets.exchange,
+        symbols: batchSymbols,
+      }),
+    [markets.exchange, batchSymbols],
+  );
+  const batchQuery = usePostIndicatorsBatchQuery(batchArg, {
+    skip: !enrichEnabled || batchArg.symbols.length === 0,
+    pollingInterval: enrichEnabled ? BATCH_INDICATORS_POLL_MS : 0,
+    refetchOnFocus: false,
+  });
+
+  const displayRows = useMemo(() => {
+    const indexed = indexBatchItemsBySymbol(batchQuery.data?.items);
+    const loading = batchQuery.isLoading || (batchQuery.isFetching && !batchQuery.data);
+    return displayRowsBase.map((row) => {
+      const fields = rsiFieldsFromItem(indexed.get(row.symbol.toUpperCase()), loading);
+      return {
+        ...row,
+        rsiLabel: fields.rsiLabel,
+        rsiTone: fields.rsiTone,
+        rsiLoading: fields.rsiLoading,
+      };
+    });
+  }, [displayRowsBase, batchQuery.data, batchQuery.isLoading, batchQuery.isFetching]);
+
+  const indicatorsError = batchQuery.isError
+    ? rtkErrorMessage(batchQuery.error, { resource: 'indicators' })
+    : null;
+  const indicatorsDisclaimer =
+    displayRowsBase.length > 0
+      ? (batchQuery.data?.note ?? BATCH_INDICATORS_DISCLAIMER)
+      : null;
+
+  const onRefreshWithBatch = useCallback(() => {
+    onRefresh();
+    if (batchArg.symbols.length > 0) void batchQuery.refetch();
+  }, [onRefresh, batchArg.symbols.length, batchQuery]);
+
+  const onRetryWithBatch = useCallback(() => {
+    onRetry();
+    if (batchArg.symbols.length > 0) void batchQuery.refetch();
+  }, [onRetry, batchArg.symbols.length, batchQuery]);
 
   const displayEmpty =
     favoritesEmptyMessage(favoritesOnly, errorMessage, isLoading, displayRows.length) ??
@@ -277,10 +340,12 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
       ? 'Showing favorites only — tap ★ again to remove'
       : null,
     actionError: watchlist.actionError,
+    indicatorsError,
+    indicatorsDisclaimer,
 
     onLoadMore,
-    onRetry,
-    onRefresh,
+    onRetry: onRetryWithBatch,
+    onRefresh: onRefreshWithBatch,
     onPressRow,
     isWatched,
     onStarPress,

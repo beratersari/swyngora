@@ -39,3 +39,11 @@ describe('marketApi pure helpers', () => {
     ).toEqual({ exchange: 'coinbase', intervals: ['1h', '4h'] });
   });
 });
+
+describe('postIndicatorsBatch serialize shape', () => {
+  it('exports batch types via marketApi module load', async () => {
+    const mod = await import('./marketApi');
+    expect(typeof mod.usePostIndicatorsBatchQuery).toBe('function');
+    expect(mod.marketApi.endpoints.postIndicatorsBatch).toBeTruthy();
+  });
+});

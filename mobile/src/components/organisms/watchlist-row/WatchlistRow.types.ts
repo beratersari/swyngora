@@ -6,6 +6,10 @@ export type WatchlistRowViewModel = {
   changePercentLabel: string;
   changeTone: 'success' | 'error' | 'secondary';
   quoteLoading?: boolean;
+  /** Optional batch RSI enrichment */
+  rsiLabel?: string;
+  rsiTone?: 'success' | 'warning' | 'error' | 'secondary';
+  rsiLoading?: boolean;
 };
 
 export type WatchlistRowProps = {

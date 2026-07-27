@@ -33,6 +33,9 @@ export type MarketsPageViewModel = {
   summaryLabel: string | null;
   detailHint: string | null;
   actionError: string | null;
+  /** Whole-batch indicators failure (list prices still show) */
+  indicatorsError: string | null;
+  indicatorsDisclaimer: string | null;
 
   onLoadMore: () => void;
   onRetry: () => void;

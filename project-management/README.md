@@ -15,7 +15,8 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 ```text
 tasks/
 ├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
-└── mobile/init|markets|detail|watchlist  # MINIT-*, MMKT-*, MDET-*, MWL-*
+└── mobile/init|markets|detail|watchlist|pumps|batch-indicators
+    # MINIT-*, MMKT-*, MDET-*, MWL-*, MPUMP-*, MBIND-*
 ```
 
 **Do not add new task files to `tasks/` root.** Use the matching subfolder.
@@ -54,6 +55,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 6. Epic E — Mobile coin detail — **done** (`tasks/mobile/detail/`, `epics/mobile-coin-detail.md`)
 7. Epic F — Mobile watchlist — **done** (`tasks/mobile/watchlist/`, `epics/mobile-watchlist.md`)
 8. Epic G — Mobile pump / dump radar — **done** (`tasks/mobile/pumps/`, `epics/mobile-pumps.md`)
+9. Epic H — Mobile batch indicators — **done** (`tasks/mobile/batch-indicators/`, `epics/mobile-batch-indicators.md`)
 
 ### Mobile designs
 
@@ -65,7 +67,8 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 | `docs/design/mobile-coin-detail.md` | Coin detail + indicators |
 | `docs/design/mobile-watchlist.md` | Watchlist (stars + tab) |
 | `docs/design/mobile-pumps.md` | Pump / dump scan radar |
+| `docs/design/mobile-batch-indicators.md` | Batch RSI/EMA list enrichment |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-27
+**Last updated:** 2026-07-27 (Epic H batch indicators planned)

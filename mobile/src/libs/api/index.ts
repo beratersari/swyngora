@@ -14,6 +14,8 @@ export {
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
+  usePostIndicatorsBatchQuery,
+  useLazyPostIndicatorsBatchQuery,
   compactParams,
 } from './endpoints/marketApi';
 export type {
@@ -36,6 +38,9 @@ export type {
   IndicatorsQuery,
   IntervalsResponse,
   IndicatorsResponse,
+  IndicatorsBatchArg,
+  IndicatorsBatchItem,
+  IndicatorsBatchResponse,
 } from './endpoints/marketApi';
 export {
   watchlistApi,

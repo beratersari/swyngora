@@ -14,7 +14,8 @@ tasks/
     ├── markets/              # MMKT-*  (mobile markets dashboard)
     ├── detail/               # MDET-*  (mobile coin detail)
     ├── watchlist/            # MWL-*   (mobile watchlist / favorites)
-    └── pumps/                # MPUMP-* (mobile pump / dump radar)
+    ├── pumps/                # MPUMP-* (mobile pump / dump radar)
+    └── batch-indicators/     # MBIND-* (mobile batch RSI/EMA list enrichment)
 ```
 
 ## Rules

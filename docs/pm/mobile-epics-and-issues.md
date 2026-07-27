@@ -237,3 +237,59 @@ MPUMP-A (analysis done) · MPUMP-1 … MPUMP-7
 | MPUMP-5 | Coin detail pump events section |
 | MPUMP-6 | Loading / empty / error / disclaimer |
 | MPUMP-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/pumps/MPUMP-*.md`.
+
+
+---
+
+## Epic H — Mobile batch indicators
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Batch indicators (list RSI)` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-batch-indicators.md` |
+| **Feature** | `docs/features/mobile-batch-indicators.md` |
+| **Analysis** | `project-management/tasks/mobile/batch-indicators/MBIND-A.md` |
+| **Epic file** | `project-management/epics/mobile-batch-indicators.md` |
+| **Tasks** | `project-management/tasks/mobile/batch-indicators/MBIND-*.md` |
+| **Branch** | `feature/mobile-batch-indicators` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Enrich Favorites (P0) and Markets list (P1) with latest RSI via
+POST /api/v1/market/indicators/batch. Avoid N+1 GET /indicators.
+Coin detail series unchanged. No new backend work.
+
+## Goals
+
+- RTK batch endpoint + helpers (chunk ≤50, multi-exchange split)
+- RSI badge on Favorites (and Markets rows)
+- Partial failure UX + AppState pause + disclaimer
+
+## Out of scope
+
+Alerts, trading, editable periods on lists, web frontend columns.
+
+## Child issues
+
+MBIND-A (analysis) · MBIND-1 … MBIND-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MBIND-A | API field matrix analysis |
+| MBIND-1 | RTK postIndicatorsBatch endpoint |
+| MBIND-2 | Chunk/group/format helpers |
+| MBIND-3 | RSI badge + row props |
+| MBIND-4 | Favorites batch enrichment (P0) |
+| MBIND-5 | Markets list batch enrichment (P1) |
+| MBIND-6 | Loading / partial failure / disclaimer |
+| MBIND-7 | Docs + board + changelog closeout |

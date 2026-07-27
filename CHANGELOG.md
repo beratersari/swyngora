@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mobile batch indicators** (`mobile/`): Favorites and Markets lists enrich rows with latest RSI via `POST /api/v1/market/indicators/batch` (≤50 symbols/exchange, AppState pause, partial-failure safe); coin detail series unchanged (`docs/features/mobile-batch-indicators.md`)
 - **Mobile pumps radar** (`mobile/`): Pumps tab scans top-volume pairs via `/pumps/scan`; coin detail shows pump/dump events via `/pumps`; filters for lookback/threshold/direction (`docs/features/mobile-pumps.md`)
 - **Mobile watchlist** (`mobile/`): star/unstar on Markets + Coin detail; Watchlist tab with ticker quotes; device clientId + optimistic local/server merge (`docs/features/mobile-watchlist.md`)
 - **Mobile coin detail** (`mobile/`): CoinDetailPage from markets row — ticker/supply stats, interval toolbar, Lightweight Charts OHLCV + EMA overlays, RSI pane; RTK detail endpoints; Atomic organisms (`docs/design/mobile-coin-detail.md`)

@@ -9,8 +9,8 @@
 | Level | Folder | Examples (kebab-case dirs) |
 |-------|--------|----------|
 | Atoms | `atoms/` | `text/`, `button/`, `skeleton/` |
-| Molecules | `molecules/` | `chip/`, `search-field/`, `chip-group/`, `star-button/` |
-| Organisms | `organisms/` | `exchange-chips/`, `markets-toolbar/`, `market-row/`, `markets-list/` |
+| Molecules | `molecules/` | `chip/`, `search-field/`, `chip-group/`, `star-button/`, `rsi-badge/` |
+| Organisms | `organisms/` | `exchange-chips/`, `markets-toolbar/`, `market-row/`, `markets-list/`, `watchlist-row/` |
 | Templates | `templates/` | `screen-template/` |
 
 **Folders:** kebab-case. **Files:** PascalCase (`StarButton.tsx` inside `star-button/`).

@@ -79,6 +79,16 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
 - Chart: `lightweight-charts` on react-native-web only
 
+## Batch indicators (list RSI)
+
+- Endpoint: `POST /api/v1/market/indicators/batch` via `usePostIndicatorsBatchQuery` in `marketApi.ts`
+- Helpers: `libs/utils/batchIndicators.ts` (chunk ≤50, multi-exchange group, format/tone)
+- Hook: `useMultiExchangeBatchIndicators` for Favorites
+- UI: `molecules/rsi-badge`; optional RSI props on `market-row` / `watchlist-row`
+- Surfaces: Favorites (P0), Markets visible page (P1); detail still uses `getIndicators` series
+- Poll: ~45s when focused + AppState active; pause when backgrounded
+- Feature: `docs/features/mobile-batch-indicators.md`
+
 ## Watchlist / favorites
 
 - Module: `modules/watchlist/` (context + `pages/watchlist-page`)

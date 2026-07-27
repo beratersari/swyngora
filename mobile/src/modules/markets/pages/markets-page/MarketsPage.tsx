@@ -48,6 +48,16 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
           {vm.actionError}
         </Text>
       ) : null}
+      {vm.indicatorsError ? (
+        <Text variant="caption" color="error" style={styles.hint}>
+          Indicators: {vm.indicatorsError}
+        </Text>
+      ) : null}
+      {vm.indicatorsDisclaimer ? (
+        <Text variant="caption" color="steel" style={styles.hint}>
+          {vm.indicatorsDisclaimer}
+        </Text>
+      ) : null}
     </View>
   );
 

@@ -7,6 +7,10 @@ export type MarketRowViewModel = {
   quoteVolumeLabel: string;
   marketCapLabel: string;
   tagsLabel: string;
+  /** Optional batch RSI enrichment */
+  rsiLabel?: string;
+  rsiTone?: 'success' | 'warning' | 'error' | 'secondary';
+  rsiLoading?: boolean;
 };
 
 export type MarketRowProps = {

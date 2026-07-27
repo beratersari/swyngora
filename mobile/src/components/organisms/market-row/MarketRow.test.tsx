@@ -38,4 +38,14 @@ describe('MarketRow', () => {
     expect(onStar).toHaveBeenCalledWith('BTCUSDT');
     expect(onPress).not.toHaveBeenCalled();
   });
+
+  it('renders optional RSI badge', () => {
+    render(
+      <MarketRow
+        row={{ ...row, rsiLabel: 'RSI 61.2', rsiTone: 'secondary' }}
+        onPress={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('RSI 61.2')).toBeTruthy();
+  });
 });

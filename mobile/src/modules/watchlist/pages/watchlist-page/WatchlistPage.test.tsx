@@ -13,6 +13,8 @@ const baseVm = (): WatchlistPageViewModel => ({
   errorMessage: null,
   emptyMessage: 'No favorites yet — open Markets and tap ★ on a pair',
   actionError: null,
+  indicatorsError: null,
+  indicatorsDisclaimer: null,
   pairs: [],
   onRetry: vi.fn(),
   onRefresh: vi.fn(),
@@ -20,6 +22,7 @@ const baseVm = (): WatchlistPageViewModel => ({
   onPressRow: vi.fn(),
   onUnstar: vi.fn(),
   pollQuotes: false,
+  rsiByKey: new Map(),
 });
 
 describe('WatchlistPage (Favorites)', () => {
@@ -44,5 +47,22 @@ describe('WatchlistPage (Favorites)', () => {
     );
     expect(screen.getByText('Network error')).toBeTruthy();
     expect(screen.getByText('Retry')).toBeTruthy();
+  });
+
+  it('shows indicators error and disclaimer without emptying list chrome', () => {
+    renderWithProviders(
+      <WatchlistPage
+        viewModel={{
+          ...baseVm(),
+          emptyMessage: null,
+          countLabel: '1 favorite',
+          pairs: [{ exchange: 'binance', symbol: 'BTCUSDT' }],
+          indicatorsError: 'Request failed (502)',
+          indicatorsDisclaimer: 'RSI/EMA are informational only — not financial advice.',
+        }}
+      />,
+    );
+    expect(screen.getByText(/Indicators: Request failed/)).toBeTruthy();
+    expect(screen.getByText(/informational only/)).toBeTruthy();
   });
 });

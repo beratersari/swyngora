@@ -39,7 +39,7 @@ const SORTS = new Set<SpotSortField>([
 ]);
 
 export function isMarketExchange(value: string): value is MarketExchange {
-  return EXCHANGES.has(value);
+  return EXCHANGES.has(String(value).toLowerCase());
 }
 
 export function isSpotSortField(value: string): value is SpotSortField {
@@ -66,6 +66,8 @@ export function toSpotListQuery(
 }
 
 export function normalizeExchange(value: string | undefined): MarketExchange {
-  if (value && isMarketExchange(value)) return value;
+  if (!value) return DEFAULT_MARKETS_FILTER.exchange;
+  const lower = String(value).toLowerCase();
+  if (isMarketExchange(lower)) return lower;
   return DEFAULT_MARKETS_FILTER.exchange;
 }

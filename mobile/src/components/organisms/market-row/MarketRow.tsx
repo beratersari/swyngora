@@ -1,5 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { Text } from '@/components/atoms/text';
+import { RsiBadge } from '@/components/molecules/rsi-badge';
 import { StarButton } from '@/components/molecules/star-button';
 import type { MarketRowProps } from './MarketRow.types';
 import { styles } from './MarketRow.styles';
@@ -24,7 +25,17 @@ export function MarketRow({ row, onPress, watched, onStarPress }: MarketRowProps
       >
         <View style={styles.top}>
           <Text variant="h4">{row.symbol}</Text>
-          <Text variant="numeric">{row.lastPriceLabel}</Text>
+          <View style={styles.topRight}>
+            {row.rsiLabel != null ? (
+              <RsiBadge
+                label={row.rsiLabel}
+                tone={row.rsiTone ?? 'secondary'}
+                loading={row.rsiLoading}
+                size="sm"
+              />
+            ) : null}
+            <Text variant="numeric">{row.lastPriceLabel}</Text>
+          </View>
         </View>
         <View style={styles.bottom}>
           <Text variant="caption" color={row.changeTone} style={styles.meta}>

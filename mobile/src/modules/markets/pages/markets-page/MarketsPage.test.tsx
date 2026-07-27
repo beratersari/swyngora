@@ -39,6 +39,8 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
     summaryLabel: 'Showing 1 of 1',
     detailHint: null,
     actionError: null,
+    indicatorsError: null,
+    indicatorsDisclaimer: null,
     favoritesOnly: false,
     favoritesCount: 0,
     onToggleFavoritesOnly: vi.fn(),

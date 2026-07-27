@@ -43,6 +43,29 @@ export type IndicatorsResponse = {
   note?: string;
 };
 
+/** POST /api/v1/market/indicators/batch — latest snapshot only (MBIND). */
+export type IndicatorsBatchItem = {
+  symbol?: string;
+  rsi?: number | null;
+  ema?: Record<string, number>;
+  error?: string;
+};
+
+export type IndicatorsBatchResponse = {
+  exchange?: string;
+  interval?: string;
+  items?: IndicatorsBatchItem[];
+  note?: string;
+};
+
+export type IndicatorsBatchArg = {
+  exchange?: MarketExchange | string;
+  interval?: string;
+  symbols: string[];
+  rsiPeriod?: number;
+  emaPeriods?: string;
+};
+
 export type ExchangesResponse = {
   exchanges: string[];
   default: string;
@@ -198,6 +221,44 @@ export const marketApi = baseApi.injectEndpoints({
         },
       ],
     }),
+
+    /**
+     * Latest RSI/EMA for many symbols (one exchange). Prefer over N× getIndicators for lists.
+     * Implemented as a query (POST body) so cache + polling work like other market reads.
+     */
+    postIndicatorsBatch: build.query<IndicatorsBatchResponse, IndicatorsBatchArg>({
+      query: (arg) => ({
+        url: '/api/v1/market/indicators/batch',
+        method: 'POST',
+        body: {
+          exchange: arg.exchange ?? 'binance',
+          interval: arg.interval ?? '1h',
+          symbols: arg.symbols,
+          ...(arg.rsiPeriod != null ? { rsiPeriod: arg.rsiPeriod } : {}),
+          ...(arg.emaPeriods ? { emaPeriods: arg.emaPeriods } : {}),
+        },
+      }),
+      serializeQueryArgs: ({ queryArgs }) => {
+        const symbols = [...(queryArgs.symbols ?? [])]
+          .map((s) => String(s).toUpperCase())
+          .filter(Boolean)
+          .sort()
+          .join(',');
+        return [
+          queryArgs.exchange ?? 'binance',
+          queryArgs.interval ?? '1h',
+          queryArgs.rsiPeriod ?? 14,
+          queryArgs.emaPeriods ?? '12,26',
+          symbols,
+        ].join('|');
+      },
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Indicator' as const,
+          id: `batch:${arg.exchange ?? 'binance'}:${arg.interval ?? '1h'}`,
+        },
+      ],
+    }),
   }),
 });
 
@@ -210,4 +271,6 @@ export const {
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
+  usePostIndicatorsBatchQuery,
+  useLazyPostIndicatorsBatchQuery,
 } = marketApi;
