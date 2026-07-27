@@ -27,3 +27,56 @@ export function pageRangeLabel(offset: number, limit: number, total: number): st
   const end = Math.min(offset + limit, total);
   return `${start}–${end} of ${total}`;
 }
+
+/** Favorites for a single exchange (case-insensitive). */
+export function favoritesForExchange(
+  items: { exchange: string; symbol: string }[],
+  exchange: string,
+): { exchange: string; symbol: string }[] {
+  const ex = String(exchange).toLowerCase();
+  return items.filter((i) => i.exchange.toLowerCase() === ex);
+}
+
+/**
+ * When favorites-only is on, surface every favorite for the exchange.
+ * Prefer loaded spot rows when present; otherwise placeholder metrics.
+ */
+export function buildFavoritesOnlyRows(
+  favoritesOnExchange: { exchange: string; symbol: string }[],
+  loadedRows: MarketRowViewModel[],
+): MarketRowViewModel[] {
+  const bySym = new Map(loadedRows.map((r) => [r.symbol.toUpperCase(), r]));
+  return favoritesOnExchange.map((f) => {
+    const existing = bySym.get(f.symbol.toUpperCase());
+    if (existing) return existing;
+    return {
+      id: `${f.exchange}|${f.symbol}`,
+      symbol: f.symbol,
+      lastPriceLabel: '—',
+      changePercentLabel: '—',
+      changeTone: 'secondary',
+      quoteVolumeLabel: '—',
+      marketCapLabel: '—',
+      tagsLabel: 'Favorite',
+    };
+  });
+}
+
+export function favoritesEmptyMessage(
+  favoritesOnly: boolean,
+  errorMessage: string | null,
+  isLoading: boolean,
+  displayCount: number,
+): string | null {
+  if (!favoritesOnly || errorMessage || isLoading || displayCount > 0) return null;
+  return 'No favorites on this exchange yet — tap ★ on a row';
+}
+
+export function favoritesSummaryLabel(
+  favoritesOnly: boolean,
+  displayCount: number,
+  defaultSummary: string | null,
+): string | null {
+  if (!favoritesOnly) return defaultSummary;
+  return displayCount > 0 ? `Favorites: ${displayCount} shown` : null;
+}

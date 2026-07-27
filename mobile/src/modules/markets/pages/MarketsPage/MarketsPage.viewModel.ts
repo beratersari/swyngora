@@ -22,7 +22,13 @@ import {
   SEARCH_DEBOUNCE_MS,
   SPOT_POLL_MS,
 } from './MarketsPage.constants';
-import { mapSpotMarketToRow } from './MarketsPage.helpers';
+import {
+  buildFavoritesOnlyRows,
+  favoritesEmptyMessage,
+  favoritesForExchange,
+  favoritesSummaryLabel,
+  mapSpotMarketToRow,
+} from './MarketsPage.helpers';
 import type { MarketRowViewModel } from '@/components/organisms/MarketRow';
 import type { MarketsPageViewModel } from './MarketsPage.types';
 
@@ -220,44 +226,23 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
 
   /** Favorites for the active exchange (badge + filter). */
   const favoritesOnExchange = useMemo(
-    () =>
-      watchlist.items.filter(
-        (i) => i.exchange.toLowerCase() === String(markets.exchange).toLowerCase(),
-      ),
+    () => favoritesForExchange(watchlist.items, markets.exchange),
     [watchlist.items, markets.exchange],
   );
 
   const displayRows = useMemo(() => {
     if (!favoritesOnly) return rows;
-    // Always surface every favorite for this exchange (not only loaded spot pages)
-    const bySym = new Map(rows.map((r) => [r.symbol.toUpperCase(), r]));
-    return favoritesOnExchange.map((f) => {
-      const existing = bySym.get(f.symbol.toUpperCase());
-      if (existing) return existing;
-      return {
-        id: `${f.exchange}|${f.symbol}`,
-        symbol: f.symbol,
-        lastPriceLabel: '—',
-        changePercentLabel: '—',
-        changeTone: 'secondary' as const,
-        quoteVolumeLabel: '—',
-        marketCapLabel: '—',
-        tagsLabel: 'Favorite',
-      };
-    });
+    return buildFavoritesOnlyRows(favoritesOnExchange, rows);
   }, [favoritesOnly, rows, favoritesOnExchange]);
 
-  const favEmpty =
-    favoritesOnly && !errorMessage && !isLoading && displayRows.length === 0
-      ? 'No favorites on this exchange yet — tap ★ on a row'
-      : null;
-
-  const displayEmpty = favEmpty ?? emptyMessage;
-  const displaySummary = favoritesOnly
-    ? displayRows.length > 0
-      ? `Favorites: ${displayRows.length} shown`
-      : null
-    : summaryLabel;
+  const displayEmpty =
+    favoritesEmptyMessage(favoritesOnly, errorMessage, isLoading, displayRows.length) ??
+    emptyMessage;
+  const displaySummary = favoritesSummaryLabel(
+    favoritesOnly,
+    displayRows.length,
+    summaryLabel,
+  );
 
   return {
     title: 'Markets',
