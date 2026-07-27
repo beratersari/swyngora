@@ -140,6 +140,28 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (1–3) · (4–5) · (6–7) · (8)
 
+## Epic G — Mobile pump / dump radar (**done**)
+
+**Tasks:** `tasks/mobile/pumps/`  
+**Epic:** `epics/mobile-pumps.md`  
+**Plan:** `docs/design/mobile-pumps.md`  
+**Feature:** `docs/features/mobile-pumps.md`  
+**Analysis:** `tasks/mobile/pumps/MPUMP-A.md`  
+**Branch:** `feature/mobile-pumps`
+
+| ID | Task | Status |
+|---|---|---|
+| MPUMP-A | API field matrix analysis | done |
+| MPUMP-1 | RTK pumpApi endpoints (scan + get events) | done |
+| MPUMP-2 | formatPump + pumpQuery helpers and tests | done |
+| MPUMP-3 | Pump Atomic UI (badge, filters, hit/event lists) | done |
+| MPUMP-4 | PumpsScanPage + Pumps tab navigation | done |
+| MPUMP-5 | Coin detail pump events section | done |
+| MPUMP-6 | Loading / empty / error / disclaimer | done |
+| MPUMP-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
+
 ## Later (not started)
 
 | ID | Task | Status |

@@ -13,7 +13,8 @@ tasks/
     ├── init/                 # MINIT-* (mobile scaffold)
     ├── markets/              # MMKT-*  (mobile markets dashboard)
     ├── detail/               # MDET-*  (mobile coin detail)
-    └── watchlist/            # MWL-*   (mobile watchlist)
+    ├── watchlist/            # MWL-*   (mobile watchlist / favorites)
+    └── pumps/                # MPUMP-* (mobile pump / dump radar)
 ```
 
 ## Rules

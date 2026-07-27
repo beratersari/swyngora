@@ -180,3 +180,60 @@ MWL-1 … MWL-8
 | MWL-6 | Watchlist tab + WatchlistPage |
 | MWL-7 | Quote enrichment + poll/empty/error |
 | MWL-8 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/watchlist/MWL-*.md`.
+
+
+---
+
+## Epic G — Mobile pump / dump radar
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Pump / dump radar` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-pumps.md` |
+| **Feature** | `docs/features/mobile-pumps.md` |
+| **Analysis** | `project-management/tasks/mobile/pumps/MPUMP-A.md` |
+| **Epic file** | `project-management/epics/mobile-pumps.md` |
+| **Tasks** | `project-management/tasks/mobile/pumps/MPUMP-*.md` |
+| **Branch** | `feature/mobile-pumps` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Mobile pump/dump radar: scan top-volume symbols via GET /api/v1/market/pumps/scan,
+list ranked hits, open coin detail, show per-symbol events via GET /pumps.
+Backend already implemented; MCP tools exist. No new backend work.
+
+## Goals
+
+- Pumps tab with scan list + filters (exchange, threshold, lookback, direction)
+- Hit → coin detail
+- Detail section: pump/dump event timeline
+- Informational disclaimer; no aggressive polling
+
+## Out of scope
+
+Alerts, trading, AI narratives, web frontend pumps UI.
+
+## Child issues
+
+MPUMP-A (analysis done) · MPUMP-1 … MPUMP-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MPUMP-A | API field matrix analysis |
+| MPUMP-1 | RTK pumpApi endpoints |
+| MPUMP-2 | formatPump + pumpQuery helpers |
+| MPUMP-3 | Pump Atomic UI |
+| MPUMP-4 | PumpsScanPage + tab navigation |
+| MPUMP-5 | Coin detail pump events section |
+| MPUMP-6 | Loading / empty / error / disclaimer |
+| MPUMP-7 | Docs + board + changelog closeout |

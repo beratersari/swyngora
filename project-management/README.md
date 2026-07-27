@@ -53,6 +53,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 5. Epic D — Mobile markets dashboard — **done** (`tasks/mobile/markets/`)
 6. Epic E — Mobile coin detail — **done** (`tasks/mobile/detail/`, `epics/mobile-coin-detail.md`)
 7. Epic F — Mobile watchlist — **done** (`tasks/mobile/watchlist/`, `epics/mobile-watchlist.md`)
+8. Epic G — Mobile pump / dump radar — **done** (`tasks/mobile/pumps/`, `epics/mobile-pumps.md`)
 
 ### Mobile designs
 
@@ -63,6 +64,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 | `docs/design/mobile-markets-dashboard.md` | Markets dashboard |
 | `docs/design/mobile-coin-detail.md` | Coin detail + indicators |
 | `docs/design/mobile-watchlist.md` | Watchlist (stars + tab) |
+| `docs/design/mobile-pumps.md` | Pump / dump scan radar |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
