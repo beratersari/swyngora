@@ -52,6 +52,33 @@ export function apiCandlesToChart(candles: ApiCandle[]): ChartCandle[] {
     .filter((x): x is ChartCandle => x !== null);
 }
 
+/**
+ * Merge candle series by open time (seconds). Later arguments win on conflict.
+ * Result is sorted ascending (oldest → newest).
+ */
+export function mergeChartCandles(...series: ChartCandle[][]): ChartCandle[] {
+  const map = new Map<number, ChartCandle>();
+  for (const list of series) {
+    for (const c of list) {
+      map.set(c.time, c);
+    }
+  }
+  return [...map.values()].sort((a, b) => a.time - b.time);
+}
+
+/**
+ * endTime for fetching bars strictly before the oldest chart candle.
+ * Returns RFC3339 (preferred by exchanges) with 1ms subtracted from open.
+ */
+export function endTimeBeforeOldestCandle(
+  oldest: ChartCandle | undefined,
+): string | undefined {
+  if (!oldest || !Number.isFinite(oldest.time)) return undefined;
+  const ms = oldest.time * 1000 - 1;
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  return new Date(ms).toISOString();
+}
+
 export function sortedEmaKeys(ema: Record<string, number> | undefined): string[] {
   if (!ema) return [];
   return Object.keys(ema).sort((a, b) => Number(a) - Number(b));

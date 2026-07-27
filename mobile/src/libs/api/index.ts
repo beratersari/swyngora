@@ -11,6 +11,7 @@ export {
   useListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
+  useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,

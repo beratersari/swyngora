@@ -178,10 +178,19 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/candles',
         params: compactParams({ ...arg }),
       }),
+      serializeQueryArgs: ({ queryArgs }) =>
+        [
+          queryArgs.exchange ?? 'binance',
+          queryArgs.symbol,
+          queryArgs.interval ?? '1h',
+          queryArgs.limit ?? 100,
+          queryArgs.startTime ?? '',
+          queryArgs.endTime ?? '',
+        ].join('|'),
       providesTags: (_r, _e, arg) => [
         {
           type: 'Candle' as const,
-          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}`,
+          id: `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.interval ?? '1h'}:${arg.limit ?? 100}:${arg.endTime ?? 'latest'}`,
         },
       ],
     }),
@@ -268,6 +277,7 @@ export const {
   useListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
+  useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
