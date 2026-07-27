@@ -1,4 +1,5 @@
 import type { CandleChartOverlay } from '@/components/organisms/candle-chart';
+import type { PumpEventRowViewModel } from '@/components/organisms/pump-event-list';
 import type { ChartCandle, ChartLinePoint } from '@/libs/utils';
 
 export type CoinDetailPageViewModel = {
@@ -35,6 +36,12 @@ export type CoinDetailPageViewModel = {
   indicatorsLoading: boolean;
   indicatorsError: string | null;
   emaLatestLabels: string[];
+
+  pumpEventRows: PumpEventRowViewModel[];
+  pumpEventsLoading: boolean;
+  pumpEventsError: string | null;
+  pumpEventsSubtitle: string | null;
+  pumpDisclaimer: string | null;
 
   onBack: () => void;
   onRetry: () => void;

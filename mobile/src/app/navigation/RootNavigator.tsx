@@ -22,11 +22,13 @@ import {
   WatchlistScreens,
   useWatchlist,
 } from '@/modules/watchlist';
+import { PumpsScanPage, PumpsScreens } from '@/modules/pumps';
 import { colors, semanticColors } from '@/styles/tokens';
 import type {
   HomeTabParamList,
   MainTabParamList,
   MarketsTabParamList,
+  PumpsTabParamList,
   WatchlistTabParamList,
 } from './types';
 
@@ -34,6 +36,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createNativeStackNavigator<HomeTabParamList>();
 const MarketsStack = createNativeStackNavigator<MarketsTabParamList>();
 const WatchlistStack = createNativeStackNavigator<WatchlistTabParamList>();
+const PumpsStack = createNativeStackNavigator<PumpsTabParamList>();
 
 const fill = StyleSheet.create({
   root: { flex: 1, height: '100%', width: '100%' },
@@ -79,10 +82,6 @@ function MarketsStackNavigator() {
   );
 }
 
-/**
- * When the last favorite is removed on this stack, jump to Markets before the
- * Favorites tab is unmounted.
- */
 function withExitWhenNoFavorites<P extends object>(Screen: ComponentType<P>) {
   return function FavoritesGuardedScreen(props: P) {
     const { count, isReady } = useWatchlist();
@@ -118,10 +117,15 @@ function WatchlistStackNavigator() {
   );
 }
 
-/**
- * Favorites tab is only mounted when the user has at least one favorite.
- * Empty watchlist → tab hidden; first star → tab appears with badge.
- */
+function PumpsStackNavigator() {
+  return (
+    <PumpsStack.Navigator screenOptions={stackScreenOptions}>
+      <PumpsStack.Screen name={PumpsScreens.Scan} component={PumpsScanPage} />
+      <PumpsStack.Screen name={PumpsScreens.Detail} component={CoinDetailPage} />
+    </PumpsStack.Navigator>
+  );
+}
+
 function MainTabsInner() {
   const { count, isReady } = useWatchlist();
   const showFavoritesTab = isReady && count > 0;
@@ -148,6 +152,11 @@ function MainTabsInner() {
         name="MarketsTab"
         component={MarketsStackNavigator}
         options={{ title: 'Markets' }}
+      />
+      <Tab.Screen
+        name="PumpsTab"
+        component={PumpsStackNavigator}
+        options={{ title: 'Pumps' }}
       />
       {showFavoritesTab ? (
         <Tab.Screen

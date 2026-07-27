@@ -88,3 +88,12 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - clientId: `mobile-<uuid>` in localStorage; header `X-Client-Id`
 - Max items: 200 (backend cap)
 
+## Pumps
+
+- Module: `modules/pumps/` (`pages/pumps-scan-page`)
+- RTK: `libs/api/endpoints/pumpApi.ts` (`scanPumpEvents`, `getPumpEvents`)
+- Helpers: `libs/utils/formatPump.ts`, `pumpQuery.ts`
+- UI: `pump-return-badge`, `pump-scan-filters`, `pump-hit-row/list`, `pump-event-list`
+- Tab: **Pumps** (always visible); no scan polling
+- Detail: pump events section on coin detail
+

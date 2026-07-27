@@ -26,6 +26,7 @@ export const baseApi = createApi({
     'Ticker',
     'Supply',
     'Indicator',
+    'Pump',
   ],
   endpoints: () => ({}),
 });

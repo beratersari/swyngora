@@ -7,6 +7,7 @@ import {
   rtkErrorMessage,
   useGetCandlesQuery,
   useGetIndicatorsQuery,
+  useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetTicker24hQuery,
   useListIntervalsQuery,
@@ -15,19 +16,32 @@ import {
 import { useAppStateActive } from '@/libs/hooks';
 import {
   apiCandlesToChart,
+  buildDetailPumpQuery,
   changeTone,
   emaColor,
   formatChangePercent,
   formatCompactUsd,
   formatPrice,
+  formatPumpEventTime,
+  formatPumpReturnPct,
   formatSupplyNum,
   formatTradeCount,
+  formatVolumeRatio,
   indicatorPointsToEmaLine,
   indicatorPointsToRsi,
   isMarketExchange,
+  pumpModeLabel,
+  pumpReturnTone,
   resolveInterval,
   sortedEmaKeys,
 } from '@/libs/utils';
+import {
+  DEFAULT_PUMP_DETAIL_DIRECTION,
+  DEFAULT_PUMP_DETAIL_LOOKBACK_HOURS,
+  DEFAULT_PUMP_DETAIL_MAX_EVENTS,
+  DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT,
+  PUMP_DISCLAIMER,
+} from '@/config/pumpConstants';
 import type { MarketsStackParamList } from '../../navigation';
 import { useOptionalWatchlist } from '@/modules/watchlist';
 import {
@@ -201,13 +215,69 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     navigation.goBack();
   }, [navigation]);
 
+  const pumpQueryArgs = useMemo(
+    () =>
+      buildDetailPumpQuery({
+        exchange,
+        symbol,
+        interval: resolvedInterval,
+        lookbackHours: DEFAULT_PUMP_DETAIL_LOOKBACK_HOURS,
+        minReturnPct: DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT,
+        direction: DEFAULT_PUMP_DETAIL_DIRECTION,
+        maxEvents: DEFAULT_PUMP_DETAIL_MAX_EVENTS,
+      }),
+    [exchange, symbol, resolvedInterval],
+  );
+
+  const pumpQuery = useGetPumpEventsQuery(pumpQueryArgs, {
+    skip: skip || !symbol,
+    refetchOnFocus: false,
+    pollingInterval: 0,
+  });
+
+  const pumpEventRows = useMemo(() => {
+    const events = pumpQuery.data?.events ?? [];
+    return events.map((e, i) => {
+      const vol = formatVolumeRatio(e.volumeRatio);
+      const mode = pumpModeLabel(e.mode);
+      return {
+        id: `${e.openTime ?? i}-${e.returnPct ?? i}`,
+        returnLabel: formatPumpReturnPct(e.returnPct),
+        returnTone: pumpReturnTone(e.returnPct),
+        timeLabel: formatPumpEventTime(e.openTime),
+        metaLabel: [mode, vol].filter(Boolean).join(' · '),
+      };
+    });
+  }, [pumpQuery.data?.events]);
+
+  const pumpEventsSubtitle = useMemo(() => {
+    if (!pumpQuery.data) return null;
+    const parts = [
+      `≥${pumpQuery.data.minReturnPct ?? DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT}%`,
+      pumpQuery.data.direction ?? DEFAULT_PUMP_DETAIL_DIRECTION,
+      pumpQuery.data.interval ?? resolvedInterval,
+    ];
+    if (pumpQuery.data.eventCount != null) {
+      parts.push(`${pumpQuery.data.eventCount} events`);
+    }
+    return parts.join(' · ');
+  }, [pumpQuery.data, resolvedInterval]);
+
   const onRetry = useCallback(() => {
     void tickerQuery.refetch();
     void supplyQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
     void intervalsQuery.refetch();
-  }, [tickerQuery, supplyQuery, candlesQuery, indicatorsQuery, intervalsQuery]);
+    void pumpQuery.refetch();
+  }, [
+    tickerQuery,
+    supplyQuery,
+    candlesQuery,
+    indicatorsQuery,
+    intervalsQuery,
+    pumpQuery,
+  ]);
 
   const onSelectInterval = useCallback((next: string) => {
     setInterval(next);
@@ -257,6 +327,14 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       ? rtkErrorMessage(indicatorsQuery.error, { resource: 'indicators' })
       : null,
     emaLatestLabels,
+
+    pumpEventRows,
+    pumpEventsLoading: pumpQuery.isLoading || pumpQuery.isFetching,
+    pumpEventsError: pumpQuery.isError
+      ? rtkErrorMessage(pumpQuery.error, { resource: 'pump events' })
+      : null,
+    pumpEventsSubtitle,
+    pumpDisclaimer: pumpQuery.data?.note ?? PUMP_DISCLAIMER,
 
     onBack,
     onRetry,

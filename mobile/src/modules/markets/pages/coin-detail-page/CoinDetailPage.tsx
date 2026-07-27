@@ -6,6 +6,7 @@ import { CoinDetailHeader } from '@/components/organisms/coin-detail-header';
 import { CoinDetailStats } from '@/components/organisms/coin-detail-stats';
 import { IndicatorRsiPane } from '@/components/organisms/indicator-rsi-pane';
 import { IntervalToolbar } from '@/components/organisms/interval-toolbar';
+import { PumpEventList } from '@/components/organisms/pump-event-list';
 import { ScreenTemplate } from '@/components/templates/screen-template';
 import type { CoinDetailPageProps, CoinDetailPageViewModel } from './CoinDetailPage.types';
 import { useCoinDetailPageViewModel } from './CoinDetailPage.viewModel';
@@ -70,6 +71,14 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           latestRsi={vm.latestRsi}
           isLoading={vm.indicatorsLoading}
           errorMessage={vm.indicatorsError}
+        />
+
+        <PumpEventList
+          rows={vm.pumpEventRows}
+          isLoading={vm.pumpEventsLoading}
+          errorMessage={vm.pumpEventsError}
+          subtitle={vm.pumpEventsSubtitle}
+          disclaimer={vm.pumpDisclaimer}
         />
 
         <View style={styles.retry}>

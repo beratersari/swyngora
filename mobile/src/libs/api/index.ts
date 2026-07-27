@@ -53,3 +53,19 @@ export type {
   ReplaceWatchlistArg,
 } from './endpoints/watchlistApi';
 export { rtkErrorMessage } from './rtkErrorMessage';
+
+export {
+  pumpApi,
+  useScanPumpEventsQuery,
+  useGetPumpEventsQuery,
+} from './endpoints/pumpApi';
+export type {
+  PumpEvent,
+  PumpEventsResponse,
+  PumpScanHit,
+  PumpScanResponse,
+  ScanPumpEventsQuery,
+  GetPumpEventsQuery,
+  PumpDirection,
+  PumpMode,
+} from './endpoints/pumpApi';

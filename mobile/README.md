@@ -142,3 +142,20 @@ Copied from frontend:
 | State | Redux Toolkit + RTK Query |
 
 **Last updated:** 2026-07-26
+
+## Pumps
+
+The **Pumps** tab scans top quote-volume pairs for rapid moves:
+
+- Exchange / lookback / threshold / direction filters
+- Ranked hits with best return %
+- Tap a hit for coin detail + event timeline
+- Pull-to-refresh only (no auto-poll)
+
+```text
+modules/pumps/pages/pumps-scan-page/
+libs/api/endpoints/pumpApi.ts
+```
+
+Feature: `docs/features/mobile-pumps.md`
+
