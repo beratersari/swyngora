@@ -1,7 +1,7 @@
 # Epic J: Mobile home dashboard
 
 **Priority:** P1 (mobile track — next after AI chat)  
-**Status:** todo  
+**Status:** done  
 **Depends on:** Epics C–I (markets, detail, favorites, pumps, batch RSI, AI chat) — done  
 **Branch:** `feature/mobile-home-dashboard` (from latest `develop` after AI chat merges, or stacked)  
 **Design plan:** `docs/design/mobile-home-dashboard.md`  
@@ -27,13 +27,13 @@ Default exchange: **binance**; quote **USDT** (configurable later).
 
 ## Tasks
 
-- [ ] MHOME-1 — Dashboard constants + spot/pump query helpers  
-- [ ] MHOME-2 — Atomic dashboard UI (section header, mover row, teaser cards)  
-- [ ] MHOME-3 — HomePage ViewModel (parallel RTK, poll, AppState pause)  
-- [ ] MHOME-4 — HomePage View + pull-to-refresh + deep links  
-- [ ] MHOME-5 — Empty / partial failure / loading UX  
-- [ ] MHOME-6 — Tests (helpers + ViewModel + page)  
-- [ ] MHOME-7 — Docs + board + changelog closeout  
+- [x] MHOME-1 — Dashboard constants + spot/pump query helpers  
+- [x] MHOME-2 — Atomic dashboard UI (section header, mover row, teaser cards)  
+- [x] MHOME-3 — HomePage ViewModel (parallel RTK, poll, AppState pause)  
+- [x] MHOME-4 — HomePage View + pull-to-refresh + deep links  
+- [x] MHOME-5 — Empty / partial failure / loading UX  
+- [x] MHOME-6 — Tests (helpers + ViewModel + page)  
+- [x] MHOME-7 — Docs + board + changelog closeout  
 
 ## Acceptance
 

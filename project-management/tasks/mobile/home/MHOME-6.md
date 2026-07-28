@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-6 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Depends on** | MHOME-1 … MHOME-5 |
 | **Path** | `project-management/tasks/mobile/home/MHOME-6.md` |
@@ -18,9 +18,9 @@
 
 ## Acceptance
 
-- [ ] `npm test` green for new tests  
-- [ ] Status updated  
+- [x] `npm test` green for new tests  
+- [x] Status updated  
 
 ## Status
 
-`todo`
+`done`

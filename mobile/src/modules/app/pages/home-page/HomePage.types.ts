@@ -1,19 +1,60 @@
-/** Public VM surface consumed by the View (and tests). */
+import type {
+  DashboardMarketRow,
+  DashboardPumpTeaser,
+} from '@/libs/utils';
+
 export type HomePageViewModel = {
   title: string;
-  apiBaseUrlLabel: string;
+  intro: string;
+
+  quickActions: { id: string; label: string; onPress: () => void }[];
+
+  favorites: DashboardMarketRow[];
+  favoritesLoading: boolean;
+  favoritesEmpty: string | null;
+  favoritesTitle: string;
+
+  movers: DashboardMarketRow[];
+  moversLoading: boolean;
+  moversError: string | null;
+  moversEmpty: string | null;
+  moversTitle: string;
+  onRetryMovers: () => void;
+
+  volume: DashboardMarketRow[];
+  volumeLoading: boolean;
+  volumeError: string | null;
+  volumeEmpty: string | null;
+  volumeTitle: string;
+  onRetryVolume: () => void;
+
+  pumps: DashboardPumpTeaser[];
+  pumpsLoading: boolean;
+  pumpsError: string | null;
+  pumpsEmpty: string | null;
+  pumpsTitle: string;
+  pumpsDisclaimer: string | null;
+  onRetryPumps: () => void;
+
+  seeAllLabel: string;
+  retryLabel: string;
+  isRefreshing: boolean;
+  isPollingPaused: boolean;
+  pollingCaption: string | null;
+
   healthStatus: 'unknown' | 'ok' | 'error';
   healthDetail: string | null;
-  isLoading: boolean;
-  isPollingPaused: boolean;
-  errorMessage: string | null;
-  onRetry: () => void;
+  apiBaseUrlLabel: string;
+
+  onRefresh: () => void;
   onOpenMarkets: () => void;
   onOpenPumps: () => void;
   onOpenAsk: () => void;
+  onPressMarket: (exchange: string, symbol: string) => void;
+  onPressPump: (exchange: string, symbol: string) => void;
+  onOpenFavorites: () => void;
 };
 
 export type HomePageProps = {
-  /** Optional injection for tests. Production path omits this. */
   viewModel?: HomePageViewModel;
 };

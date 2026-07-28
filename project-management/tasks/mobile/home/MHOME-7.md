@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-7 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile / docs |
 | **Depends on** | MHOME-1 … MHOME-6 |
 | **Path** | `project-management/tasks/mobile/home/MHOME-7.md` |
@@ -19,10 +19,10 @@
 
 ## Acceptance
 
-- [ ] Docs not stale  
-- [ ] Board + tasks synced  
-- [ ] Status → done  
+- [x] Docs not stale  
+- [x] Board + tasks synced  
+- [x] Status → done  
 
 ## Status
 
-`todo`
+`done`

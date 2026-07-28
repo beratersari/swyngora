@@ -139,3 +139,11 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 
 **Ops:** AI needs Python service (`AI_SERVICE_URL`, optional `AI_AUTOSTART`). Without it, chat shows 503 unavailable UX — markets still work.
 
+## Home dashboard
+
+- Page: `modules/app/pages/home-page/` (widgets ViewModel)
+- Helpers: `libs/utils/homeDashboardQuery.ts`, `config/homeDashboardConstants.ts`
+- UI: `section-header`, `quick-action-chips`, `dashboard-market-row`, `dashboard-section-list`, `pump-teaser-card`
+- Data: spot (movers/volume), pumps scan, optional watchlist favorites
+- Design: `docs/design/mobile-home-dashboard.md`
+

@@ -1,6 +1,6 @@
 # Design: Mobile home dashboard
 
-**Status:** Planned  
+**Status:** Implemented  
 **Epic:** `project-management/epics/mobile-home-dashboard.md`  
 **Feature:** `docs/features/mobile-home-dashboard.md`  
 **Tasks:** `project-management/tasks/mobile/home/MHOME-*.md`  

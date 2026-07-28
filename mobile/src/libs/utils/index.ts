@@ -100,3 +100,18 @@ export type {
   ChatRole,
   ChatMessageModel,
 } from './aiContextPrompt';
+
+export {
+  buildMoversSpotQuery,
+  buildVolumeSpotQuery,
+  buildHomePumpScanQuery,
+  mapSpotToDashboardRow,
+  mapSpotListToDashboardRows,
+  mapFavoritesToDashboardRows,
+  mapPumpHitsToTeasers,
+  indexDashboardRows,
+} from './homeDashboardQuery';
+export type {
+  DashboardMarketRow,
+  DashboardPumpTeaser,
+} from './homeDashboardQuery';

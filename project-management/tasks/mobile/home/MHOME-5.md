@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-5 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Depends on** | MHOME-4 |
 | **Path** | `project-management/tasks/mobile/home/MHOME-5.md` |
@@ -26,10 +26,10 @@ Pump / indicators disclaimers where relevant.
 
 ## Acceptance
 
-- [ ] Partial failure does not blank entire Home  
-- [ ] Retry hooks wired  
-- [ ] Status updated  
+- [x] Partial failure does not blank entire Home  
+- [x] Retry hooks wired  
+- [x] Status updated  
 
 ## Status
 
-`todo`
+`done`

@@ -77,6 +77,24 @@ See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 
 
 
+
+
+## Home dashboard
+
+The **Home** tab is a live market snapshot:
+
+- Quick chips: Markets / Pumps / Ask
+- Favorites strip (when starred)
+- Top movers & highest volume (Binance USDT)
+- Pump radar teaser
+- Pull-to-refresh; poll pauses in background
+
+```text
+modules/app/pages/home-page/
+components/{molecules/section-header,quick-action-chips,organisms/dashboard-*}
+libs/utils/homeDashboardQuery.ts
+```
+
 ## AI assistant (Ask)
 
 **Ask** tab chats with the multi-agent assistant via `POST /api/v1/ai/chat`:

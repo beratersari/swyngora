@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mobile home dashboard** (`mobile/`): Home tab shows live favorites strip, top movers, highest volume, pump teaser, and quick chips; pull-to-refresh and AppState poll pause (`docs/features/mobile-home-dashboard.md`)
 - **Mobile AI chat** (`mobile/`): Ask tab multi-turn chat via `POST /api/v1/ai/chat`; OpenAPI `postAiChat`; RTK mutation; context from coin detail; 503 UX when AI offline (`docs/features/mobile-ai-chat.md`)
 - **Mobile chart pump overlays** (`mobile/`): coin detail chart toggles for pump/dump markers and high–low margin price lines (same pump events as the list section)
 - **Mobile chart history pan** (`mobile/`): coin detail candle chart loads older bars when scrolling left (`endTime` pages, time-range viewport so empty left fills on all intervals; indicators limit follows series length)

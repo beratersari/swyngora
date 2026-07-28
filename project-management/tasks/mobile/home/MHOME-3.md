@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-3 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Depends on** | MHOME-1 |
 | **Path** | `project-management/tasks/mobile/home/MHOME-3.md` |
@@ -27,10 +27,10 @@ Keep health as optional footer, not the main content.
 
 ## Acceptance
 
-- [ ] Section-level loading/error fields on VM  
-- [ ] No JSX in ViewModel  
-- [ ] Status updated  
+- [x] Section-level loading/error fields on VM  
+- [x] No JSX in ViewModel  
+- [x] Status updated  
 
 ## Status
 
-`todo`
+`done`

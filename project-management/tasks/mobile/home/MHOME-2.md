@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-2 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Depends on** | MHOME-1 types (can stub props) |
 | **Path** | `project-management/tasks/mobile/home/MHOME-2.md` |
@@ -29,10 +29,10 @@ Props only — no RTK. File split: types, styles, index.
 
 ## Acceptance
 
-- [ ] Atomic only; no module components  
-- [ ] Brand tokens / existing Text, Chip patterns  
-- [ ] Status updated  
+- [x] Atomic only; no module components  
+- [x] Brand tokens / existing Text, Chip patterns  
+- [x] Status updated  
 
 ## Status
 
-`todo`
+`done`

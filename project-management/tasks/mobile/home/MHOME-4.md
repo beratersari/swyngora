@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-4 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Depends on** | MHOME-2, MHOME-3 |
 | **Path** | `project-management/tasks/mobile/home/MHOME-4.md` |
@@ -27,10 +27,10 @@ Rebuild `HomePage.tsx` composition:
 
 ## Acceptance
 
-- [ ] Deep links work from Home  
-- [ ] Pull-to-refresh resets sections  
-- [ ] Status updated  
+- [x] Deep links work from Home  
+- [x] Pull-to-refresh resets sections  
+- [x] Status updated  
 
 ## Status
 
-`todo`
+`done`

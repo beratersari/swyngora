@@ -209,7 +209,7 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 **MR grouping:** (A+1) · (2–3) · (4–5) · (6–7) · (8)
 
 
-## Epic J — Mobile home dashboard (**todo**)
+## Epic J — Mobile home dashboard (**done**)
 
 **Tasks:** `tasks/mobile/home/`  
 **Epic:** `epics/mobile-home-dashboard.md`  
@@ -219,13 +219,13 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 | ID | Task | Status |
 |---|---|---|
-| MHOME-1 | Dashboard constants + query helpers | todo |
-| MHOME-2 | Atomic dashboard UI | todo |
-| MHOME-3 | HomePage ViewModel | todo |
-| MHOME-4 | HomePage View + deep links | todo |
-| MHOME-5 | Empty / partial failure / loading UX | todo |
-| MHOME-6 | Tests | todo |
-| MHOME-7 | Docs + board + changelog closeout | todo |
+| MHOME-1 | Dashboard constants + query helpers | done |
+| MHOME-2 | Atomic dashboard UI | done |
+| MHOME-3 | HomePage ViewModel | done |
+| MHOME-4 | HomePage View + deep links | done |
+| MHOME-5 | Empty / partial failure / loading UX | done |
+| MHOME-6 | Tests | done |
+| MHOME-7 | Docs + board + changelog closeout | done |
 
 **MR grouping:** (1–2) · (3–4) · (5–6) · (7)
 

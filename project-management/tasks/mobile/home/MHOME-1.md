@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MHOME-1 |
 | **Epic** | mobile-home-dashboard |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/home/MHOME-1.md` |
 
@@ -23,11 +23,11 @@ Pure helpers + constants (no UI):
 
 ## Acceptance
 
-- [ ] Stable query args for RTK cache keys  
-- [ ] No React / navigation imports  
-- [ ] Tests green  
-- [ ] Status → done when finished  
+- [x] Stable query args for RTK cache keys  
+- [x] No React / navigation imports  
+- [x] Tests green  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

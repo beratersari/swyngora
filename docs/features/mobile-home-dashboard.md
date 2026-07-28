@@ -1,6 +1,6 @@
 # Feature: Home dashboard (mobile)
 
-**Status:** Planned  
+**Status:** Implemented  
 **Surface:** Product mobile (`mobile/`) — Chrome via react-native-web  
 **Backend:** Existing spot, pumps scan, watchlist, health  
 **Epic:** `project-management/epics/mobile-home-dashboard.md`  

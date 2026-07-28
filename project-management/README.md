@@ -57,7 +57,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 8. Epic G — Mobile pump / dump radar — **done** (`tasks/mobile/pumps/`, `epics/mobile-pumps.md`)
 9. Epic H — Mobile batch indicators — **done** (`tasks/mobile/batch-indicators/`, `epics/mobile-batch-indicators.md`)
 10. Epic I — Mobile AI assistant chat — **done** (`tasks/mobile/ai-chat/`, `epics/mobile-ai-chat.md`)
-11. Epic J — Mobile home dashboard — **todo** (`tasks/mobile/home/`, `epics/mobile-home-dashboard.md`)
+11. Epic J — Mobile home dashboard — **done** (`tasks/mobile/home/`, `epics/mobile-home-dashboard.md`)
 
 ### Mobile designs
 
@@ -75,4 +75,4 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-28 (Epic J home dashboard planned)
+**Last updated:** 2026-07-28 (Epic J home dashboard implemented)
