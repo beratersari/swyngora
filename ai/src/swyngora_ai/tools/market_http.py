@@ -140,6 +140,10 @@ class AlertWebhookGetInput(BaseModel):
 class AlertWebhookSetInput(BaseModel):
     client_id: str
     url: str = Field(description="Absolute http(s) webhook URL")
+    delivery_mode: str = Field(
+        default="immediate",
+        description="immediate | hourly_digest",
+    )
 
 
 class PumpDetectInput(BaseModel):
@@ -318,10 +322,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_alert_webhook(client_id: str) -> str:
         return http.get("/api/v1/alerts/webhook", {"clientId": client_id})
 
-    def set_alert_webhook(client_id: str, url: str) -> str:
+    def set_alert_webhook(
+        client_id: str,
+        url: str,
+        delivery_mode: str = "immediate",
+    ) -> str:
         return http.put(
             "/api/v1/alerts/webhook",
-            {"clientId": client_id, "url": url},
+            {
+                "clientId": client_id,
+                "url": url,
+                "deliveryMode": delivery_mode,
+            },
         )
 
     def delete_alert_webhook(client_id: str) -> str:
@@ -473,7 +485,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="set_alert_webhook",
             description=(
                 "Set absolute http(s) webhook URL for price-alert notifications. "
-                "On trigger a durable outbox row is enqueued (at most once per alert) and POSTed in the background."
+                "delivery_mode=immediate posts each fire soon; hourly_digest batches fires into one POST per UTC hour."
             ),
             args_schema=AlertWebhookSetInput,
         ),

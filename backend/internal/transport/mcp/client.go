@@ -279,11 +279,17 @@ func (c *APIClient) GetAlertWebhook(ctx context.Context, clientID string) (json.
 	return c.get(ctx, "/api/v1/alerts/webhook", q)
 }
 
-// SetAlertWebhook sets the client's webhook URL.
+// SetAlertWebhook sets the client's webhook URL (immediate delivery).
 func (c *APIClient) SetAlertWebhook(ctx context.Context, clientID, webhookURL string) (json.RawMessage, error) {
+	return c.SetAlertWebhookWithMode(ctx, clientID, webhookURL, "immediate")
+}
+
+// SetAlertWebhookWithMode sets webhook URL and delivery mode.
+func (c *APIClient) SetAlertWebhookWithMode(ctx context.Context, clientID, webhookURL, deliveryMode string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPut, "/api/v1/alerts/webhook", map[string]any{
-		"clientId": clientID,
-		"url":      webhookURL,
+		"clientId":     clientID,
+		"url":          webhookURL,
+		"deliveryMode": deliveryMode,
 	})
 }
 

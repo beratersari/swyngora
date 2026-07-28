@@ -216,8 +216,9 @@ func (s *Service) GetWebhook(ctx context.Context, clientID string) (*domain.Clie
 	return s.store.GetWebhook(ctx, clientID)
 }
 
-// SetWebhook validates and stores the client's webhook URL.
-func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL string) (*domain.ClientWebhook, error) {
+// SetWebhook validates and stores the client's webhook URL and delivery mode.
+// deliveryMode is immediate (default) or hourly_digest.
+func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL, deliveryMode string) (*domain.ClientWebhook, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
 	}
@@ -229,7 +230,11 @@ func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL string) (*dom
 	if err != nil {
 		return nil, err
 	}
-	return s.store.SetWebhook(ctx, clientID, u)
+	dm, ok := domain.NormalizeDeliveryMode(deliveryMode)
+	if !ok {
+		return nil, fmt.Errorf("%w: deliveryMode must be immediate or hourly_digest", domain.ErrInvalidArgument)
+	}
+	return s.store.SetWebhook(ctx, clientID, u, string(dm))
 }
 
 // DeleteWebhook clears the client's webhook URL.
@@ -284,6 +289,62 @@ func (s *Service) GetNotificationByAlertID(ctx context.Context, alertID string) 
 	return s.store.GetNotificationByAlertID(ctx, alertID)
 }
 
+// SealOpenDigests seals completed hour windows (used by deliverer / tests).
+func (s *Service) SealOpenDigests(ctx context.Context, now time.Time) (int, error) {
+	if s.store == nil {
+		return 0, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.SealOpenDigests(ctx, now)
+}
+
+// ListDueDigests returns sealed digests ready to send.
+func (s *Service) ListDueDigests(ctx context.Context, now time.Time, limit int) ([]domain.AlertDigest, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListDueDigests(ctx, now, limit)
+}
+
+// GetDigest returns one digest by id.
+func (s *Service) GetDigest(ctx context.Context, id string) (*domain.AlertDigest, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.GetDigest(ctx, id)
+}
+
+// ListDigestItems returns items in a digest.
+func (s *Service) ListDigestItems(ctx context.Context, digestID string) ([]domain.AlertDigestItem, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListDigestItems(ctx, digestID)
+}
+
+// MarkDigestDelivered marks a digest delivered.
+func (s *Service) MarkDigestDelivered(ctx context.Context, id string, at time.Time) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.MarkDigestDelivered(ctx, id, at)
+}
+
+// ScheduleDigestRetry schedules another digest delivery attempt.
+func (s *Service) ScheduleDigestRetry(ctx context.Context, id string, attempts int, nextAt time.Time, lastErr string) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.ScheduleDigestRetry(ctx, id, attempts, nextAt, lastErr)
+}
+
+// FailDigest permanently fails a digest.
+func (s *Service) FailDigest(ctx context.Context, id string, lastErr string) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.FailDigest(ctx, id, lastErr)
+}
+
 func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.PriceAlert) error {
 	if a == nil {
 		return nil
@@ -300,6 +361,14 @@ func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.Pric
 		return err
 	}
 	now := time.Now().UTC()
+	mode := wh.DeliveryMode
+	if mode == "" {
+		mode = domain.DeliveryImmediate
+	}
+	if mode == domain.DeliveryHourlyDigest {
+		_, err = s.store.AddDigestItem(ctx, a.ClientID, wh.URL, a.ID, payload, now)
+		return err
+	}
 	_, err = s.store.EnqueueNotification(ctx, domain.AlertNotification{
 		ID:            uuid.NewString(),
 		AlertID:       a.ID,

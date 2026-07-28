@@ -148,17 +148,23 @@ func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 type webhookDTO struct {
-	ClientID  string `json:"clientId"`
-	URL       string `json:"url"`
-	UpdatedAt string `json:"updatedAt,omitempty"`
-	Configured bool  `json:"configured"`
+	ClientID     string `json:"clientId"`
+	URL          string `json:"url"`
+	DeliveryMode string `json:"deliveryMode"`
+	UpdatedAt    string `json:"updatedAt,omitempty"`
+	Configured   bool   `json:"configured"`
 }
 
 func webhookToDTO(w *domain.ClientWebhook) webhookDTO {
+	mode := string(w.DeliveryMode)
+	if mode == "" {
+		mode = string(domain.DeliveryImmediate)
+	}
 	dto := webhookDTO{
-		ClientID:   w.ClientID,
-		URL:        w.URL,
-		Configured: strings.TrimSpace(w.URL) != "",
+		ClientID:     w.ClientID,
+		URL:          w.URL,
+		DeliveryMode: mode,
+		Configured:   strings.TrimSpace(w.URL) != "",
 	}
 	if !w.UpdatedAt.IsZero() {
 		dto.UpdatedAt = w.UpdatedAt.UTC().Format(time.RFC3339Nano)
@@ -177,8 +183,9 @@ func (h *AlertHandler) GetWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 type setWebhookBody struct {
-	ClientID string `json:"clientId"`
-	URL      string `json:"url"`
+	ClientID     string `json:"clientId"`
+	URL          string `json:"url"`
+	DeliveryMode string `json:"deliveryMode"` // immediate | hourly_digest
 }
 
 // PutWebhook handles PUT /api/v1/alerts/webhook
@@ -192,7 +199,7 @@ func (h *AlertHandler) PutWebhook(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	wh, err := h.svc.SetWebhook(r.Context(), clientID, body.URL)
+	wh, err := h.svc.SetWebhook(r.Context(), clientID, body.URL, body.DeliveryMode)
 	if err != nil {
 		writeError(w, err)
 		return

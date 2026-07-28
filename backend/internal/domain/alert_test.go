@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestAlertConditionMet(t *testing.T) {
 	tests := []struct {
@@ -120,5 +123,30 @@ func TestNormalizeAlertMode(t *testing.T) {
 	}
 	if _, ok := NormalizeAlertMode("forever"); ok {
 		t.Fatal("expected invalid")
+	}
+}
+
+func TestNormalizeDeliveryMode(t *testing.T) {
+	m, ok := NormalizeDeliveryMode("")
+	if !ok || m != DeliveryImmediate {
+		t.Fatalf("%v %v", m, ok)
+	}
+	m, ok = NormalizeDeliveryMode("hourly_digest")
+	if !ok || m != DeliveryHourlyDigest {
+		t.Fatalf("%v %v", m, ok)
+	}
+	if _, ok := NormalizeDeliveryMode("daily"); ok {
+		t.Fatal("expected invalid")
+	}
+}
+
+func TestDigestHourWindow(t *testing.T) {
+	t0 := time.Date(2026, 7, 28, 15, 42, 10, 0, time.UTC)
+	start, end := DigestHourWindow(t0)
+	if !start.Equal(time.Date(2026, 7, 28, 15, 0, 0, 0, time.UTC)) {
+		t.Fatalf("start=%v", start)
+	}
+	if !end.Equal(time.Date(2026, 7, 28, 16, 0, 0, 0, time.UTC)) {
+		t.Fatalf("end=%v", end)
 	}
 }

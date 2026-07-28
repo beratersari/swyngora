@@ -58,7 +58,7 @@ func (d *Deliverer) Start(ctx context.Context) {
 	}
 }
 
-// RunOnce claims due notifications and attempts delivery.
+// RunOnce seals completed digest windows, then delivers due digests and immediate notifications.
 func (d *Deliverer) RunOnce(ctx context.Context) {
 	if d.Alerts == nil {
 		return
@@ -79,7 +79,23 @@ func (d *Deliverer) RunOnce(ctx context.Context) {
 		d.HTTP = &http.Client{Timeout: 10 * time.Second}
 	}
 
-	due, err := d.Alerts.ListDueNotifications(ctx, d.now().UTC(), d.BatchSize)
+	now := d.now().UTC()
+	if n, err := d.Alerts.SealOpenDigests(ctx, now); err != nil {
+		d.Logger.Error("seal open digests", "err", err)
+	} else if n > 0 {
+		d.Logger.Info("sealed digests", "count", n)
+	}
+
+	dueDigests, err := d.Alerts.ListDueDigests(ctx, now, d.BatchSize)
+	if err != nil {
+		d.Logger.Error("list due digests", "err", err)
+	} else {
+		for i := range dueDigests {
+			d.deliverDigest(ctx, &dueDigests[i])
+		}
+	}
+
+	due, err := d.Alerts.ListDueNotifications(ctx, now, d.BatchSize)
 	if err != nil {
 		d.Logger.Error("list due webhook notifications", "err", err)
 		return
@@ -87,6 +103,53 @@ func (d *Deliverer) RunOnce(ctx context.Context) {
 	for i := range due {
 		d.deliverOne(ctx, &due[i])
 	}
+}
+
+func (d *Deliverer) deliverDigest(ctx context.Context, dig *domain.AlertDigest) {
+	if dig == nil || dig.Status != domain.DigestPending {
+		return
+	}
+	code, bodySnippet, err := d.postWebhook(ctx, dig.WebhookURL, dig.PayloadJSON)
+	attempts := dig.Attempts + 1
+	now := d.now().UTC()
+
+	if err == nil && code >= 200 && code < 300 {
+		if err := d.Alerts.MarkDigestDelivered(ctx, dig.ID, now); err != nil {
+			d.Logger.Error("mark digest delivered", "id", dig.ID, "err", err)
+			return
+		}
+		d.Logger.Info("digest webhook delivered",
+			"id", dig.ID,
+			"clientId", dig.ClientID,
+			"status", code,
+			"attempts", attempts,
+		)
+		return
+	}
+
+	errMsg := fmt.Sprintf("status=%d", code)
+	if err != nil {
+		errMsg = err.Error()
+	} else if bodySnippet != "" {
+		errMsg = fmt.Sprintf("status=%d body=%s", code, bodySnippet)
+	}
+
+	if attempts >= d.MaxAttempts {
+		if err := d.Alerts.FailDigest(ctx, dig.ID, errMsg); err != nil {
+			d.Logger.Error("fail digest", "id", dig.ID, "err", err)
+		}
+		d.Logger.Warn("digest permanently failed",
+			"id", dig.ID, "clientId", dig.ClientID, "attempts", attempts, "err", errMsg)
+		return
+	}
+
+	next := now.Add(webhookBackoff(attempts))
+	if err := d.Alerts.ScheduleDigestRetry(ctx, dig.ID, attempts, next, errMsg); err != nil {
+		d.Logger.Error("schedule digest retry", "id", dig.ID, "err", err)
+		return
+	}
+	d.Logger.Info("digest delivery deferred",
+		"id", dig.ID, "clientId", dig.ClientID, "attempts", attempts, "next", next.Format(time.RFC3339), "err", errMsg)
 }
 
 func (d *Deliverer) deliverOne(ctx context.Context, n *domain.AlertNotification) {

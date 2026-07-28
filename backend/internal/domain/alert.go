@@ -85,15 +85,25 @@ const (
 	NotificationFailed    NotificationStatus = "failed" // exhausted retries
 )
 
+// NotificationDeliveryMode controls when webhook notifications are sent.
+type NotificationDeliveryMode string
+
+const (
+	// DeliveryImmediate POSTs each fire as soon as it is enqueued (default).
+	DeliveryImmediate NotificationDeliveryMode = "immediate"
+	// DeliveryHourlyDigest batches fires into one webhook POST per UTC hour.
+	DeliveryHourlyDigest NotificationDeliveryMode = "hourly_digest"
+)
+
 // ClientWebhook is a client's registered webhook destination for price alerts.
 type ClientWebhook struct {
-	ClientID  string
-	URL       string
-	UpdatedAt time.Time
+	ClientID     string
+	URL          string
+	DeliveryMode NotificationDeliveryMode
+	UpdatedAt    time.Time
 }
 
-// AlertNotification is a durable outbox row for one alert trigger delivery.
-// At most one row exists per AlertID (enforced by store unique constraint).
+// AlertNotification is a durable outbox row for one immediate alert fire delivery.
 type AlertNotification struct {
 	ID            string
 	AlertID       string
@@ -106,6 +116,44 @@ type AlertNotification struct {
 	LastError     string
 	CreatedAt     time.Time
 	DeliveredAt   *time.Time
+}
+
+// DigestStatus is the lifecycle of an hourly digest batch.
+type DigestStatus string
+
+const (
+	// DigestOpen collects items until the hour window ends.
+	DigestOpen DigestStatus = "open"
+	// DigestPending is sealed and waiting for (re)delivery.
+	DigestPending DigestStatus = "pending"
+	DigestDelivered DigestStatus = "delivered"
+	DigestFailed    DigestStatus = "failed"
+)
+
+// AlertDigest is a durable hourly batch of alert fires for one client.
+type AlertDigest struct {
+	ID            string
+	ClientID      string
+	WebhookURL    string
+	WindowStart   time.Time
+	WindowEnd     time.Time
+	Status        DigestStatus
+	Attempts      int
+	NextAttemptAt time.Time
+	LastError     string
+	PayloadJSON   string // set when sealed
+	CreatedAt     time.Time
+	SealedAt      *time.Time
+	DeliveredAt   *time.Time
+	Items         []AlertDigestItem // optional, loaded when needed
+}
+
+// AlertDigestItem is one alert's contribution to a digest (unique per digest).
+type AlertDigestItem struct {
+	DigestID    string
+	AlertID     string
+	PayloadJSON string
+	CreatedAt   time.Time
 }
 
 // PriceAlertPort persists price alerts, webhooks, and the notification outbox.
@@ -129,13 +177,12 @@ type PriceAlertPort interface {
 	// CountByClient returns how many alerts a client currently has (any status).
 	CountByClient(ctx context.Context, clientID string) (int, error)
 
-	// Webhook settings (one URL per client).
+	// Webhook settings (one URL + delivery mode per client).
 	GetWebhook(ctx context.Context, clientID string) (*ClientWebhook, error)
-	SetWebhook(ctx context.Context, clientID, url string) (*ClientWebhook, error)
+	SetWebhook(ctx context.Context, clientID, url, deliveryMode string) (*ClientWebhook, error)
 	DeleteWebhook(ctx context.Context, clientID string) error
 
-	// Notification outbox (durable queue). Each fire enqueues a new row (new id).
-	// EnqueueNotification always inserts a new row.
+	// Immediate notification outbox (durable queue). Each fire enqueues a new row.
 	EnqueueNotification(ctx context.Context, n AlertNotification) (*AlertNotification, error)
 	// ListDueNotifications returns pending rows with next_attempt_at <= now.
 	ListDueNotifications(ctx context.Context, now time.Time, limit int) ([]AlertNotification, error)
@@ -144,8 +191,19 @@ type PriceAlertPort interface {
 	ScheduleNotificationRetry(ctx context.Context, id string, attempts int, nextAt time.Time, lastErr string) error
 	// FailNotification marks permanent failure after max attempts.
 	FailNotification(ctx context.Context, id string, lastErr string) error
-	// GetNotificationByAlertID returns the outbox row for an alert, or ErrNotFound.
+	// GetNotificationByAlertID returns the latest outbox row for an alert, or ErrNotFound.
 	GetNotificationByAlertID(ctx context.Context, alertID string) (*AlertNotification, error)
+
+	// Hourly digests: AddDigestItem upserts by (digest, alert_id) so an alert appears once.
+	AddDigestItem(ctx context.Context, clientID, webhookURL, alertID, itemPayloadJSON string, at time.Time) (*AlertDigest, error)
+	// SealOpenDigests seals open digests whose window_end <= now into pending with payload.
+	SealOpenDigests(ctx context.Context, now time.Time) (int, error)
+	ListDueDigests(ctx context.Context, now time.Time, limit int) ([]AlertDigest, error)
+	GetDigest(ctx context.Context, id string) (*AlertDigest, error)
+	ListDigestItems(ctx context.Context, digestID string) ([]AlertDigestItem, error)
+	MarkDigestDelivered(ctx context.Context, id string, at time.Time) error
+	ScheduleDigestRetry(ctx context.Context, id string, attempts int, nextAt time.Time, lastErr string) error
+	FailDigest(ctx context.Context, id string, lastErr string) error
 }
 
 // AlertConditionMet reports whether lastPrice satisfies the alert threshold.
@@ -191,6 +249,36 @@ func NormalizeAlertMode(s string) (AlertMode, bool) {
 		return "", false
 	}
 	return AlertMode(s), true
+}
+
+// IsValidDeliveryMode reports whether s is immediate or hourly_digest.
+func IsValidDeliveryMode(s string) bool {
+	switch NotificationDeliveryMode(s) {
+	case DeliveryImmediate, DeliveryHourlyDigest:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeDeliveryMode returns immediate for empty input; validates otherwise.
+func NormalizeDeliveryMode(s string) (NotificationDeliveryMode, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return DeliveryImmediate, true
+	}
+	if !IsValidDeliveryMode(s) {
+		return "", false
+	}
+	return NotificationDeliveryMode(s), true
+}
+
+// DigestHourWindow returns the UTC hour bucket [start, end) containing t.
+func DigestHourWindow(t time.Time) (start, end time.Time) {
+	t = t.UTC()
+	start = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
+	end = start.Add(time.Hour)
+	return start, end
 }
 
 // EvaluateAlert applies one price observation to an alert (pure; no I/O).

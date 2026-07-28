@@ -81,9 +81,40 @@ CREATE INDEX IF NOT EXISTS idx_price_alerts_client ON price_alerts(client_id);
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(status) WHERE status = 'active';
 
 CREATE TABLE IF NOT EXISTS client_webhooks (
-	client_id  TEXT PRIMARY KEY NOT NULL,
-	url        TEXT NOT NULL,
-	updated_at TEXT NOT NULL
+	client_id      TEXT PRIMARY KEY NOT NULL,
+	url            TEXT NOT NULL,
+	delivery_mode  TEXT NOT NULL DEFAULT 'immediate',
+	updated_at     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS alert_digests (
+	id              TEXT PRIMARY KEY NOT NULL,
+	client_id       TEXT NOT NULL,
+	webhook_url     TEXT NOT NULL,
+	window_start    TEXT NOT NULL,
+	window_end      TEXT NOT NULL,
+	status          TEXT NOT NULL,
+	attempts        INTEGER NOT NULL DEFAULT 0,
+	next_attempt_at TEXT NOT NULL,
+	last_error      TEXT NOT NULL DEFAULT '',
+	payload_json    TEXT NOT NULL DEFAULT '',
+	created_at      TEXT NOT NULL,
+	sealed_at       TEXT,
+	delivered_at    TEXT,
+	UNIQUE (client_id, window_start)
+);
+CREATE INDEX IF NOT EXISTS idx_alert_digests_due
+	ON alert_digests(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_alert_digests_open
+	ON alert_digests(status, window_end);
+
+CREATE TABLE IF NOT EXISTS alert_digest_items (
+	digest_id    TEXT NOT NULL,
+	alert_id     TEXT NOT NULL,
+	payload_json TEXT NOT NULL,
+	created_at   TEXT NOT NULL,
+	PRIMARY KEY (digest_id, alert_id),
+	FOREIGN KEY (digest_id) REFERENCES alert_digests(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS alert_notifications (
@@ -109,10 +140,11 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("alerts sqlite migrate: %w", err)
 	}
-	// Additive columns for DBs created before mode/armed existed.
+	// Additive columns for DBs created before mode/armed/delivery_mode existed.
 	for _, stmt := range []string{
 		`ALTER TABLE price_alerts ADD COLUMN mode TEXT NOT NULL DEFAULT 'one_time'`,
 		`ALTER TABLE price_alerts ADD COLUMN armed INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE client_webhooks ADD COLUMN delivery_mode TEXT NOT NULL DEFAULT 'immediate'`,
 	} {
 		_, _ = s.db.Exec(stmt) // ignore "duplicate column" errors
 	}
@@ -387,36 +419,58 @@ func (s *SQLite) CountByClient(ctx context.Context, clientID string) (int, error
 
 // GetWebhook returns the client's webhook, or empty URL if unset (not an error).
 func (s *SQLite) GetWebhook(ctx context.Context, clientID string) (*domain.ClientWebhook, error) {
-	var url, updatedRaw string
+	var url, mode, updatedRaw string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT url, updated_at FROM client_webhooks WHERE client_id = ?
-	`, clientID).Scan(&url, &updatedRaw)
+		SELECT url, COALESCE(delivery_mode, 'immediate'), updated_at FROM client_webhooks WHERE client_id = ?
+	`, clientID).Scan(&url, &mode, &updatedRaw)
 	if err == sql.ErrNoRows {
-		return &domain.ClientWebhook{ClientID: clientID, URL: "", UpdatedAt: time.Time{}}, nil
+		return &domain.ClientWebhook{
+			ClientID:     clientID,
+			URL:          "",
+			DeliveryMode: domain.DeliveryImmediate,
+			UpdatedAt:    time.Time{},
+		}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite get webhook: %w", err)
 	}
+	dm, ok := domain.NormalizeDeliveryMode(mode)
+	if !ok {
+		dm = domain.DeliveryImmediate
+	}
 	return &domain.ClientWebhook{
-		ClientID:  clientID,
-		URL:       url,
-		UpdatedAt: parseTime(updatedRaw),
+		ClientID:     clientID,
+		URL:          url,
+		DeliveryMode: dm,
+		UpdatedAt:    parseTime(updatedRaw),
 	}, nil
 }
 
-// SetWebhook upserts the client's webhook URL.
-func (s *SQLite) SetWebhook(ctx context.Context, clientID, url string) (*domain.ClientWebhook, error) {
+// SetWebhook upserts the client's webhook URL and delivery mode.
+func (s *SQLite) SetWebhook(ctx context.Context, clientID, url, deliveryMode string) (*domain.ClientWebhook, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	dm, ok := domain.NormalizeDeliveryMode(deliveryMode)
+	if !ok {
+		dm = domain.DeliveryImmediate
+	}
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO client_webhooks (client_id, url, updated_at) VALUES (?, ?, ?)
-		ON CONFLICT(client_id) DO UPDATE SET url = excluded.url, updated_at = excluded.updated_at
-	`, clientID, url, now.Format(time.RFC3339Nano))
+		INSERT INTO client_webhooks (client_id, url, delivery_mode, updated_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT(client_id) DO UPDATE SET
+			url = excluded.url,
+			delivery_mode = excluded.delivery_mode,
+			updated_at = excluded.updated_at
+	`, clientID, url, string(dm), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite set webhook: %w", err)
 	}
-	return &domain.ClientWebhook{ClientID: clientID, URL: url, UpdatedAt: now}, nil
+	return &domain.ClientWebhook{
+		ClientID:     clientID,
+		URL:          url,
+		DeliveryMode: dm,
+		UpdatedAt:    now,
+	}, nil
 }
 
 // DeleteWebhook removes the client's webhook URL.

@@ -100,8 +100,9 @@ func TestAlertHTTP_Validation(t *testing.T) {
 func TestAlertHTTP_WebhookCRUD(t *testing.T) {
 	h := newAlertHandler(t)
 	body, _ := json.Marshal(map[string]string{
-		"clientId": "wh-user",
-		"url":      "https://hooks.example.com/a",
+		"clientId":     "wh-user",
+		"url":          "https://hooks.example.com/a",
+		"deliveryMode": "hourly_digest",
 	})
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/alerts/webhook", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -118,7 +119,7 @@ func TestAlertHTTP_WebhookCRUD(t *testing.T) {
 	}
 	var got map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
-	if got["url"] != "https://hooks.example.com/a" || got["configured"] != true {
+	if got["url"] != "https://hooks.example.com/a" || got["configured"] != true || got["deliveryMode"] != "hourly_digest" {
 		t.Fatalf("%v", got)
 	}
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/alerts/webhook?clientId=wh-user", nil)

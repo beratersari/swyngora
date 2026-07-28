@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,7 +145,7 @@ func TestSQLite_CountAndIsolation(t *testing.T) {
 func TestSQLite_WebhookAndNotificationOutbox(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
-	wh, err := s.SetWebhook(ctx, "c1", "https://hooks.example.com/swyngora")
+	wh, err := s.SetWebhook(ctx, "c1", "https://hooks.example.com/swyngora", "immediate")
 	if err != nil || wh.URL == "" {
 		t.Fatalf("%+v %v", wh, err)
 	}
@@ -196,7 +197,7 @@ func TestSQLite_NotificationRetryAndPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = s1.SetWebhook(ctx, "u", "https://example.com/hook")
+	_, _ = s1.SetWebhook(ctx, "u", "https://example.com/hook", "immediate")
 	past := time.Now().UTC().Add(-time.Minute)
 	_, err = s1.EnqueueNotification(ctx, domain.AlertNotification{
 		ID: "pend-1", AlertID: "a-1", ClientID: "u",
@@ -223,5 +224,79 @@ func TestSQLite_NotificationRetryAndPersist(t *testing.T) {
 	wh, _ := s2.GetWebhook(ctx, "u")
 	if wh.URL != "https://example.com/hook" {
 		t.Fatalf("webhook lost: %+v", wh)
+	}
+}
+
+func TestSQLite_DigestDedupeAndSeal(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	at := time.Date(2026, 7, 28, 10, 15, 0, 0, time.UTC)
+	d1, err := s.AddDigestItem(ctx, "c", "https://hooks.example.com/d", "alert-a", `{"alertId":"alert-a","lastPrice":1}`, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same alert again in same hour — still one item, payload updated
+	d2, err := s.AddDigestItem(ctx, "c", "https://hooks.example.com/d", "alert-a", `{"alertId":"alert-a","lastPrice":2}`, at.Add(10*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d1.ID != d2.ID {
+		t.Fatalf("same hour digest ids differ: %s vs %s", d1.ID, d2.ID)
+	}
+	_, err = s.AddDigestItem(ctx, "c", "https://hooks.example.com/d", "alert-b", `{"alertId":"alert-b","lastPrice":3}`, at.Add(20*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items, err := s.ListDigestItems(ctx, d1.ID)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("items=%+v err=%v", items, err)
+	}
+	// Seal after window ends
+	n, err := s.SealOpenDigests(ctx, time.Date(2026, 7, 28, 11, 0, 1, 0, time.UTC))
+	if err != nil || n != 1 {
+		t.Fatalf("sealed=%d err=%v", n, err)
+	}
+	got, err := s.GetDigest(ctx, d1.ID)
+	if err != nil || got.Status != domain.DigestPending || got.PayloadJSON == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if !strings.Contains(got.PayloadJSON, `"count":2`) && !strings.Contains(got.PayloadJSON, `"count": 2`) {
+		// json.Marshal uses no space after colon
+		if !strings.Contains(got.PayloadJSON, `"count":2`) {
+			t.Fatalf("payload=%s", got.PayloadJSON)
+		}
+	}
+	due, err := s.ListDueDigests(ctx, time.Date(2026, 7, 28, 11, 0, 1, 0, time.UTC), 10)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("due=%+v err=%v", due, err)
+	}
+}
+
+func TestSQLite_DigestPersistsAcrossReopen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "alerts.db")
+	ctx := context.Background()
+	at := time.Date(2026, 7, 28, 12, 5, 0, 0, time.UTC)
+	s1, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := s1.AddDigestItem(ctx, "u", "https://example.com/h", "a1", `{"alertId":"a1"}`, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = s1.Close()
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	items, err := s2.ListDigestItems(ctx, d.ID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("%+v %v", items, err)
+	}
+	n, err := s2.SealOpenDigests(ctx, time.Date(2026, 7, 28, 13, 0, 0, 0, time.UTC))
+	if err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
 	}
 }

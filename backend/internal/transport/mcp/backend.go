@@ -413,10 +413,14 @@ func (b *Backend) GetAlertWebhook(ctx context.Context, clientID string) (json.Ra
 }
 
 func (b *Backend) SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error) {
+	return b.SetAlertWebhookWithMode(ctx, clientID, url, string(domain.DeliveryImmediate))
+}
+
+func (b *Backend) SetAlertWebhookWithMode(ctx context.Context, clientID, url, deliveryMode string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
 	}
-	wh, err := b.Alerts.SetWebhook(ctx, clientID, url)
+	wh, err := b.Alerts.SetWebhook(ctx, clientID, url, deliveryMode)
 	if err != nil {
 		return nil, err
 	}
@@ -434,10 +438,15 @@ func (b *Backend) DeleteAlertWebhook(ctx context.Context, clientID string) (json
 }
 
 func webhookJSON(wh *domain.ClientWebhook) (json.RawMessage, error) {
+	mode := string(wh.DeliveryMode)
+	if mode == "" {
+		mode = string(domain.DeliveryImmediate)
+	}
 	m := map[string]any{
-		"clientId":   wh.ClientID,
-		"url":        wh.URL,
-		"configured": strings.TrimSpace(wh.URL) != "",
+		"clientId":     wh.ClientID,
+		"url":          wh.URL,
+		"deliveryMode": mode,
+		"configured":   strings.TrimSpace(wh.URL) != "",
 	}
 	if !wh.UpdatedAt.IsZero() {
 		m["updatedAt"] = wh.UpdatedAt.UTC().Format(time.RFC3339Nano)

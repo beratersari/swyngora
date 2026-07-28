@@ -32,6 +32,7 @@ type DataPort interface {
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
+	SetAlertWebhookWithMode(ctx context.Context, clientID, url, deliveryMode string) (json.RawMessage, error)
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
@@ -421,9 +422,10 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("set_alert_webhook",
-		mcp.WithDescription("Set absolute http(s) webhook URL for price-alert notifications (durable outbox, at most once per alert)."),
+		mcp.WithDescription("Set absolute http(s) webhook URL. deliveryMode=immediate (default) or hourly_digest (batch fires into one POST per UTC hour)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("url", mcp.Required(), mcp.Description("https://hooks.example.com/...")),
+		mcp.WithString("deliveryMode", mcp.Description("immediate | hourly_digest (default immediate)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -433,7 +435,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.SetAlertWebhook(ctx, clientID, u)
+		raw, err := api.SetAlertWebhookWithMode(ctx, clientID, u, req.GetString("deliveryMode", "immediate"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
