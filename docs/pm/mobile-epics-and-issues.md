@@ -351,3 +351,57 @@ MAI-A · MAI-1 … MAI-8
 | MAI-8 | Docs + board + changelog closeout |
 
 Full task text: `project-management/tasks/mobile/ai-chat/MAI-*.md`.
+
+
+---
+
+## Epic J — Mobile home dashboard
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Home market dashboard` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-home-dashboard.md` |
+| **Feature** | `docs/features/mobile-home-dashboard.md` |
+| **Epic file** | `project-management/epics/mobile-home-dashboard.md` |
+| **Tasks** | `project-management/tasks/mobile/home/MHOME-*.md` |
+| **Branch** | `feature/mobile-home-dashboard` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Replace mobile Home scaffold with live dashboard: favorites, top movers,
+high volume, pump teaser, quick links to Markets / Pumps / Ask.
+Uses existing spot / pumps / watchlist APIs only.
+
+## Goals
+
+- Parallel RTK widgets with AppState pause
+- Deep links into existing stacks
+- Partial failure UX per section
+
+## Out of scope
+
+New backend, alerts, layout editor, web home.
+
+## Child issues
+
+MHOME-1 … MHOME-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MHOME-1 | Dashboard constants + query helpers |
+| MHOME-2 | Atomic dashboard UI |
+| MHOME-3 | HomePage ViewModel |
+| MHOME-4 | HomePage View + deep links |
+| MHOME-5 | Empty / partial failure / loading UX |
+| MHOME-6 | Tests |
+| MHOME-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/home/MHOME-*.md`.
