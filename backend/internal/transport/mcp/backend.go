@@ -519,6 +519,72 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
 }
 
+func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	o, err := b.Portfolio.PlacePendingOrder(ctx, portfolio.PendingOrderInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
+		Quantity: quantity, TriggerPrice: triggerPrice,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"type":  string(o.Type),
+		"order": pendingOrderMap(o),
+		"note":  "Paper pending order — fills when last price meets trigger. Not real money.",
+	})
+}
+
+func (b *Backend) ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListPendingOrders(ctx, clientID, status, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, pendingOrderMap(&list[i]))
+	}
+	st := status
+	if st == "" {
+		st = "open"
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "orders": items, "count": len(items), "status": st})
+}
+
+func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	o, err := b.Portfolio.CancelPendingOrder(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; it will not execute."})
+}
+
+func pendingOrderMap(o *domain.PendingOrder) map[string]any {
+	m := map[string]any{
+		"id": o.ID, "clientId": o.ClientID, "exchange": string(o.Exchange), "symbol": o.Symbol,
+		"type": string(o.Type), "side": string(o.Side), "quantity": o.Quantity, "triggerPrice": o.TriggerPrice,
+		"status": string(o.Status),
+		"createdAt": o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason,
+	}
+	if o.FilledAt != nil {
+		m["filledAt"] = o.FilledAt.UTC().Format(time.RFC3339Nano)
+	}
+	if o.CanceledAt != nil {
+		m["canceledAt"] = o.CanceledAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
+}
+
 func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 	pos := make([]map[string]any, 0, len(v.Positions))
 	for _, p := range v.Positions {

@@ -19,7 +19,8 @@ info:
       plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
       quiet hours end; pending notifications survive restarts.
     - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
-      open positions, realized/unrealized P&amp;L, and trade history (SQLite; not real money).
+      pending limit buy/sell and stop-loss orders (auto-fill on price), open positions,
+      realized/unrealized P&amp;L, and trade history (SQLite; not real money).
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -1011,8 +1012,11 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/orders:
     post:
-      summary: Place a paper market order
-      description: Buy or sell at the venue last price. Simulated fill only.
+      summary: Place a paper order (market or pending)
+      description: |
+        type=market (default): immediate buy/sell at last price (side required).
+        type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; fills when last meets condition.
+        Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
       requestBody:
@@ -1021,18 +1025,94 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol, side, quantity]
+              required: [symbol, quantity]
               properties:
                 clientId: { type: string }
                 exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
                 symbol: { type: string }
-                side: { type: string, enum: [buy, sell] }
+                type:
+                  type: string
+                  enum: [market, limit_buy, limit_sell, stop_loss]
+                  default: market
+                side:
+                  type: string
+                  enum: [buy, sell]
+                  description: Required for market orders; derived for pending types
                 quantity: { type: number, exclusiveMinimum: 0 }
+                triggerPrice:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Limit or stop price (required for pending types)
       responses:
         '200':
-          description: Fill and updated portfolio
+          description: Market fill and updated portfolio
+        '201':
+          description: Pending order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type: { type: string }
+                  order: { $ref: '#/components/schemas/PendingOrder' }
+                  note: { type: string }
         '400':
           $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List paper pending orders
+      description: Defaults to open orders. status=open|filled|canceled|rejected|all
+      operationId: listPortfolioOrders
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, filled, canceled, rejected, all], default: open }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Pending order list
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/orders/{id}:
+    delete:
+      summary: Cancel an open paper pending order
+      description: Only open orders can be canceled. Filled/canceled/rejected return 404. Canceled orders never fill.
+      operationId: cancelPortfolioOrder
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Canceled order
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/PendingOrder' }
+                  note: { type: string }
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/trades:
@@ -1249,6 +1329,25 @@ components:
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PendingOrder:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        type: { type: string, enum: [limit_buy, limit_sell, stop_loss] }
+        side: { type: string, enum: [buy, sell] }
+        quantity: { type: number }
+        triggerPrice: { type: number }
+        status: { type: string, enum: [open, filled, canceled, rejected] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        filledAt: { type: string, format: date-time, nullable: true }
+        canceledAt: { type: string, format: date-time, nullable: true }
+        fillTradeId: { type: string }
+        fillPrice: { type: number }
+        rejectReason: { type: string }
     Watchlist:
       type: object
       properties:

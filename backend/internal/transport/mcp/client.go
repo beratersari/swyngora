@@ -349,6 +349,45 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 	})
 }
 
+// PlacePortfolioPendingOrder places a limit/stop paper order.
+func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": orderType,
+		"quantity": quantity, "triggerPrice": triggerPrice,
+	})
+}
+
+// ListPortfolioOrders lists paper pending orders.
+func (c *APIClient) ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/orders", q)
+}
+
+// CancelPortfolioOrder cancels an open pending paper order.
+func (c *APIClient) CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/orders/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
 // ListPortfolioTrades lists paper trades.
 func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -129,14 +130,56 @@ func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type orderBody struct {
-	ClientID string  `json:"clientId"`
-	Exchange string  `json:"exchange"`
-	Symbol   string  `json:"symbol"`
-	Side     string  `json:"side"`
-	Quantity float64 `json:"quantity"`
+	ClientID     string  `json:"clientId"`
+	Exchange     string  `json:"exchange"`
+	Symbol       string  `json:"symbol"`
+	Side         string  `json:"side"`
+	Quantity     float64 `json:"quantity"`
+	Type         string  `json:"type"`         // market (default) | limit_buy | limit_sell | stop_loss
+	TriggerPrice float64 `json:"triggerPrice"` // required for pending types
+}
+
+type pendingOrderDTO struct {
+	ID           string  `json:"id"`
+	ClientID     string  `json:"clientId"`
+	Exchange     string  `json:"exchange"`
+	Symbol       string  `json:"symbol"`
+	Type         string  `json:"type"`
+	Side         string  `json:"side"`
+	Quantity     float64 `json:"quantity"`
+	TriggerPrice float64 `json:"triggerPrice"`
+	Status       string  `json:"status"`
+	CreatedAt    string  `json:"createdAt"`
+	UpdatedAt    string  `json:"updatedAt"`
+	FilledAt     *string `json:"filledAt,omitempty"`
+	CanceledAt   *string `json:"canceledAt,omitempty"`
+	FillTradeID  string  `json:"fillTradeId,omitempty"`
+	FillPrice    float64 `json:"fillPrice,omitempty"`
+	RejectReason string  `json:"rejectReason,omitempty"`
+}
+
+func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
+	d := pendingOrderDTO{
+		ID: o.ID, ClientID: o.ClientID, Exchange: string(o.Exchange), Symbol: o.Symbol,
+		Type: string(o.Type), Side: string(o.Side), Quantity: o.Quantity, TriggerPrice: o.TriggerPrice,
+		Status: string(o.Status),
+		CreatedAt: o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt: o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason,
+	}
+	if o.FilledAt != nil {
+		s := o.FilledAt.UTC().Format(time.RFC3339Nano)
+		d.FilledAt = &s
+	}
+	if o.CanceledAt != nil {
+		s := o.CanceledAt.UTC().Format(time.RFC3339Nano)
+		d.CanceledAt = &s
+	}
+	return d
 }
 
 // PlaceOrder handles POST /api/v1/portfolio/orders
+// type=market (default): immediate fill; limit_buy|limit_sell|stop_loss: resting order.
 func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	var body orderBody
 	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
@@ -147,18 +190,86 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
-		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
-		Side: body.Side, Quantity: body.Quantity,
+	typ := body.Type
+	if typ == "" {
+		typ = "market"
+	}
+	switch typ {
+	case "market":
+		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
+			ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
+			Side: body.Side, Quantity: body.Quantity,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":      "market",
+			"trade":     tradeToDTO(tr),
+			"portfolio": portfolioViewDTO(view),
+			"note":      view.Note,
+		})
+	case "limit_buy", "limit_sell", "stop_loss":
+		o, err := h.svc.PlacePendingOrder(r.Context(), portfolio.PendingOrderInput{
+			ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
+			Type: typ, Quantity: body.Quantity, TriggerPrice: body.TriggerPrice,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"type":  typ,
+			"order": pendingOrderToDTO(o),
+			"note":  "Paper pending order — fills when last price meets trigger. Not real money.",
+		})
+	default:
+		writeError(w, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, or stop_loss", domain.ErrInvalidArgument))
+	}
+}
+
+// ListOrders handles GET /api/v1/portfolio/orders — open pending orders by default.
+func (h *PortfolioHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	status := q.Get("status")
+	list, err := h.svc.ListPendingOrders(r.Context(), clientIDFrom(r), status, limit, offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]pendingOrderDTO, 0, len(list))
+	for i := range list {
+		items = append(items, pendingOrderToDTO(&list[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId": clientIDFrom(r),
+		"orders":   items,
+		"count":    len(items),
+		"status":   statusOrDefault(status),
 	})
+}
+
+func statusOrDefault(s string) string {
+	if s == "" {
+		return "open"
+	}
+	return s
+}
+
+// CancelOrder handles DELETE /api/v1/portfolio/orders/{id}
+func (h *PortfolioHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	o, err := h.svc.CancelPendingOrder(r.Context(), clientIDFrom(r), id)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"trade":     tradeToDTO(tr),
-		"portfolio": portfolioViewDTO(view),
-		"note":      view.Note,
+		"order": pendingOrderToDTO(o),
+		"note":  "Order canceled; it will not execute.",
 	})
 }
 

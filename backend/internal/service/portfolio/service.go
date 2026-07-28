@@ -270,6 +270,217 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 	return list, total, err
 }
 
+// PendingOrderInput creates a limit or stop resting order.
+type PendingOrderInput struct {
+	ClientID     string
+	Exchange     string
+	Symbol       string
+	Type         string // limit_buy | limit_sell | stop_loss
+	Quantity     float64
+	TriggerPrice float64
+}
+
+// PlacePendingOrder creates an open resting order (not filled immediately).
+func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (*domain.PendingOrder, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
+	if !domain.IsValidPendingOrderType(string(typ)) {
+		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, or stop_loss", domain.ErrInvalidArgument)
+	}
+	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
+		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
+		return nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
+	}
+	if in.TriggerPrice < domain.MinTriggerPrice || in.TriggerPrice > domain.MaxTriggerPrice ||
+		math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
+		return nil, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
+	}
+	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, err
+	}
+	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if n >= domain.MaxOpenPendingOrders {
+		return nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
+	}
+	now := time.Now().UTC()
+	o := domain.PendingOrder{
+		ID:           uuid.NewString(),
+		ClientID:     clientID,
+		Exchange:     ex,
+		Symbol:       sym,
+		Type:         typ,
+		Side:         domain.SideForPendingType(typ),
+		Quantity:     in.Quantity,
+		TriggerPrice: in.TriggerPrice,
+		Status:       domain.PendingStatusOpen,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	return s.store.CreatePendingOrder(ctx, o)
+}
+
+// ListPendingOrders returns pending orders for a client (default: open only).
+func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status string, limit, offset int) ([]domain.PendingOrder, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	st := domain.PendingOrderStatus(strings.ToLower(strings.TrimSpace(status)))
+	if st == "" {
+		st = domain.PendingStatusOpen
+	}
+	if st == "all" {
+		st = ""
+	} else {
+		switch st {
+		case domain.PendingStatusOpen, domain.PendingStatusFilled, domain.PendingStatusCanceled, domain.PendingStatusRejected:
+		default:
+			return nil, fmt.Errorf("%w: status must be open, filled, canceled, rejected, or all", domain.ErrInvalidArgument)
+		}
+	}
+	return s.store.ListPendingOrders(ctx, clientID, st, limit, offset)
+}
+
+// CancelPendingOrder cancels an open order; filled/canceled/rejected cannot be canceled.
+func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (*domain.PendingOrder, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
+	}
+	// Ensure portfolio exists for clearer 404 vs order 404
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return s.store.CancelPendingOrder(ctx, clientID, id, time.Now().UTC())
+}
+
+// ListAllOpenPendingOrders is used by the background order filler.
+func (s *Service) ListAllOpenPendingOrders(ctx context.Context) ([]domain.PendingOrder, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListAllOpenPendingOrders(ctx)
+}
+
+// TryFillPendingOrder evaluates one open order against lastPrice and fills or rejects atomically.
+// Returns (filledOrder, true, nil) when filled; (nil, false, nil) when not triggered or race lost.
+func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice float64) (*domain.PendingOrder, bool, error) {
+	if s.store == nil {
+		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	if !domain.PendingOrderTriggered(o.Type, o.TriggerPrice, lastPrice) {
+		return nil, false, nil
+	}
+	now := time.Now().UTC()
+	p, err := s.store.GetPortfolio(ctx, o.ClientID)
+	if err != nil {
+		return nil, false, err
+	}
+	var posQty, avg float64
+	pos, perr := s.store.GetPosition(ctx, o.ClientID, o.Exchange, o.Symbol)
+	if perr == nil && pos != nil {
+		posQty, avg = pos.Quantity, pos.AvgCost
+	} else if perr != nil && perr != domain.ErrNotFound {
+		return nil, false, perr
+	}
+
+	var newCash, newQty, newAvg, realized float64
+	switch o.Side {
+	case domain.TradeSideBuy:
+		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, o.Quantity, lastPrice, posQty, avg)
+		realized = 0
+	case domain.TradeSideSell:
+		newCash, newQty, realized, err = domain.ApplySell(p.CashBalance, o.Quantity, lastPrice, posQty, avg)
+		newAvg = avg
+	default:
+		return nil, false, fmt.Errorf("%w: invalid order side", domain.ErrInvalidArgument)
+	}
+	if err != nil {
+		// Insufficient cash/position at trigger — reject so it never fills later.
+		reason := err.Error()
+		if rerr := s.store.RejectPendingOrder(ctx, o.ID, reason, now); rerr != nil {
+			if rerr == domain.ErrNotFound {
+				return nil, false, nil // already terminal elsewhere
+			}
+			return nil, false, rerr
+		}
+		return nil, false, nil
+	}
+
+	p.CashBalance = newCash
+	p.RealizedPnLTotal += realized
+	p.UpdatedAt = now
+	posOut := &domain.Position{
+		ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
+		Quantity: newQty, AvgCost: newAvg, UpdatedAt: now,
+	}
+	if newQty <= domain.PositionEpsilon {
+		posOut.Quantity = 0
+		posOut.AvgCost = 0
+	}
+	tr := domain.Trade{
+		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
+		Side: o.Side, Quantity: o.Quantity, Price: lastPrice, Notional: o.Quantity * lastPrice,
+		RealizedPnL: realized, CreatedAt: now,
+	}
+	if err := s.store.ExecutePendingFill(ctx, o.ID, p, posOut, tr, lastPrice, now); err != nil {
+		if err == domain.ErrNotFound {
+			// Canceled or already filled — do not execute again.
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	filled, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
+	if gerr != nil {
+		// Fill succeeded; return synthetic view if re-read fails.
+		o.Status = domain.PendingStatusFilled
+		o.FillTradeID = tr.ID
+		o.FillPrice = lastPrice
+		o.FilledAt = &now
+		o.UpdatedAt = now
+		return &o, true, nil
+	}
+	return filled, true, nil
+}
+
 func (s *Service) lastPrice(ctx context.Context, exchange, symbol string) (float64, error) {
 	tkr, err := s.market.GetTicker24h(ctx, exchange, symbol)
 	if err != nil {

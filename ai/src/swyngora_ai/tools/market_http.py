@@ -155,6 +155,25 @@ class PortfolioOrderInput(BaseModel):
     exchange: str = "binance"
 
 
+class PortfolioPendingOrderInput(BaseModel):
+    client_id: str
+    symbol: str
+    order_type: str = Field(description="limit_buy | limit_sell | stop_loss")
+    quantity: float = Field(gt=0)
+    trigger_price: float = Field(gt=0, description="Limit or stop price")
+    exchange: str = "binance"
+
+
+class PortfolioListOrdersInput(BaseModel):
+    client_id: str
+    status: str = Field(default="open", description="open|filled|canceled|rejected|all")
+
+
+class PortfolioCancelOrderInput(BaseModel):
+    client_id: str
+    order_id: str
+
+
 class AlertWebhookSetInput(BaseModel):
     client_id: str
     url: str = Field(description="Absolute http(s) webhook URL")
@@ -404,6 +423,38 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             },
         )
 
+    def place_portfolio_pending_order(
+        client_id: str,
+        symbol: str,
+        order_type: str,
+        quantity: float,
+        trigger_price: float,
+        exchange: str = "binance",
+    ) -> str:
+        return http.post(
+            "/api/v1/portfolio/orders",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "type": order_type,
+                "quantity": quantity,
+                "triggerPrice": trigger_price,
+                "exchange": exchange,
+            },
+        )
+
+    def list_portfolio_orders(client_id: str, status: str = "open") -> str:
+        return http.get(
+            "/api/v1/portfolio/orders",
+            {"clientId": client_id, "status": status},
+        )
+
+    def cancel_portfolio_order(client_id: str, order_id: str) -> str:
+        return http.delete(
+            f"/api/v1/portfolio/orders/{order_id}",
+            {"clientId": client_id},
+        )
+
     def list_portfolio_trades(client_id: str) -> str:
         return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
 
@@ -580,6 +631,27 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="place_portfolio_order",
             description="Paper market buy/sell at last price. Not real money.",
             args_schema=PortfolioOrderInput,
+        ),
+        StructuredTool.from_function(
+            place_portfolio_pending_order,
+            name="place_portfolio_pending_order",
+            description=(
+                "Paper pending order: limit_buy, limit_sell, or stop_loss. "
+                "Fills when last price meets trigger_price. Simulated only."
+            ),
+            args_schema=PortfolioPendingOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_orders,
+            name="list_portfolio_orders",
+            description="List paper pending orders (default status=open).",
+            args_schema=PortfolioListOrdersInput,
+        ),
+        StructuredTool.from_function(
+            cancel_portfolio_order,
+            name="cancel_portfolio_order",
+            description="Cancel an open paper pending order. Canceled orders never fill.",
+            args_schema=PortfolioCancelOrderInput,
         ),
         StructuredTool.from_function(
             list_portfolio_trades,

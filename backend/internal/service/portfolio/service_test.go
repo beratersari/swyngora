@@ -6,6 +6,7 @@ import (
 	"math"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -109,6 +110,172 @@ func TestPortfolio_InsufficientCashAndQty(t *testing.T) {
 	_, _, err = svc.PlaceOrder(ctx, OrderInput{ClientID: "poor", Symbol: "ETHUSDT", Side: "sell", Quantity: 1})
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestPortfolio_PendingLimitBuyFillAndCancel(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "110"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	_, err := svc.Create(ctx, CreateInput{ClientID: "pend-1", StartingBalance: 10000})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Limit buy at 100 — not triggered while last is 110
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "pend-1", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 100,
+	})
+	if err != nil || o.Status != domain.PendingStatusOpen {
+		t.Fatalf("%+v %v", o, err)
+	}
+	filled, ok, err := svc.TryFillPendingOrder(ctx, *o, 110)
+	if err != nil || ok || filled != nil {
+		t.Fatalf("should not fill: ok=%v filled=%v err=%v", ok, filled, err)
+	}
+
+	// Price drops to 99 → fill at last
+	filled, ok, err = svc.TryFillPendingOrder(ctx, *o, 99)
+	if err != nil || !ok || filled == nil || filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("fill: ok=%v filled=%+v err=%v", ok, filled, err)
+	}
+	view, err := svc.View(ctx, "pend-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(view.CashBalance-(10000-99)) > 1e-6 || len(view.Positions) != 1 {
+		t.Fatalf("%+v", view)
+	}
+
+	// Idempotent: second fill attempt no-ops
+	_, ok, err = svc.TryFillPendingOrder(ctx, *o, 90)
+	if err != nil || ok {
+		t.Fatalf("second fill: ok=%v err=%v", ok, err)
+	}
+
+	// Cancel path: place then cancel before fill
+	o2, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "pend-1", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	canceled, err := svc.CancelPendingOrder(ctx, "pend-1", o2.ID)
+	if err != nil || canceled.Status != domain.PendingStatusCanceled {
+		t.Fatalf("%+v %v", canceled, err)
+	}
+	// Canceled must not execute later
+	_, ok, err = svc.TryFillPendingOrder(ctx, *o2, 40)
+	if err != nil || ok {
+		t.Fatalf("canceled fill: ok=%v err=%v", ok, err)
+	}
+	open, err := svc.ListPendingOrders(ctx, "pend-1", "open", 10, 0)
+	if err != nil || len(open) != 0 {
+		t.Fatalf("open=%+v err=%v", open, err)
+	}
+}
+
+func TestPortfolio_StopLossAndInsufficientOnFill(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "2000"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	_, _ = svc.Create(ctx, CreateInput{ClientID: "stop-1", StartingBalance: 5000})
+	// Buy 1 ETH
+	_, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "stop-1", Symbol: "ETHUSDT", Side: "buy", Quantity: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stop loss at 1800
+	sl, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "stop-1", Symbol: "ETHUSDT", Type: "stop_loss", Quantity: 1, TriggerPrice: 1800,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Above stop — no fill
+	_, ok, err := svc.TryFillPendingOrder(ctx, *sl, 1900)
+	if err != nil || ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	// Drop through stop
+	filled, ok, err := svc.TryFillPendingOrder(ctx, *sl, 1700)
+	if err != nil || !ok || filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("stop fill %+v ok=%v err=%v", filled, ok, err)
+	}
+	view, _ := svc.View(ctx, "stop-1")
+	if len(view.Positions) != 0 {
+		t.Fatalf("expected flat: %+v", view.Positions)
+	}
+
+	// Limit sell with no position → reject at trigger
+	ls, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "stop-1", Symbol: "ETHUSDT", Type: "limit_sell", Quantity: 1, TriggerPrice: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ok, err = svc.TryFillPendingOrder(ctx, *ls, 100)
+	if err != nil || ok {
+		t.Fatalf("should reject not fill: ok=%v err=%v", ok, err)
+	}
+	got, err := svc.ListPendingOrders(ctx, "stop-1", "rejected", 10, 0)
+	if err != nil || len(got) != 1 || got[0].Status != domain.PendingStatusRejected {
+		t.Fatalf("rejected=%+v err=%v", got, err)
+	}
+}
+
+func TestPortfolio_OrderFillerRunOnce(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "95"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	_, _ = svc.Create(ctx, CreateInput{ClientID: "fill-w", StartingBalance: 10000})
+	_, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "fill-w", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 2, TriggerPrice: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &OrderFiller{Portfolio: svc, Market: px, Interval: time.Hour}
+	f.RunOnce(ctx)
+	open, _ := svc.ListPendingOrders(ctx, "fill-w", "open", 10, 0)
+	if len(open) != 0 {
+		t.Fatalf("expected filled open=%+v", open)
+	}
+	view, _ := svc.View(ctx, "fill-w")
+	if math.Abs(view.CashBalance-(10000-190)) > 1e-6 {
+		t.Fatalf("cash=%v", view.CashBalance)
+	}
+}
+
+func TestPortfolio_PendingPersistsAcrossReopen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pf.db")
+	ctx := context.Background()
+	st1, err := portfoliostore.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc1 := New(st1, px)
+	_, _ = svc1.Create(ctx, CreateInput{ClientID: "po-persist", StartingBalance: 1000})
+	o, err := svc1.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "po-persist", Symbol: "BTCUSDT", Type: "limit_sell", Quantity: 1, TriggerPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := o.ID
+	_ = st1.Close()
+
+	st2, err := portfoliostore.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st2.Close()
+	svc2 := New(st2, px)
+	open, err := svc2.ListPendingOrders(ctx, "po-persist", "open", 10, 0)
+	if err != nil || len(open) != 1 || open[0].ID != id {
+		t.Fatalf("%+v err=%v", open, err)
 	}
 }
 

@@ -38,3 +38,33 @@ func TestUnrealizedPnL(t *testing.T) {
 		t.Fatalf("%v", u)
 	}
 }
+
+func TestPendingOrderTriggered(t *testing.T) {
+	if !PendingOrderTriggered(PendingLimitBuy, 100, 99) {
+		t.Fatal("limit buy should trigger at or below")
+	}
+	if PendingOrderTriggered(PendingLimitBuy, 100, 101) {
+		t.Fatal("limit buy should not trigger above")
+	}
+	if !PendingOrderTriggered(PendingLimitSell, 100, 101) {
+		t.Fatal("limit sell should trigger at or above")
+	}
+	if PendingOrderTriggered(PendingLimitSell, 100, 99) {
+		t.Fatal("limit sell should not trigger below")
+	}
+	if !PendingOrderTriggered(PendingStopLoss, 90, 89) {
+		t.Fatal("stop loss should trigger at or below")
+	}
+	if PendingOrderTriggered(PendingStopLoss, 90, 91) {
+		t.Fatal("stop loss should not trigger above")
+	}
+}
+
+func TestSideForPendingType(t *testing.T) {
+	if SideForPendingType(PendingLimitBuy) != TradeSideBuy {
+		t.Fatal("buy")
+	}
+	if SideForPendingType(PendingLimitSell) != TradeSideSell || SideForPendingType(PendingStopLoss) != TradeSideSell {
+		t.Fatal("sell")
+	}
+}

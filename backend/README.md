@@ -37,7 +37,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `POST` | `/api/v1/portfolio` | Create paper portfolio (starting balance) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, realized/unrealized P&L |
-| `POST` | `/api/v1/portfolio/orders` | Paper market buy/sell at last price |
+| `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |
+| `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
+| `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
@@ -53,7 +55,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
 
-**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, open positions, realized/unrealized P&L, and trade history. Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`).
+**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders (background filler), open positions, realized/unrealized P&L, and trade history. Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -130,6 +132,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `WEBHOOK_HTTP_TIMEOUT` | `10s` | Per-webhook HTTP timeout |
 | `WEBHOOK_MAX_ATTEMPTS` | `8` | Permanent failure after this many delivery attempts |
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
+| `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 

@@ -151,6 +151,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	orderFiller := &portfolio.OrderFiller{
+		Portfolio: portfolioSvc,
+		Market:    marketSvc,
+		Interval:  cfg.PortfolioOrderCheckInterval,
+		Logger:    logger,
+	}
+	go orderFiller.Start(ctx)
+
 	// Optional: start Python multi-agent HTTP as a child of this process.
 	aiProc, err := aistart.Start(ctx, aistart.Options{
 		Enabled: cfg.AIAutoStart,

@@ -74,6 +74,8 @@ type Config struct {
 
 	// PortfolioDBPath is the SQLite file for paper-trading portfolios.
 	PortfolioDBPath string
+	// PortfolioOrderCheckInterval is how often open pending paper orders are evaluated.
+	PortfolioOrderCheckInterval time.Duration
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -135,7 +137,8 @@ func Load() Config {
 		WebhookHTTPTimeout:      positiveDurationEnv("WEBHOOK_HTTP_TIMEOUT", 10*time.Second),
 		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
 
-		PortfolioDBPath: getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
+		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
+		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
 	}
 }
 

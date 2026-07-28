@@ -39,6 +39,9 @@ type DataPort interface {
 	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
+	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64) (json.RawMessage, error)
+	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
@@ -551,6 +554,80 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListPortfolioTrades(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("place_portfolio_pending_order",
+		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, or stop_loss. Fills when last price meets triggerPrice. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("type", mcp.Required(), mcp.Description("limit_buy | limit_sell | stop_loss")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
+		mcp.WithNumber("triggerPrice", mcp.Required(), mcp.Description("Limit or stop price")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		typ, err := req.RequireString("type")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		trig, err := req.RequireFloat("triggerPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PlacePortfolioPendingOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, typ, qty, trig)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_portfolio_orders",
+		mcp.WithDescription("List paper pending orders (default status=open)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPortfolioOrders(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("cancel_portfolio_order",
+		mcp.WithDescription("Cancel an open paper pending order. Canceled orders never fill."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		orderID, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelPortfolioOrder(ctx, clientID, orderID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -17,6 +17,10 @@ const (
 	MaxTradeQuantity       = 1e9
 	// Position qty below this is treated as flat (closed).
 	PositionEpsilon = 1e-12
+	// Max open pending orders per client.
+	MaxOpenPendingOrders = 50
+	MinTriggerPrice      = 1e-12
+	MaxTriggerPrice      = 1e15
 )
 
 // TradeSide is buy or sell.
@@ -62,6 +66,45 @@ type Trade struct {
 	CreatedAt   time.Time
 }
 
+// PendingOrderType is a resting paper order kind.
+type PendingOrderType string
+
+const (
+	PendingLimitBuy  PendingOrderType = "limit_buy"
+	PendingLimitSell PendingOrderType = "limit_sell"
+	PendingStopLoss  PendingOrderType = "stop_loss"
+)
+
+// PendingOrderStatus is the lifecycle of a resting order.
+type PendingOrderStatus string
+
+const (
+	PendingStatusOpen     PendingOrderStatus = "open"
+	PendingStatusFilled   PendingOrderStatus = "filled"
+	PendingStatusCanceled PendingOrderStatus = "canceled"
+	PendingStatusRejected PendingOrderStatus = "rejected" // condition met but insufficient cash/position
+)
+
+// PendingOrder is a limit or stop order waiting for a price condition.
+type PendingOrder struct {
+	ID           string
+	ClientID     string
+	Exchange     Exchange
+	Symbol       string
+	Type         PendingOrderType
+	Side         TradeSide // buy for limit_buy; sell for limit_sell and stop_loss
+	Quantity     float64
+	TriggerPrice float64 // limit price or stop trigger
+	Status       PendingOrderStatus
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	FilledAt     *time.Time
+	CanceledAt   *time.Time
+	FillTradeID  string
+	FillPrice    float64
+	RejectReason string
+}
+
 // PositionView is a position with mark-to-market fields.
 type PositionView struct {
 	Exchange       Exchange
@@ -91,7 +134,7 @@ type PortfolioView struct {
 	UpdatedAt        time.Time
 }
 
-// PortfolioPort persists paper portfolios, positions, and trades.
+// PortfolioPort persists paper portfolios, positions, trades, and pending orders.
 type PortfolioPort interface {
 	// GetPortfolio returns the portfolio or ErrNotFound.
 	GetPortfolio(ctx context.Context, clientID string) (*Portfolio, error)
@@ -111,6 +154,25 @@ type PortfolioPort interface {
 
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.
 	ExecuteTrade(ctx context.Context, p *Portfolio, pos *Position, t Trade) error
+
+	// CreatePendingOrder inserts a new open resting order.
+	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
+	// GetPendingOrder returns one order for the client or ErrNotFound.
+	GetPendingOrder(ctx context.Context, clientID, id string) (*PendingOrder, error)
+	// ListPendingOrders lists orders for a client, optionally filtered by status (empty = all).
+	ListPendingOrders(ctx context.Context, clientID string, status PendingOrderStatus, limit, offset int) ([]PendingOrder, error)
+	// CountOpenPendingOrders returns the number of open orders for a client.
+	CountOpenPendingOrders(ctx context.Context, clientID string) (int, error)
+	// ListAllOpenPendingOrders returns every open order (background filler).
+	ListAllOpenPendingOrders(ctx context.Context) ([]PendingOrder, error)
+	// CancelPendingOrder sets status canceled only if still open; returns ErrNotFound otherwise.
+	CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time) (*PendingOrder, error)
+	// ExecutePendingFill fills an open order atomically (status must still be open).
+	// Applies portfolio/position/trade and marks the order filled. Returns ErrNotFound if not open.
+	ExecutePendingFill(ctx context.Context, orderID string, p *Portfolio, pos *Position, t Trade, fillPrice float64, at time.Time) error
+	// RejectPendingOrder marks an open order rejected (e.g. insufficient funds at trigger).
+	// Returns ErrNotFound if not open.
+	RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error
 }
 
 // ApplyBuy updates cash and position for a market buy. Pure helper.
@@ -162,6 +224,47 @@ func IsValidTradeSide(s string) bool {
 	switch TradeSide(s) {
 	case TradeSideBuy, TradeSideSell:
 		return true
+	default:
+		return false
+	}
+}
+
+// IsValidPendingOrderType reports limit_buy | limit_sell | stop_loss.
+func IsValidPendingOrderType(s string) bool {
+	switch PendingOrderType(s) {
+	case PendingLimitBuy, PendingLimitSell, PendingStopLoss:
+		return true
+	default:
+		return false
+	}
+}
+
+// SideForPendingType returns the trade side for a pending order type.
+func SideForPendingType(t PendingOrderType) TradeSide {
+	switch t {
+	case PendingLimitBuy:
+		return TradeSideBuy
+	case PendingLimitSell, PendingStopLoss:
+		return TradeSideSell
+	default:
+		return ""
+	}
+}
+
+// PendingOrderTriggered reports whether last price meets the resting order condition.
+//
+//	limit_buy:  last <= trigger (buy at or below limit)
+//	limit_sell: last >= trigger (sell at or above limit)
+//	stop_loss:  last <= trigger (sell when price falls to stop)
+func PendingOrderTriggered(orderType PendingOrderType, trigger, last float64) bool {
+	if trigger <= 0 || last <= 0 || math.IsNaN(trigger) || math.IsNaN(last) {
+		return false
+	}
+	switch orderType {
+	case PendingLimitBuy, PendingStopLoss:
+		return last <= trigger+1e-12
+	case PendingLimitSell:
+		return last >= trigger-1e-12
 	default:
 		return false
 	}

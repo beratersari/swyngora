@@ -95,6 +95,27 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 CREATE INDEX IF NOT EXISTS idx_trades_client ON trades(client_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_positions_client ON positions(client_id);
+CREATE TABLE IF NOT EXISTS pending_orders (
+	id            TEXT PRIMARY KEY NOT NULL,
+	client_id     TEXT NOT NULL,
+	exchange      TEXT NOT NULL,
+	symbol        TEXT NOT NULL,
+	order_type    TEXT NOT NULL,
+	side          TEXT NOT NULL,
+	quantity      REAL NOT NULL,
+	trigger_price REAL NOT NULL,
+	status        TEXT NOT NULL,
+	created_at    TEXT NOT NULL,
+	updated_at    TEXT NOT NULL,
+	filled_at     TEXT,
+	canceled_at   TEXT,
+	fill_trade_id TEXT NOT NULL DEFAULT '',
+	fill_price    REAL NOT NULL DEFAULT 0,
+	reject_reason TEXT NOT NULL DEFAULT '',
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pending_orders_client ON pending_orders(client_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pending_orders_open ON pending_orders(status) WHERE status = 'open';
 `
 	_, err := s.db.Exec(schema)
 	return err
@@ -353,6 +374,270 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 		return err
 	}
 	return tx.Commit()
+}
+
+// CreatePendingOrder inserts an open resting order.
+func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) (*domain.PendingOrder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if o.CreatedAt.IsZero() {
+		o.CreatedAt = time.Now().UTC()
+	}
+	if o.UpdatedAt.IsZero() {
+		o.UpdatedAt = o.CreatedAt
+	}
+	if o.Status == "" {
+		o.Status = domain.PendingStatusOpen
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO pending_orders (
+			id, client_id, exchange, symbol, order_type, side, quantity, trigger_price, status,
+			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Type), string(o.Side), o.Quantity, o.TriggerPrice, string(o.Status),
+		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason)
+	if err != nil {
+		return nil, fmt.Errorf("pending order create: %w", err)
+	}
+	cp := o
+	return &cp, nil
+}
+
+// GetPendingOrder returns one order or ErrNotFound.
+func (s *SQLite) GetPendingOrder(ctx context.Context, clientID, id string) (*domain.PendingOrder, error) {
+	row := s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE client_id = ? AND id = ?`, clientID, id)
+	o, err := scanPendingOrder(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return o, nil
+}
+
+// ListPendingOrders lists client orders, optional status filter.
+func (s *SQLite) ListPendingOrders(ctx context.Context, clientID string, status domain.PendingOrderStatus, limit, offset int) ([]domain.PendingOrder, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var rows *sql.Rows
+	var err error
+	if status == "" {
+		rows, err = s.db.QueryContext(ctx, pendingOrderSelect+`
+			WHERE client_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`, clientID, limit, offset)
+	} else {
+		rows, err = s.db.QueryContext(ctx, pendingOrderSelect+`
+			WHERE client_id = ? AND status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`, clientID, string(status), limit, offset)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanPendingOrders(rows)
+}
+
+// CountOpenPendingOrders counts open orders for a client.
+func (s *SQLite) CountOpenPendingOrders(ctx context.Context, clientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM pending_orders WHERE client_id = ? AND status = 'open'
+	`, clientID).Scan(&n)
+	return n, err
+}
+
+// ListAllOpenPendingOrders returns all open orders for the background filler.
+func (s *SQLite) ListAllOpenPendingOrders(ctx context.Context) ([]domain.PendingOrder, error) {
+	rows, err := s.db.QueryContext(ctx, pendingOrderSelect+` WHERE status = 'open' ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanPendingOrders(rows)
+}
+
+// CancelPendingOrder cancels only if still open.
+func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time) (*domain.PendingOrder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	atStr := at.UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET status = 'canceled', canceled_at = ?, updated_at = ?
+		WHERE id = ? AND client_id = ? AND status = 'open'
+	`, atStr, atStr, id, clientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	// Read without re-locking: hold mu still, query ok.
+	row := s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE id = ? AND client_id = ?`, id, clientID)
+	return scanPendingOrder(row)
+}
+
+// ExecutePendingFill fills an open order atomically with the trade.
+func (s *SQLite) ExecutePendingFill(ctx context.Context, orderID string, p *domain.Portfolio, pos *domain.Position, t domain.Trade, fillPrice float64, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+		t.CreatedAt = at
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM pending_orders WHERE id = ?`, orderID).Scan(&status)
+	if err == sql.ErrNoRows {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status != string(domain.PendingStatusOpen) {
+		return domain.ErrNotFound
+	}
+
+	atStr := at.UTC().Format(time.RFC3339Nano)
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
+		WHERE client_id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, atStr, p.ClientID); err != nil {
+		return err
+	}
+
+	if pos != nil {
+		if pos.Quantity <= domain.PositionEpsilon {
+			if _, err := tx.ExecContext(ctx, `
+				DELETE FROM positions WHERE client_id = ? AND exchange = ? AND symbol = ?
+			`, pos.ClientID, string(pos.Exchange), pos.Symbol); err != nil {
+				return err
+			}
+		} else {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO positions (client_id, exchange, symbol, quantity, avg_cost, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(client_id, exchange, symbol) DO UPDATE SET
+					quantity = excluded.quantity,
+					avg_cost = excluded.avg_cost,
+					updated_at = excluded.updated_at
+			`, pos.ClientID, string(pos.Exchange), pos.Symbol, pos.Quantity, pos.AvgCost, atStr); err != nil {
+				return err
+			}
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, atStr); err != nil {
+		return err
+	}
+
+	res, err := tx.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET status = 'filled', filled_at = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?
+		WHERE id = ? AND status = 'open'
+	`, atStr, atStr, t.ID, fillPrice, orderID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return tx.Commit()
+}
+
+// RejectPendingOrder marks open order rejected.
+func (s *SQLite) RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	atStr := at.UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET status = 'rejected', reject_reason = ?, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, reason, atStr, orderID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+const pendingOrderSelect = `
+	SELECT id, client_id, exchange, symbol, order_type, side, quantity, trigger_price, status,
+		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason
+	FROM pending_orders`
+
+type scannable interface {
+	Scan(dest ...any) error
+}
+
+func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
+	var o domain.PendingOrder
+	var ex, typ, side, st, cAt, uAt string
+	var filledAt, canceledAt sql.NullString
+	if err := row.Scan(
+		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.TriggerPrice, &st,
+		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason,
+	); err != nil {
+		return nil, err
+	}
+	o.Exchange = domain.Exchange(ex)
+	o.Type = domain.PendingOrderType(typ)
+	o.Side = domain.TradeSide(side)
+	o.Status = domain.PendingOrderStatus(st)
+	o.CreatedAt = parseTime(cAt)
+	o.UpdatedAt = parseTime(uAt)
+	if filledAt.Valid && filledAt.String != "" {
+		t := parseTime(filledAt.String)
+		o.FilledAt = &t
+	}
+	if canceledAt.Valid && canceledAt.String != "" {
+		t := parseTime(canceledAt.String)
+		o.CanceledAt = &t
+	}
+	return &o, nil
+}
+
+func scanPendingOrders(rows *sql.Rows) ([]domain.PendingOrder, error) {
+	out := make([]domain.PendingOrder, 0)
+	for rows.Next() {
+		o, err := scanPendingOrder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *o)
+	}
+	return out, rows.Err()
+}
+
+func nullTime(t *time.Time) any {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 func parseTime(raw string) time.Time {

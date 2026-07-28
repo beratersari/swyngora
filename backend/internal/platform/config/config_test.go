@@ -85,6 +85,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PortfolioDBPath != "data/portfolio.db" {
 		t.Fatalf("PortfolioDBPath default=%q", cfg.PortfolioDBPath)
 	}
+	if cfg.PortfolioOrderCheckInterval != 15*time.Second {
+		t.Fatalf("PortfolioOrderCheckInterval default=%v", cfg.PortfolioOrderCheckInterval)
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {

@@ -77,3 +77,65 @@ func TestPortfolioHTTP_CreateOrderTrades(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+func TestPortfolioHTTP_PendingOrders(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "http-pend", "startingBalance": 10000,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-pend", "symbol": "BTCUSDT", "type": "limit_buy",
+		"quantity": 1, "triggerPrice": 90,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.PlaceOrder(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("pending %d %s", rr.Code, rr.Body.String())
+	}
+	var place map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &place)
+	order := place["order"].(map[string]any)
+	id := order["id"].(string)
+	if order["status"] != "open" {
+		t.Fatalf("%v", order)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/orders?clientId=http-pend", nil)
+	rr = httptest.NewRecorder()
+	h.ListOrders(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list %d %s", rr.Code, rr.Body.String())
+	}
+	var list map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &list)
+	if int(list["count"].(float64)) != 1 {
+		t.Fatalf("%v", list)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/portfolio/orders/"+id+"?clientId=http-pend", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.CancelOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("cancel %d %s", rr.Code, rr.Body.String())
+	}
+
+	// Cancel again → 404
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/portfolio/orders/"+id+"?clientId=http-pend", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.CancelOrder(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("cancel2 %d %s", rr.Code, rr.Body.String())
+	}
+}
