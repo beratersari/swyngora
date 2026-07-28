@@ -14,7 +14,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_spot_markets` | Search/sort spot list |
 | `get_indicators` | RSI/EMA |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
-| `scan_pump_events` | Scan top-volume symbols for recent pumps |
+| `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
 | `get_watchlist` | Read watchlist |
 | `add_watchlist_item` | Add/update watch item |
 | `remove_watchlist_item` | Remove watch item |

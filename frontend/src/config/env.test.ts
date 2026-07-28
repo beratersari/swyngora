@@ -2,14 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { env } from './env';
 
 describe('env', () => {
-  it('exposes apiBaseUrl as a string (may be empty for same-origin)', () => {
+  it('exposes apiBaseUrl, label, and clientId strings', () => {
     expect(typeof env.apiBaseUrl).toBe('string');
-    if (env.apiBaseUrl.length > 0) {
+    expect(typeof env.apiBaseUrlLabel).toBe('string');
+    expect(typeof env.clientId).toBe('string');
+    expect(env.apiBaseUrlLabel.length).toBeGreaterThan(0);
+    if (env.apiBaseUrl) {
       expect(env.apiBaseUrl.endsWith('/')).toBe(false);
     }
-  });
-
-  it('exposes a non-empty apiBaseUrlLabel for display', () => {
-    expect(env.apiBaseUrlLabel.length).toBeGreaterThan(0);
   });
 });

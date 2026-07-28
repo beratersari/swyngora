@@ -26,8 +26,14 @@
     "symbol": "Symbol",
     "last": "Last",
     "change24h": "24h %",
+    "changeAbs": "24h Δ",
+    "high": "High",
+    "low": "Low",
+    "baseVol": "Base vol",
     "quoteVol": "Quote vol",
     "circMcap": "Circ. mcap",
+    "totalMcap": "Total mcap",
+    "maxMcap": "Max mcap",
     "trades": "Trades",
     "tags": "Tags",
     "loadErrorTitle": "Could not load markets",
@@ -35,10 +41,19 @@
     "emptyHint": "Try another exchange, quote, tag, or search",
     "openDetail": "Open {{symbol}} detail"
   },
+  "columns": {
+    "button": "Columns",
+    "aria": "Choose and reorder metric columns",
+    "reset": "Reset",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "dragHint": "Drag rows or use arrows to change column order. Order is saved for this browser."
+  },
   "errors": {
     "mcapWarmupTitle": "Market-cap data may be warming up",
     "mcapWarmupBody": "If the supply snapshot is empty, mcap sorts can fail. Switch sort to Quote volume or retry.",
-    "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly."
+    "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly.",
+    "refreshFailed": "Could not refresh markets — showing last successful data."
   },
   "resource": "markets"
 }

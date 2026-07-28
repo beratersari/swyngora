@@ -529,7 +529,10 @@ paths:
       summary: Scan top-volume symbols for recent pumps
       description: |
         Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
-        Informational only â€” not financial advice.
+        Omitted optional parameters use documented defaults; the response metadata echoes the
+        resolved values (not zeros/empty strings).
+        maxTotalEvents caps the aggregate number of events across all hits (not the hit count).
+        Informational only — not financial advice.
       operationId: scanPumpEvents
       tags: [Market]
       parameters:
@@ -553,25 +556,42 @@ paths:
           schema: { type: integer, default: 1 }
         - name: mode
           in: query
-          schema: { type: string, enum: [close_return, candle_body, high_from_low] }
+          schema: { type: string, enum: [close_return, candle_body, high_from_low], default: close_return }
         - name: direction
           in: query
-          schema: { type: string, enum: [up, down, both] }
+          schema: { type: string, enum: [up, down, both], default: up }
         - name: minVolumeRatio
           in: query
           schema: { type: number }
         - name: symbolLimit
           in: query
           schema: { type: integer, default: 15, maximum: 40 }
+        - name: maxTotalEvents
+          in: query
+          description: Maximum total events across all symbols (default 30). Hits are ranked by |return|; excess events/hits are dropped.
+          schema: { type: integer, default: 30, minimum: 1 }
       responses:
         '200':
-          description: Ranked pump hits
+          description: Ranked pump hits with resolved scan parameters
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  exchange: { type: string }
+                  quote: { type: string }
+                  interval: { type: string }
+                  lookbackHours: { type: number }
+                  minReturnPct: { type: number }
+                  windowBars: { type: integer }
+                  mode: { type: string }
+                  direction: { type: string }
+                  symbolLimit: { type: integer }
+                  maxTotalEvents: { type: integer }
                   hitCount: { type: integer }
+                  eventCount:
+                    type: integer
+                    description: Total events across all hits (≤ maxTotalEvents)
                   hits: { type: array, items: { type: object } }
                   note: { type: string }
         '400':

@@ -1,7 +1,9 @@
 {
   "appName": "Swyngora",
   "nav": {
-    "markets": "Markets"
+    "markets": "Markets",
+    "watchlist": "Watchlist",
+    "pumps": "Pumps"
   },
   "footer": {
     "disclaimer": "{{appName}} · informational market data · not financial advice"
@@ -13,7 +15,8 @@
   },
   "actions": {
     "retry": "Retry",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "reload": "Reload page"
   },
   "status": {
     "updating": "updating…",
@@ -24,7 +27,8 @@
     "loadingChart": "Loading chart",
     "loadingIndicatorChart": "Loading indicator chart",
     "loadingExchanges": "Loading exchanges",
-    "loadingMarketsTable": "Loading markets table"
+    "loadingMarketsTable": "Loading markets table",
+    "loadingButton": "Loading button"
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
@@ -41,6 +45,8 @@
     "serviceUnavailable": "Service temporarily unavailable. Retry shortly.",
     "network": "Could not reach the API. Is the backend running?",
     "parse": "Received an unexpected response from the API.",
-    "timeout": "The request timed out. Try again."
+    "timeout": "The request timed out. Try again.",
+    "boundaryTitle": "Something went wrong",
+    "boundaryBody": "This screen hit an unexpected error. Retry or reload the page."
   }
 }

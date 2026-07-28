@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatResultsRange,
+  fromAntdSortOrder,
   getResultsRange,
   paginationChanged,
+  resolveNextSortOrder,
+  resolveSortChange,
   resolveTableChangeAction,
+  toAntdSortOrder,
+  toggleSortOrder,
 } from './MarketsTable.helpers';
+import { COLUMN_SORT } from './MarketsTable.constants';
 
 describe('getResultsRange', () => {
   it('returns empty and range parts', () => {
@@ -46,5 +52,119 @@ describe('paginationChanged', () => {
       nextOffset: 0,
       nextLimit: 50,
     });
+  });
+});
+
+describe('resolveNextSortOrder', () => {
+  it('maps ascend/descend to api orders', () => {
+    expect(resolveNextSortOrder('ascend', 'desc')).toBe('asc');
+    expect(resolveNextSortOrder('descend', 'asc')).toBe('desc');
+  });
+
+  it('toggles when antd clears the active sort column', () => {
+    expect(
+      resolveNextSortOrder(null, 'desc', { isActiveColumn: true }),
+    ).toBe('asc');
+    expect(
+      resolveNextSortOrder(null, 'asc', { isActiveColumn: true }),
+    ).toBe('desc');
+  });
+
+  it('toggles on sort action when order is cleared', () => {
+    expect(
+      resolveNextSortOrder(null, 'asc', { actionIsSort: true }),
+    ).toBe('desc');
+  });
+
+  it('returns null when cleared without sort context', () => {
+    expect(resolveNextSortOrder(null, 'desc')).toBeNull();
+  });
+});
+
+describe('toggleSortOrder', () => {
+  it('flips asc and desc', () => {
+    expect(toggleSortOrder('asc')).toBe('desc');
+    expect(toggleSortOrder('desc')).toBe('asc');
+  });
+});
+
+describe('resolveSortChange', () => {
+  const base = {
+    activeSort: 'quoteVolume',
+    activeOrder: 'desc' as const,
+    columnSortMap: COLUMN_SORT as Record<string, string>,
+  };
+
+  it('maps a normal ascend click on a column', () => {
+    expect(
+      resolveSortChange({
+        ...base,
+        columnKey: 'lastPrice',
+        antdOrder: 'ascend',
+        action: 'sort',
+      }),
+    ).toEqual({ type: 'sort', field: 'lastPrice', order: 'asc' });
+  });
+
+  it('cycles descend → asc when antd wipes columnKey (third-click bug)', () => {
+    expect(
+      resolveSortChange({
+        ...base,
+        activeOrder: 'desc',
+        columnKey: undefined,
+        field: undefined,
+        antdOrder: null,
+        action: 'sort',
+      }),
+    ).toEqual({ type: 'sort', field: 'quoteVolume', order: 'asc' });
+  });
+
+  it('toggles when antd echoes the same order again', () => {
+    expect(
+      resolveSortChange({
+        ...base,
+        activeSort: 'lastPrice',
+        activeOrder: 'desc',
+        columnKey: 'lastPrice',
+        antdOrder: 'descend',
+        action: 'sort',
+      }),
+    ).toEqual({ type: 'sort', field: 'lastPrice', order: 'asc' });
+  });
+
+  it('returns none when not a sort action and identifiers missing', () => {
+    expect(
+      resolveSortChange({
+        ...base,
+        action: 'paginate',
+        columnKey: undefined,
+        antdOrder: null,
+      }),
+    ).toEqual({ type: 'none' });
+  });
+});
+
+describe('toAntdSortOrder / fromAntdSortOrder', () => {
+  it('maps active asc/desc and inactive null', () => {
+    expect(toAntdSortOrder('asc', true)).toBe('ascend');
+    expect(toAntdSortOrder('desc', true)).toBe('descend');
+    expect(toAntdSortOrder('asc', false)).toBeNull();
+  });
+
+  it('maps antd orders back and nulls unknown', () => {
+    expect(fromAntdSortOrder('ascend')).toBe('asc');
+    expect(fromAntdSortOrder('descend')).toBe('desc');
+    expect(fromAntdSortOrder(null)).toBeNull();
+  });
+});
+
+describe('getResultsRange edge cases', () => {
+  it('returns empty when limit is zero or negative', () => {
+    expect(getResultsRange(0, 0, 100)).toEqual({ kind: 'empty' });
+    expect(getResultsRange(0, -10, 100)).toEqual({ kind: 'empty' });
+  });
+
+  it('clamps negative offset', () => {
+    expect(getResultsRange(-5, 50, 100)).toEqual({ kind: 'range', from: 1, to: 50, total: 100 });
   });
 });

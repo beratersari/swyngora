@@ -5,10 +5,21 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 
 | Path | Purpose |
 |---|---|
-| `board.md` | Status overview (todo / in progress / done) |
+| `board.md` | Status overview (todo / in progress / done) for frontend **and** mobile |
 | `epics/` | Epic definitions |
-| `tasks/` | Individual tasks (INIT-*, MKT-*, …) |
-| `decisions/` | Stack/product decisions (ADRs-lite for frontend PM) |
+| `tasks/` | Tasks in **subfolders by surface × epic** (see `tasks/README.md`) |
+| `decisions/` | Stack/product decisions (ADRs-lite for client PM) |
+
+## Tasks layout
+
+```text
+tasks/
+├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
+└── mobile/init|markets|detail|watchlist|pumps|batch-indicators
+    # MINIT-*, MMKT-*, MDET-*, MWL-*, MPUMP-*, MBIND-*
+```
+
+**Do not add new task files to `tasks/` root.** Use the matching subfolder.
 
 ## Active frontend stack (decided)
 
@@ -18,19 +29,46 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 | Charts | **TradingView Lightweight Charts** (`lightweight-charts`) |
 | Data | RTK Query + OpenAPI (`src/libs/api`) |
 | Layout of non-UI code | `src/libs/{api,hooks,utils}` |
+| Colors | `frontend/src/styles/tokens/colors.ts` |
 
-See `decisions/001-antd-and-lightweight-charts.md`, `decisions/002-no-features-folder-atomic-only.md`, `decisions/003-i18n-i18next.md`.
+See `decisions/001-antd-and-lightweight-charts.md`.
+
+## Active mobile stack (decided)
+
+| Layer | Choice |
+|---|---|
+| Runtime | **React Native** — **no Expo**; Chrome via **react-native-web** |
+| UI | **Atomic Design only** under `src/components/` (no module feature components) |
+| Structure | `modules/*/pages` + ViewModel + context |
+| Data | RTK Query + OpenAPI (`src/libs/api`) |
+| Colors | Same brand tokens as frontend |
+
+See `decisions/002-react-native-cli-modules-viewmodel.md`.
 
 ## Work order
 
-1. Epic A — Frontend project initialization (`epics/frontend-project-initialization.md`) — **done**
-2. Epic B — Multi-exchange spot markets (`epics/multi-exchange-spot-markets.md`) — **done**
-3. Epic C — Coin detail + indicators (`epics/coin-detail-and-indicators.md`) — **done**
-   - DET-A / DET-B analysis + DET-1…4 implementation applied
-4. Later — Watchlist (WL-1)
+1. Epic A — Frontend project initialization — **done** (`tasks/frontend/init/`)
+2. Epic B — Multi-exchange spot markets (web) — **done** (`tasks/frontend/markets/`)
+3. Frontend coin detail — **done** (`tasks/frontend/detail/`)
+4. Epic C — Mobile project initialization — **done** (`tasks/mobile/init/`)
+5. Epic D — Mobile markets dashboard — **done** (`tasks/mobile/markets/`)
+6. Epic E — Mobile coin detail — **done** (`tasks/mobile/detail/`, `epics/mobile-coin-detail.md`)
+7. Epic F — Mobile watchlist — **done** (`tasks/mobile/watchlist/`, `epics/mobile-watchlist.md`)
+8. Epic G — Mobile pump / dump radar — **done** (`tasks/mobile/pumps/`, `epics/mobile-pumps.md`)
+9. Epic H — Mobile batch indicators — **done** (`tasks/mobile/batch-indicators/`, `epics/mobile-batch-indicators.md`)
 
-**Rule:** create PM tasks + analysis before implementation. Do not mark impl tasks done without an explicit implement request.
+### Mobile designs
+
+| Doc | Role |
+|---|---|
+| `docs/design/mobile-project-initialization.md` | Init plan |
+| `docs/design/mobile-system-design.md` | Architecture |
+| `docs/design/mobile-markets-dashboard.md` | Markets dashboard |
+| `docs/design/mobile-coin-detail.md` | Coin detail + indicators |
+| `docs/design/mobile-watchlist.md` | Watchlist (stars + tab) |
+| `docs/design/mobile-pumps.md` | Pump / dump scan radar |
+| `docs/design/mobile-batch-indicators.md` | Batch RSI/EMA list enrichment |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-26
+**Last updated:** 2026-07-27 (Epic H batch indicators planned)

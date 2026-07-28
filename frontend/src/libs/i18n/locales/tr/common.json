@@ -1,7 +1,9 @@
 {
   "appName": "Swyngora",
   "nav": {
-    "markets": "Piyasalar"
+    "markets": "Piyasalar",
+    "watchlist": "İzleme",
+    "pumps": "Pump"
   },
   "footer": {
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"
@@ -13,7 +15,8 @@
   },
   "actions": {
     "retry": "Yeniden dene",
-    "refresh": "Yenile"
+    "refresh": "Yenile",
+    "reload": "Sayfayı yenile"
   },
   "status": {
     "updating": "güncelleniyor…",
@@ -24,7 +27,8 @@
     "loadingChart": "Grafik yükleniyor",
     "loadingIndicatorChart": "Gösterge grafiği yükleniyor",
     "loadingExchanges": "Borsalar yükleniyor",
-    "loadingMarketsTable": "Piyasa tablosu yükleniyor"
+    "loadingMarketsTable": "Piyasa tablosu yükleniyor",
+    "loadingButton": "Düğme yükleniyor"
   },
   "errors": {
     "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
@@ -41,6 +45,8 @@
     "serviceUnavailable": "Servis geçici olarak kullanılamıyor. Kısa süre sonra deneyin.",
     "network": "API'ye ulaşılamıyor. Backend çalışıyor mu?",
     "parse": "API'den beklenmeyen bir yanıt alındı.",
-    "timeout": "İstek zaman aşımına uğradı. Tekrar deneyin."
+    "timeout": "İstek zaman aşımına uğradı. Tekrar deneyin.",
+    "boundaryTitle": "Bir şeyler ters gitti",
+    "boundaryBody": "Bu ekranda beklenmeyen bir hata oluştu. Yeniden deneyin veya sayfayı yenileyin."
   }
 }

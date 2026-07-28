@@ -11,9 +11,14 @@ export {
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
+  useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
+  useGetPumpEventsQuery,
+  useLazyGetPumpEventsQuery,
+  useScanPumpEventsQuery,
+  usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
 export type {
   SpotMarket,
@@ -35,7 +40,19 @@ export type {
   IntervalsResponse,
   IndicatorsQuery,
   IndicatorsResponse,
+  PumpEventsQuery,
+  PumpEventsResponse,
+  PumpEventDto,
+  PumpScanHitDto,
+  ScanPumpEventsQuery,
+  ScanPumpEventsResponse,
 } from './endpoints/marketApi';
+export {
+  useGetWatchlistQuery,
+  useAddWatchlistItemMutation,
+  useRemoveWatchlistItemMutation,
+} from './endpoints/watchlistApi';
+export type { Watchlist, WatchlistItem } from './endpoints/watchlistApi';
 export {
   rtkErrorMessage,
   getRtkErrorStatus,

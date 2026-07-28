@@ -7,6 +7,10 @@ import {
 
 export type DetailUrlState = {
   interval: string;
+  /**
+   * @deprecated Bars are no longer URL-controlled; progressive load owns limit.
+   * Still parsed if present for old links, then ignored by the page.
+   */
   limit: number;
 };
 
@@ -16,7 +20,47 @@ export const DEFAULT_DETAIL_STATE: DetailUrlState = {
 };
 
 const LIMIT_MIN = 20;
-const LIMIT_MAX = 500;
+/** Legacy URL limit clamp only (chart history is no longer URL-driven). */
+const LIMIT_MAX = 1000;
+
+/**
+ * Interval string → duration in seconds (e.g. `15m` → 900, `1h` → 3600).
+ * Returns 0 when the token is not a simple m/h/d unit.
+ */
+export function intervalToSeconds(interval: string): number {
+  // Case-sensitive units: `1m` minute vs Binance `1M` month (unsupported here → 0).
+  const m = /^(\d+)([mhdw])$/.exec((interval ?? '').trim());
+  if (!m) return 0;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  switch (m[2]) {
+    case 'm':
+      return n * 60;
+    case 'h':
+      return n * 3600;
+    case 'd':
+      return n * 86400;
+    case 'w':
+      return n * 604800;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Candle count for pump/indicator APIs: track loaded chart depth up to the
+ * backend max (1000). Never below `minLive` so the first paint still analyzes
+ * a full live window.
+ */
+export function analyticsBarLimit(
+  loadedBars: number,
+  minLive: number,
+  apiMax = 1000,
+): number {
+  const floor = Math.max(1, Math.min(apiMax, minLive));
+  if (!Number.isFinite(loadedBars) || loadedBars <= 0) return floor;
+  return Math.min(apiMax, Math.max(floor, Math.floor(loadedBars)));
+}
 
 export function parseExchangeParam(raw: string | undefined): SupportedExchange {
   const v = (raw ?? '').toLowerCase();
@@ -36,23 +80,64 @@ export function parseSymbolParam(raw: string | undefined): string {
   }
 }
 
+/**
+ * Map a trading pair symbol to the supply-cache asset key (base ticker).
+ * Backend supply is asset-level (e.g. BTC); it strips unhyphenated stables
+ * (BTCUSDT → BTC) but not Coinbase-style `BASE-QUOTE` (BTC-USD stays as-is → 404).
+ * Longest stable first so USDT/FDUSD win over shorter tails.
+ */
+const SUPPLY_STABLE_QUOTES = ['FDUSD', 'USDT', 'USDC', 'BUSD', 'TUSD', 'DAI'] as const;
+
+export function toSupplyAsset(symbol: string): string {
+  const s = symbol.trim().toUpperCase();
+  if (!s) return '';
+  // Coinbase / unified: BASE-QUOTE
+  if (s.includes('-')) {
+    const base = s.split('-')[0]?.trim() ?? '';
+    return base || s;
+  }
+  for (const q of SUPPLY_STABLE_QUOTES) {
+    if (s.length > q.length && s.endsWith(q)) {
+      const base = s.slice(0, -q.length);
+      if (base && base !== q) return base;
+    }
+  }
+  return s;
+}
+
+/** Markets list URL that preserves the venue the user was browsing. */
+export function marketsBackPath(exchange: string): string {
+  const p = new URLSearchParams();
+  const ex = (exchange || '').toLowerCase();
+  if (ex && ex !== 'binance') {
+    p.set('exchange', ex);
+  }
+  const qs = p.toString();
+  return qs ? `/markets?${qs}` : '/markets';
+}
+
 export function parseDetailSearchParams(params: URLSearchParams): DetailUrlState {
   const interval = params.get('interval')?.trim() || DEFAULT_DETAIL_STATE.interval;
   const limitRaw = Number(params.get('limit'));
-  const limit =
-    Number.isFinite(limitRaw) && limitRaw >= LIMIT_MIN && limitRaw <= LIMIT_MAX
-      ? Math.floor(limitRaw)
-      : DEFAULT_DETAIL_STATE.limit;
+  // Floor first, then clamp — same pattern as markets parseIntParam
+  // so limit=500.1 → 500 (not default), limit=19.9 → default (below min after floor).
+  let limit = DEFAULT_DETAIL_STATE.limit;
+  if (Number.isFinite(limitRaw)) {
+    const floored = Math.floor(limitRaw);
+    if (floored >= LIMIT_MIN && floored <= LIMIT_MAX) {
+      limit = floored;
+    }
+  }
   return { interval, limit };
 }
 
-export function detailStateToSearchParams(state: DetailUrlState): URLSearchParams {
+/** Serialize detail URL state. Limit is not written (scroll-loads history in-app). */
+export function detailStateToSearchParams(
+  state: Pick<DetailUrlState, 'interval'> & Partial<Pick<DetailUrlState, 'limit'>>,
+): URLSearchParams {
   const p = new URLSearchParams();
   if (state.interval && state.interval !== DEFAULT_DETAIL_STATE.interval) {
     p.set('interval', state.interval);
-  }
-  if (state.limit !== DEFAULT_DETAIL_STATE.limit) {
-    p.set('limit', String(state.limit));
   }
   return p;
 }

@@ -1,0 +1,55 @@
+{
+  "appName": "Swyngora",
+  "nav": {
+    "home": "Ana sayfa",
+    "markets": "Piyasalar",
+    "pumps": "Pump",
+    "favorites": "Favoriler",
+    "pumpsA11y": "Pump radarı"
+  },
+  "language": {
+    "label": "Dil",
+    "en": "English",
+    "tr": "Türkçe"
+  },
+  "actions": {
+    "retry": "Yeniden dene",
+    "refresh": "Yenile",
+    "cancel": "İptal",
+    "apply": "Uygula",
+    "openMarkets": "Piyasalara git",
+    "retryIndicators": "Göstergeleri yenile",
+    "retryAll": "Tümünü yenile",
+    "back": "Geri",
+    "clearTags": "Etiketleri temizle",
+    "selectVisible": "Görünenleri seç",
+    "resetAllFilters": "Tüm filtreleri sıfırla"
+  },
+  "status": {
+    "loading": "Yükleniyor…",
+    "checking": "Kontrol ediliyor…",
+    "ok": "Tamam",
+    "error": "Hata",
+    "pollingActive": "aktif",
+    "pollingPaused": "duraklatıldı (arka plan)",
+    "liveRefreshPaused": "canlı yenileme durdu",
+    "searching": "Aranıyor…",
+    "loadingMore": "Daha fazla yükleniyor…"
+  },
+  "disclaimer": {
+    "indicators": "RSI/EMA yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir.",
+    "pumps": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Mekanik eşik eşlemesi; işlem sinyali değildir."
+  },
+  "errors": {
+    "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+    "network": "Ağ hatası — backend çalışıyor mu?",
+    "requestFailed": "İstek başarısız",
+    "requestFailedStatus": "İstek başarısız ({{status}})",
+    "failedToLoad": "{{resource}} yüklenemedi"
+  },
+  "a11y": {
+    "addFavorite": "{{symbol}} favorilere ekle",
+    "removeFavorite": "{{symbol}} favorilerden çıkar",
+    "loadingMoreMarkets": "Daha fazla piyasa yükleniyor"
+  }
+}

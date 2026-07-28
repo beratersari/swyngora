@@ -1,0 +1,355 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// favorites filter is client-side over loaded rows
+import { useIsFocused, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTranslation } from 'react-i18next';
+import {
+  rtkErrorMessage,
+  useListExchangesQuery,
+  useListSpotMarketsQuery,
+  usePostIndicatorsBatchQuery,
+  type SpotMarket,
+} from '@/libs/api';
+import { useAppStateActive, useDebouncedValue } from '@/libs/hooks';
+import {
+  buildBatchIndicatorsArg,
+  indexBatchItemsBySymbol,
+  rsiFieldsFromItem,
+  toSpotListQuery,
+} from '@/libs/utils';
+import {
+  BATCH_INDICATORS_DISCLAIMER,
+  BATCH_INDICATORS_POLL_MS,
+  BATCH_MARKETS_ENRICH_CAP,
+} from '@/config/batchIndicatorsConstants';
+import { useMarketsContext } from '../../context';
+import { useWatchlist } from '@/modules/watchlist';
+import { MarketsScreens, type MarketsStackParamList } from '../../navigation';
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_ORDER,
+  DEFAULT_QUOTE,
+  DEFAULT_SORT,
+  FALLBACK_EXCHANGES,
+  SEARCH_DEBOUNCE_MS,
+  SPOT_POLL_MS,
+} from './MarketsPage.constants';
+import {
+  buildFavoritesOnlyRows,
+  favoritesEmptyMessage,
+  favoritesForExchange,
+  favoritesSummaryLabel,
+  mapSpotMarketToRow,
+} from './MarketsPage.helpers';
+import type { MarketRowViewModel } from '@/components/organisms/market-row';
+import type { MarketsPageViewModel } from './MarketsPage.types';
+
+function mergeUniqueRows(
+  prev: MarketRowViewModel[],
+  nextItems: SpotMarket[],
+): MarketRowViewModel[] {
+  const seen = new Set(prev.map((r) => r.id));
+  const appended: MarketRowViewModel[] = [];
+  for (const item of nextItems) {
+    const row = mapSpotMarketToRow(item);
+    if (!seen.has(row.id)) {
+      seen.add(row.id);
+      appended.push(row);
+    }
+  }
+  return appended.length === 0 ? prev : [...prev, ...appended];
+}
+
+export function useMarketsPageViewModel(): MarketsPageViewModel {
+  const { t } = useTranslation(['markets', 'common']);
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MarketsStackParamList>>();
+  const markets = useMarketsContext();
+  const watchlist = useWatchlist();
+  const active = useAppStateActive();
+  const focused = useIsFocused();
+
+  const debouncedSearch = useDebouncedValue(markets.search, SEARCH_DEBOUNCE_MS);
+  const isSearchDebouncing = markets.search.trim() !== debouncedSearch.trim();
+
+  // Reset list when debounced search settles to a new value
+  const lastDebouncedRef = useRef(debouncedSearch);
+  useEffect(() => {
+    if (lastDebouncedRef.current !== debouncedSearch) {
+      lastDebouncedRef.current = debouncedSearch;
+      markets.notifyFiltersChanged();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when debounced search changes
+  }, [debouncedSearch]);
+
+  const [offset, setOffset] = useState(0);
+  const [rows, setRows] = useState<MarketRowViewModel[]>([]);
+  const [total, setTotal] = useState(0);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+
+  // Reset pagination when filter revision changes
+  useEffect(() => {
+    setOffset(0);
+    setRows([]);
+    setTotal(0);
+  }, [markets.filterRevision]);
+
+  const filterState = useMemo(
+    () => ({
+      exchange: markets.exchange,
+      q: markets.search,
+      quote: markets.quote,
+      tags: markets.selectedTags,
+      sort: markets.sort,
+      order: markets.order,
+      limit: DEFAULT_LIMIT,
+      offset,
+    }),
+    [
+      markets.exchange,
+      markets.search,
+      markets.quote,
+      markets.selectedTags,
+      markets.sort,
+      markets.order,
+      offset,
+    ],
+  );
+
+  const spotArgs = useMemo(
+    () => toSpotListQuery(filterState, debouncedSearch),
+    [filterState, debouncedSearch],
+  );
+
+  // Poll only the first page while user has not scrolled into more pages
+  const pollingEnabled = active && focused && offset === 0 && rows.length <= DEFAULT_LIMIT;
+
+  const spotQuery = useListSpotMarketsQuery(spotArgs, {
+    pollingInterval: pollingEnabled ? SPOT_POLL_MS : 0,
+    refetchOnFocus: false,
+  });
+
+  const exchangesQuery = useListExchangesQuery();
+
+  // Merge query results into accumulated rows
+  useEffect(() => {
+    if (!spotQuery.data || spotQuery.isError) return;
+    const items = spotQuery.data.items ?? [];
+    const nextTotal = spotQuery.data.total ?? 0;
+    setTotal(nextTotal);
+
+    if (offset === 0) {
+      setRows(items.map(mapSpotMarketToRow));
+    } else {
+      setRows((prev) => mergeUniqueRows(prev, items));
+    }
+  }, [spotQuery.data, spotQuery.isError, offset]);
+
+  const exchanges =
+    exchangesQuery.data?.exchanges?.length
+      ? exchangesQuery.data.exchanges
+      : FALLBACK_EXCHANGES;
+
+  const hasMore = rows.length < total;
+  const isLoading =
+    (spotQuery.isLoading || spotQuery.isFetching) && rows.length === 0 && !isSearchDebouncing;
+  const isLoadingMore =
+    spotQuery.isFetching && offset > 0 && rows.length > 0;
+  const isRefreshing =
+    spotQuery.isFetching && offset === 0 && rows.length > 0;
+
+  const errorMessage = spotQuery.isError
+    ? rtkErrorMessage(spotQuery.error, { resource: 'markets' })
+    : null;
+
+  const emptyMessage =
+    !errorMessage && !isLoading && !isSearchDebouncing && rows.length === 0
+      ? t('markets:empty')
+      : null;
+
+  const onLoadMore = useCallback(() => {
+    if (!hasMore || spotQuery.isFetching || isLoading || isSearchDebouncing) return;
+    setOffset((prev) => prev + DEFAULT_LIMIT);
+  }, [hasMore, spotQuery.isFetching, isLoading, isSearchDebouncing]);
+
+  const onRefresh = useCallback(() => {
+    setOffset(0);
+    markets.notifyFiltersChanged();
+    void spotQuery.refetch();
+  }, [markets, spotQuery]);
+
+  const onRetry = useCallback(() => {
+    void spotQuery.refetch();
+    void exchangesQuery.refetch();
+  }, [spotQuery, exchangesQuery]);
+
+  const onOpenFilters = useCallback(() => {
+    navigation.navigate(MarketsScreens.Filters);
+  }, [navigation]);
+
+  const onSearchChange = useCallback(
+    (q: string) => {
+      markets.setSearch(q);
+    },
+    [markets],
+  );
+
+  const onPressRow = useCallback(
+    (symbol: string) => {
+      navigation.navigate(MarketsScreens.Detail, {
+        exchange: markets.exchange,
+        symbol,
+      });
+    },
+    [navigation, markets.exchange],
+  );
+
+  const summaryLabel =
+    total > 0
+      ? t('markets:summary', { count: rows.length, total })
+      : rows.length === 0
+        ? null
+        : t('markets:summaryCount', { count: rows.length });
+
+  const filterSummaryParts: string[] = [];
+  if (markets.quote !== DEFAULT_QUOTE) filterSummaryParts.push(markets.quote);
+  if (markets.sort !== DEFAULT_SORT) filterSummaryParts.push(markets.sort);
+  if (markets.order !== DEFAULT_ORDER) filterSummaryParts.push(markets.order);
+  if (markets.selectedTags.length > 0) {
+    filterSummaryParts.push(`${markets.selectedTags.length} tags`);
+  }
+  const filterSummary =
+    filterSummaryParts.length > 0 ? filterSummaryParts.join(' · ') : null;
+
+  const isWatched = useCallback(
+    (symbol: string) => watchlist.isWatched(markets.exchange, symbol),
+    [watchlist, markets.exchange],
+  );
+
+  const onStarPress = useCallback(
+    (symbol: string) => {
+      void watchlist.toggle(markets.exchange, symbol);
+    },
+    [watchlist, markets.exchange],
+  );
+
+  const onToggleFavoritesOnly = useCallback(() => {
+    setFavoritesOnly((v) => !v);
+  }, []);
+
+  /** Favorites for the active exchange (badge + filter). */
+  const favoritesOnExchange = useMemo(
+    () => favoritesForExchange(watchlist.items, markets.exchange),
+    [watchlist.items, markets.exchange],
+  );
+
+  const displayRowsBase = useMemo(() => {
+    if (!favoritesOnly) return rows;
+    return buildFavoritesOnlyRows(favoritesOnExchange, rows);
+  }, [favoritesOnly, rows, favoritesOnExchange]);
+
+  // Batch RSI for first page / visible set only (cap), when focused + active.
+  const enrichEnabled = active && focused && displayRowsBase.length > 0;
+  const batchSymbols = useMemo(
+    () => displayRowsBase.slice(0, BATCH_MARKETS_ENRICH_CAP).map((r) => r.symbol),
+    [displayRowsBase],
+  );
+  const batchArg = useMemo(
+    () =>
+      buildBatchIndicatorsArg({
+        exchange: markets.exchange,
+        symbols: batchSymbols,
+      }),
+    [markets.exchange, batchSymbols],
+  );
+  const batchQuery = usePostIndicatorsBatchQuery(batchArg, {
+    skip: !enrichEnabled || batchArg.symbols.length === 0,
+    pollingInterval: enrichEnabled ? BATCH_INDICATORS_POLL_MS : 0,
+    refetchOnFocus: false,
+  });
+
+  const displayRows = useMemo(() => {
+    const indexed = indexBatchItemsBySymbol(batchQuery.data?.items);
+    const loading = batchQuery.isLoading || (batchQuery.isFetching && !batchQuery.data);
+    return displayRowsBase.map((row) => {
+      const fields = rsiFieldsFromItem(indexed.get(row.symbol.toUpperCase()), loading);
+      return {
+        ...row,
+        rsiLabel: fields.rsiLabel,
+        rsiTone: fields.rsiTone,
+        rsiLoading: fields.rsiLoading,
+      };
+    });
+  }, [displayRowsBase, batchQuery.data, batchQuery.isLoading, batchQuery.isFetching]);
+
+  const indicatorsError = batchQuery.isError
+    ? t('markets:indicatorsPrefix', {
+        message: rtkErrorMessage(batchQuery.error, { resource: 'indicators' }),
+      })
+    : null;
+  const indicatorsDisclaimer =
+    displayRowsBase.length > 0
+      ? (batchQuery.data?.note ?? t('common:disclaimer.indicators', { defaultValue: BATCH_INDICATORS_DISCLAIMER }))
+      : null;
+
+  const onRefreshWithBatch = useCallback(() => {
+    onRefresh();
+    if (batchArg.symbols.length > 0) void batchQuery.refetch();
+  }, [onRefresh, batchArg.symbols.length, batchQuery]);
+
+  const onRetryWithBatch = useCallback(() => {
+    onRetry();
+    if (batchArg.symbols.length > 0) void batchQuery.refetch();
+  }, [onRetry, batchArg.symbols.length, batchQuery]);
+
+  const localizedDisplayEmpty =
+    favoritesEmptyMessage(favoritesOnly, errorMessage, isLoading, displayRows.length) ??
+    emptyMessage;
+  const localizedDisplaySummary = favoritesSummaryLabel(
+    favoritesOnly,
+    displayRows.length,
+    summaryLabel,
+  );
+
+  return {
+    title: t('markets:title'),
+    exchanges,
+    selectedExchange: markets.exchange,
+    onSelectExchange: markets.setExchange,
+    exchangesLoading: exchangesQuery.isLoading,
+
+    search: markets.search,
+    onSearchChange,
+    isSearchDebouncing,
+
+    activeFilterCount: markets.activeFilterCount,
+    filterSummary,
+    onOpenFilters,
+
+    favoritesOnly,
+    favoritesCount: favoritesOnExchange.length,
+    onToggleFavoritesOnly,
+
+    rows: displayRows,
+    total: favoritesOnly ? displayRows.length : total,
+    hasMore: favoritesOnly ? false : hasMore,
+    isLoading,
+    isLoadingMore: favoritesOnly ? false : isLoadingMore,
+    isRefreshing,
+    isPollingPaused: !pollingEnabled,
+    errorMessage,
+    emptyMessage: localizedDisplayEmpty,
+    summaryLabel: localizedDisplaySummary,
+    detailHint: favoritesOnly ? t('markets:favoritesOnlyHint') : null,
+    actionError: watchlist.actionError,
+    indicatorsError,
+    indicatorsDisclaimer,
+
+    onLoadMore,
+    onRetry: onRetryWithBatch,
+    onRefresh: onRefreshWithBatch,
+    onPressRow,
+    isWatched,
+    onStarPress,
+  };
+}

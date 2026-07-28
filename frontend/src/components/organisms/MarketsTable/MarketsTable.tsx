@@ -1,23 +1,25 @@
-import type { KeyboardEvent } from 'react';
-import { Alert, Button, Empty, Space, Tag } from 'antd';
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { useMemo } from 'react';
+import { Alert, Button, Empty, Space } from 'antd';
+import { StarFilled, StarOutlined } from '@ant-design/icons';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import type { SpotMarket, SpotSortField } from '@/libs/api';
+import { SpotMetricValue } from '@/components/molecules/SpotMetricValue';
 import {
-  changeTone,
-  formatChangePercent,
-  formatCompactUsd,
-  formatPrice,
-  formatTradeCount,
+  defaultMetricIds,
+  formatSymbolDisplay,
+  metricColumnTitle,
+  resolveMetricDefs,
 } from '@/libs/utils';
-import { COLUMN_SORT, PAGE_SIZE_OPTIONS } from './MarketsTable.constants';
+import { COLUMN_SORT, PAGE_SIZE_OPTIONS, SORT_DIRECTIONS } from './MarketsTable.constants';
 import {
   getResultsRange,
-  fromAntdSortOrder,
   paginationChanged,
+  resolveSortChange,
   resolveTableChangeAction,
   toAntdSortOrder,
 } from './MarketsTable.helpers';
@@ -27,7 +29,6 @@ import {
   StyledTable,
   TableCard,
   TableSkeletonWrap,
-  TagList,
 } from './MarketsTable.styles';
 import type { MarketsTableProps } from './MarketsTable.types';
 
@@ -64,8 +65,16 @@ export function MarketsTable({
   onPageChange,
   onRetry,
   onRowOpen,
+  watchedKeys,
+  onToggleWatch,
+  metrics: metricsProp,
 }: MarketsTableProps) {
-  const { t } = useTranslation(['markets', 'common']);
+  const { t } = useTranslation(['markets', 'common', 'watchlist']);
+
+  const metrics = useMemo(
+    () => metricsProp ?? resolveMetricDefs('markets', defaultMetricIds('markets')),
+    [metricsProp],
+  );
 
   if (errorMessage) {
     return (
@@ -100,104 +109,72 @@ export function MarketsTable({
     );
   }
 
+  // Server-side sort only (sorter: true). Never allow Ant Design's third-click
+  // "clear sort" — that sets order=null while our URL still holds a sort, which
+  // fights controlled sortOrder and makes the header feel unstable.
+  // Metric columns come from the shared catalog + column picker selection.
   const columns: ColumnsType<SpotMarket> = [
+    ...(onToggleWatch
+      ? [
+          {
+            title: '',
+            key: 'watch',
+            width: 44,
+            render: (_: unknown, row: SpotMarket) => {
+              const sym = row.symbol ?? '';
+              const key = `${exchange}:${sym}`;
+              const watched = watchedKeys?.has(key) ?? false;
+              return (
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={
+                    watched ? t('watchlist:remove') : t('watchlist:add')
+                  }
+                  icon={watched ? <StarFilled /> : <StarOutlined />}
+                  onClick={(e: MouseEvent) => {
+                    e.stopPropagation();
+                    if (sym) onToggleWatch(sym, watched);
+                  }}
+                />
+              );
+            },
+          } as ColumnsType<SpotMarket>[number],
+        ]
+      : []),
     {
       title: t('markets:table.symbol'),
       dataIndex: 'symbol',
       key: 'symbol',
       sorter: true,
+      sortDirections: [...SORT_DIRECTIONS],
       sortOrder: toAntdSortOrder(order, sort === 'symbol'),
+      // Display BASE/QUOTE consistently; row navigation still uses native `symbol`.
       render: (symbol: string | undefined) => (
         <Text variant="label" color="primary" mono>
-          {symbol ?? '—'}
+          {formatSymbolDisplay(symbol)}
         </Text>
       ),
     },
-    {
-      title: t('markets:table.last'),
-      dataIndex: 'lastPrice',
-      key: 'lastPrice',
-      align: 'right',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'lastPrice'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color="primary">
-          {formatPrice(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.change24h'),
-      dataIndex: 'priceChangePercent',
-      key: 'priceChangePercent',
-      align: 'right',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'priceChangePercent'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color={changeTone(v)}>
-          {formatChangePercent(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.quoteVol'),
-      dataIndex: 'quoteVolume',
-      key: 'quoteVolume',
-      align: 'right',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'quoteVolume'),
-      render: (v: string | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatCompactUsd(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.circMcap'),
-      dataIndex: 'marketCapCirculating',
-      key: 'marketCapCirculating',
-      align: 'right',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'marketCapCirculating'),
-      render: (v: number | null | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatCompactUsd(v)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.trades'),
-      dataIndex: 'tradeCount',
-      key: 'tradeCount',
-      align: 'right',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'tradeCount'),
-      render: (v: number | undefined) => (
-        <Text variant="numeric" color="secondary">
-          {formatTradeCount(v, exchange)}
-        </Text>
-      ),
-    },
-    {
-      title: t('markets:table.tags'),
-      dataIndex: 'tags',
-      key: 'tags',
-      sorter: true,
-      sortOrder: toAntdSortOrder(order, sort === 'tags'),
-      render: (tags: string[] | undefined) =>
-        tags && tags.length > 0 ? (
-          <TagList>
-            {tags.slice(0, 4).map((tag) => (
-              <Tag key={tag}>{tag}</Tag>
-            ))}
-            {tags.length > 4 ? <Tag>+{tags.length - 4}</Tag> : null}
-          </TagList>
-        ) : (
-          <Text variant="caption" color="secondary">
-            —
-          </Text>
+    ...metrics.map((def) => {
+      const sortable = Boolean(def.sortField);
+      return {
+        title: metricColumnTitle(t, def.labelKey),
+        dataIndex: def.field,
+        key: def.id,
+        align: def.align ?? 'right',
+        ...(sortable
+          ? {
+              sorter: true as const,
+              sortDirections: [...SORT_DIRECTIONS],
+              sortOrder: toAntdSortOrder(order, sort === def.sortField),
+            }
+          : {}),
+        render: (_: unknown, row: SpotMarket) => (
+          <SpotMetricValue metric={def} spot={row} exchange={exchange} />
         ),
-    },
+      } as ColumnsType<SpotMarket>[number];
+    }),
   ];
 
   const range = getResultsRange(offset, limit, total);
@@ -227,18 +204,23 @@ export function MarketsTable({
     extra: TableCurrentDataSource<SpotMarket>,
   ) => {
     const s = Array.isArray(sorter) ? sorter[0] : sorter;
-    const field = s?.columnKey ? COLUMN_SORT[String(s.columnKey)] : undefined;
-    const nextOrder = fromAntdSortOrder(s?.order ?? null);
-    const sortChanged = Boolean(
-      field && nextOrder && (field !== sort || nextOrder !== order),
-    );
+    const sortResult = resolveSortChange({
+      columnKey: s?.columnKey as string | number | undefined,
+      field: s?.field as string | number | undefined,
+      antdOrder: s?.order ?? null,
+      action: extra?.action,
+      activeSort: sort,
+      activeOrder: order,
+      columnSortMap: COLUMN_SORT,
+    });
+    const sortChanged = sortResult.type === 'sort';
     const pageInfo = paginationChanged(pag, offset, limit);
 
     const action = resolveTableChangeAction(extra?.action, sortChanged, pageInfo.changed);
 
     if (action === 'sort') {
-      if (field && nextOrder) {
-        onSortChange(field as SpotSortField, nextOrder);
+      if (sortResult.type === 'sort') {
+        onSortChange(sortResult.field as SpotSortField, sortResult.order);
       }
       return;
     }
@@ -254,8 +236,8 @@ export function MarketsTable({
       onPageChange(pageInfo.nextOffset, pageInfo.nextLimit);
       return;
     }
-    if (sortChanged && field && nextOrder) {
-      onSortChange(field as SpotSortField, nextOrder);
+    if (sortResult.type === 'sort') {
+      onSortChange(sortResult.field as SpotSortField, sortResult.order);
     }
   };
 
@@ -267,6 +249,8 @@ export function MarketsTable({
         dataSource={items}
         loading={isLoading && items.length > 0}
         pagination={pagination}
+        // Table-level directions (same as columns) — avoid antd default cycle ending in clear.
+        sortDirections={[...SORT_DIRECTIONS]}
         onChange={handleChange}
         onRow={(record) => ({
           className: onRowOpen && record.symbol ? 'markets-row-clickable' : undefined,
@@ -283,7 +267,7 @@ export function MarketsTable({
           tabIndex: onRowOpen && record.symbol ? 0 : undefined,
           role: onRowOpen ? 'link' : undefined,
           'aria-label': record.symbol
-            ? t('markets:table.openDetail', { symbol: record.symbol })
+            ? t('markets:table.openDetail', { symbol: formatSymbolDisplay(record.symbol) })
             : undefined,
         })}
         locale={{

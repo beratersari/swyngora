@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Providers } from './providers';
 import { AppRoutes } from './routes';
@@ -10,8 +9,10 @@ import {
   AppFooter,
   AppHeader,
   AppLayout,
+  BrandLink,
   HeaderNav,
   HeaderSpacer,
+  NavLink,
 } from './App.styles';
 
 function AppShell() {
@@ -20,15 +21,27 @@ function AppShell() {
   return (
     <AppLayout>
       <AppHeader>
-        <HeaderNav>
-          <Link to="/markets" style={{ textDecoration: 'none' }}>
+        <HeaderNav aria-label={t('nav.markets')}>
+          <BrandLink to="/markets">
             <Text variant="h4" color="primary" as="span">
               {t('appName', { defaultValue: APP_NAME })}
             </Text>
-          </Link>
-          <Text variant="label" color="secondary" as="span">
-            {t('nav.markets')}
-          </Text>
+          </BrandLink>
+          <NavLink to="/markets">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.markets')}
+            </Text>
+          </NavLink>
+          <NavLink to="/watchlist">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.watchlist')}
+            </Text>
+          </NavLink>
+          <NavLink to="/pumps">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.pumps')}
+            </Text>
+          </NavLink>
         </HeaderNav>
         <HeaderSpacer />
         <LanguageSwitcher />

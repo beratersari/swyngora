@@ -1,12 +1,30 @@
-# Frontend board
+# Product client board
 
-## Stack (locked)
+Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues are fully wired.
+
+**Tasks live under subfolders** — see `tasks/README.md` (do not add new files to `tasks/` root).
+
+## Frontend stack (locked)
 
 - UI: **Ant Design**
 - Charts: **TradingView Lightweight Charts**
 - Data: RTK Query + OpenAPI in `libs/api`
+- Colors: `frontend/src/styles/tokens/colors.ts`
 
-## Epic A — Project initialization (P0)
+## Mobile stack (locked)
+
+- Runtime: **React Native** (**no Expo**); Chrome via **react-native-web**
+- UI: **Atomic Design only** under `src/components/` (no `modules/*/components`)
+- Architecture: **`modules/*/pages` + ViewModel + module context**
+- Data: RTK Query + OpenAPI in `libs/api`
+- Colors: same tokens as frontend
+- Decision: `decisions/002-react-native-cli-modules-viewmodel.md`
+
+---
+
+## Epic A — Frontend project initialization (P0, done)
+
+**Tasks:** `tasks/frontend/init/`
 
 | ID | Task | Status |
 |---|---|---|
@@ -22,6 +40,8 @@
 
 ## Epic B — Multi-exchange spot markets (P1, done)
 
+**Tasks:** `tasks/frontend/markets/`
+
 | ID | Task | Status |
 |---|---|---|
 | MKT-1 | RTK market endpoints in libs/api | done |
@@ -32,35 +52,143 @@
 | MKT-6 | Live poll + visibility pause | done |
 | MKT-7 | Empty/error UX + tests | done |
 
-## Epic C — Coin detail + technical indicators (P1)
+## Epic — Frontend coin detail (done)
 
-**Epic:** `epics/coin-detail-and-indicators.md`  
-**Analysis doc:** `docs/features/coin-detail.md`  
-**Process:** analysis tasks first (DET-A/B); implementation (DET-1…4) only after acceptance.
-
-### Analysis (no code) — full field-level specs
+**Tasks:** `tasks/frontend/detail/` · Feature: `docs/features/coin-detail.md`
 
 | ID | Task | Status |
 |---|---|---|
-| DET-A | Coin detail: route + intervals/ticker/supply/candles (all fields + logic) | done |
-| DET-B | Indicators: GET /indicators (+ batch out-of-scope), RSI/EMA mapping | done |
+| DET-A | Analysis: detail APIs field matrix | done |
+| DET-B | Analysis: indicators field matrix | done |
+| DET-1 | RTK detail endpoints | done |
+| DET-2 | Page shell + route + header/stats | done |
+| DET-3 | Candles + toolbar | done |
+| DET-4 | Indicator panel + overlays + tests | done |
 
-See `tasks/DET-A.md` and `tasks/DET-B.md` for complete contracts.
+## Epic C — Mobile project initialization (P0, done — MR !15)
 
-### Implementation (DET-A + DET-B applied)
+**Tasks:** `tasks/mobile/init/`  
+**Plan:** `docs/design/mobile-project-initialization.md`
 
 | ID | Task | Status |
 |---|---|---|
-| DET-1 | RTK detail endpoints (candles, ticker, supply, intervals, indicators) | done |
-| DET-2 | Coin detail page shell + header/stats + route from Markets | done |
-| DET-3 | Candle chart + interval/limit toolbar | done |
-| DET-4 | RSI/EMA panel + EMA overlay + tests | done |
+| MINIT-1 | Scaffold React Native CLI TypeScript app (no Expo) | done |
+| MINIT-2 | Lint, format, Jest, path aliases | done |
+| MINIT-3 | libs + Atomic + modules skeleton + boundary ESLint | done |
+| MINIT-4 | libs/api store + RTK baseApi + env | done |
+| MINIT-5 | OpenAPI codegen → libs/api/generated | done |
+| MINIT-6 | Navigation shell + AppState hook + providers | done |
+| MINIT-7 | Color tokens (match frontend) + core atoms + ScreenTemplate | done |
+| MINIT-8 | Home + Markets stub pages with ViewModels | done |
+| MINIT-9 | Package docs + root AGENTS/README + changelog | done |
+
+## Epic D — Mobile multi-exchange spot markets / dashboard (done)
+
+**Tasks:** `tasks/mobile/markets/`  
+**Plan:** `docs/design/mobile-markets-dashboard.md`  
+**Branch:** `feature/mobile-spot-markets`
+
+| ID | Task | Status |
+|---|---|---|
+| MMKT-1 | RTK marketApi: exchanges, tags, spot | done |
+| MMKT-2 | Formatters + spot query helpers | done |
+| MMKT-3 | ExchangeChips + MarketsFilterBar | done |
+| MMKT-4 | MarketRow + MarketsList | done |
+| MMKT-5 | MarketsPage ViewModel (filters, poll, pagination) | done |
+| MMKT-6 | MarketsPage View + pull-to-refresh | done |
+| MMKT-7 | Empty/error/loading UX + tests | done |
+| MMKT-8 | Docs + board + changelog closeout | done |
+
+## Epic E — Mobile coin detail + indicators (**done**)
+
+**Tasks:** `tasks/mobile/detail/`  
+**Epic:** `epics/mobile-coin-detail.md`  
+**Plan:** `docs/design/mobile-coin-detail.md`  
+**Feature:** `docs/features/mobile-coin-detail.md`  
+**Branch:** `feature/mobile-coin-detail` (after / stacked on markets)
+
+| ID | Task | Status |
+|---|---|---|
+| MDET-1 | RTK detail endpoints (intervals, ticker, supply, candles, indicators) | done |
+| MDET-2 | Navigation: CoinDetail route + markets row press | done |
+| MDET-3 | CoinDetailPage shell + header/stats organisms + ViewModel | done |
+| MDET-4 | Interval toolbar + candle chart organism | done |
+| MDET-5 | RSI/EMA indicator organisms + series mapping | done |
+| MDET-6 | Section loading/error, polling pause, tests | done |
+| MDET-7 | Docs + board + changelog closeout | done |
+
+**MR grouping:** (1–2) · (3) · (4–5) · (6–7)
+
+## Epic F — Mobile watchlist (**done**)
+
+**Tasks:** `tasks/mobile/watchlist/`  
+**Epic:** `epics/mobile-watchlist.md`  
+**Plan:** `docs/design/mobile-watchlist.md`  
+**Feature:** `docs/features/mobile-watchlist.md`  
+**Branch:** `feature/mobile-watchlist`
+
+| ID | Task | Status |
+|---|---|---|
+| MWL-1 | clientId + local storage helpers | done |
+| MWL-2 | RTK watchlistApi endpoints | done |
+| MWL-3 | watchKey + merge pure helpers + tests | done |
+| MWL-4 | WatchlistProvider context (hydrate + toggle) | done |
+| MWL-5 | StarButton + Markets / Detail wiring | done |
+| MWL-6 | Watchlist tab + WatchlistPage + list organisms | done |
+| MWL-7 | Quote enrichment + poll + empty/error UX | done |
+| MWL-8 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (1–3) · (4–5) · (6–7) · (8)
+
+## Epic G — Mobile pump / dump radar (**done**)
+
+**Tasks:** `tasks/mobile/pumps/`  
+**Epic:** `epics/mobile-pumps.md`  
+**Plan:** `docs/design/mobile-pumps.md`  
+**Feature:** `docs/features/mobile-pumps.md`  
+**Analysis:** `tasks/mobile/pumps/MPUMP-A.md`  
+**Branch:** `feature/mobile-pumps`
+
+| ID | Task | Status |
+|---|---|---|
+| MPUMP-A | API field matrix analysis | done |
+| MPUMP-1 | RTK pumpApi endpoints (scan + get events) | done |
+| MPUMP-2 | formatPump + pumpQuery helpers and tests | done |
+| MPUMP-3 | Pump Atomic UI (badge, filters, hit/event lists) | done |
+| MPUMP-4 | PumpsScanPage + Pumps tab navigation | done |
+| MPUMP-5 | Coin detail pump events section | done |
+| MPUMP-6 | Loading / empty / error / disclaimer | done |
+| MPUMP-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
+
+## Epic H — Mobile batch indicators (**done**)
+
+**Tasks:** `tasks/mobile/batch-indicators/`  
+**Epic:** `epics/mobile-batch-indicators.md`  
+**Plan:** `docs/design/mobile-batch-indicators.md`  
+**Feature:** `docs/features/mobile-batch-indicators.md`  
+**Analysis:** `tasks/mobile/batch-indicators/MBIND-A.md`  
+**Branch:** `feature/mobile-batch-indicators`
+
+| ID | Task | Status |
+|---|---|---|
+| MBIND-A | API field matrix analysis | done |
+| MBIND-1 | RTK postIndicatorsBatch endpoint | done |
+| MBIND-2 | Chunk/group/format helpers + tests | done |
+| MBIND-3 | RSI badge + row prop extensions | done |
+| MBIND-4 | Favorites batch RSI enrichment (P0) | done |
+| MBIND-5 | Markets list batch RSI enrichment (P1) | done |
+| MBIND-6 | Loading / partial failure / disclaimer | done |
+| MBIND-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
 
 ## Later (not started)
 
 | ID | Task | Status |
 |---|---|---|
-| WL-1 | Watchlist UI | backlog |
+| WL-1 | Watchlist UI (web / `frontend/`) | backlog |
 
 ## Status legend
 

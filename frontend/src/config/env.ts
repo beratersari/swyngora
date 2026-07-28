@@ -20,6 +20,12 @@ function resolveApiBaseUrl(): string {
   return trimmed.replace(/\/+$/, '');
 }
 
+function resolveClientId(): string {
+  const raw = import.meta.env.VITE_CLIENT_ID;
+  if (raw === undefined || raw === null) return '';
+  return String(raw).trim();
+}
+
 export const env = {
   /** Empty string = relative same-origin requests (use Vite proxy in dev). */
   apiBaseUrl: resolveApiBaseUrl(),
@@ -28,4 +34,9 @@ export const env = {
     const base = resolveApiBaseUrl();
     return base === '' ? '(same origin / Vite proxy)' : base;
   })(),
+  /**
+   * Optional fixed client id for watchlist (`X-Client-Id`).
+   * When empty, runtime generates/persists one via getOrCreateClientId().
+   */
+  clientId: resolveClientId(),
 } as const;

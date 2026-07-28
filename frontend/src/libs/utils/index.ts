@@ -1,5 +1,14 @@
 export { formatPrice } from './formatPrice';
-export { apiCandlesToChart } from './candles';
+export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
+export type { ParsedTradingPair } from './formatSymbol';
+export { getOrCreateClientId } from './clientId';
+export {
+  apiCandlesToChart,
+  filterValidApiCandles,
+  mergeCandleHistory,
+  oldestCandleOpenTimeMs,
+  trimCandlesToMax,
+} from './candles';
 export type { ApiCandle, ChartCandle } from './candles';
 export {
   formatChangePercent,
@@ -10,9 +19,11 @@ export {
 } from './formatMarket';
 export {
   DEFAULT_MARKETS_STATE,
+  defaultQuoteForExchange,
   parseMarketsSearchParams,
   marketsStateToSearchParams,
   toSpotListQuery,
+  effectiveMarketsStateForQuery,
 } from './spotQuery';
 export type { MarketsUrlState } from './spotQuery';
 export {
@@ -32,5 +43,31 @@ export {
   parseDetailSearchParams,
   detailStateToSearchParams,
   resolveInterval,
+  toSupplyAsset,
+  marketsBackPath,
+  intervalToSeconds,
+  analyticsBarLimit,
 } from './detailQuery';
 export type { DetailUrlState } from './detailQuery';
+export {
+  SPOT_METRICS,
+  getSpotMetric,
+  metricsForSurface,
+  defaultMetricIds,
+  columnSortMap,
+  normalizeMetricIds,
+  loadMetricIds,
+  saveMetricIds,
+  resolveMetricDefs,
+  metricColumnTitle,
+  metricI18nKey,
+  METRIC_I18N_KEYS,
+} from './spotMetrics';
+export type {
+  SpotMetricId,
+  SpotMetricDef,
+  SpotMetricSurface,
+  SpotMetricFormat,
+  SpotMetricLabelKey,
+  MetricI18nKey,
+} from './spotMetrics';

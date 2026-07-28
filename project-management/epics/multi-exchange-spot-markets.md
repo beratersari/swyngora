@@ -18,4 +18,4 @@ Browse Binance / Coinbase / Bybit spot markets with search, filters, sort, pagin
 
 ## Tasks
 
-- [x] MKT-1 … MKT-7 (see `project-management/board.md` and `tasks/`)
+- [x] MKT-1 … MKT-7 (see `project-management/board.md` and `tasks/frontend/markets/`)

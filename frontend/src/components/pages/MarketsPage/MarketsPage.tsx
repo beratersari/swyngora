@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Tag } from 'antd';
+import { Alert, Button, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
@@ -9,18 +9,23 @@ import { MarketsTable } from '@/components/organisms/MarketsTable';
 import { getResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
 import {
   rtkErrorMessage,
+  useAddWatchlistItemMutation,
+  useGetWatchlistQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
+  useRemoveWatchlistItemMutation,
   type MarketExchange,
   type SpotMarket,
   type SpotSortField,
   type SpotSortOrder,
 } from '@/libs/api';
-import { useDebouncedValue, useDocumentVisible } from '@/libs/hooks';
+import { MetricColumnPicker } from '@/components/molecules/MetricColumnPicker';
+import { useDebouncedValue, useDocumentVisible, useSpotMetricColumns } from '@/libs/hooks';
 import {
-  DEFAULT_MARKETS_STATE,
+  defaultQuoteForExchange,
   marketsStateToSearchParams,
+  metricColumnTitle,
   parseMarketsSearchParams,
   toSpotListQuery,
   type MarketsUrlState,
@@ -44,6 +49,7 @@ export function MarketsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const visible = useDocumentVisible();
+  const metricColumns = useSpotMetricColumns('markets');
 
   const state = useMemo(() => parseMarketsSearchParams(searchParams), [searchParams]);
   const [qInput, setQInput] = useState(state.q);
@@ -53,55 +59,85 @@ export function MarketsPage() {
     setQInput(state.q);
   }, [state.q]);
 
+  /**
+   * Functional URL updates — always merge from the latest search params so sort /
+   * pagination / search debounce never overwrite each other with a stale `state`.
+   */
   const patchState = useCallback(
     (patch: Partial<MarketsUrlState>) => {
-      const next: MarketsUrlState = { ...state, ...patch };
-      if (patch.q === undefined) {
-        next.q = qInput;
-      }
-      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+      setSearchParams(
+        (prev) => {
+          const current = parseMarketsSearchParams(prev);
+          return marketsStateToSearchParams({ ...current, ...patch });
+        },
+        { replace: true },
+      );
     },
-    [state, qInput, setSearchParams],
+    [setSearchParams],
   );
 
+  // Search q is owned by the debounce effect only (not injected into every patch).
   useEffect(() => {
-    if (debouncedQ === state.q) return;
-    const next = { ...state, q: debouncedQ, offset: 0 };
-    setSearchParams(marketsStateToSearchParams(next), { replace: true });
-  }, [debouncedQ, state, setSearchParams]);
+    setSearchParams(
+      (prev) => {
+        const current = parseMarketsSearchParams(prev);
+        if (debouncedQ === current.q) return prev;
+        return marketsStateToSearchParams({ ...current, q: debouncedQ, offset: 0 });
+      },
+      { replace: true },
+    );
+  }, [debouncedQ, setSearchParams]);
 
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
   const spotArgs = useMemo(() => toSpotListQuery(state, debouncedQ), [state, debouncedQ]);
+  const watchlistQuery = useGetWatchlistQuery();
+  const [addWatch] = useAddWatchlistItemMutation();
+  const [removeWatch] = useRemoveWatchlistItemMutation();
 
   const spotQuery = useListSpotMarketsQuery(spotArgs, {
     pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
     refetchOnFocus: true,
   });
 
+  const watchedKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const it of watchlistQuery.data?.items ?? []) {
+      if (it.exchange && it.symbol) set.add(`${it.exchange}:${it.symbol}`);
+    }
+    return set;
+  }, [watchlistQuery.data?.items]);
+
   const exchanges = exchangesQuery.data?.exchanges?.length
     ? exchangesQuery.data.exchanges
     : ['binance', 'coinbase', 'bybit'];
 
-  const [cachedItems, setCachedItems] = useState<SpotMarket[]>([]);
-  const [cachedTotal, setCachedTotal] = useState(0);
-  const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}|${state.sort}|${state.order}`;
-
-  useEffect(() => {
-    setCachedItems([]);
-    setCachedTotal(0);
-  }, [filterKey]);
+  // Keep last rows only for the *current* filter set (sort/page/poll).
+  // Key the cache so a filter change never paints the previous venue's rows
+  // for one frame before a useEffect can clear (stale flash).
+  const filterKey = `${state.exchange}|${state.quote}|${state.tag}|${debouncedQ}`;
+  const [rowCache, setRowCache] = useState<{
+    key: string;
+    items: SpotMarket[];
+    total: number;
+  }>({ key: filterKey, items: [], total: 0 });
 
   useEffect(() => {
     if (spotQuery.data?.items) {
-      setCachedItems(spotQuery.data.items);
-      setCachedTotal(spotQuery.data.total ?? spotQuery.data.items.length);
+      setRowCache({
+        key: filterKey,
+        items: spotQuery.data.items,
+        total: spotQuery.data.total ?? spotQuery.data.items.length,
+      });
     }
-  }, [spotQuery.data]);
+  }, [spotQuery.data, filterKey]);
 
-  const items = spotQuery.data?.items ?? cachedItems;
-  const total = spotQuery.data?.total ?? cachedTotal;
-  const errorMessage = spotQuery.isError
+  const cachedForFilter = rowCache.key === filterKey ? rowCache : null;
+  // Prefer current query data; while a new sort/page is loading keep last rows.
+  const items = spotQuery.data?.items ?? cachedForFilter?.items ?? [];
+  const total = spotQuery.data?.total ?? cachedForFilter?.total ?? 0;
+  const hasRows = items.length > 0;
+  const loadErrorText = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {
         resource: t('markets:resource'),
         statusMessages: {
@@ -109,9 +145,19 @@ export function MarketsPage() {
         },
       })
     : null;
+  // Full-table error only when there is nothing to show. Poll/refetch failures
+  // keep last rows (RTK keeps data on reject) so sort/paging stay usable.
+  const tableErrorMessage = hasRows ? null : loadErrorText;
 
   const onExchangeChange = (exchange: MarketExchange) => {
-    patchState({ exchange, offset: 0, tag: '' });
+    // Reset quote to the venue's primary book (USDT vs USD) so Coinbase is not
+    // left filtered to a handful of USDT pairs after browsing Binance.
+    patchState({
+      exchange,
+      quote: defaultQuoteForExchange(exchange),
+      offset: 0,
+      tag: '',
+    });
   };
 
   const onSortChange = (sort: SpotSortField, order: SpotSortOrder) => {
@@ -120,15 +166,9 @@ export function MarketsPage() {
 
   const onPageChange = useCallback(
     (offset: number, limit: number) => {
-      const next: MarketsUrlState = {
-        ...state,
-        q: qInput,
-        offset,
-        limit,
-      };
-      setSearchParams(marketsStateToSearchParams(next), { replace: true });
+      patchState({ offset, limit });
     },
-    [state, qInput, setSearchParams],
+    [patchState],
   );
 
   const range = getResultsRange(state.offset, state.limit, total);
@@ -140,7 +180,9 @@ export function MarketsPage() {
           to: range.to.toLocaleString(),
           total: range.total.toLocaleString(),
         });
-  const isInitialLoading = spotQuery.isLoading && items.length === 0;
+  // Full-table skeleton only on first paint for a filter set (no rows yet).
+  const isInitialLoading = items.length === 0 && (spotQuery.isLoading || spotQuery.isFetching);
+  // In-table spinner for sort/page/poll refreshes while previous rows stay mounted.
   const isRefreshing = spotQuery.isFetching && items.length > 0;
   const pageNum = Math.floor(state.offset / state.limit) + 1;
 
@@ -171,6 +213,21 @@ export function MarketsPage() {
         onQChange={(q) => setQInput(q)}
         onQuoteChange={(quote) => patchState({ quote, offset: 0 })}
         onTagChange={(tag) => patchState({ tag, offset: 0 })}
+        trailing={
+          <MetricColumnPicker
+            available={metricColumns.available}
+            value={metricColumns.metricIds}
+            onChange={metricColumns.setMetricIds}
+            onReset={metricColumns.resetToDefaults}
+            getLabel={(key) => metricColumnTitle(t, key)}
+            ariaLabel={t('markets:columns.aria')}
+            buttonLabel={t('markets:columns.button')}
+            resetLabel={t('markets:columns.reset')}
+            moveUpLabel={t('markets:columns.moveUp')}
+            moveDownLabel={t('markets:columns.moveDown')}
+            dragHintLabel={t('markets:columns.dragHint')}
+          />
+        }
       />
 
       <MetaRow>
@@ -202,7 +259,7 @@ export function MarketsPage() {
         <MetaRight>
           <Text variant="caption" color="secondary">
             {t('markets:results.meta', {
-              quote: state.quote || DEFAULT_MARKETS_STATE.quote,
+              quote: state.quote || defaultQuoteForExchange(state.exchange),
               sort: state.sort,
               order: state.order,
             })}
@@ -222,6 +279,20 @@ export function MarketsPage() {
         />
       ) : null}
 
+      {loadErrorText && hasRows ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('markets:errors.refreshFailed')}
+          description={loadErrorText}
+          action={
+            <Button size="small" type="primary" onClick={() => void spotQuery.refetch()}>
+              {t('common:actions.retry')}
+            </Button>
+          }
+        />
+      ) : null}
+
       <MarketsTable
         items={items}
         exchange={state.exchange}
@@ -230,14 +301,23 @@ export function MarketsPage() {
         total={total}
         limit={state.limit}
         offset={state.offset}
-        isLoading={spotQuery.isLoading || spotQuery.isFetching}
-        errorMessage={errorMessage}
+        isLoading={isInitialLoading || isRefreshing}
+        errorMessage={tableErrorMessage}
         onSortChange={onSortChange}
         onPageChange={onPageChange}
         onRetry={() => void spotQuery.refetch()}
         onRowOpen={(symbol) =>
           navigate(`/markets/${encodeURIComponent(state.exchange)}/${encodeURIComponent(symbol)}`)
         }
+        watchedKeys={watchedKeys}
+        onToggleWatch={(symbol, watched) => {
+          if (watched) {
+            void removeWatch({ exchange: state.exchange, symbol });
+          } else {
+            void addWatch({ exchange: state.exchange, symbol });
+          }
+        }}
+        metrics={metricColumns.metrics}
       />
     </PageStack>
   );

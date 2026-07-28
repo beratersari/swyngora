@@ -1,0 +1,10 @@
+{
+  "title": "Favorites",
+  "count_one": "{{count}} favorite",
+  "count_other": "{{count}} favorites",
+  "empty": "No favorites yet — open Markets and tap ★ on a pair",
+  "emptyList": "No watched pairs yet",
+  "indicatorsPrefix": "Indicators: {{message}}",
+  "openMarkets": "Open Markets",
+  "full": "Watchlist full ({{max}})"
+}

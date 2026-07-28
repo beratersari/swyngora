@@ -25,7 +25,7 @@ Treat this file as the source of truth for collaboration, branching, versioning,
 |---|---|---|
 | Simple frontend | Static HTML/JS | **Test harness only** under `simple-frontend/` — not Atomic Design / RTK Query |
 | Web app (product) | React | Lives under `frontend/`; Atomic Design (§6.8); **Ant Design**; **Lightweight Charts**; **RTK Query**; OpenAPI types (§6.9); libs under `src/libs/` |
-| Mobile app | React Native | Same as product web: Atomic Design, **RTK Query**, OpenAPI-generated types (§6.8 / §6.9) |
+| Mobile app | React Native | `mobile/`; Atomic Design + **modules/pages + ViewModel**; **no Expo**; **Chrome via react-native-web** (`npm run web`); **RTK Query** + OpenAPI (§6.8 / §6.9); brand tokens match frontend |
 | Messaging | Telegram bot | Optional transport under `backend/internal/transport/telegram` (same process as HTTP API; no AI) |
 
 ### Backend and AI
@@ -137,6 +137,7 @@ We follow **Git Flow** adapted for a default branch named `main` (not `master`).
 - Prefer **merge commits** or **squash** consistently; pick one team default and stick to it. Recommended default:
   - Features → **squash merge** into `develop` (clean history).
   - Releases / hotfixes → **merge commit** into `main` (preserve release points).
+- **Squash / merge commit messages** must use the same Conventional Commits form as §5.1 (not `[scope] Title` or free-form MR UI defaults). Set the squash commit subject explicitly when merging.
 - Rebase feature branches onto latest `develop` before merge when history is linear and shared history allows it; do not rewrite others’ published history without agreement.
 - Keep MRs/PRs reviewable: small, focused, with a clear description and test plan.
 
@@ -239,9 +240,9 @@ Until the first public stable release, start at **`0.1.0`** and advance MINOR fo
 
 ## 5. Commits and merge requests
 
-### 5.1 Conventional Commits
+### 5.1 Conventional Commits (commits **and** MR/PR titles)
 
-Prefer [Conventional Commits](https://www.conventionalcommits.org/):
+**One convention for both.** Git commits, MR/PR titles, and the message written onto `develop` / `main` on squash or merge must all use [Conventional Commits](https://www.conventionalcommits.org/). Do **not** use a separate `[scope] Title` form for MRs.
 
 ```text
 <type>(<optional-scope>): <short imperative summary>
@@ -253,39 +254,38 @@ Prefer [Conventional Commits](https://www.conventionalcommits.org/):
 
 **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
 
-**Scopes (examples):** `backend`, `ai`, `web`, `mobile`, `bot`, `mcp`, `docs`, `release`
+**Scopes (examples):** `backend`, `ai`, `frontend`, `web`, `mobile`, `bot`, `mcp`, `docs`, `release`
 
-**Examples**
+**Examples (valid for commits and MR titles)**
 
 ```text
 feat(backend): add cross-exchange volume comparison endpoint
+fix(frontend): harden chart history, pump markers, and build
 fix(ai): prevent assistant from leaking API keys in tool output
 docs: document Git Flow and SemVer in AGENTS.md
 chore(release): bump version to 0.2.0
 ```
 
+**Rules**
+
 - Subject line: imperative mood, ~72 chars, no trailing period.
 - Breaking changes: add `!` after type/scope (`feat(api)!: ...`) and/or a `BREAKING CHANGE:` footer.
+- Prefer a scope when the change is package-local (`frontend`, `backend`, `mobile`, `ai`, …).
+- **Agents:** when opening an MR, set the title to the same Conventional Commits subject as the primary commit (or the intended squash message)—never `[backend] Add …` or other non-conventional titles.
+- **Squash merge:** the squash commit subject on `develop` must be Conventional Commits (GitLab/GitHub default to the MR title—so the MR title must already be correct).
 
 ### 5.2 Merge request / pull request template (minimum)
 
 Every MR/PR should include:
 
-1. **Summary** — what and why (1–3 sentences).
-2. **Type** — feature / fix / release / hotfix / chore / docs.
-3. **Tests** — list new/updated test files and commands run (see §6.3). Features and behavioral fixes without tests are incomplete.
-4. **Documentation** — list docs added/updated for new folders or features (see §8.1), and any **`AGENTS.md` / `README.md`** updates for stale guidance (see §8.2). Note N/A only when nothing in those files was affected.
-5. **Risk / rollback** — especially for market-data and trading-adjacent code.
-6. **Changelog note** — draft bullet if user-visible.
-7. **Screenshots** — for UI changes (web/mobile).
-
-Title format:
-
-```text
-[<scope>] <imperative summary>
-```
-
-Example: `[backend] Add exchange market-cap ranking API`
+1. **Title** — Conventional Commits subject only (§5.1), e.g. `fix(frontend): harden chart history and pump markers`.
+2. **Summary** — what and why (1–3 sentences).
+3. **Type** — feature / fix / release / hotfix / chore / docs (should match the title `type`).
+4. **Tests** — list new/updated test files and commands run (see §6.3). Features and behavioral fixes without tests are incomplete.
+5. **Documentation** — list docs added/updated for new folders or features (see §8.1), and any **`AGENTS.md` / `README.md`** updates for stale guidance (see §8.2). Note N/A only when nothing in those files was affected.
+6. **Risk / rollback** — especially for market-data and trading-adjacent code.
+7. **Changelog note** — draft bullet if user-visible.
+8. **Screenshots** — for UI changes (web/mobile).
 
 ---
 
@@ -724,9 +724,11 @@ python3 -m http.server 5173   # open http://localhost:5173
 # npm run codegen:api
 # npm test && npm run lint && npm run build
 
-# Mobile — from mobile/
-# npm run codegen:api   # same OpenAPI source as frontend when configured
-# follow React Native project scripts once scaffolded
+# Mobile (React Native + react-native-web) — from mobile/
+# npm install
+# npm run web           # Chrome → http://localhost:5180 (primary; no simulator required)
+# npm test && npm run lint && npm run typecheck
+# npm run codegen:api   # same OpenAPI source as frontend
 ```
 
 CI should run the relevant subset of the above on every MR/PR to `develop` and `main`.
@@ -861,7 +863,7 @@ Feature work:   develop → feature/* → MR → develop
 Release:        develop → release/vX.Y.Z → main + tag → back-merge develop
 Hotfix:         main → hotfix/vX.Y.Z → main + tag → back-merge develop
 Versioning:     SemVer MAJOR.MINOR.PATCH · tags vX.Y.Z · VERSION + CHANGELOG
-Commits:        Conventional Commits · scoped by package
+Commits + MR titles: Conventional Commits · type(scope): subject (§5.1)
 Tests:          Required for every feature + new/changed production logic (same MR)
 Docs:           Folder README for new packages; feature/API/ADR docs for new capabilities
 After code:     Update related AGENTS.md + README.md in the same MR (§8.2)
@@ -886,5 +888,5 @@ Push:           git pushboth <ref>  # both remotes (§3.8)
 
 This project is early. When stack choices solidify (module paths, package managers, CI jobs, deploy targets), update **§2**, **§7**, nested package `AGENTS.md`, and related `README.md` files in the same change set (see §8.2). Stale agent docs are worse than short ones.
 
-**Last updated:** 2026-07-26 (frontend UI + multi-agent AI/MCP)  
+**Last updated:** 2026-07-27 (commits + MR titles: single Conventional Commits convention)  
 **Initial product version target:** `0.1.0` (pre-release development)

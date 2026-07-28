@@ -1,0 +1,10 @@
+{
+  "title": "Favoriler",
+  "count_one": "{{count}} favori",
+  "count_other": "{{count}} favori",
+  "empty": "Henüz favori yok — Piyasalar'ı açın ve ★ simgesine dokunun",
+  "emptyList": "İzlenen çift yok",
+  "indicatorsPrefix": "Göstergeler: {{message}}",
+  "openMarkets": "Piyasalara git",
+  "full": "İzleme listesi dolu ({{max}})"
+}

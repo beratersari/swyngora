@@ -5,9 +5,9 @@ export type ButtonProps = Omit<AntButtonProps, 'loading'> &
   WithLoadingProps & {
     /**
      * When true, renders a button-shaped Skeleton instead of the control.
-     * For in-button spinner (still interactive chrome), use `pending` instead.
+     * For in-button spinner, use `pending` (disables unless `disabled` is set).
      */
     isLoading?: boolean;
-    /** Maps to Ant Design `loading` spinner on the button */
+    /** Maps to Ant Design `loading` spinner; disables when `disabled` is omitted */
     pending?: boolean;
   };

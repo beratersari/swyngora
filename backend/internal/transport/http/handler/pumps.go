@@ -206,13 +206,15 @@ func (h *MarketHandler) ScanPumpEvents(w http.ResponseWriter, r *http.Request) {
 		sq.MaxTotalEvents = n
 	}
 
-	hits, err := h.svc.ScanPumpEvents(r.Context(), sq)
+	res, err := h.svc.ScanPumpEvents(r.Context(), sq)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	items := make([]map[string]any, 0, len(hits))
-	for _, hhit := range hits {
+	items := make([]map[string]any, 0, len(res.Hits))
+	totalEvents := 0
+	for _, hhit := range res.Hits {
+		totalEvents += len(hhit.Events)
 		items = append(items, map[string]any{
 			"symbol":        hhit.Symbol,
 			"exchange":      string(hhit.Exchange),
@@ -221,13 +223,21 @@ func (h *MarketHandler) ScanPumpEvents(w http.ResponseWriter, r *http.Request) {
 			"events":        pumpEventsDTO(hhit.Events),
 		})
 	}
+	// Metadata uses service-resolved defaults (not raw query zeros/empties).
 	writeJSON(w, http.StatusOK, map[string]any{
-		"exchange":      q.Get("exchange"),
-		"interval":      sq.Interval,
-		"lookbackHours": sq.LookbackHours,
-		"minReturnPct":  sq.MinReturnPct,
-		"hits":          items,
-		"hitCount":      len(items),
-		"note":          "Informational only — not financial advice. Scan is a mechanical threshold filter over top-volume symbols.",
+		"exchange":       string(res.Exchange),
+		"quote":          res.QuoteAsset,
+		"interval":       res.Interval,
+		"lookbackHours":  res.LookbackHours,
+		"minReturnPct":   res.MinReturnPct,
+		"windowBars":     res.WindowBars,
+		"mode":           string(res.Mode),
+		"direction":      string(res.Direction),
+		"symbolLimit":    res.SymbolLimit,
+		"maxTotalEvents": res.MaxTotalEvents,
+		"hits":           items,
+		"hitCount":       len(items),
+		"eventCount":     totalEvents,
+		"note":           res.Note,
 	})
 }

@@ -1,0 +1,16 @@
+{
+  "title": "Watchlist",
+  "subtitle": "Live price, 24h change, volume, and mcap for pairs you track. Stored for this browser client.",
+  "emptyTitle": "No pairs yet",
+  "emptyHint": "Star a row on Markets or open a coin detail and add it.",
+  "remove": "Remove",
+  "open": "Open {{symbol}}",
+  "exchange": "Exchange",
+  "symbol": "Pair",
+  "added": "Added",
+  "add": "Add to watchlist",
+  "addedToast": "Added to watchlist",
+  "removedToast": "Removed from watchlist",
+  "loadFailed": "Could not load watchlist",
+  "resource": "watchlist"
+}

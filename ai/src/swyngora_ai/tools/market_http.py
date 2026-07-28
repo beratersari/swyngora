@@ -214,6 +214,12 @@ class PumpScanInput(BaseModel):
     direction: str = "up"
     min_volume_ratio: float = 0
     symbol_limit: int = Field(default=15, ge=1, le=40, description="Top volume symbols to scan")
+    max_total_events: int = Field(
+        default=30,
+        ge=1,
+        le=200,
+        description="Cap on total events across all symbols (not hit count)",
+    )
 
 
 def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]:
@@ -496,6 +502,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         direction: str = "up",
         min_volume_ratio: float = 0,
         symbol_limit: int = 15,
+        max_total_events: int = 30,
     ) -> str:
         params: dict[str, Any] = {
             "exchange": exchange,
@@ -507,6 +514,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "mode": mode,
             "direction": direction,
             "symbolLimit": symbol_limit,
+            "maxTotalEvents": max_total_events,
         }
         if min_volume_ratio and min_volume_ratio > 0:
             params["minVolumeRatio"] = min_volume_ratio
@@ -675,7 +683,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="scan_pump_events",
             description=(
                 "Scan top-volume symbols for recent pumps/dumps with thresholds "
-                "(min_return_pct, lookback_hours, interval, mode, direction). "
+                "(min_return_pct, lookback_hours, interval, mode, direction, max_total_events). "
+                "max_total_events caps aggregate events across symbols. "
+                "Response metadata echoes resolved defaults. "
                 "Use for 'what pumped in the last N hours'."
             ),
             args_schema=PumpScanInput,

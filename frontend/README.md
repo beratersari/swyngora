@@ -100,12 +100,14 @@ Backend CORS already allows `*` for local dev.
 
 Find WSL IP: `hostname -I | awk '{print $1}'`
 
-## Format / lint
+## Format / lint / test
 
 ```bash
-npm run format        # Prettier write
-npm run format:check  # CI-friendly check
-npm run lint          # ESLint (prettier-compatible)
+npm run format         # Prettier write
+npm run format:check   # CI-friendly check
+npm run lint           # ESLint (prettier-compatible)
+npm test               # Vitest unit/component tests
+npm run test:coverage  # Coverage (line + branch) via @vitest/coverage-v8
 ```
 
 Config: `.prettierrc.json` · ignore: `.prettierignore`

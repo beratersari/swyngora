@@ -46,3 +46,64 @@ export function apiCandlesToChart(candles: ApiCandle[]): ChartCandle[] {
     })
     .filter((x): x is ChartCandle => x !== null);
 }
+
+/** Keep candles with complete OHLC + openTime. */
+export function filterValidApiCandles(
+  candles: readonly (Partial<ApiCandle> | undefined)[] | undefined,
+): ApiCandle[] {
+  if (!candles?.length) return [];
+  const out: ApiCandle[] = [];
+  for (const c of candles) {
+    if (!c?.openTime || !c.open || !c.high || !c.low || !c.close) continue;
+    if (!Number.isFinite(Date.parse(c.openTime))) continue;
+    out.push({
+      openTime: c.openTime,
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close,
+      volume: c.volume ?? '0',
+      closeTime: c.closeTime,
+    });
+  }
+  return out;
+}
+
+/**
+ * Merge candle series by openTime (later list wins on conflict), sorted ascending.
+ * Used to stitch live polls with older history pages.
+ */
+export function mergeCandleHistory(
+  older: readonly ApiCandle[],
+  newer: readonly ApiCandle[],
+): ApiCandle[] {
+  const byTime = new Map<string, ApiCandle>();
+  for (const c of older) {
+    if (c.openTime) byTime.set(c.openTime, c);
+  }
+  for (const c of newer) {
+    if (c.openTime) byTime.set(c.openTime, c);
+  }
+  return [...byTime.values()].sort(
+    (a, b) => Date.parse(a.openTime) - Date.parse(b.openTime),
+  );
+}
+
+/** openTime ms of the oldest bar, or null if empty. */
+export function oldestCandleOpenTimeMs(candles: readonly ApiCandle[]): number | null {
+  if (!candles.length) return null;
+  let min = Number.POSITIVE_INFINITY;
+  for (const c of candles) {
+    const ms = Date.parse(c.openTime);
+    if (Number.isFinite(ms) && ms < min) min = ms;
+  }
+  return Number.isFinite(min) ? min : null;
+}
+
+/**
+ * Trim from the oldest side so length ≤ maxBars (keeps the newest bars).
+ */
+export function trimCandlesToMax(candles: readonly ApiCandle[], maxBars: number): ApiCandle[] {
+  if (maxBars <= 0 || candles.length <= maxBars) return [...candles];
+  return candles.slice(candles.length - maxBars);
+}

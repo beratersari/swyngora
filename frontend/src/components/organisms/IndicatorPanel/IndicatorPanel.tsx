@@ -9,7 +9,7 @@ import {
   rsiTone,
   sortedEmaKeys,
 } from '@/libs/utils';
-import { EMA_COLORS, FALLBACK_EMA_COLORS } from './IndicatorPanel.constants';
+import { emaColor } from './IndicatorPanel.helpers';
 import {
   ChartBlock,
   LegendRow,
@@ -20,10 +20,6 @@ import {
   SnapshotGrid,
 } from './IndicatorPanel.styles';
 import type { IndicatorPanelProps } from './IndicatorPanel.types';
-
-function emaColor(key: string, index: number): string {
-  return EMA_COLORS[key] ?? FALLBACK_EMA_COLORS[index % FALLBACK_EMA_COLORS.length]!;
-}
 
 export function IndicatorPanel({
   data,
@@ -37,7 +33,8 @@ export function IndicatorPanel({
   const emaKeys = sortedEmaKeys(data?.latest?.ema);
   const rsiLine = indicatorPointsToRsiLine(data?.points);
   const period = data?.rsiPeriod ?? 14;
-  const emaPeriodLabel = emaKeys.join(', ') || '12, 26';
+  // Empty when no EMA keys yet — avoid hard-coded periods that may not exist.
+  const emaPeriodLabel = emaKeys.join(', ') || '—';
   const band = t(`indicators.band.${rsiBandKey(rsi)}`);
 
   if (errorMessage) {
@@ -136,4 +133,4 @@ export function IndicatorPanel({
   );
 }
 
-export { emaColor };
+export { emaColor } from './IndicatorPanel.helpers';

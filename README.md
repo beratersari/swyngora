@@ -11,9 +11,10 @@ AI-powered cryptocurrency (and stock) analysis platform — market data, analyti
 | [`backend/`](backend/) | Go HTTP API — multi-exchange market data, supply, indicators, watchlist; **MCP** server (`cmd/mcp`) |
 | [`ai/`](ai/) | Python multi-agent assistant (LangGraph orchestrator + market/web/X/analyst specialists) |
 | [`simple-frontend/`](simple-frontend/) | Static test UI for the API (not the product app) |
-| [`frontend/`](frontend/) | Production web UI (Ant Design + Lightweight Charts; init epic first) |
-| [`project-management/`](project-management/) | Local frontend epics, tasks, board |
-| [`docs/`](docs/) | Feature notes, ADRs, frontend design, GitLab PM defs |
+| [`frontend/`](frontend/) | Production web UI (Ant Design + Lightweight Charts) |
+| [`mobile/`](mobile/) | React Native client — **Chrome via react-native-web** (`npm run web`); no Expo |
+| [`project-management/`](project-management/) | Local epics, tasks, board (frontend + mobile) |
+| [`docs/`](docs/) | Feature notes, ADRs, design docs, GitLab PM defs |
 | [`AGENTS.md`](AGENTS.md) | Team & coding-agent conventions |
 
 ## Quick start
@@ -40,6 +41,21 @@ curl -s 'http://localhost:8080/api/v1/market/ticker/24h?symbol=BTCUSDT' | jq .
 curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&sort=quoteVolume&limit=5' | jq .
 curl -s 'http://localhost:8080/api/v1/market/supply?asset=BTC' | jq .
 ```
+
+### Mobile (React Native — Chrome)
+
+Web-first scaffold under `mobile/` — **no Expo**, uses **react-native-web**.
+
+```bash
+cd mobile
+npm install
+npm run web
+# open http://localhost:5180 in Chrome (or http://<WSL-IP>:5180 from Windows)
+```
+
+Optional: start the Go backend so Home can show API health.
+
+See [`mobile/README.md`](mobile/README.md) and [`docs/design/mobile-project-initialization.md`](docs/design/mobile-project-initialization.md).
 
 ### Simple frontend (manual testing)
 

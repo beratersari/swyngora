@@ -9,5 +9,6 @@ Examples:
 | `formatPrice.ts` | Price / volume / mcap display              |
 | `exchange.ts`    | Symbol format quirks (Binance vs Coinbase) |
 | `spotQuery.ts`   | Build/normalize spot list query args       |
+| `spotMetrics.ts` | Shared metric column catalog + prefs       |
 
 Colocate unit tests as `*.test.ts` next to the module.

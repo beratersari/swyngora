@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#111844" />
+    <title>Swyngora Mobile</title>
+    <style>
+      /* Full-height flex chain is required for react-native-web + React Navigation */
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: #111844;
+        overflow: hidden;
+      }
+      #root {
+        height: 100%;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        background: #111844;
+      }
+      #root > * {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: 100%;
+        width: 100%;
+      }
+      /* Mobile-like frame on large desktop browsers */
+      @media (min-width: 480px) {
+        body {
+          display: flex;
+          justify-content: center;
+          align-items: stretch;
+          background: #0a0f2a;
+        }
+        #root {
+          width: 100%;
+          max-width: 430px;
+          height: 100%;
+          box-shadow: 0 0 0 1px rgba(114, 136, 174, 0.25), 0 24px 80px rgba(0, 0, 0, 0.45);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.web.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "title": "Pump tarayıcı",
+  "subtitle": "Yüksek hacimli spot semboller üzerinde mekanik eşik taraması. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "scan": "Tara",
+  "exchange": "Borsa",
+  "quote": "Quote",
+  "interval": "Aralık",
+  "hits": "{{count}} sonuç",
+  "emptyTitle": "Sonuç yok",
+  "emptyHint": "Daha düşük getiri eşiği, farklı aralık veya quote deneyin.",
+  "symbol": "Çift",
+  "returnPct": "Getiri %",
+  "volumeRatio": "Hacim oranı",
+  "time": "Zaman",
+  "openDetail": "{{symbol}} aç",
+  "note": "Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "loadFailed": "Tarama başarısız",
+  "resource": "pump tarama",
+  "chartEvents": "Grafikte pump olayları",
+  "markerUp": "pump",
+  "markerDown": "dump",
+  "events": "Olay"
+}
