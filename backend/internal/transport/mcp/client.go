@@ -273,7 +273,7 @@ func (c *APIClient) ScanPumpEvents(ctx context.Context, args map[string]any) (js
 	q := url.Values{}
 	for _, k := range []string{
 		"exchange", "quote", "interval", "mode", "direction",
-		"lookbackHours", "minReturnPct", "windowBars", "minVolumeRatio", "symbolLimit",
+		"lookbackHours", "minReturnPct", "windowBars", "minVolumeRatio", "symbolLimit", "maxTotalEvents",
 	} {
 		if v, ok := args[k]; ok && v != nil {
 			s := fmt.Sprint(v)

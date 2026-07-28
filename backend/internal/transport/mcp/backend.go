@@ -327,13 +327,16 @@ func (b *Backend) ScanPumpEvents(ctx context.Context, args map[string]any) (json
 		Direction:      domain.PumpDirection(strArg(args, "direction", "up")),
 		MinVolumeRatio: floatArg(args, "minVolumeRatio", 0),
 		SymbolLimit:    intArg(args, "symbolLimit", 15),
+		MaxTotalEvents: intArg(args, "maxTotalEvents", 30),
 	}
-	hits, err := b.Market.ScanPumpEvents(ctx, q)
+	res, err := b.Market.ScanPumpEvents(ctx, q)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]map[string]any, 0, len(hits))
-	for _, h := range hits {
+	items := make([]map[string]any, 0, len(res.Hits))
+	totalEvents := 0
+	for _, h := range res.Hits {
+		totalEvents += len(h.Events)
 		evs := make([]map[string]any, 0, len(h.Events))
 		for _, e := range h.Events {
 			evs = append(evs, map[string]any{
@@ -354,9 +357,20 @@ func (b *Backend) ScanPumpEvents(ctx context.Context, args map[string]any) (json
 		})
 	}
 	return mustJSON(map[string]any{
-		"hits":     items,
-		"hitCount": len(items),
-		"note":     "Informational only — not financial advice.",
+		"exchange":       string(res.Exchange),
+		"quote":          res.QuoteAsset,
+		"interval":       res.Interval,
+		"lookbackHours":  res.LookbackHours,
+		"minReturnPct":   res.MinReturnPct,
+		"windowBars":     res.WindowBars,
+		"mode":           string(res.Mode),
+		"direction":      string(res.Direction),
+		"symbolLimit":    res.SymbolLimit,
+		"maxTotalEvents": res.MaxTotalEvents,
+		"hits":           items,
+		"hitCount":       len(items),
+		"eventCount":     totalEvents,
+		"note":           res.Note,
 	})
 }
 

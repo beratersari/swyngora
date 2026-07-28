@@ -66,11 +66,29 @@ type PumpDetectResult struct {
 
 // PumpScanHit is one symbol's strongest recent pump in a scan.
 type PumpScanHit struct {
-	Symbol       string
-	Exchange     domain.Exchange
-	Interval     string
-	Events       []domain.PumpEvent
+	Symbol        string
+	Exchange      domain.Exchange
+	Interval      string
+	Events        []domain.PumpEvent
 	BestReturnPct float64
+}
+
+// PumpScanResult is the service response for a multi-symbol pump scan.
+// Metadata fields always reflect resolved defaults (not zero/empty when omitted).
+type PumpScanResult struct {
+	Exchange       domain.Exchange
+	QuoteAsset     string
+	Interval       string
+	LookbackHours  float64
+	MinReturnPct   float64
+	WindowBars     int
+	Mode           domain.PumpDetectMode
+	Direction      domain.PumpDirection
+	MinVolumeRatio float64
+	SymbolLimit    int
+	MaxTotalEvents int
+	Hits           []PumpScanHit
+	Note           string
 }
 
 // DetectPumpEvents loads candles and runs domain pump detection.
@@ -149,7 +167,9 @@ func (s *Service) DetectPumpEvents(ctx context.Context, q PumpQuery) (*PumpDetec
 }
 
 // ScanPumpEvents scans top quote-volume symbols for pumps (rate-limited concurrency).
-func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) ([]PumpScanHit, error) {
+// Resolved defaults are always returned on PumpScanResult so clients see the values actually used.
+// MaxTotalEvents caps the aggregate number of events across all hits (not the hit count).
+func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) (*PumpScanResult, error) {
 	ex, err := s.ResolveExchange(q.Exchange)
 	if err != nil {
 		return nil, err
@@ -191,6 +211,21 @@ func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) ([]PumpSc
 		} else {
 			quote = "USDT"
 		}
+	}
+
+	out := &PumpScanResult{
+		Exchange:       ex,
+		QuoteAsset:     quote,
+		Interval:       q.Interval,
+		LookbackHours:  q.LookbackHours,
+		MinReturnPct:   q.MinReturnPct,
+		WindowBars:     q.WindowBars,
+		Mode:           q.Mode,
+		Direction:      q.Direction,
+		MinVolumeRatio: q.MinVolumeRatio,
+		SymbolLimit:    q.SymbolLimit,
+		MaxTotalEvents: q.MaxTotalEvents,
+		Note:           "Informational only — not financial advice. Scan is a mechanical threshold filter over top-volume symbols.",
 	}
 
 	spot, err := s.ListSpotMarkets(ctx, string(ex), domain.SpotListQuery{
@@ -263,7 +298,8 @@ func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) ([]PumpSc
 	}
 	wg.Wait()
 	if err := ctx.Err(); err != nil {
-		return hits, err
+		out.Hits = hits
+		return out, err
 	}
 
 	sort.Slice(hits, func(i, j int) bool {
@@ -276,10 +312,41 @@ func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) ([]PumpSc
 		}
 		return ai > aj
 	})
-	if len(hits) > q.MaxTotalEvents {
-		hits = hits[:q.MaxTotalEvents]
+	out.Hits = capPumpScanHitsByTotalEvents(hits, q.MaxTotalEvents)
+	return out, nil
+}
+
+// capPumpScanHitsByTotalEvents keeps highest-|return| hits first and truncates so the
+// sum of event counts across hits does not exceed maxTotal. Hits with no remaining
+// budget are dropped. maxTotal <= 0 leaves hits unchanged.
+func capPumpScanHitsByTotalEvents(hits []PumpScanHit, maxTotal int) []PumpScanHit {
+	if maxTotal <= 0 || len(hits) == 0 {
+		return hits
 	}
-	return hits, nil
+	remaining := maxTotal
+	capped := make([]PumpScanHit, 0, len(hits))
+	for _, h := range hits {
+		if remaining <= 0 {
+			break
+		}
+		evs := h.Events
+		if len(evs) > remaining {
+			evs = append([]domain.PumpEvent(nil), evs[:remaining]...)
+		}
+		if len(evs) == 0 {
+			continue
+		}
+		hit := PumpScanHit{
+			Symbol:        h.Symbol,
+			Exchange:      h.Exchange,
+			Interval:      h.Interval,
+			Events:        evs,
+			BestReturnPct: evs[0].ReturnPct,
+		}
+		remaining -= len(evs)
+		capped = append(capped, hit)
+	}
+	return capped
 }
 
 // FormatPumpReturn is a helper for tests/DTOs.

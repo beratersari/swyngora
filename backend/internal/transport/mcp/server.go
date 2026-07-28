@@ -243,6 +243,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithString("direction", mcp.Description("up|down|both")),
 		mcp.WithNumber("minVolumeRatio", mcp.Description("Volume vs median filter (0=off)")),
 		mcp.WithNumber("symbolLimit", mcp.Description("How many top-volume symbols to scan (default 15, max 40)")),
+		mcp.WithNumber("maxTotalEvents", mcp.Description("Cap on total events across all symbols (default 30)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		args := map[string]any{
 			"exchange":       req.GetString("exchange", "binance"),
@@ -255,6 +256,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			"direction":      req.GetString("direction", "up"),
 			"minVolumeRatio": req.GetFloat("minVolumeRatio", 0),
 			"symbolLimit":    req.GetInt("symbolLimit", 15),
+			"maxTotalEvents": req.GetInt("maxTotalEvents", 30),
 		}
 		raw, err := api.ScanPumpEvents(ctx, args)
 		if err != nil {
