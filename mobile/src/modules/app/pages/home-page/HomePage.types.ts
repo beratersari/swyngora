@@ -10,6 +10,7 @@ export type HomePageViewModel = {
   onRetry: () => void;
   onOpenMarkets: () => void;
   onOpenPumps: () => void;
+  onOpenAsk: () => void;
 };
 
 export type HomePageProps = {

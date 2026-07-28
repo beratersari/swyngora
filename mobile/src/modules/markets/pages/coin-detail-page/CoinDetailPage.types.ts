@@ -62,6 +62,8 @@ export type CoinDetailPageViewModel = {
 
   onBack: () => void;
   onRetry: () => void;
+  askAiLabel: string;
+  onAskAi: () => void;
 };
 
 export type CoinDetailPageProps = {

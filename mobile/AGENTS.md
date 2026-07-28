@@ -125,3 +125,17 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - Tab: **Pumps** (always visible); no scan polling
 - Detail: pump events section on coin detail
 
+## AI chat (Ask)
+
+- Page: `modules/ai/pages/ai-chat-page/`
+- Tab: `AskTab` → `AiScreens.Chat`
+- RTK: `libs/api/endpoints/aiApi.ts` → `POST /api/v1/ai/chat`
+- Session: `libs/utils/aiSession.ts` (`mobile-ai-<uuid>`)
+- UI: `chat-bubble`, `chat-composer`, `chat-disclaimer`, `chat-tools-chips`, `chat-message-list`
+- OpenAPI: `postAiChat` (regenerate with `npm run codegen:api`)
+- i18n namespace: `ai` (en/tr)
+- Design: `docs/design/mobile-ai-chat.md`
+- Feature: `docs/features/mobile-ai-chat.md`
+
+**Ops:** AI needs Python service (`AI_SERVICE_URL`, optional `AI_AUTOSTART`). Without it, chat shows 503 unavailable UX — markets still work.
+

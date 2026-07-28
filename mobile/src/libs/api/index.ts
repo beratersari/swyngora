@@ -75,3 +75,10 @@ export type {
   PumpDirection,
   PumpMode,
 } from './endpoints/pumpApi';
+
+export { aiApi, usePostAiChatMutation, buildAiChatBody } from './endpoints/aiApi';
+export type {
+  AiChatRequest,
+  AiChatResponse,
+  PostAiChatArg,
+} from './endpoints/aiApi';

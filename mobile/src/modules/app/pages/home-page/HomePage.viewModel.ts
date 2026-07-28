@@ -31,6 +31,10 @@ export function useHomePageViewModel(): HomePageViewModel {
     navigation.getParent<TabNav>()?.navigate('PumpsTab' as never);
   }, [navigation]);
 
+  const onOpenAsk = useCallback(() => {
+    navigation.getParent<TabNav>()?.navigate('AskTab' as never);
+  }, [navigation]);
+
   return {
     title: t('home:title'),
     apiBaseUrlLabel: env.apiBaseUrlLabel,
@@ -46,5 +50,6 @@ export function useHomePageViewModel(): HomePageViewModel {
     },
     onOpenMarkets,
     onOpenPumps,
+    onOpenAsk,
   };
 }

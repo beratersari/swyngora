@@ -4,7 +4,6 @@
   "noCandleData": "Mum verisi yok",
   "chartWebOnly": "Grafik web gerektirir",
   "loadingOlderHistory": "Eski geçmiş yükleniyor…",
-
   "interval": "Aralık",
   "chartOverlays": "Grafik katmanları",
   "emaOn": "EMA açık",
@@ -35,5 +34,6 @@
     "circSupply": "Dolaşımdaki arz",
     "totalSupply": "Toplam arz",
     "circMcap": "Dolaşım piyasa değeri"
-  }
+  },
+  "askAi": "Bu çift hakkında AI’ya sor"
 }

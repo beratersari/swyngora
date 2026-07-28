@@ -280,6 +280,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat with the multi-agent AI assistant
+         * @description Proxies to the Python multi-agent service (`AI_SERVICE_URL`).
+         *     Market figures must come from tools on the assistant side.
+         *     Returns 503 when AI is not configured; 502 on upstream failure.
+         *     Informational only — not financial advice.
+         */
+        post: operations["postAiChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -289,6 +312,26 @@ export interface components {
                 code?: string;
                 message?: string;
             };
+        };
+        AiChatRequest: {
+            /** @description User message (non-empty after trim) */
+            message: string;
+            /**
+             * @description Optional multi-turn session key. Server defaults to http-default
+             *     when omitted. Clients should send a stable device session id.
+             */
+            sessionId?: string;
+        };
+        AiChatResponse: {
+            /** @description Assistant text */
+            reply: string;
+            sessionId: string;
+            /** @description Tool names invoked during the turn (optional) */
+            tools?: string[];
+            /** @description High-level plan lines (optional) */
+            thinking?: string[];
+            /** @description Disclaimer (e.g. not financial advice) */
+            note?: string;
         };
         CandlesResponse: {
             symbol?: string;
@@ -1002,6 +1045,39 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    postAiChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "message": "What is BTC RSI on binance 1h?",
+                 *       "sessionId": "mobile-ai-example"
+                 *     }
+                 */
+                "application/json": components["schemas"]["AiChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Assistant reply */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiChatResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+            503: components["responses"]["Error"];
         };
     };
 }

@@ -7,6 +7,7 @@ import marketsEn from './locales/en/markets.json';
 import watchlistEn from './locales/en/watchlist.json';
 import pumpsEn from './locales/en/pumps.json';
 import detailEn from './locales/en/detail.json';
+import aiEn from './locales/en/ai.json';
 
 import commonTr from './locales/tr/common.json';
 import homeTr from './locales/tr/home.json';
@@ -14,12 +15,13 @@ import marketsTr from './locales/tr/markets.json';
 import watchlistTr from './locales/tr/watchlist.json';
 import pumpsTr from './locales/tr/pumps.json';
 import detailTr from './locales/tr/detail.json';
+import aiTr from './locales/tr/ai.json';
 
 /**
  * Bundled translation catalogs.
  *
  * To add a language:
- * 1. Create `locales/<code>/{common,home,markets,watchlist,pumps,detail}.json`
+ * 1. Create `locales/<code>/{common,home,markets,watchlist,pumps,detail,ai}.json`
  * 2. Import and register in `localeBundles` below
  * 3. Add `<code>` to `SUPPORTED_LOCALES` in `config.ts`
  * 4. Add display labels under `common.language.<code>` and `LOCALE_META`
@@ -34,6 +36,7 @@ const localeBundles = {
     watchlist: watchlistEn,
     pumps: pumpsEn,
     detail: detailEn,
+    ai: aiEn,
   },
   tr: {
     common: commonTr,
@@ -42,6 +45,7 @@ const localeBundles = {
     watchlist: watchlistTr,
     pumps: pumpsTr,
     detail: detailTr,
+    ai: aiTr,
   },
 } as const satisfies Record<AppLocale, Record<I18nNamespace, object>>;
 

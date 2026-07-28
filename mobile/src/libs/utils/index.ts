@@ -80,3 +80,23 @@ export type {
   BatchIndicatorsResponse,
   RsiRowFields,
 } from './batchIndicators';
+
+export {
+  getOrCreateAiSessionId,
+  rotateAiSessionId,
+  peekAiSessionId,
+  resetAiSessionCacheForTests,
+} from './aiSession';
+export {
+  buildContextPrompt,
+  createMessageId,
+  createUserMessage,
+  createAssistantMessage,
+  createPendingAssistantMessage,
+  trimMessages,
+} from './aiContextPrompt';
+export type {
+  AiContextParams,
+  ChatRole,
+  ChatMessageModel,
+} from './aiContextPrompt';

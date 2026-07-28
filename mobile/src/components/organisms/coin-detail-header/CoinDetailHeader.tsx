@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft } from 'lucide-react-native';
+import { Button } from '@/components/atoms/button';
 import { Icon } from '@/components/atoms/icon';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
@@ -19,6 +20,8 @@ export function CoinDetailHeader({
   onBack,
   watched,
   onStarPress,
+  askAiLabel,
+  onAskAi,
 }: CoinDetailHeaderProps) {
   const { t } = useTranslation('common');
   return (
@@ -73,6 +76,11 @@ export function CoinDetailHeader({
           )}
         </View>
       </View>
+      {onAskAi != null && askAiLabel ? (
+        <View style={styles.askRow}>
+          <Button label={askAiLabel} variant="secondary" onPress={onAskAi} />
+        </View>
+      ) : null}
     </View>
   );
 }

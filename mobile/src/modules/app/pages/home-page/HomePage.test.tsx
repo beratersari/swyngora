@@ -14,6 +14,7 @@ const stubVm: HomePageViewModel = {
   onRetry: () => undefined,
   onOpenMarkets: () => undefined,
   onOpenPumps: () => undefined,
+  onOpenAsk: () => undefined,
 };
 
 describe('HomePage', () => {

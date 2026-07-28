@@ -1,0 +1,15 @@
+{
+  "title": "Ask",
+  "resourceName": "assistant",
+  "emptyTitle": "Ask Swyngora",
+  "emptyMessage": "Ask about prices, RSI, pumps, or markets. Answers use live tools when available.",
+  "placeholder": "Ask about markets…",
+  "send": "Send",
+  "newChat": "New chat",
+  "thinking": "Thinking… (local AI can take 1–3 min on first reply)",
+  "toolsUsed": "Tools",
+  "unavailable": "Assistant is off. Start the AI service on :8090 (see ai/README) with Ollama or Grok, then retry.",
+  "upstreamError": "Assistant cannot reach the LLM. Ensure the AI service is running on :8090 and Ollama (local) or XAI_API_KEY (Grok) is configured.",
+  "llmNotReady": "No LLM available. Install/start Ollama (ollama pull llama3.2) or set AI_LLM_PROVIDER=grok and XAI_API_KEY.",
+  "disclaimer": "Informational only — not financial advice. Market numbers should come from tools."
+}

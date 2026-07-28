@@ -38,6 +38,7 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <View style={styles.actions}>
           <Button label={t('home:openMarkets')} onPress={vm.onOpenMarkets} />
           <Button label={t('home:openPumps')} onPress={vm.onOpenPumps} variant="secondary" />
+          <Button label={t('home:openAsk')} onPress={vm.onOpenAsk} variant="secondary" />
         </View>
         <Text variant="caption" color="steel">
           {t('home:pumpsHint')}

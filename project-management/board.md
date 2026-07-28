@@ -184,6 +184,30 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (A+1–2) · (3–4) · (5–6) · (7)
 
+
+## Epic I — Mobile AI assistant chat (**done**)
+
+**Tasks:** `tasks/mobile/ai-chat/`  
+**Epic:** `epics/mobile-ai-chat.md`  
+**Plan:** `docs/design/mobile-ai-chat.md`  
+**Feature:** `docs/features/mobile-ai-chat.md`  
+**Analysis:** `tasks/mobile/ai-chat/MAI-A.md`  
+**Branch:** `feature/mobile-ai-chat`
+
+| ID | Task | Status |
+|---|---|---|
+| MAI-A | API field matrix analysis | done |
+| MAI-1 | OpenAPI for AI chat + client codegen | done |
+| MAI-2 | RTK aiApi chat mutation | done |
+| MAI-3 | sessionId + message model helpers | done |
+| MAI-4 | Atomic chat UI (bubbles, composer, list) | done |
+| MAI-5 | Ask tab + AiChatPage ViewModel | done |
+| MAI-6 | Context chips from Markets / Detail / Pumps | done |
+| MAI-7 | Loading / 503 / error / disclaimer UX | done |
+| MAI-8 | Docs + board + changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7) · (8)
+
 ## Later (not started)
 
 | ID | Task | Status |

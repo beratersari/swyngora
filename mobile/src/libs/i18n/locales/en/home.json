@@ -1,6 +1,6 @@
 {
   "title": "Swyngora",
-  "intro": "Mobile client (Chrome). Use the bottom tabs: Markets · Pumps · Favorites.",
+  "intro": "Mobile client (Chrome). Use the bottom tabs: Markets · Pumps · Ask · Favorites.",
   "features": "Features",
   "openMarkets": "Open Markets",
   "openPumps": "Open Pumps radar",
@@ -10,5 +10,6 @@
   "healthOk": "OK",
   "healthOkDetail": "OK ({{detail}})",
   "polling": "Polling {{state}}",
-  "retryHealth": "Retry health"
+  "retryHealth": "Retry health",
+  "openAsk": "Open Ask assistant"
 }

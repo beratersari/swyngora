@@ -1,6 +1,6 @@
 {
   "title": "Swyngora",
-  "intro": "Mobil istemci (Chrome). Alt sekmeleri kullanın: Piyasalar · Pump · Favoriler.",
+  "intro": "Mobil istemci (Chrome). Alt sekmeleri kullanın: Piyasalar · Pump · Sor · Favoriler.",
   "features": "Özellikler",
   "openMarkets": "Piyasalara git",
   "openPumps": "Pump radarını aç",
@@ -10,5 +10,6 @@
   "healthOk": "Tamam",
   "healthOkDetail": "Tamam ({{detail}})",
   "polling": "Yenileme {{state}}",
-  "retryHealth": "Sağlığı yenile"
+  "retryHealth": "Sağlığı yenile",
+  "openAsk": "Soru asistanını aç"
 }

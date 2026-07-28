@@ -51,7 +51,13 @@ export default defineConfig({
     port: 5180,
     strictPort: true,
     proxy: {
-      '/api': { target: API_PROXY_TARGET, changeOrigin: true },
+      // AI chat can take minutes on local Ollama (multi-agent + tools).
+      '/api': {
+        target: API_PROXY_TARGET,
+        changeOrigin: true,
+        timeout: 600_000,
+        proxyTimeout: 600_000,
+      },
       '/health': { target: API_PROXY_TARGET, changeOrigin: true },
     },
   },

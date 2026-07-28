@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ChartCandlestick,
   House,
+  MessageCircle,
   Star,
   TrendingUp,
   type LucideIcon,
@@ -32,8 +33,10 @@ import {
   useWatchlist,
 } from '@/modules/watchlist';
 import { PumpsScanPage, PumpsScreens } from '@/modules/pumps';
+import { AiChatPage, AiScreens } from '@/modules/ai';
 import { colors, semanticColors } from '@/styles/tokens';
 import type {
+  AskTabParamList,
   HomeTabParamList,
   MainTabParamList,
   MarketsTabParamList,
@@ -58,6 +61,7 @@ const HomeStack = createNativeStackNavigator<HomeTabParamList>();
 const MarketsStack = createNativeStackNavigator<MarketsTabParamList>();
 const WatchlistStack = createNativeStackNavigator<WatchlistTabParamList>();
 const PumpsStack = createNativeStackNavigator<PumpsTabParamList>();
+const AskStack = createNativeStackNavigator<AskTabParamList>();
 
 const fill = StyleSheet.create({
   root: { flex: 1, height: '100%', width: '100%' },
@@ -147,6 +151,14 @@ function PumpsStackNavigator() {
   );
 }
 
+function AskStackNavigator() {
+  return (
+    <AskStack.Navigator screenOptions={stackScreenOptions}>
+      <AskStack.Screen name={AiScreens.Chat} component={AiChatPage} />
+    </AskStack.Navigator>
+  );
+}
+
 function MainTabsInner() {
   const { t } = useTranslation('common');
   const { count, isReady } = useWatchlist();
@@ -191,6 +203,16 @@ function MainTabsInner() {
           tabBarLabel: t('nav.pumps'),
           tabBarAccessibilityLabel: t('nav.pumpsA11y'),
           tabBarIcon: ({ color, size }) => tabIcon(TrendingUp, color, size),
+        }}
+      />
+      <Tab.Screen
+        name="AskTab"
+        component={AskStackNavigator}
+        options={{
+          title: t('nav.ask'),
+          tabBarLabel: t('nav.ask'),
+          tabBarAccessibilityLabel: t('nav.askA11y'),
+          tabBarIcon: ({ color, size }) => tabIcon(MessageCircle, color, size),
         }}
       />
       {showFavoritesTab ? (

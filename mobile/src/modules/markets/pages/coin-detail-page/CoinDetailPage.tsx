@@ -28,6 +28,8 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           onBack={vm.onBack}
           watched={vm.watched}
           onStarPress={vm.onStarPress}
+          askAiLabel={vm.askAiLabel}
+          onAskAi={vm.onAskAi}
         />
 
         {vm.actionError ? (

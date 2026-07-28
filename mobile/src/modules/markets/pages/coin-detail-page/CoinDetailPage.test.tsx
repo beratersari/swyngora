@@ -55,6 +55,8 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     pumpDisclaimer: 'Informational only — not financial advice.',
     onBack: vi.fn(),
     onRetry: vi.fn(),
+    askAiLabel: 'Ask AI about this pair',
+    onAskAi: vi.fn(),
     ...overrides,
   };
 }

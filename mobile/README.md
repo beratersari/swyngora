@@ -47,6 +47,7 @@ src/
     app/pages/         # home-page (View + ViewModel)
     markets/pages/     # markets-page, coin-detail-page, …
     watchlist/pages/   # watchlist-page (Favorites tab)
+    ai/pages/          # ai-chat-page (Ask tab)
   libs/api/            # RTK Query + OpenAPI
   libs/i18n/           # i18next catalogs (en/tr), useLocale, LanguageSwitcher
   styles/tokens/       # same brand hex as frontend
@@ -66,13 +67,38 @@ import { Icon } from '@/components/atoms/icon';
 ## Localization
 
 - **i18next** + **react-i18next**; languages **en** + **tr** (extensible)
-- Catalogs: `src/libs/i18n/locales/<lng>/{common,home,markets,watchlist,pumps,detail}.json`
+- Catalogs: `src/libs/i18n/locales/<lng>/{common,home,markets,watchlist,pumps,detail,ai}.json`
 - Switch language on **Home** via Language chips (persisted in localStorage)
 - Add a locale: new folder + register in `resources.ts` + `SUPPORTED_LOCALES` (see `libs/i18n/README.md`)
 
 See `AGENTS.md` and `docs/design/mobile-project-initialization.md`.
 
 **Naming:** component/page **folders** are kebab-case (`star-button/`); **files** stay PascalCase (`StarButton.tsx`).
+
+
+
+## AI assistant (Ask)
+
+**Ask** tab chats with the multi-agent assistant via `POST /api/v1/ai/chat`:
+
+- Device `sessionId` for multi-turn context
+- Prefill from Coin detail (**Ask AI about this pair**)
+- Graceful unavailable state when AI service is off
+- Disclaimer: informational only — not financial advice
+
+```bash
+# backend + optional AI (see backend/.env.example AI_*)
+cd backend && go run ./cmd/server
+# AI on :8090 (or AI_AUTOSTART=true + AI_PYTHON)
+cd mobile && npm run web
+# open Ask tab
+```
+
+```text
+modules/ai/pages/ai-chat-page/
+components/{molecules/chat-*,organisms/chat-message-list}
+libs/api/endpoints/aiApi.ts
+```
 
 ## Coin detail
 

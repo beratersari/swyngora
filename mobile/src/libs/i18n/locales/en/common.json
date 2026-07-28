@@ -5,7 +5,9 @@
     "markets": "Markets",
     "pumps": "Pumps",
     "favorites": "Favorites",
-    "pumpsA11y": "Pumps radar"
+    "pumpsA11y": "Pumps radar",
+    "ask": "Ask",
+    "askA11y": "AI assistant chat"
   },
   "language": {
     "label": "Language",
@@ -23,7 +25,10 @@
     "back": "Back",
     "clearTags": "Clear tags",
     "selectVisible": "Select visible",
-    "resetAllFilters": "Reset all filters"
+    "resetAllFilters": "Reset all filters",
+    "send": "Send",
+    "newChat": "New chat",
+    "askAi": "Ask AI"
   },
   "status": {
     "loading": "Loading…",
@@ -38,7 +43,8 @@
   },
   "disclaimer": {
     "indicators": "RSI/EMA are informational only — not financial advice.",
-    "pumps": "Informational only — not financial advice. Mechanical threshold matching, not a trade signal."
+    "pumps": "Informational only — not financial advice. Mechanical threshold matching, not a trade signal.",
+    "ai": "Informational only — not financial advice."
   },
   "errors": {
     "generic": "Something went wrong. Please try again.",
