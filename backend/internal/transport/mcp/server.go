@@ -33,6 +33,7 @@ type DataPort interface {
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
 	SetAlertWebhookWithMode(ctx context.Context, clientID, url, deliveryMode string) (json.RawMessage, error)
+	SetAlertWebhookSettings(ctx context.Context, clientID, url, deliveryMode, timeZone string, quietEnabled bool, quietStart, quietEnd string) (json.RawMessage, error)
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
@@ -422,10 +423,14 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("set_alert_webhook",
-		mcp.WithDescription("Set absolute http(s) webhook URL. deliveryMode=immediate (default) or hourly_digest (batch fires into one POST per UTC hour)."),
+		mcp.WithDescription("Set webhook URL, deliveryMode (immediate|hourly_digest), timeZone, and optional quietHours (start/end HH:MM, may cross midnight)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("url", mcp.Required(), mcp.Description("https://hooks.example.com/...")),
 		mcp.WithString("deliveryMode", mcp.Description("immediate | hourly_digest (default immediate)")),
+		mcp.WithString("timeZone", mcp.Description("IANA timezone, default UTC")),
+		mcp.WithBoolean("quietEnabled", mcp.Description("Defer delivery during quiet hours")),
+		mcp.WithString("quietStart", mcp.Description("Local quiet start HH:MM")),
+		mcp.WithString("quietEnd", mcp.Description("Local quiet end HH:MM")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -435,7 +440,13 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.SetAlertWebhookWithMode(ctx, clientID, u, req.GetString("deliveryMode", "immediate"))
+		raw, err := api.SetAlertWebhookSettings(ctx, clientID, u,
+			req.GetString("deliveryMode", "immediate"),
+			req.GetString("timeZone", "UTC"),
+			req.GetBool("quietEnabled", false),
+			req.GetString("quietStart", ""),
+			req.GetString("quietEnd", ""),
+		)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

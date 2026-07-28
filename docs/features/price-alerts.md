@@ -2,45 +2,46 @@
 
 ## Goal
 
-Let users create **one-time** or **repeating** alerts when a symbol's last price goes **above** or **below** a target. Alerts and notification outboxes survive process restarts. Webhooks can be delivered **immediately** or as an **hourly digest**.
+Price alerts support one-time/repeating modes, webhooks (immediate or hourly digest), and **quiet hours**.
 
-## Modes
+## Quiet hours
 
-| `mode` | Behavior |
-|--------|----------|
-| `one_time` (default) | Fires once when the condition is met; status becomes `triggered`. |
-| `repeating` | Stays `active`. Fires on each edge into the condition zone; re-arms on the safe side. |
+| Setting | Meaning |
+|---------|---------|
+| `timeZone` | IANA name (default `UTC`) |
+| `quietHours.enabled` | When true, defer delivery |
+| `quietHours.start` / `end` | Local `HH:MM` (24h). If start > end, range crosses midnight (e.g. 22:00–08:00). |
 
-## Webhook delivery
+- Fires still **create** pending notifications/digest items during quiet hours.
+- `nextAttemptAt` is set to the **end of quiet hours** (not lost on restart).
+- Retries also skip quiet windows.
+- Digests still seal on the hour; POST waits until quiet hours end if needed.
 
-| `deliveryMode` | Behavior |
-|----------------|----------|
-| `immediate` (default) | Each fire enqueues a pending notification and is POSTed soon with retries. |
-| `hourly_digest` | Fires in the same UTC hour are collected; after the hour ends, one webhook POST is sent with all distinct alerts in that window. The same `alertId` appears **at most once** per digest (latest payload wins). Digests are durable, retry on failure, and survive restarts. |
-
-### Digest payload (example)
+### API example
 
 ```json
+PUT /api/v1/alerts/webhook
 {
-  "type": "price_alert.digest",
-  "digestId": "…",
-  "clientId": "web-abc",
-  "windowStart": "2026-07-28T14:00:00Z",
-  "windowEnd": "2026-07-28T15:00:00Z",
-  "count": 2,
-  "alerts": [ { "type": "price_alert.triggered", "alertId": "…", "…" : "…" } ],
-  "note": "Informational only — not financial advice."
+  "url": "https://hooks.example.com/x",
+  "deliveryMode": "immediate",
+  "timeZone": "Europe/Istanbul",
+  "quietHours": { "enabled": true, "start": "22:00", "end": "08:00" }
 }
 ```
 
-## API
+## Delivery modes
 
-| Method | Path | Notes |
-|--------|------|--------|
-| `POST` | `/api/v1/alerts` | Create (`mode`: `one_time` \| `repeating`) |
-| `GET`/`DELETE` | `/api/v1/alerts`, `…/{id}` | List / get / delete |
-| `PUT` | `/api/v1/alerts/webhook` | Set `url` + optional `deliveryMode` |
-| `GET`/`DELETE` | `/api/v1/alerts/webhook` | Get / clear webhook |
+| `deliveryMode` | Behavior |
+|----------------|----------|
+| `immediate` | Each fire enqueued; POST after quiet hours allow |
+| `hourly_digest` | UTC-hour batch; one POST after seal (+ quiet hours) |
+
+## Alert modes
+
+| `mode` | Behavior |
+|--------|----------|
+| `one_time` | Fire once → `triggered` |
+| `repeating` | Edge-cross re-fire with re-arm |
 
 ## Config
 

@@ -84,6 +84,10 @@ CREATE TABLE IF NOT EXISTS client_webhooks (
 	client_id      TEXT PRIMARY KEY NOT NULL,
 	url            TEXT NOT NULL,
 	delivery_mode  TEXT NOT NULL DEFAULT 'immediate',
+	timezone       TEXT NOT NULL DEFAULT 'UTC',
+	quiet_enabled  INTEGER NOT NULL DEFAULT 0,
+	quiet_start    TEXT NOT NULL DEFAULT '',
+	quiet_end      TEXT NOT NULL DEFAULT '',
 	updated_at     TEXT NOT NULL
 );
 
@@ -140,11 +144,15 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("alerts sqlite migrate: %w", err)
 	}
-	// Additive columns for DBs created before mode/armed/delivery_mode existed.
+	// Additive columns for DBs created before newer webhook prefs existed.
 	for _, stmt := range []string{
 		`ALTER TABLE price_alerts ADD COLUMN mode TEXT NOT NULL DEFAULT 'one_time'`,
 		`ALTER TABLE price_alerts ADD COLUMN armed INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE client_webhooks ADD COLUMN delivery_mode TEXT NOT NULL DEFAULT 'immediate'`,
+		`ALTER TABLE client_webhooks ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'`,
+		`ALTER TABLE client_webhooks ADD COLUMN quiet_enabled INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE client_webhooks ADD COLUMN quiet_start TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE client_webhooks ADD COLUMN quiet_end TEXT NOT NULL DEFAULT ''`,
 	} {
 		_, _ = s.db.Exec(stmt) // ignore "duplicate column" errors
 	}
@@ -419,15 +427,28 @@ func (s *SQLite) CountByClient(ctx context.Context, clientID string) (int, error
 
 // GetWebhook returns the client's webhook, or empty URL if unset (not an error).
 func (s *SQLite) GetWebhook(ctx context.Context, clientID string) (*domain.ClientWebhook, error) {
-	var url, mode, updatedRaw string
+	return s.getWebhookUnlocked(ctx, clientID)
+}
+
+func (s *SQLite) getWebhookUnlocked(ctx context.Context, clientID string) (*domain.ClientWebhook, error) {
+	var url, mode, tz, qStart, qEnd, updatedRaw string
+	var quietEn int
 	err := s.db.QueryRowContext(ctx, `
-		SELECT url, COALESCE(delivery_mode, 'immediate'), updated_at FROM client_webhooks WHERE client_id = ?
-	`, clientID).Scan(&url, &mode, &updatedRaw)
+		SELECT url,
+		       COALESCE(delivery_mode, 'immediate'),
+		       COALESCE(timezone, 'UTC'),
+		       COALESCE(quiet_enabled, 0),
+		       COALESCE(quiet_start, ''),
+		       COALESCE(quiet_end, ''),
+		       updated_at
+		FROM client_webhooks WHERE client_id = ?
+	`, clientID).Scan(&url, &mode, &tz, &quietEn, &qStart, &qEnd, &updatedRaw)
 	if err == sql.ErrNoRows {
 		return &domain.ClientWebhook{
 			ClientID:     clientID,
 			URL:          "",
 			DeliveryMode: domain.DeliveryImmediate,
+			TimeZone:     "UTC",
 			UpdatedAt:    time.Time{},
 		}, nil
 	}
@@ -438,38 +459,63 @@ func (s *SQLite) GetWebhook(ctx context.Context, clientID string) (*domain.Clien
 	if !ok {
 		dm = domain.DeliveryImmediate
 	}
+	if strings.TrimSpace(tz) == "" {
+		tz = "UTC"
+	}
 	return &domain.ClientWebhook{
-		ClientID:     clientID,
-		URL:          url,
-		DeliveryMode: dm,
-		UpdatedAt:    parseTime(updatedRaw),
+		ClientID:          clientID,
+		URL:               url,
+		DeliveryMode:      dm,
+		TimeZone:          tz,
+		QuietHoursEnabled: quietEn != 0,
+		QuietStart:        qStart,
+		QuietEnd:          qEnd,
+		UpdatedAt:         parseTime(updatedRaw),
 	}, nil
 }
 
-// SetWebhook upserts the client's webhook URL and delivery mode.
-func (s *SQLite) SetWebhook(ctx context.Context, clientID, url, deliveryMode string) (*domain.ClientWebhook, error) {
+// SetWebhook upserts the client's webhook URL and notification preferences.
+func (s *SQLite) SetWebhook(ctx context.Context, clientID string, settings domain.WebhookSettings) (*domain.ClientWebhook, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	dm, ok := domain.NormalizeDeliveryMode(deliveryMode)
+	dm, ok := domain.NormalizeDeliveryMode(settings.DeliveryMode)
 	if !ok {
 		dm = domain.DeliveryImmediate
 	}
+	tz := strings.TrimSpace(settings.TimeZone)
+	if tz == "" {
+		tz = "UTC"
+	}
+	quietEn := 0
+	if settings.QuietHoursEnabled {
+		quietEn = 1
+	}
 	now := time.Now().UTC()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO client_webhooks (client_id, url, delivery_mode, updated_at) VALUES (?, ?, ?, ?)
+		INSERT INTO client_webhooks (
+			client_id, url, delivery_mode, timezone, quiet_enabled, quiet_start, quiet_end, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(client_id) DO UPDATE SET
 			url = excluded.url,
 			delivery_mode = excluded.delivery_mode,
+			timezone = excluded.timezone,
+			quiet_enabled = excluded.quiet_enabled,
+			quiet_start = excluded.quiet_start,
+			quiet_end = excluded.quiet_end,
 			updated_at = excluded.updated_at
-	`, clientID, url, string(dm), now.Format(time.RFC3339Nano))
+	`, clientID, settings.URL, string(dm), tz, quietEn, settings.QuietStart, settings.QuietEnd, now.Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite set webhook: %w", err)
 	}
 	return &domain.ClientWebhook{
-		ClientID:     clientID,
-		URL:          url,
-		DeliveryMode: dm,
-		UpdatedAt:    now,
+		ClientID:          clientID,
+		URL:               settings.URL,
+		DeliveryMode:      dm,
+		TimeZone:          tz,
+		QuietHoursEnabled: settings.QuietHoursEnabled,
+		QuietStart:        settings.QuietStart,
+		QuietEnd:          settings.QuietEnd,
+		UpdatedAt:         now,
 	}, nil
 }
 

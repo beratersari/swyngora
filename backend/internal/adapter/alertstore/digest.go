@@ -162,12 +162,17 @@ func (s *SQLite) sealDigestLocked(ctx context.Context, id string, now time.Time)
 	if err != nil {
 		return err
 	}
+	// Respect quiet hours using current webhook prefs (if any).
+	nextAt := now.UTC()
+	if wh, werr := s.getWebhookUnlocked(ctx, d.ClientID); werr == nil && wh != nil {
+		nextAt = domain.NextAllowedDeliveryTime(now, wh)
+	}
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE alert_digests
 		SET status = ?, payload_json = ?, sealed_at = ?, next_attempt_at = ?, attempts = 0, last_error = ''
 		WHERE id = ? AND status = ?
 	`, string(domain.DigestPending), payload, now.UTC().Format(time.RFC3339Nano),
-		now.UTC().Format(time.RFC3339Nano), id, string(domain.DigestOpen))
+		nextAt.UTC().Format(time.RFC3339Nano), id, string(domain.DigestOpen))
 	return err
 }
 

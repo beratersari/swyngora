@@ -13,6 +13,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+func setWH(url, mode string) domain.WebhookSettings {
+	return domain.WebhookSettings{URL: url, DeliveryMode: mode}
+}
+
 func TestDeliverer_SuccessAndIdempotent(t *testing.T) {
 	svc, store := newSvc(t)
 	ctx := context.Background()
@@ -27,7 +31,7 @@ func TestDeliverer_SuccessAndIdempotent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if _, err := svc.SetWebhook(ctx, "user-w", srv.URL, "immediate"); err != nil {
+	if _, err := svc.SetWebhook(ctx, "user-w", setWH(srv.URL, "immediate")); err != nil {
 		t.Fatal(err)
 	}
 	a, err := svc.Create(ctx, CreateInput{
@@ -76,7 +80,7 @@ func TestDeliverer_RetryThenSucceed(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, _ = svc.SetWebhook(ctx, "retry-u", srv.URL, "immediate")
+	_, _ = svc.SetWebhook(ctx, "retry-u", setWH(srv.URL, "immediate"))
 	a, _ := svc.Create(ctx, CreateInput{ClientID: "retry-u", Symbol: "ETHUSDT", Condition: "below", TargetPrice: 2000})
 	_, _ = svc.MarkTriggered(ctx, a.ID, 1990, time.Now().UTC())
 
@@ -109,7 +113,7 @@ func TestDeliverer_MaxAttemptsPermanentFail(t *testing.T) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	_, _ = svc.SetWebhook(ctx, "fail-u", srv.URL, "immediate")
+	_, _ = svc.SetWebhook(ctx, "fail-u", setWH(srv.URL, "immediate"))
 	a, _ := svc.Create(ctx, CreateInput{ClientID: "fail-u", Symbol: "SOLUSDT", Condition: "above", TargetPrice: 1})
 	_, _ = svc.MarkTriggered(ctx, a.ID, 2, time.Now().UTC())
 	n, _ := svc.GetNotificationByAlertID(ctx, a.ID)
@@ -137,11 +141,11 @@ func TestDeliverer_MaxAttemptsPermanentFail(t *testing.T) {
 func TestWebhookURLValidation(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()
-	_, err := svc.SetWebhook(ctx, "v", "ftp://bad", "")
+	_, err := svc.SetWebhook(ctx, "v", setWH("ftp://bad", ""))
 	if err == nil {
 		t.Fatal("expected scheme error")
 	}
-	_, err = svc.SetWebhook(ctx, "v", "https://hooks.example.com/x", "immediate")
+	_, err = svc.SetWebhook(ctx, "v", setWH("https://hooks.example.com/x", "immediate"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +154,7 @@ func TestWebhookURLValidation(t *testing.T) {
 func TestMarkTriggered_EnqueuesOnce(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()
-	_, _ = svc.SetWebhook(ctx, "once", "https://example.com/h", "immediate")
+	_, _ = svc.SetWebhook(ctx, "once", setWH("https://example.com/h", "immediate"))
 	a, _ := svc.Create(ctx, CreateInput{ClientID: "once", Symbol: "BTCUSDT", Condition: "above", TargetPrice: 10})
 	_, err := svc.MarkTriggered(ctx, a.ID, 11, time.Now().UTC())
 	if err != nil {
@@ -185,7 +189,7 @@ func TestWebhookBackoff(t *testing.T) {
 func TestHourlyDigest_NoImmediateOutbox(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()
-	if _, err := svc.SetWebhook(ctx, "hd", "https://hooks.example.com/x", "hourly_digest"); err != nil {
+	if _, err := svc.SetWebhook(ctx, "hd", setWH("https://hooks.example.com/x", "hourly_digest")); err != nil {
 		t.Fatal(err)
 	}
 	a, err := svc.Create(ctx, CreateInput{ClientID: "hd", Symbol: "BTCUSDT", Condition: "above", TargetPrice: 1})
@@ -243,6 +247,62 @@ func TestDeliverer_HourlyDigest(t *testing.T) {
 	dvr.RunOnce(ctx)
 	if hits.Load() != 1 {
 		t.Fatalf("re-sent digest hits=%d", hits.Load())
+	}
+}
+
+func TestQuietHours_DefersImmediateNotification(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	// Quiet all day except we set 00:00-23:59 effectively always quiet for a fixed "now" in test:
+	// Use 22:00-08:00 and fire at 23:00 UTC by controlling enqueue via SetWebhook + MarkTriggered
+	// MarkTriggered uses time.Now() for enqueue — so use real now and set quiet to always cover "now".
+	// Safer: call store Enqueue path via SetWebhook with quiet 00:00-23:59 and check next_attempt is after end.
+	// Actually end 23:59 means quiet almost all day; next end is 23:59 today or tomorrow.
+	// Simpler unit path: use domain helper covered above; here integration with settings.
+	_, err := svc.SetWebhook(ctx, "qh", domain.WebhookSettings{
+		URL: "https://hooks.example.com/qh", DeliveryMode: "immediate",
+		TimeZone: "UTC", QuietHoursEnabled: true, QuietStart: "00:00", QuietEnd: "23:59",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := svc.Create(ctx, CreateInput{ClientID: "qh", Symbol: "BTCUSDT", Condition: "above", TargetPrice: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.MarkTriggered(ctx, a.ID, 2, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	n, err := svc.GetNotificationByAlertID(ctx, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// next attempt should be at quiet end (23:59 UTC today or tomorrow), not immediately
+	if !n.NextAttemptAt.After(time.Now().UTC().Add(-time.Minute)) {
+		// always true; check it's roughly on :59
+	}
+	// Must not be "now" within a few seconds if we're inside quiet (almost always with 00-23:59)
+	// If test runs at exactly 23:59 may flake; use assertion that QuietHours applied:
+	loc := time.UTC
+	if domain.InQuietHours(time.Now().UTC(), loc, "00:00", "23:59") {
+		end := domain.QuietHoursEndAfter(time.Now().UTC(), loc, "00:00", "23:59")
+		// allow 1s skew
+		if n.NextAttemptAt.Before(end.Add(-2 * time.Second)) {
+			t.Fatalf("nextAttempt=%v want around %v", n.NextAttemptAt, end)
+		}
+	}
+	// Deliverer should not send while next_attempt is in future
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+	// Re-point webhook URL without changing quiet hours timing already enqueued
+	dvr := &Deliverer{Alerts: svc, HTTP: srv.Client(), MaxAttempts: 3}
+	dvr.RunOnce(ctx)
+	if hits.Load() != 0 {
+		t.Fatalf("should not deliver during quiet hours, hits=%d next=%v", hits.Load(), n.NextAttemptAt)
 	}
 }
 

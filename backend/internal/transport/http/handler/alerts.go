@@ -147,12 +147,20 @@ func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id})
 }
 
+type quietHoursDTO struct {
+	Enabled bool   `json:"enabled"`
+	Start   string `json:"start,omitempty"`
+	End     string `json:"end,omitempty"`
+}
+
 type webhookDTO struct {
-	ClientID     string `json:"clientId"`
-	URL          string `json:"url"`
-	DeliveryMode string `json:"deliveryMode"`
-	UpdatedAt    string `json:"updatedAt,omitempty"`
-	Configured   bool   `json:"configured"`
+	ClientID     string        `json:"clientId"`
+	URL          string        `json:"url"`
+	DeliveryMode string        `json:"deliveryMode"`
+	TimeZone     string        `json:"timeZone"`
+	QuietHours   quietHoursDTO `json:"quietHours"`
+	UpdatedAt    string        `json:"updatedAt,omitempty"`
+	Configured   bool          `json:"configured"`
 }
 
 func webhookToDTO(w *domain.ClientWebhook) webhookDTO {
@@ -160,11 +168,21 @@ func webhookToDTO(w *domain.ClientWebhook) webhookDTO {
 	if mode == "" {
 		mode = string(domain.DeliveryImmediate)
 	}
+	tz := w.TimeZone
+	if tz == "" {
+		tz = "UTC"
+	}
 	dto := webhookDTO{
 		ClientID:     w.ClientID,
 		URL:          w.URL,
 		DeliveryMode: mode,
-		Configured:   strings.TrimSpace(w.URL) != "",
+		TimeZone:     tz,
+		QuietHours: quietHoursDTO{
+			Enabled: w.QuietHoursEnabled,
+			Start:   w.QuietStart,
+			End:     w.QuietEnd,
+		},
+		Configured: strings.TrimSpace(w.URL) != "",
 	}
 	if !w.UpdatedAt.IsZero() {
 		dto.UpdatedAt = w.UpdatedAt.UTC().Format(time.RFC3339Nano)
@@ -186,6 +204,12 @@ type setWebhookBody struct {
 	ClientID     string `json:"clientId"`
 	URL          string `json:"url"`
 	DeliveryMode string `json:"deliveryMode"` // immediate | hourly_digest
+	TimeZone     string `json:"timeZone"`
+	QuietHours   *struct {
+		Enabled bool   `json:"enabled"`
+		Start   string `json:"start"`
+		End     string `json:"end"`
+	} `json:"quietHours"`
 }
 
 // PutWebhook handles PUT /api/v1/alerts/webhook
@@ -199,7 +223,17 @@ func (h *AlertHandler) PutWebhook(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	wh, err := h.svc.SetWebhook(r.Context(), clientID, body.URL, body.DeliveryMode)
+	in := domain.WebhookSettings{
+		URL:          body.URL,
+		DeliveryMode: body.DeliveryMode,
+		TimeZone:     body.TimeZone,
+	}
+	if body.QuietHours != nil {
+		in.QuietHoursEnabled = body.QuietHours.Enabled
+		in.QuietStart = body.QuietHours.Start
+		in.QuietEnd = body.QuietHours.End
+	}
+	wh, err := h.svc.SetWebhook(r.Context(), clientID, in)
 	if err != nil {
 		writeError(w, err)
 		return

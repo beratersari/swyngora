@@ -144,6 +144,10 @@ class AlertWebhookSetInput(BaseModel):
         default="immediate",
         description="immediate | hourly_digest",
     )
+    time_zone: str = Field(default="UTC", description="IANA timezone for quiet hours")
+    quiet_enabled: bool = Field(default=False, description="Defer delivery during quiet hours")
+    quiet_start: str = Field(default="", description="Local HH:MM quiet start")
+    quiet_end: str = Field(default="", description="Local HH:MM quiet end (may cross midnight)")
 
 
 class PumpDetectInput(BaseModel):
@@ -326,6 +330,10 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         client_id: str,
         url: str,
         delivery_mode: str = "immediate",
+        time_zone: str = "UTC",
+        quiet_enabled: bool = False,
+        quiet_start: str = "",
+        quiet_end: str = "",
     ) -> str:
         return http.put(
             "/api/v1/alerts/webhook",
@@ -333,6 +341,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "clientId": client_id,
                 "url": url,
                 "deliveryMode": delivery_mode,
+                "timeZone": time_zone,
+                "quietHours": {
+                    "enabled": quiet_enabled,
+                    "start": quiet_start,
+                    "end": quiet_end,
+                },
             },
         )
 

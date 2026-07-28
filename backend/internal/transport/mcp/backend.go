@@ -417,10 +417,21 @@ func (b *Backend) SetAlertWebhook(ctx context.Context, clientID, url string) (js
 }
 
 func (b *Backend) SetAlertWebhookWithMode(ctx context.Context, clientID, url, deliveryMode string) (json.RawMessage, error) {
+	return b.SetAlertWebhookSettings(ctx, clientID, url, deliveryMode, "UTC", false, "", "")
+}
+
+func (b *Backend) SetAlertWebhookSettings(ctx context.Context, clientID, url, deliveryMode, timeZone string, quietEnabled bool, quietStart, quietEnd string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
 	}
-	wh, err := b.Alerts.SetWebhook(ctx, clientID, url, deliveryMode)
+	wh, err := b.Alerts.SetWebhook(ctx, clientID, domain.WebhookSettings{
+		URL:               url,
+		DeliveryMode:      deliveryMode,
+		TimeZone:          timeZone,
+		QuietHoursEnabled: quietEnabled,
+		QuietStart:        quietStart,
+		QuietEnd:          quietEnd,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -442,11 +453,21 @@ func webhookJSON(wh *domain.ClientWebhook) (json.RawMessage, error) {
 	if mode == "" {
 		mode = string(domain.DeliveryImmediate)
 	}
+	tz := wh.TimeZone
+	if tz == "" {
+		tz = "UTC"
+	}
 	m := map[string]any{
 		"clientId":     wh.ClientID,
 		"url":          wh.URL,
 		"deliveryMode": mode,
-		"configured":   strings.TrimSpace(wh.URL) != "",
+		"timeZone":     tz,
+		"quietHours": map[string]any{
+			"enabled": wh.QuietHoursEnabled,
+			"start":   wh.QuietStart,
+			"end":     wh.QuietEnd,
+		},
+		"configured": strings.TrimSpace(wh.URL) != "",
 	}
 	if !wh.UpdatedAt.IsZero() {
 		m["updatedAt"] = wh.UpdatedAt.UTC().Format(time.RFC3339Nano)

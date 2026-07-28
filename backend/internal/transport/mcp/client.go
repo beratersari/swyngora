@@ -286,10 +286,21 @@ func (c *APIClient) SetAlertWebhook(ctx context.Context, clientID, webhookURL st
 
 // SetAlertWebhookWithMode sets webhook URL and delivery mode.
 func (c *APIClient) SetAlertWebhookWithMode(ctx context.Context, clientID, webhookURL, deliveryMode string) (json.RawMessage, error) {
+	return c.SetAlertWebhookSettings(ctx, clientID, webhookURL, deliveryMode, "UTC", false, "", "")
+}
+
+// SetAlertWebhookSettings sets full webhook notification preferences.
+func (c *APIClient) SetAlertWebhookSettings(ctx context.Context, clientID, webhookURL, deliveryMode, timeZone string, quietEnabled bool, quietStart, quietEnd string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPut, "/api/v1/alerts/webhook", map[string]any{
 		"clientId":     clientID,
 		"url":          webhookURL,
 		"deliveryMode": deliveryMode,
+		"timeZone":     timeZone,
+		"quietHours": map[string]any{
+			"enabled": quietEnabled,
+			"start":   quietStart,
+			"end":     quietEnd,
+		},
 	})
 }
 

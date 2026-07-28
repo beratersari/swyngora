@@ -15,9 +15,9 @@ info:
     - Price alerts support `one_time` (default) or `repeating` modes for above/below targets.
       One-time alerts become `triggered` after the first fire; repeating alerts stay `active`
       and re-fire only after the price returns to the safe side and crosses again.
-    - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`.
-      Immediate fires POST soon; hourly digests batch fires into one POST per UTC hour
-      (each alert id at most once per digest). Pending deliveries survive restarts.
+    - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`,
+      plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
+      quiet hours end; pending notifications survive restarts.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -722,13 +722,13 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
     put:
-      summary: Set price-alert webhook URL and delivery mode
+      summary: Set price-alert webhook URL and notification preferences
       description: |
-        Stores an absolute http(s) URL and deliveryMode:
-        - immediate (default): each fire is enqueued and POSTed soon
-        - hourly_digest: fires in the same UTC hour are batched into one webhook POST
-          (same alert id appears at most once per digest; latest fire wins)
-        Pending immediate notifications and digests survive restarts and retry on failure.
+        Stores an absolute http(s) URL and preferences:
+        - deliveryMode immediate (default) or hourly_digest
+        - timeZone (IANA) and quietHours local start/end (HH:MM); ranges may cross midnight
+        Notifications created during quiet hours wait until quiet hours end.
+        Pending deliveries survive restarts and retry on failure.
       operationId: putAlertWebhook
       tags: [Alerts]
       requestBody:
@@ -745,6 +745,16 @@ paths:
                   type: string
                   enum: [immediate, hourly_digest]
                   default: immediate
+                timeZone:
+                  type: string
+                  default: UTC
+                  example: Europe/Istanbul
+                quietHours:
+                  type: object
+                  properties:
+                    enabled: { type: boolean, default: false }
+                    start: { type: string, example: "22:00", description: Local HH:MM }
+                    end: { type: string, example: "08:00", description: Local HH:MM; may be earlier than start }
       responses:
         '200':
           description: Saved webhook
@@ -1111,6 +1121,13 @@ components:
         clientId: { type: string }
         url: { type: string }
         deliveryMode: { type: string, enum: [immediate, hourly_digest] }
+        timeZone: { type: string }
+        quietHours:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            start: { type: string }
+            end: { type: string }
         configured: { type: boolean }
         updatedAt: { type: string, format: date-time }
     Watchlist:

@@ -99,10 +99,16 @@ func TestAlertHTTP_Validation(t *testing.T) {
 }
 func TestAlertHTTP_WebhookCRUD(t *testing.T) {
 	h := newAlertHandler(t)
-	body, _ := json.Marshal(map[string]string{
+	body, _ := json.Marshal(map[string]any{
 		"clientId":     "wh-user",
 		"url":          "https://hooks.example.com/a",
 		"deliveryMode": "hourly_digest",
+		"timeZone":     "UTC",
+		"quietHours": map[string]any{
+			"enabled": true,
+			"start":   "22:00",
+			"end":     "08:00",
+		},
 	})
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/alerts/webhook", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -121,6 +127,13 @@ func TestAlertHTTP_WebhookCRUD(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
 	if got["url"] != "https://hooks.example.com/a" || got["configured"] != true || got["deliveryMode"] != "hourly_digest" {
 		t.Fatalf("%v", got)
+	}
+	if got["timeZone"] != "UTC" {
+		t.Fatalf("timeZone=%v", got["timeZone"])
+	}
+	qh, _ := got["quietHours"].(map[string]any)
+	if qh == nil || qh["enabled"] != true || qh["start"] != "22:00" || qh["end"] != "08:00" {
+		t.Fatalf("quietHours=%v", got["quietHours"])
 	}
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/alerts/webhook?clientId=wh-user", nil)
 	rr = httptest.NewRecorder()

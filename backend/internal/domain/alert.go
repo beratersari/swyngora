@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -100,7 +102,24 @@ type ClientWebhook struct {
 	ClientID     string
 	URL          string
 	DeliveryMode NotificationDeliveryMode
-	UpdatedAt    time.Time
+	// TimeZone is an IANA name (e.g. Europe/Istanbul). Empty means UTC.
+	TimeZone string
+	// QuietHoursEnabled when true delays delivery while local time is in [QuietStart, QuietEnd).
+	QuietHoursEnabled bool
+	// QuietStart / QuietEnd are local "HH:MM" (24h). End may be earlier than start (crosses midnight).
+	QuietStart string
+	QuietEnd   string
+	UpdatedAt  time.Time
+}
+
+// WebhookSettings is the write model for SetWebhook.
+type WebhookSettings struct {
+	URL               string
+	DeliveryMode      string
+	TimeZone          string
+	QuietHoursEnabled bool
+	QuietStart        string // "HH:MM"
+	QuietEnd          string // "HH:MM"
 }
 
 // AlertNotification is a durable outbox row for one immediate alert fire delivery.
@@ -177,9 +196,9 @@ type PriceAlertPort interface {
 	// CountByClient returns how many alerts a client currently has (any status).
 	CountByClient(ctx context.Context, clientID string) (int, error)
 
-	// Webhook settings (one URL + delivery mode per client).
+	// Webhook settings (one URL + delivery prefs per client).
 	GetWebhook(ctx context.Context, clientID string) (*ClientWebhook, error)
-	SetWebhook(ctx context.Context, clientID, url, deliveryMode string) (*ClientWebhook, error)
+	SetWebhook(ctx context.Context, clientID string, settings WebhookSettings) (*ClientWebhook, error)
 	DeleteWebhook(ctx context.Context, clientID string) error
 
 	// Immediate notification outbox (durable queue). Each fire enqueues a new row.
@@ -279,6 +298,119 @@ func DigestHourWindow(t time.Time) (start, end time.Time) {
 	start = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
 	end = start.Add(time.Hour)
 	return start, end
+}
+
+// ParseClockHHMM parses "HH:MM" (24h) into hour and minute.
+func ParseClockHHMM(s string) (hour, min int, err error) {
+	s = strings.TrimSpace(s)
+	if len(s) != 5 || s[2] != ':' {
+		return 0, 0, fmt.Errorf("clock must be HH:MM")
+	}
+	h, err1 := strconv.Atoi(s[0:2])
+	m, err2 := strconv.Atoi(s[3:5])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, 0, fmt.Errorf("invalid clock %q", s)
+	}
+	return h, m, nil
+}
+
+// LoadWebhookLocation loads IANA timezone; empty or invalid → UTC.
+func LoadWebhookLocation(name string) *time.Location {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+// minutesOfDay returns minutes since local midnight for t in loc.
+func minutesOfDay(t time.Time, loc *time.Location) int {
+	lt := t.In(loc)
+	return lt.Hour()*60 + lt.Minute()
+}
+
+// InQuietHours reports whether local time of now is inside the quiet range.
+// If start == end, quiet hours are treated as disabled (never quiet).
+// If start < end: quiet is [start, end) same day.
+// If start > end: quiet crosses midnight — [start, 24:00) U [00:00, end).
+func InQuietHours(now time.Time, loc *time.Location, startHHMM, endHHMM string) bool {
+	if loc == nil {
+		loc = time.UTC
+	}
+	sh, sm, err1 := ParseClockHHMM(startHHMM)
+	eh, em, err2 := ParseClockHHMM(endHHMM)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	startM := sh*60 + sm
+	endM := eh*60 + em
+	if startM == endM {
+		return false
+	}
+	cur := minutesOfDay(now, loc)
+	if startM < endM {
+		return cur >= startM && cur < endM
+	}
+	// Crosses midnight.
+	return cur >= startM || cur < endM
+}
+
+// QuietHoursEndAfter returns the next UTC instant when quiet hours end after now.
+// If now is not in quiet hours, returns now.UTC().
+func QuietHoursEndAfter(now time.Time, loc *time.Location, startHHMM, endHHMM string) time.Time {
+	if loc == nil {
+		loc = time.UTC
+	}
+	if !InQuietHours(now, loc, startHHMM, endHHMM) {
+		return now.UTC()
+	}
+	eh, em, err := ParseClockHHMM(endHHMM)
+	if err != nil {
+		return now.UTC()
+	}
+	lt := now.In(loc)
+	// Candidate: today at quiet end.
+	endToday := time.Date(lt.Year(), lt.Month(), lt.Day(), eh, em, 0, 0, loc)
+	if !endToday.After(lt) {
+		// Already past today's end clock while still in quiet → end is tomorrow
+		// (only possible for cross-midnight ranges when now is after midnight end? 
+		// Actually for 22-08: at 23:00 endToday is 08:00 today which is Before lt → add day.
+		// For 22-08 at 02:00: endToday is 08:00 today which is After lt → use endToday.
+		endToday = endToday.Add(24 * time.Hour)
+	}
+	// For cross-midnight at 23:00: endToday was 08:00 today, not after, so +1 day → 08:00 tomorrow. Correct.
+	// For same-day 13-17 at 14:00: endToday 17:00 is after → correct.
+	return endToday.UTC()
+}
+
+// NextAllowedDeliveryTime returns now if outside quiet hours, otherwise quiet-hours end (UTC).
+func NextAllowedDeliveryTime(now time.Time, wh *ClientWebhook) time.Time {
+	if wh == nil || !wh.QuietHoursEnabled {
+		return now.UTC()
+	}
+	if strings.TrimSpace(wh.QuietStart) == "" || strings.TrimSpace(wh.QuietEnd) == "" {
+		return now.UTC()
+	}
+	loc := LoadWebhookLocation(wh.TimeZone)
+	return QuietHoursEndAfter(now, loc, wh.QuietStart, wh.QuietEnd)
+}
+
+// ValidateQuietHoursClock validates optional quiet-hours clocks when enabled.
+func ValidateQuietHoursClock(enabled bool, start, end string) error {
+	if !enabled {
+		return nil
+	}
+	if _, _, err := ParseClockHHMM(start); err != nil {
+		return fmt.Errorf("quietStart: %w", err)
+	}
+	if _, _, err := ParseClockHHMM(end); err != nil {
+		return fmt.Errorf("quietEnd: %w", err)
+	}
+	return nil
 }
 
 // EvaluateAlert applies one price observation to an alert (pure; no I/O).

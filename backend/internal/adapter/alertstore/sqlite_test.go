@@ -145,7 +145,7 @@ func TestSQLite_CountAndIsolation(t *testing.T) {
 func TestSQLite_WebhookAndNotificationOutbox(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
-	wh, err := s.SetWebhook(ctx, "c1", "https://hooks.example.com/swyngora", "immediate")
+	wh, err := s.SetWebhook(ctx, "c1", domain.WebhookSettings{URL: "https://hooks.example.com/swyngora", DeliveryMode: "immediate"})
 	if err != nil || wh.URL == "" {
 		t.Fatalf("%+v %v", wh, err)
 	}
@@ -197,7 +197,7 @@ func TestSQLite_NotificationRetryAndPersist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = s1.SetWebhook(ctx, "u", "https://example.com/hook", "immediate")
+	_, _ = s1.SetWebhook(ctx, "u", domain.WebhookSettings{URL: "https://example.com/hook", DeliveryMode: "immediate"})
 	past := time.Now().UTC().Add(-time.Minute)
 	_, err = s1.EnqueueNotification(ctx, domain.AlertNotification{
 		ID: "pend-1", AlertID: "a-1", ClientID: "u",

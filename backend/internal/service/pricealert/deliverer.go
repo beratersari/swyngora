@@ -144,6 +144,9 @@ func (d *Deliverer) deliverDigest(ctx context.Context, dig *domain.AlertDigest) 
 	}
 
 	next := now.Add(webhookBackoff(attempts))
+	if wh, werr := d.Alerts.GetWebhook(ctx, dig.ClientID); werr == nil {
+		next = domain.NextAllowedDeliveryTime(next, wh)
+	}
 	if err := d.Alerts.ScheduleDigestRetry(ctx, dig.ID, attempts, next, errMsg); err != nil {
 		d.Logger.Error("schedule digest retry", "id", dig.ID, "err", err)
 		return
@@ -192,6 +195,9 @@ func (d *Deliverer) deliverOne(ctx context.Context, n *domain.AlertNotification)
 	}
 
 	next := now.Add(webhookBackoff(attempts))
+	if wh, werr := d.Alerts.GetWebhook(ctx, n.ClientID); werr == nil {
+		next = domain.NextAllowedDeliveryTime(next, wh)
+	}
 	if err := d.Alerts.ScheduleNotificationRetry(ctx, n.ID, attempts, next, errMsg); err != nil {
 		d.Logger.Error("schedule webhook retry", "id", n.ID, "err", err)
 		return

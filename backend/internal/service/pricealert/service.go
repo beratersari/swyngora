@@ -216,9 +216,8 @@ func (s *Service) GetWebhook(ctx context.Context, clientID string) (*domain.Clie
 	return s.store.GetWebhook(ctx, clientID)
 }
 
-// SetWebhook validates and stores the client's webhook URL and delivery mode.
-// deliveryMode is immediate (default) or hourly_digest.
-func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL, deliveryMode string) (*domain.ClientWebhook, error) {
+// SetWebhook validates and stores the client's webhook URL and notification preferences.
+func (s *Service) SetWebhook(ctx context.Context, clientID string, in domain.WebhookSettings) (*domain.ClientWebhook, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
 	}
@@ -226,15 +225,27 @@ func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL, deliveryMode
 	if err != nil {
 		return nil, err
 	}
-	u, err := normalizeWebhookURL(rawURL)
+	u, err := normalizeWebhookURL(in.URL)
 	if err != nil {
 		return nil, err
 	}
-	dm, ok := domain.NormalizeDeliveryMode(deliveryMode)
+	dm, ok := domain.NormalizeDeliveryMode(in.DeliveryMode)
 	if !ok {
 		return nil, fmt.Errorf("%w: deliveryMode must be immediate or hourly_digest", domain.ErrInvalidArgument)
 	}
-	return s.store.SetWebhook(ctx, clientID, u, string(dm))
+	tz := strings.TrimSpace(in.TimeZone)
+	if tz == "" {
+		tz = "UTC"
+	} else if _, err := time.LoadLocation(tz); err != nil {
+		return nil, fmt.Errorf("%w: timeZone must be a valid IANA name", domain.ErrInvalidArgument)
+	}
+	if err := domain.ValidateQuietHoursClock(in.QuietHoursEnabled, in.QuietStart, in.QuietEnd); err != nil {
+		return nil, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
+	}
+	in.URL = u
+	in.DeliveryMode = string(dm)
+	in.TimeZone = tz
+	return s.store.SetWebhook(ctx, clientID, in)
 }
 
 // DeleteWebhook clears the client's webhook URL.
@@ -366,9 +377,12 @@ func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.Pric
 		mode = domain.DeliveryImmediate
 	}
 	if mode == domain.DeliveryHourlyDigest {
+		// Items still collect during quiet hours; delivery waits until seal + quiet end.
 		_, err = s.store.AddDigestItem(ctx, a.ClientID, wh.URL, a.ID, payload, now)
 		return err
 	}
+	// Immediate: schedule first attempt after quiet hours if needed.
+	nextAt := domain.NextAllowedDeliveryTime(now, wh)
 	_, err = s.store.EnqueueNotification(ctx, domain.AlertNotification{
 		ID:            uuid.NewString(),
 		AlertID:       a.ID,
@@ -377,7 +391,7 @@ func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.Pric
 		PayloadJSON:   payload,
 		Status:        domain.NotificationPending,
 		Attempts:      0,
-		NextAttemptAt: now,
+		NextAttemptAt: nextAt,
 		CreatedAt:     now,
 	})
 	return err

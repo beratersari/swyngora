@@ -150,3 +150,68 @@ func TestDigestHourWindow(t *testing.T) {
 		t.Fatalf("end=%v", end)
 	}
 }
+
+func TestInQuietHours_SameDayAndCrossMidnight(t *testing.T) {
+	loc := time.UTC
+	// Same-day 13:00-17:00
+	mid := time.Date(2026, 7, 28, 14, 0, 0, 0, time.UTC)
+	if !InQuietHours(mid, loc, "13:00", "17:00") {
+		t.Fatal("expected quiet at 14:00")
+	}
+	if InQuietHours(time.Date(2026, 7, 28, 18, 0, 0, 0, time.UTC), loc, "13:00", "17:00") {
+		t.Fatal("not quiet at 18:00")
+	}
+	// Cross midnight 22:00-08:00
+	if !InQuietHours(time.Date(2026, 7, 28, 23, 0, 0, 0, time.UTC), loc, "22:00", "08:00") {
+		t.Fatal("expected quiet at 23:00")
+	}
+	if !InQuietHours(time.Date(2026, 7, 29, 2, 0, 0, 0, time.UTC), loc, "22:00", "08:00") {
+		t.Fatal("expected quiet at 02:00")
+	}
+	if InQuietHours(time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC), loc, "22:00", "08:00") {
+		t.Fatal("not quiet at noon")
+	}
+}
+
+func TestQuietHoursEndAfter_CrossMidnight(t *testing.T) {
+	loc := time.UTC
+	// 23:00 → quiet ends 08:00 next day
+	at := time.Date(2026, 7, 28, 23, 15, 0, 0, time.UTC)
+	end := QuietHoursEndAfter(at, loc, "22:00", "08:00")
+	want := time.Date(2026, 7, 29, 8, 0, 0, 0, time.UTC)
+	if !end.Equal(want) {
+		t.Fatalf("got %v want %v", end, want)
+	}
+	// 03:00 → quiet ends 08:00 same day
+	at = time.Date(2026, 7, 29, 3, 0, 0, 0, time.UTC)
+	end = QuietHoursEndAfter(at, loc, "22:00", "08:00")
+	want = time.Date(2026, 7, 29, 8, 0, 0, 0, time.UTC)
+	if !end.Equal(want) {
+		t.Fatalf("got %v want %v", end, want)
+	}
+	// Outside quiet → unchanged
+	at = time.Date(2026, 7, 28, 12, 0, 0, 0, time.UTC)
+	end = QuietHoursEndAfter(at, loc, "22:00", "08:00")
+	if !end.Equal(at.UTC()) {
+		t.Fatalf("outside quiet got %v", end)
+	}
+}
+
+func TestNextAllowedDeliveryTime(t *testing.T) {
+	wh := &ClientWebhook{
+		QuietHoursEnabled: true,
+		TimeZone:          "UTC",
+		QuietStart:        "22:00",
+		QuietEnd:          "08:00",
+	}
+	at := time.Date(2026, 7, 28, 23, 0, 0, 0, time.UTC)
+	got := NextAllowedDeliveryTime(at, wh)
+	want := time.Date(2026, 7, 29, 8, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	wh.QuietHoursEnabled = false
+	if !NextAllowedDeliveryTime(at, wh).Equal(at) {
+		t.Fatal("disabled quiet should not delay")
+	}
+}
