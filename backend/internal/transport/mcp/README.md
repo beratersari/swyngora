@@ -21,6 +21,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_price_alerts` | List price alerts for a client |
 | `create_price_alert` | Create one-shot above/below price alert |
 | `delete_price_alert` | Delete a price alert by id |
+| `get_alert_webhook` | Get client webhook URL for alert notifications |
+| `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |
+| `delete_alert_webhook` | Clear client webhook URL |
 
 ## Run (integrated — preferred)
 

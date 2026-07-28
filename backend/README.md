@@ -34,6 +34,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/alerts` | Create one-shot above/below price alert |
 | `GET` | `/api/v1/alerts/{id}` | Get one alert |
 | `DELETE` | `/api/v1/alerts/{id}` | Delete an alert |
+| `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -46,7 +47,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
 
-**Price alerts:** one-shot above/below thresholds per symbol (`POST /api/v1/alerts`). Active alerts are checked in the background (default every 30s) against last price; when the condition is met the alert is marked **`triggered` once** and never re-fires. Stored in SQLite (`ALERTS_DB_PATH`, default `data/alerts.db`).
+**Price alerts:** one-shot above/below thresholds per symbol (`POST /api/v1/alerts`). Active alerts are checked in the background (default every 30s) against last price; when the condition is met the alert is marked **`triggered` once** and never re-fires. Stored in SQLite (`ALERTS_DB_PATH`, default `data/alerts.db`). Optional **webhook** URL per client (`/api/v1/alerts/webhook`): on trigger a durable outbox row is enqueued (one per alert) and POSTed in the background with retries; pending deliveries survive restarts.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -119,6 +120,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `WATCHLIST_DB_PATH` | `data/watchlist.db` | SQLite file for durable watchlists (created if missing) |
 | `ALERTS_DB_PATH` | `data/alerts.db` | SQLite file for durable price alerts |
 | `ALERT_CHECK_INTERVAL` | `30s` | How often active alerts are evaluated against last price |
+| `WEBHOOK_DELIVERY_INTERVAL` | `5s` | Outbox drain interval for alert webhooks |
+| `WEBHOOK_HTTP_TIMEOUT` | `10s` | Per-webhook HTTP timeout |
+| `WEBHOOK_MAX_ATTEMPTS` | `8` | Permanent failure after this many delivery attempts |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 

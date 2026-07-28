@@ -30,6 +30,9 @@ type DataPort interface {
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
+	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
+	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -395,6 +398,56 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.DeletePriceAlert(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_alert_webhook",
+		mcp.WithDescription("Get the client's price-alert webhook URL (empty if not set)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetAlertWebhook(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_alert_webhook",
+		mcp.WithDescription("Set absolute http(s) webhook URL for price-alert notifications (durable outbox, at most once per alert)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("url", mcp.Required(), mcp.Description("https://hooks.example.com/...")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		u, err := req.RequireString("url")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.SetAlertWebhook(ctx, clientID, u)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_alert_webhook",
+		mcp.WithDescription("Clear the client's price-alert webhook URL."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeleteAlertWebhook(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

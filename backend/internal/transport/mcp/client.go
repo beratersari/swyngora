@@ -271,6 +271,45 @@ func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (
 	return json.RawMessage(body), nil
 }
 
+// GetAlertWebhook fetches the client's webhook settings.
+func (c *APIClient) GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/alerts/webhook", q)
+}
+
+// SetAlertWebhook sets the client's webhook URL.
+func (c *APIClient) SetAlertWebhook(ctx context.Context, clientID, webhookURL string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPut, "/api/v1/alerts/webhook", map[string]any{
+		"clientId": clientID,
+		"url":      webhookURL,
+	})
+}
+
+// DeleteAlertWebhook clears the client's webhook URL.
+func (c *APIClient) DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v1/alerts/webhook?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API %s: %s", resp.Status, truncate(string(body), 400))
+	}
+	return json.RawMessage(body), nil
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

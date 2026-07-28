@@ -37,6 +37,16 @@ class _HTTP:
             except Exception:
                 return r.text
 
+    def put(self, path: str, body: dict[str, Any]) -> str:
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.put(f"{self.base}{path}", json=body)
+            if r.status_code >= 400:
+                return f"ERROR {r.status_code}: {r.text[:500]}"
+            try:
+                return json.dumps(r.json(), indent=2)
+            except Exception:
+                return r.text
+
     def delete(self, path: str, params: dict[str, Any]) -> str:
         with httpx.Client(timeout=self.timeout) as client:
             r = client.delete(f"{self.base}{path}", params=params)
@@ -117,6 +127,15 @@ class AlertCreateInput(BaseModel):
 class AlertDeleteInput(BaseModel):
     client_id: str
     id: str = Field(description="Alert id")
+
+
+class AlertWebhookGetInput(BaseModel):
+    client_id: str
+
+
+class AlertWebhookSetInput(BaseModel):
+    client_id: str
+    url: str = Field(description="Absolute http(s) webhook URL")
 
 
 class PumpDetectInput(BaseModel):
@@ -290,6 +309,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def delete_price_alert(client_id: str, id: str) -> str:
         return http.delete(f"/api/v1/alerts/{id}", {"clientId": client_id})
 
+    def get_alert_webhook(client_id: str) -> str:
+        return http.get("/api/v1/alerts/webhook", {"clientId": client_id})
+
+    def set_alert_webhook(client_id: str, url: str) -> str:
+        return http.put(
+            "/api/v1/alerts/webhook",
+            {"clientId": client_id, "url": url},
+        )
+
+    def delete_alert_webhook(client_id: str) -> str:
+        return http.delete("/api/v1/alerts/webhook", {"clientId": client_id})
+
     def detect_pump_events(
         symbol: str,
         exchange: str = "binance",
@@ -423,6 +454,27 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="delete_price_alert",
             description="Delete a price alert by id for a clientId.",
             args_schema=AlertDeleteInput,
+        ),
+        StructuredTool.from_function(
+            get_alert_webhook,
+            name="get_alert_webhook",
+            description="Get the client's price-alert webhook URL.",
+            args_schema=AlertWebhookGetInput,
+        ),
+        StructuredTool.from_function(
+            set_alert_webhook,
+            name="set_alert_webhook",
+            description=(
+                "Set absolute http(s) webhook URL for price-alert notifications. "
+                "On trigger a durable outbox row is enqueued (at most once per alert) and POSTed in the background."
+            ),
+            args_schema=AlertWebhookSetInput,
+        ),
+        StructuredTool.from_function(
+            delete_alert_webhook,
+            name="delete_alert_webhook",
+            description="Clear the client's price-alert webhook URL.",
+            args_schema=AlertWebhookGetInput,
         ),
         StructuredTool.from_function(
             detect_pump_events,

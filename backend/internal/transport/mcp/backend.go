@@ -400,6 +400,50 @@ func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (js
 	return mustJSON(map[string]any{"deleted": true, "id": id})
 }
 
+func (b *Backend) GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	wh, err := b.Alerts.GetWebhook(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	return webhookJSON(wh)
+}
+
+func (b *Backend) SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	wh, err := b.Alerts.SetWebhook(ctx, clientID, url)
+	if err != nil {
+		return nil, err
+	}
+	return webhookJSON(wh)
+}
+
+func (b *Backend) DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	if err := b.Alerts.DeleteWebhook(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "deleted": true, "configured": false})
+}
+
+func webhookJSON(wh *domain.ClientWebhook) (json.RawMessage, error) {
+	m := map[string]any{
+		"clientId":   wh.ClientID,
+		"url":        wh.URL,
+		"configured": strings.TrimSpace(wh.URL) != "",
+	}
+	if !wh.UpdatedAt.IsZero() {
+		m["updatedAt"] = wh.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(m)
+}
+
 func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 	m := map[string]any{
 		"id":          a.ID,

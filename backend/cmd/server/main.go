@@ -185,6 +185,15 @@ func main() {
 	}
 	go alertChecker.Start(ctx)
 
+	webhookDeliverer := &pricealert.Deliverer{
+		Alerts:      alertSvc,
+		HTTP:        &http.Client{Timeout: cfg.WebhookHTTPTimeout},
+		Interval:    cfg.WebhookDeliveryInterval,
+		MaxAttempts: cfg.WebhookMaxAttempts,
+		Logger:      logger,
+	}
+	go webhookDeliverer.Start(ctx)
+
 	// Optional Telegram bot transport (same process, in-process services).
 	// Fail closed: token without allowlist and without TELEGRAM_ALLOW_ALL does not start.
 	if cfg.TelegramBotToken != "" {

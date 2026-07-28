@@ -65,6 +65,12 @@ type Config struct {
 	AlertsDBPath string
 	// AlertCheckInterval is how often active alerts are evaluated against last price.
 	AlertCheckInterval time.Duration
+	// WebhookDeliveryInterval is how often the outbox deliverer drains pending notifications.
+	WebhookDeliveryInterval time.Duration
+	// WebhookHTTPTimeout is the per-delivery HTTP client timeout.
+	WebhookHTTPTimeout time.Duration
+	// WebhookMaxAttempts is permanent failure threshold for webhook deliveries.
+	WebhookMaxAttempts int
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -121,6 +127,10 @@ func Load() Config {
 		// Durable price alerts + background check cadence.
 		AlertsDBPath:       getenv("ALERTS_DB_PATH", "data/alerts.db"),
 		AlertCheckInterval: positiveDurationEnv("ALERT_CHECK_INTERVAL", 30*time.Second),
+
+		WebhookDeliveryInterval: positiveDurationEnv("WEBHOOK_DELIVERY_INTERVAL", 5*time.Second),
+		WebhookHTTPTimeout:      positiveDurationEnv("WEBHOOK_HTTP_TIMEOUT", 10*time.Second),
+		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
 	}
 }
 

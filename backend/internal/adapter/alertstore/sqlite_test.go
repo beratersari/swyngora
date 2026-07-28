@@ -141,3 +141,91 @@ func TestSQLite_CountAndIsolation(t *testing.T) {
 		t.Fatalf("cross-client delete: %v", err)
 	}
 }
+func TestSQLite_WebhookAndNotificationOutbox(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	wh, err := s.SetWebhook(ctx, "c1", "https://hooks.example.com/swyngora")
+	if err != nil || wh.URL == "" {
+		t.Fatalf("%+v %v", wh, err)
+	}
+	got, err := s.GetWebhook(ctx, "c1")
+	if err != nil || got.URL != "https://hooks.example.com/swyngora" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	// Enqueue once per alert
+	n1, err := s.EnqueueNotification(ctx, domain.AlertNotification{
+		ID: "n1", AlertID: "alert-1", ClientID: "c1",
+		WebhookURL: got.URL, PayloadJSON: `{"ok":true}`,
+		Status: domain.NotificationPending, NextAttemptAt: time.Now().UTC().Add(-time.Second),
+		CreatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n2, err := s.EnqueueNotification(ctx, domain.AlertNotification{
+		ID: "n2-dup", AlertID: "alert-1", ClientID: "c1",
+		WebhookURL: got.URL, PayloadJSON: `{"dup":true}`,
+		Status: domain.NotificationPending, NextAttemptAt: time.Now().UTC(),
+		CreatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n2.ID != n1.ID {
+		t.Fatalf("duplicate enqueue must return same row: %s vs %s", n1.ID, n2.ID)
+	}
+	due, err := s.ListDueNotifications(ctx, time.Now().UTC(), 10)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("due=%+v err=%v", due, err)
+	}
+	if err := s.MarkNotificationDelivered(ctx, n1.ID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	// Not due anymore
+	due, err = s.ListDueNotifications(ctx, time.Now().UTC(), 10)
+	if err != nil || len(due) != 0 {
+		t.Fatalf("after deliver due=%+v", due)
+	}
+	// Second mark delivered is ok
+	if err := s.MarkNotificationDelivered(ctx, n1.ID, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSQLite_NotificationRetryAndPersist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "alerts.db")
+	ctx := context.Background()
+	s1, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = s1.SetWebhook(ctx, "u", "https://example.com/hook")
+	past := time.Now().UTC().Add(-time.Minute)
+	_, err = s1.EnqueueNotification(ctx, domain.AlertNotification{
+		ID: "pend-1", AlertID: "a-1", ClientID: "u",
+		WebhookURL: "https://example.com/hook", PayloadJSON: `{}`,
+		Status: domain.NotificationPending, NextAttemptAt: past, CreatedAt: past,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s1.ScheduleNotificationRetry(ctx, "pend-1", 1, past, "timeout"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s1.Close()
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	due, err := s2.ListDueNotifications(ctx, time.Now().UTC(), 10)
+	if err != nil || len(due) != 1 || due[0].Attempts != 1 || due[0].LastError != "timeout" {
+		t.Fatalf("after reopen: %+v err=%v", due, err)
+	}
+	wh, _ := s2.GetWebhook(ctx, "u")
+	if wh.URL != "https://example.com/hook" {
+		t.Fatalf("webhook lost: %+v", wh)
+	}
+}

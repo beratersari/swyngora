@@ -135,3 +135,70 @@ func (h *AlertHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id})
 }
+
+type webhookDTO struct {
+	ClientID  string `json:"clientId"`
+	URL       string `json:"url"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	Configured bool  `json:"configured"`
+}
+
+func webhookToDTO(w *domain.ClientWebhook) webhookDTO {
+	dto := webhookDTO{
+		ClientID:   w.ClientID,
+		URL:        w.URL,
+		Configured: strings.TrimSpace(w.URL) != "",
+	}
+	if !w.UpdatedAt.IsZero() {
+		dto.UpdatedAt = w.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return dto
+}
+
+// GetWebhook handles GET /api/v1/alerts/webhook
+func (h *AlertHandler) GetWebhook(w http.ResponseWriter, r *http.Request) {
+	wh, err := h.svc.GetWebhook(r.Context(), clientIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, webhookToDTO(wh))
+}
+
+type setWebhookBody struct {
+	ClientID string `json:"clientId"`
+	URL      string `json:"url"`
+}
+
+// PutWebhook handles PUT /api/v1/alerts/webhook
+func (h *AlertHandler) PutWebhook(w http.ResponseWriter, r *http.Request) {
+	var body setWebhookBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	clientID := body.ClientID
+	if clientID == "" {
+		clientID = clientIDFrom(r)
+	}
+	wh, err := h.svc.SetWebhook(r.Context(), clientID, body.URL)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, webhookToDTO(wh))
+}
+
+// DeleteWebhook handles DELETE /api/v1/alerts/webhook
+func (h *AlertHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
+	clientID := clientIDFrom(r)
+	if err := h.svc.DeleteWebhook(r.Context(), clientID); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId":   clientID,
+		"deleted":    true,
+		"configured": false,
+	})
+}

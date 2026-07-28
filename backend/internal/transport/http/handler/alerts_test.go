@@ -97,3 +97,41 @@ func TestAlertHTTP_Validation(t *testing.T) {
 		t.Fatalf("status=%d", rr.Code)
 	}
 }
+func TestAlertHTTP_WebhookCRUD(t *testing.T) {
+	h := newAlertHandler(t)
+	body, _ := json.Marshal(map[string]string{
+		"clientId": "wh-user",
+		"url":      "https://hooks.example.com/a",
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/alerts/webhook", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.PutWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/alerts/webhook?clientId=wh-user", nil)
+	rr = httptest.NewRecorder()
+	h.GetWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get status=%d", rr.Code)
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got["url"] != "https://hooks.example.com/a" || got["configured"] != true {
+		t.Fatalf("%v", got)
+	}
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/alerts/webhook?clientId=wh-user", nil)
+	rr = httptest.NewRecorder()
+	h.DeleteWebhook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("delete status=%d", rr.Code)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/alerts/webhook?clientId=wh-user", nil)
+	rr = httptest.NewRecorder()
+	h.GetWebhook(rr, req)
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got["configured"] != false {
+		t.Fatalf("%v", got)
+	}
+}

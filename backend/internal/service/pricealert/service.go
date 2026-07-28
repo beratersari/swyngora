@@ -2,8 +2,11 @@ package pricealert
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
@@ -125,7 +128,8 @@ func (s *Service) ListActive(ctx context.Context) ([]domain.PriceAlert, error) {
 	return s.store.ListActive(ctx)
 }
 
-// MarkTriggered records a one-shot trigger.
+// MarkTriggered records a one-shot trigger and enqueues a webhook notification if configured.
+// Enqueue is idempotent per alert id (at most one notification row).
 func (s *Service) MarkTriggered(ctx context.Context, id string, price float64, at time.Time) (*domain.PriceAlert, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
@@ -134,7 +138,171 @@ func (s *Service) MarkTriggered(ctx context.Context, id string, price float64, a
 	if id == "" {
 		return nil, fmt.Errorf("%w: alert id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.MarkTriggered(ctx, id, price, at)
+	a, err := s.store.MarkTriggered(ctx, id, price, at)
+	if err != nil {
+		return nil, err
+	}
+	// Durable enqueue; unique alert_id prevents double-send even if this is retried.
+	if err := s.enqueueWebhookNotification(ctx, a); err != nil {
+		slog.Error("enqueue webhook after alert trigger", "alertId", a.ID, "clientId", a.ClientID, "err", err)
+	}
+	return a, nil
+}
+
+// GetWebhook returns the client's webhook settings (empty URL if unset).
+func (s *Service) GetWebhook(ctx context.Context, clientID string) (*domain.ClientWebhook, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.GetWebhook(ctx, clientID)
+}
+
+// SetWebhook validates and stores the client's webhook URL.
+func (s *Service) SetWebhook(ctx context.Context, clientID, rawURL string) (*domain.ClientWebhook, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	u, err := normalizeWebhookURL(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.SetWebhook(ctx, clientID, u)
+}
+
+// DeleteWebhook clears the client's webhook URL.
+func (s *Service) DeleteWebhook(ctx context.Context, clientID string) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return err
+	}
+	return s.store.DeleteWebhook(ctx, clientID)
+}
+
+// ListDueNotifications is used by the background deliverer.
+func (s *Service) ListDueNotifications(ctx context.Context, now time.Time, limit int) ([]domain.AlertNotification, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListDueNotifications(ctx, now, limit)
+}
+
+// MarkNotificationDelivered records a successful webhook POST.
+func (s *Service) MarkNotificationDelivered(ctx context.Context, id string, at time.Time) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.MarkNotificationDelivered(ctx, id, at)
+}
+
+// ScheduleNotificationRetry schedules another attempt.
+func (s *Service) ScheduleNotificationRetry(ctx context.Context, id string, attempts int, nextAt time.Time, lastErr string) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.ScheduleNotificationRetry(ctx, id, attempts, nextAt, lastErr)
+}
+
+// FailNotification permanently fails a notification.
+func (s *Service) FailNotification(ctx context.Context, id string, lastErr string) error {
+	if s.store == nil {
+		return fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.FailNotification(ctx, id, lastErr)
+}
+
+// GetNotificationByAlertID returns the outbox row for tests/ops.
+func (s *Service) GetNotificationByAlertID(ctx context.Context, alertID string) (*domain.AlertNotification, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	return s.store.GetNotificationByAlertID(ctx, alertID)
+}
+
+func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.PriceAlert) error {
+	if a == nil {
+		return nil
+	}
+	wh, err := s.store.GetWebhook(ctx, a.ClientID)
+	if err != nil {
+		return err
+	}
+	if wh == nil || strings.TrimSpace(wh.URL) == "" {
+		return nil
+	}
+	payload, err := buildAlertWebhookPayload(a)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	_, err = s.store.EnqueueNotification(ctx, domain.AlertNotification{
+		ID:            uuid.NewString(),
+		AlertID:       a.ID,
+		ClientID:      a.ClientID,
+		WebhookURL:    wh.URL,
+		PayloadJSON:   payload,
+		Status:        domain.NotificationPending,
+		Attempts:      0,
+		NextAttemptAt: now,
+		CreatedAt:     now,
+	})
+	return err
+}
+
+func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
+	trigAt := ""
+	if a.TriggeredAt != nil {
+		trigAt = a.TriggeredAt.UTC().Format(time.RFC3339Nano)
+	}
+	body := map[string]any{
+		"type":           "price_alert.triggered",
+		"alertId":        a.ID,
+		"clientId":       a.ClientID,
+		"exchange":       string(a.Exchange),
+		"symbol":         a.Symbol,
+		"condition":      string(a.Condition),
+		"targetPrice":    a.TargetPrice,
+		"lastPrice":      a.TriggeredPrice,
+		"triggeredAt":    trigAt,
+		"status":         string(a.Status),
+		"note":           "Informational only — not financial advice.",
+	}
+	b, err := json.Marshal(body)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func normalizeWebhookURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: webhook URL is required", domain.ErrInvalidArgument)
+	}
+	if len(raw) > domain.MaxWebhookURLLen {
+		return "", fmt.Errorf("%w: webhook URL too long", domain.ErrInvalidArgument)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return "", fmt.Errorf("%w: webhook URL must be an absolute http(s) URL", domain.ErrInvalidArgument)
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("%w: webhook URL scheme must be http or https", domain.ErrInvalidArgument)
+	}
+	// Reconstruct without fragment.
+	u.Fragment = ""
+	return u.String(), nil
 }
 
 func normalizeClientID(id string) (string, error) {

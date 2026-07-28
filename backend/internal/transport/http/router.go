@@ -66,6 +66,10 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	if opts.Alerts != nil {
 		ah := handler.NewAlertHandler(opts.Alerts)
+		// Static paths before /{id} so "webhook" is not captured as an id.
+		mux.HandleFunc("GET /api/v1/alerts/webhook", ah.GetWebhook)
+		mux.HandleFunc("PUT /api/v1/alerts/webhook", ah.PutWebhook)
+		mux.HandleFunc("DELETE /api/v1/alerts/webhook", ah.DeleteWebhook)
 		mux.HandleFunc("GET /api/v1/alerts", ah.List)
 		mux.HandleFunc("POST /api/v1/alerts", ah.Create)
 		mux.HandleFunc("GET /api/v1/alerts/{id}", ah.Get)

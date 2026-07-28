@@ -27,6 +27,9 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("WATCHLIST_DB_PATH", "")
 	t.Setenv("ALERTS_DB_PATH", "")
 	t.Setenv("ALERT_CHECK_INTERVAL", "")
+	t.Setenv("WEBHOOK_DELIVERY_INTERVAL", "")
+	t.Setenv("WEBHOOK_HTTP_TIMEOUT", "")
+	t.Setenv("WEBHOOK_MAX_ATTEMPTS", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":8080" {
@@ -68,6 +71,15 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.AlertCheckInterval != 30*time.Second {
 		t.Fatalf("AlertCheckInterval default=%v", cfg.AlertCheckInterval)
+	}
+	if cfg.WebhookDeliveryInterval != 5*time.Second {
+		t.Fatalf("WebhookDeliveryInterval default=%v", cfg.WebhookDeliveryInterval)
+	}
+	if cfg.WebhookHTTPTimeout != 10*time.Second {
+		t.Fatalf("WebhookHTTPTimeout default=%v", cfg.WebhookHTTPTimeout)
+	}
+	if cfg.WebhookMaxAttempts != 8 {
+		t.Fatalf("WebhookMaxAttempts default=%d", cfg.WebhookMaxAttempts)
 	}
 }
 
