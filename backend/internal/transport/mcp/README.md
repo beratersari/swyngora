@@ -18,6 +18,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_watchlist` | Read watchlist |
 | `add_watchlist_item` | Add/update watch item |
 | `remove_watchlist_item` | Remove watch item |
+| `list_price_alerts` | List price alerts for a client |
+| `create_price_alert` | Create one-shot above/below price alert |
+| `delete_price_alert` | Delete a price alert by id |
 
 ## Run (integrated — preferred)
 

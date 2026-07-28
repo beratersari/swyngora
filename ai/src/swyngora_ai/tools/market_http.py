@@ -102,6 +102,23 @@ class WatchRemoveInput(BaseModel):
     exchange: str = "binance"
 
 
+class AlertListInput(BaseModel):
+    client_id: str = Field(description="Opaque client id")
+
+
+class AlertCreateInput(BaseModel):
+    client_id: str
+    symbol: str
+    condition: str = Field(description="above | below")
+    target_price: float = Field(gt=0, description="Threshold price")
+    exchange: str = "binance"
+
+
+class AlertDeleteInput(BaseModel):
+    client_id: str
+    id: str = Field(description="Alert id")
+
+
 class PumpDetectInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or JUVUSDT")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
@@ -249,6 +266,30 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             },
         )
 
+    def list_price_alerts(client_id: str) -> str:
+        return http.get("/api/v1/alerts", {"clientId": client_id})
+
+    def create_price_alert(
+        client_id: str,
+        symbol: str,
+        condition: str,
+        target_price: float,
+        exchange: str = "binance",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "condition": condition,
+                "targetPrice": target_price,
+                "exchange": exchange,
+            },
+        )
+
+    def delete_price_alert(client_id: str, id: str) -> str:
+        return http.delete(f"/api/v1/alerts/{id}", {"clientId": client_id})
+
     def detect_pump_events(
         symbol: str,
         exchange: str = "binance",
@@ -361,6 +402,27 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="remove_watchlist_item",
             description="Remove symbol from watchlist.",
             args_schema=WatchRemoveInput,
+        ),
+        StructuredTool.from_function(
+            list_price_alerts,
+            name="list_price_alerts",
+            description="List one-shot price alerts for a clientId (active and triggered).",
+            args_schema=AlertListInput,
+        ),
+        StructuredTool.from_function(
+            create_price_alert,
+            name="create_price_alert",
+            description=(
+                "Create a one-shot price alert when last price goes above or below target_price. "
+                "Fires at most once (status becomes triggered)."
+            ),
+            args_schema=AlertCreateInput,
+        ),
+        StructuredTool.from_function(
+            delete_price_alert,
+            name="delete_price_alert",
+            description="Delete a price alert by id for a clientId.",
+            args_schema=AlertDeleteInput,
         ),
         StructuredTool.from_function(
             detect_pump_events,

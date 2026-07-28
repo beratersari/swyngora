@@ -30,6 +30,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/watchlist/items` | Add symbol to watchlist |
 | `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove from watchlist |
 | `PUT` | `/api/v1/watchlist` | Replace entire watchlist |
+| `GET` | `/api/v1/alerts` | List price alerts (`clientId` / `X-Client-Id`) |
+| `POST` | `/api/v1/alerts` | Create one-shot above/below price alert |
+| `GET` | `/api/v1/alerts/{id}` | Get one alert |
+| `DELETE` | `/api/v1/alerts/{id}` | Delete an alert |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -41,6 +45,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). Failed refreshes **retry with backoff** (1m→1h) before waiting for the next daily slot. User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (last-good retained on failure until safety TTL). Default **`SUPPLY_CACHE_TTL=48h`** so entries cannot live forever after a long outage (set `0` to never expire). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first). Empty supply snapshot → market-cap sort returns `502`.
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
+
+**Price alerts:** one-shot above/below thresholds per symbol (`POST /api/v1/alerts`). Active alerts are checked in the background (default every 30s) against last price; when the condition is met the alert is marked **`triggered` once** and never re-fires. Stored in SQLite (`ALERTS_DB_PATH`, default `data/alerts.db`).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -111,6 +117,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `RATE_LIMIT_RPS` | `40` | Per-IP request rate (0 disables) |
 | `RATE_LIMIT_BURST` | `80` | Per-IP burst size |
 | `WATCHLIST_DB_PATH` | `data/watchlist.db` | SQLite file for durable watchlists (created if missing) |
+| `ALERTS_DB_PATH` | `data/alerts.db` | SQLite file for durable price alerts |
+| `ALERT_CHECK_INTERVAL` | `30s` | How often active alerts are evaluated against last price |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 
@@ -151,6 +159,8 @@ Unit tests mock upstream HTTP; they do not call live Binance.
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
+| Infrastructure | `internal/adapter/alertstore` | `sqlite_test.go` (CRUD, one-shot trigger, reopen) |
+| Application | `internal/service/pricealert` | `service_test.go` (validation, max, checker once-only) |
 | Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go` |
 | Transport middleware | `internal/transport/http/middleware` | `cors_test.go`, `ratelimit_test.go` |
 | Transport router | `internal/transport/http` | `router_test.go` |

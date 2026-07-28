@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -26,6 +27,9 @@ type DataPort interface {
 	GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error)
 	AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error)
 	RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
+	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
+	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error)
+	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -60,10 +64,10 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 	return s
 }
 
-// NewInProcessServer wires MCP tools to market/watchlist services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service) *server.MCPServer {
+// NewInProcessServer wires MCP tools to market/watchlist/alert services (same process as HTTP).
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -325,6 +329,72 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.RemoveWatchlistItem(ctx, clientID, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_price_alerts",
+		mcp.WithDescription("List price alerts for a clientId (active and triggered)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPriceAlerts(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_price_alert",
+		mcp.WithDescription("Create a one-shot price alert (above/below target). Triggers once then stays triggered."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT")),
+		mcp.WithString("condition", mcp.Required(), mcp.Description("above | below")),
+		mcp.WithNumber("targetPrice", mcp.Required(), mcp.Description("Threshold price")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		condition, err := req.RequireString("condition")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		target, err := req.RequireFloat("targetPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_price_alert",
+		mcp.WithDescription("Delete a price alert by id for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Alert id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeletePriceAlert(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

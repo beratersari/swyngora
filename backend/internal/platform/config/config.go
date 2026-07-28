@@ -60,6 +60,11 @@ type Config struct {
 	// WatchlistDBPath is the SQLite file for durable watchlists (survives restarts).
 	// Relative paths are resolved from the process working directory.
 	WatchlistDBPath string
+
+	// AlertsDBPath is the SQLite file for durable price alerts (survives restarts).
+	AlertsDBPath string
+	// AlertCheckInterval is how often active alerts are evaluated against last price.
+	AlertCheckInterval time.Duration
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -112,6 +117,10 @@ func Load() Config {
 
 		// Durable watchlist storage (SQLite). Default relative to process cwd.
 		WatchlistDBPath: getenv("WATCHLIST_DB_PATH", "data/watchlist.db"),
+
+		// Durable price alerts + background check cadence.
+		AlertsDBPath:       getenv("ALERTS_DB_PATH", "data/alerts.db"),
+		AlertCheckInterval: positiveDurationEnv("ALERT_CHECK_INTERVAL", 30*time.Second),
 	}
 }
 

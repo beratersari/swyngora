@@ -12,6 +12,8 @@ info:
     - Watchlist is unauthenticated state keyed by client-supplied `clientId`
       (must be non-empty; not for multi-tenant production without real auth).
       Data is persisted in SQLite on the server (survives restarts); API contract is unchanged.
+    - Price alerts fire once when last price crosses above/below a target; stored in SQLite
+      and evaluated in the background (status becomes `triggered` at most once).
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -694,6 +696,120 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /api/v1/alerts:
+    get:
+      summary: List price alerts for a client
+      operationId: listPriceAlerts
+      tags: [Alerts]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string, minLength: 1 }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  count: { type: integer }
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PriceAlert'
+        '400':
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a one-shot price alert
+      description: |
+        Creates an active alert for when last price goes above or below targetPrice.
+        Background checker marks it triggered at most once. Informational — not financial advice.
+      operationId: createPriceAlert
+      tags: [Alerts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, condition, targetPrice]
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
+                symbol: { type: string }
+                condition: { type: string, enum: [above, below] }
+                targetPrice: { type: number, exclusiveMinimum: 0 }
+      responses:
+        '201':
+          description: Created alert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/alerts/{id}:
+    get:
+      summary: Get one price alert
+      operationId: getPriceAlert
+      tags: [Alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Alert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAlert'
+        '404':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a price alert
+      operationId: deletePriceAlert
+      tags: [Alerts]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+                  id: { type: string }
+        '404':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
+
   /api/v1/watchlist/items:
     post:
       summary: Add or update a watchlist item
@@ -890,6 +1006,19 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpotMarket'
+    PriceAlert:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        condition: { type: string, enum: [above, below] }
+        targetPrice: { type: number }
+        status: { type: string, enum: [active, triggered] }
+        createdAt: { type: string, format: date-time }
+        triggeredAt: { type: string, format: date-time, nullable: true }
+        triggeredPrice: { type: number }
     Watchlist:
       type: object
       properties:

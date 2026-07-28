@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
@@ -19,6 +20,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
@@ -118,6 +120,19 @@ func main() {
 	watchSvc := watchlist.New(watchStore)
 	logger.Info("watchlist store ready", "driver", "sqlite", "path", watchStore.Path())
 
+	alertStore, err := alertstore.Open(cfg.AlertsDBPath)
+	if err != nil {
+		logger.Error("alerts sqlite open failed", "path", cfg.AlertsDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := alertStore.Close(); err != nil {
+			logger.Error("alerts sqlite close", "err", err)
+		}
+	}()
+	alertSvc := pricealert.New(alertStore)
+	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -139,7 +154,7 @@ func main() {
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
 	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc)
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc)
 	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
@@ -149,6 +164,7 @@ func main() {
 		MCPHandler:       mcpHTTP,
 		AI:              aiClient,
 		AITimeout:       cfg.AITimeout,
+		Alerts:          alertSvc,
 	})
 
 	job := &supplyjob.Runner{
@@ -160,6 +176,14 @@ func main() {
 		Logger:     logger,
 	}
 	go job.Start(ctx)
+
+	alertChecker := &pricealert.Checker{
+		Alerts:   alertSvc,
+		Market:   marketSvc,
+		Interval: cfg.AlertCheckInterval,
+		Logger:   logger,
+	}
+	go alertChecker.Start(ctx)
 
 	// Optional Telegram bot transport (same process, in-process services).
 	// Fail closed: token without allowlist and without TELEGRAM_ALLOW_ALL does not start.

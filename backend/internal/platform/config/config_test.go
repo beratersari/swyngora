@@ -25,6 +25,8 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("CORS_ALLOW_ORIGINS", "")
 	t.Setenv("TELEGRAM_ALLOW_ALL", "")
 	t.Setenv("WATCHLIST_DB_PATH", "")
+	t.Setenv("ALERTS_DB_PATH", "")
+	t.Setenv("ALERT_CHECK_INTERVAL", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":8080" {
@@ -60,6 +62,12 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.WatchlistDBPath != "data/watchlist.db" {
 		t.Fatalf("WatchlistDBPath default=%q", cfg.WatchlistDBPath)
+	}
+	if cfg.AlertsDBPath != "data/alerts.db" {
+		t.Fatalf("AlertsDBPath default=%q", cfg.AlertsDBPath)
+	}
+	if cfg.AlertCheckInterval != 30*time.Second {
+		t.Fatalf("AlertCheckInterval default=%v", cfg.AlertCheckInterval)
 	}
 }
 

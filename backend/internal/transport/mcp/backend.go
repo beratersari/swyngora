@@ -9,6 +9,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -16,6 +17,7 @@ import (
 type Backend struct {
 	Market *market.Service
 	Watch  *watchlist.Service
+	Alerts *pricealert.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -357,6 +359,84 @@ func (b *Backend) ScanPumpEvents(ctx context.Context, args map[string]any) (json
 		"hits":     items,
 		"hitCount": len(items),
 		"note":     "Informational only — not financial advice.",
+	})
+}
+
+func (b *Backend) ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	list, err := b.Alerts.List(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	return alertsJSON(clientID, list)
+}
+
+func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Condition:   condition,
+		TargetPrice: targetPrice,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
+func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	if err := b.Alerts.Delete(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
+	m := map[string]any{
+		"id":          a.ID,
+		"clientId":    a.ClientID,
+		"exchange":    string(a.Exchange),
+		"symbol":      a.Symbol,
+		"condition":   string(a.Condition),
+		"targetPrice": a.TargetPrice,
+		"status":      string(a.Status),
+		"createdAt":   a.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if a.TriggeredAt != nil {
+		m["triggeredAt"] = a.TriggeredAt.UTC().Format(time.RFC3339Nano)
+	}
+	if a.Status == domain.AlertStatusTriggered {
+		m["triggeredPrice"] = a.TriggeredPrice
+	}
+	return mustJSON(m)
+}
+
+func alertsJSON(clientID string, list []domain.PriceAlert) (json.RawMessage, error) {
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		raw, err := alertJSON(&list[i])
+		if err != nil {
+			return nil, err
+		}
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return mustJSON(map[string]any{
+		"clientId": clientID,
+		"alerts":   items,
+		"count":    len(items),
 	})
 }
 

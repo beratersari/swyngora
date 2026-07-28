@@ -6,6 +6,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
@@ -23,6 +24,8 @@ type RouterOptions struct {
 	// AI client for POST /api/v1/ai/chat (optional).
 	AI        *aiagent.Client
 	AITimeout time.Duration
+	// Alerts enables price-alert routes when non-nil.
+	Alerts *pricealert.Service
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -59,6 +62,14 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("PUT /api/v1/watchlist", wh.Replace)
 		mux.HandleFunc("POST /api/v1/watchlist/items", wh.Add)
 		mux.HandleFunc("DELETE /api/v1/watchlist/items", wh.Remove)
+	}
+
+	if opts.Alerts != nil {
+		ah := handler.NewAlertHandler(opts.Alerts)
+		mux.HandleFunc("GET /api/v1/alerts", ah.List)
+		mux.HandleFunc("POST /api/v1/alerts", ah.Create)
+		mux.HandleFunc("GET /api/v1/alerts/{id}", ah.Get)
+		mux.HandleFunc("DELETE /api/v1/alerts/{id}", ah.Delete)
 	}
 
 	// MCP streamable HTTP — same process as REST API (no second server).
