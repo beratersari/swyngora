@@ -9,8 +9,9 @@ info:
     - Circulating / total / max supply is sourced from the **Binance** public marketing
       symbol list (asset-level, used for all venues' mcap enrichment), refreshed daily.
       Max supply is null when undefined.
-    - Watchlist is unauthenticated demo state keyed by client-supplied `clientId`
+    - Watchlist is unauthenticated state keyed by client-supplied `clientId`
       (must be non-empty; not for multi-tenant production without real auth).
+      Data is persisted in SQLite on the server (survives restarts); API contract is unchanged.
   version: 0.1.0
 servers:
   - url: http://localhost:8080

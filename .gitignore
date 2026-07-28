@@ -21,6 +21,12 @@ backend/dist/
 *.out
 vendor/
 
+# Local SQLite / data files (watchlist persistence)
+backend/data/
+*.db
+*.db-shm
+*.db-wal
+
 # Node (future frontend)
 node_modules/
 dist/

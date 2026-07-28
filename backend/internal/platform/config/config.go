@@ -56,6 +56,10 @@ type Config struct {
 	AIWorkDir      string // cwd for auto-start (repo ai/ package)
 	AIListenHost   string
 	AIListenPort   int
+
+	// WatchlistDBPath is the SQLite file for durable watchlists (survives restarts).
+	// Relative paths are resolved from the process working directory.
+	WatchlistDBPath string
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -105,6 +109,9 @@ func Load() Config {
 		AIWorkDir:    strings.TrimSpace(getenv("AI_WORKDIR", "ai")),
 		AIListenHost: getenv("AI_LISTEN_HOST", "127.0.0.1"),
 		AIListenPort: positiveIntEnv("AI_LISTEN_PORT", 8090),
+
+		// Durable watchlist storage (SQLite). Default relative to process cwd.
+		WatchlistDBPath: getenv("WATCHLIST_DB_PATH", "data/watchlist.db"),
 	}
 }
 

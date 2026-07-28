@@ -10,7 +10,7 @@ Go HTTP API for market data across **Binance**, **Coinbase**, and **Bybit** (spo
 | Transport | `internal/transport/telegram` | Optional Telegram bot (long-poll → same services) |
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
-| Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache |
+| Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache, **SQLite watchlist** |
 | Platform | `internal/platform/config` | Env config |
 
 OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
@@ -39,6 +39,8 @@ Intervals: `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `6h`, `8h`, `12h`, 
 Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). Failed refreshes **retry with backoff** (1m→1h) before waiting for the next daily slot. User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (last-good retained on failure until safety TTL). Default **`SUPPLY_CACHE_TTL=48h`** so entries cannot live forever after a long outage (set `0` to never expire). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first). Empty supply snapshot → market-cap sort returns `502`.
+
+**Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -108,6 +110,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `CACHE_CLEANUP_EVERY` | `1m` | Background expired-entry cleanup (must be > 0) |
 | `RATE_LIMIT_RPS` | `40` | Per-IP request rate (0 disables) |
 | `RATE_LIMIT_BURST` | `80` | Per-IP burst size |
+| `WATCHLIST_DB_PATH` | `data/watchlist.db` | SQLite file for durable watchlists (created if missing) |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 
@@ -147,6 +150,7 @@ Unit tests mock upstream HTTP; they do not call live Binance.
 | Application | `internal/service/market` | `service_test.go` (fakes for ports) |
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
+| Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
 | Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go` |
 | Transport middleware | `internal/transport/http/middleware` | `cors_test.go`, `ratelimit_test.go` |
 | Transport router | `internal/transport/http` | `router_test.go` |

@@ -24,6 +24,7 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("RATE_LIMIT_BURST", "")
 	t.Setenv("CORS_ALLOW_ORIGINS", "")
 	t.Setenv("TELEGRAM_ALLOW_ALL", "")
+	t.Setenv("WATCHLIST_DB_PATH", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":8080" {
@@ -57,6 +58,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.TelegramAllowAll {
 		t.Fatal("TelegramAllowAll default false")
 	}
+	if cfg.WatchlistDBPath != "data/watchlist.db" {
+		t.Fatalf("WatchlistDBPath default=%q", cfg.WatchlistDBPath)
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {
@@ -68,10 +72,14 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	t.Setenv("SUPPLY_REFRESH_ON_STARTUP", "false")
 	t.Setenv("RATE_LIMIT_RPS", "5")
 	t.Setenv("RATE_LIMIT_BURST", "10")
+	t.Setenv("WATCHLIST_DB_PATH", "C:/tmp/wl.db")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":9090" || cfg.SupplyCacheTTL != 30*time.Hour {
 		t.Fatalf("cfg=%+v", cfg)
+	}
+	if cfg.WatchlistDBPath != "C:/tmp/wl.db" {
+		t.Fatalf("WatchlistDBPath=%q", cfg.WatchlistDBPath)
 	}
 	if cfg.BinanceProductBaseURL != "https://example.test" {
 		t.Fatalf("product base=%q", cfg.BinanceProductBaseURL)

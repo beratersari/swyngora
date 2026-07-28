@@ -105,7 +105,18 @@ func main() {
 		domain.ExchangeBybit:    bybitClient,
 	}, binanceClient)
 
-	watchSvc := watchlist.New(watchliststore.NewMemory())
+	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
+	if err != nil {
+		logger.Error("watchlist sqlite open failed", "path", cfg.WatchlistDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := watchStore.Close(); err != nil {
+			logger.Error("watchlist sqlite close", "err", err)
+		}
+	}()
+	watchSvc := watchlist.New(watchStore)
+	logger.Info("watchlist store ready", "driver", "sqlite", "path", watchStore.Path())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
