@@ -24,6 +24,8 @@ type CreateInput struct {
 	Symbol      string
 	Condition   string // above | below
 	TargetPrice float64
+	// Mode is one_time (default) or repeating.
+	Mode string
 }
 
 // Service orchestrates price-alert use cases.
@@ -56,6 +58,10 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if in.TargetPrice <= 0 || math.IsNaN(in.TargetPrice) || math.IsInf(in.TargetPrice, 0) {
 		return nil, fmt.Errorf("%w: targetPrice must be a positive number", domain.ErrInvalidArgument)
 	}
+	mode, ok := domain.NormalizeAlertMode(in.Mode)
+	if !ok {
+		return nil, fmt.Errorf("%w: mode must be one_time or repeating", domain.ErrInvalidArgument)
+	}
 	n, err := s.store.CountByClient(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -63,6 +69,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if n >= domain.MaxPriceAlertsPerClient {
 		return nil, fmt.Errorf("%w: max %d alerts per client", domain.ErrInvalidArgument, domain.MaxPriceAlertsPerClient)
 	}
+	// Repeating starts disarmed so we only fire on a true cross (not while already on the trigger side).
 	alert := domain.PriceAlert{
 		ID:          uuid.NewString(),
 		ClientID:    clientID,
@@ -70,6 +77,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		Symbol:      sym,
 		Condition:   cond,
 		TargetPrice: in.TargetPrice,
+		Mode:        mode,
+		Armed:       false,
 		Status:      domain.AlertStatusActive,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -129,7 +138,6 @@ func (s *Service) ListActive(ctx context.Context) ([]domain.PriceAlert, error) {
 }
 
 // MarkTriggered records a one-shot trigger and enqueues a webhook notification if configured.
-// Enqueue is idempotent per alert id (at most one notification row).
 func (s *Service) MarkTriggered(ctx context.Context, id string, price float64, at time.Time) (*domain.PriceAlert, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
@@ -142,11 +150,58 @@ func (s *Service) MarkTriggered(ctx context.Context, id string, price float64, a
 	if err != nil {
 		return nil, err
 	}
-	// Durable enqueue; unique alert_id prevents double-send even if this is retried.
 	if err := s.enqueueWebhookNotification(ctx, a); err != nil {
 		slog.Error("enqueue webhook after alert trigger", "alertId", a.ID, "clientId", a.ClientID, "err", err)
 	}
 	return a, nil
+}
+
+// ProcessPrice evaluates a price tick for one alert (one_time or repeating).
+// Returns the updated alert, whether a fire event occurred, and any error.
+func (s *Service) ProcessPrice(ctx context.Context, a domain.PriceAlert, price float64, at time.Time) (*domain.PriceAlert, bool, error) {
+	if s.store == nil {
+		return nil, false, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	ev := domain.EvaluateAlert(a, price)
+	if !ev.Fire && !ev.UpdateArmed && !ev.OneTimeDone {
+		return &a, false, nil
+	}
+
+	var (
+		out *domain.PriceAlert
+		err error
+	)
+	switch {
+	case ev.OneTimeDone && ev.Fire:
+		out, err = s.store.MarkTriggered(ctx, a.ID, price, at)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := s.enqueueWebhookNotification(ctx, out); err != nil {
+			slog.Error("enqueue webhook after alert trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
+		}
+		return out, true, nil
+	case ev.Fire && a.Mode == domain.AlertModeRepeating:
+		out, err = s.store.RecordRepeatingTrigger(ctx, a.ID, price, at)
+		if err != nil {
+			return nil, false, err
+		}
+		if err := s.enqueueWebhookNotification(ctx, out); err != nil {
+			slog.Error("enqueue webhook after repeating trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
+		}
+		return out, true, nil
+	case ev.UpdateArmed:
+		out, err = s.store.SetArmed(ctx, a.ID, ev.NewArmed)
+		if err != nil {
+			return nil, false, err
+		}
+		return out, false, nil
+	default:
+		return &a, false, nil
+	}
 }
 
 // GetWebhook returns the client's webhook settings (empty URL if unset).
@@ -264,18 +319,23 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 	if a.TriggeredAt != nil {
 		trigAt = a.TriggeredAt.UTC().Format(time.RFC3339Nano)
 	}
+	mode := string(a.Mode)
+	if mode == "" {
+		mode = string(domain.AlertModeOneTime)
+	}
 	body := map[string]any{
-		"type":           "price_alert.triggered",
-		"alertId":        a.ID,
-		"clientId":       a.ClientID,
-		"exchange":       string(a.Exchange),
-		"symbol":         a.Symbol,
-		"condition":      string(a.Condition),
-		"targetPrice":    a.TargetPrice,
-		"lastPrice":      a.TriggeredPrice,
-		"triggeredAt":    trigAt,
-		"status":         string(a.Status),
-		"note":           "Informational only — not financial advice.",
+		"type":        "price_alert.triggered",
+		"alertId":     a.ID,
+		"clientId":    a.ClientID,
+		"exchange":    string(a.Exchange),
+		"symbol":      a.Symbol,
+		"condition":   string(a.Condition),
+		"mode":        mode,
+		"targetPrice": a.TargetPrice,
+		"lastPrice":   a.TriggeredPrice,
+		"triggeredAt": trigAt,
+		"status":      string(a.Status),
+		"note":        "Informational only — not financial advice.",
 	}
 	b, err := json.Marshal(body)
 	if err != nil {

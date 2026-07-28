@@ -12,10 +12,11 @@ info:
     - Watchlist is unauthenticated state keyed by client-supplied `clientId`
       (must be non-empty; not for multi-tenant production without real auth).
       Data is persisted in SQLite on the server (survives restarts); API contract is unchanged.
-    - Price alerts fire once when last price crosses above/below a target; stored in SQLite
-      and evaluated in the background (status becomes `triggered` at most once).
-    - Clients may register a webhook URL; on trigger a durable notification is queued and
-      delivered in the background with retries (at most one delivery per alert).
+    - Price alerts support `one_time` (default) or `repeating` modes for above/below targets.
+      One-time alerts become `triggered` after the first fire; repeating alerts stay `active`
+      and re-fire only after the price returns to the safe side and crosses again.
+    - Clients may register a webhook URL; on each fire a durable notification is queued and
+      delivered in the background with retries.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -792,10 +793,12 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
     post:
-      summary: Create a one-shot price alert
+      summary: Create a price alert (one-time or repeating)
       description: |
         Creates an active alert for when last price goes above or below targetPrice.
-        Background checker marks it triggered at most once. Informational — not financial advice.
+        mode=one_time (default): fires once then status becomes triggered.
+        mode=repeating: fires on each edge into the condition zone; does not re-fire while price
+        stays on that side; re-arms when price returns to the safe side. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]
       requestBody:
@@ -811,6 +814,11 @@ paths:
                 symbol: { type: string }
                 condition: { type: string, enum: [above, below] }
                 targetPrice: { type: number, exclusiveMinimum: 0 }
+                mode:
+                  type: string
+                  enum: [one_time, repeating]
+                  default: one_time
+                  description: one_time fires once; repeating fires on each re-cross of the target
       responses:
         '201':
           description: Created alert
@@ -1082,6 +1090,10 @@ components:
         symbol: { type: string }
         condition: { type: string, enum: [above, below] }
         targetPrice: { type: number }
+        mode: { type: string, enum: [one_time, repeating] }
+        armed:
+          type: boolean
+          description: Repeating only — ready to fire on next cross into the condition zone
         status: { type: string, enum: [active, triggered] }
         createdAt: { type: string, format: date-time }
         triggeredAt: { type: string, format: date-time, nullable: true }

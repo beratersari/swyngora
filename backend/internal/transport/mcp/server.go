@@ -28,7 +28,7 @@ type DataPort interface {
 	AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error)
 	RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
-	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error)
+	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -354,12 +354,13 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("create_price_alert",
-		mcp.WithDescription("Create a one-shot price alert (above/below target). Triggers once then stays triggered."),
+		mcp.WithDescription("Create a price alert (above/below). mode=one_time (default) fires once; mode=repeating re-fires on each re-cross after returning to the safe side."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT")),
 		mcp.WithString("condition", mcp.Required(), mcp.Description("above | below")),
 		mcp.WithNumber("targetPrice", mcp.Required(), mcp.Description("Threshold price")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("mode", mcp.Description("one_time | repeating (default one_time)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -377,7 +378,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target)
+		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target, req.GetString("mode", "one_time"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -28,6 +28,8 @@ type alertDTO struct {
 	Symbol         string  `json:"symbol"`
 	Condition      string  `json:"condition"`
 	TargetPrice    float64 `json:"targetPrice"`
+	Mode           string  `json:"mode"`
+	Armed          bool    `json:"armed,omitempty"`
 	Status         string  `json:"status"`
 	CreatedAt      string  `json:"createdAt"`
 	TriggeredAt    *string `json:"triggeredAt,omitempty"`
@@ -35,6 +37,10 @@ type alertDTO struct {
 }
 
 func alertToDTO(a *domain.PriceAlert) alertDTO {
+	mode := string(a.Mode)
+	if mode == "" {
+		mode = string(domain.AlertModeOneTime)
+	}
 	dto := alertDTO{
 		ID:          a.ID,
 		ClientID:    a.ClientID,
@@ -42,14 +48,18 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 		Symbol:      a.Symbol,
 		Condition:   string(a.Condition),
 		TargetPrice: a.TargetPrice,
+		Mode:        mode,
 		Status:      string(a.Status),
 		CreatedAt:   a.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if a.Mode == domain.AlertModeRepeating {
+		dto.Armed = a.Armed
 	}
 	if a.TriggeredAt != nil && !a.TriggeredAt.IsZero() {
 		s := a.TriggeredAt.UTC().Format(time.RFC3339Nano)
 		dto.TriggeredAt = &s
 	}
-	if a.Status == domain.AlertStatusTriggered {
+	if a.TriggeredPrice > 0 {
 		dto.TriggeredPrice = a.TriggeredPrice
 	}
 	return dto
@@ -90,7 +100,7 @@ type createAlertBody struct {
 	Symbol      string  `json:"symbol"`
 	Condition   string  `json:"condition"`
 	TargetPrice float64 `json:"targetPrice"`
-	// TargetPrice may also arrive as string from some clients — handled via raw if needed.
+	Mode        string  `json:"mode"` // one_time | repeating
 }
 
 // Create handles POST /api/v1/alerts
@@ -118,6 +128,7 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Symbol:      body.Symbol,
 		Condition:   body.Condition,
 		TargetPrice: body.TargetPrice,
+		Mode:        body.Mode,
 	})
 	if err != nil {
 		writeError(w, err)

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
@@ -23,11 +24,23 @@ type AlertStatus string
 
 const (
 	AlertStatusActive    AlertStatus = "active"
-	AlertStatusTriggered AlertStatus = "triggered"
+	AlertStatusTriggered AlertStatus = "triggered" // terminal for one_time only
 )
 
-// PriceAlert is a one-shot price threshold for a symbol on an exchange.
-// Triggered alerts stay stored; they are never re-fired automatically.
+// AlertMode selects one-shot vs repeating edge-cross behavior.
+type AlertMode string
+
+const (
+	// AlertModeOneTime fires once then stays triggered (default).
+	AlertModeOneTime AlertMode = "one_time"
+	// AlertModeRepeating fires on each cross into the condition zone; stays active.
+	// While price remains on the trigger side it does not re-fire; re-arms on the safe side.
+	AlertModeRepeating AlertMode = "repeating"
+)
+
+// PriceAlert is a price threshold for a symbol on an exchange.
+// One-time alerts become status=triggered after the first fire.
+// Repeating alerts stay status=active and use Armed for edge detection.
 type PriceAlert struct {
 	ID             string
 	ClientID       string
@@ -35,10 +48,26 @@ type PriceAlert struct {
 	Symbol         string
 	Condition      AlertCondition
 	TargetPrice    float64
+	Mode           AlertMode
+	// Armed is used for repeating alerts: true means ready to fire on the next
+	// transition into the condition-met zone. Ignored for one_time.
+	Armed          bool
 	Status         AlertStatus
 	CreatedAt      time.Time
-	TriggeredAt    *time.Time
-	TriggeredPrice float64 // last price when triggered; 0 if still active
+	TriggeredAt    *time.Time // last fire time (one_time or repeating)
+	TriggeredPrice float64    // last price at most recent fire; 0 if never fired
+}
+
+// AlertEvalResult is the outcome of evaluating a price tick against an alert.
+type AlertEvalResult struct {
+	// Fire is true when a notification / trigger event should be emitted.
+	Fire bool
+	// OneTimeDone is true when a one_time alert should become status=triggered.
+	OneTimeDone bool
+	// NewArmed is the armed flag to persist for repeating alerts (and one_time unused).
+	NewArmed bool
+	// UpdateArmed is true when NewArmed should be written (repeating only).
+	UpdateArmed bool
 }
 
 // MaxWebhookURLLen bounds stored webhook URLs.
@@ -81,17 +110,21 @@ type AlertNotification struct {
 
 // PriceAlertPort persists price alerts, webhooks, and the notification outbox.
 // Implementations must be concurrent-safe.
-// MarkTriggered must succeed at most once per alert (active → triggered).
-// EnqueueNotification must insert at most one row per AlertID.
+// MarkTriggered must succeed at most once per one_time alert (active → triggered).
+// RecordRepeatingTrigger keeps status=active and disarms until price returns to the safe side.
 type PriceAlertPort interface {
 	Create(ctx context.Context, alert PriceAlert) (*PriceAlert, error)
 	Get(ctx context.Context, clientID, id string) (*PriceAlert, error)
 	ListByClient(ctx context.Context, clientID string) ([]PriceAlert, error)
 	// ListActive returns all alerts with status active (background checker).
 	ListActive(ctx context.Context) ([]PriceAlert, error)
-	// MarkTriggered sets status to triggered only if still active.
+	// MarkTriggered sets status to triggered only if still active (one_time).
 	// Returns (nil, ErrNotFound) if missing or already triggered.
 	MarkTriggered(ctx context.Context, id string, price float64, at time.Time) (*PriceAlert, error)
+	// RecordRepeatingTrigger records a fire for a repeating alert (status stays active, armed=false).
+	RecordRepeatingTrigger(ctx context.Context, id string, price float64, at time.Time) (*PriceAlert, error)
+	// SetArmed updates the armed flag for a repeating (or any) active alert.
+	SetArmed(ctx context.Context, id string, armed bool) (*PriceAlert, error)
 	Delete(ctx context.Context, clientID, id string) error
 	// CountByClient returns how many alerts a client currently has (any status).
 	CountByClient(ctx context.Context, clientID string) (int, error)
@@ -101,8 +134,8 @@ type PriceAlertPort interface {
 	SetWebhook(ctx context.Context, clientID, url string) (*ClientWebhook, error)
 	DeleteWebhook(ctx context.Context, clientID string) error
 
-	// Notification outbox (durable queue).
-	// EnqueueNotification inserts if alert_id is new; if a row already exists, returns it without error.
+	// Notification outbox (durable queue). Each fire enqueues a new row (new id).
+	// EnqueueNotification always inserts a new row.
 	EnqueueNotification(ctx context.Context, n AlertNotification) (*AlertNotification, error)
 	// ListDueNotifications returns pending rows with next_attempt_at <= now.
 	ListDueNotifications(ctx context.Context, now time.Time, limit int) ([]AlertNotification, error)
@@ -135,4 +168,61 @@ func IsValidAlertCondition(s string) bool {
 	default:
 		return false
 	}
+}
+
+// IsValidAlertMode reports whether s is a known mode (empty is not valid here;
+// callers may default empty to one_time before checking).
+func IsValidAlertMode(s string) bool {
+	switch AlertMode(s) {
+	case AlertModeOneTime, AlertModeRepeating:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeAlertMode returns one_time for empty input; validates otherwise.
+func NormalizeAlertMode(s string) (AlertMode, bool) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return AlertModeOneTime, true
+	}
+	if !IsValidAlertMode(s) {
+		return "", false
+	}
+	return AlertMode(s), true
+}
+
+// EvaluateAlert applies one price observation to an alert (pure; no I/O).
+//
+// One-time: fires when condition is met while still active.
+// Repeating: fires only on the edge into the condition zone while Armed;
+// re-arms when price is on the safe side; does not fire while staying on the trigger side.
+func EvaluateAlert(a PriceAlert, lastPrice float64) AlertEvalResult {
+	if a.Status != AlertStatusActive {
+		return AlertEvalResult{}
+	}
+	mode := a.Mode
+	if mode == "" {
+		mode = AlertModeOneTime
+	}
+	met := AlertConditionMet(a.Condition, lastPrice, a.TargetPrice)
+
+	if mode == AlertModeOneTime {
+		if met {
+			return AlertEvalResult{Fire: true, OneTimeDone: true}
+		}
+		return AlertEvalResult{}
+	}
+
+	// Repeating edge detection.
+	if met {
+		if a.Armed {
+			return AlertEvalResult{Fire: true, NewArmed: false, UpdateArmed: true}
+		}
+		// Already on trigger side and disarmed — stay quiet.
+		return AlertEvalResult{NewArmed: false, UpdateArmed: true}
+	}
+	// Safe side — re-arm for the next cross.
+	return AlertEvalResult{NewArmed: true, UpdateArmed: true}
 }

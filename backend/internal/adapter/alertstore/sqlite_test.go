@@ -162,33 +162,29 @@ func TestSQLite_WebhookAndNotificationOutbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Second fire for same alert is a new outbox row (repeating support).
 	n2, err := s.EnqueueNotification(ctx, domain.AlertNotification{
-		ID: "n2-dup", AlertID: "alert-1", ClientID: "c1",
-		WebhookURL: got.URL, PayloadJSON: `{"dup":true}`,
-		Status: domain.NotificationPending, NextAttemptAt: time.Now().UTC(),
+		ID: "n2", AlertID: "alert-1", ClientID: "c1",
+		WebhookURL: got.URL, PayloadJSON: `{"again":true}`,
+		Status: domain.NotificationPending, NextAttemptAt: time.Now().UTC().Add(-time.Second),
 		CreatedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if n2.ID != n1.ID {
-		t.Fatalf("duplicate enqueue must return same row: %s vs %s", n1.ID, n2.ID)
+	if n2.ID == n1.ID {
+		t.Fatalf("expected distinct notification rows per fire")
 	}
 	due, err := s.ListDueNotifications(ctx, time.Now().UTC(), 10)
-	if err != nil || len(due) != 1 {
+	if err != nil || len(due) != 2 {
 		t.Fatalf("due=%+v err=%v", due, err)
 	}
 	if err := s.MarkNotificationDelivered(ctx, n1.ID, time.Now().UTC()); err != nil {
 		t.Fatal(err)
 	}
-	// Not due anymore
 	due, err = s.ListDueNotifications(ctx, time.Now().UTC(), 10)
-	if err != nil || len(due) != 0 {
-		t.Fatalf("after deliver due=%+v", due)
-	}
-	// Second mark delivered is ok
-	if err := s.MarkNotificationDelivered(ctx, n1.ID, time.Now().UTC()); err != nil {
-		t.Fatal(err)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("after one deliver due=%+v", due)
 	}
 }
 

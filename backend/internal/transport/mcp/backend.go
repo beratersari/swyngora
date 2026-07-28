@@ -373,7 +373,7 @@ func (b *Backend) ListPriceAlerts(ctx context.Context, clientID string) (json.Ra
 	return alertsJSON(clientID, list)
 }
 
-func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error) {
+func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
 	}
@@ -383,6 +383,7 @@ func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symb
 		Symbol:      symbol,
 		Condition:   condition,
 		TargetPrice: targetPrice,
+		Mode:        mode,
 	})
 	if err != nil {
 		return nil, err
@@ -445,20 +446,28 @@ func webhookJSON(wh *domain.ClientWebhook) (json.RawMessage, error) {
 }
 
 func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
+	mode := string(a.Mode)
+	if mode == "" {
+		mode = string(domain.AlertModeOneTime)
+	}
 	m := map[string]any{
 		"id":          a.ID,
 		"clientId":    a.ClientID,
 		"exchange":    string(a.Exchange),
 		"symbol":      a.Symbol,
 		"condition":   string(a.Condition),
+		"mode":        mode,
 		"targetPrice": a.TargetPrice,
 		"status":      string(a.Status),
 		"createdAt":   a.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if a.Mode == domain.AlertModeRepeating {
+		m["armed"] = a.Armed
+	}
 	if a.TriggeredAt != nil {
 		m["triggeredAt"] = a.TriggeredAt.UTC().Format(time.RFC3339Nano)
 	}
-	if a.Status == domain.AlertStatusTriggered {
+	if a.TriggeredPrice > 0 {
 		m["triggeredPrice"] = a.TriggeredPrice
 	}
 	return mustJSON(m)

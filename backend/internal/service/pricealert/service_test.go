@@ -204,3 +204,75 @@ func TestChecker_DoesNotTriggerOnStaleWithoutRefresh(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestChecker_RepeatingCrossAndRearm(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "rep", Symbol: "BTCUSDT", Condition: "above", TargetPrice: 100, Mode: "repeating",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Mode != domain.AlertModeRepeating || a.Armed {
+		t.Fatalf("defaults: %+v", a)
+	}
+	mkt := &fakeTicker{prices: map[string]string{"binance|BTCUSDT": "105"}}
+	c := &Checker{Alerts: svc, Market: mkt}
+	// Start already above, disarmed — must not fire
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "rep", a.ID)
+	if got.Status != domain.AlertStatusActive || got.TriggeredPrice != 0 {
+		t.Fatalf("no fire while already hot: %+v", got)
+	}
+	// Safe side re-arms
+	mkt.prices["binance|BTCUSDT"] = "90"
+	c.RunOnce(ctx)
+	got, _ = svc.Get(ctx, "rep", a.ID)
+	if !got.Armed {
+		t.Fatalf("expected armed after safe side: %+v", got)
+	}
+	// Cross up — fire, stay active, disarmed
+	mkt.prices["binance|BTCUSDT"] = "101"
+	c.RunOnce(ctx)
+	got, _ = svc.Get(ctx, "rep", a.ID)
+	if got.Status != domain.AlertStatusActive || got.TriggeredPrice != 101 || got.Armed {
+		t.Fatalf("after first cross: %+v", got)
+	}
+	// Stay above — no re-fire (triggered price unchanged)
+	mkt.prices["binance|BTCUSDT"] = "120"
+	c.RunOnce(ctx)
+	got2, _ := svc.Get(ctx, "rep", a.ID)
+	if got2.TriggeredPrice != 101 {
+		t.Fatalf("re-fired while staying hot: %+v", got2)
+	}
+	// Back safe then cross again
+	mkt.prices["binance|BTCUSDT"] = "95"
+	c.RunOnce(ctx)
+	mkt.prices["binance|BTCUSDT"] = "102"
+	c.RunOnce(ctx)
+	got3, _ := svc.Get(ctx, "rep", a.ID)
+	if got3.TriggeredPrice != 102 || got3.Status != domain.AlertStatusActive {
+		t.Fatalf("second cross: %+v", got3)
+	}
+}
+
+func TestCreate_DefaultModeOneTime(t *testing.T) {
+	svc, _ := newSvc(t)
+	a, err := svc.Create(context.Background(), CreateInput{
+		ClientID: "m", Symbol: "ETHUSDT", Condition: "below", TargetPrice: 1,
+	})
+	if err != nil || a.Mode != domain.AlertModeOneTime {
+		t.Fatalf("%+v %v", a, err)
+	}
+}
+
+func TestCreate_InvalidMode(t *testing.T) {
+	svc, _ := newSvc(t)
+	_, err := svc.Create(context.Background(), CreateInput{
+		ClientID: "m", Symbol: "ETHUSDT", Condition: "above", TargetPrice: 1, Mode: "daily",
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +70,8 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 	symbol          TEXT NOT NULL,
 	condition       TEXT NOT NULL,
 	target_price    REAL NOT NULL,
+	mode            TEXT NOT NULL DEFAULT 'one_time',
+	armed           INTEGER NOT NULL DEFAULT 0,
 	status          TEXT NOT NULL,
 	created_at      TEXT NOT NULL,
 	triggered_at    TEXT,
@@ -85,7 +88,7 @@ CREATE TABLE IF NOT EXISTS client_webhooks (
 
 CREATE TABLE IF NOT EXISTS alert_notifications (
 	id              TEXT PRIMARY KEY NOT NULL,
-	alert_id        TEXT NOT NULL UNIQUE,
+	alert_id        TEXT NOT NULL,
 	client_id       TEXT NOT NULL,
 	webhook_url     TEXT NOT NULL,
 	payload_json    TEXT NOT NULL,
@@ -100,11 +103,80 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_due
 	ON alert_notifications(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_alert_notifications_client
 	ON alert_notifications(client_id);
+CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
+	ON alert_notifications(alert_id);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("alerts sqlite migrate: %w", err)
 	}
+	// Additive columns for DBs created before mode/armed existed.
+	for _, stmt := range []string{
+		`ALTER TABLE price_alerts ADD COLUMN mode TEXT NOT NULL DEFAULT 'one_time'`,
+		`ALTER TABLE price_alerts ADD COLUMN armed INTEGER NOT NULL DEFAULT 0`,
+	} {
+		_, _ = s.db.Exec(stmt) // ignore "duplicate column" errors
+	}
+	if err := s.migrateNotificationsDropAlertUnique(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// migrateNotificationsDropAlertUnique rebuilds alert_notifications without UNIQUE(alert_id)
+// so repeating alerts can enqueue one row per fire.
+func (s *SQLite) migrateNotificationsDropAlertUnique() error {
+	var createSQL string
+	err := s.db.QueryRow(`SELECT sql FROM sqlite_master WHERE type='table' AND name='alert_notifications'`).Scan(&createSQL)
+	if err == sql.ErrNoRows || createSQL == "" {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("alerts sqlite inspect notifications: %w", err)
+	}
+	// Old schema: "alert_id ... UNIQUE" (PRIMARY KEY also implies UNIQUE on id only).
+	hasAlertUnique := strings.Contains(createSQL, "alert_id") &&
+		(strings.Contains(createSQL, "alert_id        TEXT NOT NULL UNIQUE") ||
+			strings.Contains(createSQL, "alert_id TEXT NOT NULL UNIQUE") ||
+			strings.Contains(createSQL, "UNIQUE(alert_id)") ||
+			strings.Contains(createSQL, "UNIQUE (alert_id)"))
+	if !hasAlertUnique {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(`
+CREATE TABLE alert_notifications_new (
+	id              TEXT PRIMARY KEY NOT NULL,
+	alert_id        TEXT NOT NULL,
+	client_id       TEXT NOT NULL,
+	webhook_url     TEXT NOT NULL,
+	payload_json    TEXT NOT NULL,
+	status          TEXT NOT NULL,
+	attempts        INTEGER NOT NULL DEFAULT 0,
+	next_attempt_at TEXT NOT NULL,
+	last_error      TEXT NOT NULL DEFAULT '',
+	created_at      TEXT NOT NULL,
+	delivered_at    TEXT
+);
+INSERT INTO alert_notifications_new
+	SELECT id, alert_id, client_id, webhook_url, payload_json, status,
+	       attempts, next_attempt_at, last_error, created_at, delivered_at
+	FROM alert_notifications;
+DROP TABLE alert_notifications;
+ALTER TABLE alert_notifications_new RENAME TO alert_notifications;
+CREATE INDEX IF NOT EXISTS idx_alert_notifications_due
+	ON alert_notifications(status, next_attempt_at);
+CREATE INDEX IF NOT EXISTS idx_alert_notifications_client
+	ON alert_notifications(client_id);
+CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
+	ON alert_notifications(alert_id);
+`); err != nil {
+		return fmt.Errorf("alerts sqlite rebuild notifications: %w", err)
+	}
+	return tx.Commit()
 }
 
 // Path returns the absolute database file path.
@@ -118,6 +190,11 @@ func (s *SQLite) Close() error {
 	return s.db.Close()
 }
 
+const alertSelectCols = `
+	id, client_id, exchange, symbol, condition, target_price,
+	mode, armed, status, created_at, triggered_at, triggered_price
+`
+
 // Create inserts a new alert. Caller supplies a unique ID and Active status.
 func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.PriceAlert, error) {
 	s.mu.Lock()
@@ -128,14 +205,22 @@ func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.P
 	if alert.Status == "" {
 		alert.Status = domain.AlertStatusActive
 	}
+	if alert.Mode == "" {
+		alert.Mode = domain.AlertModeOneTime
+	}
+	armed := 0
+	if alert.Armed {
+		armed = 1
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_alerts (
 			id, client_id, exchange, symbol, condition, target_price,
-			status, created_at, triggered_at, triggered_price
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			mode, armed, status, created_at, triggered_at, triggered_price
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		alert.ID, alert.ClientID, string(alert.Exchange), alert.Symbol,
-		string(alert.Condition), alert.TargetPrice, string(alert.Status),
+		string(alert.Condition), alert.TargetPrice,
+		string(alert.Mode), armed, string(alert.Status),
 		alert.CreatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(alert.TriggeredAt), alert.TriggeredPrice,
 	)
@@ -148,8 +233,7 @@ func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.P
 // Get returns one alert for the client or ErrNotFound.
 func (s *SQLite) Get(ctx context.Context, clientID, id string) (*domain.PriceAlert, error) {
 	a, err := s.scanOne(ctx, s.db, `
-		SELECT id, client_id, exchange, symbol, condition, target_price,
-		       status, created_at, triggered_at, triggered_price
+		SELECT `+alertSelectCols+`
 		FROM price_alerts WHERE id = ? AND client_id = ?
 	`, id, clientID)
 	if err == sql.ErrNoRows {
@@ -161,8 +245,7 @@ func (s *SQLite) Get(ctx context.Context, clientID, id string) (*domain.PriceAle
 // ListByClient returns all alerts for a client (newest first).
 func (s *SQLite) ListByClient(ctx context.Context, clientID string) ([]domain.PriceAlert, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, exchange, symbol, condition, target_price,
-		       status, created_at, triggered_at, triggered_price
+		SELECT `+alertSelectCols+`
 		FROM price_alerts WHERE client_id = ?
 		ORDER BY created_at DESC
 	`, clientID)
@@ -176,8 +259,7 @@ func (s *SQLite) ListByClient(ctx context.Context, clientID string) ([]domain.Pr
 // ListActive returns every active alert (any client).
 func (s *SQLite) ListActive(ctx context.Context) ([]domain.PriceAlert, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, exchange, symbol, condition, target_price,
-		       status, created_at, triggered_at, triggered_price
+		SELECT `+alertSelectCols+`
 		FROM price_alerts WHERE status = ?
 		ORDER BY created_at ASC
 	`, string(domain.AlertStatusActive))
@@ -188,7 +270,7 @@ func (s *SQLite) ListActive(ctx context.Context) ([]domain.PriceAlert, error) {
 	return scanAll(rows)
 }
 
-// MarkTriggered transitions active → triggered exactly once.
+// MarkTriggered transitions active → triggered exactly once (one_time alerts).
 func (s *SQLite) MarkTriggered(ctx context.Context, id string, price float64, at time.Time) (*domain.PriceAlert, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -197,7 +279,7 @@ func (s *SQLite) MarkTriggered(ctx context.Context, id string, price float64, at
 	}
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE price_alerts
-		SET status = ?, triggered_at = ?, triggered_price = ?
+		SET status = ?, triggered_at = ?, triggered_price = ?, armed = 0
 		WHERE id = ? AND status = ?
 	`, string(domain.AlertStatusTriggered), at.UTC().Format(time.RFC3339Nano), price,
 		id, string(domain.AlertStatusActive))
@@ -211,9 +293,62 @@ func (s *SQLite) MarkTriggered(ctx context.Context, id string, price float64, at
 	if n == 0 {
 		return nil, domain.ErrNotFound
 	}
+	return s.getByIDUnlocked(ctx, id)
+}
+
+// RecordRepeatingTrigger records a fire for a repeating alert (stays active, disarmed).
+func (s *SQLite) RecordRepeatingTrigger(ctx context.Context, id string, price float64, at time.Time) (*domain.PriceAlert, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE price_alerts
+		SET triggered_at = ?, triggered_price = ?, armed = 0
+		WHERE id = ? AND status = ? AND mode = ?
+	`, at.UTC().Format(time.RFC3339Nano), price,
+		id, string(domain.AlertStatusActive), string(domain.AlertModeRepeating))
+	if err != nil {
+		return nil, fmt.Errorf("alerts sqlite record repeating: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getByIDUnlocked(ctx, id)
+}
+
+// SetArmed updates the armed flag used by repeating edge detection.
+func (s *SQLite) SetArmed(ctx context.Context, id string, armed bool) (*domain.PriceAlert, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v := 0
+	if armed {
+		v = 1
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE price_alerts SET armed = ? WHERE id = ? AND status = ?
+	`, v, id, string(domain.AlertStatusActive))
+	if err != nil {
+		return nil, fmt.Errorf("alerts sqlite set armed: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getByIDUnlocked(ctx, id)
+}
+
+func (s *SQLite) getByIDUnlocked(ctx context.Context, id string) (*domain.PriceAlert, error) {
 	a, err := s.scanOne(ctx, s.db, `
-		SELECT id, client_id, exchange, symbol, condition, target_price,
-		       status, created_at, triggered_at, triggered_price
+		SELECT `+alertSelectCols+`
 		FROM price_alerts WHERE id = ?
 	`, id)
 	if err == sql.ErrNoRows {
@@ -295,7 +430,7 @@ func (s *SQLite) DeleteWebhook(ctx context.Context, clientID string) error {
 	return nil
 }
 
-// EnqueueNotification inserts a pending notification. Unique on alert_id — duplicates return the existing row.
+// EnqueueNotification inserts a new pending notification row (one per fire event).
 func (s *SQLite) EnqueueNotification(ctx context.Context, n domain.AlertNotification) (*domain.AlertNotification, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -319,10 +454,6 @@ func (s *SQLite) EnqueueNotification(ctx context.Context, n domain.AlertNotifica
 		n.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(n.DeliveredAt),
 	)
 	if err != nil {
-		// Unique conflict on alert_id → return existing (idempotent enqueue).
-		if existing, gerr := s.getNotificationByAlertIDUnlocked(ctx, n.AlertID); gerr == nil {
-			return existing, nil
-		}
 		return nil, fmt.Errorf("alerts sqlite enqueue: %w", err)
 	}
 	return cloneNotification(&n), nil
@@ -428,10 +559,13 @@ func (s *SQLite) GetNotificationByAlertID(ctx context.Context, alertID string) (
 }
 
 func (s *SQLite) getNotificationByAlertIDUnlocked(ctx context.Context, alertID string) (*domain.AlertNotification, error) {
+	// Latest notification for this alert (repeating alerts may have many).
 	n, err := s.scanNotification(ctx, s.db, `
 		SELECT id, alert_id, client_id, webhook_url, payload_json, status,
 		       attempts, next_attempt_at, last_error, created_at, delivered_at
 		FROM alert_notifications WHERE alert_id = ?
+		ORDER BY created_at DESC
+		LIMIT 1
 	`, alertID)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrNotFound
@@ -509,19 +643,25 @@ type rowScanner interface {
 
 func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args ...any) (*domain.PriceAlert, error) {
 	var (
-		a           domain.PriceAlert
-		ex, cond, st, createdRaw string
-		trigRaw     sql.NullString
+		a                            domain.PriceAlert
+		ex, cond, mode, st, createdRaw string
+		armed                        int
+		trigRaw                      sql.NullString
 	)
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
-		&st, &createdRaw, &trigRaw, &a.TriggeredPrice,
+		&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
 	)
 	if err != nil {
 		return nil, err
 	}
 	a.Exchange = domain.Exchange(ex)
 	a.Condition = domain.AlertCondition(cond)
+	a.Mode = domain.AlertMode(mode)
+	if a.Mode == "" {
+		a.Mode = domain.AlertModeOneTime
+	}
+	a.Armed = armed != 0
 	a.Status = domain.AlertStatus(st)
 	a.CreatedAt = parseTime(createdRaw)
 	if trigRaw.Valid && trigRaw.String != "" {
@@ -535,18 +675,24 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 	out := make([]domain.PriceAlert, 0)
 	for rows.Next() {
 		var (
-			a                      domain.PriceAlert
-			ex, cond, st, createdRaw string
-			trigRaw                sql.NullString
+			a                              domain.PriceAlert
+			ex, cond, mode, st, createdRaw string
+			armed                          int
+			trigRaw                        sql.NullString
 		)
 		if err := rows.Scan(
 			&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
-			&st, &createdRaw, &trigRaw, &a.TriggeredPrice,
+			&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
 		); err != nil {
 			return nil, fmt.Errorf("alerts sqlite scan: %w", err)
 		}
 		a.Exchange = domain.Exchange(ex)
 		a.Condition = domain.AlertCondition(cond)
+		a.Mode = domain.AlertMode(mode)
+		if a.Mode == "" {
+			a.Mode = domain.AlertModeOneTime
+		}
+		a.Armed = armed != 0
 		a.Status = domain.AlertStatus(st)
 		a.CreatedAt = parseTime(createdRaw)
 		if trigRaw.Valid && trigRaw.String != "" {

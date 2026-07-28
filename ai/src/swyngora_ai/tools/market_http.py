@@ -122,6 +122,10 @@ class AlertCreateInput(BaseModel):
     condition: str = Field(description="above | below")
     target_price: float = Field(gt=0, description="Threshold price")
     exchange: str = "binance"
+    mode: str = Field(
+        default="one_time",
+        description="one_time (default) or repeating (re-fire after re-cross)",
+    )
 
 
 class AlertDeleteInput(BaseModel):
@@ -294,6 +298,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         condition: str,
         target_price: float,
         exchange: str = "binance",
+        mode: str = "one_time",
     ) -> str:
         return http.post(
             "/api/v1/alerts",
@@ -303,6 +308,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "condition": condition,
                 "targetPrice": target_price,
                 "exchange": exchange,
+                "mode": mode,
             },
         )
 
@@ -444,8 +450,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             create_price_alert,
             name="create_price_alert",
             description=(
-                "Create a one-shot price alert when last price goes above or below target_price. "
-                "Fires at most once (status becomes triggered)."
+                "Create a price alert when last price goes above or below target_price. "
+                "mode=one_time (default) fires once; mode=repeating re-fires on each re-cross "
+                "after price returns to the safe side."
             ),
             args_schema=AlertCreateInput,
         ),

@@ -236,14 +236,15 @@ func (c *APIClient) ListPriceAlerts(ctx context.Context, clientID string) (json.
 	return c.get(ctx, "/api/v1/alerts", q)
 }
 
-// CreatePriceAlert creates a one-shot price alert.
-func (c *APIClient) CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64) (json.RawMessage, error) {
+// CreatePriceAlert creates a price alert (one_time or repeating).
+func (c *APIClient) CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
 		"clientId":    clientID,
 		"exchange":    exchange,
 		"symbol":      symbol,
 		"condition":   condition,
 		"targetPrice": targetPrice,
+		"mode":        mode,
 	})
 }
 

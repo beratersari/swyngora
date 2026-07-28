@@ -47,7 +47,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
 
-**Price alerts:** one-shot above/below thresholds per symbol (`POST /api/v1/alerts`). Active alerts are checked in the background (default every 30s) against last price; when the condition is met the alert is marked **`triggered` once** and never re-fires. Stored in SQLite (`ALERTS_DB_PATH`, default `data/alerts.db`). Optional **webhook** URL per client (`/api/v1/alerts/webhook`): on trigger a durable outbox row is enqueued (one per alert) and POSTed in the background with retries; pending deliveries survive restarts.
+**Price alerts:** above/below thresholds per symbol (`POST /api/v1/alerts`) with `mode=one_time` (default) or `mode=repeating`. One-time alerts fire once then stay **`triggered`**; repeating alerts re-fire on each re-cross after the price returns to the safe side. Checked in the background (default every 30s). Stored in SQLite (`ALERTS_DB_PATH`). Optional **webhook** URL (`/api/v1/alerts/webhook`): each fire enqueues a durable outbox row delivered with retries.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 

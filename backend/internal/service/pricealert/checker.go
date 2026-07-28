@@ -16,7 +16,8 @@ type TickerFetcher interface {
 }
 
 // Checker evaluates active price alerts on an interval.
-// Each alert is marked triggered at most once (store enforces active → triggered).
+// One-time alerts fire once then leave the active set.
+// Repeating alerts fire on each edge into the condition zone and re-arm on the safe side.
 type Checker struct {
 	Alerts   *Service
 	Market   TickerFetcher
@@ -52,7 +53,7 @@ func (c *Checker) Start(ctx context.Context) {
 	}
 }
 
-// RunOnce loads active alerts, fetches unique tickers, and marks matches triggered.
+// RunOnce loads active alerts, fetches unique tickers, and applies price evaluation.
 func (c *Checker) RunOnce(ctx context.Context) {
 	if c.Alerts == nil || c.Market == nil {
 		return
@@ -110,21 +111,22 @@ func (c *Checker) RunOnce(ctx context.Context) {
 			}
 			now := c.now().UTC()
 			for _, a := range alerts {
-				if !domain.AlertConditionMet(a.Condition, last, a.TargetPrice) {
+				updated, fired, err := c.Alerts.ProcessPrice(ctx, a, last, now)
+				if err != nil {
+					c.Logger.Debug("process price alert failed", "id", a.ID, "err", err)
 					continue
 				}
-				if _, err := c.Alerts.MarkTriggered(ctx, a.ID, last, now); err != nil {
-					// Already triggered or gone — expected under races; do not re-fire.
-					c.Logger.Debug("mark triggered skipped", "id", a.ID, "err", err)
+				if !fired || updated == nil {
 					continue
 				}
 				c.Logger.Info("price alert triggered",
-					"id", a.ID,
-					"clientId", a.ClientID,
-					"exchange", a.Exchange,
-					"symbol", a.Symbol,
-					"condition", a.Condition,
-					"target", a.TargetPrice,
+					"id", updated.ID,
+					"clientId", updated.ClientID,
+					"exchange", updated.Exchange,
+					"symbol", updated.Symbol,
+					"condition", updated.Condition,
+					"mode", updated.Mode,
+					"target", updated.TargetPrice,
 					"lastPrice", last,
 				)
 			}
