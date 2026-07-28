@@ -30,6 +30,7 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("WEBHOOK_DELIVERY_INTERVAL", "")
 	t.Setenv("WEBHOOK_HTTP_TIMEOUT", "")
 	t.Setenv("WEBHOOK_MAX_ATTEMPTS", "")
+	t.Setenv("PORTFOLIO_DB_PATH", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != ":8080" {
@@ -80,6 +81,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.WebhookMaxAttempts != 8 {
 		t.Fatalf("WebhookMaxAttempts default=%d", cfg.WebhookMaxAttempts)
+	}
+	if cfg.PortfolioDBPath != "data/portfolio.db" {
+		t.Fatalf("PortfolioDBPath default=%q", cfg.PortfolioDBPath)
 	}
 }
 

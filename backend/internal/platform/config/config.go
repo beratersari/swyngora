@@ -71,6 +71,9 @@ type Config struct {
 	WebhookHTTPTimeout time.Duration
 	// WebhookMaxAttempts is permanent failure threshold for webhook deliveries.
 	WebhookMaxAttempts int
+
+	// PortfolioDBPath is the SQLite file for paper-trading portfolios.
+	PortfolioDBPath string
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -131,6 +134,8 @@ func Load() Config {
 		WebhookDeliveryInterval: positiveDurationEnv("WEBHOOK_DELIVERY_INTERVAL", 5*time.Second),
 		WebhookHTTPTimeout:      positiveDurationEnv("WEBHOOK_HTTP_TIMEOUT", 10*time.Second),
 		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
+
+		PortfolioDBPath: getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
 	}
 }
 

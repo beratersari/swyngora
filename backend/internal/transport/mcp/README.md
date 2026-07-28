@@ -24,6 +24,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_alert_webhook` | Get client webhook URL for alert notifications |
 | `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |
 | `delete_alert_webhook` | Clear client webhook URL |
+| `create_portfolio` | Create paper portfolio with starting balance |
+| `get_portfolio` | Cash, positions, P&L snapshot |
+| `place_portfolio_order` | Paper market buy/sell |
+| `list_portfolio_trades` | Paper trade history |
 
 ## Run (integrated — preferred)
 

@@ -18,6 +18,8 @@ info:
     - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`,
       plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
       quiet hours end; pending notifications survive restarts.
+    - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
+      open positions, realized/unrealized P&amp;L, and trade history (SQLite; not real money).
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -210,7 +212,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Page size (1–500, default 50)
+          description: Page size (1â€“500, default 50)
           schema:
             type: integer
             minimum: 1
@@ -261,8 +263,8 @@ paths:
           in: query
           required: false
           description: |
-            Candle interval (default 1h). Supported values are exchange-specific —
-            call GET /api/v1/market/intervals?exchange=… for the authoritative list.
+            Candle interval (default 1h). Supported values are exchange-specific â€”
+            call GET /api/v1/market/intervals?exchange=â€¦ for the authoritative list.
             Coinbase/Bybit reject many Binance-only intervals with 400.
           schema:
             type: string
@@ -271,7 +273,7 @@ paths:
         - name: limit
           in: query
           required: false
-          description: Number of candles (1–1000, default 100)
+          description: Number of candles (1â€“1000, default 100)
           schema:
             type: integer
             minimum: 1
@@ -386,7 +388,7 @@ paths:
         Fetches OHLCV candles from the selected exchange and computes:
         - RSI (Wilder's smoothing, default period 14)
         - EMA (default periods 12 and 26; seed = SMA of first period)
-        Informational only — not financial advice.
+        Informational only â€” not financial advice.
       operationId: getIndicators
       tags: [Market]
       parameters:
@@ -458,7 +460,7 @@ paths:
       description: |
         Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
         Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
-        Informational only — not financial advice.
+        Informational only â€” not financial advice.
       operationId: getPumpEvents
       tags: [Market]
       parameters:
@@ -526,7 +528,7 @@ paths:
       summary: Scan top-volume symbols for recent pumps
       description: |
         Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
-        Informational only — not financial advice.
+        Informational only â€” not financial advice.
       operationId: scanPumpEvents
       tags: [Market]
       parameters:
@@ -582,7 +584,7 @@ paths:
       description: |
         Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
         Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
-        Upstream concurrency is bounded process-wide. Informational only — not financial advice.
+        Upstream concurrency is bounded process-wide. Informational only â€” not financial advice.
       operationId: postIndicatorsBatch
       tags: [Market]
       requestBody:
@@ -955,6 +957,107 @@ paths:
           $ref: '#/components/responses/Error'
 
 
+
+  /api/v1/portfolio:
+    post:
+      summary: Create a paper-trading portfolio
+      description: |
+        Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
+        Paper trading only — not real money. Not financial advice.
+      operationId: createPortfolio
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [startingBalance]
+              properties:
+                clientId: { type: string }
+                startingBalance: { type: number, exclusiveMinimum: 0, example: 10000 }
+                currency: { type: string, default: USDT }
+      responses:
+        '201':
+          description: Created portfolio snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioView'
+        '400':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: Get paper portfolio snapshot
+      description: Cash, open positions (mark-to-market), realized and unrealized P&L.
+      operationId: getPortfolio
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Portfolio view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioView'
+        '404':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/orders:
+    post:
+      summary: Place a paper market order
+      description: Buy or sell at the venue last price. Simulated fill only.
+      operationId: placePortfolioOrder
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, side, quantity]
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
+                symbol: { type: string }
+                side: { type: string, enum: [buy, sell] }
+                quantity: { type: number, exclusiveMinimum: 0 }
+      responses:
+        '200':
+          description: Fill and updated portfolio
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/trades:
+    get:
+      summary: List paper trade history
+      operationId: listPortfolioTrades
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Trade list
+        '404':
+          $ref: '#/components/responses/Error'
 components:
   responses:
     Error:
@@ -1110,7 +1213,7 @@ components:
         mode: { type: string, enum: [one_time, repeating] }
         armed:
           type: boolean
-          description: Repeating only — ready to fire on next cross into the condition zone
+          description: Repeating only â€” ready to fire on next cross into the condition zone
         status: { type: string, enum: [active, triggered] }
         createdAt: { type: string, format: date-time }
         triggeredAt: { type: string, format: date-time, nullable: true }
@@ -1129,6 +1232,22 @@ components:
             start: { type: string }
             end: { type: string }
         configured: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    PortfolioView:
+      type: object
+      properties:
+        clientId: { type: string }
+        currency: { type: string }
+        startingBalance: { type: number }
+        cashBalance: { type: number }
+        positionsValue: { type: number }
+        equity: { type: number }
+        unrealizedPnL: { type: number }
+        realizedPnLTotal: { type: number }
+        totalPnL: { type: number }
+        positions: { type: array, items: { type: object } }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     Watchlist:
       type: object
@@ -1184,15 +1303,15 @@ components:
         marketCapCirculating:
           type: number
           nullable: true
-          description: USD price × circulating supply
+          description: USD price Ã— circulating supply
         marketCapTotal:
           type: number
           nullable: true
-          description: USD price × total supply
+          description: USD price Ã— total supply
         marketCapMax:
-          description: USD price × max supply, or the string "∞" when max supply is undefined
+          description: USD price Ã— max supply, or the string "âˆ" when max supply is undefined
           nullable: true
           oneOf:
             - type: number
             - type: string
-              enum: ["∞"]
+              enum: ["âˆ"]

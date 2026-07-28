@@ -137,6 +137,24 @@ class AlertWebhookGetInput(BaseModel):
     client_id: str
 
 
+class PortfolioCreateInput(BaseModel):
+    client_id: str
+    starting_balance: float = Field(gt=0, description="Starting cash")
+    currency: str = "USDT"
+
+
+class PortfolioGetInput(BaseModel):
+    client_id: str
+
+
+class PortfolioOrderInput(BaseModel):
+    client_id: str
+    symbol: str
+    side: str = Field(description="buy | sell")
+    quantity: float = Field(gt=0)
+    exchange: str = "binance"
+
+
 class AlertWebhookSetInput(BaseModel):
     client_id: str
     url: str = Field(description="Absolute http(s) webhook URL")
@@ -353,6 +371,42 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def delete_alert_webhook(client_id: str) -> str:
         return http.delete("/api/v1/alerts/webhook", {"clientId": client_id})
 
+    def create_portfolio(
+        client_id: str, starting_balance: float, currency: str = "USDT"
+    ) -> str:
+        return http.post(
+            "/api/v1/portfolio",
+            {
+                "clientId": client_id,
+                "startingBalance": starting_balance,
+                "currency": currency,
+            },
+        )
+
+    def get_portfolio(client_id: str) -> str:
+        return http.get("/api/v1/portfolio", {"clientId": client_id})
+
+    def place_portfolio_order(
+        client_id: str,
+        symbol: str,
+        side: str,
+        quantity: float,
+        exchange: str = "binance",
+    ) -> str:
+        return http.post(
+            "/api/v1/portfolio/orders",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "side": side,
+                "quantity": quantity,
+                "exchange": exchange,
+            },
+        )
+
+    def list_portfolio_trades(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
+
     def detect_pump_events(
         symbol: str,
         exchange: str = "binance",
@@ -508,6 +562,30 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="delete_alert_webhook",
             description="Clear the client's price-alert webhook URL.",
             args_schema=AlertWebhookGetInput,
+        ),
+        StructuredTool.from_function(
+            create_portfolio,
+            name="create_portfolio",
+            description="Create a paper-trading portfolio with starting cash (simulated only).",
+            args_schema=PortfolioCreateInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio,
+            name="get_portfolio",
+            description="Get paper portfolio cash, positions, realized/unrealized P&L.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            place_portfolio_order,
+            name="place_portfolio_order",
+            description="Paper market buy/sell at last price. Not real money.",
+            args_schema=PortfolioOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_trades,
+            name="list_portfolio_trades",
+            description="List paper trade history for a clientId.",
+            args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
             detect_pump_events,

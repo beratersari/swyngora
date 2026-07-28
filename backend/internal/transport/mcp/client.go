@@ -328,6 +328,40 @@ func (c *APIClient) DeleteAlertWebhook(ctx context.Context, clientID string) (js
 	return json.RawMessage(body), nil
 }
 
+// CreatePortfolio creates a paper portfolio.
+func (c *APIClient) CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio", map[string]any{
+		"clientId": clientID, "startingBalance": startingBalance, "currency": currency,
+	})
+}
+
+// GetPortfolio fetches paper portfolio view.
+func (c *APIClient) GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio", q)
+}
+
+// PlacePortfolioOrder places a paper market order.
+func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
+	})
+}
+
+// ListPortfolioTrades lists paper trades.
+func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", fmt.Sprint(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", fmt.Sprint(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/trades", q)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

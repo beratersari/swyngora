@@ -14,12 +14,14 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -133,6 +135,19 @@ func main() {
 	alertSvc := pricealert.New(alertStore)
 	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
 
+	portfolioStore, err := portfoliostore.Open(cfg.PortfolioDBPath)
+	if err != nil {
+		logger.Error("portfolio sqlite open failed", "path", cfg.PortfolioDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := portfolioStore.Close(); err != nil {
+			logger.Error("portfolio sqlite close", "err", err)
+		}
+	}()
+	portfolioSvc := portfolio.New(portfolioStore, marketSvc)
+	logger.Info("paper portfolio store ready", "driver", "sqlite", "path", portfolioStore.Path())
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -154,7 +169,7 @@ func main() {
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
 	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc)
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc)
 	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
@@ -165,6 +180,7 @@ func main() {
 		AI:              aiClient,
 		AITimeout:       cfg.AITimeout,
 		Alerts:          alertSvc,
+		Portfolio:       portfolioSvc,
 	})
 
 	job := &supplyjob.Runner{

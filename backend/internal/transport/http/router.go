@@ -6,6 +6,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
@@ -26,6 +27,8 @@ type RouterOptions struct {
 	AITimeout time.Duration
 	// Alerts enables price-alert routes when non-nil.
 	Alerts *pricealert.Service
+	// Portfolio enables paper-trading routes when non-nil.
+	Portfolio *portfolio.Service
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -74,6 +77,14 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/alerts", ah.Create)
 		mux.HandleFunc("GET /api/v1/alerts/{id}", ah.Get)
 		mux.HandleFunc("DELETE /api/v1/alerts/{id}", ah.Delete)
+	}
+
+	if opts.Portfolio != nil {
+		ph := handler.NewPortfolioHandler(opts.Portfolio)
+		mux.HandleFunc("POST /api/v1/portfolio", ph.Create)
+		mux.HandleFunc("GET /api/v1/portfolio", ph.Get)
+		mux.HandleFunc("POST /api/v1/portfolio/orders", ph.PlaceOrder)
+		mux.HandleFunc("GET /api/v1/portfolio/trades", ph.ListTrades)
 	}
 
 	// MCP streamable HTTP — same process as REST API (no second server).

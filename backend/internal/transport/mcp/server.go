@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
@@ -35,6 +36,10 @@ type DataPort interface {
 	SetAlertWebhookWithMode(ctx context.Context, clientID, url, deliveryMode string) (json.RawMessage, error)
 	SetAlertWebhookSettings(ctx context.Context, clientID, url, deliveryMode, timeZone string, quietEnabled bool, quietStart, quietEnd string) (json.RawMessage, error)
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
+	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
+	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
+	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
+	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -69,10 +74,10 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 	return s
 }
 
-// NewInProcessServer wires MCP tools to market/watchlist/alert services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service) *server.MCPServer {
+// NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio services (same process as HTTP).
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -462,6 +467,90 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.DeleteAlertWebhook(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_portfolio",
+		mcp.WithDescription("Create a paper-trading portfolio with a starting cash balance (one per clientId). Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("startingBalance", mcp.Required(), mcp.Description("Starting cash e.g. 10000")),
+		mcp.WithString("currency", mcp.Description("Accounting currency default USDT")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		bal, err := req.RequireFloat("startingBalance")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreatePortfolio(ctx, clientID, bal, req.GetString("currency", "USDT"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_portfolio",
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPortfolio(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("place_portfolio_order",
+		mcp.WithDescription("Paper market buy/sell at last price. Simulated only — not real trading."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		side, err := req.RequireString("side")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_portfolio_trades",
+		mcp.WithDescription("List paper trade history for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPortfolioTrades(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

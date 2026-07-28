@@ -9,15 +9,17 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
 // Backend is an in-process facade for MCP tools (no second process, no self-HTTP).
 type Backend struct {
-	Market *market.Service
-	Watch  *watchlist.Service
-	Alerts *pricealert.Service
+	Market    *market.Service
+	Watch     *watchlist.Service
+	Alerts    *pricealert.Service
+	Portfolio *portfolio.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -446,6 +448,94 @@ func (b *Backend) DeleteAlertWebhook(ctx context.Context, clientID string) (json
 		return nil, err
 	}
 	return mustJSON(map[string]any{"clientId": clientID, "deleted": true, "configured": false})
+}
+
+func (b *Backend) CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if _, err := b.Portfolio.Create(ctx, portfolio.CreateInput{
+		ClientID: clientID, StartingBalance: startingBalance, Currency: currency,
+	}); err != nil {
+		return nil, err
+	}
+	return b.GetPortfolio(ctx, clientID)
+}
+
+func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.View(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	return portfolioViewJSON(v)
+}
+
+func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity,
+	})
+	if err != nil {
+		return nil, err
+	}
+	pv, err := portfolioViewJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	var pmap map[string]any
+	_ = json.Unmarshal(pv, &pmap)
+	return mustJSON(map[string]any{
+		"trade": map[string]any{
+			"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
+			"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
+			"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+		},
+		"portfolio": pmap,
+		"note":      v.Note,
+	})
+}
+
+func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Portfolio.ListTrades(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, t := range list {
+		items = append(items, map[string]any{
+			"id": t.ID, "exchange": string(t.Exchange), "symbol": t.Symbol, "side": string(t.Side),
+			"quantity": t.Quantity, "price": t.Price, "notional": t.Notional, "realizedPnL": t.RealizedPnL,
+			"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
+}
+
+func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
+	pos := make([]map[string]any, 0, len(v.Positions))
+	for _, p := range v.Positions {
+		pos = append(pos, map[string]any{
+			"exchange": string(p.Exchange), "symbol": p.Symbol, "quantity": p.Quantity,
+			"avgCost": p.AvgCost, "markPrice": p.MarkPrice, "marketValue": p.MarketValue,
+			"unrealizedPnL": p.UnrealizedPnL, "costBasis": p.CostBasis,
+		})
+	}
+	return mustJSON(map[string]any{
+		"clientId": v.ClientID, "currency": v.Currency, "startingBalance": v.StartingBalance,
+		"cashBalance": v.CashBalance, "positionsValue": v.PositionsValue, "equity": v.Equity,
+		"unrealizedPnL": v.UnrealizedPnL, "realizedPnLTotal": v.RealizedPnLTotal, "totalPnL": v.TotalPnL,
+		"positions": pos, "note": v.Note,
+		"createdAt": v.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": v.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
 }
 
 func webhookJSON(wh *domain.ClientWebhook) (json.RawMessage, error) {
