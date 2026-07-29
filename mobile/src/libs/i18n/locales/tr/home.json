@@ -10,6 +10,8 @@
   "sectionMovers": "En çok yükselenler (24s)",
   "sectionVolume": "En yüksek hacim",
   "sectionPumps": "Pump radar",
+  "sectionCategories": "Kategoriler",
+  "categoriesEmpty": "Şu an öne çıkan kategori yok",
   "favoritesEmpty": "Henüz favori yok — Piyasalarda yıldızlayın.",
   "moversEmpty": "Şu an yükselen yok",
   "volumeEmpty": "Hacim verisi yok",

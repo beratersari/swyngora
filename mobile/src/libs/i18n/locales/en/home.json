@@ -10,6 +10,8 @@
   "sectionMovers": "Top movers (24h)",
   "sectionVolume": "Highest volume",
   "sectionPumps": "Pump radar",
+  "sectionCategories": "Categories",
+  "categoriesEmpty": "No featured categories right now",
   "favoritesEmpty": "No favorites yet — star pairs on Markets.",
   "moversEmpty": "No movers right now",
   "volumeEmpty": "No volume data",

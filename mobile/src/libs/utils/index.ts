@@ -115,3 +115,11 @@ export type {
   DashboardMarketRow,
   DashboardPumpTeaser,
 } from './homeDashboardQuery';
+
+export {
+  intersectFeaturedTags,
+  filterTagsBySearch,
+  formatCategoryLabel,
+  buildCategorySpotParams,
+} from './categoryQuery';
+export type { CategorySpotParamsInput } from './categoryQuery';

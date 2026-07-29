@@ -10,7 +10,7 @@
 |-------|--------|----------|
 | Atoms | `atoms/` | `text/`, `button/`, `skeleton/`, `icon/` (Lucide) |
 | Molecules | `molecules/` | `chip/`, `search-field/`, `chip-group/`, `star-button/`, `rsi-badge/`, `language-switcher/`, `chat-bubble/`, `chat-composer/`, `chat-disclaimer/`, `chat-tools-chips/`, `section-header/`, `quick-action-chips/` |
-| Organisms | `organisms/` | `exchange-chips/`, `markets-toolbar/`, `market-row/`, `markets-list/`, `watchlist-row/`, `chat-message-list/`, `dashboard-market-row/`, `dashboard-section-list/`, `pump-teaser-card/` |
+| Organisms | `organisms/` | `exchange-chips/`, `markets-toolbar/`, `market-row/`, `markets-list/`, `watchlist-row/`, `chat-message-list/`, `dashboard-market-row/`, `dashboard-section-list/`, `pump-teaser-card/`, `category-chip-grid/`, `category-section/` |
 | Templates | `templates/` | `screen-template/` |
 
 **Folders:** kebab-case. **Files:** PascalCase (`StarButton.tsx` inside `star-button/`).

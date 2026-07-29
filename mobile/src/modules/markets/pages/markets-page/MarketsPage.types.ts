@@ -16,6 +16,9 @@ export type MarketsPageViewModel = {
   activeFilterCount: number;
   filterSummary: string | null;
   onOpenFilters: () => void;
+  onOpenCategories: () => void;
+  activeCategoryLabel: string | null;
+  onClearCategory: () => void;
 
   favoritesOnly: boolean;
   favoritesCount: number;

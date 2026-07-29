@@ -4,6 +4,14 @@ export type MarketsToolbarProps = {
   isSearchDebouncing?: boolean;
   activeFilterCount: number;
   onOpenFilters: () => void;
+  /** Open category browse page */
+  onOpenCategories?: () => void;
+  categoriesLabel?: string;
+  categoriesA11y?: string;
+  /** Active single category chip */
+  activeCategoryLabel?: string | null;
+  onClearCategory?: () => void;
+  clearCategoryA11y?: string;
   /** Show only favorited pairs (client-side) */
   favoritesOnly?: boolean;
   onToggleFavoritesOnly?: () => void;

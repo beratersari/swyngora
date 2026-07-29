@@ -55,10 +55,11 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 
 - Endpoints: `libs/api/endpoints/marketApi.ts`
 - Pages: `modules/markets/pages/*` (View + ViewModel + context) — kebab folders
-- UI: `components/organisms/{exchange-chips,markets-toolbar,market-row,markets-list,markets-filter-form}`
+- UI: `components/organisms/{exchange-chips,markets-toolbar,market-row,markets-list,markets-filter-form,category-chip-grid,category-section}`
 - Molecules: `components/molecules/{chip,search-field,chip-group}`
-- State: `MarketsProvider` in `modules/markets/context/`
+- State: `MarketsProvider` at **MainTabs** (shared with Home for category deep links); `selectCategoryTag` / `clearSelectedTags`
 - Infinite scroll + filter screen; search debounce 300ms
+- Categories: `pages/categories-page` + `MarketsScreens.Categories`; helpers `libs/utils/categoryQuery.ts`
 
 ## Data / freshness
 
@@ -143,7 +144,17 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 
 - Page: `modules/app/pages/home-page/` (widgets ViewModel)
 - Helpers: `libs/utils/homeDashboardQuery.ts`, `config/homeDashboardConstants.ts`
-- UI: `section-header`, `quick-action-chips`, `dashboard-market-row`, `dashboard-section-list`, `pump-teaser-card`
-- Data: spot (movers/volume), pumps scan, optional watchlist favorites
+- UI: `section-header`, `quick-action-chips`, `dashboard-market-row`, `dashboard-section-list`, `pump-teaser-card`, `category-section`
+- Data: spot (movers/volume), pumps scan, optional watchlist favorites, featured category tags
 - Design: `docs/design/mobile-home-dashboard.md`
+
+## Category discovery
+
+- Feature: browse product-catalog tags → tag-filtered Markets list
+- APIs: `GET /api/v1/market/tags`, `GET /api/v1/market/spot?tag=`
+- Page: `modules/markets/pages/categories-page/`
+- Helpers: `libs/utils/categoryQuery.ts`, `config/categoryConstants.ts` (featured set)
+- Home: featured chips; Markets toolbar: Categories entry + active tag clear chip
+- Design: `docs/design/mobile-category-discovery.md`
+- Feature doc: `docs/features/mobile-category-discovery.md`
 

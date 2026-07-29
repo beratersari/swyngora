@@ -229,6 +229,28 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (1–2) · (3–4) · (5–6) · (7)
 
+## Epic K — Mobile category discovery (**done**)
+
+**Tasks:** `tasks/mobile/category-discovery/`  
+**Epic:** `epics/mobile-category-discovery.md`  
+**Plan:** `docs/design/mobile-category-discovery.md`  
+**Feature:** `docs/features/mobile-category-discovery.md`  
+**Analysis:** `tasks/mobile/category-discovery/MCAT-A.md`  
+**Branch:** `feature/mobile-category-discovery`
+
+| ID | Task | Status |
+|---|---|---|
+| MCAT-A | Tags + spot tag-filter field matrix | done |
+| MCAT-1 | Constants + category query helpers + tests | done |
+| MCAT-2 | Atomic category UI (grid / strip) | done |
+| MCAT-3 | Categories browse page + route | done |
+| MCAT-4 | Apply tag to Markets list (context + nav) | done |
+| MCAT-5 | Home featured strip + Markets entry | done |
+| MCAT-6 | Loading / empty / error / i18n | done |
+| MCAT-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
+
 ## Later (not started)
 
 | ID | Task | Status |

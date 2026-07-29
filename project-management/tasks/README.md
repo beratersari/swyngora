@@ -17,7 +17,8 @@ tasks/
     ├── pumps/                # MPUMP-* (mobile pump / dump radar)
     ├── batch-indicators/     # MBIND-* (mobile batch RSI/EMA list enrichment)
     ├── ai-chat/              # MAI-*   (mobile AI assistant chat)
-    └── home/                 # MHOME-* (mobile home dashboard)
+    ├── home/                 # MHOME-* (mobile home dashboard)
+    └── category-discovery/   # MCAT-*  (mobile category / tag discovery)
 ```
 
 ## Rules

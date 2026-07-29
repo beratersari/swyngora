@@ -15,6 +15,7 @@ import {
   buildBatchIndicatorsArg,
   indexBatchItemsBySymbol,
   rsiFieldsFromItem,
+  formatCategoryLabel,
   toSpotListQuery,
 } from '@/libs/utils';
 import {
@@ -164,7 +165,11 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
 
   const emptyMessage =
     !errorMessage && !isLoading && !isSearchDebouncing && rows.length === 0
-      ? t('markets:empty')
+      ? markets.selectedTags.length > 0
+        ? t('markets:emptyCategory', {
+            tag: formatCategoryLabel(markets.selectedTags[0] ?? ''),
+          })
+        : t('markets:empty')
       : null;
 
   const onLoadMore = useCallback(() => {
@@ -186,6 +191,23 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   const onOpenFilters = useCallback(() => {
     navigation.navigate(MarketsScreens.Filters);
   }, [navigation]);
+
+  const onOpenCategories = useCallback(() => {
+    navigation.navigate(MarketsScreens.Categories);
+  }, [navigation]);
+
+  const onClearCategory = useCallback(() => {
+    markets.clearSelectedTags();
+  }, [markets]);
+
+  const activeCategoryLabel =
+    markets.selectedTags.length === 1
+      ? t('markets:categoryActive', {
+          tag: formatCategoryLabel(markets.selectedTags[0] ?? ''),
+        })
+      : markets.selectedTags.length > 1
+        ? t('markets:categoryActiveMulti', { count: markets.selectedTags.length })
+        : null;
 
   const onSearchChange = useCallback(
     (q: string) => {
@@ -215,8 +237,12 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
   if (markets.quote !== DEFAULT_QUOTE) filterSummaryParts.push(markets.quote);
   if (markets.sort !== DEFAULT_SORT) filterSummaryParts.push(markets.sort);
   if (markets.order !== DEFAULT_ORDER) filterSummaryParts.push(markets.order);
-  if (markets.selectedTags.length > 0) {
-    filterSummaryParts.push(`${markets.selectedTags.length} tags`);
+  if (markets.selectedTags.length === 1) {
+    filterSummaryParts.push(formatCategoryLabel(markets.selectedTags[0] ?? ''));
+  } else if (markets.selectedTags.length > 1) {
+    filterSummaryParts.push(
+      t('markets:tagsWithCount', { count: markets.selectedTags.length }),
+    );
   }
   const filterSummary =
     filterSummaryParts.length > 0 ? filterSummaryParts.join(' · ') : null;
@@ -325,6 +351,9 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     activeFilterCount: markets.activeFilterCount,
     filterSummary,
     onOpenFilters,
+    onOpenCategories,
+    activeCategoryLabel,
+    onClearCategory,
 
     favoritesOnly,
     favoritesCount: favoritesOnExchange.length,

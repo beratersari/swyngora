@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { LanguageSwitcher } from '@/components/molecules/language-switcher';
 import { QuickActionChips } from '@/components/molecules/quick-action-chips';
+import { CategorySection } from '@/components/organisms/category-section';
 import { DashboardSectionList } from '@/components/organisms/dashboard-section-list';
 import { PumpTeaserCard } from '@/components/organisms/pump-teaser-card';
 import { ScreenTemplate } from '@/components/templates/screen-template';
@@ -42,6 +43,20 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <View style={styles.quick}>
           <QuickActionChips actions={vm.quickActions} />
         </View>
+
+        <CategorySection
+          title={vm.categoriesTitle}
+          actionLabel={vm.seeAllLabel}
+          onAction={vm.onOpenCategories}
+          tags={vm.categoryTags}
+          onSelectTag={vm.onSelectCategory}
+          isLoading={vm.categoriesLoading}
+          errorMessage={vm.categoriesError}
+          emptyMessage={vm.categoriesEmpty}
+          onRetry={vm.onRetryCategories}
+          retryLabel={vm.retryLabel}
+          formatLabel={vm.formatCategoryLabel}
+        />
 
         <DashboardSectionList
           title={vm.favoritesTitle}

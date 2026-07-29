@@ -405,3 +405,61 @@ MHOME-1 … MHOME-7
 | MHOME-7 | Docs + board + changelog closeout |
 
 Full task text: `project-management/tasks/mobile/home/MHOME-*.md`.
+
+
+---
+
+## Epic K — Mobile category discovery
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Category discovery` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-category-discovery.md` |
+| **Feature** | `docs/features/mobile-category-discovery.md` |
+| **Analysis** | `project-management/tasks/mobile/category-discovery/MCAT-A.md` |
+| **Epic file** | `project-management/epics/mobile-category-discovery.md` |
+| **Tasks** | `project-management/tasks/mobile/category-discovery/MCAT-*.md` |
+| **Branch** | `feature/mobile-category-discovery` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Mobile category discovery: browse Binance product-catalog tags (Meme, AI, defi, …)
+via GET /api/v1/market/tags, open tag-filtered markets via GET /spot?tag=.
+Home featured chips + Categories browse page; reuse Markets list/context.
+No new backend work.
+
+## Goals
+
+- Featured categories on Home
+- Categories browse (search + grid) on Markets stack
+- Single-tag apply → filtered Markets list
+- Empty / error / i18n (en/tr)
+
+## Out of scope
+
+New endpoints, multi-tag discovery UX, alerts, web frontend category UI.
+
+## Child issues
+
+MCAT-A · MCAT-1 … MCAT-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MCAT-A | Tags + spot tag-filter field matrix |
+| MCAT-1 | Constants + category query helpers |
+| MCAT-2 | Atomic category UI |
+| MCAT-3 | Categories browse page + route |
+| MCAT-4 | Apply tag to Markets list |
+| MCAT-5 | Home featured strip + Markets entry |
+| MCAT-6 | Loading / empty / error / i18n |
+| MCAT-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/category-discovery/MCAT-*.md`.

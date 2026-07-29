@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { SlidersHorizontal, Star } from 'lucide-react-native';
+import { LayoutGrid, SlidersHorizontal, Star, X } from 'lucide-react-native';
 import { Icon, ICON_FAVORITE_GOLD } from '@/components/atoms/icon';
 import { Text } from '@/components/atoms/text';
 import { SearchField } from '@/components/molecules/search-field';
@@ -14,6 +14,12 @@ export function MarketsToolbar({
   isSearchDebouncing = false,
   activeFilterCount,
   onOpenFilters,
+  onOpenCategories,
+  categoriesLabel,
+  categoriesA11y,
+  activeCategoryLabel,
+  onClearCategory,
+  clearCategoryA11y,
   favoritesOnly = false,
   onToggleFavoritesOnly,
   favoritesCount = 0,
@@ -26,6 +32,8 @@ export function MarketsToolbar({
   const favIconColor = favoritesOnly
     ? ICON_FAVORITE_GOLD
     : semanticColors.text.secondary;
+  const catLabel = categoriesLabel ?? t('markets:categories');
+  const catA11y = categoriesA11y ?? t('markets:openCategoriesA11y');
   return (
     <View style={styles.root}>
       <View style={styles.row}>
@@ -37,6 +45,21 @@ export function MarketsToolbar({
           autoCapitalize="characters"
           style={styles.search}
         />
+        {onOpenCategories ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={catA11y}
+            onPress={onOpenCategories}
+            style={styles.filterBtn}
+          >
+            <View style={styles.btnInner}>
+              <Icon icon={LayoutGrid} size="sm" color={semanticColors.text.secondary} />
+              <Text variant="label" color="secondary">
+                {catLabel}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('markets:openFiltersA11y')}
@@ -53,6 +76,27 @@ export function MarketsToolbar({
           </View>
         </Pressable>
       </View>
+      {activeCategoryLabel ? (
+        <View style={styles.row}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              clearCategoryA11y ?? t('markets:clearCategoryA11y')
+            }
+            onPress={onClearCategory}
+            style={[styles.favBtn, styles.categoryChip]}
+          >
+            <View style={styles.btnInner}>
+              <Text variant="label" color="cream">
+                {activeCategoryLabel}
+              </Text>
+              {onClearCategory ? (
+                <Icon icon={X} size="sm" color={colors.cream} />
+              ) : null}
+            </View>
+          </Pressable>
+        </View>
+      ) : null}
       {onToggleFavoritesOnly ? (
         <View style={styles.row}>
           <Pressable

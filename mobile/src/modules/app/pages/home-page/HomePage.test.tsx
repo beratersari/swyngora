@@ -53,6 +53,15 @@ const stubVm = (): HomePageViewModel => ({
   pumpsTitle: 'Pump radar',
   pumpsDisclaimer: 'Not a trade signal',
   onRetryPumps: vi.fn(),
+  categoriesTitle: 'Categories',
+  categoryTags: ['Meme', 'AI'],
+  categoriesLoading: false,
+  categoriesError: null,
+  categoriesEmpty: null,
+  onSelectCategory: vi.fn(),
+  onOpenCategories: vi.fn(),
+  onRetryCategories: vi.fn(),
+  formatCategoryLabel: (t) => t,
   seeAllLabel: 'See all',
   retryLabel: 'Retry',
   isRefreshing: false,
@@ -78,6 +87,8 @@ describe('HomePage dashboard', () => {
     expect(screen.getByText('BTCUSDT')).toBeTruthy();
     expect(screen.getByText('PEPEUSDT')).toBeTruthy();
     expect(screen.getByText(/No favorites yet/)).toBeTruthy();
+    expect(screen.getByText('Categories')).toBeTruthy();
+    expect(screen.getByText('Meme')).toBeTruthy();
   });
 
   it('shows section error with retry', () => {

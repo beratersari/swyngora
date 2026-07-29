@@ -36,6 +36,16 @@ export type HomePageViewModel = {
   pumpsDisclaimer: string | null;
   onRetryPumps: () => void;
 
+  categoriesTitle: string;
+  categoryTags: string[];
+  categoriesLoading: boolean;
+  categoriesError: string | null;
+  categoriesEmpty: string | null;
+  onSelectCategory: (tag: string) => void;
+  onOpenCategories: () => void;
+  onRetryCategories: () => void;
+  formatCategoryLabel: (tag: string) => string;
+
   seeAllLabel: string;
   retryLabel: string;
   isRefreshing: boolean;
