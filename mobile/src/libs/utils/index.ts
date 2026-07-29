@@ -137,3 +137,11 @@ export type {
   CrossExchangeRowModel,
   CrossExchangeRowStatus,
 } from './crossExchange';
+
+export {
+  buildLeaderboardSpotQuery,
+  rankLabel,
+  mapSpotToLeaderboardRow,
+  mapSpotListToLeaderboardRows,
+} from './leaderboardQuery';
+export type { BuildLeaderboardSpotQueryInput } from './leaderboardQuery';

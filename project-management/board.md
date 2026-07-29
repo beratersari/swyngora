@@ -273,6 +273,28 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
 
+## Epic M — Mobile gainers / losers / high-volume leaderboards (**done**)
+
+**Tasks:** `tasks/mobile/leaderboards/`  
+**Epic:** `epics/mobile-leaderboards.md`  
+**Plan:** `docs/design/mobile-leaderboards.md`  
+**Feature:** `docs/features/mobile-leaderboards.md`  
+**Analysis:** `tasks/mobile/leaderboards/MLEAD-A.md`  
+**Branch:** `feature/mobile-leaderboards`
+
+| ID | Task | Status |
+|---|---|---|
+| MLEAD-A | Spot sort field matrix + UX decisions | done |
+| MLEAD-1 | Constants + leaderboard query helpers + tests | done |
+| MLEAD-2 | Atomic segment / list chrome | done |
+| MLEAD-3 | LeaderboardsPage ViewModel | done |
+| MLEAD-4 | LeaderboardsPage View + navigation routes | done |
+| MLEAD-5 | Home See all deep links + Markets entry | done |
+| MLEAD-6 | Loading / empty / error / poll / i18n | done |
+| MLEAD-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
+
 ## Later (not started)
 
 | ID | Task | Status |

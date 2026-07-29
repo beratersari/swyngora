@@ -2,6 +2,7 @@ export { CoinDetailPage } from './pages/coin-detail-page';
 export { MarketsPage } from './pages/markets-page';
 export { MarketsFilterPage } from './pages/markets-filter-page';
 export { CategoriesPage } from './pages/categories-page';
+export { LeaderboardsPage } from './pages/leaderboards-page';
 export {
   MarketsProvider,
   useMarketsContext,

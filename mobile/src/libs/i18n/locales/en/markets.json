@@ -7,6 +7,8 @@
   "empty": "No markets match filters",
   "emptyCategory": "No markets in {{tag}}",
   "categories": "Categories",
+  "leaderboards": "Boards",
+  "openLeaderboardsA11y": "Open leaderboards",
   "categoriesTitle": "Categories",
   "categoriesFeatured": "Featured",
   "categoriesAll": "All tags",

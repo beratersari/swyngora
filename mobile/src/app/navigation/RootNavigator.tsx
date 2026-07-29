@@ -22,6 +22,7 @@ import { HomePage } from '@/modules/app';
 import {
   CategoriesPage,
   CoinDetailPage,
+  LeaderboardsPage,
   MarketsFilterPage,
   MarketsPage,
   MarketsProvider,
@@ -102,6 +103,7 @@ function MarketsStackNavigator() {
       <MarketsStack.Screen name={MarketsScreens.List} component={MarketsPage} />
       <MarketsStack.Screen name={MarketsScreens.Filters} component={MarketsFilterPage} />
       <MarketsStack.Screen name={MarketsScreens.Categories} component={CategoriesPage} />
+      <MarketsStack.Screen name={MarketsScreens.Leaderboards} component={LeaderboardsPage} />
       <MarketsStack.Screen name={MarketsScreens.Detail} component={CoinDetailPage} />
     </MarketsStack.Navigator>
   );

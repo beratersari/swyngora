@@ -159,3 +159,13 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 - Design: `docs/design/mobile-category-discovery.md`
 - Feature doc: `docs/features/mobile-category-discovery.md`
 
+## Leaderboards (gainers / losers / volume)
+
+- Page: `modules/markets/pages/leaderboards-page/`
+- Route: `MarketsScreens.Leaderboards` params `{ board?: 'gainers' | 'losers' | 'volume' }`
+- APIs: `GET /api/v1/market/spot` sorts (`priceChangePercent`, `quoteVolume`)
+- Helpers: `libs/utils/leaderboardQuery.ts`, `config/leaderboardConstants.ts`
+- Entry: Home “See all” / Leaderboards chip; Markets toolbar **Boards**
+- Design: `docs/design/mobile-leaderboards.md`
+- Feature: `docs/features/mobile-leaderboards.md`
+

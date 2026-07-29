@@ -17,6 +17,7 @@ export type MarketsPageViewModel = {
   filterSummary: string | null;
   onOpenFilters: () => void;
   onOpenCategories: () => void;
+  onOpenLeaderboards: () => void;
   activeCategoryLabel: string | null;
   onClearCategory: () => void;
 

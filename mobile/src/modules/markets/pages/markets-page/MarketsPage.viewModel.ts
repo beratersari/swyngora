@@ -196,6 +196,10 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     navigation.navigate(MarketsScreens.Categories);
   }, [navigation]);
 
+  const onOpenLeaderboards = useCallback(() => {
+    navigation.navigate(MarketsScreens.Leaderboards, { board: 'gainers' });
+  }, [navigation]);
+
   const onClearCategory = useCallback(() => {
     markets.clearSelectedTags();
   }, [markets]);
@@ -352,6 +356,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     filterSummary,
     onOpenFilters,
     onOpenCategories,
+    onOpenLeaderboards,
     activeCategoryLabel,
     onClearCategory,
 

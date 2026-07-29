@@ -104,6 +104,7 @@ vi.mock('lucide-react-native', () => {
     'TrendingUp',
     'SlidersHorizontal',
     'LayoutGrid',
+    'ListOrdered',
     'X',
     'MessageCircle',
     'ChevronLeft',

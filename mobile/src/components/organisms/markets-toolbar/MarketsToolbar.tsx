@@ -1,6 +1,6 @@
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { LayoutGrid, SlidersHorizontal, Star, X } from 'lucide-react-native';
+import { LayoutGrid, ListOrdered, SlidersHorizontal, Star, X } from 'lucide-react-native';
 import { Icon, ICON_FAVORITE_GOLD } from '@/components/atoms/icon';
 import { Text } from '@/components/atoms/text';
 import { SearchField } from '@/components/molecules/search-field';
@@ -17,6 +17,9 @@ export function MarketsToolbar({
   onOpenCategories,
   categoriesLabel,
   categoriesA11y,
+  onOpenLeaderboards,
+  leaderboardsLabel,
+  leaderboardsA11y,
   activeCategoryLabel,
   onClearCategory,
   clearCategoryA11y,
@@ -34,6 +37,8 @@ export function MarketsToolbar({
     : semanticColors.text.secondary;
   const catLabel = categoriesLabel ?? t('markets:categories');
   const catA11y = categoriesA11y ?? t('markets:openCategoriesA11y');
+  const boardsLabel = leaderboardsLabel ?? t('markets:leaderboards');
+  const boardsA11y = leaderboardsA11y ?? t('markets:openLeaderboardsA11y');
   return (
     <View style={styles.root}>
       <View style={styles.row}>
@@ -45,6 +50,21 @@ export function MarketsToolbar({
           autoCapitalize="characters"
           style={styles.search}
         />
+        {onOpenLeaderboards ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={boardsA11y}
+            onPress={onOpenLeaderboards}
+            style={styles.filterBtn}
+          >
+            <View style={styles.btnInner}>
+              <Icon icon={ListOrdered} size="sm" color={semanticColors.text.secondary} />
+              <Text variant="label" color="secondary">
+                {boardsLabel}
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
         {onOpenCategories ? (
           <Pressable
             accessibilityRole="button"

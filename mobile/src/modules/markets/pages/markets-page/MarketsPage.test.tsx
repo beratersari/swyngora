@@ -17,6 +17,7 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
     filterSummary: null,
     onOpenFilters: vi.fn(),
     onOpenCategories: vi.fn(),
+    onOpenLeaderboards: vi.fn(),
     activeCategoryLabel: null,
     onClearCategory: vi.fn(),
     rows: [

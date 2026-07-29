@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mobile leaderboards** (`mobile/`): full Gainers / Losers / Volume boards via spot sorts; Home See all + Markets Boards entry (`docs/features/mobile-leaderboards.md`)
 - **Mobile cross-exchange compare** (`mobile/`): coin detail “Across exchanges” section compares 24h tickers on Binance / Coinbase / Bybit with symbol mapping and partial failure (`docs/features/mobile-cross-exchange-compare.md`)
 - **Mobile category discovery** (`mobile/`): browse Binance product-catalog tags (Home featured chips + Markets Categories page); single-tag filter reuses Markets list via `GET /tags` + `GET /spot?tag=` (`docs/features/mobile-category-discovery.md`)
 - **Mobile home dashboard** (`mobile/`): Home tab shows live favorites strip, top movers, highest volume, pump teaser, and quick chips; pull-to-refresh and AppState poll pause (`docs/features/mobile-home-dashboard.md`)

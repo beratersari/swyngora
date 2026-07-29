@@ -72,7 +72,7 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <DashboardSectionList
           title={vm.moversTitle}
           actionLabel={vm.seeAllLabel}
-          onAction={vm.onOpenMarkets}
+          onAction={vm.onOpenMoversSeeAll}
           rows={vm.movers}
           isLoading={vm.moversLoading}
           errorMessage={vm.moversError}
@@ -85,7 +85,7 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <DashboardSectionList
           title={vm.volumeTitle}
           actionLabel={vm.seeAllLabel}
-          onAction={vm.onOpenMarkets}
+          onAction={vm.onOpenVolumeSeeAll}
           rows={vm.volume}
           isLoading={vm.volumeLoading}
           errorMessage={vm.volumeError}

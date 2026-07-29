@@ -520,3 +520,60 @@ MCROSS-A · MCROSS-1 … MCROSS-7
 | MCROSS-7 | Docs + board + changelog closeout |
 
 Full task text: `project-management/tasks/mobile/cross-exchange/MCROSS-*.md`.
+
+
+---
+
+## Epic M — Mobile gainers / losers / high-volume leaderboards
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Gainers/losers/volume leaderboards` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-leaderboards.md` |
+| **Feature** | `docs/features/mobile-leaderboards.md` |
+| **Analysis** | `project-management/tasks/mobile/leaderboards/MLEAD-A.md` |
+| **Epic file** | `project-management/epics/mobile-leaderboards.md` |
+| **Tasks** | `project-management/tasks/mobile/leaderboards/MLEAD-*.md` |
+| **Branch** | `feature/mobile-leaderboards` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Full leaderboards for 24h gainers, losers, and high quote volume via
+GET /api/v1/market/spot sorts. Beyond Home teasers (limit 5): pagination,
+exchange/quote chips, Home “See all” deep links. No new backend.
+
+## Goals
+
+- LeaderboardsPage with Gainers | Losers | Volume
+- Shared query helpers with Home
+- Infinite scroll + poll pause
+- en/tr i18n
+
+## Out of scope
+
+New endpoints, multi-timeframe boards, alerts, web redesign.
+
+## Child issues
+
+MLEAD-A · MLEAD-1 … MLEAD-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MLEAD-A | Spot sort field matrix + UX decisions |
+| MLEAD-1 | Constants + leaderboard query helpers |
+| MLEAD-2 | Atomic segment / list chrome |
+| MLEAD-3 | LeaderboardsPage ViewModel |
+| MLEAD-4 | LeaderboardsPage View + routes |
+| MLEAD-5 | Home See all + Markets entry |
+| MLEAD-6 | Loading / empty / error / i18n |
+| MLEAD-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/leaderboards/MLEAD-*.md`.

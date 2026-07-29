@@ -7,6 +7,8 @@
   "empty": "Filtrelere uyan piyasa yok",
   "emptyCategory": "{{tag}} kategorisinde piyasa yok",
   "categories": "Kategoriler",
+  "leaderboards": "Sıralama",
+  "openLeaderboardsA11y": "Sıralamaları aç",
   "categoriesTitle": "Kategoriler",
   "categoriesFeatured": "Öne çıkanlar",
   "categoriesAll": "Tüm etiketler",

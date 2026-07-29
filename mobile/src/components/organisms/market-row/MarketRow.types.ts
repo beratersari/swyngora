@@ -7,6 +7,8 @@ export type MarketRowViewModel = {
   quoteVolumeLabel: string;
   marketCapLabel: string;
   tagsLabel: string;
+  /** Optional leaderboard rank e.g. #1 */
+  rankLabel?: string;
   /** Optional batch RSI enrichment */
   rsiLabel?: string;
   rsiTone?: 'success' | 'warning' | 'error' | 'secondary';

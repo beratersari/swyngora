@@ -8,6 +8,10 @@ export type MarketsToolbarProps = {
   onOpenCategories?: () => void;
   categoriesLabel?: string;
   categoriesA11y?: string;
+  /** Open gainers/losers/volume leaderboards */
+  onOpenLeaderboards?: () => void;
+  leaderboardsLabel?: string;
+  leaderboardsA11y?: string;
   /** Active single category chip */
   activeCategoryLabel?: string | null;
   onClearCategory?: () => void;

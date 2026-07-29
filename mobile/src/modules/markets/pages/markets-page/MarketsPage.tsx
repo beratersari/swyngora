@@ -26,6 +26,7 @@ function MarketsPageView({ vm }: { vm: MarketsPageViewModel }) {
         activeFilterCount={vm.activeFilterCount}
         onOpenFilters={vm.onOpenFilters}
         onOpenCategories={vm.onOpenCategories}
+        onOpenLeaderboards={vm.onOpenLeaderboards}
         activeCategoryLabel={vm.activeCategoryLabel}
         onClearCategory={vm.onClearCategory}
         favoritesOnly={vm.favoritesOnly}

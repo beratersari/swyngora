@@ -114,6 +114,27 @@ export function useHomePageViewModel(): HomePageViewModel {
     navigateTab('MarketsTab');
   }, [navigateTab]);
 
+  const onOpenGainers = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'gainers' },
+    });
+  }, [navigateTab]);
+
+  const onOpenVolumeBoard = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'volume' },
+    });
+  }, [navigateTab]);
+
+  const onOpenLeaderboards = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'gainers' },
+    });
+  }, [navigateTab]);
+
   const onOpenPumps = useCallback(() => {
     navigateTab('PumpsTab');
   }, [navigateTab]);
@@ -195,6 +216,7 @@ export function useHomePageViewModel(): HomePageViewModel {
     intro: t('home:intro'),
     quickActions: [
       { id: 'markets', label: t('home:openMarkets'), onPress: onOpenMarkets },
+      { id: 'leaderboards', label: t('home:openLeaderboards'), onPress: onOpenLeaderboards },
       { id: 'pumps', label: t('home:openPumps'), onPress: onOpenPumps },
       { id: 'ask', label: t('home:openAsk'), onPress: onOpenAsk },
     ],
@@ -217,6 +239,7 @@ export function useHomePageViewModel(): HomePageViewModel {
         ? t('home:moversEmpty')
         : null,
     moversTitle: t('home:sectionMovers'),
+    onOpenMoversSeeAll: onOpenGainers,
     onRetryMovers: () => {
       void moversQuery.refetch();
     },
@@ -231,6 +254,7 @@ export function useHomePageViewModel(): HomePageViewModel {
         ? t('home:volumeEmpty')
         : null,
     volumeTitle: t('home:sectionVolume'),
+    onOpenVolumeSeeAll: onOpenVolumeBoard,
     onRetryVolume: () => {
       void volumeQuery.refetch();
     },

@@ -21,6 +21,15 @@ export const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  symbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flexShrink: 1,
+  },
+  rank: {
+    minWidth: 28,
+  },
   topRight: {
     flexDirection: 'row',
     alignItems: 'center',
