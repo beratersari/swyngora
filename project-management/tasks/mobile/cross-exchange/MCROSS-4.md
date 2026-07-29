@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-4 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-4.md` |
 
@@ -22,11 +22,11 @@
 
 ## Acceptance
 
-- [ ] Section visible on detail for major pairs  
-- [ ] Switching venue updates full detail context  
-- [ ] Page test covers section presence with injected VM  
-- [ ] Status → done when finished  
+- [x] Section visible on detail for major pairs  
+- [x] Switching venue updates full detail context  
+- [x] Page test covers section presence with injected VM  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

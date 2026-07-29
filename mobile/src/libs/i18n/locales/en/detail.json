@@ -35,5 +35,10 @@
     "totalSupply": "Total supply",
     "circMcap": "Circ. mcap"
   },
-  "askAi": "Ask AI about this pair"
+  "askAi": "Ask AI about this pair",
+  "crossExchangeTitle": "Across exchanges",
+  "crossExchangeDisclaimer": "Venue-local prices from 24h tickers — informational only, not arbitrage or financial advice. Quotes may differ (e.g. USDT vs USD).",
+  "crossExchangeUnavailable": "Not listed",
+  "crossExchangeSource": "This venue",
+  "crossExchangeCheapest": "Lowest"
 }

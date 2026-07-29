@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mobile cross-exchange compare** (`mobile/`): coin detail “Across exchanges” section compares 24h tickers on Binance / Coinbase / Bybit with symbol mapping and partial failure (`docs/features/mobile-cross-exchange-compare.md`)
 - **Mobile category discovery** (`mobile/`): browse Binance product-catalog tags (Home featured chips + Markets Categories page); single-tag filter reuses Markets list via `GET /tags` + `GET /spot?tag=` (`docs/features/mobile-category-discovery.md`)
 - **Mobile home dashboard** (`mobile/`): Home tab shows live favorites strip, top movers, highest volume, pump teaser, and quick chips; pull-to-refresh and AppState poll pause (`docs/features/mobile-home-dashboard.md`)
 - **Mobile AI chat** (`mobile/`): Ask tab multi-turn chat via `POST /api/v1/ai/chat`; OpenAPI `postAiChat`; RTK mutation; context from coin detail; 503 UX when AI offline (`docs/features/mobile-ai-chat.md`)

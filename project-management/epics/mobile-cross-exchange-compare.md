@@ -1,7 +1,7 @@
 # Epic L: Mobile cross-exchange coin comparison
 
 **Priority:** P1 (mobile track — after category discovery)  
-**Status:** todo  
+**Status:** done  
 **Depends on:** Epic E coin detail (done)  
 **Branch:** `feature/mobile-cross-exchange-compare` (from latest `develop`)  
 **Design plan:** `docs/design/mobile-cross-exchange-compare.md`  
@@ -24,14 +24,14 @@ Symbol mapping: e.g. `BTCUSDT` → Coinbase `BTC-USD` (try candidates; backend n
 
 ## Tasks
 
-- [ ] MCROSS-A — Field matrix + symbol mapping analysis  
-- [ ] MCROSS-1 — Constants + cross-exchange helpers + tests  
-- [ ] MCROSS-2 — Atomic compare UI (row + list organism)  
-- [ ] MCROSS-3 — Coin detail ViewModel: parallel tickers + mapping  
-- [ ] MCROSS-4 — Wire section into CoinDetailPage + navigate to venue  
-- [ ] MCROSS-5 — Loading / partial failure / disclaimer / i18n  
-- [ ] MCROSS-6 — Tests polish  
-- [ ] MCROSS-7 — Docs / board / changelog closeout  
+- [x] MCROSS-A — Field matrix + symbol mapping analysis  
+- [x] MCROSS-1 — Constants + cross-exchange helpers + tests  
+- [x] MCROSS-2 — Atomic compare UI (row + list organism)  
+- [x] MCROSS-3 — Coin detail ViewModel: parallel tickers + mapping  
+- [x] MCROSS-4 — Wire section into CoinDetailPage + navigate to venue  
+- [x] MCROSS-5 — Loading / partial failure / disclaimer / i18n  
+- [x] MCROSS-6 — Tests polish  
+- [x] MCROSS-7 — Docs / board / changelog closeout  
 
 ## Acceptance
 

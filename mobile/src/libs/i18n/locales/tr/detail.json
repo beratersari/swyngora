@@ -35,5 +35,10 @@
     "totalSupply": "Toplam arz",
     "circMcap": "Dolaşım piyasa değeri"
   },
-  "askAi": "Bu çift hakkında AI’ya sor"
+  "askAi": "Bu çift hakkında AI’ya sor",
+  "crossExchangeTitle": "Borsalar arası",
+  "crossExchangeDisclaimer": "24s ticker’dan borsa-yerel fiyatlar — bilgilendirme amaçlıdır; arbitraj veya yatırım tavsiyesi değildir. Kotasyonlar farklı olabilir (ör. USDT / USD).",
+  "crossExchangeUnavailable": "Listede yok",
+  "crossExchangeSource": "Bu borsa",
+  "crossExchangeCheapest": "En düşük"
 }

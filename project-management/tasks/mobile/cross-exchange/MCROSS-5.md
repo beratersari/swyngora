@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-5 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-5.md` |
 
@@ -27,10 +27,10 @@ No hard-coded user-facing English in View.
 
 ## Acceptance
 
-- [ ] en/tr parity for new strings  
-- [ ] Disclaimer visible when section has data  
-- [ ] Status → done when finished  
+- [x] en/tr parity for new strings  
+- [x] Disclaimer visible when section has data  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

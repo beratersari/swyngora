@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-2 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-2.md` |
 
@@ -28,12 +28,12 @@ Row props: exchange label, symbol, price, change, volume, status, isSource, onPr
 
 ## Acceptance
 
-- [ ] Loading / unavailable / error row states  
-- [ ] Source venue visual distinction  
-- [ ] Press invokes callback with exchange+symbol  
-- [ ] Render tests  
-- [ ] Status → done when finished  
+- [x] Loading / unavailable / error row states  
+- [x] Source venue visual distinction  
+- [x] Press invokes callback with exchange+symbol  
+- [x] Render tests  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

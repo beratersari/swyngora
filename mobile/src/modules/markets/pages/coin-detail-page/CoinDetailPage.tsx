@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/text';
 import { CandleChart } from '@/components/organisms/candle-chart';
 import { CoinDetailHeader } from '@/components/organisms/coin-detail-header';
 import { CoinDetailStats } from '@/components/organisms/coin-detail-stats';
+import { CrossExchangeCompare } from '@/components/organisms/cross-exchange-compare';
 import { IndicatorRsiPane } from '@/components/organisms/indicator-rsi-pane';
 import { IntervalToolbar } from '@/components/organisms/interval-toolbar';
 import { PumpEventList } from '@/components/organisms/pump-event-list';
@@ -43,6 +44,17 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           isLoading={vm.statsLoading}
           tickerError={vm.tickerError}
           supplyError={vm.supplyError}
+        />
+
+        <CrossExchangeCompare
+          title={vm.crossExchangeTitle}
+          rows={vm.crossExchangeRows}
+          disclaimer={vm.crossExchangeDisclaimer}
+          unavailableLabel={vm.crossExchangeUnavailableLabel}
+          sourceLabel={vm.crossExchangeSourceLabel}
+          cheapestLabel={vm.crossExchangeCheapestLabel}
+          cheapestId={vm.crossExchangeCheapestId}
+          onPressRow={vm.onPressCrossExchangeRow}
         />
 
         <IntervalToolbar

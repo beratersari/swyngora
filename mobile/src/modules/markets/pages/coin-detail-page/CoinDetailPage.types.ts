@@ -5,6 +5,7 @@ import type {
   ChartLinePoint,
   ChartMarker,
   ChartPriceLine,
+  CrossExchangeRowModel,
 } from '@/libs/utils';
 
 export type CoinDetailPageViewModel = {
@@ -23,6 +24,15 @@ export type CoinDetailPageViewModel = {
   statsLoading: boolean;
   tickerError: string | null;
   supplyError: string | null;
+
+  crossExchangeTitle: string;
+  crossExchangeRows: CrossExchangeRowModel[];
+  crossExchangeDisclaimer: string | null;
+  crossExchangeUnavailableLabel: string;
+  crossExchangeSourceLabel: string;
+  crossExchangeCheapestLabel: string;
+  crossExchangeCheapestId: string | null;
+  onPressCrossExchangeRow: (exchange: string, symbol: string) => void;
 
   intervals: string[];
   intervalsLoading: boolean;

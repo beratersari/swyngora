@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-1 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-1.md` |
 
@@ -27,12 +27,12 @@ Pure helpers + constants (no UI):
 
 ## Acceptance
 
-- [ ] Coinbase candidates hyphenated; Binance/Bybit compact  
-- [ ] Source venue plan uses original symbol only  
-- [ ] No React / navigation imports  
-- [ ] Tests green  
-- [ ] Status → done when finished  
+- [x] Coinbase candidates hyphenated; Binance/Bybit compact  
+- [x] Source venue plan uses original symbol only  
+- [x] No React / navigation imports  
+- [x] Tests green  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

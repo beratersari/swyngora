@@ -76,8 +76,9 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 
 - Page: `modules/markets/pages/coin-detail-page/`
 - Navigate: `MarketsScreens.Detail` `{ exchange, symbol }`
-- Organisms: `coin-detail-header`, `coin-detail-stats`, `interval-toolbar`, `candle-chart`, `indicator-rsi-pane`
+- Organisms: `coin-detail-header`, `coin-detail-stats`, `cross-exchange-compare`, `interval-toolbar`, `candle-chart`, `indicator-rsi-pane`
 - RTK: intervals, ticker, supply, candles, indicators in `marketApi.ts`
+- Cross-exchange: `useCrossExchangeRows` + `libs/utils/crossExchange.ts` (parallel tickers; candidate symbols)
 - Chart: `lightweight-charts` on react-native-web only
 
 ## Icons

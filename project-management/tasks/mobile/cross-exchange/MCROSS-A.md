@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-A |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile / analysis |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-A.md` |
 
@@ -79,10 +79,10 @@ Document candidate order in design §4; implement in MCROSS-1.
 
 ## Acceptance
 
-- [ ] Matrix complete; linked from design/epic  
-- [ ] Candidate lists agreed for binance/bybit/coinbase  
-- [ ] Status → done when analysis accepted  
+- [x] Matrix complete; linked from design/epic  
+- [x] Candidate lists agreed for binance/bybit/coinbase  
+- [x] Status → done when analysis accepted  
 
 ## Status
 
-`todo`
+`done`

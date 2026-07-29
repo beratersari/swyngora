@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-6 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-6.md` |
 
@@ -17,10 +17,10 @@
 
 ## Acceptance
 
-- [ ] Relevant tests green  
-- [ ] Typecheck green  
-- [ ] Status → done when finished  
+- [x] Relevant tests green  
+- [x] Typecheck green  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

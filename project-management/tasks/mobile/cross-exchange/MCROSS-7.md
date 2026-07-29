@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-7 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-7.md` |
 
@@ -18,11 +18,11 @@
 
 ## Acceptance
 
-- [ ] Docs match code  
-- [ ] Board Epic L done  
-- [ ] Changelog entry  
-- [ ] Status → done when finished  
+- [x] Docs match code  
+- [x] Board Epic L done  
+- [x] Changelog entry  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`

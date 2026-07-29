@@ -53,6 +53,37 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     pumpEventsError: null,
     pumpEventsSubtitle: null,
     pumpDisclaimer: 'Informational only — not financial advice.',
+    crossExchangeTitle: 'Across exchanges',
+    crossExchangeRows: [
+      {
+        id: 'binance|BTCUSDT',
+        exchange: 'binance',
+        symbol: 'BTCUSDT',
+        isSource: true,
+        lastPriceLabel: '67,000',
+        changePercentLabel: '+1.50%',
+        changeTone: 'success',
+        quoteVolumeLabel: '$1.2B',
+        status: 'ok',
+      },
+      {
+        id: 'coinbase|BTC-USD',
+        exchange: 'coinbase',
+        symbol: 'BTC-USD',
+        isSource: false,
+        lastPriceLabel: '66,900',
+        changePercentLabel: '+1.40%',
+        changeTone: 'success',
+        quoteVolumeLabel: '$800M',
+        status: 'ok',
+      },
+    ],
+    crossExchangeDisclaimer: 'Venue-local prices — informational only.',
+    crossExchangeUnavailableLabel: 'Not listed',
+    crossExchangeSourceLabel: 'This venue',
+    crossExchangeCheapestLabel: 'Lowest',
+    crossExchangeCheapestId: 'coinbase|BTC-USD',
+    onPressCrossExchangeRow: vi.fn(),
     onBack: vi.fn(),
     onRetry: vi.fn(),
     askAiLabel: 'Ask AI about this pair',
@@ -66,7 +97,7 @@ describe('CoinDetailPage', () => {
     const onBack = vi.fn();
     render(<CoinDetailPage viewModel={makeVm({ onBack })} />);
     expect(screen.getAllByText('BTCUSDT').length).toBeGreaterThan(0);
-    expect(screen.getByText('67,000')).toBeTruthy();
+    expect(screen.getAllByText('67,000').length).toBeGreaterThan(0);
     expect(screen.getByText('Open')).toBeTruthy();
     fireEvent.click(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
@@ -82,5 +113,18 @@ describe('CoinDetailPage', () => {
       />,
     );
     expect(screen.getByText('Candle fetch failed')).toBeTruthy();
+  });
+
+  it('renders cross-exchange section', () => {
+    const onPress = vi.fn();
+    render(
+      <CoinDetailPage
+        viewModel={makeVm({ onPressCrossExchangeRow: onPress })}
+      />,
+    );
+    expect(screen.getByText('Across exchanges')).toBeTruthy();
+    expect(screen.getByText('BTC-USD')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('coinbase BTC-USD'));
+    expect(onPress).toHaveBeenCalledWith('coinbase', 'BTC-USD');
   });
 });

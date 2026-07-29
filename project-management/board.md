@@ -251,7 +251,7 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
 
-## Epic L — Mobile cross-exchange coin comparison (**todo**)
+## Epic L — Mobile cross-exchange coin comparison (**done**)
 
 **Tasks:** `tasks/mobile/cross-exchange/`  
 **Epic:** `epics/mobile-cross-exchange-compare.md`  
@@ -262,14 +262,14 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 | ID | Task | Status |
 |---|---|---|
-| MCROSS-A | Field matrix + symbol mapping analysis | todo |
-| MCROSS-1 | Constants + cross-exchange helpers + tests | todo |
-| MCROSS-2 | Atomic compare UI (row + list) | todo |
-| MCROSS-3 | Coin detail ViewModel parallel tickers | todo |
-| MCROSS-4 | Wire section + navigate to venue detail | todo |
-| MCROSS-5 | Loading / partial failure / i18n | todo |
-| MCROSS-6 | Tests polish | todo |
-| MCROSS-7 | Docs / board / changelog closeout | todo |
+| MCROSS-A | Field matrix + symbol mapping analysis | done |
+| MCROSS-1 | Constants + cross-exchange helpers + tests | done |
+| MCROSS-2 | Atomic compare UI (row + list) | done |
+| MCROSS-3 | Coin detail ViewModel parallel tickers | done |
+| MCROSS-4 | Wire section + navigate to venue detail | done |
+| MCROSS-5 | Loading / partial failure / i18n | done |
+| MCROSS-6 | Tests polish | done |
+| MCROSS-7 | Docs / board / changelog closeout | done |
 
 **MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
 

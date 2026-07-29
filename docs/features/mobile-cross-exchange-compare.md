@@ -1,6 +1,6 @@
 # Feature: Cross-exchange coin comparison (mobile)
 
-**Status:** Planned  
+**Status:** Implemented  
 **Surface:** Product mobile (`mobile/`) — Chrome via react-native-web  
 **Backend:** Existing multi-exchange ticker (compose client-side)  
 **Epic:** `project-management/epics/mobile-cross-exchange-compare.md`  

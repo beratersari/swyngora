@@ -1,6 +1,6 @@
 # Design: Mobile cross-exchange coin comparison
 
-**Status:** Planned  
+**Status:** Implemented  
 **Epic:** `project-management/epics/mobile-cross-exchange-compare.md`  
 **Feature:** `docs/features/mobile-cross-exchange-compare.md`  
 **Tasks:** `project-management/tasks/mobile/cross-exchange/MCROSS-*.md`  

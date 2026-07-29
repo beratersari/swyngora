@@ -4,7 +4,7 @@
 |---|---|
 | **ID** | MCROSS-3 |
 | **Epic** | mobile-cross-exchange-compare |
-| **Status** | todo |
+| **Status** | done |
 | **Area** | mobile |
 | **Path** | `project-management/tasks/mobile/cross-exchange/MCROSS-3.md` |
 
@@ -28,12 +28,12 @@ Keep RTK in libs/api only (existing ticker endpoint).
 
 ## Acceptance
 
-- [ ] Source row always present when main ticker works  
-- [ ] Candidate fallback attempted for non-source venues  
-- [ ] Partial failure isolated per row  
-- [ ] ViewModel unit/integration test with mocked API hooks or pure mapper tests  
-- [ ] Status → done when finished  
+- [x] Source row always present when main ticker works  
+- [x] Candidate fallback attempted for non-source venues  
+- [x] Partial failure isolated per row  
+- [x] ViewModel unit/integration test with mocked API hooks or pure mapper tests  
+- [x] Status → done when finished  
 
 ## Status
 
-`todo`
+`done`
