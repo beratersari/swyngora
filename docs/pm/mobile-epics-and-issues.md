@@ -463,3 +463,60 @@ MCAT-A · MCAT-1 … MCAT-7
 | MCAT-7 | Docs + board + changelog closeout |
 
 Full task text: `project-management/tasks/mobile/category-discovery/MCAT-*.md`.
+
+
+---
+
+## Epic L — Mobile cross-exchange coin comparison
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Cross-exchange coin comparison` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-cross-exchange-compare.md` |
+| **Feature** | `docs/features/mobile-cross-exchange-compare.md` |
+| **Analysis** | `project-management/tasks/mobile/cross-exchange/MCROSS-A.md` |
+| **Epic file** | `project-management/epics/mobile-cross-exchange-compare.md` |
+| **Tasks** | `project-management/tasks/mobile/cross-exchange/MCROSS-*.md` |
+| **Branch** | `feature/mobile-cross-exchange-compare` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Coin detail “Across exchanges” section: parallel GET /ticker/24h for
+binance / coinbase / bybit with client symbol mapping (BTCUSDT ↔ BTC-USD).
+No new backend endpoint in v1. Partial failure per venue; tap opens that venue detail.
+
+## Goals
+
+- Symbol mapping helpers + tests
+- Atomic compare UI
+- Wire into coin detail ViewModel + page
+- Poll pause / i18n / disclaimer
+
+## Out of scope
+
+New compare API, FX conversion, alerts, web UI.
+
+## Child issues
+
+MCROSS-A · MCROSS-1 … MCROSS-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MCROSS-A | Field matrix + symbol mapping analysis |
+| MCROSS-1 | Constants + cross-exchange helpers |
+| MCROSS-2 | Atomic compare UI |
+| MCROSS-3 | Coin detail ViewModel parallel tickers |
+| MCROSS-4 | Wire section + navigate to venue |
+| MCROSS-5 | Loading / partial failure / i18n |
+| MCROSS-6 | Tests polish |
+| MCROSS-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/cross-exchange/MCROSS-*.md`.

@@ -18,7 +18,8 @@ tasks/
     ├── batch-indicators/     # MBIND-* (mobile batch RSI/EMA list enrichment)
     ├── ai-chat/              # MAI-*   (mobile AI assistant chat)
     ├── home/                 # MHOME-* (mobile home dashboard)
-    └── category-discovery/   # MCAT-*  (mobile category / tag discovery)
+    ├── category-discovery/   # MCAT-*  (mobile category / tag discovery)
+    └── cross-exchange/       # MCROSS-* (mobile cross-exchange compare)
 ```
 
 ## Rules

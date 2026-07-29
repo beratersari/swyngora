@@ -15,8 +15,8 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 ```text
 tasks/
 ├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
-└── mobile/init|markets|detail|watchlist|pumps|batch-indicators|ai-chat|home|category-discovery
-    # MINIT-*, MMKT-*, MDET-*, MWL-*, MPUMP-*, MBIND-*, MAI-*, MHOME-*, MCAT-*
+└── mobile/init|markets|detail|watchlist|pumps|batch-indicators|ai-chat|home|category-discovery|cross-exchange
+    # MINIT-*, MMKT-*, MDET-*, MWL-*, MPUMP-*, MBIND-*, MAI-*, MHOME-*, MCAT-*, MCROSS-*
 ```
 
 **Do not add new task files to `tasks/` root.** Use the matching subfolder.
@@ -59,6 +59,7 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 10. Epic I — Mobile AI assistant chat — **done** (`tasks/mobile/ai-chat/`, `epics/mobile-ai-chat.md`)
 11. Epic J — Mobile home dashboard — **done** (`tasks/mobile/home/`, `epics/mobile-home-dashboard.md`)
 12. Epic K — Mobile category discovery — **done** (`tasks/mobile/category-discovery/`, `epics/mobile-category-discovery.md`)
+13. Epic L — Mobile cross-exchange coin comparison — **todo** (`tasks/mobile/cross-exchange/`, `epics/mobile-cross-exchange-compare.md`)
 
 ### Mobile designs
 
@@ -74,7 +75,8 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 | `docs/design/mobile-ai-chat.md` | AI assistant Ask tab / chat |
 | `docs/design/mobile-home-dashboard.md` | Home live widgets dashboard |
 | `docs/design/mobile-category-discovery.md` | Product tag / category browse |
+| `docs/design/mobile-cross-exchange-compare.md` | Cross-venue ticker compare on detail |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-29 (Epic K category discovery implemented)
+**Last updated:** 2026-07-29 (Epic L cross-exchange compare planned)
