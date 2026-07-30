@@ -476,3 +476,45 @@ func PrettyJSON(raw json.RawMessage) string {
 	}
 	return string(b)
 }
+
+// CreateScannerRule creates a scanner rule via HTTP.
+func (c *APIClient) CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/scanner/rules", args)
+}
+
+// ListScannerRules lists scanner rules.
+func (c *APIClient) ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	return c.get(ctx, "/api/v1/scanner/rules", q)
+}
+
+// DeleteScannerRule deletes a scanner rule.
+func (c *APIClient) DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/scanner/rules/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+// ListScannerResults lists scanner match history.
+func (c *APIClient) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/scanner/results", q)
+}

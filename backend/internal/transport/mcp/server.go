@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -43,6 +44,10 @@ type DataPort interface {
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
+	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
+	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -77,10 +82,10 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 	return s
 }
 
-// NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service) *server.MCPServer {
+// NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner services (same process as HTTP).
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -633,6 +638,95 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CancelPortfolioOrder(ctx, clientID, orderID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_scanner_rule",
+		mcp.WithDescription("Create a technical scanner rule for the client's watchlist: rsi, ma_crossover, or volume_increase."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("type", mcp.Required(), mcp.Description("rsi | ma_crossover | volume_increase")),
+		mcp.WithString("interval", mcp.Description("Candle interval default 1h")),
+		mcp.WithNumber("rsiPeriod", mcp.Description("RSI period default 14")),
+		mcp.WithString("rsiCondition", mcp.Description("above | below")),
+		mcp.WithNumber("rsiThreshold", mcp.Description("RSI threshold 0-100")),
+		mcp.WithNumber("maFastPeriod", mcp.Description("EMA fast period")),
+		mcp.WithNumber("maSlowPeriod", mcp.Description("EMA slow period")),
+		mcp.WithString("maDirection", mcp.Description("golden_cross | death_cross")),
+		mcp.WithNumber("volumeLookback", mcp.Description("Bars for volume average")),
+		mcp.WithNumber("volumeMinRatio", mcp.Description("Min last/avg volume ratio")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		typ, err := req.RequireString("type")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		args := map[string]any{
+			"clientId": clientID, "type": typ, "interval": req.GetString("interval", "1h"),
+			"rsiPeriod": req.GetFloat("rsiPeriod", 14), "rsiCondition": req.GetString("rsiCondition", "below"),
+			"rsiThreshold": req.GetFloat("rsiThreshold", 30),
+			"maFastPeriod": req.GetFloat("maFastPeriod", 12), "maSlowPeriod": req.GetFloat("maSlowPeriod", 26),
+			"maDirection": req.GetString("maDirection", "golden_cross"),
+			"volumeLookback": req.GetFloat("volumeLookback", 20), "volumeMinRatio": req.GetFloat("volumeMinRatio", 2),
+		}
+		raw, err := api.CreateScannerRule(ctx, args)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_scanner_rules",
+		mcp.WithDescription("List technical scanner rules for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListScannerRules(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_scanner_rule",
+		mcp.WithDescription("Delete a scanner rule by id."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("ruleId", mcp.Required(), mcp.Description("Rule id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ruleID, err := req.RequireString("ruleId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeleteScannerRule(ctx, clientID, ruleID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_scanner_results",
+		mcp.WithDescription("List saved scanner match history for a clientId (deduped by rule/symbol/bar)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListScannerResults(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

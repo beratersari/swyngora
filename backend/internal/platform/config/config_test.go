@@ -88,6 +88,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PortfolioOrderCheckInterval != 15*time.Second {
 		t.Fatalf("PortfolioOrderCheckInterval default=%v", cfg.PortfolioOrderCheckInterval)
 	}
+	if cfg.ScannerDBPath != "data/scanner.db" {
+		t.Fatalf("ScannerDBPath default=%q", cfg.ScannerDBPath)
+	}
+	if cfg.ScannerCheckInterval != 60*time.Second {
+		t.Fatalf("ScannerCheckInterval default=%v", cfg.ScannerCheckInterval)
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {

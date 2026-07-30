@@ -8,6 +8,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
@@ -29,6 +30,8 @@ type RouterOptions struct {
 	Alerts *pricealert.Service
 	// Portfolio enables paper-trading routes when non-nil.
 	Portfolio *portfolio.Service
+	// Scanner enables technical indicator scanner routes when non-nil.
+	Scanner *scanner.Service
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -87,6 +90,21 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio/orders", ph.ListOrders)
 		mux.HandleFunc("DELETE /api/v1/portfolio/orders/{id}", ph.CancelOrder)
 		mux.HandleFunc("GET /api/v1/portfolio/trades", ph.ListTrades)
+	}
+
+	if opts.Scanner != nil {
+		sh := handler.NewScannerHandler(opts.Scanner)
+		mux.HandleFunc("POST /api/v1/scanner/rules", sh.Create)
+		mux.HandleFunc("GET /api/v1/scanner/rules", sh.ListRules)
+		mux.HandleFunc("GET /api/v1/scanner/rules/{id}", sh.GetRule)
+		mux.HandleFunc("DELETE /api/v1/scanner/rules/{id}", sh.DeleteRule)
+		mux.HandleFunc("GET /api/v1/scanner/results", sh.ListResults)
+		// Backtests: static subpaths before {id} where needed
+		mux.HandleFunc("POST /api/v1/scanner/backtests", sh.StartBacktest)
+		mux.HandleFunc("GET /api/v1/scanner/backtests", sh.ListBacktests)
+		mux.HandleFunc("POST /api/v1/scanner/backtests/{id}/cancel", sh.CancelBacktest)
+		mux.HandleFunc("GET /api/v1/scanner/backtests/{id}/signals", sh.ListBacktestSignals)
+		mux.HandleFunc("GET /api/v1/scanner/backtests/{id}", sh.GetBacktest)
 	}
 
 	// MCP streamable HTTP — same process as REST API (no second server).

@@ -22,6 +22,10 @@ info:
       pending limit buy/sell and stop-loss orders with balance/position reservations and
       partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L, and
       trade history (SQLite; not real money).
+    - Technical indicator scanner: RSI, EMA crossover, and volume-increase rules over the
+      client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
+    - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
+      cancel jobs, and view signals with 1/5/20-day forward returns.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -1170,6 +1174,221 @@ paths:
       responses:
         '200':
           description: Trade list
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/scanner/rules:
+    post:
+      summary: Create a technical scanner rule
+      description: |
+        Creates a rule evaluated against the client's watchlist symbols.
+        Types: rsi, ma_crossover, volume_increase. Informational only — not financial advice.
+      operationId: createScannerRule
+      tags: [Scanner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                clientId: { type: string }
+                type: { type: string, enum: [rsi, ma_crossover, volume_increase] }
+                interval: { type: string, default: 1h }
+                rsiPeriod: { type: integer, default: 14 }
+                rsiCondition: { type: string, enum: [above, below] }
+                rsiThreshold: { type: number }
+                maFastPeriod: { type: integer, default: 12 }
+                maSlowPeriod: { type: integer, default: 26 }
+                maDirection: { type: string, enum: [golden_cross, death_cross] }
+                volumeLookback: { type: integer, default: 20 }
+                volumeMinRatio: { type: number, default: 2 }
+      responses:
+        '201':
+          description: Created rule
+        '400':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List scanner rules
+      operationId: listScannerRules
+      tags: [Scanner]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Rule list
+  /api/v1/scanner/rules/{id}:
+    get:
+      summary: Get a scanner rule
+      operationId: getScannerRule
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Rule
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a scanner rule
+      operationId: deleteScannerRule
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/scanner/results:
+    get:
+      summary: List scanner match history
+      description: |
+        Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
+        (candle open time) so the same bar is not stored twice.
+      operationId: listScannerResults
+      tags: [Scanner]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Result list
+  /api/v1/scanner/backtests:
+    post:
+      summary: Start a historical scanner backtest
+      description: |
+        Runs a rule over a symbol and date range in the background. Identical jobs
+        (same client, rule, symbol, range) return the existing pending/running/completed job.
+        Progress and signalCount update while running. Informational only.
+      operationId: startScannerBacktest
+      tags: [Scanner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ruleId, symbol, rangeStart, rangeEnd]
+              properties:
+                clientId: { type: string }
+                ruleId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
+                symbol: { type: string }
+                rangeStart: { type: string, format: date-time }
+                rangeEnd: { type: string, format: date-time }
+      responses:
+        '202':
+          description: Job accepted or existing job returned
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List scanner backtests
+      operationId: listScannerBacktests
+      tags: [Scanner]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Backtest list
+  /api/v1/scanner/backtests/{id}:
+    get:
+      summary: Get scanner backtest progress and summary
+      operationId: getScannerBacktest
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Job with progressPct, signalCount, status
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/scanner/backtests/{id}/cancel:
+    post:
+      summary: Cancel a pending or running backtest
+      operationId: cancelScannerBacktest
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Canceled job
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/scanner/backtests/{id}/signals:
+    get:
+      summary: List backtest signals with forward returns
+      description: |
+        Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
+        (percent price change after 1/5/20 calendar days when data exists).
+      operationId: listScannerBacktestSignals
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Signals list
         '404':
           $ref: '#/components/responses/Error'
 components:

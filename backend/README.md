@@ -41,6 +41,16 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
+| `POST` | `/api/v1/scanner/rules` | Create RSI / MA crossover / volume scanner rule |
+| `GET` | `/api/v1/scanner/rules` | List scanner rules |
+| `GET` | `/api/v1/scanner/rules/{id}` | Get scanner rule |
+| `DELETE` | `/api/v1/scanner/rules/{id}` | Delete scanner rule |
+| `GET` | `/api/v1/scanner/results` | Scanner match history |
+| `POST` | `/api/v1/scanner/backtests` | Start historical rule backtest |
+| `GET` | `/api/v1/scanner/backtests` | List backtests |
+| `GET` | `/api/v1/scanner/backtests/{id}` | Backtest progress/summary |
+| `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel backtest |
+| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Backtest signals + 1/5/20d returns |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -56,6 +66,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
 
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, and trade history. Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`).
+
+**Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -133,6 +145,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `WEBHOOK_MAX_ATTEMPTS` | `8` | Permanent failure after this many delivery attempts |
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
+| `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |
+| `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
 

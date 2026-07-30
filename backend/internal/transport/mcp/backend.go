@@ -11,6 +11,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -20,6 +21,7 @@ type Backend struct {
 	Watch     *watchlist.Service
 	Alerts    *pricealert.Service
 	Portfolio *portfolio.Service
+	Scanner   *scanner.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -798,4 +800,137 @@ func mustJSON(v any) (json.RawMessage, error) {
 		return nil, err
 	}
 	return json.RawMessage(b), nil
+}
+
+func (b *Backend) CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	clientID, _ := args["clientId"].(string)
+	typ, _ := args["type"].(string)
+	interval, _ := args["interval"].(string)
+	in := scanner.CreateInput{
+		ClientID: clientID, Type: typ, Interval: interval,
+		RSIPeriod: intFromAny(args["rsiPeriod"], 14),
+		RSICondition: strFromAny(args["rsiCondition"], "below"),
+		RSIThreshold: floatFromAny(args["rsiThreshold"], 30),
+		MAFastPeriod: intFromAny(args["maFastPeriod"], 12),
+		MASlowPeriod: intFromAny(args["maSlowPeriod"], 26),
+		MADirection: strFromAny(args["maDirection"], "golden_cross"),
+		VolumeLookback: intFromAny(args["volumeLookback"], 20),
+		VolumeMinRatio: floatFromAny(args["volumeMinRatio"], 2),
+	}
+	rule, err := b.Scanner.Create(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return scannerRuleJSON(rule)
+}
+
+func (b *Backend) ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, err := b.Scanner.List(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		m, err := scannerRuleMap(&list[i])
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "rules": items, "count": len(items)})
+}
+
+func (b *Backend) DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	if err := b.Scanner.Delete(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Scanner.ListResults(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, r := range list {
+		items = append(items, map[string]any{
+			"id": r.ID, "clientId": r.ClientID, "ruleId": r.RuleID, "exchange": string(r.Exchange),
+			"symbol": r.Symbol, "ruleType": string(r.RuleType), "interval": r.Interval,
+			"marketDataKey": r.MarketDataKey, "matchedAt": r.MatchedAt.UTC().Format(time.RFC3339Nano),
+			"summary": r.Summary, "metrics": r.Metrics,
+		})
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "results": items, "count": len(items), "total": total})
+}
+
+func scannerRuleJSON(r *domain.ScannerRule) (json.RawMessage, error) {
+	m, err := scannerRuleMap(r)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(m)
+}
+
+func scannerRuleMap(r *domain.ScannerRule) (map[string]any, error) {
+	m := map[string]any{
+		"id": r.ID, "clientId": r.ClientID, "type": string(r.Type), "interval": r.Interval, "enabled": r.Enabled,
+		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": r.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	switch r.Type {
+	case domain.ScannerRuleRSI:
+		m["rsiPeriod"] = r.RSIPeriod
+		m["rsiCondition"] = string(r.RSICondition)
+		m["rsiThreshold"] = r.RSIThreshold
+	case domain.ScannerRuleMACrossover:
+		m["maFastPeriod"] = r.MAFastPeriod
+		m["maSlowPeriod"] = r.MASlowPeriod
+		m["maDirection"] = r.MADirection
+	case domain.ScannerRuleVolumeIncrease:
+		m["volumeLookback"] = r.VolumeLookback
+		m["volumeMinRatio"] = r.VolumeMinRatio
+	}
+	return m, nil
+}
+
+func intFromAny(v any, def int) int {
+	switch t := v.(type) {
+	case float64:
+		return int(t)
+	case int:
+		return t
+	default:
+		return def
+	}
+}
+
+func floatFromAny(v any, def float64) float64 {
+	switch t := v.(type) {
+	case float64:
+		return t
+	case int:
+		return float64(t)
+	default:
+		return def
+	}
+}
+
+func strFromAny(v any, def string) string {
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return def
 }

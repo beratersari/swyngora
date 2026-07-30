@@ -176,6 +176,25 @@ class PortfolioCancelOrderInput(BaseModel):
     order_id: str
 
 
+class ScannerRuleCreateInput(BaseModel):
+    client_id: str
+    rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
+    interval: str = "1h"
+    rsi_period: int = 14
+    rsi_condition: str = "below"
+    rsi_threshold: float = 30
+    ma_fast_period: int = 12
+    ma_slow_period: int = 26
+    ma_direction: str = "golden_cross"
+    volume_lookback: int = 20
+    volume_min_ratio: float = 2
+
+
+class ScannerRuleDeleteInput(BaseModel):
+    client_id: str
+    rule_id: str
+
+
 class AlertWebhookSetInput(BaseModel):
     client_id: str
     url: str = Field(description="Absolute http(s) webhook URL")
@@ -469,6 +488,45 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def list_portfolio_trades(client_id: str) -> str:
         return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
 
+    def create_scanner_rule(
+        client_id: str,
+        rule_type: str,
+        interval: str = "1h",
+        rsi_period: int = 14,
+        rsi_condition: str = "below",
+        rsi_threshold: float = 30,
+        ma_fast_period: int = 12,
+        ma_slow_period: int = 26,
+        ma_direction: str = "golden_cross",
+        volume_lookback: int = 20,
+        volume_min_ratio: float = 2,
+    ) -> str:
+        return http.post(
+            "/api/v1/scanner/rules",
+            {
+                "clientId": client_id,
+                "type": rule_type,
+                "interval": interval,
+                "rsiPeriod": rsi_period,
+                "rsiCondition": rsi_condition,
+                "rsiThreshold": rsi_threshold,
+                "maFastPeriod": ma_fast_period,
+                "maSlowPeriod": ma_slow_period,
+                "maDirection": ma_direction,
+                "volumeLookback": volume_lookback,
+                "volumeMinRatio": volume_min_ratio,
+            },
+        )
+
+    def list_scanner_rules(client_id: str) -> str:
+        return http.get("/api/v1/scanner/rules", {"clientId": client_id})
+
+    def delete_scanner_rule(client_id: str, rule_id: str) -> str:
+        return http.delete(f"/api/v1/scanner/rules/{rule_id}", {"clientId": client_id})
+
+    def list_scanner_results(client_id: str) -> str:
+        return http.get("/api/v1/scanner/results", {"clientId": client_id})
+
     def detect_pump_events(
         symbol: str,
         exchange: str = "binance",
@@ -670,6 +728,33 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             list_portfolio_trades,
             name="list_portfolio_trades",
             description="List paper trade history for a clientId.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            create_scanner_rule,
+            name="create_scanner_rule",
+            description=(
+                "Create a technical scanner rule for the client's watchlist: "
+                "rsi, ma_crossover, or volume_increase. Informational only."
+            ),
+            args_schema=ScannerRuleCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_scanner_rules,
+            name="list_scanner_rules",
+            description="List technical scanner rules for a clientId.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            delete_scanner_rule,
+            name="delete_scanner_rule",
+            description="Delete a scanner rule by id.",
+            args_schema=ScannerRuleDeleteInput,
+        ),
+        StructuredTool.from_function(
+            list_scanner_results,
+            name="list_scanner_results",
+            description="List saved scanner match history (deduped by rule/symbol/bar).",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

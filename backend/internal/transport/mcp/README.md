@@ -31,6 +31,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_portfolio_orders` | List pending paper orders |
 | `cancel_portfolio_order` | Cancel open pending paper order |
 | `list_portfolio_trades` | Paper trade history |
+| `create_scanner_rule` | Create RSI / MA / volume watchlist scanner rule |
+| `list_scanner_rules` | List scanner rules |
+| `delete_scanner_rule` | Delete scanner rule |
+| `list_scanner_results` | Scanner match history |
 
 ## Run (integrated — preferred)
 

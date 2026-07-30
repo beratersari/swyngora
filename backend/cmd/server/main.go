@@ -15,6 +15,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
@@ -23,6 +24,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
@@ -148,6 +150,19 @@ func main() {
 	portfolioSvc := portfolio.New(portfolioStore, marketSvc)
 	logger.Info("paper portfolio store ready", "driver", "sqlite", "path", portfolioStore.Path())
 
+	scannerStore, err := scannerstore.Open(cfg.ScannerDBPath)
+	if err != nil {
+		logger.Error("scanner sqlite open failed", "path", cfg.ScannerDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := scannerStore.Close(); err != nil {
+			logger.Error("scanner sqlite close", "err", err)
+		}
+	}()
+	scannerSvc := scanner.New(scannerStore, marketSvc, watchSvc)
+	logger.Info("indicator scanner store ready", "driver", "sqlite", "path", scannerStore.Path())
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -158,6 +173,20 @@ func main() {
 		Logger:    logger,
 	}
 	go orderFiller.Start(ctx)
+
+	scannerChecker := &scanner.Checker{
+		Scanner:  scannerSvc,
+		Interval: cfg.ScannerCheckInterval,
+		Logger:   logger,
+	}
+	go scannerChecker.Start(ctx)
+
+	backtestWorker := &scanner.BacktestWorker{
+		Scanner:  scannerSvc,
+		Interval: 2 * time.Second,
+		Logger:   logger,
+	}
+	go backtestWorker.Start(ctx)
 
 	// Optional: start Python multi-agent HTTP as a child of this process.
 	aiProc, err := aistart.Start(ctx, aistart.Options{
@@ -177,7 +206,7 @@ func main() {
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
 	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc)
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc)
 	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
@@ -189,6 +218,7 @@ func main() {
 		AITimeout:       cfg.AITimeout,
 		Alerts:          alertSvc,
 		Portfolio:       portfolioSvc,
+		Scanner:         scannerSvc,
 	})
 
 	job := &supplyjob.Runner{

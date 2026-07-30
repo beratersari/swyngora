@@ -76,6 +76,11 @@ type Config struct {
 	PortfolioDBPath string
 	// PortfolioOrderCheckInterval is how often open pending paper orders are evaluated.
 	PortfolioOrderCheckInterval time.Duration
+
+	// ScannerDBPath is the SQLite file for technical indicator scanner rules/results.
+	ScannerDBPath string
+	// ScannerCheckInterval is how often scanner rules are evaluated against watchlists.
+	ScannerCheckInterval time.Duration
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -139,6 +144,9 @@ func Load() Config {
 
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
 		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
+
+		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
+		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),
 	}
 }
 
