@@ -19,8 +19,9 @@ info:
       plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
       quiet hours end; pending notifications survive restarts.
     - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
-      pending limit buy/sell and stop-loss orders (auto-fill on price), open positions,
-      realized/unrealized P&amp;L, and trade history (SQLite; not real money).
+      pending limit buy/sell and stop-loss orders with balance/position reservations and
+      partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L, and
+      trade history (SQLite; not real money).
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -1034,8 +1035,9 @@ paths:
     post:
       summary: Place a paper order (market or pending)
       description: |
-        type=market (default): immediate buy/sell at last price (side required).
-        type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; fills when last meets condition.
+        type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
+        type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
+        may fill partially and stay open until remaining size is zero; each fill is a trade history row.
         Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
@@ -1063,6 +1065,18 @@ paths:
                   type: number
                   exclusiveMinimum: 0
                   description: Limit or stop price (required for pending types)
+                timeInForce:
+                  type: string
+                  enum: [gtc, ioc, fok]
+                  default: gtc
+                  description: |
+                    gtc — rest until filled/canceled/expired;
+                    ioc — fill available on first try, cancel remainder;
+                    fok — fill fully on first try or cancel with no fill
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Optional RFC3339 expiry (GTC only); cancels and releases reservation when reached
       responses:
         '200':
           description: Market fill and updated portfolio
@@ -1340,6 +1354,12 @@ components:
         currency: { type: string }
         startingBalance: { type: number }
         cashBalance: { type: number }
+        reservedCash:
+          type: number
+          description: Cash locked by open buy pending orders
+        availableCash:
+          type: number
+          description: cashBalance minus reservedCash
         positionsValue: { type: number }
         equity: { type: number }
         unrealizedPnL: { type: number }
@@ -1358,16 +1378,29 @@ components:
         symbol: { type: string }
         type: { type: string, enum: [limit_buy, limit_sell, stop_loss] }
         side: { type: string, enum: [buy, sell] }
-        quantity: { type: number }
+        quantity: { type: number, description: Original order size }
+        filledQuantity: { type: number }
+        remainingQuantity: { type: number }
         triggerPrice: { type: number }
+        reservedCash:
+          type: number
+          description: Cash reserved for remaining buy size (remaining * triggerPrice)
+        reservedQuantity:
+          type: number
+          description: Position quantity reserved for remaining sell size
+        timeInForce: { type: string, enum: [gtc, ioc, fok] }
+        expiresAt: { type: string, format: date-time, nullable: true }
         status: { type: string, enum: [open, filled, canceled, rejected] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         filledAt: { type: string, format: date-time, nullable: true }
         canceledAt: { type: string, format: date-time, nullable: true }
-        fillTradeId: { type: string }
-        fillPrice: { type: number }
+        fillTradeId: { type: string, description: Latest fill trade id }
+        fillPrice: { type: number, description: Latest fill price }
         rejectReason: { type: string }
+        cancelReason:
+          type: string
+          description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled
     Watchlist:
       type: object
       properties:

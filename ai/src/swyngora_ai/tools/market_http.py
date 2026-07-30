@@ -162,6 +162,8 @@ class PortfolioPendingOrderInput(BaseModel):
     quantity: float = Field(gt=0)
     trigger_price: float = Field(gt=0, description="Limit or stop price")
     exchange: str = "binance"
+    time_in_force: str = Field(default="gtc", description="gtc | ioc | fok")
+    expires_at: str = Field(default="", description="RFC3339 expiry for GTC only")
 
 
 class PortfolioListOrdersInput(BaseModel):
@@ -436,18 +438,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         quantity: float,
         trigger_price: float,
         exchange: str = "binance",
+        time_in_force: str = "gtc",
+        expires_at: str = "",
     ) -> str:
-        return http.post(
-            "/api/v1/portfolio/orders",
-            {
-                "clientId": client_id,
-                "symbol": symbol,
-                "type": order_type,
-                "quantity": quantity,
-                "triggerPrice": trigger_price,
-                "exchange": exchange,
-            },
-        )
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "type": order_type,
+            "quantity": quantity,
+            "triggerPrice": trigger_price,
+            "exchange": exchange,
+            "timeInForce": time_in_force,
+        }
+        if expires_at:
+            body["expiresAt"] = expires_at
+        return http.post("/api/v1/portfolio/orders", body)
 
     def list_portfolio_orders(client_id: str, status: str = "open") -> str:
         return http.get(
@@ -645,7 +650,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="place_portfolio_pending_order",
             description=(
                 "Paper pending order: limit_buy, limit_sell, or stop_loss. "
-                "Fills when last price meets trigger_price. Simulated only."
+                "time_in_force gtc|ioc|fok; optional expires_at for GTC. Simulated only."
             ),
             args_schema=PortfolioPendingOrderInput,
         ),

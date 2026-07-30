@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,44 +82,87 @@ CREATE TABLE IF NOT EXISTS positions (
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS trades (
-	id           TEXT PRIMARY KEY NOT NULL,
-	client_id    TEXT NOT NULL,
-	exchange     TEXT NOT NULL,
-	symbol       TEXT NOT NULL,
-	side         TEXT NOT NULL,
-	quantity     REAL NOT NULL,
-	price        REAL NOT NULL,
-	notional     REAL NOT NULL,
-	realized_pnl REAL NOT NULL DEFAULT 0,
-	created_at   TEXT NOT NULL,
+	id               TEXT PRIMARY KEY NOT NULL,
+	client_id        TEXT NOT NULL,
+	exchange         TEXT NOT NULL,
+	symbol           TEXT NOT NULL,
+	side             TEXT NOT NULL,
+	quantity         REAL NOT NULL,
+	price            REAL NOT NULL,
+	notional         REAL NOT NULL,
+	realized_pnl     REAL NOT NULL DEFAULT 0,
+	pending_order_id TEXT NOT NULL DEFAULT '',
+	created_at       TEXT NOT NULL,
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_trades_client ON trades(client_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_positions_client ON positions(client_id);
 CREATE TABLE IF NOT EXISTS pending_orders (
-	id            TEXT PRIMARY KEY NOT NULL,
-	client_id     TEXT NOT NULL,
-	exchange      TEXT NOT NULL,
-	symbol        TEXT NOT NULL,
-	order_type    TEXT NOT NULL,
-	side          TEXT NOT NULL,
-	quantity      REAL NOT NULL,
-	trigger_price REAL NOT NULL,
-	status        TEXT NOT NULL,
-	created_at    TEXT NOT NULL,
-	updated_at    TEXT NOT NULL,
-	filled_at     TEXT,
-	canceled_at   TEXT,
-	fill_trade_id TEXT NOT NULL DEFAULT '',
-	fill_price    REAL NOT NULL DEFAULT 0,
-	reject_reason TEXT NOT NULL DEFAULT '',
+	id                 TEXT PRIMARY KEY NOT NULL,
+	client_id          TEXT NOT NULL,
+	exchange           TEXT NOT NULL,
+	symbol             TEXT NOT NULL,
+	order_type         TEXT NOT NULL,
+	side               TEXT NOT NULL,
+	quantity           REAL NOT NULL,
+	filled_quantity    REAL NOT NULL DEFAULT 0,
+	remaining_quantity REAL NOT NULL DEFAULT 0,
+	trigger_price      REAL NOT NULL,
+	reserved_cash      REAL NOT NULL DEFAULT 0,
+	reserved_quantity  REAL NOT NULL DEFAULT 0,
+	time_in_force      TEXT NOT NULL DEFAULT 'gtc',
+	expires_at         TEXT,
+	status             TEXT NOT NULL,
+	created_at         TEXT NOT NULL,
+	updated_at         TEXT NOT NULL,
+	filled_at          TEXT,
+	canceled_at        TEXT,
+	fill_trade_id      TEXT NOT NULL DEFAULT '',
+	fill_price         REAL NOT NULL DEFAULT 0,
+	reject_reason      TEXT NOT NULL DEFAULT '',
+	cancel_reason      TEXT NOT NULL DEFAULT '',
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_pending_orders_client ON pending_orders(client_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pending_orders_open ON pending_orders(status) WHERE status = 'open';
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// Additive migrations for DBs created before reservations/partial fills.
+	alters := []string{
+		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE pending_orders ADD COLUMN filled_quantity REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN remaining_quantity REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN reserved_cash REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN reserved_quantity REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN time_in_force TEXT NOT NULL DEFAULT 'gtc'`,
+		`ALTER TABLE pending_orders ADD COLUMN expires_at TEXT`,
+		`ALTER TABLE pending_orders ADD COLUMN cancel_reason TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, q := range alters {
+		if _, err := s.db.Exec(q); err != nil {
+			// SQLite returns error if column already exists — ignore those.
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
+				// modernc may say "duplicate column name"
+				if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+					// continue only on duplicate; other errors are fatal
+					msg := strings.ToLower(err.Error())
+					if strings.Contains(msg, "duplicate") {
+						continue
+					}
+					return err
+				}
+			}
+		}
+	}
+	// Backfill remaining_quantity for legacy open orders that only had quantity.
+	_, _ = s.db.Exec(`
+		UPDATE pending_orders
+		SET remaining_quantity = quantity - COALESCE(filled_quantity, 0)
+		WHERE remaining_quantity = 0 AND status = 'open' AND quantity > 0
+	`)
+	return nil
 }
 
 // Path returns absolute DB path.
@@ -271,9 +315,9 @@ func (s *SQLite) InsertTrade(ctx context.Context, t domain.Trade) (*domain.Trade
 		t.CreatedAt = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL,
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -291,7 +335,7 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, created_at
+		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at
 		FROM trades WHERE client_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -304,7 +348,7 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	for rows.Next() {
 		var t domain.Trade
 		var ex, side, cAt string
-		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &cAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &cAt); err != nil {
 			return nil, err
 		}
 		t.Exchange = domain.Exchange(ex)
@@ -367,16 +411,16 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL,
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
 		at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-// CreatePendingOrder inserts an open resting order.
+// CreatePendingOrder inserts an open resting order with reservations.
 func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) (*domain.PendingOrder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -389,14 +433,22 @@ func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) 
 	if o.Status == "" {
 		o.Status = domain.PendingStatusOpen
 	}
+	if o.RemainingQuantity <= 0 {
+		o.RemainingQuantity = o.Quantity
+	}
+	if o.TimeInForce == "" {
+		o.TimeInForce = domain.TimeInForceGTC
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO pending_orders (
-			id, client_id, exchange, symbol, order_type, side, quantity, trigger_price, status,
-			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Type), string(o.Side), o.Quantity, o.TriggerPrice, string(o.Status),
+			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
+			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
+			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Type), string(o.Side), o.Quantity, o.FilledQuantity, o.RemainingQuantity,
+		o.TriggerPrice, o.ReservedCash, o.ReservedQuantity, string(o.TimeInForce), nullTime(o.ExpiresAt), string(o.Status),
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason)
+		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason)
 	if err != nil {
 		return nil, fmt.Errorf("pending order create: %w", err)
 	}
@@ -450,6 +502,32 @@ func (s *SQLite) CountOpenPendingOrders(ctx context.Context, clientID string) (i
 	return n, err
 }
 
+// SumReservedCash totals reserved cash on open buy orders.
+func (s *SQLite) SumReservedCash(ctx context.Context, clientID string) (float64, error) {
+	var n sql.NullFloat64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(reserved_cash), 0) FROM pending_orders
+		WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
+	`, clientID).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n.Float64, nil
+}
+
+// SumReservedQuantity totals reserved sell qty for a symbol.
+func (s *SQLite) SumReservedQuantity(ctx context.Context, clientID string, exchange domain.Exchange, symbol string) (float64, error) {
+	var n sql.NullFloat64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(reserved_quantity), 0) FROM pending_orders
+		WHERE client_id = ? AND status = 'open' AND exchange = ? AND symbol = ? AND reserved_quantity > 0
+	`, clientID, string(exchange), symbol).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n.Float64, nil
+}
+
 // ListAllOpenPendingOrders returns all open orders for the background filler.
 func (s *SQLite) ListAllOpenPendingOrders(ctx context.Context) ([]domain.PendingOrder, error) {
 	rows, err := s.db.QueryContext(ctx, pendingOrderSelect+` WHERE status = 'open' ORDER BY created_at ASC`)
@@ -460,19 +538,23 @@ func (s *SQLite) ListAllOpenPendingOrders(ctx context.Context) ([]domain.Pending
 	return scanPendingOrders(rows)
 }
 
-// CancelPendingOrder cancels only if still open.
-func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time) (*domain.PendingOrder, error) {
+// CancelPendingOrder cancels only if still open and releases remaining reservation.
+func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time, reason string) (*domain.PendingOrder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
+	if reason == "" {
+		reason = domain.CancelReasonUser
+	}
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE pending_orders
-		SET status = 'canceled', canceled_at = ?, updated_at = ?
+		SET status = 'canceled', canceled_at = ?, updated_at = ?,
+		    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
 		WHERE id = ? AND client_id = ? AND status = 'open'
-	`, atStr, atStr, id, clientID)
+	`, atStr, atStr, reason, id, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -480,15 +562,18 @@ func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at
 	if n == 0 {
 		return nil, domain.ErrNotFound
 	}
-	// Read without re-locking: hold mu still, query ok.
 	row := s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE id = ? AND client_id = ?`, id, clientID)
 	return scanPendingOrder(row)
 }
 
-// ExecutePendingFill fills an open order atomically with the trade.
-func (s *SQLite) ExecutePendingFill(ctx context.Context, orderID string, p *domain.Portfolio, pos *domain.Position, t domain.Trade, fillPrice float64, at time.Time) error {
+// ExecutePendingFill applies a partial or full fill for an open order.
+// order must contain updated filled/remaining/reserved/status fields after the fill.
+func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOrder, p *domain.Portfolio, pos *domain.Position, t domain.Trade, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if order == nil {
+		return fmt.Errorf("pending order required")
+	}
 	if at.IsZero() {
 		at = time.Now().UTC()
 		t.CreatedAt = at
@@ -500,15 +585,21 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, orderID string, p *doma
 	defer func() { _ = tx.Rollback() }()
 
 	var status string
-	err = tx.QueryRowContext(ctx, `SELECT status FROM pending_orders WHERE id = ?`, orderID).Scan(&status)
+	var remaining float64
+	err = tx.QueryRowContext(ctx, `
+		SELECT status, remaining_quantity FROM pending_orders WHERE id = ?
+	`, order.ID).Scan(&status, &remaining)
 	if err == sql.ErrNoRows {
 		return domain.ErrNotFound
 	}
 	if err != nil {
 		return err
 	}
-	if status != string(domain.PendingStatusOpen) {
+	if status != string(domain.PendingStatusOpen) || remaining <= domain.PositionEpsilon {
 		return domain.ErrNotFound
+	}
+	if t.Quantity > remaining+1e-9 {
+		return fmt.Errorf("%w: fill quantity exceeds remaining", domain.ErrInvalidArgument)
 	}
 
 	atStr := at.UTC().Format(time.RFC3339Nano)
@@ -540,18 +631,29 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, orderID string, p *doma
 		}
 	}
 
+	if t.PendingOrderID == "" {
+		t.PendingOrderID = order.ID
+	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, atStr); err != nil {
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, atStr); err != nil {
 		return err
 	}
 
+	var filledAt any
+	if order.Status == domain.PendingStatusFilled {
+		filledAt = atStr
+	} else {
+		filledAt = nil
+	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE pending_orders
-		SET status = 'filled', filled_at = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?
+		SET filled_quantity = ?, remaining_quantity = ?, reserved_cash = ?, reserved_quantity = ?,
+		    status = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?, filled_at = COALESCE(?, filled_at)
 		WHERE id = ? AND status = 'open'
-	`, atStr, atStr, t.ID, fillPrice, orderID)
+	`, order.FilledQuantity, order.RemainingQuantity, order.ReservedCash, order.ReservedQuantity,
+		string(order.Status), atStr, t.ID, t.Price, filledAt, order.ID)
 	if err != nil {
 		return err
 	}
@@ -562,7 +664,7 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, orderID string, p *doma
 	return tx.Commit()
 }
 
-// RejectPendingOrder marks open order rejected.
+// RejectPendingOrder marks open order rejected and releases reservation.
 func (s *SQLite) RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -572,7 +674,8 @@ func (s *SQLite) RejectPendingOrder(ctx context.Context, orderID, reason string,
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE pending_orders
-		SET status = 'rejected', reject_reason = ?, updated_at = ?
+		SET status = 'rejected', reject_reason = ?, updated_at = ?,
+		    reserved_cash = 0, reserved_quantity = 0
 		WHERE id = ? AND status = 'open'
 	`, reason, atStr, orderID)
 	if err != nil {
@@ -586,8 +689,9 @@ func (s *SQLite) RejectPendingOrder(ctx context.Context, orderID, reason string,
 }
 
 const pendingOrderSelect = `
-	SELECT id, client_id, exchange, symbol, order_type, side, quantity, trigger_price, status,
-		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason
+	SELECT id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
+		trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
+		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason
 	FROM pending_orders`
 
 type scannable interface {
@@ -596,20 +700,29 @@ type scannable interface {
 
 func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 	var o domain.PendingOrder
-	var ex, typ, side, st, cAt, uAt string
-	var filledAt, canceledAt sql.NullString
+	var ex, typ, side, tif, st, cAt, uAt string
+	var filledAt, canceledAt, expiresAt sql.NullString
 	if err := row.Scan(
-		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.TriggerPrice, &st,
-		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason,
+		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
+		&o.TriggerPrice, &o.ReservedCash, &o.ReservedQuantity, &tif, &expiresAt, &st,
+		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 	); err != nil {
 		return nil, err
 	}
 	o.Exchange = domain.Exchange(ex)
 	o.Type = domain.PendingOrderType(typ)
 	o.Side = domain.TradeSide(side)
+	o.TimeInForce = domain.TimeInForce(tif)
+	if o.TimeInForce == "" {
+		o.TimeInForce = domain.TimeInForceGTC
+	}
 	o.Status = domain.PendingOrderStatus(st)
 	o.CreatedAt = parseTime(cAt)
 	o.UpdatedAt = parseTime(uAt)
+	if expiresAt.Valid && expiresAt.String != "" {
+		t := parseTime(expiresAt.String)
+		o.ExpiresAt = &t
+	}
 	if filledAt.Valid && filledAt.String != "" {
 		t := parseTime(filledAt.String)
 		o.FilledAt = &t

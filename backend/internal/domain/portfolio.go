@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
@@ -52,18 +53,19 @@ type Position struct {
 	UpdatedAt time.Time
 }
 
-// Trade is a filled paper market order.
+// Trade is a filled paper order leg (market or one partial/complete pending fill).
 type Trade struct {
-	ID          string
-	ClientID    string
-	Exchange    Exchange
-	Symbol      string
-	Side        TradeSide
-	Quantity    float64
-	Price       float64
-	Notional    float64
-	RealizedPnL float64 // non-zero on sells
-	CreatedAt   time.Time
+	ID             string
+	ClientID       string
+	Exchange       Exchange
+	Symbol         string
+	Side           TradeSide
+	Quantity       float64
+	Price          float64
+	Notional       float64
+	RealizedPnL    float64 // non-zero on sells
+	PendingOrderID string  // set when fill belongs to a pending order
+	CreatedAt      time.Time
 }
 
 // PendingOrderType is a resting paper order kind.
@@ -85,36 +87,68 @@ const (
 	PendingStatusRejected PendingOrderStatus = "rejected" // condition met but insufficient cash/position
 )
 
+// TimeInForce is the fill policy for a pending paper order.
+type TimeInForce string
+
+const (
+	// TimeInForceGTC (good-til-canceled) rests until filled, canceled, or expiresAt.
+	TimeInForceGTC TimeInForce = "gtc"
+	// TimeInForceIOC (immediate-or-cancel) fills available qty on first try, cancels remainder.
+	TimeInForceIOC TimeInForce = "ioc"
+	// TimeInForceFOK (fill-or-kill) fills fully on first try or cancels with no fill.
+	TimeInForceFOK TimeInForce = "fok"
+)
+
+// Cancel reason codes (stored on canceled orders).
+const (
+	CancelReasonUser         = "user"
+	CancelReasonExpired      = "expired"
+	CancelReasonIOCRemainder = "ioc_remainder"
+	CancelReasonIOCNoFill    = "ioc_no_fill"
+	CancelReasonFOKUnfilled  = "fok_unfilled"
+)
+
 // PendingOrder is a limit or stop order waiting for a price condition.
+// Buy orders reserve cash (quantity * triggerPrice for remaining size).
+// Sell orders reserve position quantity so it cannot be spent by other orders.
 type PendingOrder struct {
-	ID           string
-	ClientID     string
-	Exchange     Exchange
-	Symbol       string
-	Type         PendingOrderType
-	Side         TradeSide // buy for limit_buy; sell for limit_sell and stop_loss
-	Quantity     float64
-	TriggerPrice float64 // limit price or stop trigger
-	Status       PendingOrderStatus
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	FilledAt     *time.Time
-	CanceledAt   *time.Time
-	FillTradeID  string
-	FillPrice    float64
-	RejectReason string
+	ID                string
+	ClientID          string
+	Exchange          Exchange
+	Symbol            string
+	Type              PendingOrderType
+	Side              TradeSide // buy for limit_buy; sell for limit_sell and stop_loss
+	Quantity          float64   // original size
+	FilledQuantity    float64
+	RemainingQuantity float64
+	TriggerPrice      float64 // limit price or stop trigger
+	ReservedCash      float64 // open buy notional lock (remaining * trigger)
+	ReservedQuantity  float64 // open sell size lock
+	TimeInForce       TimeInForce
+	ExpiresAt         *time.Time // optional; GTC only — cancel when now >= expiresAt
+	Status            PendingOrderStatus
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	FilledAt          *time.Time
+	CanceledAt        *time.Time
+	FillTradeID       string  // latest fill trade id
+	FillPrice         float64 // latest fill price
+	RejectReason      string
+	CancelReason      string
 }
 
 // PositionView is a position with mark-to-market fields.
 type PositionView struct {
-	Exchange       Exchange
-	Symbol         string
-	Quantity       float64
-	AvgCost        float64
-	MarkPrice      float64
-	MarketValue    float64
-	UnrealizedPnL  float64
-	CostBasis      float64
+	Exchange          Exchange
+	Symbol            string
+	Quantity          float64
+	ReservedQuantity  float64
+	AvailableQuantity float64
+	AvgCost           float64
+	MarkPrice         float64
+	MarketValue       float64
+	UnrealizedPnL     float64
+	CostBasis         float64
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.
@@ -123,6 +157,8 @@ type PortfolioView struct {
 	Currency         string
 	StartingBalance  float64
 	CashBalance      float64
+	ReservedCash     float64
+	AvailableCash    float64
 	PositionsValue   float64
 	Equity           float64
 	UnrealizedPnL    float64
@@ -155,7 +191,7 @@ type PortfolioPort interface {
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.
 	ExecuteTrade(ctx context.Context, p *Portfolio, pos *Position, t Trade) error
 
-	// CreatePendingOrder inserts a new open resting order.
+	// CreatePendingOrder inserts a new open resting order with reservations.
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
 	// GetPendingOrder returns one order for the client or ErrNotFound.
 	GetPendingOrder(ctx context.Context, clientID, id string) (*PendingOrder, error)
@@ -165,12 +201,18 @@ type PortfolioPort interface {
 	CountOpenPendingOrders(ctx context.Context, clientID string) (int, error)
 	// ListAllOpenPendingOrders returns every open order (background filler).
 	ListAllOpenPendingOrders(ctx context.Context) ([]PendingOrder, error)
-	// CancelPendingOrder sets status canceled only if still open; returns ErrNotFound otherwise.
-	CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time) (*PendingOrder, error)
-	// ExecutePendingFill fills an open order atomically (status must still be open).
-	// Applies portfolio/position/trade and marks the order filled. Returns ErrNotFound if not open.
-	ExecutePendingFill(ctx context.Context, orderID string, p *Portfolio, pos *Position, t Trade, fillPrice float64, at time.Time) error
-	// RejectPendingOrder marks an open order rejected (e.g. insufficient funds at trigger).
+	// SumReservedCash returns total reserved cash for open buy orders of a client.
+	SumReservedCash(ctx context.Context, clientID string) (float64, error)
+	// SumReservedQuantity returns reserved sell quantity for a client/exchange/symbol.
+	SumReservedQuantity(ctx context.Context, clientID string, exchange Exchange, symbol string) (float64, error)
+	// CancelPendingOrder sets status canceled only if still open and releases remaining reservation.
+	// reason is stored as cancel_reason (e.g. user, expired, ioc_remainder).
+	CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time, reason string) (*PendingOrder, error)
+	// ExecutePendingFill applies a (possibly partial) fill for an open order.
+	// Updates remaining/reserved, inserts trade, marks filled only when remaining is zero.
+	// Returns ErrNotFound if not open.
+	ExecutePendingFill(ctx context.Context, order *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time) error
+	// RejectPendingOrder marks an open order rejected and releases remaining reservation.
 	// Returns ErrNotFound if not open.
 	RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error
 }
@@ -239,6 +281,36 @@ func IsValidPendingOrderType(s string) bool {
 	}
 }
 
+// IsValidTimeInForce reports gtc | ioc | fok.
+func IsValidTimeInForce(s string) bool {
+	switch TimeInForce(s) {
+	case TimeInForceGTC, TimeInForceIOC, TimeInForceFOK:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeTimeInForce returns a valid TIF; empty defaults to gtc.
+func NormalizeTimeInForce(s string) (TimeInForce, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return TimeInForceGTC, nil
+	}
+	if !IsValidTimeInForce(s) {
+		return "", fmt.Errorf("%w: timeInForce must be gtc, ioc, or fok", ErrInvalidArgument)
+	}
+	return TimeInForce(s), nil
+}
+
+// PendingOrderExpired reports whether a GTC order with expiresAt is past expiry.
+func PendingOrderExpired(o PendingOrder, now time.Time) bool {
+	if o.ExpiresAt == nil || o.ExpiresAt.IsZero() {
+		return false
+	}
+	return !now.Before(o.ExpiresAt.UTC())
+}
+
 // SideForPendingType returns the trade side for a pending order type.
 func SideForPendingType(t PendingOrderType) TradeSide {
 	switch t {
@@ -268,4 +340,78 @@ func PendingOrderTriggered(orderType PendingOrderType, trigger, last float64) bo
 	default:
 		return false
 	}
+}
+
+// BuyReserveCash is quantity * triggerPrice (max cash locked for a limit buy).
+func BuyReserveCash(quantity, triggerPrice float64) float64 {
+	if quantity <= 0 || triggerPrice <= 0 {
+		return 0
+	}
+	return quantity * triggerPrice
+}
+
+// AvailableCash is total cash minus reserved cash for open buy orders.
+func AvailableCash(cashBalance, reservedCash float64) float64 {
+	a := cashBalance - reservedCash
+	if a < 0 {
+		return 0
+	}
+	return a
+}
+
+// AvailablePosition is held quantity minus reserved sell quantity.
+func AvailablePosition(held, reservedQty float64) float64 {
+	a := held - reservedQty
+	if a < PositionEpsilon {
+		return 0
+	}
+	return a
+}
+
+// MaxBuyFillQty returns how much base qty can be filled from remaining reserved cash at fillPrice.
+func MaxBuyFillQty(remainingQty, reservedCash, fillPrice float64) float64 {
+	if remainingQty <= PositionEpsilon || reservedCash <= 0 || fillPrice <= 0 {
+		return 0
+	}
+	byCash := reservedCash / fillPrice
+	if byCash < remainingQty {
+		return byCash
+	}
+	return remainingQty
+}
+
+// ClampFillQty bounds a requested fill to remaining size (and optional maxFill).
+// maxFill <= 0 means no extra cap.
+func ClampFillQty(remaining, requested, maxFill float64) float64 {
+	if remaining <= PositionEpsilon {
+		return 0
+	}
+	q := remaining
+	if requested > 0 && requested < q {
+		q = requested
+	}
+	if maxFill > 0 && maxFill < q {
+		q = maxFill
+	}
+	if q < MinTradeQuantity {
+		return 0
+	}
+	return q
+}
+
+// AfterBuyFillReservation updates reserved cash after a buy fill of fillQty at fillPrice.
+// Reservation for remaining size is remainingAfter * triggerPrice.
+func AfterBuyFillReservation(remainingAfter, triggerPrice float64) float64 {
+	if remainingAfter <= PositionEpsilon {
+		return 0
+	}
+	return remainingAfter * triggerPrice
+}
+
+// AfterSellFillReservation updates reserved quantity after a sell fill.
+func AfterSellFillReservation(remainingAfter float64) float64 {
+	if remainingAfter <= PositionEpsilon {
+		return 0
+	}
+	return remainingAfter
 }

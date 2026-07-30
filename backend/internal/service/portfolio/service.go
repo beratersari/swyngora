@@ -96,9 +96,13 @@ func (s *Service) Get(ctx context.Context, clientID string) (*domain.Portfolio, 
 	return s.store.GetPortfolio(ctx, clientID)
 }
 
-// View returns cash, positions marked to market, and P&L summary.
+// View returns cash, reservations, positions marked to market, and P&L summary.
 func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioView, error) {
 	p, err := s.Get(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	reservedCash, err := s.store.SumReservedCash(ctx, p.ClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -114,17 +118,23 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 			// Skip mark on error — still show cost basis; mark=avg for display safety
 			mark = pos.AvgCost
 		}
+		resQty, rerr := s.store.SumReservedQuantity(ctx, p.ClientID, pos.Exchange, pos.Symbol)
+		if rerr != nil {
+			return nil, rerr
+		}
 		mv := pos.Quantity * mark
 		u := domain.UnrealizedPnL(pos.Quantity, pos.AvgCost, mark)
 		views = append(views, domain.PositionView{
-			Exchange:      pos.Exchange,
-			Symbol:        pos.Symbol,
-			Quantity:      pos.Quantity,
-			AvgCost:       pos.AvgCost,
-			MarkPrice:     mark,
-			MarketValue:   mv,
-			UnrealizedPnL: u,
-			CostBasis:     pos.Quantity * pos.AvgCost,
+			Exchange:          pos.Exchange,
+			Symbol:            pos.Symbol,
+			Quantity:          pos.Quantity,
+			ReservedQuantity:  resQty,
+			AvailableQuantity: domain.AvailablePosition(pos.Quantity, resQty),
+			AvgCost:           pos.AvgCost,
+			MarkPrice:         mark,
+			MarketValue:       mv,
+			UnrealizedPnL:     u,
+			CostBasis:         pos.Quantity * pos.AvgCost,
 		})
 		posValue += mv
 		unreal += u
@@ -135,6 +145,8 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		Currency:         p.Currency,
 		StartingBalance:  p.StartingBalance,
 		CashBalance:      p.CashBalance,
+		ReservedCash:     reservedCash,
+		AvailableCash:    domain.AvailableCash(p.CashBalance, reservedCash),
 		PositionsValue:   posValue,
 		Equity:           equity,
 		UnrealizedPnL:    unreal,
@@ -176,6 +188,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
+	reservedCash, err := s.store.SumReservedCash(ctx, clientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	availCash := domain.AvailableCash(p.CashBalance, reservedCash)
 
 	var posQty, avg float64
 	pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
@@ -184,6 +201,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	} else if perr != nil && perr != domain.ErrNotFound {
 		return nil, nil, perr
 	}
+	reservedQty, err := s.store.SumReservedQuantity(ctx, clientID, ex, sym)
+	if err != nil {
+		return nil, nil, err
+	}
+	availPos := domain.AvailablePosition(posQty, reservedQty)
 
 	now := time.Now().UTC()
 	var (
@@ -191,11 +213,23 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	)
 	switch side {
 	case domain.TradeSideBuy:
-		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, in.Quantity, price, posQty, avg)
+		// Spend only unreserved cash; update absolute cash from full balance.
+		_, newQty, newAvg, err = domain.ApplyBuy(availCash, in.Quantity, price, posQty, avg)
+		if err == nil {
+			newCash = p.CashBalance - in.Quantity*price
+		}
 		realized = 0
 	case domain.TradeSideSell:
-		newCash, newQty, realized, err = domain.ApplySell(p.CashBalance, in.Quantity, price, posQty, avg)
-		newAvg = avg
+		// Sell only unreserved quantity.
+		_, _, realized, err = domain.ApplySell(0, in.Quantity, price, availPos, avg)
+		if err == nil {
+			newCash = p.CashBalance + in.Quantity*price
+			newQty = posQty - in.Quantity
+			if newQty < domain.PositionEpsilon {
+				newQty = 0
+			}
+			newAvg = avg
+		}
 	}
 	if err != nil {
 		return nil, nil, err
@@ -278,9 +312,11 @@ type PendingOrderInput struct {
 	Type         string // limit_buy | limit_sell | stop_loss
 	Quantity     float64
 	TriggerPrice float64
+	TimeInForce  string     // gtc (default) | ioc | fok
+	ExpiresAt    *time.Time // optional; GTC only
 }
 
-// PlacePendingOrder creates an open resting order (not filled immediately).
+// PlacePendingOrder creates an open resting order and reserves cash or position.
 func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (*domain.PendingOrder, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
@@ -301,11 +337,16 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
 		return nil, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
 	}
+	tif, err := domain.NormalizeTimeInForce(in.TimeInForce)
+	if err != nil {
+		return nil, err
+	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
 		return nil, err
 	}
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
@@ -315,19 +356,71 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	if n >= domain.MaxOpenPendingOrders {
 		return nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
 	}
+
 	now := time.Now().UTC()
+	var expiresAt *time.Time
+	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
+		if tif != domain.TimeInForceGTC {
+			return nil, fmt.Errorf("%w: expiresAt is only valid for gtc orders", domain.ErrInvalidArgument)
+		}
+		exp := in.ExpiresAt.UTC()
+		if !exp.After(now) {
+			return nil, fmt.Errorf("%w: expiresAt must be in the future", domain.ErrInvalidArgument)
+		}
+		expiresAt = &exp
+	}
+
+	side := domain.SideForPendingType(typ)
+	var reservedCash, reservedQty float64
+	switch side {
+	case domain.TradeSideBuy:
+		need := domain.BuyReserveCash(in.Quantity, in.TriggerPrice)
+		resCash, rerr := s.store.SumReservedCash(ctx, clientID)
+		if rerr != nil {
+			return nil, rerr
+		}
+		avail := domain.AvailableCash(p.CashBalance, resCash)
+		if avail+1e-9 < need {
+			return nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
+		}
+		reservedCash = need
+	case domain.TradeSideSell:
+		var held float64
+		pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
+		if perr == nil && pos != nil {
+			held = pos.Quantity
+		} else if perr != nil && perr != domain.ErrNotFound {
+			return nil, perr
+		}
+		resQty, rerr := s.store.SumReservedQuantity(ctx, clientID, ex, sym)
+		if rerr != nil {
+			return nil, rerr
+		}
+		avail := domain.AvailablePosition(held, resQty)
+		if avail+domain.PositionEpsilon < in.Quantity {
+			return nil, fmt.Errorf("%w: insufficient available position to reserve (need %g, available %g)", domain.ErrInvalidArgument, in.Quantity, avail)
+		}
+		reservedQty = in.Quantity
+	}
+
 	o := domain.PendingOrder{
-		ID:           uuid.NewString(),
-		ClientID:     clientID,
-		Exchange:     ex,
-		Symbol:       sym,
-		Type:         typ,
-		Side:         domain.SideForPendingType(typ),
-		Quantity:     in.Quantity,
-		TriggerPrice: in.TriggerPrice,
-		Status:       domain.PendingStatusOpen,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:                uuid.NewString(),
+		ClientID:          clientID,
+		Exchange:          ex,
+		Symbol:            sym,
+		Type:              typ,
+		Side:              side,
+		Quantity:          in.Quantity,
+		FilledQuantity:    0,
+		RemainingQuantity: in.Quantity,
+		TriggerPrice:      in.TriggerPrice,
+		ReservedCash:      reservedCash,
+		ReservedQuantity:  reservedQty,
+		TimeInForce:       tif,
+		ExpiresAt:         expiresAt,
+		Status:            domain.PendingStatusOpen,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}
 	return s.store.CreatePendingOrder(ctx, o)
 }
@@ -386,7 +479,7 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (
 	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
 		return nil, err
 	}
-	return s.store.CancelPendingOrder(ctx, clientID, id, time.Now().UTC())
+	return s.store.CancelPendingOrder(ctx, clientID, id, time.Now().UTC(), domain.CancelReasonUser)
 }
 
 // ListAllOpenPendingOrders is used by the background order filler.
@@ -397,13 +490,150 @@ func (s *Service) ListAllOpenPendingOrders(ctx context.Context) ([]domain.Pendin
 	return s.store.ListAllOpenPendingOrders(ctx)
 }
 
-// TryFillPendingOrder evaluates one open order against lastPrice and fills or rejects atomically.
-// Returns (filledOrder, true, nil) when filled; (nil, false, nil) when not triggered or race lost.
-func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice float64) (*domain.PendingOrder, bool, error) {
+// ProcessOpenOrder runs expiry checks and one fill attempt according to time-in-force.
+// Returns the order when something changed (fill and/or cancel), ok=true; otherwise (nil,false,nil).
+func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
 	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	tif := o.TimeInForce
+	if tif == "" {
+		tif = domain.TimeInForceGTC
+	}
+
+	// GTC expiration: cancel and release reservation.
+	if tif == domain.TimeInForceGTC && domain.PendingOrderExpired(o, now) {
+		canceled, err := s.store.CancelPendingOrder(ctx, o.ClientID, o.ID, now, domain.CancelReasonExpired)
+		if err != nil {
+			if err == domain.ErrNotFound {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+		return canceled, true, nil
+	}
+
+	triggered := domain.PendingOrderTriggered(o.Type, o.TriggerPrice, lastPrice)
+	if !triggered {
+		// IOC/FOK: one immediate attempt — if not marketable, cancel with no fill.
+		switch tif {
+		case domain.TimeInForceIOC:
+			canceled, err := s.store.CancelPendingOrder(ctx, o.ClientID, o.ID, now, domain.CancelReasonIOCNoFill)
+			if err != nil {
+				if err == domain.ErrNotFound {
+					return nil, false, nil
+				}
+				return nil, false, err
+			}
+			return canceled, true, nil
+		case domain.TimeInForceFOK:
+			canceled, err := s.store.CancelPendingOrder(ctx, o.ClientID, o.ID, now, domain.CancelReasonFOKUnfilled)
+			if err != nil {
+				if err == domain.ErrNotFound {
+					return nil, false, nil
+				}
+				return nil, false, err
+			}
+			return canceled, true, nil
+		default:
+			return nil, false, nil
+		}
+	}
+
+	// FOK: require full remaining size in one shot.
+	if tif == domain.TimeInForceFOK {
+		remaining := o.RemainingQuantity
+		if remaining <= domain.PositionEpsilon {
+			remaining = o.Quantity - o.FilledQuantity
+		}
+		can := s.maxFillableQty(o, remaining, lastPrice)
+		if can+domain.PositionEpsilon < remaining {
+			canceled, err := s.store.CancelPendingOrder(ctx, o.ClientID, o.ID, now, domain.CancelReasonFOKUnfilled)
+			if err != nil {
+				if err == domain.ErrNotFound {
+					return nil, false, nil
+				}
+				return nil, false, err
+			}
+			return canceled, true, nil
+		}
+		// Force full fill (no partial cap).
+		maxFillQty = 0
+	}
+
+	filled, ok, err := s.TryFillPendingOrder(ctx, o, lastPrice, maxFillQty)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// IOC: after first try, cancel any remainder and release reservation.
+	if tif == domain.TimeInForceIOC {
+		if ok && filled != nil && filled.Status == domain.PendingStatusOpen && filled.RemainingQuantity > domain.PositionEpsilon {
+			canceled, cerr := s.store.CancelPendingOrder(ctx, filled.ClientID, filled.ID, now, domain.CancelReasonIOCRemainder)
+			if cerr != nil {
+				if cerr == domain.ErrNotFound {
+					return filled, true, nil
+				}
+				return nil, false, cerr
+			}
+			return canceled, true, nil
+		}
+		if !ok {
+			canceled, cerr := s.store.CancelPendingOrder(ctx, o.ClientID, o.ID, now, domain.CancelReasonIOCNoFill)
+			if cerr != nil {
+				if cerr == domain.ErrNotFound {
+					return nil, false, nil
+				}
+				return nil, false, cerr
+			}
+			return canceled, true, nil
+		}
+	}
+	return filled, ok, nil
+}
+
+func (s *Service) maxFillableQty(o domain.PendingOrder, remaining, lastPrice float64) float64 {
+	switch o.Side {
+	case domain.TradeSideBuy:
+		return domain.MaxBuyFillQty(remaining, o.ReservedCash, lastPrice)
+	case domain.TradeSideSell:
+		maxByRes := o.ReservedQuantity
+		if maxByRes <= 0 {
+			maxByRes = remaining
+		}
+		if maxByRes > remaining {
+			maxByRes = remaining
+		}
+		return maxByRes
+	default:
+		return 0
+	}
+}
+
+// TryFillPendingOrder evaluates one open order against lastPrice and applies a fill.
+// maxFillQty > 0 caps this execution (partial fill); <= 0 fills as much remaining as possible.
+// Returns (order, true, nil) when any quantity was filled; (nil, false, nil) when not triggered / no-op.
+// Prefer ProcessOpenOrder for TIF/expiry handling.
+func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	if s.store == nil {
+		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	remaining := o.RemainingQuantity
+	if remaining <= domain.PositionEpsilon {
+		remaining = o.Quantity - o.FilledQuantity
+	}
+	if remaining <= domain.PositionEpsilon {
 		return nil, false, nil
 	}
 	if !domain.PendingOrderTriggered(o.Type, o.TriggerPrice, lastPrice) {
@@ -422,27 +652,83 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		return nil, false, perr
 	}
 
-	var newCash, newQty, newAvg, realized float64
+	// How much can we fill this pass?
+	fillQty := domain.ClampFillQty(remaining, 0, maxFillQty)
 	switch o.Side {
 	case domain.TradeSideBuy:
-		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, o.Quantity, lastPrice, posQty, avg)
-		realized = 0
+		// Bound by remaining reserved cash at fill price.
+		maxByRes := domain.MaxBuyFillQty(remaining, o.ReservedCash, lastPrice)
+		if maxFillQty > 0 && maxFillQty < maxByRes {
+			fillQty = maxFillQty
+		} else {
+			fillQty = maxByRes
+		}
+		fillQty = domain.ClampFillQty(remaining, fillQty, 0)
 	case domain.TradeSideSell:
-		newCash, newQty, realized, err = domain.ApplySell(p.CashBalance, o.Quantity, lastPrice, posQty, avg)
-		newAvg = avg
+		// Bound by reserved quantity remaining.
+		maxByRes := o.ReservedQuantity
+		if maxByRes <= 0 {
+			maxByRes = remaining
+		}
+		if maxByRes > remaining {
+			maxByRes = remaining
+		}
+		fillQty = domain.ClampFillQty(maxByRes, 0, maxFillQty)
 	default:
 		return nil, false, fmt.Errorf("%w: invalid order side", domain.ErrInvalidArgument)
 	}
+	if fillQty < domain.MinTradeQuantity {
+		// Cannot fill any this pass — leave open for GTC; IOC/FOK handled by ProcessOpenOrder.
+		return nil, false, nil
+	}
+
+	var newCash, newQty, newAvg, realized float64
+	switch o.Side {
+	case domain.TradeSideBuy:
+		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, fillQty, lastPrice, posQty, avg)
+		realized = 0
+	case domain.TradeSideSell:
+		newCash, newQty, realized, err = domain.ApplySell(p.CashBalance, fillQty, lastPrice, posQty, avg)
+		newAvg = avg
+	}
 	if err != nil {
-		// Insufficient cash/position at trigger — reject so it never fills later.
+		// Reservation should prevent this; fail closed and release remainder.
 		reason := err.Error()
 		if rerr := s.store.RejectPendingOrder(ctx, o.ID, reason, now); rerr != nil {
 			if rerr == domain.ErrNotFound {
-				return nil, false, nil // already terminal elsewhere
+				return nil, false, nil
 			}
 			return nil, false, rerr
 		}
 		return nil, false, nil
+	}
+
+	remainingAfter := remaining - fillQty
+	if remainingAfter < domain.PositionEpsilon {
+		remainingAfter = 0
+	}
+	filledAfter := o.FilledQuantity + fillQty
+	updated := o
+	updated.FilledQuantity = filledAfter
+	updated.RemainingQuantity = remainingAfter
+	updated.FillTradeID = "" // set after trade id known
+	updated.FillPrice = lastPrice
+	updated.UpdatedAt = now
+	if remainingAfter <= domain.PositionEpsilon {
+		updated.Status = domain.PendingStatusFilled
+		updated.FilledAt = &now
+		updated.ReservedCash = 0
+		updated.ReservedQuantity = 0
+		updated.RemainingQuantity = 0
+	} else {
+		updated.Status = domain.PendingStatusOpen
+		if o.Side == domain.TradeSideBuy {
+			updated.ReservedCash = domain.AfterBuyFillReservation(remainingAfter, o.TriggerPrice)
+			updated.ReservedQuantity = 0
+		} else {
+			updated.ReservedCash = 0
+			updated.ReservedQuantity = domain.AfterSellFillReservation(remainingAfter)
+		}
 	}
 
 	p.CashBalance = newCash
@@ -458,27 +744,21 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	}
 	tr := domain.Trade{
 		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
-		Side: o.Side, Quantity: o.Quantity, Price: lastPrice, Notional: o.Quantity * lastPrice,
-		RealizedPnL: realized, CreatedAt: now,
+		Side: o.Side, Quantity: fillQty, Price: lastPrice, Notional: fillQty * lastPrice,
+		RealizedPnL: realized, PendingOrderID: o.ID, CreatedAt: now,
 	}
-	if err := s.store.ExecutePendingFill(ctx, o.ID, p, posOut, tr, lastPrice, now); err != nil {
+	updated.FillTradeID = tr.ID
+	if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now); err != nil {
 		if err == domain.ErrNotFound {
-			// Canceled or already filled — do not execute again.
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
-	filled, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
+	got, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
 	if gerr != nil {
-		// Fill succeeded; return synthetic view if re-read fails.
-		o.Status = domain.PendingStatusFilled
-		o.FillTradeID = tr.ID
-		o.FillPrice = lastPrice
-		o.FilledAt = &now
-		o.UpdatedAt = now
-		return &o, true, nil
+		return &updated, true, nil
 	}
-	return filled, true, nil
+	return got, true, nil
 }
 
 func (s *Service) lastPrice(ctx context.Context, exchange, symbol string) (float64, error) {

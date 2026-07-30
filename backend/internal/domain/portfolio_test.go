@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 )
 
 func TestApplyBuy(t *testing.T) {
@@ -66,5 +67,57 @@ func TestSideForPendingType(t *testing.T) {
 	}
 	if SideForPendingType(PendingLimitSell) != TradeSideSell || SideForPendingType(PendingStopLoss) != TradeSideSell {
 		t.Fatal("sell")
+	}
+}
+
+func TestTimeInForceAndExpiry(t *testing.T) {
+	tif, err := NormalizeTimeInForce("")
+	if err != nil || tif != TimeInForceGTC {
+		t.Fatalf("%v %v", tif, err)
+	}
+	if _, err := NormalizeTimeInForce("day"); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	exp := time.Now().UTC().Add(-time.Minute)
+	o := PendingOrder{ExpiresAt: &exp}
+	if !PendingOrderExpired(o, time.Now().UTC()) {
+		t.Fatal("expected expired")
+	}
+	future := time.Now().UTC().Add(time.Hour)
+	o.ExpiresAt = &future
+	if PendingOrderExpired(o, time.Now().UTC()) {
+		t.Fatal("not yet expired")
+	}
+}
+
+func TestAvailableAndReservations(t *testing.T) {
+	if math.Abs(BuyReserveCash(2, 100)-200) > 1e-9 {
+		t.Fatal("reserve")
+	}
+	if math.Abs(AvailableCash(1000, 250)-750) > 1e-9 {
+		t.Fatal("avail cash")
+	}
+	if math.Abs(AvailablePosition(5, 2)-3) > 1e-9 {
+		t.Fatal("avail pos")
+	}
+	// Cheaper fill than limit: reserved cash can cover full remaining
+	if math.Abs(MaxBuyFillQty(2, 200, 90)-2) > 1e-9 {
+		t.Fatal("max buy full")
+	}
+	// Cap by cash at higher fill price within reservation
+	if math.Abs(MaxBuyFillQty(3, 100, 50)-2) > 1e-9 {
+		t.Fatalf("max buy partial got %v", MaxBuyFillQty(3, 100, 50))
+	}
+	if math.Abs(ClampFillQty(10, 0, 3)-3) > 1e-9 {
+		t.Fatal("clamp max")
+	}
+	if math.Abs(ClampFillQty(10, 4, 0)-4) > 1e-9 {
+		t.Fatal("clamp requested")
+	}
+	if math.Abs(AfterBuyFillReservation(1, 100)-100) > 1e-9 {
+		t.Fatal("after buy res")
+	}
+	if AfterSellFillReservation(0) != 0 {
+		t.Fatal("after sell res")
 	}
 }

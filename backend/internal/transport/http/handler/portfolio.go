@@ -22,42 +22,47 @@ func NewPortfolioHandler(svc *portfolio.Service) *PortfolioHandler {
 }
 
 type portfolioDTO struct {
-	ClientID         string         `json:"clientId"`
-	Currency         string         `json:"currency"`
-	StartingBalance  float64        `json:"startingBalance"`
-	CashBalance      float64        `json:"cashBalance"`
-	PositionsValue   float64        `json:"positionsValue"`
-	Equity           float64        `json:"equity"`
-	UnrealizedPnL    float64        `json:"unrealizedPnL"`
-	RealizedPnLTotal float64        `json:"realizedPnLTotal"`
-	TotalPnL         float64        `json:"totalPnL"`
-	Positions        []positionDTO  `json:"positions"`
-	Note             string         `json:"note"`
-	CreatedAt        string         `json:"createdAt"`
-	UpdatedAt        string         `json:"updatedAt"`
+	ClientID         string        `json:"clientId"`
+	Currency         string        `json:"currency"`
+	StartingBalance  float64       `json:"startingBalance"`
+	CashBalance      float64       `json:"cashBalance"`
+	ReservedCash     float64       `json:"reservedCash"`
+	AvailableCash    float64       `json:"availableCash"`
+	PositionsValue   float64       `json:"positionsValue"`
+	Equity           float64       `json:"equity"`
+	UnrealizedPnL    float64       `json:"unrealizedPnL"`
+	RealizedPnLTotal float64       `json:"realizedPnLTotal"`
+	TotalPnL         float64       `json:"totalPnL"`
+	Positions        []positionDTO `json:"positions"`
+	Note             string        `json:"note"`
+	CreatedAt        string        `json:"createdAt"`
+	UpdatedAt        string        `json:"updatedAt"`
 }
 
 type positionDTO struct {
-	Exchange      string  `json:"exchange"`
-	Symbol        string  `json:"symbol"`
-	Quantity      float64 `json:"quantity"`
-	AvgCost       float64 `json:"avgCost"`
-	MarkPrice     float64 `json:"markPrice"`
-	MarketValue   float64 `json:"marketValue"`
-	UnrealizedPnL float64 `json:"unrealizedPnL"`
-	CostBasis     float64 `json:"costBasis"`
+	Exchange          string  `json:"exchange"`
+	Symbol            string  `json:"symbol"`
+	Quantity          float64 `json:"quantity"`
+	ReservedQuantity  float64 `json:"reservedQuantity"`
+	AvailableQuantity float64 `json:"availableQuantity"`
+	AvgCost           float64 `json:"avgCost"`
+	MarkPrice         float64 `json:"markPrice"`
+	MarketValue       float64 `json:"marketValue"`
+	UnrealizedPnL     float64 `json:"unrealizedPnL"`
+	CostBasis         float64 `json:"costBasis"`
 }
 
 type tradeDTO struct {
-	ID          string  `json:"id"`
-	Exchange    string  `json:"exchange"`
-	Symbol      string  `json:"symbol"`
-	Side        string  `json:"side"`
-	Quantity    float64 `json:"quantity"`
-	Price       float64 `json:"price"`
-	Notional    float64 `json:"notional"`
-	RealizedPnL float64 `json:"realizedPnL"`
-	CreatedAt   string  `json:"createdAt"`
+	ID             string  `json:"id"`
+	Exchange       string  `json:"exchange"`
+	Symbol         string  `json:"symbol"`
+	Side           string  `json:"side"`
+	Quantity       float64 `json:"quantity"`
+	Price          float64 `json:"price"`
+	Notional       float64 `json:"notional"`
+	RealizedPnL    float64 `json:"realizedPnL"`
+	PendingOrderID string  `json:"pendingOrderId,omitempty"`
+	CreatedAt      string  `json:"createdAt"`
 }
 
 func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
@@ -65,13 +70,15 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 	for _, p := range v.Positions {
 		pos = append(pos, positionDTO{
 			Exchange: string(p.Exchange), Symbol: p.Symbol, Quantity: p.Quantity,
+			ReservedQuantity: p.ReservedQuantity, AvailableQuantity: p.AvailableQuantity,
 			AvgCost: p.AvgCost, MarkPrice: p.MarkPrice, MarketValue: p.MarketValue,
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
 		})
 	}
 	return portfolioDTO{
 		ClientID: v.ClientID, Currency: v.Currency, StartingBalance: v.StartingBalance,
-		CashBalance: v.CashBalance, PositionsValue: v.PositionsValue, Equity: v.Equity,
+		CashBalance: v.CashBalance, ReservedCash: v.ReservedCash, AvailableCash: v.AvailableCash,
+		PositionsValue: v.PositionsValue, Equity: v.Equity,
 		UnrealizedPnL: v.UnrealizedPnL, RealizedPnLTotal: v.RealizedPnLTotal, TotalPnL: v.TotalPnL,
 		Positions: pos, Note: v.Note,
 		CreatedAt: v.CreatedAt.UTC().Format(time.RFC3339Nano),
@@ -83,7 +90,8 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 	return tradeDTO{
 		ID: t.ID, Exchange: string(t.Exchange), Symbol: t.Symbol, Side: string(t.Side),
 		Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
-		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
+		PendingOrderID: t.PendingOrderID,
+		CreatedAt:      t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
@@ -137,35 +145,55 @@ type orderBody struct {
 	Quantity     float64 `json:"quantity"`
 	Type         string  `json:"type"`         // market (default) | limit_buy | limit_sell | stop_loss
 	TriggerPrice float64 `json:"triggerPrice"` // required for pending types
+	TimeInForce  string  `json:"timeInForce"`  // gtc (default) | ioc | fok
+	ExpiresAt    string  `json:"expiresAt"`    // RFC3339; GTC only
 }
 
 type pendingOrderDTO struct {
-	ID           string  `json:"id"`
-	ClientID     string  `json:"clientId"`
-	Exchange     string  `json:"exchange"`
-	Symbol       string  `json:"symbol"`
-	Type         string  `json:"type"`
-	Side         string  `json:"side"`
-	Quantity     float64 `json:"quantity"`
-	TriggerPrice float64 `json:"triggerPrice"`
-	Status       string  `json:"status"`
-	CreatedAt    string  `json:"createdAt"`
-	UpdatedAt    string  `json:"updatedAt"`
-	FilledAt     *string `json:"filledAt,omitempty"`
-	CanceledAt   *string `json:"canceledAt,omitempty"`
-	FillTradeID  string  `json:"fillTradeId,omitempty"`
-	FillPrice    float64 `json:"fillPrice,omitempty"`
-	RejectReason string  `json:"rejectReason,omitempty"`
+	ID                string  `json:"id"`
+	ClientID          string  `json:"clientId"`
+	Exchange          string  `json:"exchange"`
+	Symbol            string  `json:"symbol"`
+	Type              string  `json:"type"`
+	Side              string  `json:"side"`
+	Quantity          float64 `json:"quantity"`
+	FilledQuantity    float64 `json:"filledQuantity"`
+	RemainingQuantity float64 `json:"remainingQuantity"`
+	TriggerPrice      float64 `json:"triggerPrice"`
+	ReservedCash      float64 `json:"reservedCash"`
+	ReservedQuantity  float64 `json:"reservedQuantity"`
+	TimeInForce       string  `json:"timeInForce"`
+	ExpiresAt         *string `json:"expiresAt,omitempty"`
+	Status            string  `json:"status"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedAt         string  `json:"updatedAt"`
+	FilledAt          *string `json:"filledAt,omitempty"`
+	CanceledAt        *string `json:"canceledAt,omitempty"`
+	FillTradeID       string  `json:"fillTradeId,omitempty"`
+	FillPrice         float64 `json:"fillPrice,omitempty"`
+	RejectReason      string  `json:"rejectReason,omitempty"`
+	CancelReason      string  `json:"cancelReason,omitempty"`
 }
 
 func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
+	tif := string(o.TimeInForce)
+	if tif == "" {
+		tif = string(domain.TimeInForceGTC)
+	}
 	d := pendingOrderDTO{
 		ID: o.ID, ClientID: o.ClientID, Exchange: string(o.Exchange), Symbol: o.Symbol,
-		Type: string(o.Type), Side: string(o.Side), Quantity: o.Quantity, TriggerPrice: o.TriggerPrice,
-		Status: string(o.Status),
-		CreatedAt: o.CreatedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt: o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason,
+		Type: string(o.Type), Side: string(o.Side), Quantity: o.Quantity,
+		FilledQuantity: o.FilledQuantity, RemainingQuantity: o.RemainingQuantity,
+		TriggerPrice: o.TriggerPrice, ReservedCash: o.ReservedCash, ReservedQuantity: o.ReservedQuantity,
+		TimeInForce: tif,
+		Status:      string(o.Status),
+		CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
+	}
+	if o.ExpiresAt != nil {
+		s := o.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		d.ExpiresAt = &s
 	}
 	if o.FilledAt != nil {
 		s := o.FilledAt.UTC().Format(time.RFC3339Nano)
@@ -211,9 +239,23 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			"note":      view.Note,
 		})
 	case "limit_buy", "limit_sell", "stop_loss":
+		var exp *time.Time
+		if body.ExpiresAt != "" {
+			t, perr := time.Parse(time.RFC3339Nano, body.ExpiresAt)
+			if perr != nil {
+				t, perr = time.Parse(time.RFC3339, body.ExpiresAt)
+			}
+			if perr != nil {
+				writeError(w, fmt.Errorf("%w: expiresAt must be RFC3339", domain.ErrInvalidArgument))
+				return
+			}
+			tu := t.UTC()
+			exp = &tu
+		}
 		o, err := h.svc.PlacePendingOrder(r.Context(), portfolio.PendingOrderInput{
 			ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Type: typ, Quantity: body.Quantity, TriggerPrice: body.TriggerPrice,
+			TimeInForce: body.TimeInForce, ExpiresAt: exp,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -222,7 +264,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"type":  typ,
 			"order": pendingOrderToDTO(o),
-			"note":  "Paper pending order — fills when last price meets trigger. Not real money.",
+			"note":  "Paper pending order (GTC/IOC/FOK) with reservations. GTC may expire; IOC/FOK act on first try. Not real money.",
 		})
 	default:
 		writeError(w, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, or stop_loss", domain.ErrInvalidArgument))
@@ -269,7 +311,7 @@ func (h *PortfolioHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"order": pendingOrderToDTO(o),
-		"note":  "Order canceled; it will not execute.",
+		"note":  "Order canceled; unused reservation released; it will not execute.",
 	})
 }
 

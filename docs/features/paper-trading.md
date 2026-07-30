@@ -2,40 +2,64 @@
 
 ## Goal
 
-Simulated portfolios with starting cash, market buy/sell at last price, **pending limit/stop orders**, open positions, realized/unrealized P&L, and trade history. **Not real money.** Data is stored in SQLite and survives restarts.
+Simulated portfolios with starting cash, market buy/sell at last price, **pending limit/stop orders with reservations and partial fills**, open positions, realized/unrealized P&L, and trade history. **Not real money.** Data is stored in SQLite and survives restarts.
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/v1/portfolio` | Create portfolio (`startingBalance`, optional `currency`) |
-| `GET` | `/api/v1/portfolio` | Snapshot: cash, equity, positions, P&L |
+| `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
-| `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`; also `filled` / `canceled` / `rejected` / `all`) |
-| `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an **open** pending order |
-| `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`) |
+| `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
+| `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
+| `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
 
 ### Order types (`POST /api/v1/portfolio/orders`)
 
-| `type` | Required fields | Fill condition (last price) | Side |
-|--------|-----------------|------------------------------|------|
-| `market` (default) | `side`, `quantity` | Immediate at last price | buy / sell |
-| `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy |
-| `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell |
-| `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell |
+| `type` | Required fields | Fill condition (last price) | Side | Reservation |
+|--------|-----------------|------------------------------|------|-------------|
+| `market` (default) | `side`, `quantity` | Immediate at last price | buy / sell | Uses **available** cash/qty only |
+| `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `quantity * triggerPrice` cash |
+| `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
+| `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |
 
-Pending fills use the **current last price** when the condition is met (paper simulation). Cash and position are checked **at fill time**; if insufficient, the order is marked `rejected` and never fills later.
+Optional pending fields:
+- `timeInForce`: `gtc` (default), `ioc`, or `fok`
+- `expiresAt`: RFC3339 timestamp (**GTC only**); when reached the order is canceled and unused reservation is released
 
 ## Behavior
 
-- **Buy:** debit cash at fill price; increase position; average cost updated.
-- **Sell:** credit cash; reduce position; realize `(price - avgCost) * qty`.
-- **Unrealized P&L:** mark open positions to current last price.
-- **Equity:** cash + market value of positions.
-- **Pending orders:** stored in SQLite; background filler evaluates on `PORTFOLIO_ORDER_CHECK_INTERVAL` (and once on process start).
-- **Idempotency:** fill/cancel use `status = open` predicates so the same order cannot fill twice and canceled orders never execute.
+### Time-in-force
+| Policy | Behavior |
+|--------|----------|
+| **GTC** | Stays open until filled, user cancel, or `expiresAt`. Partial fills allowed; remainder stays open. |
+| **IOC** | On the first try: fill as much as possible if marketable; cancel any remainder (`ioc_remainder`) or cancel with no fill (`ioc_no_fill`). Reservation released. |
+| **FOK** | On the first try: fill **entire** remaining size or cancel with **no** fill (`fok_unfilled`). |
+
+### Reservations
+- **Buy pending:** locks cash so another market/pending buy cannot spend it.
+- **Sell pending:** locks position quantity so another market/pending sell cannot sell it.
+- Snapshot fields: `reservedCash`, `availableCash`; positions include `reservedQuantity`, `availableQuantity`.
+- **Cancel / reject / expire / IOC remainder / FOK kill:** remaining reservation is released immediately (`cancelReason` explains why).
+
+### Partial fills
+- Orders track `quantity` (original), `filledQuantity`, `remainingQuantity`.
+- When triggered, the filler may fill only part of the remaining size; the order stays `open` until remaining is zero, then becomes `filled`.
+- **Each fill** creates a separate trade history row with `pendingOrderId`.
+- Latest fill metadata: `fillTradeId`, `fillPrice`.
+
+### Accounting
+- **Buy fill:** debit cash at fill price; increase position; average cost updated.
+- **Sell fill:** credit cash; reduce position; realize `(price - avgCost) * qty`.
+- **Equity:** cash + market value of positions (reserved cash is still part of cash until filled).
+
+### Durability & safety
+- Portfolios, positions, trades, pending orders, remaining size, and reservations are in SQLite (`PORTFOLIO_DB_PATH`).
+- Fill/cancel/reject use `status = open` predicates so a canceled order never fills and a completed order is not double-filled.
+- Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
 
 ## Code
 

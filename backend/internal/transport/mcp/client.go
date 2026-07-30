@@ -350,11 +350,18 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 }
 
 // PlacePortfolioPendingOrder places a limit/stop paper order.
-func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", map[string]any{
+func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error) {
+	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": orderType,
 		"quantity": quantity, "triggerPrice": triggerPrice,
-	})
+	}
+	if timeInForce != "" {
+		body["timeInForce"] = timeInForce
+	}
+	if expiresAt != "" {
+		body["expiresAt"] = expiresAt
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
 // ListPortfolioOrders lists paper pending orders.

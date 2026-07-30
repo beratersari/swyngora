@@ -527,19 +527,32 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 		items = append(items, map[string]any{
 			"id": t.ID, "exchange": string(t.Exchange), "symbol": t.Symbol, "side": string(t.Side),
 			"quantity": t.Quantity, "price": t.Price, "notional": t.Notional, "realizedPnL": t.RealizedPnL,
-			"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"pendingOrderId": t.PendingOrderID,
+			"createdAt":      t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
 }
 
-func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
+	var exp *time.Time
+	if expiresAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, expiresAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, expiresAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: expiresAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		exp = &tu
+	}
 	o, err := b.Portfolio.PlacePendingOrder(ctx, portfolio.PendingOrderInput{
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
-		Quantity: quantity, TriggerPrice: triggerPrice,
+		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
 	})
 	if err != nil {
 		return nil, err
@@ -547,7 +560,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	return mustJSON(map[string]any{
 		"type":  string(o.Type),
 		"order": pendingOrderMap(o),
-		"note":  "Paper pending order — fills when last price meets trigger. Not real money.",
+		"note":  "Paper pending order (GTC/IOC/FOK) with reservations. Not real money.",
 	})
 }
 
@@ -578,17 +591,27 @@ func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string)
 	if err != nil {
 		return nil, err
 	}
-	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; it will not execute."})
+	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; unused reservation released; it will not execute."})
 }
 
 func pendingOrderMap(o *domain.PendingOrder) map[string]any {
+	tif := string(o.TimeInForce)
+	if tif == "" {
+		tif = string(domain.TimeInForceGTC)
+	}
 	m := map[string]any{
 		"id": o.ID, "clientId": o.ClientID, "exchange": string(o.Exchange), "symbol": o.Symbol,
-		"type": string(o.Type), "side": string(o.Side), "quantity": o.Quantity, "triggerPrice": o.TriggerPrice,
-		"status": string(o.Status),
-		"createdAt": o.CreatedAt.UTC().Format(time.RFC3339Nano),
-		"updatedAt": o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason,
+		"type": string(o.Type), "side": string(o.Side), "quantity": o.Quantity,
+		"filledQuantity": o.FilledQuantity, "remainingQuantity": o.RemainingQuantity,
+		"triggerPrice": o.TriggerPrice, "reservedCash": o.ReservedCash, "reservedQuantity": o.ReservedQuantity,
+		"timeInForce": tif,
+		"status":      string(o.Status),
+		"createdAt":   o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt":   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,
+	}
+	if o.ExpiresAt != nil {
+		m["expiresAt"] = o.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	}
 	if o.FilledAt != nil {
 		m["filledAt"] = o.FilledAt.UTC().Format(time.RFC3339Nano)
@@ -604,13 +627,15 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 	for _, p := range v.Positions {
 		pos = append(pos, map[string]any{
 			"exchange": string(p.Exchange), "symbol": p.Symbol, "quantity": p.Quantity,
+			"reservedQuantity": p.ReservedQuantity, "availableQuantity": p.AvailableQuantity,
 			"avgCost": p.AvgCost, "markPrice": p.MarkPrice, "marketValue": p.MarketValue,
 			"unrealizedPnL": p.UnrealizedPnL, "costBasis": p.CostBasis,
 		})
 	}
 	return mustJSON(map[string]any{
 		"clientId": v.ClientID, "currency": v.Currency, "startingBalance": v.StartingBalance,
-		"cashBalance": v.CashBalance, "positionsValue": v.PositionsValue, "equity": v.Equity,
+		"cashBalance": v.CashBalance, "reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
+		"positionsValue": v.PositionsValue, "equity": v.Equity,
 		"unrealizedPnL": v.UnrealizedPnL, "realizedPnLTotal": v.RealizedPnLTotal, "totalPnL": v.TotalPnL,
 		"positions": pos, "note": v.Note,
 		"createdAt": v.CreatedAt.UTC().Format(time.RFC3339Nano),

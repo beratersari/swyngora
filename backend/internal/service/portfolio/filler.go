@@ -45,13 +45,16 @@ func (f *OrderFiller) Start(ctx context.Context) {
 	}
 }
 
-// RunOnce loads open pending orders, fetches unique tickers, and tries fills.
+// RunOnce loads open pending orders, applies expiry/TIF, and tries fills.
 func (f *OrderFiller) RunOnce(ctx context.Context) {
 	if f.Portfolio == nil || f.Market == nil {
 		return
 	}
 	if f.Logger == nil {
 		f.Logger = slog.Default()
+	}
+	if f.now == nil {
+		f.now = time.Now
 	}
 	open, err := f.Portfolio.ListAllOpenPendingOrders(ctx)
 	if err != nil {
@@ -62,12 +65,39 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 		return
 	}
 
+	now := f.now().UTC()
+
+	// Expire GTC orders first (no ticker required).
+	remaining := make([]domain.PendingOrder, 0, len(open))
+	for _, o := range open {
+		tif := o.TimeInForce
+		if tif == "" {
+			tif = domain.TimeInForceGTC
+		}
+		if tif == domain.TimeInForceGTC && domain.PendingOrderExpired(o, now) {
+			updated, ok, err := f.Portfolio.ProcessOpenOrder(ctx, o, 0, now, 0)
+			if err != nil {
+				f.Logger.Debug("expire pending order failed", "id", o.ID, "err", err)
+				continue
+			}
+			if ok && updated != nil {
+				f.Logger.Info("paper pending order canceled",
+					"id", updated.ID, "reason", updated.CancelReason, "status", updated.Status)
+			}
+			continue
+		}
+		remaining = append(remaining, o)
+	}
+	if len(remaining) == 0 {
+		return
+	}
+
 	type key struct {
 		ex  string
 		sym string
 	}
 	groups := map[key][]domain.PendingOrder{}
-	for _, o := range open {
+	for _, o := range remaining {
 		k := key{ex: string(o.Exchange), sym: o.Symbol}
 		groups[k] = append(groups[k], o)
 	}
@@ -97,22 +127,24 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 				return
 			}
 			for _, o := range orders {
-				filled, ok, err := f.Portfolio.TryFillPendingOrder(ctx, o, last)
+				updated, ok, err := f.Portfolio.ProcessOpenOrder(ctx, o, last, now, 0)
 				if err != nil {
-					f.Logger.Debug("try fill pending order failed", "id", o.ID, "err", err)
+					f.Logger.Debug("process pending order failed", "id", o.ID, "err", err)
 					continue
 				}
-				if !ok || filled == nil {
+				if !ok || updated == nil {
 					continue
 				}
-				f.Logger.Info("paper pending order filled",
-					"id", filled.ID,
-					"clientId", filled.ClientID,
-					"type", filled.Type,
-					"symbol", filled.Symbol,
-					"trigger", filled.TriggerPrice,
-					"fillPrice", filled.FillPrice,
-					"quantity", filled.Quantity,
+				f.Logger.Info("paper pending order processed",
+					"id", updated.ID,
+					"clientId", updated.ClientID,
+					"type", updated.Type,
+					"tif", updated.TimeInForce,
+					"status", updated.Status,
+					"cancelReason", updated.CancelReason,
+					"filledQuantity", updated.FilledQuantity,
+					"remainingQuantity", updated.RemainingQuantity,
+					"fillPrice", updated.FillPrice,
 				)
 			}
 		}()
