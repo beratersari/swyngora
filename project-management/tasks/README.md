@@ -15,7 +15,9 @@ tasks/
     ├── detail/               # MDET-*  (mobile coin detail)
     ├── watchlist/            # MWL-*   (mobile watchlist / favorites)
     ├── pumps/                # MPUMP-* (mobile pump / dump radar)
-    └── batch-indicators/     # MBIND-* (mobile batch RSI/EMA list enrichment)
+    ├── batch-indicators/     # MBIND-* (mobile batch RSI/EMA list enrichment)
+    ├── ai-chat/              # MAI-*   (mobile AI assistant chat)
+    └── home/                 # MHOME-* (mobile home dashboard)
 ```
 
 ## Rules

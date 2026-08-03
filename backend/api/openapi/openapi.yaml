@@ -1391,6 +1391,40 @@ paths:
           description: Signals list
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/ai/chat:
+    post:
+      summary: Chat with the multi-agent AI assistant
+      description: |
+        Proxies to the Python multi-agent service (`AI_SERVICE_URL`).
+        Market figures must come from tools on the assistant side.
+        Returns 503 when AI is not configured; 502 on upstream failure.
+        Informational only — not financial advice.
+      operationId: postAiChat
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiChatRequest'
+            example:
+              message: "What is BTC RSI on binance 1h?"
+              sessionId: "mobile-ai-example"
+      responses:
+        '200':
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AiChatResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+
+
 components:
   responses:
     Error:
@@ -1410,6 +1444,40 @@ components:
               type: string
             message:
               type: string
+
+    AiChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          description: User message (non-empty after trim)
+        sessionId:
+          type: string
+          description: |
+            Optional multi-turn session key. Server defaults to http-default
+            when omitted. Clients should send a stable device session id.
+    AiChatResponse:
+      type: object
+      required: [reply, sessionId]
+      properties:
+        reply:
+          type: string
+          description: Assistant text
+        sessionId:
+          type: string
+        tools:
+          type: array
+          items: { type: string }
+          description: Tool names invoked during the turn (optional)
+        thinking:
+          type: array
+          items: { type: string }
+          description: High-level plan lines (optional)
+        note:
+          type: string
+          description: Disclaimer (e.g. not financial advice)
     CandlesResponse:
       type: object
       properties:

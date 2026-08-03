@@ -8,4 +8,7 @@ export type CoinDetailHeaderProps = {
   onBack: () => void;
   watched?: boolean;
   onStarPress?: () => void;
+  /** Optional Ask AI entry point. */
+  askAiLabel?: string;
+  onAskAi?: () => void;
 };

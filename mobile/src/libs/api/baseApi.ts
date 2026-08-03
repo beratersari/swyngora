@@ -27,6 +27,7 @@ export const baseApi = createApi({
     'Supply',
     'Indicator',
     'Pump',
+    'AiChat',
   ],
   endpoints: () => ({}),
 });

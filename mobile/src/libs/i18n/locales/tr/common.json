@@ -5,7 +5,9 @@
     "markets": "Piyasalar",
     "pumps": "Pump",
     "favorites": "Favoriler",
-    "pumpsA11y": "Pump radarı"
+    "pumpsA11y": "Pump radarı",
+    "ask": "Sor",
+    "askA11y": "AI asistan sohbeti"
   },
   "language": {
     "label": "Dil",
@@ -23,7 +25,10 @@
     "back": "Geri",
     "clearTags": "Etiketleri temizle",
     "selectVisible": "Görünenleri seç",
-    "resetAllFilters": "Tüm filtreleri sıfırla"
+    "resetAllFilters": "Tüm filtreleri sıfırla",
+    "send": "Gönder",
+    "newChat": "Yeni sohbet",
+    "askAi": "AI’ya sor"
   },
   "status": {
     "loading": "Yükleniyor…",
@@ -38,7 +43,8 @@
   },
   "disclaimer": {
     "indicators": "RSI/EMA yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir.",
-    "pumps": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Mekanik eşik eşlemesi; işlem sinyali değildir."
+    "pumps": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Mekanik eşik eşlemesi; işlem sinyali değildir.",
+    "ai": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir."
   },
   "errors": {
     "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",

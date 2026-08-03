@@ -293,3 +293,115 @@ MBIND-A (analysis) · MBIND-1 … MBIND-7
 | MBIND-5 | Markets list batch enrichment (P1) |
 | MBIND-6 | Loading / partial failure / disclaimer |
 | MBIND-7 | Docs + board + changelog closeout |
+
+
+---
+
+## Epic I — Mobile AI assistant chat
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] AI assistant chat` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-ai-chat.md` |
+| **Feature** | `docs/features/mobile-ai-chat.md` |
+| **Analysis** | `project-management/tasks/mobile/ai-chat/MAI-A.md` |
+| **Epic file** | `project-management/epics/mobile-ai-chat.md` |
+| **Tasks** | `project-management/tasks/mobile/ai-chat/MAI-*.md` |
+| **Branch** | `feature/mobile-ai-chat` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Mobile Ask tab: multi-turn chat via POST /api/v1/ai/chat (Go proxy to Python multi-agent).
+OpenAPI + codegen first; RTK mutation; Atomic chat UI; context from coin detail.
+
+## Goals
+
+- Document AI chat in OpenAPI
+- Ask tab with sessionId multi-turn
+- Context prefill from detail
+- Graceful 503 when AI offline
+- Not financial advice disclaimer
+
+## Out of scope
+
+Streaming UI, auth/history store, web chat, new LLM vendors.
+
+## Child issues
+
+MAI-A · MAI-1 … MAI-8
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MAI-A | API field matrix analysis |
+| MAI-1 | OpenAPI for AI chat + client codegen |
+| MAI-2 | RTK aiApi chat mutation |
+| MAI-3 | sessionId + message model helpers |
+| MAI-4 | Atomic chat UI |
+| MAI-5 | Ask tab + AiChatPage ViewModel |
+| MAI-6 | Context chips from Markets / Detail / Pumps |
+| MAI-7 | Loading / 503 / error / disclaimer |
+| MAI-8 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/ai-chat/MAI-*.md`.
+
+
+---
+
+## Epic J — Mobile home dashboard
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Home market dashboard` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-home-dashboard.md` |
+| **Feature** | `docs/features/mobile-home-dashboard.md` |
+| **Epic file** | `project-management/epics/mobile-home-dashboard.md` |
+| **Tasks** | `project-management/tasks/mobile/home/MHOME-*.md` |
+| **Branch** | `feature/mobile-home-dashboard` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Replace mobile Home scaffold with live dashboard: favorites, top movers,
+high volume, pump teaser, quick links to Markets / Pumps / Ask.
+Uses existing spot / pumps / watchlist APIs only.
+
+## Goals
+
+- Parallel RTK widgets with AppState pause
+- Deep links into existing stacks
+- Partial failure UX per section
+
+## Out of scope
+
+New backend, alerts, layout editor, web home.
+
+## Child issues
+
+MHOME-1 … MHOME-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MHOME-1 | Dashboard constants + query helpers |
+| MHOME-2 | Atomic dashboard UI |
+| MHOME-3 | HomePage ViewModel |
+| MHOME-4 | HomePage View + deep links |
+| MHOME-5 | Empty / partial failure / loading UX |
+| MHOME-6 | Tests |
+| MHOME-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/home/MHOME-*.md`.

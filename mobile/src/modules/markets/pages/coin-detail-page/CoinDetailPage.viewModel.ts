@@ -3,6 +3,7 @@ import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { AiScreens } from '@/modules/ai';
 import type { CandleChartOverlay } from '@/components/organisms/candle-chart';
 import {
   rtkErrorMessage,
@@ -359,6 +360,32 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     navigation.goBack();
   }, [navigation]);
 
+  const onAskAi = useCallback(() => {
+    const parent = navigation.getParent() as
+      | {
+          navigate: (
+            name: string,
+            params?: {
+              screen?: string;
+              params?: {
+                exchange?: string;
+                symbol?: string;
+                interval?: string;
+              };
+            },
+          ) => void;
+        }
+      | undefined;
+    parent?.navigate('AskTab', {
+      screen: AiScreens.Chat,
+      params: {
+        exchange,
+        symbol,
+        interval: resolvedInterval,
+      },
+    });
+  }, [navigation, exchange, symbol, resolvedInterval]);
+
   const pumpQueryArgs = useMemo(
     () =>
       buildDetailPumpQuery({
@@ -511,5 +538,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
     onBack,
     onRetry,
+    askAiLabel: t('detail:askAi'),
+    onAskAi,
   };
 }

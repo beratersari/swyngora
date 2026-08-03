@@ -38,4 +38,8 @@ export const styles = StyleSheet.create({
   exchange: {
     textTransform: 'capitalize',
   },
+  askRow: {
+    marginTop: spacing[1],
+    alignSelf: 'flex-start',
+  },
 });

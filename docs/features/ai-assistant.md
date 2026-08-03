@@ -57,3 +57,8 @@ cd ai && pytest -q
 - X agent is not official X API
 - Telegram AI mode (`/ask`) not wired yet
 - Streaming UI not shipped
+
+## Mobile client
+
+Product mobile **Ask** tab: `docs/features/mobile-ai-chat.md` (OpenAPI `postAiChat`, RTK `aiApi`).
+
