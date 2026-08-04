@@ -135,6 +135,7 @@ func main() {
 		}
 	}()
 	alertSvc := pricealert.New(alertStore)
+	alertSvc.AllowPrivateWebhooks = cfg.WebhookAllowPrivate
 	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
 
 	portfolioStore, err := portfoliostore.Open(cfg.PortfolioDBPath)
@@ -205,20 +206,24 @@ func main() {
 
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
-	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc)
-	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
+	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
+	var mcpHTTP http.Handler
+	if cfg.MCPEnabled {
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc)
+		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
+	}
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
 		RateLimitRPS:     cfg.RateLimitRPS,
 		RateLimitBurst:   cfg.RateLimitBurst,
 		CORSAllowOrigins: cfg.CORSAllowOrigins,
+		APIAuthToken:     cfg.APIAuthToken,
 		MCPHandler:       mcpHTTP,
-		AI:              aiClient,
-		AITimeout:       cfg.AITimeout,
-		Alerts:          alertSvc,
-		Portfolio:       portfolioSvc,
-		Scanner:         scannerSvc,
+		AI:               aiClient,
+		AITimeout:        cfg.AITimeout,
+		Alerts:           alertSvc,
+		Portfolio:        portfolioSvc,
+		Scanner:          scannerSvc,
 	})
 
 	job := &supplyjob.Runner{
@@ -239,9 +244,11 @@ func main() {
 	}
 	go alertChecker.Start(ctx)
 
+	webhookClient := &http.Client{Timeout: cfg.WebhookHTTPTimeout}
+	// Deliverer hardens CheckRedirect; explicit client keeps timeout from config.
 	webhookDeliverer := &pricealert.Deliverer{
 		Alerts:      alertSvc,
-		HTTP:        &http.Client{Timeout: cfg.WebhookHTTPTimeout},
+		HTTP:        webhookClient,
 		Interval:    cfg.WebhookDeliveryInterval,
 		MaxAttempts: cfg.WebhookMaxAttempts,
 		Logger:      logger,
@@ -290,10 +297,17 @@ func main() {
 	}
 
 	go func() {
+		mcpPath := ""
+		if cfg.MCPEnabled {
+			mcpPath = "/mcp"
+		}
 		logger.Info("server listening",
 			"addr", cfg.HTTPAddr,
 			"exchanges", []string{"binance", "coinbase", "bybit"},
-			"mcp", "/mcp",
+			"mcp", mcpPath,
+			"mcp_enabled", cfg.MCPEnabled,
+			"api_auth", cfg.APIAuthToken != "",
+			"webhook_allow_private", cfg.WebhookAllowPrivate,
 			"ai_service", cfg.AIServiceURL,
 		)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

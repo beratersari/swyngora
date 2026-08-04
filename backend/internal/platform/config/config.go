@@ -81,6 +81,15 @@ type Config struct {
 	ScannerDBPath string
 	// ScannerCheckInterval is how often scanner rules are evaluated against watchlists.
 	ScannerCheckInterval time.Duration
+
+	// APIAuthToken, when non-empty, requires Authorization: Bearer or X-API-Key on
+	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
+	// Empty = open local-dev mode (not multi-tenant safe).
+	APIAuthToken string
+	// MCPEnabled mounts streamable MCP at /mcp (default true). Set false to disable the agent surface.
+	MCPEnabled bool
+	// WebhookAllowPrivate permits loopback/RFC1918 webhook targets (local tests only). Default false (SSRF-safe).
+	WebhookAllowPrivate bool
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -147,6 +156,10 @@ func Load() Config {
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),
+
+		APIAuthToken:        strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
+		MCPEnabled:          boolEnv("MCP_ENABLED", true),
+		WebhookAllowPrivate: boolEnv("WEBHOOK_ALLOW_PRIVATE", false),
 	}
 }
 

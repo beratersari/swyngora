@@ -3,11 +3,13 @@ import marketsEn from './locales/en/markets.json';
 import detailEn from './locales/en/detail.json';
 import watchlistEn from './locales/en/watchlist.json';
 import pumpsEn from './locales/en/pumps.json';
+import aiEn from './locales/en/ai.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
 import detailTr from './locales/tr/detail.json';
 import watchlistTr from './locales/tr/watchlist.json';
 import pumpsTr from './locales/tr/pumps.json';
+import aiTr from './locales/tr/ai.json';
 
 /**
  * Bundled translation catalogs.
@@ -20,6 +22,7 @@ export const resources = {
     detail: detailEn,
     watchlist: watchlistEn,
     pumps: pumpsEn,
+    ai: aiEn,
   },
   tr: {
     common: commonTr,
@@ -27,6 +30,7 @@ export const resources = {
     detail: detailTr,
     watchlist: watchlistTr,
     pumps: pumpsTr,
+    ai: aiTr,
   },
 } as const;
 

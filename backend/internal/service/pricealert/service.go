@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"net/url"
 	"strings"
 	"time"
 
@@ -31,6 +30,9 @@ type CreateInput struct {
 // Service orchestrates price-alert use cases.
 type Service struct {
 	store domain.PriceAlertPort
+	// AllowPrivateWebhooks permits loopback/RFC1918 webhook targets (local tests only).
+	// Production must leave this false to prevent SSRF.
+	AllowPrivateWebhooks bool
 }
 
 // New constructs a price-alert service.
@@ -225,7 +227,7 @@ func (s *Service) SetWebhook(ctx context.Context, clientID string, in domain.Web
 	if err != nil {
 		return nil, err
 	}
-	u, err := normalizeWebhookURL(in.URL)
+	u, err := validateWebhookURL(in.URL, s.AllowPrivateWebhooks)
 	if err != nil {
 		return nil, err
 	}
@@ -425,27 +427,6 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 		return "", err
 	}
 	return string(b), nil
-}
-
-func normalizeWebhookURL(raw string) (string, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return "", fmt.Errorf("%w: webhook URL is required", domain.ErrInvalidArgument)
-	}
-	if len(raw) > domain.MaxWebhookURLLen {
-		return "", fmt.Errorf("%w: webhook URL too long", domain.ErrInvalidArgument)
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return "", fmt.Errorf("%w: webhook URL must be an absolute http(s) URL", domain.ErrInvalidArgument)
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("%w: webhook URL scheme must be http or https", domain.ErrInvalidArgument)
-	}
-	// Reconstruct without fragment.
-	u.Fragment = ""
-	return u.String(), nil
 }
 
 func normalizeClientID(id string) (string, error) {

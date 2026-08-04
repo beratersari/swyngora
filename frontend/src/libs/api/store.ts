@@ -4,6 +4,7 @@ import { baseApi } from './baseApi';
 import './endpoints/healthApi';
 import './endpoints/marketApi';
 import './endpoints/watchlistApi';
+import './endpoints/aiApi';
 
 export const store = configureStore({
   reducer: {

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Swyngora · AI assistant</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app ai-app">
+    <header class="header">
+      <div>
+        <p class="eyebrow">
+          <a class="back-link" href="index.html">← Markets</a>
+          ·
+          <a class="back-link" href="detail.html">Detail</a>
+        </p>
+        <h1>AI assistant</h1>
+        <p class="sub">
+          Chat with the multi-agent assistant via <code>POST /api/v1/ai/chat</code>.
+          Requires backend <strong>:8080</strong> and Python AI on <strong>:8090</strong> (Ollama or Grok).
+          Informational only — not financial advice.
+        </p>
+      </div>
+      <div class="detail-header-actions">
+        <label class="field inline">
+          <span>API base</span>
+          <input id="apiBase" type="text" value="http://localhost:8080" spellcheck="false" />
+        </label>
+        <button type="button" id="btnNewChat" class="ghost">New chat</button>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status">Ready.</p>
+
+    <section class="card ai-disclaimer" aria-label="Disclaimer">
+      <p class="muted" style="margin:0">
+        Answers should use live market tools. Figures from model memory alone may be stale.
+        <strong>Not financial advice.</strong>
+      </p>
+    </section>
+
+    <section class="card ai-session-bar">
+      <span class="muted">Session:</span>
+      <code id="sessionIdLabel" class="ai-session-id">—</code>
+    </section>
+
+    <section class="card ai-thread-card">
+      <div id="thread" class="ai-thread" role="log" aria-live="polite" aria-relevant="additions"></div>
+    </section>
+
+    <section class="card ai-composer-card">
+      <div id="suggestions" class="ai-suggestions" aria-label="Suggestions"></div>
+      <form id="chatForm" class="ai-composer">
+        <label class="field grow" style="width:100%">
+          <span>Message</span>
+          <textarea
+            id="message"
+            rows="3"
+            maxlength="4000"
+            placeholder="e.g. What is BTC RSI on binance 1h?"
+            spellcheck="true"
+          ></textarea>
+        </label>
+        <div class="toolbar-actions ai-composer-actions">
+          <button type="submit" id="btnSend" class="primary">Send</button>
+          <span class="muted small-hint">Enter to send · Shift+Enter for newline</span>
+        </div>
+      </form>
+    </section>
+  </div>
+  <!-- cache-bust so hard refresh is not required after MD fixes -->
+  <script src="markdown.js?v=3"></script>
+  <script src="ai.js?v=3"></script>
+</body>
+</html>

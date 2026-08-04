@@ -53,6 +53,8 @@ export {
   useRemoveWatchlistItemMutation,
 } from './endpoints/watchlistApi';
 export type { Watchlist, WatchlistItem } from './endpoints/watchlistApi';
+export { usePostAiChatMutation } from './endpoints/aiApi';
+export type { AiChatRequest, AiChatResponse, PostAiChatArg } from './endpoints/aiApi';
 export {
   rtkErrorMessage,
   getRtkErrorStatus,

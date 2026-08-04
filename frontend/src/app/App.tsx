@@ -42,6 +42,11 @@ function AppShell() {
               {t('nav.pumps')}
             </Text>
           </NavLink>
+          <NavLink to="/ai">
+            <Text variant="label" color="secondary" as="span">
+              {t('nav.ai')}
+            </Text>
+          </NavLink>
         </HeaderNav>
         <HeaderSpacer />
         <LanguageSwitcher />

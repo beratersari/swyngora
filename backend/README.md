@@ -63,13 +63,15 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
 
-**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
+**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts. Webhook URLs are **SSRF-hardened** (no loopback/RFC1918/link-local/metadata; no HTTP redirects). Set `WEBHOOK_ALLOW_PRIVATE=true` only for local tests.
 
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, and trade history. Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`).
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
 
-**Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
+**Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`**; optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); **`MCP_ENABLED=false`** unmounts MCP.
+
+**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Full multi-user identity (JWT/session) is a separate follow-up.
 
 ## Run
 
@@ -111,6 +113,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
+| `API_AUTH_TOKEN` | _(empty = open local mode)_ | When set, require `Authorization: Bearer` or `X-API-Key` for tenant routes + `/mcp` |
+| `MCP_ENABLED` | `true` | Mount streamable MCP at `/mcp`; set `false` to disable |
+| `WEBHOOK_ALLOW_PRIVATE` | `false` | Allow loopback/private webhook targets (local tests only; SSRF risk if true) |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |
 | `TELEGRAM_CHAT_ID` | — | Allowed chat id (or use `TELEGRAM_ALLOWED_CHAT_IDS`) |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | — | Comma-separated allowed chat ids |

@@ -19,7 +19,10 @@ func newAlertHandler(t *testing.T) *AlertHandler {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return NewAlertHandler(pricealert.New(store))
+	svc := pricealert.New(store)
+	// Handler tests use example.com hosts without requiring live DNS; production keeps SSRF on.
+	svc.AllowPrivateWebhooks = true
+	return NewAlertHandler(svc)
 }
 
 func TestAlertHTTP_CreateListGetDelete(t *testing.T) {

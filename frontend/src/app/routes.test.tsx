@@ -15,6 +15,9 @@ vi.mock('@/components/pages/WatchlistPage', () => ({
 vi.mock('@/components/pages/PumpsPage', () => ({
   PumpsPage: () => <div data-testid="pumps-page">Pumps</div>,
 }));
+vi.mock('@/components/pages/AiChatPage', () => ({
+  AiChatPage: () => <div data-testid="ai-page">AI</div>,
+}));
 
 describe('AppRoutes', () => {
   it('redirects / to /markets', () => {
@@ -34,11 +37,13 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('detail-page')).toBeInTheDocument();
   });
 
-  it('renders watchlist and pumps pages', () => {
+  it('renders watchlist, pumps, and ai pages', () => {
     renderWithProviders(<AppRoutes />, { routerEntries: ['/watchlist'] });
     expect(screen.getByTestId('watchlist-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/pumps'] });
     expect(screen.getByTestId('pumps-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/ai'] });
+    expect(screen.getByTestId('ai-page')).toBeInTheDocument();
   });
 
   it('redirects unknown paths to markets', () => {
