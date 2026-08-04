@@ -125,6 +125,42 @@ CREATE TABLE IF NOT EXISTS pending_orders (
 );
 CREATE INDEX IF NOT EXISTS idx_pending_orders_client ON pending_orders(client_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_pending_orders_open ON pending_orders(status) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS recurring_buy_plans (
+	id              TEXT PRIMARY KEY NOT NULL,
+	client_id       TEXT NOT NULL,
+	exchange        TEXT NOT NULL,
+	symbol          TEXT NOT NULL,
+	amount          REAL NOT NULL,
+	frequency       TEXT NOT NULL,
+	status          TEXT NOT NULL,
+	next_run_at     TEXT NOT NULL,
+	last_run_at     TEXT,
+	last_period_key TEXT NOT NULL DEFAULT '',
+	created_at      TEXT NOT NULL,
+	updated_at      TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_buy_client ON recurring_buy_plans(client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_recurring_buy_due ON recurring_buy_plans(status, next_run_at);
+
+CREATE TABLE IF NOT EXISTS recurring_buy_runs (
+	id            TEXT PRIMARY KEY NOT NULL,
+	plan_id       TEXT NOT NULL,
+	client_id     TEXT NOT NULL,
+	period_key    TEXT NOT NULL,
+	status        TEXT NOT NULL,
+	amount        REAL NOT NULL DEFAULT 0,
+	quantity      REAL NOT NULL DEFAULT 0,
+	price         REAL NOT NULL DEFAULT 0,
+	trade_id      TEXT NOT NULL DEFAULT '',
+	fail_reason   TEXT NOT NULL DEFAULT '',
+	scheduled_for TEXT NOT NULL,
+	executed_at   TEXT NOT NULL,
+	UNIQUE (plan_id, period_key),
+	FOREIGN KEY (plan_id) REFERENCES recurring_buy_plans(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_buy_runs_plan ON recurring_buy_runs(plan_id, executed_at DESC);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -762,4 +798,242 @@ func parseTime(raw string) time.Time {
 		}
 	}
 	return t.UTC()
+}
+
+const recurringPlanCols = `id, client_id, exchange, symbol, amount, frequency, status,
+	next_run_at, last_run_at, last_period_key, created_at, updated_at`
+
+func scanRecurringPlan(row scannable) (*domain.RecurringBuyPlan, error) {
+	var p domain.RecurringBuyPlan
+	var ex, freq, st, next, cAt, uAt string
+	var lastRun sql.NullString
+	if err := row.Scan(
+		&p.ID, &p.ClientID, &ex, &p.Symbol, &p.Amount, &freq, &st,
+		&next, &lastRun, &p.LastPeriodKey, &cAt, &uAt,
+	); err != nil {
+		return nil, err
+	}
+	p.Exchange = domain.Exchange(ex)
+	p.Frequency = domain.RecurringBuyFrequency(freq)
+	p.Status = domain.RecurringBuyPlanStatus(st)
+	p.NextRunAt = parseTime(next)
+	p.CreatedAt = parseTime(cAt)
+	p.UpdatedAt = parseTime(uAt)
+	if lastRun.Valid && lastRun.String != "" {
+		t := parseTime(lastRun.String)
+		p.LastRunAt = &t
+	}
+	return &p, nil
+}
+
+// CreateRecurringBuyPlan inserts a plan.
+func (s *SQLite) CreateRecurringBuyPlan(ctx context.Context, p domain.RecurringBuyPlan) (*domain.RecurringBuyPlan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO recurring_buy_plans (`+recurringPlanCols+`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ID, p.ClientID, string(p.Exchange), p.Symbol, p.Amount, string(p.Frequency), string(p.Status),
+		p.NextRunAt.UTC().Format(time.RFC3339Nano), nullTime(p.LastRunAt), p.LastPeriodKey,
+		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, err
+	}
+	return s.GetRecurringBuyPlan(ctx, p.ClientID, p.ID)
+}
+
+// GetRecurringBuyPlan returns one plan.
+func (s *SQLite) GetRecurringBuyPlan(ctx context.Context, clientID, id string) (*domain.RecurringBuyPlan, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT `+recurringPlanCols+` FROM recurring_buy_plans WHERE id = ? AND client_id = ?
+	`, id, clientID)
+	p, err := scanRecurringPlan(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	return p, err
+}
+
+// ListRecurringBuyPlans lists plans for a client.
+func (s *SQLite) ListRecurringBuyPlans(ctx context.Context, clientID string) ([]domain.RecurringBuyPlan, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+recurringPlanCols+` FROM recurring_buy_plans
+		WHERE client_id = ? ORDER BY created_at DESC
+	`, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.RecurringBuyPlan
+	for rows.Next() {
+		p, err := scanRecurringPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// CountRecurringBuyPlans counts plans for a client.
+func (s *SQLite) CountRecurringBuyPlans(ctx context.Context, clientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM recurring_buy_plans WHERE client_id = ?`, clientID).Scan(&n)
+	return n, err
+}
+
+// UpdateRecurringBuyPlanStatus sets status and next_run_at.
+func (s *SQLite) UpdateRecurringBuyPlanStatus(ctx context.Context, clientID, id string, status domain.RecurringBuyPlanStatus, nextRunAt, at time.Time) (*domain.RecurringBuyPlan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE recurring_buy_plans SET status = ?, next_run_at = ?, updated_at = ?
+		WHERE id = ? AND client_id = ?
+	`, string(status), nextRunAt.UTC().Format(time.RFC3339Nano), at.UTC().Format(time.RFC3339Nano), id, clientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.GetRecurringBuyPlan(ctx, clientID, id)
+}
+
+// DeleteRecurringBuyPlan removes a plan and cascaded runs.
+func (s *SQLite) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `DELETE FROM recurring_buy_plans WHERE id = ? AND client_id = ?`, id, clientID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+// ListDueRecurringBuyPlans returns active due plans.
+func (s *SQLite) ListDueRecurringBuyPlans(ctx context.Context, now time.Time, limit int) ([]domain.RecurringBuyPlan, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+recurringPlanCols+` FROM recurring_buy_plans
+		WHERE status = 'active' AND next_run_at <= ?
+		ORDER BY next_run_at ASC LIMIT ?
+	`, now.UTC().Format(time.RFC3339Nano), limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.RecurringBuyPlan
+	for rows.Next() {
+		p, err := scanRecurringPlan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// ClaimRecurringBuyRun inserts a run; unique (plan_id, period_key) prevents double execution.
+func (s *SQLite) ClaimRecurringBuyRun(ctx context.Context, run domain.RecurringBuyRun) (bool, *domain.RecurringBuyRun, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO recurring_buy_runs (
+			id, plan_id, client_id, period_key, status, amount, quantity, price,
+			trade_id, fail_reason, scheduled_for, executed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
+		run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
+		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "unique") || strings.Contains(msg, "constraint") {
+			return false, nil, nil
+		}
+		return false, nil, err
+	}
+	cp := run
+	return true, &cp, nil
+}
+
+// FinishRecurringBuyRun updates the run and advances the plan.
+func (s *SQLite) FinishRecurringBuyRun(ctx context.Context, planID string, run domain.RecurringBuyRun, nextRunAt time.Time, lastPeriodKey string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE recurring_buy_runs SET status = ?, amount = ?, quantity = ?, price = ?,
+			trade_id = ?, fail_reason = ?, executed_at = ?
+		WHERE id = ?
+	`, string(run.Status), run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
+		run.ExecutedAt.UTC().Format(time.RFC3339Nano), run.ID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE recurring_buy_plans SET next_run_at = ?, last_run_at = ?, last_period_key = ?, updated_at = ?
+		WHERE id = ?
+	`, nextRunAt.UTC().Format(time.RFC3339Nano), at.UTC().Format(time.RFC3339Nano), lastPeriodKey,
+		at.UTC().Format(time.RFC3339Nano), planID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// AdvanceRecurringBuyPlan updates schedule when a period was already claimed.
+func (s *SQLite) AdvanceRecurringBuyPlan(ctx context.Context, planID string, nextRunAt time.Time, lastPeriodKey string, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE recurring_buy_plans SET next_run_at = ?, last_period_key = ?, updated_at = ?
+		WHERE id = ?
+	`, nextRunAt.UTC().Format(time.RFC3339Nano), lastPeriodKey, at.UTC().Format(time.RFC3339Nano), planID)
+	return err
+}
+
+// ListRecurringBuyRuns lists runs for a plan.
+func (s *SQLite) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) ([]domain.RecurringBuyRun, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	// Ensure plan ownership
+	if _, err := s.GetRecurringBuyPlan(ctx, clientID, planID); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, plan_id, client_id, period_key, status, amount, quantity, price,
+			trade_id, fail_reason, scheduled_for, executed_at
+		FROM recurring_buy_runs WHERE plan_id = ?
+		ORDER BY executed_at DESC LIMIT ? OFFSET ?
+	`, planID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.RecurringBuyRun
+	for rows.Next() {
+		var r domain.RecurringBuyRun
+		var st, sched, exec string
+		if err := rows.Scan(
+			&r.ID, &r.PlanID, &r.ClientID, &r.PeriodKey, &st, &r.Amount, &r.Quantity, &r.Price,
+			&r.TradeID, &r.FailReason, &sched, &exec,
+		); err != nil {
+			return nil, err
+		}
+		r.Status = domain.RecurringBuyRunStatus(st)
+		r.ScheduledFor = parseTime(sched)
+		r.ExecutedAt = parseTime(exec)
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

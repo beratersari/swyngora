@@ -215,6 +215,24 @@ type PortfolioPort interface {
 	// RejectPendingOrder marks an open order rejected and releases remaining reservation.
 	// Returns ErrNotFound if not open.
 	RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error
+
+	// Recurring buy plans (paper DCA)
+	CreateRecurringBuyPlan(ctx context.Context, p RecurringBuyPlan) (*RecurringBuyPlan, error)
+	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (*RecurringBuyPlan, error)
+	ListRecurringBuyPlans(ctx context.Context, clientID string) ([]RecurringBuyPlan, error)
+	CountRecurringBuyPlans(ctx context.Context, clientID string) (int, error)
+	// UpdateRecurringBuyPlanStatus sets active/paused.
+	UpdateRecurringBuyPlanStatus(ctx context.Context, clientID, id string, status RecurringBuyPlanStatus, nextRunAt time.Time, at time.Time) (*RecurringBuyPlan, error)
+	DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) error
+	// ListDueRecurringBuyPlans returns active plans with next_run_at <= now.
+	ListDueRecurringBuyPlans(ctx context.Context, now time.Time, limit int) ([]RecurringBuyPlan, error)
+	// ClaimRecurringBuyRun inserts a run row; returns false if period already claimed (unique).
+	ClaimRecurringBuyRun(ctx context.Context, run RecurringBuyRun) (claimed bool, out *RecurringBuyRun, err error)
+	// FinishRecurringBuyRun updates run outcome and advances the plan schedule.
+	FinishRecurringBuyRun(ctx context.Context, planID string, run RecurringBuyRun, nextRunAt time.Time, lastPeriodKey string, at time.Time) error
+	// SkipRecurringBuyPeriod advances schedule without a new buy when period already claimed.
+	AdvanceRecurringBuyPlan(ctx context.Context, planID string, nextRunAt time.Time, lastPeriodKey string, at time.Time) error
+	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) ([]RecurringBuyRun, error)
 }
 
 // ApplyBuy updates cash and position for a market buy. Pure helper.

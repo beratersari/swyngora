@@ -248,6 +248,13 @@ func main() {
 	}
 	go orderFiller.Start(ctx)
 
+	recurringBuyWorker := &portfolio.RecurringBuyWorker{
+		Portfolio: portfolioSvc,
+		Interval:  cfg.RecurringBuyInterval,
+		Logger:    logger,
+	}
+	go recurringBuyWorker.Start(ctx)
+
 	scannerChecker := &scanner.Checker{
 		Scanner:  scannerSvc,
 		Interval: cfg.ScannerCheckInterval,

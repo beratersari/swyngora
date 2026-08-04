@@ -56,7 +56,8 @@ cd ai && pytest -q
 Market specialist tools mirror Go MCP (ticker, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**).  
 Sharing tools: `share_watchlist`, `update_watchlist_share`, `revoke_watchlist_share`, `list_watchlist_shares`, `list_shared_watchlists`, `list_watchlist_audit`. See `docs/features/watchlist-sharing.md`.  
 Export tools: `start_export`, `get_export`, `list_exports`, `cancel_export`. See `docs/features/user-data-export.md`.  
-Import tools: `preview_import`, `confirm_import`, `get_import`, `list_imports`, `cancel_import`. See `docs/features/user-data-import.md`.
+Import tools: `preview_import`, `confirm_import`, `get_import`, `list_imports`, `cancel_import`. See `docs/features/user-data-import.md`.  
+Recurring buys: `create_recurring_buy`, `list_recurring_buys`, `get_recurring_buy`, `pause_recurring_buy`, `resume_recurring_buy`, `delete_recurring_buy`, `list_recurring_buy_runs`. See `docs/features/recurring-buys.md`.
 
 ## Limitations / follow-ups
 

@@ -14,8 +14,31 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
 | `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
+| `POST` | `/api/v1/portfolio/recurring-buys` | Create recurring buy (DCA) plan |
+| `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
+| `GET` | `/api/v1/portfolio/recurring-buys/{id}` | Get plan |
+| `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
+| `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
+| `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |
+| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Execution history |
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
+
+### Recurring buys (DCA)
+
+| Field | Description |
+|-------|-------------|
+| `symbol` + `exchange` | Coin pair to buy |
+| `amount` | Cash notional spent each run at last market price (`qty = amount / price`) |
+| `frequency` | `daily` \| `weekly` \| `monthly` |
+| `startAt` | Optional first run (RFC3339); default now |
+
+**Lifecycle:** create (active) → pause / resume → delete. Failed runs (e.g. insufficient cash) keep the plan active and only that period is recorded as failed.
+
+**Safety:**
+- `UNIQUE(plan_id, period_key)` claim so restarts and concurrent workers cannot double-buy the same period.
+- Missed windows run **only the latest** due slot (no backlog of intermediate buys).
+- Worker interval: `RECURRING_BUY_INTERVAL` (default `30s`).
 
 ### Order types (`POST /api/v1/portfolio/orders`)
 
@@ -57,20 +80,22 @@ Optional pending fields:
 - **Equity:** cash + market value of positions (reserved cash is still part of cash until filled).
 
 ### Durability & safety
-- Portfolios, positions, trades, pending orders, remaining size, and reservations are in SQLite (`PORTFOLIO_DB_PATH`).
+- Portfolios, positions, trades, pending orders, remaining size, reservations, and recurring buy plans/runs are in SQLite (`PORTFOLIO_DB_PATH`).
 - Fill/cancel/reject use `status = open` predicates so a canceled order never fills and a completed order is not double-filled.
 - Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
+- Recurring buy worker runs on `RECURRING_BUY_INTERVAL` and once on process start.
 
 ## Code
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/portfolio.go` |
+| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go` |
 | Store | `backend/internal/adapter/portfoliostore` |
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |
-| HTTP | `backend/internal/transport/http/handler/portfolio.go` |
-| MCP | `create_portfolio`, `get_portfolio`, `place_portfolio_order`, `place_portfolio_pending_order`, `list_portfolio_orders`, `cancel_portfolio_order`, `list_portfolio_trades` |
+| Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
+| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go` |
+| MCP | `create_portfolio`, `get_portfolio`, `place_portfolio_order`, `place_portfolio_pending_order`, `list_portfolio_orders`, `cancel_portfolio_order`, `list_portfolio_trades`, `create_recurring_buy`, `list_recurring_buys`, `get_recurring_buy`, `pause_recurring_buy`, `resume_recurring_buy`, `delete_recurring_buy`, `list_recurring_buy_runs` |
 
 ## Config
 
@@ -78,10 +103,11 @@ Optional pending fields:
 |-----|---------|
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` |
+| `RECURRING_BUY_INTERVAL` | `30s` |
 
 ## Tests
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run Portfolio -count=1
+go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run 'Portfolio|Recurring' -count=1
 ```

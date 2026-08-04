@@ -56,6 +56,13 @@ type DataPort interface {
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error)
+	ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error)
 	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -783,6 +790,155 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CancelPortfolioOrder(ctx, clientID, orderID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_recurring_buy",
+		mcp.WithDescription("Create a paper recurring buy (DCA) plan: cash amount at market price on daily|weekly|monthly schedule. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Cash notional per run e.g. 50")),
+		mcp.WithString("frequency", mcp.Required(), mcp.Description("daily | weekly | monthly")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("startAt", mcp.Description("RFC3339 first run; default now")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		amount, err := req.RequireFloat("amount")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		freq, err := req.RequireString("frequency")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateRecurringBuyPlan(ctx, clientID, req.GetString("exchange", "binance"), symbol, amount, freq, req.GetString("startAt", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_recurring_buys",
+		mcp.WithDescription("List paper recurring buy plans for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListRecurringBuyPlans(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_recurring_buy",
+		mcp.WithDescription("Get one paper recurring buy plan by id."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetRecurringBuyPlan(ctx, clientID, planID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("pause_recurring_buy",
+		mcp.WithDescription("Pause a paper recurring buy plan (no further executions until resume)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PauseRecurringBuyPlan(ctx, clientID, planID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("resume_recurring_buy",
+		mcp.WithDescription("Resume a paused paper recurring buy plan."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ResumeRecurringBuyPlan(ctx, clientID, planID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_recurring_buy",
+		mcp.WithDescription("Delete a paper recurring buy plan and its run history."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeleteRecurringBuyPlan(ctx, clientID, planID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_recurring_buy_runs",
+		mcp.WithDescription("List execution history for a paper recurring buy plan (succeeded/failed runs)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListRecurringBuyRuns(ctx, clientID, planID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

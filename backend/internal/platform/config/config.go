@@ -76,6 +76,8 @@ type Config struct {
 	PortfolioDBPath string
 	// PortfolioOrderCheckInterval is how often open pending paper orders are evaluated.
 	PortfolioOrderCheckInterval time.Duration
+	// RecurringBuyInterval is how often due recurring buy plans are evaluated.
+	RecurringBuyInterval time.Duration
 
 	// ScannerDBPath is the SQLite file for technical indicator scanner rules/results.
 	ScannerDBPath string
@@ -167,6 +169,7 @@ func Load() Config {
 
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
 		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
+		RecurringBuyInterval:        positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),

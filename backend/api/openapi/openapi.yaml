@@ -22,8 +22,9 @@ info:
       quiet hours end; pending notifications survive restarts.
     - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
       pending limit buy/sell and stop-loss orders with balance/position reservations and
-      partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L, and
-      trade history (SQLite; not real money).
+      partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L,
+      trade history, and recurring buy (DCA) plans with daily/weekly/monthly schedules
+      (SQLite; not real money).
     - Technical indicator scanner: RSI, EMA crossover, and volume-increase rules over the
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
     - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
@@ -1454,6 +1455,221 @@ paths:
           description: Trade list
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys:
+    post:
+      summary: Create a paper recurring buy plan
+      description: |
+        Schedules cash buys of a symbol at market (last) price on a daily, weekly, or monthly cadence.
+        Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
+        Missed periods execute only the latest due slot (no backlog of intermediate buys).
+        Unique period keys prevent double execution across restarts or concurrent workers.
+        Paper trading only — not real money.
+      operationId: createRecurringBuyPlan
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, amount, frequency]
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
+                symbol: { type: string, example: BTCUSDT }
+                amount:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Cash notional spent each run
+                  example: 50
+                frequency:
+                  type: string
+                  enum: [daily, weekly, monthly]
+                startAt:
+                  type: string
+                  format: date-time
+                  description: First scheduled run (RFC3339); default is now (next worker tick)
+      responses:
+        '201':
+          description: Created plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringBuyPlan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List paper recurring buy plans
+      operationId: listRecurringBuyPlans
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Plan list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  plans:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecurringBuyPlan'
+                  count: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys/{id}:
+    get:
+      summary: Get a paper recurring buy plan
+      operationId: getRecurringBuyPlan
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringBuyPlan'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a paper recurring buy plan
+      description: Removes the plan and its run history (cascade).
+      operationId: deleteRecurringBuyPlan
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+                  id: { type: string }
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys/{id}/pause:
+    post:
+      summary: Pause a paper recurring buy plan
+      description: Stops future executions; plan and history remain.
+      operationId: pauseRecurringBuyPlan
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paused plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringBuyPlan'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys/{id}/resume:
+    post:
+      summary: Resume a paused paper recurring buy plan
+      description: Sets status active. If nextRunAt is in the past, it is bumped to now (next worker tick).
+      operationId: resumeRecurringBuyPlan
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringBuyPlan'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys/{id}/runs:
+    get:
+      summary: List execution history for a recurring buy plan
+      operationId: listRecurringBuyRuns
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Run list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  planId: { type: string }
+                  runs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RecurringBuyRun'
+                  count: { type: integer }
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/scanner/rules:
     post:
       summary: Create a technical scanner rule
@@ -2352,6 +2568,49 @@ components:
         cancelReason:
           type: string
           description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled
+    RecurringBuyPlan:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        amount:
+          type: number
+          description: Cash notional spent each successful run
+        frequency:
+          type: string
+          enum: [daily, weekly, monthly]
+        status:
+          type: string
+          enum: [active, paused]
+        nextRunAt: { type: string, format: date-time }
+        lastRunAt: { type: string, format: date-time, nullable: true }
+        lastPeriodKey:
+          type: string
+          description: Last claimed period key (idempotency)
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RecurringBuyRun:
+      type: object
+      properties:
+        id: { type: string }
+        planId: { type: string }
+        periodKey:
+          type: string
+          description: Calendar period key e.g. 2024-06-15 | 2024-W24 | 2024-06
+        status:
+          type: string
+          enum: [succeeded, failed]
+        amount: { type: number }
+        quantity: { type: number }
+        price: { type: number }
+        tradeId: { type: string }
+        failReason:
+          type: string
+          description: e.g. insufficient cash balance, market price unavailable
+        scheduledFor: { type: string, format: date-time }
+        executedAt: { type: string, format: date-time }
     Watchlist:
       type: object
       properties:

@@ -233,6 +233,27 @@ class PortfolioCancelOrderInput(BaseModel):
     order_id: str
 
 
+class RecurringBuyCreateInput(BaseModel):
+    client_id: str
+    symbol: str
+    amount: float = Field(gt=0, description="Cash notional per run")
+    frequency: str = Field(description="daily | weekly | monthly")
+    exchange: str = "binance"
+    start_at: str = Field(default="", description="RFC3339 first run; default now")
+
+
+class RecurringBuyPlanInput(BaseModel):
+    client_id: str
+    plan_id: str
+
+
+class RecurringBuyRunsInput(BaseModel):
+    client_id: str
+    plan_id: str
+    limit: int = 50
+    offset: int = 0
+
+
 class ScannerRuleCreateInput(BaseModel):
     client_id: str
     rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
@@ -610,6 +631,61 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def list_portfolio_trades(client_id: str) -> str:
         return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
 
+    def create_recurring_buy(
+        client_id: str,
+        symbol: str,
+        amount: float,
+        frequency: str,
+        exchange: str = "binance",
+        start_at: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "amount": amount,
+            "frequency": frequency,
+            "exchange": exchange,
+        }
+        if start_at:
+            body["startAt"] = start_at
+        return http.post("/api/v1/portfolio/recurring-buys", body)
+
+    def list_recurring_buys(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/recurring-buys", {"clientId": client_id})
+
+    def get_recurring_buy(client_id: str, plan_id: str) -> str:
+        return http.get(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}",
+            {"clientId": client_id},
+        )
+
+    def pause_recurring_buy(client_id: str, plan_id: str) -> str:
+        # clientId is query/header only on these routes
+        return http.post(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}/pause?clientId={client_id}",
+            {},
+        )
+
+    def resume_recurring_buy(client_id: str, plan_id: str) -> str:
+        return http.post(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}/resume?clientId={client_id}",
+            {},
+        )
+
+    def delete_recurring_buy(client_id: str, plan_id: str) -> str:
+        return http.delete(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}",
+            {"clientId": client_id},
+        )
+
+    def list_recurring_buy_runs(
+        client_id: str, plan_id: str, limit: int = 50, offset: int = 0
+    ) -> str:
+        return http.get(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}/runs",
+            {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
+        )
+
     def create_scanner_rule(
         client_id: str,
         rule_type: str,
@@ -921,6 +997,51 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_portfolio_trades",
             description="List paper trade history for a clientId.",
             args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            create_recurring_buy,
+            name="create_recurring_buy",
+            description=(
+                "Create a paper recurring buy (DCA) plan: cash amount at market price "
+                "on daily|weekly|monthly schedule. Simulated only."
+            ),
+            args_schema=RecurringBuyCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_recurring_buys,
+            name="list_recurring_buys",
+            description="List paper recurring buy plans for a clientId.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_recurring_buy,
+            name="get_recurring_buy",
+            description="Get one paper recurring buy plan by id.",
+            args_schema=RecurringBuyPlanInput,
+        ),
+        StructuredTool.from_function(
+            pause_recurring_buy,
+            name="pause_recurring_buy",
+            description="Pause a paper recurring buy plan.",
+            args_schema=RecurringBuyPlanInput,
+        ),
+        StructuredTool.from_function(
+            resume_recurring_buy,
+            name="resume_recurring_buy",
+            description="Resume a paused paper recurring buy plan.",
+            args_schema=RecurringBuyPlanInput,
+        ),
+        StructuredTool.from_function(
+            delete_recurring_buy,
+            name="delete_recurring_buy",
+            description="Delete a paper recurring buy plan and its run history.",
+            args_schema=RecurringBuyPlanInput,
+        ),
+        StructuredTool.from_function(
+            list_recurring_buy_runs,
+            name="list_recurring_buy_runs",
+            description="List execution history for a paper recurring buy plan.",
+            args_schema=RecurringBuyRunsInput,
         ),
         StructuredTool.from_function(
             create_scanner_rule,

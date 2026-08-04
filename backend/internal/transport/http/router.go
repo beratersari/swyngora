@@ -106,6 +106,14 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio/orders", ph.ListOrders)
 		mux.HandleFunc("DELETE /api/v1/portfolio/orders/{id}", ph.CancelOrder)
 		mux.HandleFunc("GET /api/v1/portfolio/trades", ph.ListTrades)
+		// Recurring buys: static subpaths before {id}
+		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys", ph.CreateRecurringBuy)
+		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys", ph.ListRecurringBuys)
+		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys/{id}/pause", ph.PauseRecurringBuy)
+		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys/{id}/resume", ph.ResumeRecurringBuy)
+		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}/runs", ph.ListRecurringBuyRuns)
+		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}", ph.GetRecurringBuy)
+		mux.HandleFunc("DELETE /api/v1/portfolio/recurring-buys/{id}", ph.DeleteRecurringBuy)
 	}
 
 	if opts.Scanner != nil {

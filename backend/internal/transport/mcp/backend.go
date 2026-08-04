@@ -697,6 +697,129 @@ func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string)
 	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; unused reservation released; it will not execute."})
 }
 
+func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	var start *time.Time
+	if startAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, startAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, startAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: startAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		start = &tu
+	}
+	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, portfolio.RecurringBuyCreateInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol,
+		Amount: amount, Frequency: frequency, StartAt: start,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(recurringPlanMap(plan))
+}
+
+func (b *Backend) ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListRecurringBuyPlans(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, recurringPlanMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "plans": items, "count": len(items)})
+}
+
+func (b *Backend) GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	plan, err := b.Portfolio.GetRecurringBuyPlan(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(recurringPlanMap(plan))
+}
+
+func (b *Backend) PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	plan, err := b.Portfolio.PauseRecurringBuyPlan(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(recurringPlanMap(plan))
+}
+
+func (b *Backend) ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	plan, err := b.Portfolio.ResumeRecurringBuyPlan(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(recurringPlanMap(plan))
+}
+
+func (b *Backend) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if err := b.Portfolio.DeleteRecurringBuyPlan(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func (b *Backend) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListRecurringBuyRuns(ctx, clientID, planID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, recurringRunMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"planId": planID, "runs": items, "count": len(items)})
+}
+
+func recurringPlanMap(p *domain.RecurringBuyPlan) map[string]any {
+	m := map[string]any{
+		"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,
+		"amount": p.Amount, "frequency": string(p.Frequency), "status": string(p.Status),
+		"nextRunAt": p.NextRunAt.UTC().Format(time.RFC3339Nano), "lastPeriodKey": p.LastPeriodKey,
+		"createdAt": p.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if p.LastRunAt != nil {
+		m["lastRunAt"] = p.LastRunAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
+}
+
+func recurringRunMap(r *domain.RecurringBuyRun) map[string]any {
+	return map[string]any{
+		"id": r.ID, "planId": r.PlanID, "periodKey": r.PeriodKey, "status": string(r.Status),
+		"amount": r.Amount, "quantity": r.Quantity, "price": r.Price, "tradeId": r.TradeID,
+		"failReason": r.FailReason,
+		"scheduledFor": r.ScheduledFor.UTC().Format(time.RFC3339Nano),
+		"executedAt":   r.ExecutedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 	tif := string(o.TimeInForce)
 	if tif == "" {

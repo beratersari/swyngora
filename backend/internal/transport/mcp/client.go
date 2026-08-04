@@ -500,6 +500,84 @@ func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, li
 	return c.get(ctx, "/api/v1/portfolio/trades", q)
 }
 
+// CreateRecurringBuyPlan creates a paper recurring buy plan.
+func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol,
+		"amount": amount, "frequency": frequency,
+	}
+	if startAt != "" {
+		body["startAt"] = startAt
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/recurring-buys", body)
+}
+
+// ListRecurringBuyPlans lists paper recurring buy plans.
+func (c *APIClient) ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/recurring-buys", q)
+}
+
+// GetRecurringBuyPlan fetches one plan.
+func (c *APIClient) GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(id), q)
+}
+
+// PauseRecurringBuyPlan pauses a plan.
+func (c *APIClient) PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/recurring-buys/" + url.PathEscape(id) + "/pause"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+// ResumeRecurringBuyPlan resumes a paused plan.
+func (c *APIClient) ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/recurring-buys/" + url.PathEscape(id) + "/resume"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+// DeleteRecurringBuyPlan deletes a plan.
+func (c *APIClient) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/recurring-buys/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+// ListRecurringBuyRuns lists execution history for a plan.
+func (c *APIClient) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(planID)+"/runs", q)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
