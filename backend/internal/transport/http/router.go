@@ -11,6 +11,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
@@ -33,6 +34,8 @@ type RouterOptions struct {
 	Alerts *pricealert.Service
 	// Portfolio enables paper-trading routes when non-nil.
 	Portfolio *portfolio.Service
+	// PriceDiff enables cross-exchange price difference tracking when non-nil.
+	PriceDiff *pricediff.Service
 	// Scanner enables technical indicator scanner routes when non-nil.
 	Scanner *scanner.Service
 	// Export enables user data export routes when non-nil.
@@ -114,6 +117,16 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}/runs", ph.ListRecurringBuyRuns)
 		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}", ph.GetRecurringBuy)
 		mux.HandleFunc("DELETE /api/v1/portfolio/recurring-buys/{id}", ph.DeleteRecurringBuy)
+	}
+
+	if opts.PriceDiff != nil {
+		pdh := handler.NewPriceDiffHandler(opts.PriceDiff)
+		mux.HandleFunc("POST /api/v1/price-diff/watches", pdh.CreateWatch)
+		mux.HandleFunc("GET /api/v1/price-diff/watches", pdh.ListWatches)
+		mux.HandleFunc("GET /api/v1/price-diff/watches/{id}", pdh.GetWatch)
+		mux.HandleFunc("DELETE /api/v1/price-diff/watches/{id}", pdh.DeleteWatch)
+		mux.HandleFunc("GET /api/v1/price-diff/opportunities", pdh.ListOpportunities)
+		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}", pdh.GetOpportunity)
 	}
 
 	if opts.Scanner != nil {

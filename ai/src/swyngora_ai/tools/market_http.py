@@ -254,6 +254,32 @@ class RecurringBuyRunsInput(BaseModel):
     offset: int = 0
 
 
+class PriceDiffWatchCreateInput(BaseModel):
+    client_id: str
+    symbol: str
+    min_net_diff_pct: float = Field(gt=0, description="Minimum net % after fees e.g. 0.5")
+    fee_binance_pct: float = Field(default=0, ge=0, description="Binance fee %")
+    fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase fee %")
+    fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit fee %")
+
+
+class PriceDiffWatchIdInput(BaseModel):
+    client_id: str
+    watch_id: str
+
+
+class PriceDiffOppListInput(BaseModel):
+    client_id: str
+    status: str = Field(default="open", description="open | closed | all")
+    limit: int = 50
+    offset: int = 0
+
+
+class PriceDiffOppIdInput(BaseModel):
+    client_id: str
+    opportunity_id: str
+
+
 class ScannerRuleCreateInput(BaseModel):
     client_id: str
     rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
@@ -686,6 +712,60 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
         )
 
+    def create_price_diff_watch(
+        client_id: str,
+        symbol: str,
+        min_net_diff_pct: float,
+        fee_binance_pct: float = 0,
+        fee_coinbase_pct: float = 0,
+        fee_bybit_pct: float = 0,
+    ) -> str:
+        return http.post(
+            "/api/v1/price-diff/watches",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "minNetDiffPct": min_net_diff_pct,
+                "feeBinancePct": fee_binance_pct,
+                "feeCoinbasePct": fee_coinbase_pct,
+                "feeBybitPct": fee_bybit_pct,
+            },
+        )
+
+    def list_price_diff_watches(client_id: str) -> str:
+        return http.get("/api/v1/price-diff/watches", {"clientId": client_id})
+
+    def get_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.get(
+            f"/api/v1/price-diff/watches/{watch_id}",
+            {"clientId": client_id},
+        )
+
+    def delete_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.delete(
+            f"/api/v1/price-diff/watches/{watch_id}",
+            {"clientId": client_id},
+        )
+
+    def list_price_diff_opportunities(
+        client_id: str, status: str = "open", limit: int = 50, offset: int = 0
+    ) -> str:
+        return http.get(
+            "/api/v1/price-diff/opportunities",
+            {
+                "clientId": client_id,
+                "status": status,
+                "limit": str(limit),
+                "offset": str(offset),
+            },
+        )
+
+    def get_price_diff_opportunity(client_id: str, opportunity_id: str) -> str:
+        return http.get(
+            f"/api/v1/price-diff/opportunities/{opportunity_id}",
+            {"clientId": client_id},
+        )
+
     def create_scanner_rule(
         client_id: str,
         rule_type: str,
@@ -1042,6 +1122,45 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_recurring_buy_runs",
             description="List execution history for a paper recurring buy plan.",
             args_schema=RecurringBuyRunsInput,
+        ),
+        StructuredTool.from_function(
+            create_price_diff_watch,
+            name="create_price_diff_watch",
+            description=(
+                "Track cross-exchange price differences for a coin (Binance/Coinbase/Bybit). "
+                "Opens opportunities when net edge after fees exceeds min_net_diff_pct."
+            ),
+            args_schema=PriceDiffWatchCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_price_diff_watches,
+            name="list_price_diff_watches",
+            description="List cross-exchange price difference watches for a clientId.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_price_diff_watch,
+            name="get_price_diff_watch",
+            description="Get one price-diff watch by id.",
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            delete_price_diff_watch,
+            name="delete_price_diff_watch",
+            description="Delete a price-diff watch and its opportunities.",
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            list_price_diff_opportunities,
+            name="list_price_diff_opportunities",
+            description="List price-diff opportunities (status open|closed|all).",
+            args_schema=PriceDiffOppListInput,
+        ),
+        StructuredTool.from_function(
+            get_price_diff_opportunity,
+            name="get_price_diff_opportunity",
+            description="Get one price-diff opportunity by id.",
+            args_schema=PriceDiffOppIdInput,
         ),
         StructuredTool.from_function(
             create_scanner_rule,

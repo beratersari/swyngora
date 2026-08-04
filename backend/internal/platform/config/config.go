@@ -84,6 +84,11 @@ type Config struct {
 	// ScannerCheckInterval is how often scanner rules are evaluated against watchlists.
 	ScannerCheckInterval time.Duration
 
+	// PriceDiffDBPath is the SQLite file for cross-exchange price difference watches/opportunities.
+	PriceDiffDBPath string
+	// PriceDiffCheckInterval is how often active price-diff watches are evaluated.
+	PriceDiffCheckInterval time.Duration
+
 	// ExportDBPath is the SQLite file for user data export job metadata.
 	ExportDBPath string
 	// ExportFileDir is the directory where export download files are written.
@@ -173,6 +178,9 @@ func Load() Config {
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),
+
+		PriceDiffDBPath:        getenv("PRICE_DIFF_DB_PATH", "data/pricediff.db"),
+		PriceDiffCheckInterval: positiveDurationEnv("PRICE_DIFF_CHECK_INTERVAL", 30*time.Second),
 
 		ExportDBPath:         getenv("EXPORT_DB_PATH", "data/export.db"),
 		ExportFileDir:        getenv("EXPORT_FILE_DIR", "data/exports"),

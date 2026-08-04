@@ -49,6 +49,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Recurring buy execution history |
+| `POST`/`GET` | `/api/v1/price-diff/watches` | Create / list cross-exchange price difference watches |
+| `GET`/`DELETE` | `/api/v1/price-diff/watches/{id}` | Get / delete watch |
+| `GET` | `/api/v1/price-diff/opportunities` | List opportunities (`status=open\|closed\|all`) |
+| `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
 | `POST` | `/api/v1/scanner/rules` | Create RSI / MA crossover / volume scanner rule |
 | `GET` | `/api/v1/scanner/rules` | List scanner rules |
 | `GET` | `/api/v1/scanner/rules/{id}` | Get scanner rule |
@@ -85,6 +89,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. Configure path via `WATCHLIST_DB_PATH`. **Sharing:** owners grant `viewer` or `editor` access to other `clientId`s; editors may add/remove symbols only; all mutations write an audit log (`docs/features/watchlist-sharing.md`). **Multi-device sync:** each list has a monotonic `version`; send `baseVersion` on writes — non-overlapping adds auto-merge; delete-vs-update conflicts return **409** with both sides (`docs/features/watchlist-sync.md`).
 
 **Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
+
+**Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`).
 
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, and **recurring buy (DCA) plans** (`daily`/`weekly`/`monthly`; pause/resume/delete; failed runs keep the plan). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`).
 
@@ -173,6 +179,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
 | `RECURRING_BUY_INTERVAL` | `30s` | How often due recurring buy plans are evaluated |
+| `PRICE_DIFF_DB_PATH` | `data/pricediff.db` | SQLite for cross-exchange price difference watches/opportunities |
+| `PRICE_DIFF_CHECK_INTERVAL` | `30s` | How often active price-diff watches are evaluated |
 | `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |
 | `EXPORT_DB_PATH` | `data/export.db` | SQLite file for user data export jobs |
 | `EXPORT_FILE_DIR` | `data/exports` | Directory for export download files |

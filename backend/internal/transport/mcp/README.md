@@ -44,6 +44,12 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `resume_recurring_buy` | Resume a paused plan |
 | `delete_recurring_buy` | Delete a plan and its runs |
 | `list_recurring_buy_runs` | Execution history for a plan |
+| `create_price_diff_watch` | Track cross-exchange price gaps after fees |
+| `list_price_diff_watches` | List price-diff watches |
+| `get_price_diff_watch` | Get one price-diff watch |
+| `delete_price_diff_watch` | Delete watch and opportunities |
+| `list_price_diff_opportunities` | List open/closed opportunities |
+| `get_price_diff_opportunity` | Get one opportunity |
 | `create_scanner_rule` | Create RSI / MA / volume watchlist scanner rule |
 | `list_scanner_rules` | List scanner rules |
 | `delete_scanner_rule` | Delete scanner rule |

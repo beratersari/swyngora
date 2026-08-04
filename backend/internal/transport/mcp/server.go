@@ -15,6 +15,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
@@ -76,6 +77,12 @@ type DataPort interface {
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
+	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -111,9 +118,9 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -1216,6 +1223,128 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CancelImport(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_price_diff_watch",
+		mcp.WithDescription("Track cross-exchange price differences for a coin (Binance/Coinbase/Bybit). Opens opportunities when net edge after fees exceeds minNetDiffPct."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("minNetDiffPct", mcp.Required(), mcp.Description("Minimum net difference % after fees e.g. 0.5")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee % e.g. 0.1")),
+		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee % e.g. 0.6")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee % e.g. 0.1")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		minNet, err := req.RequireFloat("minNetDiffPct")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, minNet,
+			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_price_diff_watches",
+		mcp.WithDescription("List cross-exchange price difference watches for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPriceDiffWatches(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_price_diff_watch",
+		mcp.WithDescription("Get one price-diff watch by id."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_price_diff_watch",
+		mcp.WithDescription("Delete a price-diff watch and its opportunities."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeletePriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_price_diff_opportunities",
+		mcp.WithDescription("List cross-exchange price opportunities (status open|closed|all). Open opportunities persist across restarts."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("status", mcp.Description("open | closed | all")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPriceDiffOpportunities(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_price_diff_opportunity",
+		mcp.WithDescription("Get one price-diff opportunity by id."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("opportunityId", mcp.Required(), mcp.Description("Opportunity id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("opportunityId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPriceDiffOpportunity(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

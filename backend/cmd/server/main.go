@@ -18,6 +18,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -30,6 +31,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -169,6 +171,19 @@ func main() {
 	scannerSvc := scanner.New(scannerStore, marketSvc, watchSvc)
 	logger.Info("indicator scanner store ready", "driver", "sqlite", "path", scannerStore.Path())
 
+	priceDiffStore, err := pricediffstore.Open(cfg.PriceDiffDBPath)
+	if err != nil {
+		logger.Error("price-diff sqlite open failed", "path", cfg.PriceDiffDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := priceDiffStore.Close(); err != nil {
+			logger.Error("price-diff sqlite close", "err", err)
+		}
+	}()
+	priceDiffSvc := pricediff.New(priceDiffStore, marketSvc)
+	logger.Info("price-diff store ready", "driver", "sqlite", "path", priceDiffStore.Path())
+
 	exportStore, err := exportstore.Open(cfg.ExportDBPath)
 	if err != nil {
 		logger.Error("export sqlite open failed", "path", cfg.ExportDBPath, "err", err)
@@ -262,6 +277,13 @@ func main() {
 	}
 	go scannerChecker.Start(ctx)
 
+	priceDiffChecker := &pricediff.Checker{
+		Service:  priceDiffSvc,
+		Interval: cfg.PriceDiffCheckInterval,
+		Logger:   logger,
+	}
+	go priceDiffChecker.Start(ctx)
+
 	backtestWorker := &scanner.BacktestWorker{
 		Scanner:  scannerSvc,
 		Interval: 2 * time.Second,
@@ -308,7 +330,7 @@ func main() {
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
 	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc)
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc)
 	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
@@ -320,6 +342,7 @@ func main() {
 		AITimeout:       cfg.AITimeout,
 		Alerts:          alertSvc,
 		Portfolio:       portfolioSvc,
+		PriceDiff:       priceDiffSvc,
 		Scanner:         scannerSvc,
 		Export:          exportSvc,
 		Import:          importSvc,

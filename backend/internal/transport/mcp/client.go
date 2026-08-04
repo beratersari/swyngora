@@ -578,6 +578,64 @@ func (c *APIClient) ListRecurringBuyRuns(ctx context.Context, clientID, planID s
 	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(planID)+"/runs", q)
 }
 
+// CreatePriceDiffWatch creates a cross-exchange price difference watch.
+func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", map[string]any{
+		"clientId": clientID, "symbol": symbol, "minNetDiffPct": minNetDiffPct,
+		"feeBinancePct": feeBinance, "feeCoinbasePct": feeCoinbase, "feeBybitPct": feeBybit,
+	})
+}
+
+// ListPriceDiffWatches lists watches.
+func (c *APIClient) ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/price-diff/watches", q)
+}
+
+// GetPriceDiffWatch gets one watch.
+func (c *APIClient) GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/price-diff/watches/"+url.PathEscape(id), q)
+}
+
+// DeletePriceDiffWatch deletes a watch.
+func (c *APIClient) DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/price-diff/watches/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+// ListPriceDiffOpportunities lists opportunities.
+func (c *APIClient) ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/price-diff/opportunities", q)
+}
+
+// GetPriceDiffOpportunity gets one opportunity.
+func (c *APIClient) GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/price-diff/opportunities/"+url.PathEscape(id), q)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

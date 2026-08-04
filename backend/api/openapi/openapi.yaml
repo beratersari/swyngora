@@ -25,6 +25,10 @@ info:
       partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L,
       trade history, and recurring buy (DCA) plans with daily/weekly/monthly schedules
       (SQLite; not real money).
+    - Cross-exchange price difference tracking: watch a coin across Binance, Coinbase, and
+      Bybit; when net edge after fees exceeds a threshold, store a buy/sell opportunity.
+      Open opportunities persist across restarts; no duplicate while open; re-open after
+      the edge falls below the limit and rises again. Stale or missing prices skip signals.
     - Technical indicator scanner: RSI, EMA crossover, and volume-increase rules over the
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
     - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
@@ -1670,6 +1674,159 @@ paths:
                   count: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches:
+    post:
+      summary: Create a cross-exchange price difference watch
+      description: |
+        Tracks last prices for a symbol on Binance, Coinbase, and Bybit.
+        When net edge after exchange fees exceeds minNetDiffPct, stores an opportunity
+        with buyExchange and sellExchange. Does not create a duplicate while open.
+        When net falls below the limit the opportunity closes; a later re-cross opens a new one.
+        Stale or missing exchange prices skip evaluation for that venue (no signal).
+        Open opportunities are durable (SQLite) and survive worker restarts.
+        Informational only — not financial advice / not executable trading.
+      operationId: createPriceDiffWatch
+      tags: [PriceDiff]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, minNetDiffPct]
+              properties:
+                clientId: { type: string }
+                symbol: { type: string, example: BTCUSDT }
+                minNetDiffPct:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Minimum net difference percent after fees (e.g. 0.5 = 0.5%)
+                  example: 0.5
+                feeBinancePct: { type: number, minimum: 0, example: 0.1 }
+                feeCoinbasePct: { type: number, minimum: 0, example: 0.6 }
+                feeBybitPct: { type: number, minimum: 0, example: 0.1 }
+      responses:
+        '201':
+          description: Created watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '400':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List price difference watches
+      operationId: listPriceDiffWatches
+      tags: [PriceDiff]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Watch list
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}:
+    get:
+      summary: Get a price difference watch
+      operationId: getPriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a price difference watch
+      description: Removes the watch and its opportunities.
+      operationId: deletePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/opportunities:
+    get:
+      summary: List price difference opportunities
+      operationId: listPriceDiffOpportunities
+      tags: [PriceDiff]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, closed, all], default: open }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Opportunity list
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/opportunities/{id}:
+    get:
+      summary: Get a price difference opportunity
+      operationId: getPriceDiffOpportunity
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Opportunity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffOpportunity'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/scanner/rules:
     post:
       summary: Create a technical scanner rule
@@ -2611,6 +2768,39 @@ components:
           description: e.g. insufficient cash balance, market price unavailable
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
+    PriceDiffWatch:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        symbol: { type: string }
+        minNetDiffPct:
+          type: number
+          description: Minimum net % edge after fees to open an opportunity
+        feeBinancePct: { type: number }
+        feeCoinbasePct: { type: number }
+        feeBybitPct: { type: number }
+        status: { type: string, enum: [active, paused] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PriceDiffOpportunity:
+      type: object
+      properties:
+        id: { type: string }
+        watchId: { type: string }
+        clientId: { type: string }
+        symbol: { type: string }
+        buyExchange: { type: string, enum: [binance, coinbase, bybit] }
+        sellExchange: { type: string, enum: [binance, coinbase, bybit] }
+        buyPrice: { type: number }
+        sellPrice: { type: number }
+        grossDiffPct: { type: number }
+        netDiffPct: { type: number }
+        minNetDiffPct: { type: number }
+        status: { type: string, enum: [open, closed] }
+        openedAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
     Watchlist:
       type: object
       properties:

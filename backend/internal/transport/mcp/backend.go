@@ -13,6 +13,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
@@ -26,6 +27,7 @@ type Backend struct {
 	Scanner   *scanner.Service
 	Export    *exportsvc.Service
 	Import    *dataimport.Service
+	PriceDiff *pricediff.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -1303,6 +1305,109 @@ func (b *Backend) CancelImport(ctx context.Context, clientID, id string) (json.R
 		return nil, err
 	}
 	return importJobJSON(job)
+}
+
+func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.CreateWatch(ctx, pricediff.CreateInput{
+		ClientID: clientID, Symbol: symbol, MinNetDiffPct: minNetDiffPct,
+		FeeBinancePct: feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	list, err := b.PriceDiff.ListWatches(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, priceDiffWatchMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "watches": items, "count": len(items)})
+}
+
+func (b *Backend) GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	if err := b.PriceDiff.DeleteWatch(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func (b *Backend) ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	list, err := b.PriceDiff.ListOpportunities(ctx, clientID, status, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, priceDiffOppMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "opportunities": items, "count": len(items)})
+}
+
+func (b *Backend) GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	o, err := b.PriceDiff.GetOpportunity(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffOppMap(o))
+}
+
+func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
+	return map[string]any{
+		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
+		"minNetDiffPct": w.MinNetDiffPct,
+		"feeBinancePct": w.FeeBinancePct, "feeCoinbasePct": w.FeeCoinbasePct, "feeBybitPct": w.FeeBybitPct,
+		"status": string(w.Status),
+		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func priceDiffOppMap(o *domain.PriceDiffOpportunity) map[string]any {
+	m := map[string]any{
+		"id": o.ID, "watchId": o.WatchID, "clientId": o.ClientID, "symbol": o.Symbol,
+		"buyExchange": string(o.BuyExchange), "sellExchange": string(o.SellExchange),
+		"buyPrice": o.BuyPrice, "sellPrice": o.SellPrice,
+		"grossDiffPct": o.GrossDiffPct, "netDiffPct": o.NetDiffPct, "minNetDiffPct": o.MinNetDiffPct,
+		"status": string(o.Status),
+		"openedAt":   o.OpenedAt.UTC().Format(time.RFC3339Nano),
+		"lastSeenAt": o.LastSeenAt.UTC().Format(time.RFC3339Nano),
+	}
+	if o.ClosedAt != nil {
+		m["closedAt"] = o.ClosedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
 }
 
 func scannerRuleJSON(r *domain.ScannerRule) (json.RawMessage, error) {
