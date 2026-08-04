@@ -7,6 +7,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -16,9 +18,8 @@ const (
 	maxNoteRunes   = 200
 )
 
-// Service orchestrates watchlist use cases.
+// Service orchestrates watchlist use cases including sharing and audit.
 // Client IDs are opaque client-supplied tenancy keys (no server auth yet).
-// Empty clientId is rejected — there is no shared "default" bucket.
 type Service struct {
 	store domain.WatchlistPort
 }
@@ -28,70 +29,134 @@ func New(store domain.WatchlistPort) *Service {
 	return &Service{store: store}
 }
 
-// Get returns the watchlist for a client (empty list if none).
-func (s *Service) Get(ctx context.Context, clientID string) (*domain.Watchlist, error) {
-	clientID, err := normalizeClientID(clientID)
+// resolveOwner returns the list owner id; empty owner means actor owns the list.
+func resolveOwner(actor, owner string) string {
+	if strings.TrimSpace(owner) == "" {
+		return actor
+	}
+	return owner
+}
+
+// Get returns a watchlist the actor may view (own or shared as viewer/editor).
+// ownerClientID empty → actor's own list.
+func (s *Service) Get(ctx context.Context, actorClientID, ownerClientID string) (*domain.WatchlistAccess, error) {
+	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
 	}
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
 	}
-	wl, err := s.store.Get(ctx, clientID)
+	owner, err := normalizeClientID(resolveOwner(actor, ownerClientID))
+	if err != nil {
+		return nil, err
+	}
+	role, err := s.accessRole(ctx, actor, owner)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, fmt.Errorf("%w: no access to this watchlist", domain.ErrForbidden)
+	}
+	wl, err := s.store.Get(ctx, owner)
 	if err != nil {
 		return nil, err
 	}
 	if wl == nil {
-		return &domain.Watchlist{ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC()}, nil
+		wl = &domain.Watchlist{ClientID: owner, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC()}
 	}
-	return wl, nil
+	return &domain.WatchlistAccess{Watchlist: *wl, OwnerClientID: owner, Role: role}, nil
 }
 
-// Replace sets the full list.
-func (s *Service) Replace(ctx context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
-	clientID, err := normalizeClientID(clientID)
+// Replace sets the full list. Owner only (not editors).
+func (s *Service) Replace(ctx context.Context, actorClientID, ownerClientID string, items []domain.WatchlistItem) (*domain.WatchlistAccess, error) {
+	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
 	}
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	owner, err := normalizeClientID(resolveOwner(actor, ownerClientID))
+	if err != nil {
+		return nil, err
+	}
+	if actor != owner {
+		return nil, fmt.Errorf("%w: only the owner can replace the watchlist", domain.ErrForbidden)
 	}
 	norm, err := normalizeItems(items)
 	if err != nil {
 		return nil, err
 	}
-	return s.store.Set(ctx, clientID, norm)
-}
-
-// Add appends or updates one item. Max items is enforced in the store under lock.
-func (s *Service) Add(ctx context.Context, clientID string, exchange, symbol, note string) (*domain.Watchlist, error) {
-	clientID, err := normalizeClientID(clientID)
+	wl, err := s.store.Set(ctx, owner, norm)
 	if err != nil {
 		return nil, err
 	}
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: actor,
+		Action: domain.WatchlistAuditListReplaced, Detail: fmt.Sprintf("items=%d", len(norm)),
+		CreatedAt: time.Now().UTC(),
+	})
+	return &domain.WatchlistAccess{Watchlist: *wl, OwnerClientID: owner, Role: domain.WatchlistRoleOwner}, nil
+}
+
+// Add appends or updates one item. Owner or editor.
+func (s *Service) Add(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string) (*domain.WatchlistAccess, error) {
+	actor, err := normalizeClientID(actorClientID)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	owner, err := normalizeClientID(resolveOwner(actor, ownerClientID))
+	if err != nil {
+		return nil, err
+	}
+	role, err := s.accessRole(ctx, actor, owner)
+	if err != nil {
+		return nil, err
+	}
+	if role != domain.WatchlistRoleOwner && role != domain.WatchlistRoleEditor {
+		return nil, fmt.Errorf("%w: view-only access; cannot add symbols", domain.ErrForbidden)
+	}
 	item, err := normalizeItem(domain.WatchlistItem{
-		Exchange: domain.Exchange(exchange),
-		Symbol:   symbol,
-		Note:     note,
-		AddedAt:  time.Now().UTC(),
+		Exchange: domain.Exchange(exchange), Symbol: symbol, Note: note, AddedAt: time.Now().UTC(),
 	})
 	if err != nil {
 		return nil, err
 	}
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	wl, err := s.store.Add(ctx, owner, item)
+	if err != nil {
+		return nil, err
 	}
-	return s.store.Add(ctx, clientID, item)
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: actor,
+		Action: domain.WatchlistAuditItemAdded, Exchange: string(item.Exchange), Symbol: item.Symbol,
+		Detail: item.Note, CreatedAt: time.Now().UTC(),
+	})
+	return &domain.WatchlistAccess{Watchlist: *wl, OwnerClientID: owner, Role: role}, nil
 }
 
-// Remove deletes one item.
-func (s *Service) Remove(ctx context.Context, clientID, exchange, symbol string) (*domain.Watchlist, error) {
-	clientID, err := normalizeClientID(clientID)
+// Remove deletes one item. Owner or editor.
+func (s *Service) Remove(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string) (*domain.WatchlistAccess, error) {
+	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
 	}
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	owner, err := normalizeClientID(resolveOwner(actor, ownerClientID))
+	if err != nil {
+		return nil, err
+	}
+	role, err := s.accessRole(ctx, actor, owner)
+	if err != nil {
+		return nil, err
+	}
+	if role != domain.WatchlistRoleOwner && role != domain.WatchlistRoleEditor {
+		return nil, fmt.Errorf("%w: view-only access; cannot remove symbols", domain.ErrForbidden)
 	}
 	rawEx := strings.TrimSpace(exchange)
 	var ex domain.Exchange
@@ -107,7 +172,172 @@ func (s *Service) Remove(ctx context.Context, clientID, exchange, symbol string)
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	return s.store.Remove(ctx, clientID, ex, symbol)
+	wl, err := s.store.Remove(ctx, owner, ex, symbol)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: actor,
+		Action: domain.WatchlistAuditItemRemoved, Exchange: string(ex), Symbol: symbol,
+		CreatedAt: time.Now().UTC(),
+	})
+	return &domain.WatchlistAccess{Watchlist: *wl, OwnerClientID: owner, Role: role}, nil
+}
+
+// Share grants viewer or editor access. Owner only. Same grantee cannot be shared twice.
+func (s *Service) Share(ctx context.Context, ownerClientID, granteeClientID, role string) (*domain.WatchlistShare, error) {
+	owner, err := normalizeClientID(ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	grantee, err := normalizeClientID(granteeClientID)
+	if err != nil {
+		return nil, err
+	}
+	if owner == grantee {
+		return nil, fmt.Errorf("%w: cannot share a watchlist with yourself", domain.ErrInvalidArgument)
+	}
+	r, err := domain.NormalizeWatchlistShareRole(role)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	n, err := s.store.CountSharesByOwner(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	if n >= domain.MaxWatchlistSharesPerOwner {
+		return nil, fmt.Errorf("%w: max %d shares per watchlist", domain.ErrInvalidArgument, domain.MaxWatchlistSharesPerOwner)
+	}
+	now := time.Now().UTC()
+	share, err := s.store.CreateShare(ctx, domain.WatchlistShare{
+		OwnerClientID: owner, GranteeClientID: grantee, Role: r, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: owner,
+		Action: domain.WatchlistAuditShareGranted, Detail: fmt.Sprintf("grantee=%s role=%s", grantee, r),
+		CreatedAt: now,
+	})
+	return share, nil
+}
+
+// UpdateShareRole changes an existing share's role. Owner only.
+func (s *Service) UpdateShareRole(ctx context.Context, ownerClientID, granteeClientID, role string) (*domain.WatchlistShare, error) {
+	owner, err := normalizeClientID(ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	grantee, err := normalizeClientID(granteeClientID)
+	if err != nil {
+		return nil, err
+	}
+	r, err := domain.NormalizeWatchlistShareRole(role)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	now := time.Now().UTC()
+	share, err := s.store.UpdateShareRole(ctx, owner, grantee, r, now)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: owner,
+		Action: domain.WatchlistAuditShareUpdated, Detail: fmt.Sprintf("grantee=%s role=%s", grantee, r),
+		CreatedAt: now,
+	})
+	return share, nil
+}
+
+// RevokeShare removes access. Owner only.
+func (s *Service) RevokeShare(ctx context.Context, ownerClientID, granteeClientID string) error {
+	owner, err := normalizeClientID(ownerClientID)
+	if err != nil {
+		return err
+	}
+	grantee, err := normalizeClientID(granteeClientID)
+	if err != nil {
+		return err
+	}
+	if s.store == nil {
+		return fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	if err := s.store.DeleteShare(ctx, owner, grantee); err != nil {
+		return err
+	}
+	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
+		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: owner,
+		Action: domain.WatchlistAuditShareRevoked, Detail: fmt.Sprintf("grantee=%s", grantee),
+		CreatedAt: time.Now().UTC(),
+	})
+	return nil
+}
+
+// ListShares returns shares for the owner's list.
+func (s *Service) ListShares(ctx context.Context, ownerClientID string) ([]domain.WatchlistShare, error) {
+	owner, err := normalizeClientID(ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListSharesByOwner(ctx, owner)
+}
+
+// ListSharedWithMe returns lists shared with the actor.
+func (s *Service) ListSharedWithMe(ctx context.Context, actorClientID string) ([]domain.WatchlistShare, error) {
+	actor, err := normalizeClientID(actorClientID)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	return s.store.ListSharesForGrantee(ctx, actor)
+}
+
+// ListAudit returns change history for the owner's list (owner only).
+func (s *Service) ListAudit(ctx context.Context, ownerClientID string, limit, offset int) ([]domain.WatchlistAuditEvent, error) {
+	owner, err := normalizeClientID(ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: watchlist store not configured", domain.ErrUpstream)
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.store.ListAudit(ctx, owner, limit, offset)
+}
+
+// accessRole returns owner/editor/viewer or empty if no access.
+func (s *Service) accessRole(ctx context.Context, actor, owner string) (domain.WatchlistShareRole, error) {
+	if actor == owner {
+		return domain.WatchlistRoleOwner, nil
+	}
+	sh, err := s.store.GetShare(ctx, owner, actor)
+	if err == domain.ErrNotFound {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return sh.Role, nil
 }
 
 func normalizeClientID(id string) (string, error) {
@@ -118,7 +348,6 @@ func normalizeClientID(id string) (string, error) {
 	if len(id) > maxClientIDLen {
 		return "", fmt.Errorf("%w: clientId too long", domain.ErrInvalidArgument)
 	}
-	// Reject the historical shared bucket name explicitly.
 	if strings.EqualFold(id, "default") {
 		return "", fmt.Errorf("%w: clientId must not be the shared name \"default\"", domain.ErrInvalidArgument)
 	}
@@ -169,7 +398,6 @@ func normalizeItem(it domain.WatchlistItem) (domain.WatchlistItem, error) {
 	}
 	note := strings.TrimSpace(it.Note)
 	if utf8.RuneCountInString(note) > maxNoteRunes {
-		// Truncate by runes, not bytes.
 		runes := []rune(note)
 		note = string(runes[:maxNoteRunes])
 	}
@@ -178,9 +406,6 @@ func normalizeItem(it domain.WatchlistItem) (domain.WatchlistItem, error) {
 		added = time.Now().UTC()
 	}
 	return domain.WatchlistItem{
-		Exchange: ex,
-		Symbol:   sym,
-		Note:     note,
-		AddedAt:  added.UTC(),
+		Exchange: ex, Symbol: sym, Note: note, AddedAt: added.UTC(),
 	}, nil
 }

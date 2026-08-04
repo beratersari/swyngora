@@ -27,8 +27,17 @@ type DataPort interface {
 	ScanPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListExchanges(ctx context.Context) (json.RawMessage, error)
 	GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetWatchlistOwned(ctx context.Context, actorClientID, ownerClientID string) (json.RawMessage, error)
 	AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error)
+	AddWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string) (json.RawMessage, error)
 	RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
+	RemoveWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string) (json.RawMessage, error)
+	ShareWatchlist(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error)
+	UpdateWatchlistShare(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error)
+	RevokeWatchlistShare(ctx context.Context, ownerClientID, granteeClientID string) (json.RawMessage, error)
+	ListWatchlistShares(ctx context.Context, ownerClientID string) (json.RawMessage, error)
+	ListSharedWatchlists(ctx context.Context, granteeClientID string) (json.RawMessage, error)
+	ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error)
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -298,14 +307,15 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_watchlist",
-		mcp.WithDescription("Get a user's watchlist by clientId (required non-empty opaque id; not 'default')."),
-		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id e.g. web-abc123 or tg-42")),
+		mcp.WithDescription("Get a watchlist by clientId. Optional ownerClientId reads a list shared with the actor (viewer/editor/owner)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id (not 'default')")),
+		mcp.WithString("ownerClientId", mcp.Description("List owner when viewing a shared list; omit for own list")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetWatchlist(ctx, clientID)
+		raw, err := api.GetWatchlistOwned(ctx, clientID, req.GetString("ownerClientId", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -313,11 +323,12 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("add_watchlist_item",
-		mcp.WithDescription("Add or update a symbol on a watchlist."),
-		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithDescription("Add or update a symbol on a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("note", mcp.Description("Optional note")),
+		mcp.WithString("ownerClientId", mcp.Description("List owner when editing a shared list")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -327,7 +338,8 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.AddWatchlistItem(ctx, clientID, req.GetString("exchange", "binance"), symbol, req.GetString("note", ""))
+		raw, err := api.AddWatchlistItemOwned(ctx, clientID, req.GetString("ownerClientId", ""),
+			req.GetString("exchange", "binance"), symbol, req.GetString("note", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -335,10 +347,11 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("remove_watchlist_item",
-		mcp.WithDescription("Remove a symbol from a watchlist."),
-		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithDescription("Remove a symbol from a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("ownerClientId", mcp.Description("List owner when editing a shared list")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -348,7 +361,127 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.RemoveWatchlistItem(ctx, clientID, req.GetString("exchange", "binance"), symbol)
+		raw, err := api.RemoveWatchlistItemOwned(ctx, clientID, req.GetString("ownerClientId", ""),
+			req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("share_watchlist",
+		mcp.WithDescription("Share your watchlist with another clientId as viewer (read-only) or editor (add/remove symbols). Owner only; cannot share twice with same user."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to share with")),
+		mcp.WithString("role", mcp.Required(), mcp.Description("viewer or editor")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		role, err := req.RequireString("role")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ShareWatchlist(ctx, owner, grantee, role)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("update_watchlist_share",
+		mcp.WithDescription("Change role (viewer|editor) for an existing watchlist share. Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Shared-with client id")),
+		mcp.WithString("role", mcp.Required(), mcp.Description("viewer or editor")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		role, err := req.RequireString("role")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.UpdateWatchlistShare(ctx, owner, grantee, role)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("revoke_watchlist_share",
+		mcp.WithDescription("Remove a user's access to your watchlist. Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to revoke")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.RevokeWatchlistShare(ctx, owner, grantee)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_watchlist_shares",
+		mcp.WithDescription("List who has access to your watchlist and their roles. Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListWatchlistShares(ctx, owner)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_shared_watchlists",
+		mcp.WithDescription("List watchlists shared with this clientId (incoming shares)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Grantee client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		id, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListSharedWatchlists(ctx, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_watchlist_audit",
+		mcp.WithDescription("List who changed a watchlist and when (share grants, item add/remove, replace). Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithNumber("limit", mcp.Description("Max events (default 50, max 200)")),
+		mcp.WithNumber("offset", mcp.Description("Pagination offset")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		owner, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		limit := int(req.GetFloat("limit", 50))
+		offset := int(req.GetFloat("offset", 0))
+		raw, err := api.ListWatchlistAudit(ctx, owner, limit, offset)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

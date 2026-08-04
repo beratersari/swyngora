@@ -27,11 +27,15 @@ type fakeWatch struct {
 	wl *domain.Watchlist
 }
 
-func (f *fakeWatch) Get(_ context.Context, clientID string) (*domain.Watchlist, error) {
-	if f.wl == nil || f.wl.ClientID != clientID {
+func (f *fakeWatch) Get(_ context.Context, actorClientID, ownerClientID string) (*domain.WatchlistAccess, error) {
+	owner := ownerClientID
+	if owner == "" {
+		owner = actorClientID
+	}
+	if f.wl == nil || f.wl.ClientID != owner {
 		return nil, domain.ErrNotFound
 	}
-	return f.wl, nil
+	return &domain.WatchlistAccess{Watchlist: *f.wl, OwnerClientID: owner, Role: domain.WatchlistRoleOwner}, nil
 }
 
 func TestScanner_CreateRunDedupe(t *testing.T) {

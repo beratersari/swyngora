@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -45,41 +46,6 @@ func (fakeSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSuppl
 }
 func (fakeSupply) Refresh(context.Context) (int, error) { return 0, nil }
 
-type memWatch struct {
-	items map[string][]domain.WatchlistItem
-}
-
-func newMemWatch() *memWatch { return &memWatch{items: map[string][]domain.WatchlistItem{}} }
-
-func (m *memWatch) Get(_ context.Context, clientID string) (*domain.Watchlist, error) {
-	return &domain.Watchlist{ClientID: clientID, Items: append([]domain.WatchlistItem(nil), m.items[clientID]...)}, nil
-}
-func (m *memWatch) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
-	m.items[clientID] = append([]domain.WatchlistItem(nil), items...)
-	return m.Get(context.Background(), clientID)
-}
-func (m *memWatch) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
-	wl, _ := m.Get(ctx, clientID)
-	for i, it := range wl.Items {
-		if it.Exchange == item.Exchange && it.Symbol == item.Symbol {
-			wl.Items[i] = item
-			return m.Set(ctx, clientID, wl.Items)
-		}
-	}
-	return m.Set(ctx, clientID, append(wl.Items, item))
-}
-func (m *memWatch) Remove(ctx context.Context, clientID string, exchange domain.Exchange, symbol string) (*domain.Watchlist, error) {
-	wl, _ := m.Get(ctx, clientID)
-	next := make([]domain.WatchlistItem, 0, len(wl.Items))
-	for _, it := range wl.Items {
-		if it.Exchange == exchange && it.Symbol == symbol {
-			continue
-		}
-		next = append(next, it)
-	}
-	return m.Set(ctx, clientID, next)
-}
-
 func fptr(f float64) *float64 { return &f }
 
 func newTestRouter(t *testing.T) *Router {
@@ -90,7 +56,7 @@ func newTestRouter(t *testing.T) *Router {
 		domain.ExchangeCoinbase: fm,
 		domain.ExchangeBybit:    fm,
 	}, fakeSupply{})
-	ws := watchlist.New(newMemWatch())
+	ws := watchlist.New(watchliststore.NewMemory())
 	return NewRouter(ms, ws, Options{DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true})
 }
 

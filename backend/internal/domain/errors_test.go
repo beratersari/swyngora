@@ -10,6 +10,7 @@ func TestSentinelErrors_DistinctAndWrappable(t *testing.T) {
 	sentinels := []error{
 		ErrInvalidArgument,
 		ErrNotFound,
+		ErrForbidden,
 		ErrUpstream,
 		ErrRateLimited,
 	}

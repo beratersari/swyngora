@@ -26,10 +26,13 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
-| `GET` | `/api/v1/watchlist` | Get watchlist (`clientId` / `X-Client-Id`) |
-| `POST` | `/api/v1/watchlist/items` | Add symbol to watchlist |
-| `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove from watchlist |
-| `PUT` | `/api/v1/watchlist` | Replace entire watchlist |
+| `GET` | `/api/v1/watchlist` | Get watchlist (`clientId` / optional `ownerClientId` for shared) |
+| `POST` | `/api/v1/watchlist/items` | Add symbol (owner or editor) |
+| `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove symbol (owner or editor) |
+| `PUT` | `/api/v1/watchlist` | Replace entire watchlist (owner only) |
+| `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/watchlist/shares` | List / grant / update role / revoke shares |
+| `GET` | `/api/v1/watchlist/shared` | Lists shared with the caller |
+| `GET` | `/api/v1/watchlist/audit` | Change history (who/when) |
 | `GET` | `/api/v1/alerts` | List price alerts (`clientId` / `X-Client-Id`) |
 | `POST` | `/api/v1/alerts` | Create one-shot above/below price alert |
 | `GET` | `/api/v1/alerts/{id}` | Get one alert |
@@ -61,7 +64,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Supply / mcap note:** Circulating / total / max supply is loaded from Binance’s public **marketing symbol list** on a **daily schedule** (default **03:00 UTC**, plus once on startup). Failed refreshes **retry with backoff** (1m→1h) before waiting for the next daily slot. User requests (`/supply`, spot mcap columns) **read from cache only**. Snapshots are **atomically replaced** on successful refresh (last-good retained on failure until safety TTL). Default **`SUPPLY_CACHE_TTL=48h`** so entries cannot live forever after a long outage (set `0` to never expire). Max is null when Binance does not define a hard cap (max mcap may show as infinite **only when a USD price exists**). Sorting by market-cap fields **collapses to one preferred quote pair per base** (USDT-first). Empty supply snapshot → market-cap sort returns `502`.
 
-**Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. HTTP/MCP/Telegram API shapes are unchanged. Configure path via `WATCHLIST_DB_PATH`.
+**Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. Configure path via `WATCHLIST_DB_PATH`. **Sharing:** owners grant `viewer` or `editor` access to other `clientId`s; editors may add/remove symbols only; all mutations write an audit log (`docs/features/watchlist-sharing.md`).
 
 **Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
 

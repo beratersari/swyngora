@@ -209,36 +209,133 @@ func (b *Backend) ListExchanges(ctx context.Context) (json.RawMessage, error) {
 }
 
 func (b *Backend) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {
+	return b.GetWatchlistOwned(ctx, clientID, "")
+}
+
+// GetWatchlistOwned reads actor's own list or a shared list (ownerClientID).
+func (b *Backend) GetWatchlistOwned(ctx context.Context, actorClientID, ownerClientID string) (json.RawMessage, error) {
 	if b.Watch == nil {
 		return nil, fmt.Errorf("watchlist not configured")
 	}
-	wl, err := b.Watch.Get(ctx, clientID)
+	acc, err := b.Watch.Get(ctx, actorClientID, ownerClientID)
 	if err != nil {
 		return nil, err
 	}
-	return watchlistJSON(wl)
+	return watchlistAccessJSON(acc)
 }
 
 func (b *Backend) AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error) {
+	return b.AddWatchlistItemOwned(ctx, clientID, "", exchange, symbol, note)
+}
+
+// AddWatchlistItemOwned adds a symbol; ownerClientID empty = actor's list.
+func (b *Backend) AddWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string) (json.RawMessage, error) {
 	if b.Watch == nil {
 		return nil, fmt.Errorf("watchlist not configured")
 	}
-	wl, err := b.Watch.Add(ctx, clientID, exchange, symbol, note)
+	acc, err := b.Watch.Add(ctx, actorClientID, ownerClientID, exchange, symbol, note)
 	if err != nil {
 		return nil, err
 	}
-	return watchlistJSON(wl)
+	return watchlistAccessJSON(acc)
 }
 
 func (b *Backend) RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	return b.RemoveWatchlistItemOwned(ctx, clientID, "", exchange, symbol)
+}
+
+// RemoveWatchlistItemOwned removes a symbol; ownerClientID empty = actor's list.
+func (b *Backend) RemoveWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string) (json.RawMessage, error) {
 	if b.Watch == nil {
 		return nil, fmt.Errorf("watchlist not configured")
 	}
-	wl, err := b.Watch.Remove(ctx, clientID, exchange, symbol)
+	acc, err := b.Watch.Remove(ctx, actorClientID, ownerClientID, exchange, symbol)
 	if err != nil {
 		return nil, err
 	}
-	return watchlistJSON(wl)
+	return watchlistAccessJSON(acc)
+}
+
+func (b *Backend) ShareWatchlist(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	sh, err := b.Watch.Share(ctx, ownerClientID, granteeClientID, role)
+	if err != nil {
+		return nil, err
+	}
+	return shareJSON(sh)
+}
+
+func (b *Backend) UpdateWatchlistShare(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	sh, err := b.Watch.UpdateShareRole(ctx, ownerClientID, granteeClientID, role)
+	if err != nil {
+		return nil, err
+	}
+	return shareJSON(sh)
+}
+
+func (b *Backend) RevokeWatchlistShare(ctx context.Context, ownerClientID, granteeClientID string) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	if err := b.Watch.RevokeShare(ctx, ownerClientID, granteeClientID); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"revoked": true, "granteeClientId": granteeClientID})
+}
+
+func (b *Backend) ListWatchlistShares(ctx context.Context, ownerClientID string) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	list, err := b.Watch.ListShares(ctx, ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	return sharesListJSON(ownerClientID, list)
+}
+
+func (b *Backend) ListSharedWatchlists(ctx context.Context, granteeClientID string) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	list, err := b.Watch.ListSharedWithMe(ctx, granteeClientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, shareMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": granteeClientID, "shares": items, "count": len(items)})
+}
+
+func (b *Backend) ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Watch == nil {
+		return nil, fmt.Errorf("watchlist not configured")
+	}
+	list, err := b.Watch.ListAudit(ctx, ownerClientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, ev := range list {
+		items = append(items, map[string]any{
+			"id":            ev.ID,
+			"ownerClientId": ev.OwnerClientID,
+			"actorClientId": ev.ActorClientID,
+			"action":        string(ev.Action),
+			"exchange":      ev.Exchange,
+			"symbol":        ev.Symbol,
+			"detail":        ev.Detail,
+			"createdAt":     ev.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return mustJSON(map[string]any{"ownerClientId": ownerClientID, "events": items, "count": len(items)})
 }
 
 func (b *Backend) Health(ctx context.Context) (json.RawMessage, error) {
@@ -777,9 +874,9 @@ func intArg(m map[string]any, k string, def int) int {
 	return int(floatArg(m, k, float64(def)))
 }
 
-func watchlistJSON(wl *domain.Watchlist) (json.RawMessage, error) {
-	items := make([]map[string]any, 0, len(wl.Items))
-	for _, it := range wl.Items {
+func watchlistAccessJSON(acc *domain.WatchlistAccess) (json.RawMessage, error) {
+	items := make([]map[string]any, 0, len(acc.Items))
+	for _, it := range acc.Items {
 		items = append(items, map[string]any{
 			"exchange": string(it.Exchange),
 			"symbol":   it.Symbol,
@@ -788,10 +885,34 @@ func watchlistJSON(wl *domain.Watchlist) (json.RawMessage, error) {
 		})
 	}
 	return mustJSON(map[string]any{
-		"clientId":  wl.ClientID,
-		"items":     items,
-		"updatedAt": wl.Updated.UTC().Format(time.RFC3339Nano),
+		"clientId":      acc.ClientID,
+		"ownerClientId": acc.OwnerClientID,
+		"role":          string(acc.Role),
+		"items":         items,
+		"updatedAt":     acc.Updated.UTC().Format(time.RFC3339Nano),
 	})
+}
+
+func shareMap(sh *domain.WatchlistShare) map[string]any {
+	return map[string]any{
+		"ownerClientId":   sh.OwnerClientID,
+		"granteeClientId": sh.GranteeClientID,
+		"role":            string(sh.Role),
+		"createdAt":       sh.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt":       sh.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func shareJSON(sh *domain.WatchlistShare) (json.RawMessage, error) {
+	return mustJSON(shareMap(sh))
+}
+
+func sharesListJSON(ownerClientID string, list []domain.WatchlistShare) (json.RawMessage, error) {
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, shareMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"ownerClientId": ownerClientID, "shares": items, "count": len(items)})
 }
 
 func mustJSON(v any) (json.RawMessage, error) {

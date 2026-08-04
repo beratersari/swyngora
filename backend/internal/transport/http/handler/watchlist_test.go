@@ -198,3 +198,166 @@ func TestWatchlistHTTP_BodyTooLarge(t *testing.T) {
 		t.Fatalf("oversized body status=%d", rr.Code)
 	}
 }
+
+func TestWatchlistHTTP_ShareViewerEditor(t *testing.T) {
+	h := newWatchHandler()
+	// Owner adds a symbol
+	body, _ := json.Marshal(map[string]string{
+		"clientId": "owner-a", "exchange": "binance", "symbol": "BTCUSDT",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	var got watchlistDTO
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got.Role != "owner" || got.OwnerClientID != "owner-a" {
+		t.Fatalf("%+v", got)
+	}
+
+	// Share as viewer
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "owner-a", "granteeClientId": "viewer-b", "role": "viewer",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Share(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("share status=%d %s", rr.Code, rr.Body.String())
+	}
+
+	// Duplicate share rejected
+	rr = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	h.Share(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("dup share status=%d", rr.Code)
+	}
+
+	// Viewer can GET shared list
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=viewer-b&ownerClientId=owner-a", nil)
+	rr = httptest.NewRecorder()
+	h.Get(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("viewer get status=%d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got.Role != "viewer" || len(got.Items) != 1 {
+		t.Fatalf("%+v", got)
+	}
+
+	// Viewer cannot add
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "viewer-b", "ownerClientId": "owner-a", "exchange": "binance", "symbol": "ETHUSDT",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer add status=%d", rr.Code)
+	}
+
+	// Share as editor and add
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "owner-a", "granteeClientId": "editor-c", "role": "editor",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Share(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatal(rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "editor-c", "ownerClientId": "owner-a", "exchange": "binance", "symbol": "ETHUSDT",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("editor add status=%d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if len(got.Items) != 2 || got.Role != "editor" {
+		t.Fatalf("%+v", got)
+	}
+
+	// Editor cannot replace
+	body, _ = json.Marshal(map[string]any{"clientId": "editor-c", "ownerClientId": "owner-a", "items": []any{}})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/watchlist", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Replace(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("editor replace status=%d", rr.Code)
+	}
+
+	// Revoke viewer
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/watchlist/shares?clientId=owner-a&granteeClientId=viewer-b", nil)
+	rr = httptest.NewRecorder()
+	h.RevokeShare(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=viewer-b&ownerClientId=owner-a", nil)
+	rr = httptest.NewRecorder()
+	h.Get(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("after revoke status=%d", rr.Code)
+	}
+
+	// Shared with me
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist/shared?clientId=editor-c", nil)
+	rr = httptest.NewRecorder()
+	h.ListSharedWithMe(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	var shared map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &shared)
+	if int(shared["count"].(float64)) != 1 {
+		t.Fatalf("%+v", shared)
+	}
+
+	// Audit
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist/audit?clientId=owner-a", nil)
+	rr = httptest.NewRecorder()
+	h.ListAudit(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	var audit map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &audit)
+	if int(audit["count"].(float64)) < 4 {
+		t.Fatalf("audit %+v", audit)
+	}
+
+	// Upgrade editor to viewer via PATCH
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "owner-a", "granteeClientId": "editor-c", "role": "viewer",
+	})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/watchlist/shares", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.UpdateShare(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatal(rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]string{
+		"clientId": "editor-c", "ownerClientId": "owner-a", "exchange": "binance", "symbol": "SOLUSDT",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/watchlist/items", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Add(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("demoted editor add status=%d", rr.Code)
+	}
+}

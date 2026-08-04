@@ -68,6 +68,13 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("PUT /api/v1/watchlist", wh.Replace)
 		mux.HandleFunc("POST /api/v1/watchlist/items", wh.Add)
 		mux.HandleFunc("DELETE /api/v1/watchlist/items", wh.Remove)
+		// Sharing + audit (static paths before any future {id} routes)
+		mux.HandleFunc("GET /api/v1/watchlist/shares", wh.ListShares)
+		mux.HandleFunc("POST /api/v1/watchlist/shares", wh.Share)
+		mux.HandleFunc("PATCH /api/v1/watchlist/shares", wh.UpdateShare)
+		mux.HandleFunc("DELETE /api/v1/watchlist/shares", wh.RevokeShare)
+		mux.HandleFunc("GET /api/v1/watchlist/shared", wh.ListSharedWithMe)
+		mux.HandleFunc("GET /api/v1/watchlist/audit", wh.ListAudit)
 	}
 
 	if opts.Alerts != nil {

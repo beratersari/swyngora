@@ -72,6 +72,8 @@ func mapError(err error) (status int, code, message string) {
 		return http.StatusBadRequest, "invalid_argument", publicInvalidArgument(err)
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusNotFound, "not_found", "resource not found"
+	case errors.Is(err, domain.ErrForbidden):
+		return http.StatusForbidden, "forbidden", publicForbidden(err)
 	case errors.Is(err, domain.ErrRateLimited):
 		return http.StatusTooManyRequests, "rate_limited", "rate limited; try again later"
 	case errors.Is(err, domain.ErrUpstream):
@@ -95,4 +97,16 @@ func publicInvalidArgument(err error) string {
 	}
 	// If wrapping preserved a useful suffix via %w, still avoid leaking nested upstream text.
 	return "invalid argument"
+}
+
+func publicForbidden(err error) string {
+	msg := err.Error()
+	const prefix = "forbidden: "
+	if len(msg) > len(prefix) && msg[:len(prefix)] == prefix {
+		return msg[len(prefix):]
+	}
+	if msg == "forbidden" {
+		return "forbidden"
+	}
+	return "forbidden"
 }

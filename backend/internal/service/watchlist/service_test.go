@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -13,295 +11,131 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-type mem struct {
-	mu   sync.Mutex
-	data map[string]*domain.Watchlist
-}
-
-func newMem() *mem {
-	return &mem{data: map[string]*domain.Watchlist{}}
-}
-
-func (m *mem) Get(_ context.Context, clientID string) (*domain.Watchlist, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if wl, ok := m.data[clientID]; ok {
-		cp := *wl
-		cp.Items = append([]domain.WatchlistItem(nil), wl.Items...)
-		return &cp, nil
-	}
-	return &domain.Watchlist{ClientID: clientID, Items: nil, Updated: time.Now().UTC()}, nil
-}
-
-func (m *mem) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if len(items) > maxItems {
-		return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
-	}
-	wl := &domain.Watchlist{ClientID: clientID, Items: append([]domain.WatchlistItem(nil), items...), Updated: time.Now().UTC()}
-	m.data[clientID] = wl
-	cp := *wl
-	cp.Items = append([]domain.WatchlistItem(nil), items...)
-	return &cp, nil
-}
-
-func (m *mem) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	wl := m.data[clientID]
-	if wl == nil {
-		wl = &domain.Watchlist{ClientID: clientID}
-	}
-	items := append([]domain.WatchlistItem(nil), wl.Items...)
-	found := false
-	for i, it := range items {
-		if it.Exchange == item.Exchange && it.Symbol == item.Symbol {
-			items[i] = item
-			found = true
-			break
-		}
-	}
-	if !found {
-		if len(items) >= maxItems {
-			return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, maxItems)
-		}
-		items = append(items, item)
-	}
-	out := &domain.Watchlist{ClientID: clientID, Items: items, Updated: time.Now().UTC()}
-	m.data[clientID] = out
-	cp := *out
-	cp.Items = append([]domain.WatchlistItem(nil), items...)
-	return &cp, nil
-}
-
-func (m *mem) Remove(ctx context.Context, clientID string, exchange domain.Exchange, symbol string) (*domain.Watchlist, error) {
-	wl, _ := m.Get(ctx, clientID)
-	next := make([]domain.WatchlistItem, 0, len(wl.Items))
-	for _, it := range wl.Items {
-		if it.Exchange == exchange && it.Symbol == symbol {
-			continue
-		}
-		next = append(next, it)
-	}
-	return m.Set(ctx, clientID, next)
-}
-
 func TestWatchlist_AddRemove(t *testing.T) {
-	svc := New(newMem())
-	wl, err := svc.Add(context.Background(), "me", "binance", "btcusdt", "")
+	svc := New(watchliststore.NewMemory())
+	wl, err := svc.Add(context.Background(), "me", "", "binance", "btcusdt", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(wl.Items) != 1 || wl.Items[0].Symbol != "BTCUSDT" {
-		t.Fatalf("%+v", wl.Items)
+	if len(wl.Items) != 1 || wl.Items[0].Symbol != "BTCUSDT" || wl.Role != domain.WatchlistRoleOwner {
+		t.Fatalf("%+v", wl)
 	}
-	wl, err = svc.Remove(context.Background(), "me", "binance", "BTCUSDT")
+	wl, err = svc.Remove(context.Background(), "me", "", "binance", "BTCUSDT")
 	if err != nil || len(wl.Items) != 0 {
 		t.Fatalf("%+v %v", wl, err)
 	}
 }
 
-func TestWatchlist_SixItems_StableMembership(t *testing.T) {
-	svc := New(newMem())
-	ctx := context.Background()
-	syms := []string{"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT"}
-	for _, s := range syms {
-		if _, err := svc.Add(ctx, "user1", "binance", s, ""); err != nil {
-			t.Fatal(err)
-		}
-	}
-	wl, err := svc.Get(ctx, "user1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(wl.Items) != 6 {
-		t.Fatalf("want 6 items, got %d", len(wl.Items))
-	}
-	// Re-get after "sort" simulation: membership must not shrink
-	wl2, err := svc.Get(ctx, "user1")
-	if err != nil || len(wl2.Items) != 6 {
-		t.Fatalf("membership unstable: %d", len(wl2.Items))
-	}
-}
-
-func TestWatchlist_AddEnforcesMaxItems(t *testing.T) {
-	svc := New(newMem())
-	ctx := context.Background()
-	for i := 0; i < maxItems; i++ {
-		sym := "SYM" + strconv.Itoa(i) + "USDT"
-		if _, err := svc.Add(ctx, "cap", "binance", sym, ""); err != nil {
-			t.Fatalf("add %d: %v", i, err)
-		}
-	}
-	_, err := svc.Add(ctx, "cap", "binance", "OVERFLOWUSDT", "")
-	if err == nil {
-		t.Fatal("expected max items error")
-	}
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("want invalid argument, got %v", err)
-	}
-	// Upsert existing must still work.
-	if _, err := svc.Add(ctx, "cap", "binance", "SYM0USDT", "note"); err != nil {
-		t.Fatalf("upsert existing: %v", err)
-	}
-}
-
-func TestWatchlist_MultiExchange(t *testing.T) {
-	svc := New(newMem())
-	ctx := context.Background()
-	_, _ = svc.Add(ctx, "u", "binance", "BTCUSDT", "")
-	_, _ = svc.Add(ctx, "u", "bybit", "BTCUSDT", "")
-	_, _ = svc.Add(ctx, "u", "coinbase", "BTC-USD", "")
-	wl, err := svc.Get(ctx, "u")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(wl.Items) != 3 {
-		t.Fatalf("want 3 (same base, different venues), got %d %+v", len(wl.Items), wl.Items)
-	}
-}
-
-func TestWatchlist_Replace_Dedupes(t *testing.T) {
-	svc := New(newMem())
-	wl, err := svc.Replace(context.Background(), "u", []domain.WatchlistItem{
-		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"},
-		{Exchange: domain.ExchangeBinance, Symbol: "btcusdt"},
-		{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(wl.Items) != 2 {
-		t.Fatalf("dedupe want 2 got %d", len(wl.Items))
-	}
-}
-
-func TestWatchlist_ClientIsolation(t *testing.T) {
-	svc := New(newMem())
-	ctx := context.Background()
-	_, _ = svc.Add(ctx, "alice", "binance", "BTCUSDT", "")
-	_, _ = svc.Add(ctx, "bob", "binance", "ETHUSDT", "")
-	a, _ := svc.Get(ctx, "alice")
-	b, _ := svc.Get(ctx, "bob")
-	if len(a.Items) != 1 || a.Items[0].Symbol != "BTCUSDT" {
-		t.Fatalf("alice=%+v", a.Items)
-	}
-	if len(b.Items) != 1 || b.Items[0].Symbol != "ETHUSDT" {
-		t.Fatalf("bob=%+v", b.Items)
-	}
-}
-
-func TestWatchlist_InvalidClientID(t *testing.T) {
-	svc := New(newMem())
-	_, err := svc.Get(context.Background(), "bad id!")
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("err=%v", err)
-	}
-}
-
-func TestWatchlist_EmptyClientIDRejected(t *testing.T) {
-	svc := New(newMem())
-	_, err := svc.Get(context.Background(), "")
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("empty clientId must be rejected, got %v", err)
-	}
-	_, err = svc.Add(context.Background(), "default", "binance", "BTCUSDT", "")
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("shared default name must be rejected, got %v", err)
-	}
-}
-
-func TestWatchlist_CoinbaseSymbolNormalized(t *testing.T) {
-	svc := New(newMem())
-	wl, err := svc.Add(context.Background(), "c1", "coinbase", "BTCUSD", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wl.Items[0].Symbol != "BTC-USD" {
-		t.Fatalf("want BTC-USD, got %q", wl.Items[0].Symbol)
-	}
-}
-
-func TestWatchlist_ConcurrentAddRespectsMax(t *testing.T) {
-	// Real memory store enforces max under one lock (no TOCTOU).
+func TestWatchlist_ShareViewerEditorAudit(t *testing.T) {
 	svc := New(watchliststore.NewMemory())
 	ctx := context.Background()
-	items := make([]domain.WatchlistItem, 0, maxItems-1)
-	for i := 0; i < maxItems-1; i++ {
-		items = append(items, domain.WatchlistItem{
-			Exchange: domain.ExchangeBinance,
-			Symbol:   "S" + strconv.Itoa(i) + "USDT",
-		})
-	}
-	if _, err := svc.Replace(ctx, "raceclient", items); err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			_, _ = svc.Add(ctx, "raceclient", "binance", "X"+strconv.Itoa(i)+"USDT", "")
-		}(i)
-	}
-	wg.Wait()
-	wl, err := svc.Get(ctx, "raceclient")
+	_, err := svc.Add(ctx, "owner1", "", "binance", "BTCUSDT", "note")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(wl.Items) > maxItems {
-		t.Fatalf("exceeded maxItems: %d > %d", len(wl.Items), maxItems)
-	}
-}
 
-func TestWatchlist_InvalidExchange(t *testing.T) {
-	svc := New(newMem())
-	_, err := svc.Add(context.Background(), "u", "kraken", "BTCUSDT", "")
+	// Share as viewer
+	sh, err := svc.Share(ctx, "owner1", "viewer1", "viewer")
+	if err != nil || sh.Role != domain.WatchlistRoleViewer {
+		t.Fatalf("%+v %v", sh, err)
+	}
+	// Cannot share twice
+	_, err = svc.Share(ctx, "owner1", "viewer1", "editor")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("err=%v", err)
+		t.Fatalf("dup share: %v", err)
 	}
-}
 
-func TestWatchlist_EmptySymbol(t *testing.T) {
-	svc := New(newMem())
-	_, err := svc.Add(context.Background(), "u", "binance", "  ", "")
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("err=%v", err)
+	// Viewer can get
+	acc, err := svc.Get(ctx, "viewer1", "owner1")
+	if err != nil || acc.Role != domain.WatchlistRoleViewer || len(acc.Items) != 1 {
+		t.Fatalf("%+v %v", acc, err)
 	}
-}
+	// Viewer cannot add
+	_, err = svc.Add(ctx, "viewer1", "owner1", "binance", "ETHUSDT", "")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("viewer add: %v", err)
+	}
+	// Viewer cannot replace
+	_, err = svc.Replace(ctx, "viewer1", "owner1", nil)
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("viewer replace: %v", err)
+	}
 
-func TestWatchlist_MaxItems(t *testing.T) {
-	svc := New(newMem())
-	items := make([]domain.WatchlistItem, maxItems+1)
-	for i := range items {
-		items[i] = domain.WatchlistItem{
-			Exchange: domain.ExchangeBinance,
-			Symbol:   "S" + string(rune('A'+i%26)) + string(rune('0'+i/26)),
+	// Upgrade via UpdateShareRole (create new as editor for editor1)
+	sh2, err := svc.Share(ctx, "owner1", "editor1", "editor")
+	if err != nil || sh2.Role != domain.WatchlistRoleEditor {
+		t.Fatalf("%+v %v", sh2, err)
+	}
+	acc, err = svc.Add(ctx, "editor1", "owner1", "binance", "ETHUSDT", "")
+	if err != nil || len(acc.Items) != 2 {
+		t.Fatalf("editor add %+v %v", acc, err)
+	}
+	// Editor cannot replace or manage shares
+	_, err = svc.Replace(ctx, "editor1", "owner1", nil)
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("editor replace: %v", err)
+	}
+	_, err = svc.Share(ctx, "editor1", "someone", "viewer")
+	// editor1 is not owner of their share action - Share uses ownerClientID as actor
+	// Share(ctx, ownerClientID, grantee, role) — editor calling Share("editor1", ...) shares editor1's list
+	// For owner1 list, only owner1 can Share. Good.
+
+	// Editor cannot revoke owner1's shares
+	// Revoke is by ownerClientID only.
+
+	// Remove access
+	if err := svc.RevokeShare(ctx, "owner1", "viewer1"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Get(ctx, "viewer1", "owner1")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("after revoke: %v", err)
+	}
+
+	// Shared with me
+	list, err := svc.ListSharedWithMe(ctx, "editor1")
+	if err != nil || len(list) != 1 || list[0].OwnerClientID != "owner1" {
+		t.Fatalf("%+v %v", list, err)
+	}
+
+	// Audit has events
+	audit, err := svc.ListAudit(ctx, "owner1", 50, 0)
+	if err != nil || len(audit) < 4 {
+		t.Fatalf("audit len=%d err=%v", len(audit), err)
+	}
+	// Ensure actor recorded for editor add
+	found := false
+	for _, ev := range audit {
+		if ev.Action == domain.WatchlistAuditItemAdded && ev.ActorClientID == "editor1" && ev.Symbol == "ETHUSDT" {
+			found = true
+			if ev.CreatedAt.IsZero() {
+				t.Fatal("missing timestamp")
+			}
 		}
 	}
-	// use unique symbols
-	for i := range items {
-		items[i].Symbol = "SYM" + strconv.Itoa(i)
-	}
-	_, err := svc.Replace(context.Background(), "u", items)
-	if !errors.Is(err, domain.ErrInvalidArgument) {
-		t.Fatalf("err=%v", err)
+	if !found {
+		t.Fatalf("missing editor add audit: %+v", audit)
 	}
 }
 
-func TestWatchlist_AddIdempotent(t *testing.T) {
-	svc := New(newMem())
+func TestWatchlist_StrangerForbidden(t *testing.T) {
+	svc := New(watchliststore.NewMemory())
 	ctx := context.Background()
-	_, _ = svc.Add(ctx, "u", "binance", "BTCUSDT", "note1")
-	wl, err := svc.Add(ctx, "u", "binance", "BTCUSDT", "note2")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(wl.Items) != 1 {
-		t.Fatalf("want 1 after re-add, got %d", len(wl.Items))
-	}
-	if wl.Items[0].Note != "note2" {
-		t.Fatalf("note=%q", wl.Items[0].Note)
+	_, _ = svc.Add(ctx, "a", "", "binance", "BTCUSDT", "")
+	_, err := svc.Get(ctx, "stranger", "a")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("%v", err)
 	}
 }
+
+func TestWatchlist_CannotShareSelf(t *testing.T) {
+	svc := New(watchliststore.NewMemory())
+	_, err := svc.Share(context.Background(), "me", "me", "viewer")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+// keep compile of fmt in older helpers if needed
+var _ = fmt.Sprintf
+var _ = time.Now

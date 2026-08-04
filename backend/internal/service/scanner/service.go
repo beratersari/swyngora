@@ -19,9 +19,10 @@ type CandleFetcher interface {
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int, start, end *time.Time) ([]domain.Candle, error)
 }
 
-// WatchlistReader loads a client's watchlist symbols.
+// WatchlistReader loads a client's watchlist symbols (own list).
+// Matches watchlist.Service.Get(actor, owner); pass empty owner for own list.
 type WatchlistReader interface {
-	Get(ctx context.Context, clientID string) (*domain.Watchlist, error)
+	Get(ctx context.Context, actorClientID, ownerClientID string) (*domain.WatchlistAccess, error)
 }
 
 // Service orchestrates scanner rules and evaluation.
@@ -255,17 +256,17 @@ func (s *Service) RunOnce(ctx context.Context) (int, error) {
 	inserted := 0
 	now := time.Now().UTC()
 	for clientID, clientRules := range byClient {
-		wl, err := s.watch.Get(ctx, clientID)
+		acc, err := s.watch.Get(ctx, clientID, "")
 		if err != nil {
 			// Skip clients without watchlist
 			continue
 		}
-		if wl == nil || len(wl.Items) == 0 {
+		if acc == nil || len(acc.Items) == 0 {
 			continue
 		}
 		for _, rule := range clientRules {
 			need := candleNeed(rule)
-			for _, item := range wl.Items {
+			for _, item := range acc.Items {
 				key := ck{ex: string(item.Exchange), sym: item.Symbol, iv: rule.Interval}
 				candles, ok := candleCache[key]
 				if !ok {

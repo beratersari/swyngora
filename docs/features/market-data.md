@@ -126,5 +126,6 @@ curl -s 'http://localhost:8080/api/v1/market/spot?quote=USDT&limit=20' | jq '.it
 - `clientId` is **required** (non-empty); the shared name `default` is rejected
 - Simple frontend generates an unguessable browser id in `localStorage`
 - `GET` list, `POST /items` add, `DELETE /items` remove, `PUT` replace
-- In-memory store (process lifetime, max 200 items/client, max 10k clients); UI also persists to `localStorage`
+- **Sharing:** owner may grant `viewer` or `editor` access (`/api/v1/watchlist/shares`); viewers read-only; editors add/remove symbols only; audit at `/api/v1/watchlist/audit` — see `docs/features/watchlist-sharing.md`
+- SQLite store (default `data/watchlist.db`, max 200 items/client); UI may also persist to `localStorage`
 - Not suitable for multi-tenant production without real authentication

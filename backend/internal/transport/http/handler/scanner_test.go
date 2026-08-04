@@ -23,8 +23,16 @@ func (scanCandles) GetCandles(_ context.Context, _, _, _ string, _ int, _, _ *ti
 
 type scanWatch struct{}
 
-func (scanWatch) Get(_ context.Context, id string) (*domain.Watchlist, error) {
-	return &domain.Watchlist{ClientID: id, Items: nil}, nil
+func (scanWatch) Get(_ context.Context, actorID, ownerID string) (*domain.WatchlistAccess, error) {
+	id := ownerID
+	if id == "" {
+		id = actorID
+	}
+	return &domain.WatchlistAccess{
+		Watchlist: domain.Watchlist{ClientID: id, Items: nil},
+		OwnerClientID: id,
+		Role: domain.WatchlistRoleOwner,
+	}, nil
 }
 
 func TestScannerHTTP_CreateListDelete(t *testing.T) {

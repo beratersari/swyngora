@@ -371,7 +371,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 	}
 	clientID := fmt.Sprintf("tg-%d", userID)
 	if len(args) == 0 {
-		wl, err := r.watch.Get(ctx, clientID)
+		wl, err := r.watch.Get(ctx, clientID, "")
 		if err != nil {
 			return friendlyErr(err)
 		}
@@ -389,7 +389,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 		if len(rest) >= 2 {
 			exchange = strings.ToLower(rest[1])
 		}
-		wl, err := r.watch.Add(ctx, clientID, exchange, symbol, "")
+		wl, err := r.watch.Add(ctx, clientID, "", exchange, symbol, "")
 		if err != nil {
 			return friendlyErr(err)
 		}
@@ -403,7 +403,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 		if len(rest) >= 2 {
 			exchange = strings.ToLower(rest[1])
 		}
-		wl, err := r.watch.Remove(ctx, clientID, exchange, symbol)
+		wl, err := r.watch.Remove(ctx, clientID, "", exchange, symbol)
 		if err != nil {
 			return friendlyErr(err)
 		}
@@ -416,7 +416,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 }
 
 func (r *Router) cmdWatchTop(ctx context.Context, clientID string) string {
-	wl, err := r.watch.Get(ctx, clientID)
+	wl, err := r.watch.Get(ctx, clientID, "")
 	if err != nil {
 		return friendlyErr(err)
 	}

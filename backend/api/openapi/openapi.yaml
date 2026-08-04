@@ -675,12 +675,19 @@ paths:
   /api/v1/watchlist:
     get:
       summary: Get watchlist for a client id
+      description: |
+        Returns the actor's own list, or a list shared with them when `ownerClientId` is set.
+        Response includes `role` (owner|viewer|editor) and `ownerClientId`.
       operationId: getWatchlist
       tags: [Watchlist]
       parameters:
         - name: clientId
           in: query
-          description: Required non-empty client tenancy key (not the shared name "default")
+          description: Actor client tenancy key (not the shared name "default")
+          schema: { type: string, minLength: 1 }
+        - name: ownerClientId
+          in: query
+          description: List owner when viewing a shared watchlist; omit for own list
           schema: { type: string, minLength: 1 }
         - name: X-Client-Id
           in: header
@@ -688,17 +695,20 @@ paths:
           schema: { type: string, minLength: 1 }
       responses:
         '200':
-          description: Watchlist
+          description: Watchlist with access role
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Watchlist'
         '400':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
         '429':
           $ref: '#/components/responses/Error'
     put:
-      summary: Replace entire watchlist
+      summary: Replace entire watchlist (owner only)
+      description: Full replace of items. Editors and viewers receive 403.
       operationId: putWatchlist
       tags: [Watchlist]
       requestBody:
@@ -709,6 +719,7 @@ paths:
               type: object
               properties:
                 clientId: { type: string }
+                ownerClientId: { type: string, description: Must be the actor (owner only) }
                 items:
                   type: array
                   items:
@@ -726,6 +737,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/Watchlist'
         '400':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
 
   /api/v1/alerts/webhook:
@@ -933,6 +946,7 @@ paths:
   /api/v1/watchlist/items:
     post:
       summary: Add or update a watchlist item
+      description: Owner or editor of the list may add/update symbols. Viewers receive 403.
       operationId: addWatchlistItem
       tags: [Watchlist]
       requestBody:
@@ -943,7 +957,8 @@ paths:
               type: object
               required: [symbol]
               properties:
-                clientId: { type: string }
+                clientId: { type: string, description: Actor client id }
+                ownerClientId: { type: string, description: List owner when mutating a shared list }
                 exchange: { type: string, default: binance }
                 symbol: { type: string }
                 note: { type: string }
@@ -956,8 +971,11 @@ paths:
                 $ref: '#/components/schemas/Watchlist'
         '400':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Remove a watchlist item
+      description: Owner or editor of the list may remove symbols. Viewers receive 403.
       operationId: removeWatchlistItem
       tags: [Watchlist]
       parameters:
@@ -972,6 +990,13 @@ paths:
         - name: clientId
           in: query
           schema: { type: string }
+        - name: ownerClientId
+          in: query
+          description: List owner when mutating a shared list
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
       responses:
         '200':
           description: Updated watchlist
@@ -981,8 +1006,187 @@ paths:
                 $ref: '#/components/schemas/Watchlist'
         '400':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
 
+  /api/v1/watchlist/shares:
+    get:
+      summary: List shares granted on the owner's watchlist
+      operationId: listWatchlistShares
+      tags: [Watchlist]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string, minLength: 1 }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Share list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ownerClientId: { type: string }
+                  count: { type: integer }
+                  shares:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchlistShare'
+        '400':
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Share watchlist with another client (owner only)
+      description: |
+        Grants viewer (read-only) or editor (add/remove symbols only) access.
+        Cannot share with self. Same grantee cannot be shared twice (use PATCH to change role).
+        Editors cannot delete the list or change sharing settings.
+      operationId: shareWatchlist
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [granteeClientId, role]
+              properties:
+                clientId: { type: string, description: Owner client id }
+                granteeClientId: { type: string }
+                role: { type: string, enum: [viewer, editor] }
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistShare'
+        '400':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update share role (owner only)
+      operationId: updateWatchlistShare
+      tags: [Watchlist]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [granteeClientId, role]
+              properties:
+                clientId: { type: string }
+                granteeClientId: { type: string }
+                role: { type: string, enum: [viewer, editor] }
+      responses:
+        '200':
+          description: Updated share
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistShare'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Revoke share access (owner only)
+      operationId: revokeWatchlistShare
+      tags: [Watchlist]
+      parameters:
+        - name: granteeClientId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: { type: boolean }
+                  granteeClientId: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
 
+  /api/v1/watchlist/shared:
+    get:
+      summary: List watchlists shared with the caller
+      operationId: listSharedWatchlists
+      tags: [Watchlist]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string, minLength: 1 }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string, minLength: 1 }
+      responses:
+        '200':
+          description: Incoming shares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  count: { type: integer }
+                  shares:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchlistShare'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/watchlist/audit:
+    get:
+      summary: List watchlist change history (owner only)
+      description: |
+        Returns audit events (share grant/update/revoke, item add/remove, list replace)
+        with actorClientId and createdAt.
+      operationId: listWatchlistAudit
+      tags: [Watchlist]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string, minLength: 1 }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0, minimum: 0 }
+      responses:
+        '200':
+          description: Audit events (newest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ownerClientId: { type: string }
+                  count: { type: integer }
+                  events:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchlistAuditEvent'
+        '400':
+          $ref: '#/components/responses/Error'
 
   /api/v1/portfolio:
     post:
@@ -1691,7 +1895,12 @@ components:
     Watchlist:
       type: object
       properties:
-        clientId: { type: string }
+        clientId: { type: string, description: List owner id (same as ownerClientId) }
+        ownerClientId: { type: string, description: List owner }
+        role:
+          type: string
+          enum: [owner, viewer, editor]
+          description: Caller's access role on this list
         updatedAt: { type: string, format: date-time }
         items:
           type: array
@@ -1702,6 +1911,27 @@ components:
               symbol: { type: string }
               note: { type: string }
               addedAt: { type: string, format: date-time }
+    WatchlistShare:
+      type: object
+      properties:
+        ownerClientId: { type: string }
+        granteeClientId: { type: string }
+        role: { type: string, enum: [viewer, editor] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    WatchlistAuditEvent:
+      type: object
+      properties:
+        id: { type: string }
+        ownerClientId: { type: string }
+        actorClientId: { type: string }
+        action:
+          type: string
+          enum: [share_granted, share_updated, share_revoked, item_added, item_removed, list_replaced]
+        exchange: { type: string }
+        symbol: { type: string }
+        detail: { type: string }
+        createdAt: { type: string, format: date-time }
     SpotMarket:
       type: object
       properties:

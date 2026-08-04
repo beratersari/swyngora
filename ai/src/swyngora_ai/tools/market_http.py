@@ -47,6 +47,16 @@ class _HTTP:
             except Exception:
                 return r.text
 
+    def patch(self, path: str, body: dict[str, Any]) -> str:
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.patch(f"{self.base}{path}", json=body)
+            if r.status_code >= 400:
+                return f"ERROR {r.status_code}: {r.text[:500]}"
+            try:
+                return json.dumps(r.json(), indent=2)
+            except Exception:
+                return r.text
+
     def delete(self, path: str, params: dict[str, Any]) -> str:
         with httpx.Client(timeout=self.timeout) as client:
             r = client.delete(f"{self.base}{path}", params=params)
@@ -96,7 +106,11 @@ class IndicatorsInput(BaseModel):
 
 
 class WatchGetInput(BaseModel):
-    client_id: str = Field(description="Opaque client id (required)")
+    client_id: str = Field(description="Actor opaque client id (required)")
+    owner_client_id: str = Field(
+        default="",
+        description="List owner when viewing a shared watchlist; empty for own list",
+    )
 
 
 class WatchAddInput(BaseModel):
@@ -104,12 +118,41 @@ class WatchAddInput(BaseModel):
     symbol: str
     exchange: str = "binance"
     note: str = ""
+    owner_client_id: str = Field(
+        default="",
+        description="List owner when editing a shared list (owner or editor)",
+    )
 
 
 class WatchRemoveInput(BaseModel):
     client_id: str
     symbol: str
     exchange: str = "binance"
+    owner_client_id: str = Field(
+        default="",
+        description="List owner when editing a shared list (owner or editor)",
+    )
+
+
+class WatchShareInput(BaseModel):
+    client_id: str = Field(description="Owner client id")
+    grantee_client_id: str = Field(description="Client to share with")
+    role: str = Field(description="viewer or editor")
+
+
+class WatchRevokeInput(BaseModel):
+    client_id: str = Field(description="Owner client id")
+    grantee_client_id: str = Field(description="Client to revoke")
+
+
+class WatchClientInput(BaseModel):
+    client_id: str = Field(description="Opaque client id")
+
+
+class WatchAuditInput(BaseModel):
+    client_id: str = Field(description="Owner client id")
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
 
 
 class AlertListInput(BaseModel):
@@ -328,37 +371,80 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             },
         )
 
-    def get_watchlist(client_id: str) -> str:
-        return http.get("/api/v1/watchlist", {"clientId": client_id})
+    def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
+        params: dict = {"clientId": client_id}
+        if owner_client_id:
+            params["ownerClientId"] = owner_client_id
+        return http.get("/api/v1/watchlist", params)
 
     def add_watchlist_item(
         client_id: str,
         symbol: str,
         exchange: str = "binance",
         note: str = "",
+        owner_client_id: str = "",
     ) -> str:
-        return http.post(
-            "/api/v1/watchlist/items",
-            {
-                "clientId": client_id,
-                "symbol": symbol,
-                "exchange": exchange,
-                "note": note,
-            },
-        )
+        body: dict = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "exchange": exchange,
+            "note": note,
+        }
+        if owner_client_id:
+            body["ownerClientId"] = owner_client_id
+        return http.post("/api/v1/watchlist/items", body)
 
     def remove_watchlist_item(
         client_id: str,
         symbol: str,
         exchange: str = "binance",
+        owner_client_id: str = "",
     ) -> str:
-        return http.delete(
-            "/api/v1/watchlist/items",
+        params: dict = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "exchange": exchange,
+        }
+        if owner_client_id:
+            params["ownerClientId"] = owner_client_id
+        return http.delete("/api/v1/watchlist/items", params)
+
+    def share_watchlist(client_id: str, grantee_client_id: str, role: str) -> str:
+        return http.post(
+            "/api/v1/watchlist/shares",
             {
                 "clientId": client_id,
-                "symbol": symbol,
-                "exchange": exchange,
+                "granteeClientId": grantee_client_id,
+                "role": role,
             },
+        )
+
+    def update_watchlist_share(client_id: str, grantee_client_id: str, role: str) -> str:
+        return http.patch(
+            "/api/v1/watchlist/shares",
+            {
+                "clientId": client_id,
+                "granteeClientId": grantee_client_id,
+                "role": role,
+            },
+        )
+
+    def revoke_watchlist_share(client_id: str, grantee_client_id: str) -> str:
+        return http.delete(
+            "/api/v1/watchlist/shares",
+            {"clientId": client_id, "granteeClientId": grantee_client_id},
+        )
+
+    def list_watchlist_shares(client_id: str) -> str:
+        return http.get("/api/v1/watchlist/shares", {"clientId": client_id})
+
+    def list_shared_watchlists(client_id: str) -> str:
+        return http.get("/api/v1/watchlist/shared", {"clientId": client_id})
+
+    def list_watchlist_audit(client_id: str, limit: int = 50, offset: int = 0) -> str:
+        return http.get(
+            "/api/v1/watchlist/audit",
+            {"clientId": client_id, "limit": limit, "offset": offset},
         )
 
     def list_price_alerts(client_id: str) -> str:
@@ -627,20 +713,62 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         StructuredTool.from_function(
             get_watchlist,
             name="get_watchlist",
-            description="Get watchlist for a clientId.",
+            description=(
+                "Get a watchlist. Optional owner_client_id reads a list shared with the actor "
+                "(viewer/editor/owner). Response includes role."
+            ),
             args_schema=WatchGetInput,
         ),
         StructuredTool.from_function(
             add_watchlist_item,
             name="add_watchlist_item",
-            description="Add symbol to watchlist.",
+            description="Add symbol to watchlist (owner or editor). Optional owner_client_id for shared lists.",
             args_schema=WatchAddInput,
         ),
         StructuredTool.from_function(
             remove_watchlist_item,
             name="remove_watchlist_item",
-            description="Remove symbol from watchlist.",
+            description="Remove symbol from watchlist (owner or editor). Optional owner_client_id for shared lists.",
             args_schema=WatchRemoveInput,
+        ),
+        StructuredTool.from_function(
+            share_watchlist,
+            name="share_watchlist",
+            description=(
+                "Share your watchlist as viewer (read-only) or editor (add/remove symbols). "
+                "Owner only; cannot share twice with the same user."
+            ),
+            args_schema=WatchShareInput,
+        ),
+        StructuredTool.from_function(
+            update_watchlist_share,
+            name="update_watchlist_share",
+            description="Change role (viewer|editor) for an existing share. Owner only.",
+            args_schema=WatchShareInput,
+        ),
+        StructuredTool.from_function(
+            revoke_watchlist_share,
+            name="revoke_watchlist_share",
+            description="Remove a user's access to your watchlist. Owner only.",
+            args_schema=WatchRevokeInput,
+        ),
+        StructuredTool.from_function(
+            list_watchlist_shares,
+            name="list_watchlist_shares",
+            description="List who has access to your watchlist. Owner only.",
+            args_schema=WatchClientInput,
+        ),
+        StructuredTool.from_function(
+            list_shared_watchlists,
+            name="list_shared_watchlists",
+            description="List watchlists shared with this clientId.",
+            args_schema=WatchClientInput,
+        ),
+        StructuredTool.from_function(
+            list_watchlist_audit,
+            name="list_watchlist_audit",
+            description="List who changed the watchlist and when. Owner only.",
+            args_schema=WatchAuditInput,
         ),
         StructuredTool.from_function(
             list_price_alerts,

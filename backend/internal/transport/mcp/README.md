@@ -15,9 +15,15 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_indicators` | RSI/EMA |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
-| `get_watchlist` | Read watchlist |
-| `add_watchlist_item` | Add/update watch item |
-| `remove_watchlist_item` | Remove watch item |
+| `get_watchlist` | Read watchlist (optional `ownerClientId` for shared lists) |
+| `add_watchlist_item` | Add/update watch item (owner/editor; optional `ownerClientId`) |
+| `remove_watchlist_item` | Remove watch item (owner/editor; optional `ownerClientId`) |
+| `share_watchlist` | Grant viewer/editor access (owner only; no duplicate grantee) |
+| `update_watchlist_share` | Change share role (owner only) |
+| `revoke_watchlist_share` | Remove access (owner only) |
+| `list_watchlist_shares` | List outgoing shares |
+| `list_shared_watchlists` | Lists shared with this client |
+| `list_watchlist_audit` | Who changed the list and when |
 | `list_price_alerts` | List price alerts for a client |
 | `create_price_alert` | Create one-shot above/below price alert |
 | `delete_price_alert` | Delete a price alert by id |

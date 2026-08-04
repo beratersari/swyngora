@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -97,6 +98,29 @@ CREATE TABLE IF NOT EXISTS watchlist_items (
 	FOREIGN KEY (client_id) REFERENCES watchlist_meta(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_watchlist_items_client ON watchlist_items(client_id);
+
+CREATE TABLE IF NOT EXISTS watchlist_shares (
+	owner_client_id   TEXT NOT NULL,
+	grantee_client_id TEXT NOT NULL,
+	role              TEXT NOT NULL,
+	created_at        TEXT NOT NULL,
+	updated_at        TEXT NOT NULL,
+	PRIMARY KEY (owner_client_id, grantee_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_shares_grantee ON watchlist_shares(grantee_client_id);
+CREATE INDEX IF NOT EXISTS idx_watchlist_shares_owner ON watchlist_shares(owner_client_id);
+
+CREATE TABLE IF NOT EXISTS watchlist_audit (
+	id              TEXT PRIMARY KEY NOT NULL,
+	owner_client_id TEXT NOT NULL,
+	actor_client_id TEXT NOT NULL,
+	action          TEXT NOT NULL,
+	exchange        TEXT NOT NULL DEFAULT '',
+	symbol          TEXT NOT NULL DEFAULT '',
+	detail          TEXT NOT NULL DEFAULT '',
+	created_at      TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_audit_owner ON watchlist_audit(owner_client_id, created_at DESC);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("watchlist sqlite migrate: %w", err)
@@ -392,4 +416,203 @@ func insertItem(ctx context.Context, q queryer, clientID string, it domain.Watch
 		return fmt.Errorf("watchlist sqlite insert item: %w", err)
 	}
 	return nil
+}
+
+// CreateShare inserts a share; fails if the pair already exists.
+func (s *SQLite) CreateShare(ctx context.Context, share domain.WatchlistShare) (*domain.WatchlistShare, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if share.CreatedAt.IsZero() {
+		share.CreatedAt = time.Now().UTC()
+	}
+	if share.UpdatedAt.IsZero() {
+		share.UpdatedAt = share.CreatedAt
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO watchlist_shares (owner_client_id, grantee_client_id, role, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?)
+	`, share.OwnerClientID, share.GranteeClientID, string(share.Role),
+		share.CreatedAt.UTC().Format(time.RFC3339Nano), share.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return nil, fmt.Errorf("%w: watchlist already shared with this user", domain.ErrInvalidArgument)
+		}
+		return nil, fmt.Errorf("watchlist share create: %w", err)
+	}
+	cp := share
+	return &cp, nil
+}
+
+func isUniqueConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique") || strings.Contains(msg, "constraint")
+}
+
+// UpdateShareRole updates role for an existing share.
+func (s *SQLite) UpdateShareRole(ctx context.Context, ownerClientID, granteeClientID string, role domain.WatchlistShareRole, at time.Time) (*domain.WatchlistShare, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE watchlist_shares SET role = ?, updated_at = ?
+		WHERE owner_client_id = ? AND grantee_client_id = ?
+	`, string(role), at.UTC().Format(time.RFC3339Nano), ownerClientID, granteeClientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.GetShare(ctx, ownerClientID, granteeClientID)
+}
+
+// GetShare returns one share or ErrNotFound.
+func (s *SQLite) GetShare(ctx context.Context, ownerClientID, granteeClientID string) (*domain.WatchlistShare, error) {
+	var sh domain.WatchlistShare
+	var role, cAt, uAt string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT owner_client_id, grantee_client_id, role, created_at, updated_at
+		FROM watchlist_shares WHERE owner_client_id = ? AND grantee_client_id = ?
+	`, ownerClientID, granteeClientID).Scan(&sh.OwnerClientID, &sh.GranteeClientID, &role, &cAt, &uAt)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	sh.Role = domain.WatchlistShareRole(role)
+	sh.CreatedAt = parseWLTime(cAt)
+	sh.UpdatedAt = parseWLTime(uAt)
+	return &sh, nil
+}
+
+// ListSharesByOwner lists shares granted by owner.
+func (s *SQLite) ListSharesByOwner(ctx context.Context, ownerClientID string) ([]domain.WatchlistShare, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT owner_client_id, grantee_client_id, role, created_at, updated_at
+		FROM watchlist_shares WHERE owner_client_id = ?
+		ORDER BY created_at ASC
+	`, ownerClientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanShares(rows)
+}
+
+// ListSharesForGrantee lists lists shared with grantee.
+func (s *SQLite) ListSharesForGrantee(ctx context.Context, granteeClientID string) ([]domain.WatchlistShare, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT owner_client_id, grantee_client_id, role, created_at, updated_at
+		FROM watchlist_shares WHERE grantee_client_id = ?
+		ORDER BY created_at ASC
+	`, granteeClientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanShares(rows)
+}
+
+// DeleteShare revokes access.
+func (s *SQLite) DeleteShare(ctx context.Context, ownerClientID, granteeClientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM watchlist_shares WHERE owner_client_id = ? AND grantee_client_id = ?
+	`, ownerClientID, granteeClientID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+// CountSharesByOwner counts shares for owner.
+func (s *SQLite) CountSharesByOwner(ctx context.Context, ownerClientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM watchlist_shares WHERE owner_client_id = ?`, ownerClientID).Scan(&n)
+	return n, err
+}
+
+// AppendAudit writes an audit event.
+func (s *SQLite) AppendAudit(ctx context.Context, ev domain.WatchlistAuditEvent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ev.CreatedAt.IsZero() {
+		ev.CreatedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO watchlist_audit (id, owner_client_id, actor_client_id, action, exchange, symbol, detail, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, ev.ID, ev.OwnerClientID, ev.ActorClientID, string(ev.Action), ev.Exchange, ev.Symbol, ev.Detail,
+		ev.CreatedAt.UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+// ListAudit returns newest-first audit events for an owner list.
+func (s *SQLite) ListAudit(ctx context.Context, ownerClientID string, limit, offset int) ([]domain.WatchlistAuditEvent, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, owner_client_id, actor_client_id, action, exchange, symbol, detail, created_at
+		FROM watchlist_audit WHERE owner_client_id = ?
+		ORDER BY created_at DESC LIMIT ? OFFSET ?
+	`, ownerClientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.WatchlistAuditEvent, 0)
+	for rows.Next() {
+		var ev domain.WatchlistAuditEvent
+		var action, cAt string
+		if err := rows.Scan(&ev.ID, &ev.OwnerClientID, &ev.ActorClientID, &action, &ev.Exchange, &ev.Symbol, &ev.Detail, &cAt); err != nil {
+			return nil, err
+		}
+		ev.Action = domain.WatchlistAuditAction(action)
+		ev.CreatedAt = parseWLTime(cAt)
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+func scanShares(rows *sql.Rows) ([]domain.WatchlistShare, error) {
+	out := make([]domain.WatchlistShare, 0)
+	for rows.Next() {
+		var sh domain.WatchlistShare
+		var role, cAt, uAt string
+		if err := rows.Scan(&sh.OwnerClientID, &sh.GranteeClientID, &role, &cAt, &uAt); err != nil {
+			return nil, err
+		}
+		sh.Role = domain.WatchlistShareRole(role)
+		sh.CreatedAt = parseWLTime(cAt)
+		sh.UpdatedAt = parseWLTime(uAt)
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func parseWLTime(raw string) time.Time {
+	t, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		t, err = time.Parse(time.RFC3339, raw)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return t.UTC()
 }

@@ -188,27 +188,52 @@ func (c *APIClient) ListExchanges(ctx context.Context) (json.RawMessage, error) 
 
 // GetWatchlist fetches a client watchlist.
 func (c *APIClient) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {
+	return c.GetWatchlistOwned(ctx, clientID, "")
+}
+
+// GetWatchlistOwned fetches own or shared list (ownerClientID).
+func (c *APIClient) GetWatchlistOwned(ctx context.Context, actorClientID, ownerClientID string) (json.RawMessage, error) {
 	q := url.Values{}
-	q.Set("clientId", clientID)
+	q.Set("clientId", actorClientID)
+	if ownerClientID != "" {
+		q.Set("ownerClientId", ownerClientID)
+	}
 	return c.get(ctx, "/api/v1/watchlist", q)
 }
 
 // AddWatchlistItem adds a symbol to a watchlist.
 func (c *APIClient) AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/watchlist/items", map[string]string{
-		"clientId": clientID,
+	return c.AddWatchlistItemOwned(ctx, clientID, "", exchange, symbol, note)
+}
+
+// AddWatchlistItemOwned adds a symbol; ownerClientID empty = actor's list.
+func (c *APIClient) AddWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string) (json.RawMessage, error) {
+	body := map[string]string{
+		"clientId": actorClientID,
 		"exchange": exchange,
 		"symbol":   symbol,
 		"note":     note,
-	})
+	}
+	if ownerClientID != "" {
+		body["ownerClientId"] = ownerClientID
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/watchlist/items", body)
 }
 
 // RemoveWatchlistItem removes a symbol.
 func (c *APIClient) RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	return c.RemoveWatchlistItemOwned(ctx, clientID, "", exchange, symbol)
+}
+
+// RemoveWatchlistItemOwned removes a symbol from own or shared list.
+func (c *APIClient) RemoveWatchlistItemOwned(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
-	q.Set("clientId", clientID)
+	q.Set("clientId", actorClientID)
 	q.Set("exchange", exchange)
 	q.Set("symbol", symbol)
+	if ownerClientID != "" {
+		q.Set("ownerClientId", ownerClientID)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v1/watchlist/items?"+q.Encode(), nil)
 	if err != nil {
 		return nil, err
@@ -227,6 +252,72 @@ func (c *APIClient) RemoveWatchlistItem(ctx context.Context, clientID, exchange,
 		return nil, fmt.Errorf("API %s: %s", resp.Status, truncate(string(body), 400))
 	}
 	return json.RawMessage(body), nil
+}
+
+// ShareWatchlist grants viewer/editor access (owner only).
+func (c *APIClient) ShareWatchlist(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/watchlist/shares", map[string]string{
+		"clientId": ownerClientID, "granteeClientId": granteeClientID, "role": role,
+	})
+}
+
+// UpdateWatchlistShare changes an existing share role.
+func (c *APIClient) UpdateWatchlistShare(ctx context.Context, ownerClientID, granteeClientID, role string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/watchlist/shares", map[string]string{
+		"clientId": ownerClientID, "granteeClientId": granteeClientID, "role": role,
+	})
+}
+
+// RevokeWatchlistShare removes access.
+func (c *APIClient) RevokeWatchlistShare(ctx context.Context, ownerClientID, granteeClientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", ownerClientID)
+	q.Set("granteeClientId", granteeClientID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/api/v1/watchlist/shares?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API %s: %s", resp.Status, truncate(string(body), 400))
+	}
+	return json.RawMessage(body), nil
+}
+
+// ListWatchlistShares lists shares granted by owner.
+func (c *APIClient) ListWatchlistShares(ctx context.Context, ownerClientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", ownerClientID)
+	return c.get(ctx, "/api/v1/watchlist/shares", q)
+}
+
+// ListSharedWatchlists lists lists shared with grantee.
+func (c *APIClient) ListSharedWatchlists(ctx context.Context, granteeClientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", granteeClientID)
+	return c.get(ctx, "/api/v1/watchlist/shared", q)
+}
+
+// ListWatchlistAudit returns change history for owner's list.
+func (c *APIClient) ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", ownerClientID)
+	if limit > 0 {
+		q.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	if offset > 0 {
+		q.Set("offset", fmt.Sprintf("%d", offset))
+	}
+	return c.get(ctx, "/api/v1/watchlist/audit", q)
 }
 
 // ListPriceAlerts lists alerts for a client.

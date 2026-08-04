@@ -51,6 +51,11 @@ cd backend && go test ./internal/transport/mcp/...
 cd ai && pytest -q
 ```
 
+## Market / watchlist tools
+
+Market specialist tools mirror Go MCP (ticker, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**).  
+Sharing tools: `share_watchlist`, `update_watchlist_share`, `revoke_watchlist_share`, `list_watchlist_shares`, `list_shared_watchlists`, `list_watchlist_audit`. See `docs/features/watchlist-sharing.md`.
+
 ## Limitations / follow-ups
 
 - No durable conversation store or multi-user auth yet
