@@ -282,7 +282,7 @@ func TestImport_PreviewMergeConfirm(t *testing.T) {
 	// Existing BTC so merge will skip one watchlist item
 	_, _ = wl.Add(ctx, "user1", domain.WatchlistItem{
 		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", AddedAt: time.Now().UTC(),
-	})
+	}, domain.WatchlistUnconditionalVersion)
 
 	job, err := svc.Preview(ctx, PreviewInput{
 		ClientID: "user1", FileName: "export.json", FileBytes: sampleExportJSON(), FormatHint: "json",
@@ -337,7 +337,7 @@ func TestImport_ReplaceAndNoDoubleShare(t *testing.T) {
 	ctx := context.Background()
 	_, _ = wl.Add(ctx, "user1", domain.WatchlistItem{
 		Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT", AddedAt: time.Now().UTC(),
-	})
+	}, domain.WatchlistUnconditionalVersion)
 	_, _ = wl.CreateShare(ctx, domain.WatchlistShare{
 		OwnerClientID: "user1", GranteeClientID: "oldfriend", Role: domain.WatchlistRoleViewer,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),

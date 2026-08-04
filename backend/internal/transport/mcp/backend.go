@@ -237,7 +237,7 @@ func (b *Backend) AddWatchlistItemOwned(ctx context.Context, actorClientID, owne
 	if b.Watch == nil {
 		return nil, fmt.Errorf("watchlist not configured")
 	}
-	acc, err := b.Watch.Add(ctx, actorClientID, ownerClientID, exchange, symbol, note)
+	acc, err := b.Watch.Add(ctx, actorClientID, ownerClientID, exchange, symbol, note, domain.WatchlistUnconditionalVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -253,7 +253,7 @@ func (b *Backend) RemoveWatchlistItemOwned(ctx context.Context, actorClientID, o
 	if b.Watch == nil {
 		return nil, fmt.Errorf("watchlist not configured")
 	}
-	acc, err := b.Watch.Remove(ctx, actorClientID, ownerClientID, exchange, symbol)
+	acc, err := b.Watch.Remove(ctx, actorClientID, ownerClientID, exchange, symbol, domain.WatchlistUnconditionalVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -892,6 +892,7 @@ func watchlistAccessJSON(acc *domain.WatchlistAccess) (json.RawMessage, error) {
 		"clientId":      acc.ClientID,
 		"ownerClientId": acc.OwnerClientID,
 		"role":          string(acc.Role),
+		"version":       acc.Version,
 		"items":         items,
 		"updatedAt":     acc.Updated.UTC().Format(time.RFC3339Nano),
 	})

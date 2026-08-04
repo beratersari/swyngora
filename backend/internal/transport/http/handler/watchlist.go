@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -43,22 +44,106 @@ type watchlistDTO struct {
 	ClientID      string             `json:"clientId"`
 	OwnerClientID string             `json:"ownerClientId"`
 	Role          string             `json:"role"`
+	Version       int64              `json:"version"`
 	Items         []watchlistItemDTO `json:"items"`
 	UpdatedAt     string             `json:"updatedAt"`
 }
 
-func accessToDTO(acc *domain.WatchlistAccess) watchlistDTO {
-	items := make([]watchlistItemDTO, 0, len(acc.Items))
-	for _, it := range acc.Items {
-		items = append(items, watchlistItemDTO{
-			Exchange: string(it.Exchange), Symbol: it.Symbol, Note: it.Note,
-			AddedAt: it.AddedAt.UTC().Format(time.RFC3339Nano),
-		})
+func itemToDTO(it domain.WatchlistItem) watchlistItemDTO {
+	return watchlistItemDTO{
+		Exchange: string(it.Exchange), Symbol: it.Symbol, Note: it.Note,
+		AddedAt: it.AddedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+func itemsToDTO(items []domain.WatchlistItem) []watchlistItemDTO {
+	out := make([]watchlistItemDTO, 0, len(items))
+	for _, it := range items {
+		out = append(out, itemToDTO(it))
+	}
+	return out
+}
+
+func accessToDTO(acc *domain.WatchlistAccess) watchlistDTO {
 	return watchlistDTO{
 		ClientID: acc.ClientID, OwnerClientID: acc.OwnerClientID, Role: string(acc.Role),
-		Items: items, UpdatedAt: acc.Updated.UTC().Format(time.RFC3339Nano),
+		Version: acc.Version, Items: itemsToDTO(acc.Items),
+		UpdatedAt: acc.Updated.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+type conflictItemDTO struct {
+	Exchange   string            `json:"exchange"`
+	Symbol     string            `json:"symbol"`
+	Type       string            `json:"type"`
+	ServerItem *watchlistItemDTO `json:"serverItem"`
+	ClientItem *watchlistItemDTO `json:"clientItem"`
+}
+
+type conflictBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+	Conflict struct {
+		BaseVersion    int64             `json:"baseVersion"`
+		ServerVersion  int64             `json:"serverVersion"`
+		Server         watchlistDTO      `json:"server"`
+		ClientProposed []watchlistItemDTO `json:"clientProposed,omitempty"`
+		AutoMerged     []watchlistItemDTO `json:"autoMerged"`
+		Conflicts      []conflictItemDTO `json:"conflicts"`
+	} `json:"conflict"`
+}
+
+func writeWatchlistConflict(w http.ResponseWriter, err error) {
+	var sc *domain.WatchlistSyncConflict
+	if !errors.As(err, &sc) {
+		writeError(w, err)
+		return
+	}
+	var body conflictBody
+	body.Error.Code = "conflict"
+	body.Error.Message = "watchlist version mismatch; resolve symbol conflicts"
+	body.Conflict.BaseVersion = sc.BaseVersion
+	body.Conflict.ServerVersion = sc.ServerVersion
+	body.Conflict.Server = watchlistDTO{
+		ClientID: sc.Server.ClientID, OwnerClientID: sc.Server.ClientID, Role: "owner",
+		Version: sc.Server.Version, Items: itemsToDTO(sc.Server.Items),
+		UpdatedAt: sc.Server.Updated.UTC().Format(time.RFC3339Nano),
+	}
+	body.Conflict.ClientProposed = itemsToDTO(sc.ClientProposed)
+	body.Conflict.AutoMerged = itemsToDTO(sc.AutoMerged)
+	for _, c := range sc.Conflicts {
+		ci := conflictItemDTO{
+			Exchange: string(c.Exchange), Symbol: c.Symbol, Type: string(c.Type),
+		}
+		if c.ServerItem != nil {
+			d := itemToDTO(*c.ServerItem)
+			ci.ServerItem = &d
+		}
+		if c.ClientItem != nil {
+			d := itemToDTO(*c.ClientItem)
+			ci.ClientItem = &d
+		}
+		body.Conflict.Conflicts = append(body.Conflict.Conflicts, ci)
+	}
+	writeJSON(w, http.StatusConflict, body)
+}
+
+func parseBaseVersion(raw string, body *int64) int64 {
+	// Prefer explicit body field when set (>=0 or -1).
+	if body != nil {
+		return *body
+	}
+	if raw == "" {
+		// Backward compatible: omit baseVersion → unconditional write.
+		return domain.WatchlistUnconditionalVersion
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return domain.WatchlistUnconditionalVersion
+	}
+	return v
 }
 
 // Get handles GET /api/v1/watchlist
@@ -72,17 +157,22 @@ func (h *WatchlistHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, accessToDTO(acc))
 }
 
+type itemIn struct {
+	Exchange string `json:"exchange"`
+	Symbol   string `json:"symbol"`
+	Note     string `json:"note"`
+}
+
 type replaceBody struct {
-	ClientID      string `json:"clientId"`
-	OwnerClientID string `json:"ownerClientId"`
-	Items         []struct {
-		Exchange string `json:"exchange"`
-		Symbol   string `json:"symbol"`
-		Note     string `json:"note"`
-	} `json:"items"`
+	ClientID      string   `json:"clientId"`
+	OwnerClientID string   `json:"ownerClientId"`
+	BaseVersion   *int64   `json:"baseVersion"`
+	BaseItems     []itemIn `json:"baseItems"`
+	Items         []itemIn `json:"items"`
 }
 
 // Replace handles PUT /api/v1/watchlist (owner only).
+// Send baseVersion from the last GET. On multi-device conflict returns 409 with both sides.
 func (h *WatchlistHandler) Replace(w http.ResponseWriter, r *http.Request) {
 	var body replaceBody
 	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
@@ -103,9 +193,25 @@ func (h *WatchlistHandler) Replace(w http.ResponseWriter, r *http.Request) {
 			Exchange: domain.Exchange(it.Exchange), Symbol: it.Symbol, Note: it.Note,
 		})
 	}
-	acc, err := h.svc.Replace(r.Context(), actor, owner, items)
+	var baseItems []domain.WatchlistItem
+	if body.BaseItems != nil {
+		baseItems = make([]domain.WatchlistItem, 0, len(body.BaseItems))
+		for _, it := range body.BaseItems {
+			baseItems = append(baseItems, domain.WatchlistItem{
+				Exchange: domain.Exchange(it.Exchange), Symbol: it.Symbol, Note: it.Note,
+			})
+		}
+	}
+	baseVer := parseBaseVersion(r.Header.Get("If-Match"), body.BaseVersion)
+	// Also accept query baseVersion
+	if body.BaseVersion == nil {
+		if q := r.URL.Query().Get("baseVersion"); q != "" {
+			baseVer = parseBaseVersion(q, nil)
+		}
+	}
+	acc, err := h.svc.Replace(r.Context(), actor, owner, items, baseVer, baseItems)
 	if err != nil {
-		writeError(w, err)
+		writeWatchlistConflict(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, accessToDTO(acc))
@@ -114,6 +220,7 @@ func (h *WatchlistHandler) Replace(w http.ResponseWriter, r *http.Request) {
 type addBody struct {
 	ClientID      string `json:"clientId"`
 	OwnerClientID string `json:"ownerClientId"`
+	BaseVersion   *int64 `json:"baseVersion"`
 	Exchange      string `json:"exchange"`
 	Symbol        string `json:"symbol"`
 	Note          string `json:"note"`
@@ -134,9 +241,10 @@ func (h *WatchlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 	if owner == "" {
 		owner = ownerClientIDFrom(r)
 	}
-	acc, err := h.svc.Add(r.Context(), actor, owner, body.Exchange, body.Symbol, body.Note)
+	baseVer := parseBaseVersion(r.Header.Get("If-Match"), body.BaseVersion)
+	acc, err := h.svc.Add(r.Context(), actor, owner, body.Exchange, body.Symbol, body.Note, baseVer)
 	if err != nil {
-		writeError(w, err)
+		writeWatchlistConflict(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, accessToDTO(acc))
@@ -147,9 +255,13 @@ func (h *WatchlistHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	actor := clientIDFrom(r)
 	owner := ownerClientIDFrom(r)
-	acc, err := h.svc.Remove(r.Context(), actor, owner, q.Get("exchange"), q.Get("symbol"))
+	baseVer := parseBaseVersion(q.Get("baseVersion"), nil)
+	if h := r.Header.Get("If-Match"); h != "" {
+		baseVer = parseBaseVersion(h, nil)
+	}
+	acc, err := h.svc.Remove(r.Context(), actor, owner, q.Get("exchange"), q.Get("symbol"), baseVer)
 	if err != nil {
-		writeError(w, err)
+		writeWatchlistConflict(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, accessToDTO(acc))

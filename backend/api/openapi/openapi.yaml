@@ -11,7 +11,9 @@ info:
       Max supply is null when undefined.
     - Watchlist is unauthenticated state keyed by client-supplied `clientId`
       (must be non-empty; not for multi-tenant production without real auth).
-      Data is persisted in SQLite on the server (survives restarts); API contract is unchanged.
+      Data is persisted in SQLite on the server (survives restarts). Each list has a monotonic
+      `version` for multi-device sync: send `baseVersion` on writes; concurrent adds of different
+      symbols auto-merge; delete-vs-update on the same symbol returns 409 with both sides.
     - Price alerts support `one_time` (default) or `repeating` modes for above/below targets.
       One-time alerts become `triggered` after the first fire; repeating alerts stay `active`
       and re-fire only after the price returns to the safe side and crosses again.
@@ -714,7 +716,12 @@ paths:
           $ref: '#/components/responses/Error'
     put:
       summary: Replace entire watchlist (owner only)
-      description: Full replace of items. Editors and viewers receive 403.
+      description: |
+        Full replace of items. Editors and viewers receive 403.
+        Multi-device: send `baseVersion` from the last GET. Different symbols added on two
+        devices auto-merge. Same-symbol delete vs update returns 409 with `conflict` details;
+        re-PUT with `baseVersion` = `serverVersion` and your resolved `items` to finish.
+        Optional `baseItems` improves 3-way merge accuracy.
       operationId: putWatchlist
       tags: [Watchlist]
       requestBody:
@@ -726,6 +733,19 @@ paths:
               properties:
                 clientId: { type: string }
                 ownerClientId: { type: string, description: Must be the actor (owner only) }
+                baseVersion:
+                  type: integer
+                  format: int64
+                  description: Version from last GET; omit for unconditional write (legacy)
+                baseItems:
+                  type: array
+                  description: Snapshot from last GET (recommended for accurate delete detection)
+                  items:
+                    type: object
+                    properties:
+                      exchange: { type: string }
+                      symbol: { type: string }
+                      note: { type: string }
                 items:
                   type: array
                   items:
@@ -746,6 +766,17 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          description: Version conflict — resolve and retry
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/Error'
+                  conflict:
+                    $ref: '#/components/schemas/WatchlistSyncConflict'
 
   /api/v1/alerts/webhook:
     get:
@@ -952,7 +983,10 @@ paths:
   /api/v1/watchlist/items:
     post:
       summary: Add or update a watchlist item
-      description: Owner or editor of the list may add/update symbols. Viewers receive 403.
+      description: |
+        Owner or editor may add/update symbols. Send `baseVersion` from last GET for multi-device
+        safety. Adding a symbol missing on the server auto-merges even if versions differ.
+        Conflicting notes on the same symbol return 409.
       operationId: addWatchlistItem
       tags: [Watchlist]
       requestBody:
@@ -965,6 +999,7 @@ paths:
               properties:
                 clientId: { type: string, description: Actor client id }
                 ownerClientId: { type: string, description: List owner when mutating a shared list }
+                baseVersion: { type: integer, format: int64 }
                 exchange: { type: string, default: binance }
                 symbol: { type: string }
                 note: { type: string }
@@ -979,9 +1014,22 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          description: Symbol note conflict with concurrent edit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/Error'
+                  conflict:
+                    $ref: '#/components/schemas/WatchlistSyncConflict'
     delete:
       summary: Remove a watchlist item
-      description: Owner or editor of the list may remove symbols. Viewers receive 403.
+      description: |
+        Owner or editor may remove symbols. Send `baseVersion` (query or If-Match).
+        If another device changed the same symbol, returns 409 so the user can choose.
       operationId: removeWatchlistItem
       tags: [Watchlist]
       parameters:
@@ -1000,6 +1048,13 @@ paths:
           in: query
           description: List owner when mutating a shared list
           schema: { type: string }
+        - name: baseVersion
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: If-Match
+          in: header
+          description: Optional alternative to baseVersion (list version)
+          schema: { type: string }
         - name: X-Client-Id
           in: header
           schema: { type: string }
@@ -1014,6 +1069,17 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          description: Delete vs concurrent update conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    $ref: '#/components/schemas/Error'
+                  conflict:
+                    $ref: '#/components/schemas/WatchlistSyncConflict'
 
   /api/v1/watchlist/shares:
     get:
@@ -2225,6 +2291,10 @@ components:
           type: string
           enum: [owner, viewer, editor]
           description: Caller's access role on this list
+        version:
+          type: integer
+          format: int64
+          description: Monotonic revision for multi-device optimistic concurrency (starts at 0)
         updatedAt: { type: string, format: date-time }
         items:
           type: array
@@ -2235,6 +2305,47 @@ components:
               symbol: { type: string }
               note: { type: string }
               addedAt: { type: string, format: date-time }
+    WatchlistSyncConflict:
+      type: object
+      description: Returned in 409 responses when a write cannot be auto-merged
+      properties:
+        baseVersion: { type: integer, format: int64 }
+        serverVersion: { type: integer, format: int64 }
+        server:
+          $ref: '#/components/schemas/Watchlist'
+        clientProposed:
+          type: array
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              symbol: { type: string }
+              note: { type: string }
+        autoMerged:
+          type: array
+          description: Non-conflicting merge preview
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              symbol: { type: string }
+              note: { type: string }
+        conflicts:
+          type: array
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              symbol: { type: string }
+              type:
+                type: string
+                enum: [update_vs_update, delete_vs_update, update_vs_delete]
+              serverItem:
+                type: object
+                nullable: true
+              clientItem:
+                type: object
+                nullable: true
     WatchlistShare:
       type: object
       properties:

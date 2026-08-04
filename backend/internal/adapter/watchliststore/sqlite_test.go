@@ -26,7 +26,7 @@ func openTempSQLite(t *testing.T) *SQLite {
 func TestSQLite_CRUD(t *testing.T) {
 	s := openTempSQLite(t)
 	ctx := context.Background()
-	_, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "top"})
+	_, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "top"}, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestSQLite_CRUD(t *testing.T) {
 	if err != nil || len(wl.Items) != 1 || wl.Items[0].Symbol != "BTCUSDT" || wl.Items[0].Note != "top" {
 		t.Fatalf("%+v %v", wl, err)
 	}
-	wl, err = s.Remove(ctx, "c1", domain.ExchangeBinance, "BTCUSDT")
+	wl, err = s.Remove(ctx, "c1", domain.ExchangeBinance, "BTCUSDT", -1)
 	if err != nil || len(wl.Items) != 0 {
 		t.Fatalf("%+v %v", wl, err)
 	}
@@ -56,19 +56,19 @@ func TestSQLite_PersistsAcrossReopen(t *testing.T) {
 		Symbol:   "ETHUSDT",
 		Note:     "hold",
 		AddedAt:  addedAt,
-	}); err != nil {
+	}, -1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s1.Add(ctx, "web-user-1", domain.WatchlistItem{
 		Exchange: domain.ExchangeBybit,
 		Symbol:   "SOLUSDT",
-	}); err != nil {
+	}, -1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s1.Add(ctx, "tg-42", domain.WatchlistItem{
 		Exchange: domain.ExchangeCoinbase,
 		Symbol:   "BTC-USD",
-	}); err != nil {
+	}, -1); err != nil {
 		t.Fatal(err)
 	}
 	if err := s1.Close(); err != nil {
@@ -113,7 +113,7 @@ func TestSQLite_PersistsAcrossReopen(t *testing.T) {
 	}
 
 	// Mutations still work after reopen.
-	if _, err := s2.Remove(ctx, "web-user-1", domain.ExchangeBinance, "ETHUSDT"); err != nil {
+	if _, err := s2.Remove(ctx, "web-user-1", domain.ExchangeBinance, "ETHUSDT", -1); err != nil {
 		t.Fatal(err)
 	}
 	if err := s2.Close(); err != nil {
@@ -144,13 +144,13 @@ func TestSQLite_ServiceSurvivesRestart(t *testing.T) {
 	// Exercise via port methods used by the service.
 	if _, err := store1.Add(ctx, "client-a", domain.WatchlistItem{
 		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "core",
-	}); err != nil {
+	}, -1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store1.Set(ctx, "client-a", []domain.WatchlistItem{
 		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "core"},
 		{Exchange: domain.ExchangeBinance, Symbol: "ADAUSDT"},
-	}); err != nil {
+	}, -1); err != nil {
 		t.Fatal(err)
 	}
 	_ = store1.Close()
@@ -181,12 +181,12 @@ func TestSQLite_MaxItemsEnforced(t *testing.T) {
 	s := openTempSQLite(t)
 	ctx := context.Background()
 	for i := 0; i < domain.MaxWatchlistItems; i++ {
-		_, err := s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "S" + strconv.Itoa(i)})
+		_, err := s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "S" + strconv.Itoa(i)}, -1)
 		if err != nil {
 			t.Fatalf("add %d: %v", i, err)
 		}
 	}
-	_, err := s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "OVERFLOW"})
+	_, err := s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "OVERFLOW"}, -1)
 	if err == nil {
 		t.Fatal("expected max items error")
 	}
@@ -203,18 +203,18 @@ func TestSQLite_MaxClients(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	if _, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}); err != nil {
+	if _, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}, -1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Add(ctx, "c2", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"}); err != nil {
+	if _, err := s.Add(ctx, "c2", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"}, -1); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Add(ctx, "c3", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"})
+	_, err = s.Add(ctx, "c3", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"}, -1)
 	if err == nil {
 		t.Fatal("expected capacity error")
 	}
 	// Existing client still writable.
-	if _, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}); err != nil {
+	if _, err := s.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}, -1); err != nil {
 		t.Fatalf("existing client: %v", err)
 	}
 }
@@ -222,7 +222,7 @@ func TestSQLite_MaxClients(t *testing.T) {
 func TestSQLite_GetReturnsCopy(t *testing.T) {
 	s := openTempSQLite(t)
 	ctx := context.Background()
-	_, _ = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"})
+	_, _ = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}, -1)
 	a, _ := s.Get(ctx, "c")
 	a.Items[0].Symbol = "HACKED"
 	b, _ := s.Get(ctx, "c")
@@ -240,7 +240,7 @@ func TestSQLite_ConcurrentAdds(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			sym := "SYM" + strconv.Itoa(i)
-			_, _ = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: sym})
+			_, _ = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: sym}, -1)
 		}(i)
 	}
 	wg.Wait()
@@ -259,11 +259,11 @@ func TestSQLite_SetReplaceAndUpsertNote(t *testing.T) {
 	_, err := s.Set(ctx, "c", []domain.WatchlistItem{
 		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "a"},
 		{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"},
-	})
+	}, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "b"})
+	_, err = s.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "b"}, -1)
 	if err != nil {
 		t.Fatal(err)
 	}

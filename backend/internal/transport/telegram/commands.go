@@ -389,7 +389,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 		if len(rest) >= 2 {
 			exchange = strings.ToLower(rest[1])
 		}
-		wl, err := r.watch.Add(ctx, clientID, "", exchange, symbol, "")
+		wl, err := r.watch.Add(ctx, clientID, "", exchange, symbol, "", domain.WatchlistUnconditionalVersion)
 		if err != nil {
 			return friendlyErr(err)
 		}
@@ -403,7 +403,7 @@ func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) stri
 		if len(rest) >= 2 {
 			exchange = strings.ToLower(rest[1])
 		}
-		wl, err := r.watch.Remove(ctx, clientID, "", exchange, symbol)
+		wl, err := r.watch.Remove(ctx, clientID, "", exchange, symbol, domain.WatchlistUnconditionalVersion)
 		if err != nil {
 			return friendlyErr(err)
 		}

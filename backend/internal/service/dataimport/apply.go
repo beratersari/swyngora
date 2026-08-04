@@ -60,9 +60,10 @@ func (s *Service) applyWatchlist(ctx context.Context, clientID string, mode doma
 	if len(pl.WatchlistItems) == 0 && mode != domain.ImportModeReplace {
 		return 0, nil
 	}
+	uncond := domain.WatchlistUnconditionalVersion
 	if mode == domain.ImportModeReplace {
 		// Replace entire list with imported items (may be empty).
-		if _, err := s.data.Watchlist.Set(ctx, clientID, pl.WatchlistItems); err != nil {
+		if _, err := s.data.Watchlist.Set(ctx, clientID, pl.WatchlistItems, uncond); err != nil {
 			return 0, err
 		}
 		return len(pl.WatchlistItems), nil
@@ -80,10 +81,10 @@ func (s *Service) applyWatchlist(ctx context.Context, clientID string, mode doma
 		key := string(it.Exchange) + "|" + it.Symbol
 		if _, ok := before[key]; ok {
 			// still upsert note/added via Add — but do not count as new
-			_, _ = s.data.Watchlist.Add(ctx, clientID, it)
+			_, _ = s.data.Watchlist.Add(ctx, clientID, it, uncond)
 			continue
 		}
-		if _, err := s.data.Watchlist.Add(ctx, clientID, it); err != nil {
+		if _, err := s.data.Watchlist.Add(ctx, clientID, it, uncond); err != nil {
 			return n, err
 		}
 		before[key] = struct{}{}

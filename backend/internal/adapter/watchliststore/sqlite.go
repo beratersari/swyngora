@@ -86,7 +86,8 @@ func (s *SQLite) migrate() error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS watchlist_meta (
 	client_id  TEXT PRIMARY KEY NOT NULL,
-	updated_at TEXT NOT NULL
+	updated_at TEXT NOT NULL,
+	version    INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS watchlist_items (
 	client_id TEXT NOT NULL,
@@ -125,7 +126,34 @@ CREATE INDEX IF NOT EXISTS idx_watchlist_audit_owner ON watchlist_audit(owner_cl
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("watchlist sqlite migrate: %w", err)
 	}
+	// Older DBs created before version column: add it if missing.
+	if !s.columnExists("watchlist_meta", "version") {
+		if _, err := s.db.Exec(`ALTER TABLE watchlist_meta ADD COLUMN version INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("watchlist sqlite migrate version column: %w", err)
+		}
+	}
 	return nil
+}
+
+func (s *SQLite) columnExists(table, col string) bool {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == col {
+			return true
+		}
+	}
+	return false
 }
 
 // Path returns the absolute database file path.
@@ -141,7 +169,7 @@ func (s *SQLite) Close() error {
 
 // Get returns a copy of the watchlist (empty items if unknown client).
 func (s *SQLite) Get(ctx context.Context, clientID string) (*domain.Watchlist, error) {
-	items, updated, ok, err := s.load(ctx, s.db, clientID)
+	items, updated, version, ok, err := s.load(ctx, s.db, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,17 +178,26 @@ func (s *SQLite) Get(ctx context.Context, clientID string) (*domain.Watchlist, e
 			ClientID: clientID,
 			Items:    []domain.WatchlistItem{},
 			Updated:  time.Now().UTC(),
+			Version:  0,
 		}, nil
 	}
 	return &domain.Watchlist{
 		ClientID: clientID,
 		Items:    items,
 		Updated:  updated,
+		Version:  version,
 	}, nil
 }
 
+func versionMismatch(clientID string, items []domain.WatchlistItem, updated time.Time, version int64) error {
+	return &domain.WatchlistVersionMismatch{Current: &domain.Watchlist{
+		ClientID: clientID, Items: append([]domain.WatchlistItem(nil), items...),
+		Updated: updated, Version: version,
+	}}
+}
+
 // Set replaces the list. Rejects when len(items) > maxItems.
-func (s *SQLite) Set(ctx context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
+func (s *SQLite) Set(ctx context.Context, clientID string, items []domain.WatchlistItem, expectedVersion int64) (*domain.Watchlist, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -178,9 +215,20 @@ func (s *SQLite) Set(ctx context.Context, clientID string, items []domain.Watchl
 		return nil, err
 	}
 
+	curItems, curUpdated, curVer, ok, err := s.load(ctx, tx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		curVer = 0
+	}
+	if expectedVersion >= 0 && curVer != expectedVersion {
+		return nil, versionMismatch(clientID, curItems, curUpdated, curVer)
+	}
+
 	now := time.Now().UTC()
-	// Meta first so FK on items succeeds for brand-new clients.
-	if err := upsertMeta(ctx, tx, clientID, now); err != nil {
+	newVer := curVer + 1
+	if err := upsertMetaVersion(ctx, tx, clientID, now, newVer); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM watchlist_items WHERE client_id = ?`, clientID); err != nil {
@@ -196,11 +244,11 @@ func (s *SQLite) Set(ctx context.Context, clientID string, items []domain.Watchl
 	}
 
 	outItems := append([]domain.WatchlistItem(nil), items...)
-	return &domain.Watchlist{ClientID: clientID, Items: outItems, Updated: now}, nil
+	return &domain.Watchlist{ClientID: clientID, Items: outItems, Updated: now, Version: newVer}, nil
 }
 
 // Add upserts one item. Enforces maxItems under the same lock (no TOCTOU).
-func (s *SQLite) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
+func (s *SQLite) Add(ctx context.Context, clientID string, item domain.WatchlistItem, expectedVersion int64) (*domain.Watchlist, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -214,9 +262,15 @@ func (s *SQLite) Add(ctx context.Context, clientID string, item domain.Watchlist
 		return nil, err
 	}
 
-	items, _, _, err := s.load(ctx, tx, clientID)
+	items, curUpdated, curVer, ok, err := s.load(ctx, tx, clientID)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		curVer = 0
+	}
+	if expectedVersion >= 0 && curVer != expectedVersion {
+		return nil, versionMismatch(clientID, items, curUpdated, curVer)
 	}
 
 	found := false
@@ -241,7 +295,8 @@ func (s *SQLite) Add(ctx context.Context, clientID string, item domain.Watchlist
 	}
 
 	now := time.Now().UTC()
-	if err := upsertMeta(ctx, tx, clientID, now); err != nil {
+	newVer := curVer + 1
+	if err := upsertMetaVersion(ctx, tx, clientID, now, newVer); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM watchlist_items WHERE client_id = ?`, clientID); err != nil {
@@ -260,11 +315,12 @@ func (s *SQLite) Add(ctx context.Context, clientID string, item domain.Watchlist
 		ClientID: clientID,
 		Items:    append([]domain.WatchlistItem(nil), items...),
 		Updated:  now,
+		Version:  newVer,
 	}, nil
 }
 
 // Remove deletes one item.
-func (s *SQLite) Remove(ctx context.Context, clientID string, exchange domain.Exchange, symbol string) (*domain.Watchlist, error) {
+func (s *SQLite) Remove(ctx context.Context, clientID string, exchange domain.Exchange, symbol string, expectedVersion int64) (*domain.Watchlist, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -274,13 +330,19 @@ func (s *SQLite) Remove(ctx context.Context, clientID string, exchange domain.Ex
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	items, _, ok, err := s.load(ctx, tx, clientID)
+	items, curUpdated, curVer, ok, err := s.load(ctx, tx, clientID)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	if !ok {
-		return &domain.Watchlist{ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: now}, nil
+		if expectedVersion >= 0 && expectedVersion != 0 {
+			return nil, versionMismatch(clientID, nil, now, 0)
+		}
+		return &domain.Watchlist{ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: now, Version: 0}, nil
+	}
+	if expectedVersion >= 0 && curVer != expectedVersion {
+		return nil, versionMismatch(clientID, items, curUpdated, curVer)
 	}
 
 	next := make([]domain.WatchlistItem, 0, len(items))
@@ -291,21 +353,22 @@ func (s *SQLite) Remove(ctx context.Context, clientID string, exchange domain.Ex
 		next = append(next, it)
 	}
 
+	newVer := curVer + 1
 	if _, err := tx.ExecContext(ctx, `
 		DELETE FROM watchlist_items WHERE client_id = ? AND exchange = ? AND symbol = ?
 	`, clientID, string(exchange), symbol); err != nil {
 		return nil, fmt.Errorf("watchlist sqlite delete item: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE watchlist_meta SET updated_at = ? WHERE client_id = ?
-	`, now.Format(time.RFC3339Nano), clientID); err != nil {
+		UPDATE watchlist_meta SET updated_at = ?, version = ? WHERE client_id = ?
+	`, now.Format(time.RFC3339Nano), newVer, clientID); err != nil {
 		return nil, fmt.Errorf("watchlist sqlite update meta: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("watchlist sqlite commit: %w", err)
 	}
 
-	return &domain.Watchlist{ClientID: clientID, Items: next, Updated: now}, nil
+	return &domain.Watchlist{ClientID: clientID, Items: next, Updated: now, Version: newVer}, nil
 }
 
 // queryer is satisfied by *sql.DB and *sql.Tx.
@@ -337,14 +400,14 @@ func (s *SQLite) ensureClientTx(ctx context.Context, q queryer, clientID string)
 	return nil
 }
 
-func (s *SQLite) load(ctx context.Context, q queryer, clientID string) (items []domain.WatchlistItem, updated time.Time, ok bool, err error) {
+func (s *SQLite) load(ctx context.Context, q queryer, clientID string) (items []domain.WatchlistItem, updated time.Time, version int64, ok bool, err error) {
 	var updatedRaw string
-	err = q.QueryRowContext(ctx, `SELECT updated_at FROM watchlist_meta WHERE client_id = ?`, clientID).Scan(&updatedRaw)
+	err = q.QueryRowContext(ctx, `SELECT updated_at, version FROM watchlist_meta WHERE client_id = ?`, clientID).Scan(&updatedRaw, &version)
 	if err == sql.ErrNoRows {
-		return nil, time.Time{}, false, nil
+		return nil, time.Time{}, 0, false, nil
 	}
 	if err != nil {
-		return nil, time.Time{}, false, fmt.Errorf("watchlist sqlite load meta: %w", err)
+		return nil, time.Time{}, 0, false, fmt.Errorf("watchlist sqlite load meta: %w", err)
 	}
 	updated, err = time.Parse(time.RFC3339Nano, updatedRaw)
 	if err != nil {
@@ -362,7 +425,7 @@ func (s *SQLite) load(ctx context.Context, q queryer, clientID string) (items []
 		ORDER BY added_at ASC, exchange ASC, symbol ASC
 	`, clientID)
 	if err != nil {
-		return nil, time.Time{}, false, fmt.Errorf("watchlist sqlite load items: %w", err)
+		return nil, time.Time{}, 0, false, fmt.Errorf("watchlist sqlite load items: %w", err)
 	}
 	defer rows.Close()
 
@@ -370,7 +433,7 @@ func (s *SQLite) load(ctx context.Context, q queryer, clientID string) (items []
 	for rows.Next() {
 		var ex, sym, note, addedRaw string
 		if err := rows.Scan(&ex, &sym, &note, &addedRaw); err != nil {
-			return nil, time.Time{}, false, fmt.Errorf("watchlist sqlite scan item: %w", err)
+			return nil, time.Time{}, 0, false, fmt.Errorf("watchlist sqlite scan item: %w", err)
 		}
 		added, perr := time.Parse(time.RFC3339Nano, addedRaw)
 		if perr != nil {
@@ -387,16 +450,25 @@ func (s *SQLite) load(ctx context.Context, q queryer, clientID string) (items []
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, time.Time{}, false, fmt.Errorf("watchlist sqlite rows: %w", err)
+		return nil, time.Time{}, 0, false, fmt.Errorf("watchlist sqlite rows: %w", err)
 	}
-	return items, updated.UTC(), true, nil
+	return items, updated.UTC(), version, true, nil
 }
 
 func upsertMeta(ctx context.Context, q queryer, clientID string, now time.Time) error {
+	// Preserve version on simple timestamp touch if any callers remain.
 	_, err := q.ExecContext(ctx, `
-		INSERT INTO watchlist_meta (client_id, updated_at) VALUES (?, ?)
+		INSERT INTO watchlist_meta (client_id, updated_at, version) VALUES (?, ?, 0)
 		ON CONFLICT(client_id) DO UPDATE SET updated_at = excluded.updated_at
 	`, clientID, now.UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+func upsertMetaVersion(ctx context.Context, q queryer, clientID string, now time.Time, version int64) error {
+	_, err := q.ExecContext(ctx, `
+		INSERT INTO watchlist_meta (client_id, updated_at, version) VALUES (?, ?, ?)
+		ON CONFLICT(client_id) DO UPDATE SET updated_at = excluded.updated_at, version = excluded.version
+	`, clientID, now.UTC().Format(time.RFC3339Nano), version)
 	if err != nil {
 		return fmt.Errorf("watchlist sqlite upsert meta: %w", err)
 	}

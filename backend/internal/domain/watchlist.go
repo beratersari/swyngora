@@ -22,15 +22,86 @@ type WatchlistItem struct {
 	AddedAt  time.Time
 }
 
+// WatchlistItemKey is the unique identity of a symbol on a list.
+func WatchlistItemKey(exchange Exchange, symbol string) string {
+	return string(exchange) + "|" + symbol
+}
+
+// ItemKey returns the unique key for this item.
+func (it WatchlistItem) ItemKey() string {
+	return WatchlistItemKey(it.Exchange, it.Symbol)
+}
+
+// SameContent reports equal exchange, symbol, and note (ignores AddedAt).
+func (it WatchlistItem) SameContent(other WatchlistItem) bool {
+	return it.Exchange == other.Exchange && it.Symbol == other.Symbol && it.Note == other.Note
+}
+
 // Watchlist is a client's list of items.
 // Tenancy is opaque clientId only (no server auth in early versions) — clients
 // must supply a non-empty unguessable id; empty/"default" is rejected.
 // ClientID is the list owner.
+// Version is a monotonic revision for multi-device optimistic concurrency (starts at 0).
 type Watchlist struct {
 	ClientID string
 	Items    []WatchlistItem
 	Updated  time.Time
+	Version  int64
 }
+
+// WatchlistUnconditionalVersion skips optimistic concurrency checks (imports, migrations).
+const WatchlistUnconditionalVersion int64 = -1
+
+// WatchlistConflictType classifies a per-symbol sync conflict.
+type WatchlistConflictType string
+
+const (
+	// ConflictUpdateVsUpdate: both sides changed the same symbol (e.g. different notes).
+	ConflictUpdateVsUpdate WatchlistConflictType = "update_vs_update"
+	// ConflictDeleteVsUpdate: client deleted; server still has a (possibly changed) item.
+	ConflictDeleteVsUpdate WatchlistConflictType = "delete_vs_update"
+	// ConflictUpdateVsDelete: client updated; server deleted the symbol.
+	ConflictUpdateVsDelete WatchlistConflictType = "update_vs_delete"
+)
+
+// WatchlistConflictItem is one symbol the user must resolve.
+type WatchlistConflictItem struct {
+	Exchange   Exchange
+	Symbol     string
+	Type       WatchlistConflictType
+	ServerItem *WatchlistItem // nil if deleted on server
+	ClientItem *WatchlistItem // nil if deleted on client
+}
+
+// WatchlistSyncConflict is returned when a write cannot be auto-merged.
+// Unwraps to ErrConflict (HTTP 409).
+type WatchlistSyncConflict struct {
+	BaseVersion   int64
+	ServerVersion int64
+	Server        Watchlist
+	// ClientProposed is the client's intended full list when known (replace); nil for single-ops.
+	ClientProposed []WatchlistItem
+	// AutoMerged is the non-conflicting merge preview (server + auto-accepted client changes).
+	AutoMerged []WatchlistItem
+	Conflicts  []WatchlistConflictItem
+}
+
+func (e *WatchlistSyncConflict) Error() string {
+	return "conflict: watchlist version mismatch; resolve symbol conflicts"
+}
+
+func (e *WatchlistSyncConflict) Unwrap() error { return ErrConflict }
+
+// WatchlistVersionMismatch is a low-level CAS failure from the store (no merge attempted yet).
+type WatchlistVersionMismatch struct {
+	Current *Watchlist
+}
+
+func (e *WatchlistVersionMismatch) Error() string {
+	return "conflict: watchlist version mismatch"
+}
+
+func (e *WatchlistVersionMismatch) Unwrap() error { return ErrConflict }
 
 // WatchlistShareRole is viewer (read-only) or editor (add/remove items only).
 type WatchlistShareRole string
@@ -104,13 +175,18 @@ func NormalizeWatchlistShareRole(s string) (WatchlistShareRole, error) {
 // WatchlistPort persists watchlists, shares, and audit history.
 // Implementations must be safe for concurrent use and enforce MaxWatchlistItems
 // under the same lock as mutations.
+//
+// expectedVersion is optimistic concurrency: when >= 0 it must match the stored
+// version or the method returns *WatchlistVersionMismatch without writing.
+// Use WatchlistUnconditionalVersion (-1) to skip the check (imports/tests).
+// Successful writes increment Version by 1.
 type WatchlistPort interface {
 	Get(ctx context.Context, clientID string) (*Watchlist, error)
 	// Set replaces the entire list for clientID (must reject len(items) > MaxWatchlistItems).
-	Set(ctx context.Context, clientID string, items []WatchlistItem) (*Watchlist, error)
+	Set(ctx context.Context, clientID string, items []WatchlistItem, expectedVersion int64) (*Watchlist, error)
 	// Add upserts one item; must reject when adding a new symbol would exceed MaxWatchlistItems.
-	Add(ctx context.Context, clientID string, item WatchlistItem) (*Watchlist, error)
-	Remove(ctx context.Context, clientID string, exchange Exchange, symbol string) (*Watchlist, error)
+	Add(ctx context.Context, clientID string, item WatchlistItem, expectedVersion int64) (*Watchlist, error)
+	Remove(ctx context.Context, clientID string, exchange Exchange, symbol string, expectedVersion int64) (*Watchlist, error)
 
 	// Shares: ownerClientID is the list owner; grantee is the shared-with client.
 	// CreateShare must fail if the owner+grantee pair already exists (no double-share).

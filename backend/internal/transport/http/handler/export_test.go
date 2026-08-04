@@ -152,7 +152,7 @@ func newExportFixture(t *testing.T) (*ExportHandler, *exportsvc.Service) {
 	wl := watchliststore.NewMemory()
 	_, _ = wl.Add(context.Background(), "export-user", domain.WatchlistItem{
 		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", AddedAt: time.Now().UTC(),
-	})
+	}, domain.WatchlistUnconditionalVersion)
 	svc, err := exportsvc.New(exportstore.NewMemory(), exportsvc.DataSources{
 		Watchlist: wl, Alerts: emptyAlerts{}, Scanner: emptyScanner{},
 	}, exportsvc.Options{FileDir: filepath.Join(t.TempDir(), "ex"), FileTTL: time.Hour})

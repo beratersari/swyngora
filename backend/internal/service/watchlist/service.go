@@ -2,6 +2,7 @@ package watchlist
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -69,7 +70,9 @@ func (s *Service) Get(ctx context.Context, actorClientID, ownerClientID string) 
 }
 
 // Replace sets the full list. Owner only (not editors).
-func (s *Service) Replace(ctx context.Context, actorClientID, ownerClientID string, items []domain.WatchlistItem) (*domain.WatchlistAccess, error) {
+// baseVersion is the version the client last loaded; baseItems (optional) enables accurate 3-way merge.
+// Pass domain.WatchlistUnconditionalVersion to skip concurrency checks.
+func (s *Service) Replace(ctx context.Context, actorClientID, ownerClientID string, items []domain.WatchlistItem, baseVersion int64, baseItems []domain.WatchlistItem) (*domain.WatchlistAccess, error) {
 	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
@@ -88,20 +91,44 @@ func (s *Service) Replace(ctx context.Context, actorClientID, ownerClientID stri
 	if err != nil {
 		return nil, err
 	}
-	wl, err := s.store.Set(ctx, owner, norm)
+	var baseNorm []domain.WatchlistItem
+	if baseItems != nil {
+		baseNorm, err = normalizeItems(baseItems)
+		if err != nil {
+			return nil, err
+		}
+	}
+	wl, err := s.store.Set(ctx, owner, norm, baseVersion)
 	if err != nil {
-		return nil, err
+		var mismatch *domain.WatchlistVersionMismatch
+		if errors.As(err, &mismatch) && mismatch.Current != nil {
+			merged, conflicts := domain.MergeWatchlistReplace(baseNorm, norm, mismatch.Current.Items)
+			if len(conflicts) > 0 {
+				return nil, &domain.WatchlistSyncConflict{
+					BaseVersion: baseVersion, ServerVersion: mismatch.Current.Version,
+					Server: *mismatch.Current, ClientProposed: norm, AutoMerged: merged, Conflicts: conflicts,
+				}
+			}
+			// Auto-merge fully succeeded — write with current server version.
+			wl, err = s.store.Set(ctx, owner, merged, mismatch.Current.Version)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
 		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: actor,
-		Action: domain.WatchlistAuditListReplaced, Detail: fmt.Sprintf("items=%d", len(norm)),
+		Action: domain.WatchlistAuditListReplaced, Detail: fmt.Sprintf("items=%d version=%d", len(wl.Items), wl.Version),
 		CreatedAt: time.Now().UTC(),
 	})
 	return &domain.WatchlistAccess{Watchlist: *wl, OwnerClientID: owner, Role: domain.WatchlistRoleOwner}, nil
 }
 
 // Add appends or updates one item. Owner or editor.
-func (s *Service) Add(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string) (*domain.WatchlistAccess, error) {
+// baseVersion is the version the client last loaded (or WatchlistUnconditionalVersion).
+func (s *Service) Add(ctx context.Context, actorClientID, ownerClientID, exchange, symbol, note string, baseVersion int64) (*domain.WatchlistAccess, error) {
 	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
@@ -126,9 +153,32 @@ func (s *Service) Add(ctx context.Context, actorClientID, ownerClientID, exchang
 	if err != nil {
 		return nil, err
 	}
-	wl, err := s.store.Add(ctx, owner, item)
+	wl, err := s.store.Add(ctx, owner, item, baseVersion)
 	if err != nil {
-		return nil, err
+		var mismatch *domain.WatchlistVersionMismatch
+		if errors.As(err, &mismatch) && mismatch.Current != nil {
+			noop, conf, auto, applyItem := domain.MergeWatchlistAdd(*mismatch.Current, item)
+			if conf != nil {
+				return nil, &domain.WatchlistSyncConflict{
+					BaseVersion: baseVersion, ServerVersion: mismatch.Current.Version,
+					Server: *mismatch.Current, Conflicts: []domain.WatchlistConflictItem{*conf},
+					AutoMerged: mismatch.Current.Items,
+				}
+			}
+			if noop != nil {
+				return &domain.WatchlistAccess{Watchlist: *noop, OwnerClientID: owner, Role: role}, nil
+			}
+			if auto {
+				wl, err = s.store.Add(ctx, owner, applyItem, mismatch.Current.Version)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
 	}
 	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{
 		ID: uuid.NewString(), OwnerClientID: owner, ActorClientID: actor,
@@ -139,7 +189,7 @@ func (s *Service) Add(ctx context.Context, actorClientID, ownerClientID, exchang
 }
 
 // Remove deletes one item. Owner or editor.
-func (s *Service) Remove(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string) (*domain.WatchlistAccess, error) {
+func (s *Service) Remove(ctx context.Context, actorClientID, ownerClientID, exchange, symbol string, baseVersion int64) (*domain.WatchlistAccess, error) {
 	actor, err := normalizeClientID(actorClientID)
 	if err != nil {
 		return nil, err
@@ -172,8 +222,22 @@ func (s *Service) Remove(ctx context.Context, actorClientID, ownerClientID, exch
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	wl, err := s.store.Remove(ctx, owner, ex, symbol)
+	wl, err := s.store.Remove(ctx, owner, ex, symbol, baseVersion)
 	if err != nil {
+		var mismatch *domain.WatchlistVersionMismatch
+		if errors.As(err, &mismatch) && mismatch.Current != nil {
+			noop, conf, _ := domain.MergeWatchlistRemove(*mismatch.Current, ex, symbol)
+			if conf != nil {
+				return nil, &domain.WatchlistSyncConflict{
+					BaseVersion: baseVersion, ServerVersion: mismatch.Current.Version,
+					Server: *mismatch.Current, Conflicts: []domain.WatchlistConflictItem{*conf},
+					AutoMerged: mismatch.Current.Items,
+				}
+			}
+			if noop != nil {
+				return &domain.WatchlistAccess{Watchlist: *noop, OwnerClientID: owner, Role: role}, nil
+			}
+		}
 		return nil, err
 	}
 	_ = s.store.AppendAudit(ctx, domain.WatchlistAuditEvent{

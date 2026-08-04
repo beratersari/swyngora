@@ -189,7 +189,7 @@ func newTestService(t *testing.T) (*Service, *watchliststore.Memory) {
 	ctx := context.Background()
 	_, _ = wl.Add(ctx, "user1", domain.WatchlistItem{
 		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Note: "n", AddedAt: time.Now().UTC(),
-	})
+	}, domain.WatchlistUnconditionalVersion)
 	_, _ = wl.CreateShare(ctx, domain.WatchlistShare{
 		OwnerClientID: "user1", GranteeClientID: "friend", Role: domain.WatchlistRoleViewer,
 		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),

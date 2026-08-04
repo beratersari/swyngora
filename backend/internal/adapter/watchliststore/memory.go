@@ -52,38 +52,70 @@ func (m *Memory) Get(_ context.Context, clientID string) (*domain.Watchlist, err
 		ClientID: clientID,
 		Items:    []domain.WatchlistItem{},
 		Updated:  time.Now().UTC(),
+		Version:  0,
 	}, nil
 }
 
+func (m *Memory) currentVersionLocked(clientID string) int64 {
+	if wl, ok := m.data[clientID]; ok {
+		return wl.Version
+	}
+	return 0
+}
+
+func (m *Memory) checkVersionLocked(clientID string, expectedVersion int64) (*domain.Watchlist, error) {
+	if expectedVersion < 0 {
+		return nil, nil
+	}
+	cur := m.currentVersionLocked(clientID)
+	if cur == expectedVersion {
+		return nil, nil
+	}
+	if wl, ok := m.data[clientID]; ok {
+		return nil, &domain.WatchlistVersionMismatch{Current: cloneWL(wl)}
+	}
+	return nil, &domain.WatchlistVersionMismatch{Current: &domain.Watchlist{
+		ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC(), Version: 0,
+	}}
+}
+
 // Set replaces the list. Rejects when len(items) > maxItems.
-func (m *Memory) Set(_ context.Context, clientID string, items []domain.WatchlistItem) (*domain.Watchlist, error) {
+func (m *Memory) Set(_ context.Context, clientID string, items []domain.WatchlistItem, expectedVersion int64) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ensureClientLocked(clientID); err != nil {
 		return nil, err
 	}
+	if _, err := m.checkVersionLocked(clientID, expectedVersion); err != nil {
+		return nil, err
+	}
 	if m.maxItems > 0 && len(items) > m.maxItems {
 		return nil, fmt.Errorf("%w: watchlist max %d items", domain.ErrInvalidArgument, m.maxItems)
 	}
+	ver := m.currentVersionLocked(clientID) + 1
 	wl := &domain.Watchlist{
 		ClientID: clientID,
 		Items:    append([]domain.WatchlistItem(nil), items...),
 		Updated:  time.Now().UTC(),
+		Version:  ver,
 	}
 	m.data[clientID] = wl
 	return cloneWL(wl), nil
 }
 
 // Add upserts one item. Enforces maxItems under the same lock (no TOCTOU).
-func (m *Memory) Add(ctx context.Context, clientID string, item domain.WatchlistItem) (*domain.Watchlist, error) {
+func (m *Memory) Add(ctx context.Context, clientID string, item domain.WatchlistItem, expectedVersion int64) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.ensureClientLocked(clientID); err != nil {
 		return nil, err
 	}
+	if _, err := m.checkVersionLocked(clientID, expectedVersion); err != nil {
+		return nil, err
+	}
 	wl := m.data[clientID]
 	if wl == nil {
-		wl = &domain.Watchlist{ClientID: clientID, Items: nil}
+		wl = &domain.Watchlist{ClientID: clientID, Items: nil, Version: 0}
 	}
 	found := false
 	items := append([]domain.WatchlistItem(nil), wl.Items...)
@@ -106,7 +138,9 @@ func (m *Memory) Add(ctx context.Context, clientID string, item domain.Watchlist
 		}
 		items = append(items, item)
 	}
-	out := &domain.Watchlist{ClientID: clientID, Items: items, Updated: time.Now().UTC()}
+	out := &domain.Watchlist{
+		ClientID: clientID, Items: items, Updated: time.Now().UTC(), Version: wl.Version + 1,
+	}
 	m.data[clientID] = out
 	return cloneWL(out), nil
 }
@@ -123,12 +157,20 @@ func (m *Memory) ensureClientLocked(clientID string) error {
 }
 
 // Remove deletes one item.
-func (m *Memory) Remove(_ context.Context, clientID string, exchange domain.Exchange, symbol string) (*domain.Watchlist, error) {
+func (m *Memory) Remove(_ context.Context, clientID string, exchange domain.Exchange, symbol string, expectedVersion int64) (*domain.Watchlist, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if _, err := m.checkVersionLocked(clientID, expectedVersion); err != nil {
+		return nil, err
+	}
 	wl := m.data[clientID]
 	if wl == nil {
-		return &domain.Watchlist{ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC()}, nil
+		if expectedVersion >= 0 && expectedVersion != 0 {
+			return nil, &domain.WatchlistVersionMismatch{Current: &domain.Watchlist{
+				ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC(), Version: 0,
+			}}
+		}
+		return &domain.Watchlist{ClientID: clientID, Items: []domain.WatchlistItem{}, Updated: time.Now().UTC(), Version: 0}, nil
 	}
 	next := make([]domain.WatchlistItem, 0, len(wl.Items))
 	for _, it := range wl.Items {
@@ -137,7 +179,9 @@ func (m *Memory) Remove(_ context.Context, clientID string, exchange domain.Exch
 		}
 		next = append(next, it)
 	}
-	out := &domain.Watchlist{ClientID: clientID, Items: next, Updated: time.Now().UTC()}
+	out := &domain.Watchlist{
+		ClientID: clientID, Items: next, Updated: time.Now().UTC(), Version: wl.Version + 1,
+	}
 	m.data[clientID] = out
 	return cloneWL(out), nil
 }

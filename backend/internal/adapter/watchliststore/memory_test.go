@@ -13,7 +13,7 @@ import (
 func TestMemory_CRUD(t *testing.T) {
 	m := NewMemory()
 	ctx := context.Background()
-	_, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"})
+	_, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestMemory_CRUD(t *testing.T) {
 	if err != nil || len(wl.Items) != 1 {
 		t.Fatalf("%+v %v", wl, err)
 	}
-	wl, err = m.Remove(ctx, "c1", domain.ExchangeBinance, "BTCUSDT")
+	wl, err = m.Remove(ctx, "c1", domain.ExchangeBinance, "BTCUSDT", -1)
 	if err != nil || len(wl.Items) != 0 {
 		t.Fatalf("%+v %v", wl, err)
 	}
@@ -32,7 +32,7 @@ func TestMemory_SixItems_Stable(t *testing.T) {
 	ctx := context.Background()
 	syms := []string{"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT"}
 	for _, s := range syms {
-		if _, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: s}); err != nil {
+		if _, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: s}, -1); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -41,7 +41,7 @@ func TestMemory_SixItems_Stable(t *testing.T) {
 		t.Fatalf("len=%d err=%v", len(wl.Items), err)
 	}
 	// Set replace with same 6 — still 6
-	wl, err = m.Set(ctx, "c", wl.Items)
+	wl, err = m.Set(ctx, "c", wl.Items, -1)
 	if err != nil || len(wl.Items) != 6 {
 		t.Fatalf("after set len=%d", len(wl.Items))
 	}
@@ -50,7 +50,7 @@ func TestMemory_SixItems_Stable(t *testing.T) {
 func TestMemory_GetReturnsCopy(t *testing.T) {
 	m := NewMemory()
 	ctx := context.Background()
-	_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"})
+	_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}, -1)
 	a, _ := m.Get(ctx, "c")
 	a.Items[0].Symbol = "HACKED"
 	b, _ := m.Get(ctx, "c")
@@ -68,7 +68,7 @@ func TestMemory_ConcurrentAdds(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			sym := fmt.Sprintf("SYM%d", i)
-			_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: sym})
+			_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: sym}, -1)
 		}(i)
 	}
 	wg.Wait()
@@ -84,18 +84,18 @@ func TestMemory_ConcurrentAdds(t *testing.T) {
 func TestMemory_MaxClients(t *testing.T) {
 	m := NewMemoryWithMaxClients(2)
 	ctx := context.Background()
-	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}); err != nil {
+	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}, -1); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Add(ctx, "c2", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"}); err != nil {
+	if _, err := m.Add(ctx, "c2", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"}, -1); err != nil {
 		t.Fatal(err)
 	}
-	_, err := m.Add(ctx, "c3", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"})
+	_, err := m.Add(ctx, "c3", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"}, -1)
 	if err == nil {
 		t.Fatal("expected capacity error for third client")
 	}
 	// Existing client still writable.
-	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}); err != nil {
+	if _, err := m.Add(ctx, "c1", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"}, -1); err != nil {
 		t.Fatalf("existing client should work: %v", err)
 	}
 }
@@ -104,12 +104,12 @@ func TestMemory_MaxItemsEnforced(t *testing.T) {
 	m := NewMemory()
 	ctx := context.Background()
 	for i := 0; i < domain.MaxWatchlistItems; i++ {
-		_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "S" + strconv.Itoa(i)})
+		_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "S" + strconv.Itoa(i)}, -1)
 		if err != nil {
 			t.Fatalf("add %d: %v", i, err)
 		}
 	}
-	_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "OVERFLOW"})
+	_, err := m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "OVERFLOW"}, -1)
 	if err == nil {
 		t.Fatal("expected max items error")
 	}
@@ -119,7 +119,7 @@ func TestMemory_MaxItemsEnforced(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "X" + strconv.Itoa(i)})
+			_, _ = m.Add(ctx, "c", domain.WatchlistItem{Exchange: domain.ExchangeBinance, Symbol: "X" + strconv.Itoa(i)}, -1)
 		}(i)
 	}
 	wg.Wait()
