@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
@@ -38,6 +39,8 @@ type RouterOptions struct {
 	Export *exportsvc.Service
 	// Import enables user data import routes when non-nil.
 	Import *dataimport.Service
+	// Accounts enables account close/reopen and closed-client gate when non-nil.
+	Accounts *account.Service
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -139,6 +142,13 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/import/{id}", ih.Get)
 	}
 
+	if opts.Accounts != nil {
+		ah := handler.NewAccountHandler(opts.Accounts)
+		mux.HandleFunc("GET /api/v1/account", ah.Status)
+		mux.HandleFunc("POST /api/v1/account/close", ah.Close)
+		mux.HandleFunc("POST /api/v1/account/reopen", ah.Reopen)
+	}
+
 	// MCP streamable HTTP — same process as REST API (no second server).
 	if opts.MCPHandler != nil {
 		mux.Handle("/mcp", opts.MCPHandler)
@@ -152,6 +162,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	}
 
 	var h http.Handler = mux
+	h = middleware.AccountGate(opts.Accounts)(h)
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
 	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h

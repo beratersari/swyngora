@@ -95,6 +95,10 @@ func (f *fakeAlerts) ScheduleDigestRetry(context.Context, string, int, time.Time
 	return nil
 }
 func (f *fakeAlerts) FailDigest(context.Context, string, string) error { return nil }
+func (f *fakeAlerts) PurgeClient(context.Context, string) error {
+	f.list = nil
+	return nil
+}
 
 type fakeScanner struct {
 	backtests []domain.ScannerBacktest
@@ -224,6 +228,11 @@ func (f *fakeScanner) DeleteBacktest(_ context.Context, clientID, id string) err
 		return domain.ErrNotFound
 	}
 	delete(f.signals, id)
+	return nil
+}
+func (f *fakeScanner) PurgeClient(context.Context, string) error {
+	f.backtests = nil
+	f.signals = map[string][]domain.ScannerBacktestSignal{}
 	return nil
 }
 

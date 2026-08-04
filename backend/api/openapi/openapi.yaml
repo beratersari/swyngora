@@ -34,6 +34,8 @@ info:
     - User data import: upload a prior JSON/CSV export, preview valid/invalid/willAdd counts, then
       confirm with merge or replace mode. Dedupes symbols/shares/ids; large applies run in the
       background with progress and cancel.
+    - Account close: close a clientId for 7 days (reopen allowed); product APIs and shared-list
+      access stop; after grace, user data and jobs are purged.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -1822,6 +1824,74 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
 
+  /api/v1/account:
+    get:
+      summary: Get account close/reopen status for a clientId
+      operationId: getAccount
+      tags: [Account]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Account status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/account/close:
+    post:
+      summary: Close account (7-day grace period)
+      description: |
+        Marks the clientId closed. Product APIs return 403 for that clientId.
+        Shared watchlists owned by this client become inaccessible to grantees.
+        Data is retained until purgeAt (closedAt + 7 days). Active jobs are canceled.
+      operationId: closeAccount
+      tags: [Account]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+      responses:
+        '200':
+          description: Closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/account/reopen:
+    post:
+      summary: Reopen a closed account within the grace period
+      operationId: reopenAccount
+      tags: [Account]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+      responses:
+        '200':
+          description: Reopened (active)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Error'
+
   /api/v1/import/preview:
     post:
       summary: Upload an export file and get a restore preview
@@ -2394,6 +2464,18 @@ components:
         invalid: { type: integer }
         willAdd: { type: integer }
         duplicates: { type: integer }
+    Account:
+      type: object
+      properties:
+        clientId: { type: string }
+        status: { type: string, enum: [active, closed, purged] }
+        closedAt: { type: string, format: date-time }
+        purgeAt: { type: string, format: date-time }
+        reopenedAt: { type: string, format: date-time }
+        canReopen: { type: boolean }
+        graceDays: { type: integer, example: 7 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     ImportJob:
       type: object
       properties:

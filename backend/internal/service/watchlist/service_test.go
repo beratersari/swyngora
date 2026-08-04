@@ -117,6 +117,31 @@ func TestWatchlist_CannotShareSelf(t *testing.T) {
 	}
 }
 
+type closedAccount struct{ closed map[string]bool }
+
+func (c *closedAccount) IsClosed(_ context.Context, clientID string) (bool, *domain.Account, error) {
+	if c.closed[clientID] {
+		return true, &domain.Account{ClientID: clientID, Status: domain.AccountClosed}, nil
+	}
+	return false, nil, nil
+}
+
+func TestWatchlist_ClosedOwnerBlocksShares(t *testing.T) {
+	svc := New(watchliststore.NewMemory())
+	ctx := context.Background()
+	_, _ = svc.Add(ctx, "owner", "", "binance", "BTCUSDT", "", uncond)
+	_, _ = svc.Share(ctx, "owner", "friend", "viewer")
+	// friend can see
+	if _, err := svc.Get(ctx, "friend", "owner"); err != nil {
+		t.Fatal(err)
+	}
+	svc.SetAccountChecker(&closedAccount{closed: map[string]bool{"owner": true}})
+	_, err := svc.Get(ctx, "friend", "owner")
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestWatchlist_MultiDevice_AutoMergeDifferentSymbols(t *testing.T) {
 	svc := New(watchliststore.NewMemory())
 	ctx := context.Background()

@@ -81,6 +81,7 @@ func (emptyAlerts) ScheduleDigestRetry(context.Context, string, int, time.Time, 
 	return nil
 }
 func (emptyAlerts) FailDigest(context.Context, string, string) error { return nil }
+func (emptyAlerts) PurgeClient(context.Context, string) error         { return nil }
 
 type emptyScanner struct{}
 
@@ -146,6 +147,7 @@ func (emptyScanner) CountBacktestSignals(context.Context, string) (int, error) {
 func (emptyScanner) DeleteBacktest(context.Context, string, string) error {
 	return domain.ErrNotFound
 }
+func (emptyScanner) PurgeClient(context.Context, string) error { return nil }
 
 func newExportFixture(t *testing.T) (*ExportHandler, *exportsvc.Service) {
 	t.Helper()

@@ -274,3 +274,17 @@ func (m *Memory) RequeueStuckRunning(_ context.Context, before time.Time) (int, 
 	}
 	return n, nil
 }
+
+// PurgeClient removes all export jobs for clientID and returns them (for file cleanup).
+func (m *Memory) PurgeClient(_ context.Context, clientID string) ([]domain.ExportJob, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []domain.ExportJob
+	for id, j := range m.byID {
+		if j.ClientID == clientID {
+			out = append(out, *cloneJob(j))
+			delete(m.byID, id)
+		}
+	}
+	return out, nil
+}

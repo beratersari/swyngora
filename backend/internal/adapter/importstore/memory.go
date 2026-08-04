@@ -286,6 +286,20 @@ func (m *Memory) Delete(_ context.Context, id string) error {
 	return nil
 }
 
+// PurgeClient removes all import jobs for clientID.
+func (m *Memory) PurgeClient(_ context.Context, clientID string) ([]domain.ImportJob, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []domain.ImportJob
+	for id, j := range m.byID {
+		if j.ClientID == clientID {
+			out = append(out, *cloneImport(j))
+			delete(m.byID, id)
+		}
+	}
+	return out, nil
+}
+
 func (m *Memory) RequeueStuckRunning(_ context.Context, before time.Time) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

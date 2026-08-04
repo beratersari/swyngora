@@ -82,6 +82,7 @@ func (f *fakeAlerts) ScheduleDigestRetry(context.Context, string, int, time.Time
 	return nil
 }
 func (f *fakeAlerts) FailDigest(context.Context, string, string) error { return nil }
+func (f *fakeAlerts) PurgeClient(context.Context, string) error        { f.list = nil; return nil }
 
 type fakeScanner struct {
 	backtests []domain.ScannerBacktest
@@ -181,6 +182,7 @@ func (f *fakeScanner) CountBacktestSignals(_ context.Context, backtestID string)
 func (f *fakeScanner) DeleteBacktest(context.Context, string, string) error {
 	return domain.ErrNotFound
 }
+func (f *fakeScanner) PurgeClient(context.Context, string) error { return nil }
 
 func newTestService(t *testing.T) (*Service, *watchliststore.Memory) {
 	t.Helper()

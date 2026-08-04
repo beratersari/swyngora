@@ -163,6 +163,8 @@ type ScannerPort interface {
 	CountBacktestSignals(ctx context.Context, backtestID string) (int, error)
 	// DeleteBacktest removes a job and its signals (CASCADE). Owner-scoped.
 	DeleteBacktest(ctx context.Context, clientID, id string) error
+	// PurgeClient deletes rules, results, and backtests for clientID.
+	PurgeClient(ctx context.Context, clientID string) error
 }
 
 // ForwardReturnPct is (futureClose - signalClose) / signalClose * 100.

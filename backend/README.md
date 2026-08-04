@@ -64,6 +64,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/import` | List import jobs |
 | `GET` | `/api/v1/import/{id}` | Import status / progress |
 | `POST` | `/api/v1/import/{id}/cancel` | Cancel preview or running import |
+| `GET` | `/api/v1/account` | Account status (active/closed, purgeAt, canReopen) |
+| `POST` | `/api/v1/account/close` | Close account (7-day grace; data retained) |
+| `POST` | `/api/v1/account/reopen` | Reopen within grace period |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -85,6 +88,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, and backtests. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
 
 **User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe. See `docs/features/user-data-import.md`.
+
+**Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; after grace, watchlists/shares/alerts/backtests/import-export files and jobs are purged. See `docs/features/account-close.md`.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -171,6 +176,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `IMPORT_FILE_DIR` | `data/imports` | Directory for uploaded import files |
 | `IMPORT_FILE_TTL` | `1h` | How long preview uploads remain before cleanup |
 | `IMPORT_WORKER_INTERVAL` | `2s` | How often pending imports are claimed |
+| `ACCOUNT_DB_PATH` | `data/accounts.db` | SQLite for account close/reopen state |
+| `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

@@ -14,6 +14,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
@@ -23,6 +24,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -215,6 +217,26 @@ func main() {
 	}
 	logger.Info("import store ready", "driver", "sqlite", "path", importStore.Path(), "files", importSvc.FileDir())
 
+	accountStore, err := accountstore.Open(cfg.AccountDBPath)
+	if err != nil {
+		logger.Error("account sqlite open failed", "path", cfg.AccountDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := accountStore.CloseDB(); err != nil {
+			logger.Error("account sqlite close", "err", err)
+		}
+	}()
+	accountSvc := account.New(accountStore, account.DataPurgeDeps{
+		Watchlist: watchStore,
+		Alerts:    alertStore,
+		Scanner:   scannerStore,
+		Exports:   exportStore,
+		Imports:   importStore,
+	})
+	watchSvc.SetAccountChecker(accountSvc)
+	logger.Info("account store ready", "driver", "sqlite", "path", accountStore.Path(), "grace", domain.AccountCloseGrace.String())
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -254,6 +276,13 @@ func main() {
 	}
 	go importWorker.Start(ctx)
 
+	accountPurge := &account.PurgeWorker{
+		Accounts: accountSvc,
+		Interval: cfg.AccountPurgeInterval,
+		Logger:   logger,
+	}
+	go accountPurge.Start(ctx)
+
 	// Optional: start Python multi-agent HTTP as a child of this process.
 	aiProc, err := aistart.Start(ctx, aistart.Options{
 		Enabled: cfg.AIAutoStart,
@@ -287,6 +316,7 @@ func main() {
 		Scanner:         scannerSvc,
 		Export:          exportSvc,
 		Import:          importSvc,
+		Accounts:        accountSvc,
 	})
 
 	job := &supplyjob.Runner{

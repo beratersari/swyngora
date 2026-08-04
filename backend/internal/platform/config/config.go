@@ -99,6 +99,11 @@ type Config struct {
 	ImportFileTTL time.Duration
 	// ImportWorkerInterval is how often the import worker polls for pending jobs.
 	ImportWorkerInterval time.Duration
+
+	// AccountDBPath is the SQLite file for account close/reopen state.
+	AccountDBPath string
+	// AccountPurgeInterval is how often closed accounts past grace are purged.
+	AccountPurgeInterval time.Duration
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -175,6 +180,9 @@ func Load() Config {
 		ImportFileDir:        getenv("IMPORT_FILE_DIR", "data/imports"),
 		ImportFileTTL:        positiveDurationEnv("IMPORT_FILE_TTL", 1*time.Hour),
 		ImportWorkerInterval: positiveDurationEnv("IMPORT_WORKER_INTERVAL", 2*time.Second),
+
+		AccountDBPath:        getenv("ACCOUNT_DB_PATH", "data/accounts.db"),
+		AccountPurgeInterval: positiveDurationEnv("ACCOUNT_PURGE_INTERVAL", 1*time.Hour),
 	}
 }
 

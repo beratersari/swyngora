@@ -296,6 +296,26 @@ func (m *Memory) CountSharesByOwner(_ context.Context, ownerClientID string) (in
 	return n, nil
 }
 
+// PurgeClient removes all watchlist data for clientID.
+func (m *Memory) PurgeClient(_ context.Context, clientID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.data, clientID)
+	for k, sh := range m.shares {
+		if sh.OwnerClientID == clientID || sh.GranteeClientID == clientID {
+			delete(m.shares, k)
+		}
+	}
+	next := m.audit[:0]
+	for _, ev := range m.audit {
+		if ev.OwnerClientID != clientID && ev.ActorClientID != clientID {
+			next = append(next, ev)
+		}
+	}
+	m.audit = next
+	return nil
+}
+
 // AppendAudit records an event.
 func (m *Memory) AppendAudit(_ context.Context, ev domain.WatchlistAuditEvent) error {
 	m.mu.Lock()

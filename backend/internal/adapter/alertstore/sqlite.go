@@ -415,6 +415,32 @@ func (s *SQLite) Delete(ctx context.Context, clientID, id string) error {
 	return nil
 }
 
+// PurgeClient deletes all alerts and webhook settings for clientID.
+func (s *SQLite) PurgeClient(ctx context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM alert_notifications WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM alert_digest_items WHERE digest_id IN (
+			SELECT id FROM alert_digests WHERE client_id = ?
+		)
+	`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM alert_digests WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM price_alerts WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM client_webhooks WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	return nil
+}
+
 // CountByClient returns how many alerts the client owns.
 func (s *SQLite) CountByClient(ctx context.Context, clientID string) (int, error) {
 	var n int

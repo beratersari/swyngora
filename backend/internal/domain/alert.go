@@ -223,6 +223,9 @@ type PriceAlertPort interface {
 	MarkDigestDelivered(ctx context.Context, id string, at time.Time) error
 	ScheduleDigestRetry(ctx context.Context, id string, attempts int, nextAt time.Time, lastErr string) error
 	FailDigest(ctx context.Context, id string, lastErr string) error
+
+	// PurgeClient deletes all alerts, webhooks, and related outbox rows for clientID.
+	PurgeClient(ctx context.Context, clientID string) error
 }
 
 // AlertConditionMet reports whether lastPrice satisfies the alert threshold.

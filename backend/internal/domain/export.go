@@ -198,4 +198,6 @@ type ExportPort interface {
 	Delete(ctx context.Context, id string) error
 	// RequeueStuckRunning moves running jobs older than before back to pending (restart recovery).
 	RequeueStuckRunning(ctx context.Context, before time.Time) (int, error)
+	// PurgeClient deletes all export jobs (and caller should remove files).
+	PurgeClient(ctx context.Context, clientID string) ([]ExportJob, error)
 }

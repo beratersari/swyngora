@@ -19,15 +19,26 @@ const (
 	maxNoteRunes   = 200
 )
 
+// AccountChecker reports whether a clientId account is closed (shared-list access).
+type AccountChecker interface {
+	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
 // Service orchestrates watchlist use cases including sharing and audit.
 // Client IDs are opaque client-supplied tenancy keys (no server auth yet).
 type Service struct {
-	store domain.WatchlistPort
+	store   domain.WatchlistPort
+	account AccountChecker // optional
 }
 
 // New constructs a watchlist service.
 func New(store domain.WatchlistPort) *Service {
 	return &Service{store: store}
+}
+
+// SetAccountChecker wires account-closed checks for shared lists (optional).
+func (s *Service) SetAccountChecker(a AccountChecker) {
+	s.account = a
 }
 
 // resolveOwner returns the list owner id; empty owner means actor owns the list.
@@ -261,6 +272,13 @@ func (s *Service) Share(ctx context.Context, ownerClientID, granteeClientID, rol
 	if owner == grantee {
 		return nil, fmt.Errorf("%w: cannot share a watchlist with yourself", domain.ErrInvalidArgument)
 	}
+	if s.account != nil {
+		if closed, _, err := s.account.IsClosed(ctx, grantee); err != nil {
+			return nil, err
+		} else if closed {
+			return nil, fmt.Errorf("%w: cannot share with a closed account", domain.ErrInvalidArgument)
+		}
+	}
 	r, err := domain.NormalizeWatchlistShareRole(role)
 	if err != nil {
 		return nil, err
@@ -393,6 +411,14 @@ func (s *Service) ListAudit(ctx context.Context, ownerClientID string, limit, of
 func (s *Service) accessRole(ctx context.Context, actor, owner string) (domain.WatchlistShareRole, error) {
 	if actor == owner {
 		return domain.WatchlistRoleOwner, nil
+	}
+	// Closed owners: shares stop immediately (grantees cannot view).
+	if s.account != nil {
+		if closed, _, err := s.account.IsClosed(ctx, owner); err != nil {
+			return "", err
+		} else if closed {
+			return "", nil
+		}
 	}
 	sh, err := s.store.GetShare(ctx, owner, actor)
 	if err == domain.ErrNotFound {

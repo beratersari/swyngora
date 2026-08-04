@@ -137,4 +137,6 @@ type ImportPort interface {
 	ListExpired(ctx context.Context, now time.Time, limit int) ([]ImportJob, error)
 	Delete(ctx context.Context, id string) error
 	RequeueStuckRunning(ctx context.Context, before time.Time) (int, error)
+	// PurgeClient deletes all import jobs (and caller should remove files).
+	PurgeClient(ctx context.Context, clientID string) ([]ImportJob, error)
 }

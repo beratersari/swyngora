@@ -202,4 +202,7 @@ type WatchlistPort interface {
 	// Audit
 	AppendAudit(ctx context.Context, ev WatchlistAuditEvent) error
 	ListAudit(ctx context.Context, ownerClientID string, limit, offset int) ([]WatchlistAuditEvent, error)
+
+	// PurgeClient deletes list, items, shares (as owner and grantee), and audit for clientID.
+	PurgeClient(ctx context.Context, clientID string) error
 }

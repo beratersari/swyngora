@@ -490,6 +490,34 @@ func insertItem(ctx context.Context, q queryer, clientID string, it domain.Watch
 	return nil
 }
 
+// PurgeClient deletes list, items, shares, and audit for clientID.
+func (s *SQLite) PurgeClient(ctx context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM watchlist_items WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM watchlist_meta WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM watchlist_shares WHERE owner_client_id = ? OR grantee_client_id = ?
+	`, clientID, clientID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM watchlist_audit WHERE owner_client_id = ? OR actor_client_id = ?
+	`, clientID, clientID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // CreateShare inserts a share; fails if the pair already exists.
 func (s *SQLite) CreateShare(ctx context.Context, share domain.WatchlistShare) (*domain.WatchlistShare, error) {
 	s.mu.Lock()

@@ -389,3 +389,17 @@ func (s *SQLite) RequeueStuckRunning(ctx context.Context, before time.Time) (int
 	n, _ := res.RowsAffected()
 	return int(n), nil
 }
+
+// PurgeClient deletes all export jobs for clientID and returns them for file cleanup.
+func (s *SQLite) PurgeClient(ctx context.Context, clientID string) ([]domain.ExportJob, error) {
+	list, err := s.ListByClient(ctx, clientID, 10_000, 0)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM export_jobs WHERE client_id = ?`, clientID); err != nil {
+		return nil, err
+	}
+	return list, nil
+}

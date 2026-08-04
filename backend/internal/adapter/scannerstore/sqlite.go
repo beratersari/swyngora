@@ -579,6 +579,23 @@ func (s *SQLite) DeleteBacktest(ctx context.Context, clientID, id string) error 
 	return nil
 }
 
+// PurgeClient deletes rules, results, and backtests for clientID.
+func (s *SQLite) PurgeClient(ctx context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// signals cascade with backtests if FK on; delete backtests first
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM scanner_backtests WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM scanner_results WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM scanner_rules WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	return nil
+}
+
 func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	var b domain.ScannerBacktest
 	var ex, st, rStart, rEnd, cAt string
