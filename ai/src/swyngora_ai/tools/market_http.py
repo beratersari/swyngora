@@ -155,6 +155,20 @@ class WatchAuditInput(BaseModel):
     offset: int = Field(default=0, ge=0)
 
 
+class ExportStartInput(BaseModel):
+    client_id: str = Field(description="Owner client id")
+    format: str = Field(default="json", description="json or csv")
+    sections: str = Field(
+        default="",
+        description="Comma-separated: watchlist,shares,alerts,backtests (empty=all)",
+    )
+
+
+class ExportGetInput(BaseModel):
+    client_id: str
+    export_id: str
+
+
 class AlertListInput(BaseModel):
     client_id: str = Field(description="Opaque client id")
 
@@ -446,6 +460,28 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "/api/v1/watchlist/audit",
             {"clientId": client_id, "limit": limit, "offset": offset},
         )
+
+    def start_export(
+        client_id: str,
+        format: str = "json",
+        sections: str = "",
+    ) -> str:
+        body: dict = {"clientId": client_id, "format": format or "json"}
+        if sections:
+            body["sections"] = [s.strip() for s in sections.split(",") if s.strip()]
+        return http.post("/api/v1/export", body)
+
+    def get_export(client_id: str, export_id: str) -> str:
+        return http.get(f"/api/v1/export/{export_id}", {"clientId": client_id})
+
+    def list_exports(client_id: str, limit: int = 20, offset: int = 0) -> str:
+        return http.get(
+            "/api/v1/export",
+            {"clientId": client_id, "limit": limit, "offset": offset},
+        )
+
+    def cancel_export(client_id: str, export_id: str) -> str:
+        return http.post(f"/api/v1/export/{export_id}/cancel?clientId={client_id}", {})
 
     def list_price_alerts(client_id: str) -> str:
         return http.get("/api/v1/alerts", {"clientId": client_id})
@@ -769,6 +805,34 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_watchlist_audit",
             description="List who changed the watchlist and when. Owner only.",
             args_schema=WatchAuditInput,
+        ),
+        StructuredTool.from_function(
+            start_export,
+            name="start_export",
+            description=(
+                "Start a background export of the user's watchlist, shares, alerts, "
+                "and/or backtests as json or csv. One active export per client. "
+                "Poll get_export for progress; download via HTTP when completed."
+            ),
+            args_schema=ExportStartInput,
+        ),
+        StructuredTool.from_function(
+            get_export,
+            name="get_export",
+            description="Get export job status and progressPct (0-100).",
+            args_schema=ExportGetInput,
+        ),
+        StructuredTool.from_function(
+            list_exports,
+            name="list_exports",
+            description="List recent data export jobs for a clientId.",
+            args_schema=WatchAuditInput,
+        ),
+        StructuredTool.from_function(
+            cancel_export,
+            name="cancel_export",
+            description="Cancel a pending or running data export.",
+            args_schema=ExportGetInput,
         ),
         StructuredTool.from_function(
             list_price_alerts,

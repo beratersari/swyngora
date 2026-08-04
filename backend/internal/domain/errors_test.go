@@ -11,6 +11,7 @@ func TestSentinelErrors_DistinctAndWrappable(t *testing.T) {
 		ErrInvalidArgument,
 		ErrNotFound,
 		ErrForbidden,
+		ErrConflict,
 		ErrUpstream,
 		ErrRateLimited,
 	}

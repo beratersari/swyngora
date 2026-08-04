@@ -81,6 +81,24 @@ type Config struct {
 	ScannerDBPath string
 	// ScannerCheckInterval is how often scanner rules are evaluated against watchlists.
 	ScannerCheckInterval time.Duration
+
+	// ExportDBPath is the SQLite file for user data export job metadata.
+	ExportDBPath string
+	// ExportFileDir is the directory where export download files are written.
+	ExportFileDir string
+	// ExportFileTTL is how long completed export files remain downloadable.
+	ExportFileTTL time.Duration
+	// ExportWorkerInterval is how often the export worker polls for pending jobs.
+	ExportWorkerInterval time.Duration
+
+	// ImportDBPath is the SQLite file for user data import job metadata.
+	ImportDBPath string
+	// ImportFileDir is the directory for uploaded import files and payloads.
+	ImportFileDir string
+	// ImportFileTTL is how long preview/source files remain before cleanup.
+	ImportFileTTL time.Duration
+	// ImportWorkerInterval is how often the import worker polls for pending jobs.
+	ImportWorkerInterval time.Duration
 }
 
 // Load reads configuration from environment variables with safe defaults.
@@ -147,6 +165,16 @@ func Load() Config {
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),
+
+		ExportDBPath:         getenv("EXPORT_DB_PATH", "data/export.db"),
+		ExportFileDir:        getenv("EXPORT_FILE_DIR", "data/exports"),
+		ExportFileTTL:        positiveDurationEnv("EXPORT_FILE_TTL", 1*time.Hour),
+		ExportWorkerInterval: positiveDurationEnv("EXPORT_WORKER_INTERVAL", 2*time.Second),
+
+		ImportDBPath:         getenv("IMPORT_DB_PATH", "data/import.db"),
+		ImportFileDir:        getenv("IMPORT_FILE_DIR", "data/imports"),
+		ImportFileTTL:        positiveDurationEnv("IMPORT_FILE_TTL", 1*time.Hour),
+		ImportWorkerInterval: positiveDurationEnv("IMPORT_WORKER_INTERVAL", 2*time.Second),
 	}
 }
 

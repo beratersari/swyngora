@@ -564,6 +564,21 @@ func (s *SQLite) CountBacktestSignals(ctx context.Context, backtestID string) (i
 	return n, err
 }
 
+// DeleteBacktest removes a backtest and cascaded signals for the owning client.
+func (s *SQLite) DeleteBacktest(ctx context.Context, clientID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `DELETE FROM scanner_backtests WHERE id = ? AND client_id = ?`, id, clientID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	var b domain.ScannerBacktest
 	var ex, st, rStart, rEnd, cAt string

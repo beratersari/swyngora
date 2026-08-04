@@ -161,6 +161,8 @@ type ScannerPort interface {
 	InsertBacktestSignal(ctx context.Context, sig ScannerBacktestSignal) error
 	ListBacktestSignals(ctx context.Context, backtestID string, limit, offset int) ([]ScannerBacktestSignal, error)
 	CountBacktestSignals(ctx context.Context, backtestID string) (int, error)
+	// DeleteBacktest removes a job and its signals (CASCADE). Owner-scoped.
+	DeleteBacktest(ctx context.Context, clientID, id string) error
 }
 
 // ForwardReturnPct is (futureClose - signalClose) / signalClose * 100.

@@ -41,6 +41,15 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_scanner_rules` | List scanner rules |
 | `delete_scanner_rule` | Delete scanner rule |
 | `list_scanner_results` | Scanner match history |
+| `start_export` | Start JSON/CSV export of watchlist, shares, alerts, backtests |
+| `get_export` | Export job status / progress |
+| `list_exports` | List recent export jobs |
+| `cancel_export` | Cancel pending/running export |
+| `preview_import` | Preview restore of an export file (counts only) |
+| `confirm_import` | Apply preview with merge or replace |
+| `get_import` | Import job status / progress |
+| `list_imports` | List recent import jobs |
+| `cancel_import` | Cancel previewed/pending/running import |
 
 ## Run (integrated — preferred)
 

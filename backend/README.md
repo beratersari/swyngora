@@ -54,6 +54,16 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/scanner/backtests/{id}` | Backtest progress/summary |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel backtest |
 | `GET` | `/api/v1/scanner/backtests/{id}/signals` | Backtest signals + 1/5/20d returns |
+| `POST` | `/api/v1/export` | Start JSON/CSV export of own watchlist/shares/alerts/backtests |
+| `GET` | `/api/v1/export` | List export jobs |
+| `GET` | `/api/v1/export/{id}` | Export progress / status |
+| `POST` | `/api/v1/export/{id}/cancel` | Cancel pending/running export |
+| `GET` | `/api/v1/export/{id}/download` | Download completed file (owner only; TTL) |
+| `POST` | `/api/v1/import/preview` | Upload export file; get valid/invalid/willAdd counts |
+| `POST` | `/api/v1/import/{id}/confirm` | Apply preview (`merge` or `replace`) in background |
+| `GET` | `/api/v1/import` | List import jobs |
+| `GET` | `/api/v1/import/{id}` | Import status / progress |
+| `POST` | `/api/v1/import/{id}/cancel` | Cancel preview or running import |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -71,6 +81,10 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, and trade history. Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`).
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
+
+**User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, and backtests. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
+
+**User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe. See `docs/features/user-data-import.md`.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
 
@@ -149,6 +163,14 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
 | `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |
+| `EXPORT_DB_PATH` | `data/export.db` | SQLite file for user data export jobs |
+| `EXPORT_FILE_DIR` | `data/exports` | Directory for export download files |
+| `EXPORT_FILE_TTL` | `1h` | How long completed export files remain downloadable |
+| `EXPORT_WORKER_INTERVAL` | `2s` | How often pending exports are claimed |
+| `IMPORT_DB_PATH` | `data/import.db` | SQLite file for user data import jobs |
+| `IMPORT_FILE_DIR` | `data/imports` | Directory for uploaded import files |
+| `IMPORT_FILE_TTL` | `1h` | How long preview uploads remain before cleanup |
+| `IMPORT_WORKER_INTERVAL` | `2s` | How often pending imports are claimed |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

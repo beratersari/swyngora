@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
+	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -32,6 +34,10 @@ type RouterOptions struct {
 	Portfolio *portfolio.Service
 	// Scanner enables technical indicator scanner routes when non-nil.
 	Scanner *scanner.Service
+	// Export enables user data export routes when non-nil.
+	Export *exportsvc.Service
+	// Import enables user data import routes when non-nil.
+	Import *dataimport.Service
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -112,6 +118,25 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/scanner/backtests/{id}/cancel", sh.CancelBacktest)
 		mux.HandleFunc("GET /api/v1/scanner/backtests/{id}/signals", sh.ListBacktestSignals)
 		mux.HandleFunc("GET /api/v1/scanner/backtests/{id}", sh.GetBacktest)
+	}
+
+	if opts.Export != nil {
+		eh := handler.NewExportHandler(opts.Export)
+		mux.HandleFunc("POST /api/v1/export", eh.Start)
+		mux.HandleFunc("GET /api/v1/export", eh.List)
+		// Static subpaths before bare {id}
+		mux.HandleFunc("POST /api/v1/export/{id}/cancel", eh.Cancel)
+		mux.HandleFunc("GET /api/v1/export/{id}/download", eh.Download)
+		mux.HandleFunc("GET /api/v1/export/{id}", eh.Get)
+	}
+
+	if opts.Import != nil {
+		ih := handler.NewImportHandler(opts.Import)
+		mux.HandleFunc("POST /api/v1/import/preview", ih.Preview)
+		mux.HandleFunc("GET /api/v1/import", ih.List)
+		mux.HandleFunc("POST /api/v1/import/{id}/confirm", ih.Confirm)
+		mux.HandleFunc("POST /api/v1/import/{id}/cancel", ih.Cancel)
+		mux.HandleFunc("GET /api/v1/import/{id}", ih.Get)
 	}
 
 	// MCP streamable HTTP — same process as REST API (no second server).

@@ -5,6 +5,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -608,4 +609,115 @@ func (c *APIClient) ListScannerResults(ctx context.Context, clientID string, lim
 		q.Set("offset", strconv.Itoa(offset))
 	}
 	return c.get(ctx, "/api/v1/scanner/results", q)
+}
+
+// StartExport queues a user data export job.
+func (c *APIClient) StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID, "format": format}
+	if len(sections) > 0 {
+		body["sections"] = sections
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/export", body)
+}
+
+// GetExport returns export job status.
+func (c *APIClient) GetExport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/export/"+url.PathEscape(id), q)
+}
+
+// ListExports lists export jobs for a client.
+func (c *APIClient) ListExports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/export", q)
+}
+
+// CancelExport cancels a pending/running export.
+func (c *APIClient) CancelExport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	path := "/api/v1/export/" + url.PathEscape(id) + "/cancel"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
+}
+
+// PreviewImport uploads raw export bytes for preview (JSON or CSV body).
+func (c *APIClient) PreviewImport(ctx context.Context, clientID, fileName, format string, fileBytes []byte) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if format != "" {
+		q.Set("format", format)
+	}
+	if fileName != "" {
+		q.Set("fileName", fileName)
+	}
+	ct := "application/json"
+	if format == "csv" || strings.HasSuffix(strings.ToLower(fileName), ".csv") {
+		ct = "text/csv"
+	}
+	path := "/api/v1/import/preview?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, bytes.NewReader(fileBytes))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", ct)
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("API %s: %s", resp.Status, truncate(string(body), 400))
+	}
+	return json.RawMessage(body), nil
+}
+
+// ConfirmImport starts applying a previewed import.
+func (c *APIClient) ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/import/"+url.PathEscape(id)+"/confirm", map[string]string{
+		"clientId": clientID, "mode": mode,
+	})
+}
+
+// GetImport returns import job status.
+func (c *APIClient) GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/import/"+url.PathEscape(id), q)
+}
+
+// ListImports lists import jobs.
+func (c *APIClient) ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/import", q)
+}
+
+// CancelImport cancels a previewed/pending/running import.
+func (c *APIClient) CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	path := "/api/v1/import/" + url.PathEscape(id) + "/cancel?" + q.Encode()
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
 }

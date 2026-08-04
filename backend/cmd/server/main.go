@@ -14,6 +14,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
@@ -21,6 +23,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
+	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -163,6 +167,54 @@ func main() {
 	scannerSvc := scanner.New(scannerStore, marketSvc, watchSvc)
 	logger.Info("indicator scanner store ready", "driver", "sqlite", "path", scannerStore.Path())
 
+	exportStore, err := exportstore.Open(cfg.ExportDBPath)
+	if err != nil {
+		logger.Error("export sqlite open failed", "path", cfg.ExportDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := exportStore.Close(); err != nil {
+			logger.Error("export sqlite close", "err", err)
+		}
+	}()
+	exportSvc, err := exportsvc.New(exportStore, exportsvc.DataSources{
+		Watchlist: watchStore,
+		Alerts:    alertStore,
+		Scanner:   scannerStore,
+	}, exportsvc.Options{
+		FileDir: cfg.ExportFileDir,
+		FileTTL: cfg.ExportFileTTL,
+	})
+	if err != nil {
+		logger.Error("export service init failed", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("export store ready", "driver", "sqlite", "path", exportStore.Path(), "files", exportSvc.FileDir())
+
+	importStore, err := importstore.Open(cfg.ImportDBPath)
+	if err != nil {
+		logger.Error("import sqlite open failed", "path", cfg.ImportDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := importStore.Close(); err != nil {
+			logger.Error("import sqlite close", "err", err)
+		}
+	}()
+	importSvc, err := dataimport.New(importStore, dataimport.DataSources{
+		Watchlist: watchStore,
+		Alerts:    alertStore,
+		Scanner:   scannerStore,
+	}, dataimport.Options{
+		FileDir: cfg.ImportFileDir,
+		FileTTL: cfg.ImportFileTTL,
+	})
+	if err != nil {
+		logger.Error("import service init failed", "err", err)
+		os.Exit(1)
+	}
+	logger.Info("import store ready", "driver", "sqlite", "path", importStore.Path(), "files", importSvc.FileDir())
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -188,6 +240,20 @@ func main() {
 	}
 	go backtestWorker.Start(ctx)
 
+	exportWorker := &exportsvc.Worker{
+		Export:   exportSvc,
+		Interval: cfg.ExportWorkerInterval,
+		Logger:   logger,
+	}
+	go exportWorker.Start(ctx)
+
+	importWorker := &dataimport.Worker{
+		Import:   importSvc,
+		Interval: cfg.ImportWorkerInterval,
+		Logger:   logger,
+	}
+	go importWorker.Start(ctx)
+
 	// Optional: start Python multi-agent HTTP as a child of this process.
 	aiProc, err := aistart.Start(ctx, aistart.Options{
 		Enabled: cfg.AIAutoStart,
@@ -206,7 +272,7 @@ func main() {
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
 	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc)
+	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc)
 	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
@@ -219,6 +285,8 @@ func main() {
 		Alerts:          alertSvc,
 		Portfolio:       portfolioSvc,
 		Scanner:         scannerSvc,
+		Export:          exportSvc,
+		Import:          importSvc,
 	})
 
 	job := &supplyjob.Runner{

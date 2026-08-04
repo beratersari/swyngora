@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
+	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -57,6 +60,15 @@ type DataPort interface {
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error)
+	GetExport(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListExports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	CancelExport(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	PreviewImport(ctx context.Context, clientID, fileName, format string, fileBytes []byte) (json.RawMessage, error)
+	ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error)
+	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -91,10 +103,10 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 	return s
 }
 
-// NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service) *server.MCPServer {
+// NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -860,6 +872,194 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListScannerResults(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("start_export",
+		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, and/or backtests as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("format", mcp.Description("json (default) or csv")),
+		mcp.WithString("sections", mcp.Description("Comma-separated: watchlist,shares,alerts,backtests (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var sections []string
+		if raw := strings.TrimSpace(req.GetString("sections", "")); raw != "" {
+			for _, p := range strings.Split(raw, ",") {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					sections = append(sections, p)
+				}
+			}
+		}
+		raw, err := api.StartExport(ctx, clientID, req.GetString("format", "json"), sections)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_export",
+		mcp.WithDescription("Get export job status and progressPct (0-100). When completed, downloadUrl is set for HTTP download."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("exportId", mcp.Required(), mcp.Description("Export job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("exportId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetExport(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_exports",
+		mcp.WithDescription("List recent data export jobs for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 20")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListExports(ctx, clientID, req.GetInt("limit", 20), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("cancel_export",
+		mcp.WithDescription("Cancel a pending or running data export job."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("exportId", mcp.Required(), mcp.Description("Export job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("exportId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelExport(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("preview_import",
+		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests. Returns valid/invalid/willAdd counts without applying. Pass export JSON as content. Then call confirm_import with mode merge|replace."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
+		mcp.WithString("format", mcp.Description("json (default) or csv")),
+		mcp.WithString("fileName", mcp.Description("Optional original file name")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		content, err := req.RequireString("content")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PreviewImport(ctx, clientID, req.GetString("fileName", "export.json"),
+			req.GetString("format", "json"), []byte(content))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("confirm_import",
+		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). One active apply per client."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id from preview")),
+		mcp.WithString("mode", mcp.Required(), mcp.Description("merge or replace")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("importId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		mode, err := req.RequireString("mode")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ConfirmImport(ctx, clientID, id, mode)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_import",
+		mcp.WithDescription("Get import job status, progress, and section counts."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("importId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetImport(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_imports",
+		mcp.WithDescription("List recent data import jobs for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 20")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListImports(ctx, clientID, req.GetInt("limit", 20), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("cancel_import",
+		mcp.WithDescription("Cancel a previewed, pending, or running import."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("importId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelImport(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

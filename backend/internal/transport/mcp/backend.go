@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
+	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -22,6 +24,8 @@ type Backend struct {
 	Alerts    *pricealert.Service
 	Portfolio *portfolio.Service
 	Scanner   *scanner.Service
+	Export    *exportsvc.Service
+	Import    *dataimport.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -995,6 +999,186 @@ func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit
 		})
 	}
 	return mustJSON(map[string]any{"clientId": clientID, "results": items, "count": len(items), "total": total})
+}
+
+func exportJobJSON(j *domain.ExportJob) (json.RawMessage, error) {
+	secs := make([]string, 0, len(j.Sections))
+	for _, s := range j.Sections {
+		secs = append(secs, string(s))
+	}
+	m := map[string]any{
+		"id": j.ID, "clientId": j.ClientID, "format": string(j.Format), "sections": secs,
+		"status": string(j.Status), "progressPct": j.ProgressPct, "stage": j.Stage,
+		"errorMessage": j.ErrorMessage, "fileName": j.FileName, "byteSize": j.ByteSize,
+		"createdAt": j.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if j.ExpiresAt != nil {
+		m["expiresAt"] = j.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	if j.StartedAt != nil {
+		m["startedAt"] = j.StartedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if j.FinishedAt != nil {
+		m["finishedAt"] = j.FinishedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if j.Status == domain.ExportCompleted {
+		m["downloadUrl"] = "/api/v1/export/" + j.ID + "/download"
+	}
+	return mustJSON(m)
+}
+
+func (b *Backend) StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error) {
+	if b.Export == nil {
+		return nil, fmt.Errorf("%w: export not configured", domain.ErrUpstream)
+	}
+	if format == "" {
+		format = "json"
+	}
+	job, err := b.Export.Start(ctx, exportsvc.StartInput{ClientID: clientID, Format: format, Sections: sections})
+	if err != nil {
+		return nil, err
+	}
+	return exportJobJSON(job)
+}
+
+func (b *Backend) GetExport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Export == nil {
+		return nil, fmt.Errorf("%w: export not configured", domain.ErrUpstream)
+	}
+	job, err := b.Export.Get(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return exportJobJSON(job)
+}
+
+func (b *Backend) ListExports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Export == nil {
+		return nil, fmt.Errorf("%w: export not configured", domain.ErrUpstream)
+	}
+	list, err := b.Export.List(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]json.RawMessage, 0, len(list))
+	for i := range list {
+		raw, err := exportJobJSON(&list[i])
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, raw)
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "exports": items, "count": len(items)})
+}
+
+func (b *Backend) CancelExport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Export == nil {
+		return nil, fmt.Errorf("%w: export not configured", domain.ErrUpstream)
+	}
+	job, err := b.Export.Cancel(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return exportJobJSON(job)
+}
+
+func importJobJSON(j *domain.ImportJob) (json.RawMessage, error) {
+	secs := map[string]any{}
+	for k, v := range j.SectionCounts {
+		secs[string(k)] = map[string]any{
+			"valid": v.Valid, "invalid": v.Invalid, "willAdd": v.WillAdd, "duplicates": v.Duplicates,
+		}
+	}
+	added := map[string]int{}
+	for k, v := range j.AddedCounts {
+		added[string(k)] = v
+	}
+	m := map[string]any{
+		"id": j.ID, "clientId": j.ClientID, "format": string(j.Format), "mode": string(j.Mode),
+		"status": string(j.Status), "progressPct": j.ProgressPct, "stage": j.Stage,
+		"errorMessage": j.ErrorMessage, "sections": secs,
+		"totals": map[string]any{
+			"valid": j.Totals.Valid, "invalid": j.Totals.Invalid,
+			"willAdd": j.Totals.WillAdd, "duplicates": j.Totals.Duplicates,
+		},
+		"added": added, "fileName": j.FileName, "byteSize": j.ByteSize,
+		"createdAt": j.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if j.ExpiresAt != nil {
+		m["expiresAt"] = j.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	if j.StartedAt != nil {
+		m["startedAt"] = j.StartedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if j.FinishedAt != nil {
+		m["finishedAt"] = j.FinishedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(m)
+}
+
+func (b *Backend) PreviewImport(ctx context.Context, clientID, fileName, format string, fileBytes []byte) (json.RawMessage, error) {
+	if b.Import == nil {
+		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
+	}
+	job, err := b.Import.Preview(ctx, dataimport.PreviewInput{
+		ClientID: clientID, FileName: fileName, FileBytes: fileBytes, FormatHint: format,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return importJobJSON(job)
+}
+
+func (b *Backend) ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error) {
+	if b.Import == nil {
+		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
+	}
+	job, err := b.Import.Confirm(ctx, clientID, id, mode)
+	if err != nil {
+		return nil, err
+	}
+	return importJobJSON(job)
+}
+
+func (b *Backend) GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Import == nil {
+		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
+	}
+	job, err := b.Import.Get(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return importJobJSON(job)
+}
+
+func (b *Backend) ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Import == nil {
+		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
+	}
+	list, err := b.Import.List(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]json.RawMessage, 0, len(list))
+	for i := range list {
+		raw, err := importJobJSON(&list[i])
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, raw)
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "imports": items, "count": len(items)})
+}
+
+func (b *Backend) CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Import == nil {
+		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
+	}
+	job, err := b.Import.Cancel(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return importJobJSON(job)
 }
 
 func scannerRuleJSON(r *domain.ScannerRule) (json.RawMessage, error) {

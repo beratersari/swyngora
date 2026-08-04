@@ -26,6 +26,12 @@ info:
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
     - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
       cancel jobs, and view signals with 1/5/20-day forward returns.
+    - User data export: download watchlist, shares, price-alert history, and backtest results as
+      JSON or CSV. Large exports run in the background with progress and cancel; one active export
+      per client; files are owner-only downloads and expire after a TTL.
+    - User data import: upload a prior JSON/CSV export, preview valid/invalid/willAdd counts, then
+      confirm with merge or replace mode. Dedupes symbols/shares/ids; large applies run in the
+      background with progress and cancel.
   version: 0.1.0
 servers:
   - url: http://localhost:8080
@@ -1595,6 +1601,324 @@ paths:
           description: Signals list
         '404':
           $ref: '#/components/responses/Error'
+
+  /api/v1/export:
+    post:
+      summary: Start a user data export
+      description: |
+        Queues an export of the caller's own data as JSON or CSV.
+        Sections default to all of: watchlist, shares, alerts, backtests.
+        Only one pending/running export is allowed per clientId (409 conflict otherwise).
+        Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
+      operationId: startExport
+      tags: [Export]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                format: { type: string, enum: [json, csv], default: json }
+                sections:
+                  type: array
+                  items: { type: string, enum: [watchlist, shares, alerts, backtests] }
+                  description: Omit for all sections
+      responses:
+        '202':
+          description: Export job accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List export jobs for a client
+      operationId: listExports
+      tags: [Export]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string, minLength: 1 }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string, minLength: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Export list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  count: { type: integer }
+                  exports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExportJob'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/export/{id}:
+    get:
+      summary: Get export job status and progress
+      operationId: getExport
+      tags: [Export]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Job with progressPct, status, downloadUrl when ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/export/{id}/cancel:
+    post:
+      summary: Cancel a pending or running export
+      operationId: cancelExport
+      tags: [Export]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Canceled (or already terminal)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportJob'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/export/{id}/download:
+    get:
+      summary: Download a completed export file
+      description: |
+        Only the owning clientId may download. Returns 400 if not completed, 404 if expired
+        or missing. Files are deleted automatically after EXPORT_FILE_TTL (default 1h).
+      operationId: downloadExport
+      tags: [Export]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Export file body (JSON or CSV)
+          content:
+            application/json:
+              schema: { type: object }
+            text/csv:
+              schema: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/import/preview:
+    post:
+      summary: Upload an export file and get a restore preview
+      description: |
+        Accepts multipart form field `file` (or raw JSON/CSV body).
+        Parses watchlist, shares, alerts, and backtests; returns counts of valid, invalid,
+        willAdd (under merge), and duplicates. Does not apply data until confirm.
+        Ownership is always the uploading clientId (file clientId is ignored).
+      operationId: previewImport
+      tags: [Import]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, csv] }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                format: { type: string, enum: [json, csv] }
+                file: { type: string, format: binary }
+          application/json:
+            schema: { type: object }
+          text/csv:
+            schema: { type: string }
+      responses:
+        '200':
+          description: Preview with section counts (status=previewed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJob'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/import:
+    get:
+      summary: List import jobs for a client
+      operationId: listImports
+      tags: [Import]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Import list
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/import/{id}:
+    get:
+      summary: Get import job status, progress, and preview counts
+      operationId: getImport
+      tags: [Import]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Import job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJob'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/import/{id}/confirm:
+    post:
+      summary: Start applying a previewed import
+      description: |
+        mode=merge adds only missing records (no duplicate symbols/shares/ids).
+        mode=replace clears existing section data for the client then imports from the file.
+        Only one pending/running import per client (409 otherwise). Runs in the background.
+      operationId: confirmImport
+      tags: [Import]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                clientId: { type: string }
+                mode: { type: string, enum: [merge, replace] }
+      responses:
+        '202':
+          description: Import queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJob'
+        '400':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+
+  /api/v1/import/{id}/cancel:
+    post:
+      summary: Cancel a previewed, pending, or running import
+      operationId: cancelImport
+      tags: [Import]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportJob'
+        '404':
+          $ref: '#/components/responses/Error'
+
   /api/v1/ai/chat:
     post:
       summary: Chat with the multi-agent AI assistant
@@ -1932,6 +2256,62 @@ components:
         symbol: { type: string }
         detail: { type: string }
         createdAt: { type: string, format: date-time }
+    ExportJob:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        format: { type: string, enum: [json, csv] }
+        sections:
+          type: array
+          items: { type: string, enum: [watchlist, shares, alerts, backtests] }
+        status: { type: string, enum: [pending, running, completed, canceled, failed] }
+        progressPct: { type: number, description: 0–100 }
+        stage: { type: string }
+        errorMessage: { type: string }
+        fileName: { type: string }
+        byteSize: { type: integer, format: int64 }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+        downloadUrl: { type: string, description: Relative path when status=completed }
+    ImportSectionCounts:
+      type: object
+      properties:
+        valid: { type: integer }
+        invalid: { type: integer }
+        willAdd: { type: integer }
+        duplicates: { type: integer }
+    ImportJob:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        format: { type: string, enum: [json, csv] }
+        mode: { type: string, enum: [merge, replace] }
+        status:
+          type: string
+          enum: [previewed, pending, running, completed, canceled, failed]
+        progressPct: { type: number }
+        stage: { type: string }
+        errorMessage: { type: string }
+        sections:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ImportSectionCounts'
+        totals:
+          $ref: '#/components/schemas/ImportSectionCounts'
+        added:
+          type: object
+          additionalProperties: { type: integer }
+          description: Records actually inserted after completed apply
+        fileName: { type: string }
+        byteSize: { type: integer, format: int64 }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
     SpotMarket:
       type: object
       properties:

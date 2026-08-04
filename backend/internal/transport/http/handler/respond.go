@@ -74,6 +74,8 @@ func mapError(err error) (status int, code, message string) {
 		return http.StatusNotFound, "not_found", "resource not found"
 	case errors.Is(err, domain.ErrForbidden):
 		return http.StatusForbidden, "forbidden", publicForbidden(err)
+	case errors.Is(err, domain.ErrConflict):
+		return http.StatusConflict, "conflict", publicConflict(err)
 	case errors.Is(err, domain.ErrRateLimited):
 		return http.StatusTooManyRequests, "rate_limited", "rate limited; try again later"
 	case errors.Is(err, domain.ErrUpstream):
@@ -109,4 +111,16 @@ func publicForbidden(err error) string {
 		return "forbidden"
 	}
 	return "forbidden"
+}
+
+func publicConflict(err error) string {
+	msg := err.Error()
+	const prefix = "conflict: "
+	if len(msg) > len(prefix) && msg[:len(prefix)] == prefix {
+		return msg[len(prefix):]
+	}
+	if msg == "conflict" {
+		return "conflict"
+	}
+	return "conflict"
 }

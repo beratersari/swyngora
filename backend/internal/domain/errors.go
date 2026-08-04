@@ -7,6 +7,8 @@ var (
 	ErrInvalidArgument = errors.New("invalid argument")
 	ErrNotFound        = errors.New("not found")
 	ErrForbidden       = errors.New("forbidden")
-	ErrUpstream        = errors.New("upstream data source error")
-	ErrRateLimited     = errors.New("rate limited by upstream")
+	// ErrConflict is a state conflict (e.g. export already running for this client).
+	ErrConflict    = errors.New("conflict")
+	ErrUpstream    = errors.New("upstream data source error")
+	ErrRateLimited = errors.New("rate limited by upstream")
 )
