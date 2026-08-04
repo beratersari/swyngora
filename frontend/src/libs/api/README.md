@@ -31,12 +31,13 @@ import {
   useGetIndicatorsQuery,
 } from '@/libs/api';
 
-// pumps / watchlist
+// pumps / watchlist / AI chat
 import {
   useGetPumpEventsQuery,
   useScanPumpEventsQuery,
   useGetWatchlistQuery,
   useAddWatchlistItemMutation,
+  usePostAiChatMutation,
 } from '@/libs/api';
 ```
 

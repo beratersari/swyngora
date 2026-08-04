@@ -16,6 +16,7 @@ Lightweight static **coin dashboard** for the Swyngora market API during develop
 - **Column editor:** chips to show/hide; **drag chips or table headers** (or ◀ ▶) to reorder; Symbol stays first (saved in `localStorage`)
 - Search + row limit (quote fixed to **USDT**)
 - **Double-click** a symbol → `detail.html` (ticker, supply, RSI/EMA, candles)
+- **AI chat:** `ai.html` → `POST /api/v1/ai/chat` (multi-turn `sessionId`; needs Python AI on `:8090`); **Markdown** replies rendered via `markdown.js`
 - Crypto-only list (backend excludes `bStocks` / commodities)
 
 ### How fresh is the data?
@@ -35,9 +36,10 @@ Earlier, every price refresh also re-downloaded exchangeInfo + product catalog, 
 ```bash
 # from repo root
 node --test simple-frontend/watchlist-logic.test.js
+node --test simple-frontend/markdown.test.js
 ```
 
-Covers: full membership (6 coins), regression of “filter top-N page”, sort does not change count, exact symbol pick, placeholders for missing markets, watchlist merge, fmtNum for tiny prices.
+Covers: full membership (6 coins), regression of “filter top-N page”, sort does not change count, exact symbol pick, placeholders for missing markets, watchlist merge, fmtNum for tiny prices; Markdown escape/lists/tables/code.
 
 ## Run
 
@@ -54,8 +56,21 @@ Covers: full membership (6 coins), regression of “filter top-N page”, sort d
    ```
 
 3. Open http://localhost:5173 — markets load automatically.
+4. **AI chat:** http://localhost:5173/ai.html (also linked as **AI chat** in the header).
 
 Default API base is `http://localhost:8080` (editable in the header).
+
+### AI chat prerequisites
+
+```bash
+# Backend already running on :8080
+# Python AI (Ollama or Grok):
+cd ai && source .venv/bin/activate   # after pip install -e .
+export SWYNGORA_API_URL=http://127.0.0.1:8080
+python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
+```
+
+Without the AI service, the page still works; replies show an upstream/unavailable error.
 
 ## Layout
 
@@ -64,7 +79,10 @@ Default API base is `http://localhost:8080` (editable in the header).
 | `index.html` | Dashboard shell |
 | `styles.css` | Dark dashboard styling |
 | `app.js` | Dashboard: markets, sort, columns, watchlist, live poll |
-| `detail.js` | Coin detail page (ticker, supply, indicators, candles) |
+| `detail.html` / `detail.js` | Coin detail (ticker, supply, indicators, candles) |
+| `ai.html` / `ai.js` | AI multi-agent chat harness |
+| `markdown.js` | Safe Markdown → HTML for assistant bubbles |
 | `watchlist-logic.js` | Pure helpers (merge, fmtNum, watchlist assembly) + unit tests |
 
 - **Detail page:** double-click a symbol → `detail.html?symbol=…&exchange=…`
+- **AI page:** header **AI chat** → `ai.html` (optional `?q=` prefill)

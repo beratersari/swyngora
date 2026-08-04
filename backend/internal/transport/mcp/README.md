@@ -46,11 +46,22 @@ cd backend && go run ./cmd/server
 # MCP:   http://localhost:8080/mcp   (streamable HTTP)
 ```
 
+### Security
+
+| Control | Env | Notes |
+|---------|-----|--------|
+| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires `Authorization: Bearer <token>` or `X-API-Key` (same as tenant REST) |
+| Disable MCP | `MCP_ENABLED=false` | Do not mount `/mcp` at all |
+| Webhooks | (service) | `set_alert_webhook` rejects private/local targets unless `WEBHOOK_ALLOW_PRIVATE=true` |
+
+Leave `API_AUTH_TOKEN` empty only for local single-user development. Do not expose `/mcp` on a public interface without a token.
+
 Optional **stdio** adapter only for hosts that cannot speak HTTP MCP:
 
 ```bash
 # only if you need pure stdio — API should already be running, or use in-process via server
 SWYNGORA_API_URL=http://localhost:8080 go run ./cmd/mcp
+# If the API has API_AUTH_TOKEN set, the HTTP client path must send the same token (not yet wired in stdio client — prefer in-process /mcp with auth).
 ```
 
 ## Tests

@@ -3,7 +3,8 @@
   "nav": {
     "markets": "Markets",
     "watchlist": "Watchlist",
-    "pumps": "Pumps"
+    "pumps": "Pumps",
+    "ai": "AI"
   },
   "footer": {
     "disclaimer": "{{appName}} · informational market data · not financial advice"

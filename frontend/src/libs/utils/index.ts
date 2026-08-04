@@ -2,6 +2,7 @@ export { formatPrice } from './formatPrice';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
+export { getOrCreateAiSessionId, resetAiSessionId } from './aiSessionId';
 export {
   apiCandlesToChart,
   filterValidApiCandles,

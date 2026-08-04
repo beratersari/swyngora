@@ -5,6 +5,8 @@ import (
 	"errors"
 	"math"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -515,5 +517,49 @@ func TestPortfolio_PersistsAcrossReopen(t *testing.T) {
 	list, total, err := svc2.ListTrades(ctx, "persist", 10, 0)
 	if err != nil || total != 1 || list[0].Side != domain.TradeSideBuy {
 		t.Fatalf("%+v total=%d err=%v", list, total, err)
+	}
+}
+
+// Concurrent market buys of the full cash budget must not both succeed (lost-update race).
+func TestPortfolio_ConcurrentBuysDoNotOverspend(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	const start = 1000.0
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "race-1", StartingBalance: start}); err != nil {
+		t.Fatal(err)
+	}
+	// Each buy costs 1000 (10 * 100). Only one can succeed with serialized mutations.
+	var okCount atomic.Int32
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := svc.PlaceOrder(ctx, OrderInput{
+				ClientID: "race-1", Symbol: "BTCUSDT", Side: "buy", Quantity: 10,
+			})
+			if err == nil {
+				okCount.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+	if okCount.Load() != 1 {
+		t.Fatalf("expected exactly 1 successful full-cash buy, got %d", okCount.Load())
+	}
+	view, err := svc.View(ctx, "race-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.CashBalance < -1e-6 {
+		t.Fatalf("negative cash: %+v", view)
+	}
+	// Cash spent once: 0 left, 10 BTC
+	if math.Abs(view.CashBalance) > 1e-6 {
+		t.Fatalf("cash=%v want 0", view.CashBalance)
+	}
+	if len(view.Positions) != 1 || math.Abs(view.Positions[0].Quantity-10) > 1e-6 {
+		t.Fatalf("positions=%+v", view.Positions)
 	}
 }

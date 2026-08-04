@@ -3,7 +3,8 @@
   "nav": {
     "markets": "Piyasalar",
     "watchlist": "İzleme",
-    "pumps": "Pump"
+    "pumps": "Pump",
+    "ai": "AI"
   },
   "footer": {
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"

@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { AiChatPage } from '@/components/pages/AiChatPage';
 import { CoinDetailPage } from '@/components/pages/CoinDetailPage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
@@ -12,6 +13,7 @@ export function AppRoutes() {
       <Route path="/markets/:exchange/:symbol" element={<CoinDetailPage />} />
       <Route path="/watchlist" element={<WatchlistPage />} />
       <Route path="/pumps" element={<PumpsPage />} />
+      <Route path="/ai" element={<AiChatPage />} />
       <Route path="*" element={<Navigate to="/markets" replace />} />
     </Routes>
   );

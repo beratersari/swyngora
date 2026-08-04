@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,11 +28,22 @@ type PriceFetcher interface {
 type Service struct {
 	store  domain.PortfolioPort
 	market PriceFetcher
+	// clientMu serializes mutations per clientId so concurrent market orders,
+	// pending placements, and filler ticks cannot corrupt cash/positions.
+	clientMu sync.Map // map[string]*sync.Mutex
 }
 
 // New constructs a portfolio service.
 func New(store domain.PortfolioPort, market PriceFetcher) *Service {
 	return &Service{store: store, market: market}
+}
+
+// lockClient returns an unlock function; always call via defer unlock().
+func (s *Service) lockClient(clientID string) func() {
+	v, _ := s.clientMu.LoadOrStore(clientID, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
 }
 
 // CreateInput creates a paper portfolio.
@@ -67,6 +79,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 	if cur == "" {
 		cur = domain.DefaultPaperCurrency
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if _, err := s.store.GetPortfolio(ctx, clientID); err == nil {
 		return nil, fmt.Errorf("%w: portfolio already exists for this clientId", domain.ErrInvalidArgument)
 	} else if err != nil && err != domain.ErrNotFound {
@@ -180,11 +194,14 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
+	// Fetch price outside the client lock so market I/O does not serialize all clients.
+	price, err := s.lastPrice(ctx, string(ex), sym)
 	if err != nil {
 		return nil, nil, err
 	}
-	price, err := s.lastPrice(ctx, string(ex), sym)
+	unlock := s.lockClient(clientID)
+	defer unlock()
+	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -267,6 +284,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err := s.store.ExecuteTrade(ctx, p, posOut, tr); err != nil {
 		return nil, nil, err
 	}
+	// Snapshot while still holding the client lock (marks may use market I/O).
 	view, err := s.View(ctx, clientID)
 	if err != nil {
 		return &tr, nil, err
@@ -345,6 +363,8 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -475,6 +495,8 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	// Ensure portfolio exists for clearer 404 vs order 404
 	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
 		return nil, err
@@ -504,6 +526,26 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 	} else {
 		now = now.UTC()
 	}
+	// Serialize all mutations for this client (filler runs multi-symbol in parallel).
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
+	return s.processOpenOrderLocked(ctx, o, lastPrice, now, maxFillQty)
+}
+
+func (s *Service) processOpenOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	// Re-load order under lock to avoid acting on a stale snapshot.
+	cur, err := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if cur == nil || cur.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	o = *cur
+
 	tif := o.TimeInForce
 	if tif == "" {
 		tif = domain.TimeInForceGTC
@@ -569,7 +611,7 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 		maxFillQty = 0
 	}
 
-	filled, ok, err := s.TryFillPendingOrder(ctx, o, lastPrice, maxFillQty)
+	filled, ok, err := s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
 	if err != nil {
 		return nil, false, err
 	}
@@ -626,6 +668,21 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
+	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
+	// Prefer fresh row under the lock.
+	if cur, err := s.store.GetPendingOrder(ctx, o.ClientID, o.ID); err == nil && cur != nil {
+		o = *cur
+	} else if err != nil && err != domain.ErrNotFound {
+		return nil, false, err
+	}
+	return s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
+}
+
+func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}

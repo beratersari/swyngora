@@ -2,7 +2,7 @@
 
 Production React application for Swyngora.
 
-> **Status:** Markets list + **coin detail / RSI·EMA** live on this branch.  
+> **Status:** Markets, coin detail, watchlist, pumps, and **AI chat** (`/ai`).  
 > Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 
@@ -40,7 +40,7 @@ Tokens: `src/styles/tokens/colors.ts` · Theme: `src/styles/theme.ts` · Atoms: 
 | Package agent rules | `frontend/AGENTS.md`                    |
 | System design       | `docs/design/frontend-system-design.md` |
 | Local tasks / board | `project-management/board.md`           |
-| Features            | Markets list · coin detail + indicators |
+| Features            | Markets · detail · watchlist · pumps · AI chat |
 
 ## Intended layout
 
@@ -71,7 +71,7 @@ frontend/
 ### Localization
 
 - **i18next** catalogs: `src/libs/i18n/locales/{en,tr}/`
-- Namespaces: `common`, `markets`, `detail`
+- Namespaces: `common`, `markets`, `detail`, `watchlist`, `pumps`, `ai`
 - Language switcher in the app header (persists to `localStorage`)
 - Add a language: new locale folder + register in `libs/i18n/resources.ts` + `SUPPORTED_LOCALES`
 
@@ -84,9 +84,17 @@ cd backend && go run ./cmd/server                 # :8080
 
 # terminal 2 — product UI
 cd frontend && npm install && npm run dev         # :5174
+
+# terminal 3 — AI (needed for /ai chat; optional for markets)
+cd ai && python3 -m venv .venv && source .venv/bin/activate
+pip install -e .
+# needs Ollama (local) or XAI_API_KEY + AI_LLM_PROVIDER=grok
+export SWYNGORA_API_URL=http://127.0.0.1:8080
+python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 ```
 
-Open http://localhost:5174 (from Linux) or **http://&lt;wsl-ip&gt;:5174** from Windows.
+Open http://localhost:5174 (from Linux) or **http://&lt;wsl-ip&gt;:5174** from Windows.  
+AI chat route: **http://localhost:5174/ai** (proxies `POST /api/v1/ai/chat` → Go → Python `:8090`).
 
 ### WSL / Windows browser
 

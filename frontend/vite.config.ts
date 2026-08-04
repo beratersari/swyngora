@@ -22,6 +22,9 @@ export default defineConfig({
       '/api': {
         target: API_PROXY_TARGET,
         changeOrigin: true,
+        // AI multi-agent turns can exceed default proxy idle timeouts.
+        timeout: 360_000,
+        proxyTimeout: 360_000,
       },
       '/health': {
         target: API_PROXY_TARGET,
