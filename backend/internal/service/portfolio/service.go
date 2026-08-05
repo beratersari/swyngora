@@ -106,12 +106,16 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 	if err != nil {
 		return nil, err
 	}
+	reservedMargin, err := s.store.SumReservedMargin(ctx, p.ClientID)
+	if err != nil {
+		return nil, err
+	}
 	positions, err := s.store.ListPositions(ctx, p.ClientID)
 	if err != nil {
 		return nil, err
 	}
 	views := make([]domain.PositionView, 0, len(positions))
-	var posValue, unreal float64
+	var posValue, spotUnreal float64
 	for _, pos := range positions {
 		mark, merr := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
 		if merr != nil {
@@ -137,25 +141,42 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 			CostBasis:         pos.Quantity * pos.AvgCost,
 		})
 		posValue += mv
-		unreal += u
+		spotUnreal += u
 	}
-	equity := p.CashBalance + posValue
+	marginPositions, err := s.store.ListOpenMarginPositions(ctx, p.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	var marginLocked, marginUnreal float64
+	for i := range marginPositions {
+		s.markMarginPosition(ctx, &marginPositions[i])
+		marginLocked += marginPositions[i].Margin
+		marginUnreal += marginPositions[i].UnrealizedPnL
+	}
+	// Cash already excludes locked margin; equity adds it back + unrealized + spot marks.
+	equity := p.CashBalance + posValue + marginLocked + marginUnreal
+	avail := domain.AvailableCash(p.CashBalance, reservedCash+reservedMargin)
 	return &domain.PortfolioView{
-		ClientID:         p.ClientID,
-		Currency:         p.Currency,
-		StartingBalance:  p.StartingBalance,
-		CashBalance:      p.CashBalance,
-		ReservedCash:     reservedCash,
-		AvailableCash:    domain.AvailableCash(p.CashBalance, reservedCash),
-		PositionsValue:   posValue,
-		Equity:           equity,
-		UnrealizedPnL:    unreal,
-		RealizedPnLTotal: p.RealizedPnLTotal,
-		TotalPnL:         equity - p.StartingBalance,
-		Positions:        views,
-		Note:             paperNote,
-		CreatedAt:        p.CreatedAt,
-		UpdatedAt:        p.UpdatedAt,
+		ClientID:            p.ClientID,
+		Currency:            p.Currency,
+		StartingBalance:     p.StartingBalance,
+		CashBalance:         p.CashBalance,
+		ReservedCash:        reservedCash,
+		ReservedMargin:      reservedMargin,
+		AvailableCash:       avail,
+		PositionsValue:      posValue,
+		MarginLocked:        marginLocked,
+		MarginUnrealizedPnL: marginUnreal,
+		MarginEquity:        marginLocked + marginUnreal,
+		Equity:              equity,
+		UnrealizedPnL:       spotUnreal + marginUnreal,
+		RealizedPnLTotal:    p.RealizedPnLTotal,
+		TotalPnL:            equity - p.StartingBalance,
+		Positions:           views,
+		MarginPositions:     marginPositions,
+		Note:                paperNote,
+		CreatedAt:           p.CreatedAt,
+		UpdatedAt:           p.UpdatedAt,
 	}, nil
 }
 
@@ -188,11 +209,10 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
-	reservedCash, err := s.store.SumReservedCash(ctx, clientID)
+	availCash, err := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 	if err != nil {
 		return nil, nil, err
 	}
-	availCash := domain.AvailableCash(p.CashBalance, reservedCash)
 
 	var posQty, avg float64
 	pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
@@ -375,11 +395,10 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	switch side {
 	case domain.TradeSideBuy:
 		need := domain.BuyReserveCash(in.Quantity, in.TriggerPrice)
-		resCash, rerr := s.store.SumReservedCash(ctx, clientID)
+		avail, rerr := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 		if rerr != nil {
 			return nil, rerr
 		}
-		avail := domain.AvailableCash(p.CashBalance, resCash)
 		if avail+1e-9 < need {
 			return nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
 		}

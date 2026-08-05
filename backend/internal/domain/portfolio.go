@@ -157,14 +157,22 @@ type PortfolioView struct {
 	Currency         string
 	StartingBalance  float64
 	CashBalance      float64
-	ReservedCash     float64
+	ReservedCash     float64 // spot pending buy reservations
+	ReservedMargin   float64 // margin limit-order reservations
 	AvailableCash    float64
 	PositionsValue   float64
+	// MarginLocked is isolated margin held in open margin positions (already deducted from cash).
+	MarginLocked     float64
+	// MarginUnrealizedPnL is mark-to-market PnL of open margin positions.
+	MarginUnrealizedPnL float64
+	// MarginEquity is MarginLocked + MarginUnrealizedPnL.
+	MarginEquity     float64
 	Equity           float64
-	UnrealizedPnL    float64
+	UnrealizedPnL    float64 // spot + margin unrealized
 	RealizedPnLTotal float64
-	TotalPnL         float64 // equity - starting = realized + unrealized (approx)
+	TotalPnL         float64 // equity - starting
 	Positions        []PositionView
+	MarginPositions  []MarginPosition // open margin positions (with marks when listed via View)
 	Note             string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -233,6 +241,9 @@ type PortfolioPort interface {
 	// SkipRecurringBuyPeriod advances schedule without a new buy when period already claimed.
 	AdvanceRecurringBuyPlan(ctx context.Context, planID string, nextRunAt time.Time, lastPeriodKey string, at time.Time) error
 	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) ([]RecurringBuyRun, error)
+
+	// Margin (isolated leverage) — see MarginPort methods embedded below.
+	MarginPort
 }
 
 // ApplyBuy updates cash and position for a market buy. Pure helper.

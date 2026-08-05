@@ -44,6 +44,13 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `resume_recurring_buy` | Resume a paused plan |
 | `delete_recurring_buy` | Delete a plan and its runs |
 | `list_recurring_buy_runs` | Execution history for a plan |
+| `place_margin_order` | Paper margin long/short open (market/limit, 1x–10x) |
+| `list_margin_positions` | Open margin positions |
+| `close_margin_position` | Full/partial margin close |
+| `set_margin_brackets` | Stop-loss / take-profit |
+| `list_margin_orders` | Margin limit orders |
+| `cancel_margin_order` | Cancel margin limit |
+| `list_margin_trades` | Margin trade history |
 | `create_price_diff_watch` | Track cross-exchange price gaps after fees |
 | `list_price_diff_watches` | List price-diff watches |
 | `get_price_diff_watch` | Get one price-diff watch |

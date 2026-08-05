@@ -798,6 +798,166 @@ func (b *Backend) ListRecurringBuyRuns(ctx context.Context, clientID, planID str
 	return mustJSON(map[string]any{"planId": planID, "runs": items, "count": len(items)})
 }
 
+func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, ord, err := b.Portfolio.PlaceMarginOrder(ctx, portfolio.MarginOrderInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Type: orderType,
+		Quantity: quantity, Leverage: leverage, LimitPrice: limitPrice, StopLoss: stopLoss, TakeProfit: takeProfit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if pos != nil {
+		return mustJSON(map[string]any{"type": "market", "position": marginPosMap(pos), "note": "Paper margin position. Not real money."})
+	}
+	return mustJSON(map[string]any{"type": "limit", "order": marginOrdMap(ord), "note": "Paper margin limit order. Not real money."})
+}
+
+func (b *Backend) ListMarginPositions(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListMarginPositions(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, marginPosMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "positions": items, "count": len(items)})
+}
+
+func (b *Backend) GetMarginPosition(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, err := b.Portfolio.GetMarginPosition(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(marginPosMap(pos))
+}
+
+func (b *Backend) CloseMarginPosition(ctx context.Context, clientID, id string, quantity float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, tr, err := b.Portfolio.CloseMarginPosition(ctx, portfolio.MarginCloseInput{
+		ClientID: clientID, PositionID: id, Quantity: quantity,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"position": marginPosMap(pos), "trade": marginTradeMap(tr)})
+}
+
+func (b *Backend) SetMarginBrackets(ctx context.Context, clientID, id string, stopLoss, takeProfit *float64, clearSL, clearTP bool) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, err := b.Portfolio.SetMarginBrackets(ctx, portfolio.MarginBracketsInput{
+		ClientID: clientID, PositionID: id, StopLoss: stopLoss, TakeProfit: takeProfit,
+		ClearStopLoss: clearSL, ClearTakeProfit: clearTP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(marginPosMap(pos))
+}
+
+func (b *Backend) ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListMarginOrders(ctx, clientID, status, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, marginOrdMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "orders": items, "count": len(items)})
+}
+
+func (b *Backend) CancelMarginOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	o, err := b.Portfolio.CancelMarginOrder(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"order": marginOrdMap(o)})
+}
+
+func (b *Backend) ListMarginTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListMarginTrades(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, marginTradeMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items)})
+}
+
+func marginPosMap(p *domain.MarginPosition) map[string]any {
+	m := map[string]any{
+		"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,
+		"side": string(p.Side), "quantity": p.Quantity, "entryPrice": p.EntryPrice, "leverage": p.Leverage,
+		"margin": p.Margin, "liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
+		"markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL, "realizedPnL": p.RealizedPnL,
+		"closeReason": p.CloseReason,
+		"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if p.StopLoss != nil {
+		m["stopLoss"] = *p.StopLoss
+	}
+	if p.TakeProfit != nil {
+		m["takeProfit"] = *p.TakeProfit
+	}
+	if p.ClosedAt != nil {
+		m["closedAt"] = p.ClosedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
+}
+
+func marginOrdMap(o *domain.MarginOrder) map[string]any {
+	m := map[string]any{
+		"id": o.ID, "clientId": o.ClientID, "exchange": string(o.Exchange), "symbol": o.Symbol,
+		"side": string(o.Side), "type": string(o.Type), "quantity": o.Quantity, "leverage": o.Leverage,
+		"limitPrice": o.LimitPrice, "reservedMargin": o.ReservedMargin, "status": string(o.Status),
+		"positionId": o.PositionID, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,
+		"createdAt": o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if o.StopLoss != nil {
+		m["stopLoss"] = *o.StopLoss
+	}
+	if o.TakeProfit != nil {
+		m["takeProfit"] = *o.TakeProfit
+	}
+	return m
+}
+
+func marginTradeMap(t *domain.MarginTrade) map[string]any {
+	return map[string]any{
+		"id": t.ID, "positionId": t.PositionID, "exchange": string(t.Exchange), "symbol": t.Symbol,
+		"side": string(t.Side), "action": t.Action, "quantity": t.Quantity, "price": t.Price,
+		"notional": t.Notional, "realizedPnL": t.RealizedPnL, "marginDelta": t.MarginDelta, "leverage": t.Leverage,
+		"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func recurringPlanMap(p *domain.RecurringBuyPlan) map[string]any {
 	m := map[string]any{
 		"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,

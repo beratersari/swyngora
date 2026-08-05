@@ -21,8 +21,20 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Execution history |
+| `POST` | `/api/v1/portfolio/margin/orders` | Margin market/limit long or short (1x–10x) |
+| `GET` | `/api/v1/portfolio/margin/orders` | List margin orders |
+| `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel margin limit order |
+| `GET` | `/api/v1/portfolio/margin/positions` | Open margin positions |
+| `GET` | `/api/v1/portfolio/margin/positions/{id}` | Get margin position |
+| `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full or partial close |
+| `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Set/clear stop-loss / take-profit |
+| `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
+
+### Margin (isolated leverage)
+
+See `docs/features/paper-margin.md`. Snapshot includes `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `reservedMargin`, `marginPositions`. Liquidation and SL/TP run on the same worker as pending spot fills.
 
 ### Recurring buys (DCA)
 
@@ -94,8 +106,8 @@ Optional pending fields:
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |
 | Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
-| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go` |
-| MCP | `create_portfolio`, `get_portfolio`, `place_portfolio_order`, `place_portfolio_pending_order`, `list_portfolio_orders`, `cancel_portfolio_order`, `list_portfolio_trades`, `create_recurring_buy`, `list_recurring_buys`, `get_recurring_buy`, `pause_recurring_buy`, `resume_recurring_buy`, `delete_recurring_buy`, `list_recurring_buy_runs` |
+| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_margin.go` |
+| MCP | portfolio tools + recurring buy tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
 
 ## Config
 

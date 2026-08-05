@@ -64,6 +64,14 @@ type DataPort interface {
 	ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error)
+	PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error)
+	ListMarginPositions(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetMarginPosition(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	CloseMarginPosition(ctx context.Context, clientID, id string, quantity float64) (json.RawMessage, error)
+	SetMarginBrackets(ctx context.Context, clientID, id string, stopLoss, takeProfit *float64, clearSL, clearTP bool) (json.RawMessage, error)
+	ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	CancelMarginOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListMarginTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -946,6 +954,178 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListRecurringBuyRuns(ctx, clientID, planID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("place_margin_order",
+		mcp.WithDescription("Paper isolated margin open: long|short, leverage 1-10, market or limit. Optional stopLoss/takeProfit. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("side", mcp.Required(), mcp.Description("long | short")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base quantity")),
+		mcp.WithNumber("leverage", mcp.Required(), mcp.Description("1–10")),
+		mcp.WithString("type", mcp.Description("market (default) | limit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithNumber("limitPrice", mcp.Description("Required for limit")),
+		mcp.WithNumber("stopLoss", mcp.Description("Optional stop-loss price")),
+		mcp.WithNumber("takeProfit", mcp.Description("Optional take-profit price")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		side, err := req.RequireString("side")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		levF, err := req.RequireFloat("leverage")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var sl, tp *float64
+		if v := req.GetFloat("stopLoss", 0); v > 0 {
+			sl = &v
+		}
+		if v := req.GetFloat("takeProfit", 0); v > 0 {
+			tp = &v
+		}
+		raw, err := api.PlaceMarginOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side,
+			req.GetString("type", "market"), qty, int(levF), req.GetFloat("limitPrice", 0), sl, tp)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_margin_positions",
+		mcp.WithDescription("List open paper margin positions with mark, unrealized PnL, liquidation price."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListMarginPositions(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("close_margin_position",
+		mcp.WithDescription("Close all or part of a paper margin position at market. quantity 0 = full close."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
+		mcp.WithNumber("quantity", mcp.Description("Partial size; omit/0 for full")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("positionId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CloseMarginPosition(ctx, clientID, id, req.GetFloat("quantity", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_margin_brackets",
+		mcp.WithDescription("Set or clear stop-loss / take-profit on an open paper margin position."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
+		mcp.WithNumber("stopLoss", mcp.Description("Stop-loss price")),
+		mcp.WithNumber("takeProfit", mcp.Description("Take-profit price")),
+		mcp.WithString("clearStopLoss", mcp.Description("true to clear SL")),
+		mcp.WithString("clearTakeProfit", mcp.Description("true to clear TP")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("positionId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var sl, tp *float64
+		if v := req.GetFloat("stopLoss", 0); v > 0 {
+			sl = &v
+		}
+		if v := req.GetFloat("takeProfit", 0); v > 0 {
+			tp = &v
+		}
+		clearSL := strings.EqualFold(req.GetString("clearStopLoss", ""), "true")
+		clearTP := strings.EqualFold(req.GetString("clearTakeProfit", ""), "true")
+		raw, err := api.SetMarginBrackets(ctx, clientID, id, sl, tp, clearSL, clearTP)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_margin_orders",
+		mcp.WithDescription("List paper margin orders (default status=open)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
+		mcp.WithNumber("limit", mcp.Description("Max rows")),
+		mcp.WithNumber("offset", mcp.Description("Offset")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListMarginOrders(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("cancel_margin_order",
+		mcp.WithDescription("Cancel an open paper margin limit order."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Margin order id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelMarginOrder(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_margin_trades",
+		mcp.WithDescription("List paper margin trade history (open/close/liquidation/sl/tp)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows")),
+		mcp.WithNumber("offset", mcp.Description("Offset")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListMarginTrades(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

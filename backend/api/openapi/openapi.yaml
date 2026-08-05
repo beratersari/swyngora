@@ -23,7 +23,8 @@ info:
     - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
       pending limit buy/sell and stop-loss orders with balance/position reservations and
       partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L,
-      trade history, and recurring buy (DCA) plans with daily/weekly/monthly schedules
+      trade history, recurring buy (DCA) plans, and isolated margin long/short (1x–10x)
+      with market/limit opens, liquidation, partial close, and stop-loss/take-profit
       (SQLite; not real money).
     - Cross-exchange price difference tracking: watch a coin across Binance, Coinbase, and
       Bybit; when net edge after fees exceeds a threshold, store a buy/sell opportunity.
@@ -1674,6 +1675,212 @@ paths:
                   count: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/orders:
+    post:
+      summary: Open paper margin long/short (market or limit)
+      description: |
+        Isolated margin position. Leverage 1–10x. Market opens immediately at last price;
+        limit rests until last crosses limitPrice (long: last ≤ limit; short: last ≥ limit).
+        Initial margin = qty * price / leverage is taken from available cash (or reserved for limits).
+        Optional stopLoss / takeProfit. Simulated only — not real money.
+      operationId: placeMarginOrder
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, side, quantity, leverage]
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
+                symbol: { type: string }
+                side: { type: string, enum: [long, short] }
+                type: { type: string, enum: [market, limit], default: market }
+                quantity: { type: number, exclusiveMinimum: 0 }
+                leverage: { type: integer, minimum: 1, maximum: 10 }
+                limitPrice: { type: number, exclusiveMinimum: 0, description: Required for type=limit }
+                stopLoss: { type: number, exclusiveMinimum: 0 }
+                takeProfit: { type: number, exclusiveMinimum: 0 }
+      responses:
+        '201':
+          description: Position opened (market) or limit order resting
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List paper margin orders
+      operationId: listMarginOrders
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, filled, canceled, rejected, all], default: open }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Order list
+  /api/v1/portfolio/margin/orders/{id}:
+    delete:
+      summary: Cancel an open paper margin limit order
+      operationId: cancelMarginOrder
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Canceled
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/positions:
+    get:
+      summary: List open paper margin positions
+      operationId: listMarginPositions
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Open margin positions with marks and liquidation price
+  /api/v1/portfolio/margin/positions/{id}:
+    get:
+      summary: Get a paper margin position
+      operationId: getMarginPosition
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarginPosition'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/positions/{id}/close:
+    post:
+      summary: Close all or part of a paper margin position at market
+      operationId: closeMarginPosition
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: number
+                  description: Omit or 0 for full close
+      responses:
+        '200':
+          description: Updated or closed position plus close trade
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/positions/{id}/brackets:
+    put:
+      summary: Set or clear stop-loss / take-profit on an open margin position
+      operationId: setMarginBrackets
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stopLoss: { type: number }
+                takeProfit: { type: number }
+                clearStopLoss: { type: boolean }
+                clearTakeProfit: { type: boolean }
+      responses:
+        '200':
+          description: Updated position
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/trades:
+    get:
+      summary: List paper margin trade history
+      operationId: listMarginTrades
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Margin trades
   /api/v1/price-diff/watches:
     post:
       summary: Create a cross-exchange price difference watch
@@ -2680,19 +2887,54 @@ components:
         cashBalance: { type: number }
         reservedCash:
           type: number
-          description: Cash locked by open buy pending orders
+          description: Cash locked by open spot buy pending orders
+        reservedMargin:
+          type: number
+          description: Margin reserved by open margin limit orders
         availableCash:
           type: number
-          description: cashBalance minus reservedCash
+          description: cashBalance minus reservedCash and reservedMargin
         positionsValue: { type: number }
+        marginLocked:
+          type: number
+          description: Isolated margin in open margin positions (already deducted from cash)
+        marginUnrealizedPnL: { type: number }
+        marginEquity: { type: number }
         equity: { type: number }
         unrealizedPnL: { type: number }
         realizedPnLTotal: { type: number }
         totalPnL: { type: number }
         positions: { type: array, items: { type: object } }
+        marginPositions:
+          type: array
+          items:
+            $ref: '#/components/schemas/MarginPosition'
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    MarginPosition:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [long, short] }
+        quantity: { type: number }
+        entryPrice: { type: number }
+        leverage: { type: integer }
+        margin: { type: number }
+        liquidationPrice: { type: number }
+        stopLoss: { type: number, nullable: true }
+        takeProfit: { type: number, nullable: true }
+        status: { type: string, enum: [open, closed] }
+        markPrice: { type: number }
+        unrealizedPnL: { type: number }
+        realizedPnL: { type: number }
+        closeReason: { type: string }
+        openedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
     PendingOrder:
       type: object
       properties:

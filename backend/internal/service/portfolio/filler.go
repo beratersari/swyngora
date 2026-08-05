@@ -45,7 +45,7 @@ func (f *OrderFiller) Start(ctx context.Context) {
 	}
 }
 
-// RunOnce loads open pending orders, applies expiry/TIF, and tries fills.
+// RunOnce loads open pending orders, applies expiry/TIF, tries fills, and runs margin maintenance.
 func (f *OrderFiller) RunOnce(ctx context.Context) {
 	if f.Portfolio == nil || f.Market == nil {
 		return
@@ -56,6 +56,13 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 	if f.now == nil {
 		f.now = time.Now
 	}
+	// Margin: limit fills, liquidation, stop-loss / take-profit (durable across restarts).
+	if filled, liq, stopped, err := f.Portfolio.ProcessMarginMaintenance(ctx, f.now().UTC()); err != nil {
+		f.Logger.Error("margin maintenance", "err", err)
+	} else if filled > 0 || liq > 0 || stopped > 0 {
+		f.Logger.Info("margin maintenance", "filled", filled, "liquidated", liq, "sl_tp", stopped)
+	}
+
 	open, err := f.Portfolio.ListAllOpenPendingOrders(ctx)
 	if err != nil {
 		f.Logger.Error("list open pending orders", "err", err)

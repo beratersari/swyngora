@@ -578,6 +578,117 @@ func (c *APIClient) ListRecurringBuyRuns(ctx context.Context, clientID, planID s
 	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(planID)+"/runs", q)
 }
 
+// PlaceMarginOrder opens paper margin long/short.
+func (c *APIClient) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "type": orderType,
+		"quantity": quantity, "leverage": leverage,
+	}
+	if limitPrice > 0 {
+		body["limitPrice"] = limitPrice
+	}
+	if stopLoss != nil {
+		body["stopLoss"] = *stopLoss
+	}
+	if takeProfit != nil {
+		body["takeProfit"] = *takeProfit
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/margin/orders", body)
+}
+
+// ListMarginPositions lists open margin positions.
+func (c *APIClient) ListMarginPositions(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/margin/positions", q)
+}
+
+// GetMarginPosition gets one margin position.
+func (c *APIClient) GetMarginPosition(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/margin/positions/"+url.PathEscape(id), q)
+}
+
+// CloseMarginPosition closes full or partial margin position.
+func (c *APIClient) CloseMarginPosition(ctx context.Context, clientID, id string, quantity float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/margin/positions/" + url.PathEscape(id) + "/close"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{}
+	if quantity > 0 {
+		body["quantity"] = quantity
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, body)
+}
+
+// SetMarginBrackets sets SL/TP on a margin position.
+func (c *APIClient) SetMarginBrackets(ctx context.Context, clientID, id string, stopLoss, takeProfit *float64, clearSL, clearTP bool) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/margin/positions/" + url.PathEscape(id) + "/brackets"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{"clearStopLoss": clearSL, "clearTakeProfit": clearTP}
+	if stopLoss != nil {
+		body["stopLoss"] = *stopLoss
+	}
+	if takeProfit != nil {
+		body["takeProfit"] = *takeProfit
+	}
+	return c.sendJSON(ctx, http.MethodPut, path, body)
+}
+
+// ListMarginOrders lists margin orders.
+func (c *APIClient) ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/margin/orders", q)
+}
+
+// CancelMarginOrder cancels a margin limit order.
+func (c *APIClient) CancelMarginOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/margin/orders/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+// ListMarginTrades lists margin trades.
+func (c *APIClient) ListMarginTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/margin/trades", q)
+}
+
 // CreatePriceDiffWatch creates a cross-exchange price difference watch.
 func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", map[string]any{

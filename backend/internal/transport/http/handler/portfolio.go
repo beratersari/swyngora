@@ -22,21 +22,26 @@ func NewPortfolioHandler(svc *portfolio.Service) *PortfolioHandler {
 }
 
 type portfolioDTO struct {
-	ClientID         string        `json:"clientId"`
-	Currency         string        `json:"currency"`
-	StartingBalance  float64       `json:"startingBalance"`
-	CashBalance      float64       `json:"cashBalance"`
-	ReservedCash     float64       `json:"reservedCash"`
-	AvailableCash    float64       `json:"availableCash"`
-	PositionsValue   float64       `json:"positionsValue"`
-	Equity           float64       `json:"equity"`
-	UnrealizedPnL    float64       `json:"unrealizedPnL"`
-	RealizedPnLTotal float64       `json:"realizedPnLTotal"`
-	TotalPnL         float64       `json:"totalPnL"`
-	Positions        []positionDTO `json:"positions"`
-	Note             string        `json:"note"`
-	CreatedAt        string        `json:"createdAt"`
-	UpdatedAt        string        `json:"updatedAt"`
+	ClientID            string              `json:"clientId"`
+	Currency            string              `json:"currency"`
+	StartingBalance     float64             `json:"startingBalance"`
+	CashBalance         float64             `json:"cashBalance"`
+	ReservedCash        float64             `json:"reservedCash"`
+	ReservedMargin      float64             `json:"reservedMargin"`
+	AvailableCash       float64             `json:"availableCash"`
+	PositionsValue      float64             `json:"positionsValue"`
+	MarginLocked        float64             `json:"marginLocked"`
+	MarginUnrealizedPnL float64             `json:"marginUnrealizedPnL"`
+	MarginEquity        float64             `json:"marginEquity"`
+	Equity              float64             `json:"equity"`
+	UnrealizedPnL       float64             `json:"unrealizedPnL"`
+	RealizedPnLTotal    float64             `json:"realizedPnLTotal"`
+	TotalPnL            float64             `json:"totalPnL"`
+	Positions           []positionDTO       `json:"positions"`
+	MarginPositions     []marginPositionDTO `json:"marginPositions"`
+	Note                string              `json:"note"`
+	CreatedAt           string              `json:"createdAt"`
+	UpdatedAt           string              `json:"updatedAt"`
 }
 
 type positionDTO struct {
@@ -75,12 +80,17 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
 		})
 	}
+	mpos := make([]marginPositionDTO, 0, len(v.MarginPositions))
+	for i := range v.MarginPositions {
+		mpos = append(mpos, marginPosDTO(&v.MarginPositions[i]))
+	}
 	return portfolioDTO{
 		ClientID: v.ClientID, Currency: v.Currency, StartingBalance: v.StartingBalance,
-		CashBalance: v.CashBalance, ReservedCash: v.ReservedCash, AvailableCash: v.AvailableCash,
-		PositionsValue: v.PositionsValue, Equity: v.Equity,
-		UnrealizedPnL: v.UnrealizedPnL, RealizedPnLTotal: v.RealizedPnLTotal, TotalPnL: v.TotalPnL,
-		Positions: pos, Note: v.Note,
+		CashBalance: v.CashBalance, ReservedCash: v.ReservedCash, ReservedMargin: v.ReservedMargin,
+		AvailableCash: v.AvailableCash, PositionsValue: v.PositionsValue,
+		MarginLocked: v.MarginLocked, MarginUnrealizedPnL: v.MarginUnrealizedPnL, MarginEquity: v.MarginEquity,
+		Equity: v.Equity, UnrealizedPnL: v.UnrealizedPnL, RealizedPnLTotal: v.RealizedPnLTotal, TotalPnL: v.TotalPnL,
+		Positions: pos, MarginPositions: mpos, Note: v.Note,
 		CreatedAt: v.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: v.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}

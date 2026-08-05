@@ -161,6 +161,75 @@ CREATE TABLE IF NOT EXISTS recurring_buy_runs (
 	FOREIGN KEY (plan_id) REFERENCES recurring_buy_plans(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_recurring_buy_runs_plan ON recurring_buy_runs(plan_id, executed_at DESC);
+
+CREATE TABLE IF NOT EXISTS margin_positions (
+	id                TEXT PRIMARY KEY NOT NULL,
+	client_id         TEXT NOT NULL,
+	exchange          TEXT NOT NULL,
+	symbol            TEXT NOT NULL,
+	side              TEXT NOT NULL,
+	quantity          REAL NOT NULL,
+	entry_price       REAL NOT NULL,
+	leverage          INTEGER NOT NULL,
+	margin            REAL NOT NULL,
+	liquidation_price REAL NOT NULL,
+	stop_loss         REAL,
+	take_profit       REAL,
+	status            TEXT NOT NULL,
+	realized_pnl      REAL NOT NULL DEFAULT 0,
+	close_reason      TEXT NOT NULL DEFAULT '',
+	opened_at         TEXT NOT NULL,
+	updated_at        TEXT NOT NULL,
+	closed_at         TEXT,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_margin_pos_client ON margin_positions(client_id, status, opened_at DESC);
+CREATE INDEX IF NOT EXISTS idx_margin_pos_open ON margin_positions(status) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS margin_orders (
+	id               TEXT PRIMARY KEY NOT NULL,
+	client_id        TEXT NOT NULL,
+	exchange         TEXT NOT NULL,
+	symbol           TEXT NOT NULL,
+	side             TEXT NOT NULL,
+	order_type       TEXT NOT NULL,
+	quantity         REAL NOT NULL,
+	leverage         INTEGER NOT NULL,
+	limit_price      REAL NOT NULL DEFAULT 0,
+	reserved_margin  REAL NOT NULL DEFAULT 0,
+	stop_loss        REAL,
+	take_profit      REAL,
+	status           TEXT NOT NULL,
+	position_id      TEXT NOT NULL DEFAULT '',
+	reject_reason    TEXT NOT NULL DEFAULT '',
+	cancel_reason    TEXT NOT NULL DEFAULT '',
+	created_at       TEXT NOT NULL,
+	updated_at       TEXT NOT NULL,
+	filled_at        TEXT,
+	canceled_at      TEXT,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_margin_orders_client ON margin_orders(client_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_margin_orders_open ON margin_orders(status) WHERE status = 'open';
+
+CREATE TABLE IF NOT EXISTS margin_trades (
+	id            TEXT PRIMARY KEY NOT NULL,
+	client_id     TEXT NOT NULL,
+	position_id   TEXT NOT NULL,
+	exchange      TEXT NOT NULL,
+	symbol        TEXT NOT NULL,
+	side          TEXT NOT NULL,
+	action        TEXT NOT NULL,
+	quantity      REAL NOT NULL,
+	price         REAL NOT NULL,
+	notional      REAL NOT NULL,
+	realized_pnl  REAL NOT NULL DEFAULT 0,
+	margin_delta  REAL NOT NULL DEFAULT 0,
+	leverage      INTEGER NOT NULL DEFAULT 1,
+	created_at    TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, created_at DESC);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err

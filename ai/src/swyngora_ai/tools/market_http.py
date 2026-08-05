@@ -254,6 +254,39 @@ class RecurringBuyRunsInput(BaseModel):
     offset: int = 0
 
 
+class MarginOrderInput(BaseModel):
+    client_id: str
+    symbol: str
+    side: str = Field(description="long | short")
+    quantity: float = Field(gt=0)
+    leverage: int = Field(ge=1, le=10)
+    order_type: str = Field(default="market", description="market | limit")
+    exchange: str = "binance"
+    limit_price: float = Field(default=0, description="Required for limit")
+    stop_loss: float = Field(default=0, description="Optional; 0 = omit")
+    take_profit: float = Field(default=0, description="Optional; 0 = omit")
+
+
+class MarginPositionIdInput(BaseModel):
+    client_id: str
+    position_id: str
+
+
+class MarginCloseInput(BaseModel):
+    client_id: str
+    position_id: str
+    quantity: float = Field(default=0, description="0 = full close")
+
+
+class MarginBracketsInput(BaseModel):
+    client_id: str
+    position_id: str
+    stop_loss: float = 0
+    take_profit: float = 0
+    clear_stop_loss: bool = False
+    clear_take_profit: bool = False
+
+
 class PriceDiffWatchCreateInput(BaseModel):
     client_id: str
     symbol: str
@@ -712,6 +745,85 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
         )
 
+    def place_margin_order(
+        client_id: str,
+        symbol: str,
+        side: str,
+        quantity: float,
+        leverage: int,
+        order_type: str = "market",
+        exchange: str = "binance",
+        limit_price: float = 0,
+        stop_loss: float = 0,
+        take_profit: float = 0,
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "leverage": leverage,
+            "type": order_type,
+            "exchange": exchange,
+        }
+        if limit_price > 0:
+            body["limitPrice"] = limit_price
+        if stop_loss > 0:
+            body["stopLoss"] = stop_loss
+        if take_profit > 0:
+            body["takeProfit"] = take_profit
+        return http.post("/api/v1/portfolio/margin/orders", body)
+
+    def list_margin_positions(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/margin/positions", {"clientId": client_id})
+
+    def close_margin_position(
+        client_id: str, position_id: str, quantity: float = 0
+    ) -> str:
+        body: dict[str, Any] = {}
+        if quantity > 0:
+            body["quantity"] = quantity
+        return http.post(
+            f"/api/v1/portfolio/margin/positions/{position_id}/close?clientId={client_id}",
+            body,
+        )
+
+    def set_margin_brackets(
+        client_id: str,
+        position_id: str,
+        stop_loss: float = 0,
+        take_profit: float = 0,
+        clear_stop_loss: bool = False,
+        clear_take_profit: bool = False,
+    ) -> str:
+        body: dict[str, Any] = {
+            "clearStopLoss": clear_stop_loss,
+            "clearTakeProfit": clear_take_profit,
+        }
+        if stop_loss > 0:
+            body["stopLoss"] = stop_loss
+        if take_profit > 0:
+            body["takeProfit"] = take_profit
+        return http.put(
+            f"/api/v1/portfolio/margin/positions/{position_id}/brackets?clientId={client_id}",
+            body,
+        )
+
+    def list_margin_orders(client_id: str, status: str = "open") -> str:
+        return http.get(
+            "/api/v1/portfolio/margin/orders",
+            {"clientId": client_id, "status": status},
+        )
+
+    def cancel_margin_order(client_id: str, order_id: str) -> str:
+        return http.delete(
+            f"/api/v1/portfolio/margin/orders/{order_id}",
+            {"clientId": client_id},
+        )
+
+    def list_margin_trades(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/margin/trades", {"clientId": client_id})
+
     def create_price_diff_watch(
         client_id: str,
         symbol: str,
@@ -1122,6 +1234,51 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_recurring_buy_runs",
             description="List execution history for a paper recurring buy plan.",
             args_schema=RecurringBuyRunsInput,
+        ),
+        StructuredTool.from_function(
+            place_margin_order,
+            name="place_margin_order",
+            description=(
+                "Paper isolated margin open: long|short, leverage 1-10, market or limit. "
+                "Optional stop_loss/take_profit. Simulated only."
+            ),
+            args_schema=MarginOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_margin_positions,
+            name="list_margin_positions",
+            description="List open paper margin positions with marks and liquidation price.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            close_margin_position,
+            name="close_margin_position",
+            description="Close all or part of a paper margin position at market.",
+            args_schema=MarginCloseInput,
+        ),
+        StructuredTool.from_function(
+            set_margin_brackets,
+            name="set_margin_brackets",
+            description="Set or clear stop-loss / take-profit on an open paper margin position.",
+            args_schema=MarginBracketsInput,
+        ),
+        StructuredTool.from_function(
+            list_margin_orders,
+            name="list_margin_orders",
+            description="List paper margin orders (default status=open).",
+            args_schema=PortfolioListOrdersInput,
+        ),
+        StructuredTool.from_function(
+            cancel_margin_order,
+            name="cancel_margin_order",
+            description="Cancel an open paper margin limit order.",
+            args_schema=PortfolioCancelOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_margin_trades,
+            name="list_margin_trades",
+            description="List paper margin trade history.",
+            args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
             create_price_diff_watch,
