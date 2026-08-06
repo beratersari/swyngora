@@ -172,6 +172,146 @@ func TestMargin_LimitOrderFill(t *testing.T) {
 	}
 }
 
+// TestMargin_CrossLiquidateReevaluatesAfterEachClose ensures that when several cross
+// positions are open and equity is under maintenance, we liquidate the worst first,
+// then re-check with the new shared balance — survivors that no longer need liquidation stay open.
+func TestMargin_CrossLiquidateReevaluatesAfterEachClose(t *testing.T) {
+	// 1x longs: debt 0 so equity is conserved across a close while maintenance drops.
+	// Start 1000; two positions qty 5 @ 100 → margin 500 each, cash 0.
+	// Marks chosen so equity is under total maint but above one position's maint after the worst closes.
+	svc := newSvc(t, &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "100",
+		"binance|BBBUSDT": "100",
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "xliq", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "xliq", Mode: "cross"}); err != nil {
+		t.Fatal(err)
+	}
+	posA, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq", Symbol: "AAAUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	posB, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq", Symbol: "BBBUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// U_A = (0.5-100)*5 = -497.5; U_B = (0.4-100)*5 = -498 → B is worse.
+	// equity = 1000 - 497.5 - 498 = 4.5; totalMaint = 2*2.5 = 5 → under.
+	// After closing B: equity stays ~4.5, maint = 2.5 → healthy; A must survive.
+	svc.market = &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "0.5",
+		"binance|BBBUSDT": "0.4",
+	}}
+	n, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("want exactly 1 liquidation after re-eval, got %d", n)
+	}
+	gotB, err := svc.store.GetMarginPosition(ctx, "xliq", posB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotB.Status != domain.MarginPositionClosed || gotB.CloseReason != domain.MarginCloseLiquidation {
+		t.Fatalf("worst position B should be liquidated: %+v", gotB)
+	}
+	gotA, err := svc.store.GetMarginPosition(ctx, "xliq", posA.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotA.Status != domain.MarginPositionOpen {
+		t.Fatalf("position A should survive after equity re-check, got status=%s", gotA.Status)
+	}
+	// Second pass: still healthy — no further closes.
+	n2, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq", time.Now().UTC())
+	if err != nil || n2 != 0 {
+		t.Fatalf("second pass should close nothing: n=%d err=%v", n2, err)
+	}
+	// Old batch behavior would have closed both; ensure only one forced-close trade total.
+	closes, liqs, _ := countMarginCloseActions(t, svc, "xliq", posA.ID)
+	if closes != 0 || liqs != 0 {
+		t.Fatalf("A should have no close trades, closes=%d liqs=%d", closes, liqs)
+	}
+	closesB, liqsB, _ := countMarginCloseActions(t, svc, "xliq", posB.ID)
+	if closesB != 1 || liqsB != 1 {
+		t.Fatalf("B should have exactly one liquidation trade, closes=%d liqs=%d", closesB, liqsB)
+	}
+}
+
+// TestMargin_CrossLiquidateContinuesWhileStillUnder closes further positions only when
+// re-evaluated equity remains below maintenance after the first close.
+func TestMargin_CrossLiquidateContinuesWhileStillUnder(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "100",
+		"binance|BBBUSDT": "100",
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "xliq2", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "xliq2", Mode: "cross"}); err != nil {
+		t.Fatal(err)
+	}
+	posA, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq2", Symbol: "AAAUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	posB, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq2", Symbol: "BBBUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both deep red: equity = 1000 - 499.5*2 = 1; maint = 5 → under.
+	// After one close equity still 1 < maint 2.5 → must close the second as well.
+	svc.market = &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "0.1",
+		"binance|BBBUSDT": "0.1",
+	}}
+	n, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq2", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("want both liquidated while still under after re-eval, got %d", n)
+	}
+	for _, id := range []string{posA.ID, posB.ID} {
+		got, err := svc.store.GetMarginPosition(ctx, "xliq2", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Status != domain.MarginPositionClosed {
+			t.Fatalf("pos %s want closed, got %s", id, got.Status)
+		}
+	}
+}
+
+func TestPickWorstCrossPosition(t *testing.T) {
+	list := []domain.MarginPosition{
+		{ID: "a", UnrealizedPnL: -10, Quantity: 1, EntryPrice: 100},
+		{ID: "b", UnrealizedPnL: -50, Quantity: 1, EntryPrice: 100},
+		{ID: "c", UnrealizedPnL: -50, Quantity: 2, EntryPrice: 100}, // same U, larger notional
+	}
+	w := pickWorstCrossPosition(list)
+	if w == nil || w.ID != "c" {
+		t.Fatalf("want c (most negative then larger notional), got %+v", w)
+	}
+}
+
 func TestMargin_InsufficientCash(t *testing.T) {
 	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
 	ctx := context.Background()
@@ -1020,5 +1160,203 @@ func TestMargin_CloseCASRejectsStaleQuantity(t *testing.T) {
 	closes, _, _ := countMarginCloseActions(t, svc, "cas-qty", pos.ID)
 	if closes != 1 {
 		t.Fatalf("want only the real partial close trade, got %d", closes)
+	}
+}
+
+// TestMargin_LiquidationIdempotentAfterRestart: after a successful liquidation, a simulated
+// app restart (re-running interest + maintenance) must not re-credit cash or insert another close.
+func TestMargin_LiquidationIdempotentAfterRestart(t *testing.T) {
+	const clientID = "liq-restart"
+	svc, pos := setupUnderwaterLong(t, clientID, "81")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// First run: complete liquidation (like maintenance after interest raised liq).
+	_, nLiq, _, err := svc.ProcessMarginMaintenance(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nLiq < 1 {
+		// Interest path may also liquidate; force via close if maintenance saw nothing.
+		if did, _ := svc.tryLiquidateIfBreached(ctx, clientID, pos.ID, now); !did {
+			// Position might already be closed by interest in setup — check.
+			got, _ := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+			if got.Status != domain.MarginPositionClosed {
+				t.Fatalf("expected liquidation on first pass, nLiq=%d status=%s", nLiq, got.Status)
+			}
+		}
+	}
+	got, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.MarginPositionClosed {
+		t.Fatalf("want closed after first liquidation, got %+v", got)
+	}
+	view1, err := svc.View(ctx, clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cash1 := view1.CashBalance
+	closes1, liq1, qty1 := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes1 != 1 || liq1 != 1 {
+		t.Fatalf("after first liq: closes=%d liquidations=%d qty=%v", closes1, liq1, qty1)
+	}
+	// Deterministic trade id for restart safety.
+	wantID := domain.SystemCloseTradeID(domain.MarginCloseLiquidation, pos.ID)
+	trades, _ := svc.ListMarginTrades(ctx, clientID, 20, 0)
+	found := false
+	for _, tr := range trades {
+		if tr.PositionID == pos.ID && tr.Action == domain.MarginCloseLiquidation {
+			if tr.ID != wantID {
+				t.Fatalf("liquidation trade id=%q want %q", tr.ID, wantID)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("missing liquidation trade")
+	}
+
+	// Simulated restart: workers run again (interest + maintenance).
+	for i := 0; i < 5; i++ {
+		_, _, _ = svc.ProcessMarginInterest(ctx, now.Add(time.Duration(i)*time.Hour))
+		_, n2, _, err := svc.ProcessMarginMaintenance(ctx, now.Add(time.Duration(i)*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n2 > 0 {
+			t.Fatalf("restart pass %d re-liquidated count=%d", i, n2)
+		}
+		// Direct force must also be a no-op.
+		if did, err := svc.tryLiquidateIfBreached(ctx, clientID, pos.ID, now); err != nil || did {
+			t.Fatalf("tryLiquidate after done: did=%v err=%v", did, err)
+		}
+	}
+	view2, _ := svc.View(ctx, clientID)
+	if math.Abs(view2.CashBalance-cash1) > 1e-9 {
+		t.Fatalf("cash changed on restart: before=%v after=%v", cash1, view2.CashBalance)
+	}
+	closes2, liq2, qty2 := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes2 != 1 || liq2 != 1 || math.Abs(qty2-1) > 1e-9 {
+		t.Fatalf("duplicate close after restart: closes=%d liq=%d qty=%v", closes2, liq2, qty2)
+	}
+	got2, _ := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if got2.Status != domain.MarginPositionClosed || got2.CloseReason != domain.MarginCloseLiquidation {
+		t.Fatalf("position changed on restart: %+v", got2)
+	}
+}
+
+// TestMargin_LiquidationContinuesAfterCrashBeforeClose: interest commits, then "crash" before
+// close; on restart, maintenance liquidates once and a second restart does nothing.
+func TestMargin_LiquidationContinuesAfterCrashBeforeClose(t *testing.T) {
+	const clientID = "liq-crash-mid"
+	svc, pos := setupUnderwaterLong(t, clientID, "81")
+	ctx := context.Background()
+	// setupUnderwaterLong already applied interest via CAS (simulates interest commit before crash).
+	// Position must still be open with elevated interest/liq.
+	if pos.Status != domain.MarginPositionOpen {
+		t.Fatalf("precondition open, got %s", pos.Status)
+	}
+	if pos.DebtInterest < 0.5 {
+		t.Fatalf("precondition interest applied, got %v", pos.DebtInterest)
+	}
+	viewOpen, _ := svc.View(ctx, clientID)
+	cashOpen := viewOpen.CashBalance
+
+	// "Restart" maintenance completes the liquidation that never ran.
+	now := time.Now().UTC()
+	_, nLiq, _, err := svc.ProcessMarginMaintenance(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nLiq < 1 {
+		if did, _ := svc.tryLiquidateIfBreached(ctx, clientID, pos.ID, now); !did {
+			t.Fatal("expected liquidation to complete after restart")
+		}
+	}
+	got, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.MarginPositionClosed {
+		t.Fatalf("want closed after recovery, got %s", got.Status)
+	}
+	viewClosed, _ := svc.View(ctx, clientID)
+	// Cash must have moved exactly once from open → closed.
+	if math.Abs(viewClosed.CashBalance-cashOpen) < 1e-9 {
+		t.Fatalf("cash should change on completed liquidation: still %v", viewClosed.CashBalance)
+	}
+	cashAfter := viewClosed.CashBalance
+	closes, liqN, _ := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes != 1 || liqN != 1 {
+		t.Fatalf("want 1 liquidation trade after recovery, closes=%d liq=%d", closes, liqN)
+	}
+
+	// Second restart: no further cash or trades.
+	_, n2, _, _ := svc.ProcessMarginMaintenance(ctx, now.Add(time.Hour))
+	_, n3, _ := svc.ProcessMarginInterest(ctx, now.Add(2*time.Hour))
+	if n2 > 0 || n3 > 0 {
+		t.Fatalf("second restart re-applied work: maintLiq=%d interestLiq=%d", n2, n3)
+	}
+	view2, _ := svc.View(ctx, clientID)
+	if math.Abs(view2.CashBalance-cashAfter) > 1e-9 {
+		t.Fatalf("cash changed on second restart: %v -> %v", cashAfter, view2.CashBalance)
+	}
+	closes2, _, _ := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes2 != 1 {
+		t.Fatalf("second close record after restart: %d", closes2)
+	}
+}
+
+// TestMargin_ApplyMarginCloseRestartNoDoubleCash: store rejects a second full liquidation apply.
+func TestMargin_ApplyMarginCloseRestartNoDoubleCash(t *testing.T) {
+	const clientID = "liq-store-idemp"
+	svc, pos := setupUnderwaterLong(t, clientID, "81")
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := svc.tryLiquidateIfBreached(ctx, clientID, pos.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	// Ensure closed.
+	got, _ := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if got.Status != domain.MarginPositionClosed {
+		// force
+		_, _, err := svc.closeMarginAt(ctx, pos, pos.Quantity, 81, domain.MarginCloseLiquidation)
+		if err != nil && !isPositionNotOpenErr(err) {
+			t.Fatal(err)
+		}
+		got, _ = svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	}
+	if got.Status != domain.MarginPositionClosed {
+		t.Fatal("need closed position")
+	}
+	p1, _ := svc.store.GetPortfolio(ctx, clientID)
+	cash1 := p1.CashBalance
+	// Replay a close with same snapshot-ish payload (as a buggy restart might).
+	p2 := *p1
+	p2.CashBalance += 50 // would wrongly credit if accepted
+	p2.UpdatedAt = now
+	closed := *got
+	tr := domain.MarginTrade{
+		ID: domain.SystemCloseTradeID(domain.MarginCloseLiquidation, pos.ID),
+		ClientID: clientID, PositionID: pos.ID, Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
+		Side: domain.MarginLong, Action: domain.MarginCloseLiquidation, Quantity: 1, Price: 81,
+		Notional: 81, MarginDelta: 50, CreatedAt: now,
+	}
+	err := svc.store.ApplyMarginClose(ctx, &p2, closed, tr, true, domain.PositionCloseSnapshot{
+		DebtSnapshot: domain.DebtSnapshot{Principal: 80, Interest: 0.6, LastInterestAt: pos.LastInterestAt},
+		Quantity:     1,
+	})
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("want ErrNotFound on replay, got %v", err)
+	}
+	p3, _ := svc.store.GetPortfolio(ctx, clientID)
+	if math.Abs(p3.CashBalance-cash1) > 1e-9 {
+		t.Fatalf("cash credited on replay: %v -> %v", cash1, p3.CashBalance)
+	}
+	closes, _, _ := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes != 1 {
+		t.Fatalf("extra close trade on replay: %d", closes)
 	}
 }

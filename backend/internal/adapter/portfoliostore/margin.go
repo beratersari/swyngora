@@ -4,10 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "unique") || strings.Contains(msg, "constraint")
+}
 
 const marginPosCols = `id, client_id, exchange, symbol, side, COALESCE(mode, 'isolated'), quantity, entry_price, leverage, margin,
 	COALESCE(debt_principal, 0), COALESCE(debt_interest, 0), COALESCE(debt_asset, 'quote'), last_interest_at,
@@ -499,11 +508,32 @@ func (s *SQLite) ApplyMarginOpen(ctx context.Context, p *domain.Portfolio, pos d
 	return tx.Commit()
 }
 
-// ApplyMarginClose credits cash, updates or closes position, inserts trade.
+// ApplyMarginClose credits cash, updates or closes position, inserts trade in one transaction.
+// Crash-safe: either all of (cash, position, trade) commit or none — a restart cannot double-apply.
 // expected debt+quantity must still match or returns ErrConflict / ErrNotFound if already closed.
 func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade, fullClose bool, expected domain.PositionCloseSnapshot) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// Fast path: already closed (restart after successful liquidation) — do not touch cash.
+	var st string
+	qerr := s.db.QueryRowContext(ctx, `SELECT status FROM margin_positions WHERE id = ?`, pos.ID).Scan(&st)
+	if qerr == sql.ErrNoRows {
+		return domain.ErrNotFound
+	}
+	if qerr == nil && st != "open" {
+		return domain.ErrNotFound
+	}
+	// Forced close already recorded (unique trade) even if status read races — refuse second cash credit.
+	if fullClose && domain.IsSystemForcedCloseAction(t.Action) {
+		var n int
+		_ = s.db.QueryRowContext(ctx, `
+			SELECT COUNT(1) FROM margin_trades WHERE position_id = ? AND action = ?
+		`, pos.ID, t.Action).Scan(&n)
+		if n > 0 {
+			return domain.ErrNotFound
+		}
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -535,17 +565,35 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 	}
 	if n == 0 {
 		// Distinguish already closed vs concurrent debt/qty change.
-		var st string
-		qerr := tx.QueryRowContext(ctx, `SELECT status FROM margin_positions WHERE id = ?`, pos.ID).Scan(&st)
-		if qerr == sql.ErrNoRows || st != "open" {
+		var st2 string
+		qerr := tx.QueryRowContext(ctx, `SELECT status FROM margin_positions WHERE id = ?`, pos.ID).Scan(&st2)
+		if qerr == sql.ErrNoRows || st2 != "open" {
 			return domain.ErrNotFound
 		}
 		return domain.ErrConflict
 	}
 	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
+		// Unique forced-close index / deterministic trade id: treat as already applied.
+		if isUniqueViolation(err) {
+			return domain.ErrNotFound
+		}
 		return err
 	}
 	return tx.Commit()
+}
+
+// HasMarginTradeAction reports whether a trade with action exists for the position.
+func (s *SQLite) HasMarginTradeAction(ctx context.Context, positionID, action string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(1) FROM margin_trades WHERE position_id = ? AND action = ?
+	`, strings.TrimSpace(positionID), strings.TrimSpace(action)).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // ApplyMarginOpenFromOrder fills limit order + opens position + debits cash in one tx.

@@ -238,6 +238,10 @@ CREATE TABLE IF NOT EXISTS margin_trades (
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, created_at DESC);
+-- At most one liquidation / SL / TP trade per position (restart + concurrent safe).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_forced_close
+	ON margin_trades(position_id, action)
+	WHERE action IN ('liquidation', 'stop_loss', 'take_profit');
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -260,6 +264,8 @@ CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, 
 		`ALTER TABLE margin_positions ADD COLUMN last_interest_at TEXT`,
 		`ALTER TABLE margin_trades ADD COLUMN principal_paid REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE margin_trades ADD COLUMN interest_paid REAL NOT NULL DEFAULT 0`,
+		// Restart-safe: one forced close trade per position (ignore if index already exists).
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_forced_close ON margin_trades(position_id, action) WHERE action IN ('liquidation', 'stop_loss', 'take_profit')`,
 	}
 	for _, q := range alters {
 		if _, err := s.db.Exec(q); err != nil {

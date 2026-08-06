@@ -166,6 +166,37 @@ type MarginTrade struct {
 	CreatedAt     time.Time
 }
 
+// SystemCloseTradeID returns a deterministic trade id for full forced closes
+// (liquidation / SL / TP). Empty when the action is not a forced system close.
+// Using a stable id + unique index makes a second run after restart a no-op
+// (cannot insert a second close record or re-apply cash).
+func SystemCloseTradeID(action, positionID string) string {
+	positionID = strings.TrimSpace(positionID)
+	if positionID == "" {
+		return ""
+	}
+	switch action {
+	case MarginCloseLiquidation:
+		return "margin-liq:" + positionID
+	case MarginCloseStopLoss:
+		return "margin-sl:" + positionID
+	case MarginCloseTakeProfit:
+		return "margin-tp:" + positionID
+	default:
+		return ""
+	}
+}
+
+// IsSystemForcedCloseAction reports liquidation / stop_loss / take_profit trade actions.
+func IsSystemForcedCloseAction(action string) bool {
+	switch action {
+	case MarginCloseLiquidation, MarginCloseStopLoss, MarginCloseTakeProfit:
+		return true
+	default:
+		return false
+	}
+}
+
 // IsValidMarginMode reports isolated|cross.
 func IsValidMarginMode(s string) bool {
 	switch MarginMode(strings.ToLower(strings.TrimSpace(s))) {
@@ -626,8 +657,12 @@ type MarginPort interface {
 	ApplyMarginOpen(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// ApplyMarginClose credits cash (margin release + realized), updates/closes position + trade atomically.
 	// expected must match current debt + quantity; returns ErrConflict if interest/repay/close raced,
-	// or ErrNotFound if the position is already closed (idempotent concurrent liquidation).
+	// or ErrNotFound if the position is already closed (idempotent concurrent/restart liquidation).
+	// Forced closes (liquidation/SL/TP) should use SystemCloseTradeID so a restart cannot insert a second trade.
 	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool, expected PositionCloseSnapshot) error
+	// HasMarginTradeAction reports whether a trade with the given action exists for the position
+	// (used for restart-safe forced-close checks).
+	HasMarginTradeAction(ctx context.Context, positionID, action string) (bool, error)
 	// ApplyMarginOpenFromOrder fills a limit order into a new position in one transaction.
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
 	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).

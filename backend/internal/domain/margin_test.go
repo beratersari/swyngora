@@ -72,6 +72,22 @@ func TestAllocateRepaymentInterestFirst(t *testing.T) {
 	}
 }
 
+func TestSystemCloseTradeID(t *testing.T) {
+	id := "pos-abc"
+	if got := SystemCloseTradeID(MarginCloseLiquidation, id); got != "margin-liq:pos-abc" {
+		t.Fatalf("liq id=%q", got)
+	}
+	if got := SystemCloseTradeID(MarginCloseStopLoss, id); got != "margin-sl:pos-abc" {
+		t.Fatalf("sl id=%q", got)
+	}
+	if got := SystemCloseTradeID("close", id); got != "" {
+		t.Fatalf("user close should not get system id, got %q", got)
+	}
+	if !IsSystemForcedCloseAction(MarginCloseLiquidation) || IsSystemForcedCloseAction("repay") {
+		t.Fatal("IsSystemForcedCloseAction")
+	}
+}
+
 func TestAccrueInterestHours(t *testing.T) {
 	last := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
 	now := last.Add(2*time.Hour + 30*time.Minute)
