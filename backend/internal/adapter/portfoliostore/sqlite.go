@@ -174,6 +174,10 @@ CREATE TABLE IF NOT EXISTS margin_positions (
 	entry_price       REAL NOT NULL,
 	leverage          INTEGER NOT NULL,
 	margin            REAL NOT NULL,
+	debt_principal    REAL NOT NULL DEFAULT 0,
+	debt_interest     REAL NOT NULL DEFAULT 0,
+	debt_asset        TEXT NOT NULL DEFAULT 'quote',
+	last_interest_at  TEXT,
 	liquidation_price REAL NOT NULL,
 	stop_loss         REAL,
 	take_profit       REAL,
@@ -225,10 +229,12 @@ CREATE TABLE IF NOT EXISTS margin_trades (
 	quantity      REAL NOT NULL,
 	price         REAL NOT NULL,
 	notional      REAL NOT NULL,
-	realized_pnl  REAL NOT NULL DEFAULT 0,
-	margin_delta  REAL NOT NULL DEFAULT 0,
-	leverage      INTEGER NOT NULL DEFAULT 1,
-	created_at    TEXT NOT NULL,
+	realized_pnl    REAL NOT NULL DEFAULT 0,
+	margin_delta    REAL NOT NULL DEFAULT 0,
+	principal_paid  REAL NOT NULL DEFAULT 0,
+	interest_paid   REAL NOT NULL DEFAULT 0,
+	leverage        INTEGER NOT NULL DEFAULT 1,
+	created_at      TEXT NOT NULL,
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, created_at DESC);
@@ -248,6 +254,12 @@ CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, 
 		`ALTER TABLE pending_orders ADD COLUMN cancel_reason TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE portfolios ADD COLUMN margin_mode TEXT NOT NULL DEFAULT 'isolated'`,
 		`ALTER TABLE margin_positions ADD COLUMN mode TEXT NOT NULL DEFAULT 'isolated'`,
+		`ALTER TABLE margin_positions ADD COLUMN debt_principal REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE margin_positions ADD COLUMN debt_interest REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE margin_positions ADD COLUMN debt_asset TEXT NOT NULL DEFAULT 'quote'`,
+		`ALTER TABLE margin_positions ADD COLUMN last_interest_at TEXT`,
+		`ALTER TABLE margin_trades ADD COLUMN principal_paid REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE margin_trades ADD COLUMN interest_paid REAL NOT NULL DEFAULT 0`,
 	}
 	for _, q := range alters {
 		if _, err := s.db.Exec(q); err != nil {

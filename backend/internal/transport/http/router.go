@@ -125,6 +125,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio/margin/positions", ph.ListMarginPositions)
 		mux.HandleFunc("POST /api/v1/portfolio/margin/positions/{id}/close", ph.CloseMarginPosition)
 		mux.HandleFunc("POST /api/v1/portfolio/margin/positions/{id}/margin", ph.AdjustMargin)
+		mux.HandleFunc("POST /api/v1/portfolio/margin/positions/{id}/repay", ph.RepayMarginDebt)
 		mux.HandleFunc("PUT /api/v1/portfolio/margin/positions/{id}/brackets", ph.SetMarginBrackets)
 		mux.HandleFunc("GET /api/v1/portfolio/margin/positions/{id}", ph.GetMarginPosition)
 		mux.HandleFunc("GET /api/v1/portfolio/margin/trades", ph.ListMarginTrades)

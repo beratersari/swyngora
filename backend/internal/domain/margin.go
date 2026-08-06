@@ -16,15 +16,30 @@ const (
 	MaxOpenMarginOrders    = 50
 	// DefaultMaintenanceMarginRate is fraction of notional retained as maintenance (0.5%).
 	DefaultMaintenanceMarginRate = 0.005
+	// DefaultMarginHourlyInterestRate is simple interest per full hour on principal
+	// (~0.02%/day ≈ 0.000833%/hour; we use 0.001%/hour for paper clarity).
+	DefaultMarginHourlyInterestRate = 0.00001
 	// Margin close reasons.
 	MarginCloseUser        = "user"
 	MarginCloseLiquidation = "liquidation"
 	MarginCloseStopLoss    = "stop_loss"
 	MarginCloseTakeProfit  = "take_profit"
 	MarginClosePartialUser = "partial_close"
-	// Margin trade actions (also used for adjust).
+	// Margin trade actions (also used for adjust/repay).
 	MarginActionAddMargin    = "add_margin"
 	MarginActionRemoveMargin = "remove_margin"
+	MarginActionRepay        = "repay"
+	MarginActionInterest     = "interest"
+)
+
+// DebtAsset is the unit of borrowed principal/interest.
+type DebtAsset string
+
+const (
+	// DebtAssetQuote: long positions borrow cash (portfolio currency).
+	DebtAssetQuote DebtAsset = "quote"
+	// DebtAssetBase: short positions borrow the base coin.
+	DebtAssetBase DebtAsset = "base"
 )
 
 // MarginMode is account-wide margin style (locked while any open pos/order).
@@ -83,17 +98,27 @@ type MarginPosition struct {
 	EntryPrice       float64
 	Leverage         int
 	Margin           float64 // margin assigned (isolated: only this backs the pos; cross: IM share)
+	// DebtPrincipal: long = borrowed cash; short = borrowed base coins.
+	DebtPrincipal float64
+	// DebtInterest: accrued interest in the same unit as DebtPrincipal.
+	DebtInterest float64
+	// DebtAsset is quote (cash) for long, base (coin) for short.
+	DebtAsset DebtAsset
+	// LastInterestAt is the last hour boundary when interest was applied.
+	LastInterestAt   time.Time
 	LiquidationPrice float64
 	StopLoss         *float64
 	TakeProfit       *float64
 	Status           MarginPositionStatus
 	UnrealizedPnL    float64 // view-only / last mark
 	MarkPrice        float64 // view-only
-	RealizedPnL      float64 // cumulative realized on this position (partials + final)
-	CloseReason      string
-	OpenedAt         time.Time
-	UpdatedAt        time.Time
-	ClosedAt         *time.Time
+	// DebtNotional is view-only: principal+interest in quote terms (short uses mark).
+	DebtNotional  float64
+	RealizedPnL   float64 // cumulative realized on this position (partials + final)
+	CloseReason   string
+	OpenedAt      time.Time
+	UpdatedAt     time.Time
+	ClosedAt      *time.Time
 }
 
 // MarginOrder is a pending limit open for margin (market fills immediately).
@@ -120,7 +145,7 @@ type MarginOrder struct {
 	CanceledAt    *time.Time
 }
 
-// MarginTrade is a margin open/close fill record.
+// MarginTrade is a margin open/close/repay fill record.
 type MarginTrade struct {
 	ID           string
 	ClientID     string
@@ -128,14 +153,17 @@ type MarginTrade struct {
 	Exchange     Exchange
 	Symbol       string
 	Side         MarginSide
-	Action       string // open | close | liquidation | stop_loss | take_profit
+	Action       string // open | close | liquidation | stop_loss | take_profit | repay | interest
 	Quantity     float64
 	Price        float64
 	Notional     float64
 	RealizedPnL  float64
 	MarginDelta  float64 // cash change from margin lock/release (negative open, positive release)
-	Leverage     int
-	CreatedAt    time.Time
+	// PrincipalPaid / InterestPaid track debt reduction on repay or partial close.
+	PrincipalPaid float64
+	InterestPaid  float64
+	Leverage      int
+	CreatedAt     time.Time
 }
 
 // IsValidMarginMode reports isolated|cross.
@@ -217,6 +245,103 @@ func InitialMargin(qty, price float64, leverage int) (float64, error) {
 	return qty * price / float64(leverage), nil
 }
 
+// BorrowedPrincipalOnOpen returns debt principal and asset at open.
+// Long: borrowed cash = notional - margin. Short: borrowed coins = qty.
+func BorrowedPrincipalOnOpen(side MarginSide, qty, price float64, leverage int) (principal float64, asset DebtAsset, err error) {
+	im, err := InitialMargin(qty, price, leverage)
+	if err != nil {
+		return 0, "", err
+	}
+	notional := qty * price
+	switch side {
+	case MarginLong:
+		// Cash borrowed to fund the long beyond own margin.
+		b := notional - im
+		if b < 0 {
+			b = 0
+		}
+		return b, DebtAssetQuote, nil
+	case MarginShort:
+		return qty, DebtAssetBase, nil
+	default:
+		return 0, "", fmt.Errorf("%w: side must be long or short", ErrInvalidArgument)
+	}
+}
+
+// DebtNotionalQuote values outstanding debt in quote currency (short uses mark for coins).
+func DebtNotionalQuote(side MarginSide, principal, interest, mark float64) float64 {
+	total := principal + interest
+	if total <= 0 {
+		return 0
+	}
+	switch side {
+	case MarginLong:
+		return total // already quote
+	case MarginShort:
+		if mark <= 0 {
+			return 0
+		}
+		return total * mark
+	default:
+		return 0
+	}
+}
+
+// AccrueInterestHours applies simple interest on principal for full elapsed hours.
+// Returns new interest total, new lastInterestAt, hours applied.
+func AccrueInterestHours(principal, interest float64, lastAt, now time.Time, hourlyRate float64) (newInterest float64, newLast time.Time, hours int) {
+	if principal <= 0 || hourlyRate <= 0 {
+		return interest, lastAt, 0
+	}
+	if lastAt.IsZero() {
+		lastAt = now.UTC().Truncate(time.Hour)
+	}
+	now = now.UTC()
+	lastAt = lastAt.UTC()
+	// Full hours since last accrual.
+	elapsed := now.Sub(lastAt)
+	hours = int(elapsed / time.Hour)
+	if hours <= 0 {
+		return interest, lastAt, 0
+	}
+	add := principal * hourlyRate * float64(hours)
+	return interest + add, lastAt.Add(time.Duration(hours) * time.Hour), hours
+}
+
+// AllocateRepayment pays interest first, then principal. amount is in debt units.
+func AllocateRepayment(principal, interest, amount float64) (principalPaid, interestPaid, newPrincipal, newInterest float64) {
+	if amount <= 0 {
+		return 0, 0, principal, interest
+	}
+	if amount >= interest {
+		interestPaid = interest
+		rest := amount - interest
+		if rest > principal {
+			rest = principal
+		}
+		principalPaid = rest
+	} else {
+		interestPaid = amount
+	}
+	newInterest = interest - interestPaid
+	newPrincipal = principal - principalPaid
+	if newInterest < 0 {
+		newInterest = 0
+	}
+	if newPrincipal < 0 {
+		newPrincipal = 0
+	}
+	return principalPaid, interestPaid, newPrincipal, newInterest
+}
+
+// MaxBorrowNotional is the account debt ceiling in quote terms (startingBalance * (maxLev-1)).
+func MaxBorrowNotional(startingBalance float64) float64 {
+	if startingBalance <= 0 {
+		return 0
+	}
+	return startingBalance * float64(MaxMarginLeverage-1)
+}
+
 // MaintenanceMargin is mmr * notional for open size.
 func MaintenanceMargin(qty, entry, mmr float64) float64 {
 	if qty <= 0 || entry <= 0 || mmr <= 0 {
@@ -225,10 +350,23 @@ func MaintenanceMargin(qty, entry, mmr float64) float64 {
 	return qty * entry * mmr
 }
 
-// LiquidationPriceFromMargin computes liq from assigned margin (isolated, or IM share).
-// long:  entry - (margin - maint) / qty
-// short: entry + (margin - maint) / qty
+// LiquidationPriceFromMargin computes liq from assigned margin without open interest.
+// Prefer LiquidationPriceWithDebt when debt/interest are tracked.
 func LiquidationPriceFromMargin(side MarginSide, entry, qty, margin, mmr float64) (float64, error) {
+	return LiquidationPriceWithDebt(side, entry, qty, margin, 0, 0, mmr)
+}
+
+// LiquidationPriceWithDebt includes growing interest and assigned margin.
+//
+// Long (isolated equity = margin + (mark-entry)*qty - interest):
+//
+//	mark = entry - (margin - maint - interest) / qty
+//	Extra margin lowers liq; interest raises liq (worse). Principal is already in entry/margin split.
+//
+// Short (owe principal+interest coins C):
+//
+//	mark = (margin + entry*qty - maint) / C
+func LiquidationPriceWithDebt(side MarginSide, entry, qty, margin, debtPrincipal, debtInterest, mmr float64) (float64, error) {
 	if entry <= 0 || qty <= 0 || math.IsNaN(entry) || math.IsNaN(qty) || math.IsInf(entry, 0) || math.IsInf(qty, 0) {
 		return 0, fmt.Errorf("%w: entry and quantity must be positive", ErrInvalidArgument)
 	}
@@ -238,20 +376,35 @@ func LiquidationPriceFromMargin(side MarginSide, entry, qty, margin, mmr float64
 	if mmr < 0 || mmr >= 1 || math.IsNaN(mmr) {
 		return 0, fmt.Errorf("%w: invalid maintenance margin rate", ErrInvalidArgument)
 	}
-	maint := MaintenanceMargin(qty, entry, mmr)
-	buffer := margin - maint
-	if buffer < 0 {
-		buffer = 0
+	if debtPrincipal < 0 {
+		debtPrincipal = 0
 	}
+	if debtInterest < 0 {
+		debtInterest = 0
+	}
+	maint := MaintenanceMargin(qty, entry, mmr)
 	switch side {
 	case MarginLong:
+		// Interest is cash liability on top of posted margin.
+		buffer := margin - maint - debtInterest
+		if buffer < 0 {
+			buffer = 0
+		}
 		p := entry - buffer/qty
 		if p < 0 {
 			p = 0
 		}
 		return p, nil
 	case MarginShort:
-		return entry + buffer/qty, nil
+		c := debtPrincipal + debtInterest
+		if c <= PositionEpsilon {
+			c = qty
+		}
+		num := margin + entry*qty - maint
+		if num < 0 {
+			num = 0
+		}
+		return num / c, nil
 	default:
 		return 0, fmt.Errorf("%w: side must be long or short", ErrInvalidArgument)
 	}
@@ -460,6 +613,8 @@ type MarginPort interface {
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
 	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).
 	ApplyMarginAdjust(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
+	// ApplyMarginRepay pays interest then principal from cash (long) or cash bought coins (short simplified as cash).
+	ApplyMarginRepay(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// UpdatePortfolioMarginMode sets account margin mode.
 	UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode MarginMode, at time.Time) error
 }

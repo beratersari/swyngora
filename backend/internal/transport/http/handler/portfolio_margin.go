@@ -21,6 +21,11 @@ type marginPositionDTO struct {
 	EntryPrice       float64  `json:"entryPrice"`
 	Leverage         int      `json:"leverage"`
 	Margin           float64  `json:"margin"`
+	DebtPrincipal    float64  `json:"debtPrincipal"`
+	DebtInterest     float64  `json:"debtInterest"`
+	DebtAsset        string   `json:"debtAsset"`
+	DebtNotional     float64  `json:"debtNotional,omitempty"`
+	LastInterestAt   string   `json:"lastInterestAt,omitempty"`
 	LiquidationPrice float64  `json:"liquidationPrice"`
 	StopLoss         *float64 `json:"stopLoss,omitempty"`
 	TakeProfit       *float64 `json:"takeProfit,omitempty"`
@@ -58,19 +63,21 @@ type marginOrderDTO struct {
 }
 
 type marginTradeDTO struct {
-	ID          string  `json:"id"`
-	PositionID  string  `json:"positionId"`
-	Exchange    string  `json:"exchange"`
-	Symbol      string  `json:"symbol"`
-	Side        string  `json:"side"`
-	Action      string  `json:"action"`
-	Quantity    float64 `json:"quantity"`
-	Price       float64 `json:"price"`
-	Notional    float64 `json:"notional"`
-	RealizedPnL float64 `json:"realizedPnL"`
-	MarginDelta float64 `json:"marginDelta"`
-	Leverage    int     `json:"leverage"`
-	CreatedAt   string  `json:"createdAt"`
+	ID            string  `json:"id"`
+	PositionID    string  `json:"positionId"`
+	Exchange      string  `json:"exchange"`
+	Symbol        string  `json:"symbol"`
+	Side          string  `json:"side"`
+	Action        string  `json:"action"`
+	Quantity      float64 `json:"quantity"`
+	Price         float64 `json:"price"`
+	Notional      float64 `json:"notional"`
+	RealizedPnL   float64 `json:"realizedPnL"`
+	MarginDelta   float64 `json:"marginDelta"`
+	PrincipalPaid float64 `json:"principalPaid,omitempty"`
+	InterestPaid  float64 `json:"interestPaid,omitempty"`
+	Leverage      int     `json:"leverage"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 func marginPosDTO(p *domain.MarginPosition) marginPositionDTO {
@@ -81,11 +88,16 @@ func marginPosDTO(p *domain.MarginPosition) marginPositionDTO {
 	d := marginPositionDTO{
 		ID: p.ID, ClientID: p.ClientID, Exchange: string(p.Exchange), Symbol: p.Symbol,
 		Side: string(p.Side), Mode: mode, Quantity: p.Quantity, EntryPrice: p.EntryPrice, Leverage: p.Leverage,
-		Margin: p.Margin, LiquidationPrice: p.LiquidationPrice, Status: string(p.Status),
+		Margin: p.Margin, DebtPrincipal: p.DebtPrincipal, DebtInterest: p.DebtInterest,
+		DebtAsset: string(p.DebtAsset), DebtNotional: p.DebtNotional,
+		LiquidationPrice: p.LiquidationPrice, Status: string(p.Status),
 		MarkPrice: p.MarkPrice, UnrealizedPnL: p.UnrealizedPnL, RealizedPnL: p.RealizedPnL,
 		CloseReason: p.CloseReason, StopLoss: p.StopLoss, TakeProfit: p.TakeProfit,
 		OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !p.LastInterestAt.IsZero() {
+		d.LastInterestAt = p.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
 	if p.ClosedAt != nil {
 		s := p.ClosedAt.UTC().Format(time.RFC3339Nano)
@@ -118,7 +130,8 @@ func marginTradeToDTO(t *domain.MarginTrade) marginTradeDTO {
 	return marginTradeDTO{
 		ID: t.ID, PositionID: t.PositionID, Exchange: string(t.Exchange), Symbol: t.Symbol,
 		Side: string(t.Side), Action: t.Action, Quantity: t.Quantity, Price: t.Price, Notional: t.Notional,
-		RealizedPnL: t.RealizedPnL, MarginDelta: t.MarginDelta, Leverage: t.Leverage,
+		RealizedPnL: t.RealizedPnL, MarginDelta: t.MarginDelta,
+		PrincipalPaid: t.PrincipalPaid, InterestPaid: t.InterestPaid, Leverage: t.Leverage,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
@@ -335,4 +348,27 @@ func (h *PortfolioHandler) AdjustMargin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, marginPosDTO(pos))
+}
+
+type repayMarginBody struct {
+	Amount float64 `json:"amount"`
+}
+
+// RepayMarginDebt handles POST /api/v1/portfolio/margin/positions/{id}/repay
+func (h *PortfolioHandler) RepayMarginDebt(w http.ResponseWriter, r *http.Request) {
+	var body repayMarginBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	pos, tr, err := h.svc.RepayMarginDebt(r.Context(), portfolio.MarginRepayInput{
+		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"), Amount: body.Amount,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"position": marginPosDTO(pos), "trade": marginTradeToDTO(tr),
+	})
 }

@@ -3,6 +3,7 @@ package domain
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestInitialMargin(t *testing.T) {
@@ -44,6 +45,63 @@ func TestCrossLiquidationPrice(t *testing.T) {
 	liq, err := CrossLiquidationPrice(MarginLong, 100, 1, 100, 0.5)
 	if err != nil || math.Abs(liq-0.5) > 1e-9 {
 		t.Fatalf("liq=%v err=%v", liq, err)
+	}
+}
+
+func TestBorrowedPrincipalOnOpen(t *testing.T) {
+	// long 1 @ 100, 5x → margin 20, borrow 80 cash
+	p, a, err := BorrowedPrincipalOnOpen(MarginLong, 1, 100, 5)
+	if err != nil || a != DebtAssetQuote || math.Abs(p-80) > 1e-9 {
+		t.Fatalf("p=%v a=%s err=%v", p, a, err)
+	}
+	// short 2 @ 50, any lev → borrow 2 coins
+	p, a, err = BorrowedPrincipalOnOpen(MarginShort, 2, 50, 10)
+	if err != nil || a != DebtAssetBase || math.Abs(p-2) > 1e-9 {
+		t.Fatalf("p=%v a=%s err=%v", p, a, err)
+	}
+}
+
+func TestAllocateRepaymentInterestFirst(t *testing.T) {
+	pp, ip, np, ni := AllocateRepayment(100, 10, 5)
+	if ip != 5 || pp != 0 || ni != 5 || np != 100 {
+		t.Fatalf("%v %v %v %v", pp, ip, np, ni)
+	}
+	pp, ip, np, ni = AllocateRepayment(100, 10, 30)
+	if math.Abs(ip-10) > 1e-12 || math.Abs(pp-20) > 1e-12 || math.Abs(np-80) > 1e-12 || math.Abs(ni) > 1e-12 {
+		t.Fatalf("%v %v %v %v", pp, ip, np, ni)
+	}
+}
+
+func TestAccrueInterestHours(t *testing.T) {
+	last := time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC)
+	now := last.Add(2*time.Hour + 30*time.Minute)
+	ni, nl, h := AccrueInterestHours(1000, 0, last, now, 0.01)
+	if h != 2 || math.Abs(ni-20) > 1e-9 {
+		t.Fatalf("ni=%v h=%d nl=%v", ni, h, nl)
+	}
+	if !nl.Equal(last.Add(2 * time.Hour)) {
+		t.Fatalf("last=%v", nl)
+	}
+}
+
+func TestLiquidationPriceWithDebtInterest(t *testing.T) {
+	// long 1@100, margin 20, no interest → classic ~80.5
+	liq0, err := LiquidationPriceWithDebt(MarginLong, 100, 1, 20, 80, 0, 0.005)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(liq0-80.5) > 1e-9 {
+		t.Fatalf("liq0=%v", liq0)
+	}
+	// with interest 5: liq higher (worse for long)
+	liq1, err := LiquidationPriceWithDebt(MarginLong, 100, 1, 20, 80, 5, 0.005)
+	if err != nil || liq1 <= liq0 {
+		t.Fatalf("liq0=%v liq1=%v", liq0, liq1)
+	}
+	// add margin without interest: liq lower
+	liq2, err := LiquidationPriceWithDebt(MarginLong, 100, 1, 40, 80, 0, 0.005)
+	if err != nil || liq2 >= liq0 {
+		t.Fatalf("liq0=%v liq2=%v", liq0, liq2)
 	}
 }
 

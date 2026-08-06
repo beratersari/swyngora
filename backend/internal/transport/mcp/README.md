@@ -49,6 +49,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_margin_positions` | Open margin positions |
 | `close_margin_position` | Full/partial margin close |
 | `adjust_margin` | Add/remove isolated position margin |
+| `repay_margin_debt` | Pay interest then principal without closing |
 | `set_margin_brackets` | Stop-loss / take-profit |
 | `list_margin_orders` | Margin limit orders |
 | `cancel_margin_order` | Cancel margin limit (releases reserve) |

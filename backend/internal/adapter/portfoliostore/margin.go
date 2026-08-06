@@ -10,18 +10,21 @@ import (
 )
 
 const marginPosCols = `id, client_id, exchange, symbol, side, COALESCE(mode, 'isolated'), quantity, entry_price, leverage, margin,
+	COALESCE(debt_principal, 0), COALESCE(debt_interest, 0), COALESCE(debt_asset, 'quote'), last_interest_at,
 	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
 
 const marginPosInsertCols = `id, client_id, exchange, symbol, side, mode, quantity, entry_price, leverage, margin,
+	debt_principal, debt_interest, debt_asset, last_interest_at,
 	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
 
 func scanMarginPos(row scannable) (*domain.MarginPosition, error) {
 	var p domain.MarginPosition
-	var ex, side, mode, st, opened, updated string
+	var ex, side, mode, st, opened, updated, debtAsset string
 	var sl, tp sql.NullFloat64
-	var closed sql.NullString
+	var closed, lastInt sql.NullString
 	if err := row.Scan(
 		&p.ID, &p.ClientID, &ex, &p.Symbol, &side, &mode, &p.Quantity, &p.EntryPrice, &p.Leverage, &p.Margin,
+		&p.DebtPrincipal, &p.DebtInterest, &debtAsset, &lastInt,
 		&p.LiquidationPrice, &sl, &tp, &st, &p.RealizedPnL, &p.CloseReason, &opened, &updated, &closed,
 	); err != nil {
 		return nil, err
@@ -32,9 +35,20 @@ func scanMarginPos(row scannable) (*domain.MarginPosition, error) {
 	if p.Mode == "" {
 		p.Mode = domain.MarginModeIsolated
 	}
+	p.DebtAsset = domain.DebtAsset(debtAsset)
+	if p.DebtAsset == "" {
+		if p.Side == domain.MarginShort {
+			p.DebtAsset = domain.DebtAssetBase
+		} else {
+			p.DebtAsset = domain.DebtAssetQuote
+		}
+	}
 	p.Status = domain.MarginPositionStatus(st)
 	p.OpenedAt = parseTime(opened)
 	p.UpdatedAt = parseTime(updated)
+	if lastInt.Valid && lastInt.String != "" {
+		p.LastInterestAt = parseTime(lastInt.String)
+	}
 	if sl.Valid {
 		v := sl.Float64
 		p.StopLoss = &v
@@ -64,11 +78,19 @@ func (s *SQLite) CreateMarginPosition(ctx context.Context, pos domain.MarginPosi
 	if pos.Mode == "" {
 		pos.Mode = domain.MarginModeIsolated
 	}
+	if pos.DebtAsset == "" {
+		pos.DebtAsset = domain.DebtAssetQuote
+	}
+	lastInt := nullTime(&pos.LastInterestAt)
+	if pos.LastInterestAt.IsZero() {
+		lastInt = nullTime(nil)
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO margin_positions (`+marginPosInsertCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
-		pos.Leverage, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
+		pos.Leverage, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
+		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
 		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
 	if err != nil {
@@ -136,11 +158,17 @@ func (s *SQLite) CountOpenMarginPositions(ctx context.Context, clientID string) 
 func (s *SQLite) UpdateMarginPosition(ctx context.Context, pos domain.MarginPosition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	lastInt := any(nil)
+	if !pos.LastInterestAt.IsZero() {
+		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE margin_positions SET quantity = ?, margin = ?, liquidation_price = ?,
+		UPDATE margin_positions SET quantity = ?, margin = ?, debt_principal = ?, debt_interest = ?,
+			debt_asset = ?, last_interest_at = ?, liquidation_price = ?,
 			stop_loss = ?, take_profit = ?, realized_pnl = ?, updated_at = ?
 		WHERE id = ? AND status = 'open'
-	`, pos.Quantity, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
+	`, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
+		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		pos.RealizedPnL, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
 	if err != nil {
 		return err
@@ -405,10 +433,10 @@ func (s *SQLite) InsertMarginTrade(ctx context.Context, t domain.MarginTrade) (*
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO margin_trades (
 			id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, leverage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, t.PositionID, string(t.Exchange), t.Symbol, string(t.Side), t.Action,
-		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.Leverage,
+		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -424,7 +452,7 @@ func (s *SQLite) ListMarginTrades(ctx context.Context, clientID string, limit, o
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, leverage, created_at
+			notional, realized_pnl, margin_delta, COALESCE(principal_paid, 0), COALESCE(interest_paid, 0), leverage, created_at
 		FROM margin_trades WHERE client_id = ?
 		ORDER BY created_at DESC LIMIT ? OFFSET ?
 	`, clientID, limit, offset)
@@ -438,7 +466,7 @@ func (s *SQLite) ListMarginTrades(ctx context.Context, clientID string, limit, o
 		var ex, side, cAt string
 		if err := rows.Scan(
 			&t.ID, &t.ClientID, &t.PositionID, &ex, &t.Symbol, &side, &t.Action, &t.Quantity, &t.Price,
-			&t.Notional, &t.RealizedPnL, &t.MarginDelta, &t.Leverage, &cAt,
+			&t.Notional, &t.RealizedPnL, &t.MarginDelta, &t.PrincipalPaid, &t.InterestPaid, &t.Leverage, &cAt,
 		); err != nil {
 			return nil, err
 		}
@@ -483,9 +511,14 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
 		return err
 	}
+	lastInt := any(nil)
+	if !pos.LastInterestAt.IsZero() {
+		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+	}
 	if fullClose {
 		res, err := tx.ExecContext(ctx, `
-			UPDATE margin_positions SET quantity = 0, margin = 0, realized_pnl = ?, status = 'closed',
+			UPDATE margin_positions SET quantity = 0, margin = 0, debt_principal = 0, debt_interest = 0,
+				realized_pnl = ?, status = 'closed',
 				close_reason = ?, updated_at = ?, closed_at = ?, stop_loss = NULL, take_profit = NULL
 			WHERE id = ? AND status = 'open'
 		`, pos.RealizedPnL, pos.CloseReason, pos.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -499,10 +532,10 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 		}
 	} else {
 		res, err := tx.ExecContext(ctx, `
-			UPDATE margin_positions SET quantity = ?, margin = ?, liquidation_price = ?,
-				realized_pnl = ?, updated_at = ?
+			UPDATE margin_positions SET quantity = ?, margin = ?, debt_principal = ?, debt_interest = ?,
+				last_interest_at = ?, liquidation_price = ?, realized_pnl = ?, updated_at = ?
 			WHERE id = ? AND status = 'open'
-		`, pos.Quantity, pos.Margin, pos.LiquidationPrice, pos.RealizedPnL,
+		`, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice, pos.RealizedPnL,
 			pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
 		if err != nil {
 			return err
@@ -570,11 +603,19 @@ func (s *SQLite) txInsertMarginPos(ctx context.Context, tx *sql.Tx, pos domain.M
 	if pos.Mode == "" {
 		pos.Mode = domain.MarginModeIsolated
 	}
+	if pos.DebtAsset == "" {
+		pos.DebtAsset = domain.DebtAssetQuote
+	}
+	lastInt := any(nil)
+	if !pos.LastInterestAt.IsZero() {
+		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_positions (`+marginPosInsertCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
-		pos.Leverage, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
+		pos.Leverage, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
+		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
 		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
 	return err
@@ -592,10 +633,16 @@ func (s *SQLite) ApplyMarginAdjust(ctx context.Context, p *domain.Portfolio, pos
 	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
 		return err
 	}
+	lastInt := any(nil)
+	if !pos.LastInterestAt.IsZero() {
+		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+	}
 	res, err := tx.ExecContext(ctx, `
-		UPDATE margin_positions SET margin = ?, liquidation_price = ?, updated_at = ?
+		UPDATE margin_positions SET margin = ?, debt_principal = ?, debt_interest = ?, last_interest_at = ?,
+			liquidation_price = ?, updated_at = ?
 		WHERE id = ? AND status = 'open'
-	`, pos.Margin, pos.LiquidationPrice, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+	`, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice,
+		pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
 	if err != nil {
 		return err
 	}
@@ -634,10 +681,45 @@ func (s *SQLite) txInsertMarginTrade(ctx context.Context, tx *sql.Tx, t domain.M
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_trades (
 			id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, leverage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, t.PositionID, string(t.Exchange), t.Symbol, string(t.Side), t.Action,
-		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.Leverage,
+		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano))
 	return err
+}
+
+// ApplyMarginRepay updates cash and position debt after a repayment (interest first).
+func (s *SQLite) ApplyMarginRepay(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
+		return err
+	}
+	lastInt := any(nil)
+	if !pos.LastInterestAt.IsZero() {
+		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE margin_positions SET debt_principal = ?, debt_interest = ?, last_interest_at = ?,
+			liquidation_price = ?, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice,
+		pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

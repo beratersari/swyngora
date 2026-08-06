@@ -59,8 +59,8 @@ func TestMargin_OpenLongPartialCloseAndPnL(t *testing.T) {
 		t.Fatalf("%+v", closed)
 	}
 	view, _ = svc.View(ctx, "m1")
-	// cash: 9980 + 10 margin + 5 pnl = 9995
-	if math.Abs(view.CashBalance-9995) > 1e-6 {
+	// Open: -20 margin, debt 80. Partial 0.5: +10 margin +5 pnl -40 principal = 10000-20+10+5-40=9955
+	if math.Abs(view.CashBalance-9955) > 1e-6 {
 		t.Fatalf("cash after partial=%v", view.CashBalance)
 	}
 }
@@ -227,6 +227,72 @@ func TestMargin_ModeLockAndAdjustIsolated(t *testing.T) {
 	// Cannot remove below IM
 	if _, err := svc.AdjustMargin(ctx, MarginAdjustInput{ClientID: "m6", PositionID: pos.ID, Delta: -100}); err == nil {
 		t.Fatal("expected min margin error")
+	}
+}
+
+func TestMargin_BorrowDebtAndRepay(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m8", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	// long 1 @ 100, 5x → margin 20, debt principal 80 quote
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m8", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(pos.DebtPrincipal-80) > 1e-6 || pos.DebtAsset != domain.DebtAssetQuote {
+		t.Fatalf("debt=%+v", pos)
+	}
+	if pos.DebtInterest != 0 {
+		t.Fatalf("interest=%v", pos.DebtInterest)
+	}
+	// Accrue 2 hours manually
+	pos.LastInterestAt = time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
+	pos.DebtInterest = 0
+	_ = svc.store.UpdateMarginPosition(ctx, *pos)
+	got, err := svc.GetMarginPosition(ctx, "m8", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// GetMarginPosition accrues: 80 * 0.00001 * 2 = 0.0016
+	if got.DebtInterest <= 0 {
+		t.Fatalf("expected interest growth, got %v", got.DebtInterest)
+	}
+	// Repay interest first then principal
+	payInterest := got.DebtInterest
+	_, tr, err := svc.RepayMarginDebt(ctx, MarginRepayInput{ClientID: "m8", PositionID: pos.ID, Amount: payInterest})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.InterestPaid+1e-12 < payInterest-1e-9 || tr.PrincipalPaid > 1e-9 {
+		t.Fatalf("repay interest first: %+v", tr)
+	}
+	got2, _ := svc.GetMarginPosition(ctx, "m8", pos.ID)
+	if got2.DebtInterest > 1e-9 {
+		t.Fatalf("interest remaining=%v", got2.DebtInterest)
+	}
+	// Partial close pays proportional debt
+	_, tr2, err := svc.CloseMarginPosition(ctx, MarginCloseInput{ClientID: "m8", PositionID: pos.ID, Quantity: 0.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr2.PrincipalPaid < 39 {
+		t.Fatalf("expected ~40 principal paid, got %v", tr2.PrincipalPaid)
+	}
+	// Short opens coin debt
+	posS, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m8", Symbol: "BTCUSDT", Side: "short", Type: "market",
+		Quantity: 0.5, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if posS.DebtAsset != domain.DebtAssetBase || math.Abs(posS.DebtPrincipal-0.5) > 1e-9 {
+		t.Fatalf("short debt=%+v", posS)
 	}
 }
 

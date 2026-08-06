@@ -598,6 +598,19 @@ func (c *APIClient) AdjustMargin(ctx context.Context, clientID, positionID strin
 	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{"delta": delta})
 }
 
+// RepayMarginDebt repays interest then principal.
+func (c *APIClient) RepayMarginDebt(ctx context.Context, clientID, positionID string, amount float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/margin/positions/" + url.PathEscape(positionID) + "/repay"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{"amount": amount})
+}
+
 // PlaceMarginOrder opens paper margin long/short.
 func (c *APIClient) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
 	body := map[string]any{

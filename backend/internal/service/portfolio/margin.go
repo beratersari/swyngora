@@ -39,6 +39,14 @@ type SetMarginModeInput struct {
 	Mode     string // isolated | cross
 }
 
+// MarginRepayInput pays debt without closing (interest first, then principal).
+// Amount is in debt units: quote cash for long, base coins for short.
+type MarginRepayInput struct {
+	ClientID   string
+	PositionID string
+	Amount     float64
+}
+
 // MarginCloseInput closes all or part of a margin position at market.
 type MarginCloseInput struct {
 	ClientID   string
@@ -190,7 +198,8 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 		p.CashBalance += -in.Delta // remove from position back to cash
 	}
 	p.UpdatedAt = now
-	liq, err := domain.LiquidationPriceFromMargin(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, domain.DefaultMaintenanceMarginRate)
+	_ = s.accruePositionInterest(ctx, pos, now)
+	liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, pos.DebtPrincipal, pos.DebtInterest)
 	if err != nil {
 		return nil, err
 	}
@@ -204,16 +213,162 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: pos.Exchange, Symbol: pos.Symbol,
 		Side: pos.Side, Action: action, Quantity: 0, Price: pos.EntryPrice, Notional: 0,
-		MarginDelta: -in.Delta, // cash delta: add margin → cash decreases
+		MarginDelta: -in.Delta,
 		Leverage:    pos.Leverage, CreatedAt: now,
 	}
-	// Convention: MarginDelta is cash change. Add margin: cash -delta → MarginDelta = -in.Delta when in.Delta>0.
-	// Wait: if in.Delta>0 (add), cash -= in.Delta, MarginDelta should be -in.Delta. tr.MarginDelta = -in.Delta ✓
-	// if in.Delta<0 (remove), cash += -in.Delta, MarginDelta = -in.Delta which is positive ✓
 	if err := s.store.ApplyMarginAdjust(ctx, p, *pos, tr); err != nil {
 		return nil, err
 	}
 	return s.GetMarginPosition(ctx, clientID, pos.ID)
+}
+
+// RepayMarginDebt pays interest first, then principal, without closing the position.
+func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*domain.MarginPosition, *domain.MarginTrade, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if in.Amount <= 0 || math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
+		return nil, nil, fmt.Errorf("%w: amount must be positive", domain.ErrInvalidArgument)
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	pos, err := s.store.GetMarginPosition(ctx, clientID, strings.TrimSpace(in.PositionID))
+	if err != nil {
+		return nil, nil, err
+	}
+	if pos.Status != domain.MarginPositionOpen {
+		return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
+	}
+	now := time.Now().UTC()
+	if err := s.accruePositionInterest(ctx, pos, now); err != nil {
+		return nil, nil, err
+	}
+	// Re-read after interest may have been written
+	pos, err = s.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	totalDebt := pos.DebtPrincipal + pos.DebtInterest
+	if totalDebt <= domain.PositionEpsilon {
+		return nil, nil, fmt.Errorf("%w: no outstanding debt", domain.ErrInvalidArgument)
+	}
+	pay := in.Amount
+	if pay > totalDebt {
+		pay = totalDebt
+	}
+	// Cash cost: long pays quote; short pays mark * coin amount
+	cashNeed := pay
+	if pos.DebtAsset == domain.DebtAssetBase {
+		mark, merr := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
+		if merr != nil || mark <= 0 {
+			return nil, nil, fmt.Errorf("%w: market price unavailable for coin repay", domain.ErrUpstream)
+		}
+		cashNeed = pay * mark
+	}
+	avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, p.MarginMode)
+	if err != nil {
+		return nil, nil, err
+	}
+	if avail+1e-9 < cashNeed {
+		return nil, nil, fmt.Errorf("%w: insufficient available cash to repay (need %g, available %g)", domain.ErrInvalidArgument, cashNeed, avail)
+	}
+	pp, ip, np, ni := domain.AllocateRepayment(pos.DebtPrincipal, pos.DebtInterest, pay)
+	pos.DebtPrincipal, pos.DebtInterest = np, ni
+	liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
+	if err != nil {
+		return nil, nil, err
+	}
+	pos.LiquidationPrice = liq
+	pos.UpdatedAt = now
+	p.CashBalance -= cashNeed
+	p.UpdatedAt = now
+	tr := domain.MarginTrade{
+		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: pos.Exchange, Symbol: pos.Symbol,
+		Side: pos.Side, Action: domain.MarginActionRepay, Quantity: pay, Price: cashNeed / pay, Notional: cashNeed,
+		MarginDelta: -cashNeed, PrincipalPaid: pp, InterestPaid: ip, Leverage: pos.Leverage, CreatedAt: now,
+	}
+	if err := s.store.ApplyMarginRepay(ctx, p, *pos, tr); err != nil {
+		return nil, nil, err
+	}
+	_ = s.recomputeCrossLiquidations(ctx, clientID, now)
+	out, err := s.GetMarginPosition(ctx, clientID, pos.ID)
+	return out, &tr, err
+}
+
+func (s *Service) liqPriceFor(side domain.MarginSide, entry, qty, margin, debtP, debtI float64) (float64, error) {
+	return domain.LiquidationPriceWithDebt(side, entry, qty, margin, debtP, debtI, domain.DefaultMaintenanceMarginRate)
+}
+
+// totalDebtNotionalQuote sums all open position debt in quote currency.
+func (s *Service) totalDebtNotionalQuote(ctx context.Context, clientID string) (float64, error) {
+	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return 0, err
+	}
+	var sum float64
+	for i := range list {
+		mark := list[i].EntryPrice
+		if m, e := s.lastPrice(ctx, string(list[i].Exchange), list[i].Symbol); e == nil && m > 0 {
+			mark = m
+		}
+		sum += domain.DebtNotionalQuote(list[i].Side, list[i].DebtPrincipal, list[i].DebtInterest, mark)
+	}
+	return sum, nil
+}
+
+func (s *Service) checkBorrowLimit(ctx context.Context, p *domain.Portfolio, addNotional float64) error {
+	used, err := s.totalDebtNotionalQuote(ctx, p.ClientID)
+	if err != nil {
+		return err
+	}
+	maxB := domain.MaxBorrowNotional(p.StartingBalance)
+	if used+addNotional > maxB+1e-6 {
+		return fmt.Errorf("%w: borrow limit exceeded (used %g + new %g > max %g)", domain.ErrInvalidArgument, used, addNotional, maxB)
+	}
+	return nil
+}
+
+// accruePositionInterest applies hourly simple interest and persists if any hours elapsed.
+func (s *Service) accruePositionInterest(ctx context.Context, pos *domain.MarginPosition, now time.Time) error {
+	if pos == nil || pos.Status != domain.MarginPositionOpen || pos.DebtPrincipal <= 0 {
+		return nil
+	}
+	last := pos.LastInterestAt
+	if last.IsZero() {
+		last = pos.OpenedAt
+		if last.IsZero() {
+			last = now
+		}
+		last = last.UTC().Truncate(time.Hour)
+	}
+	ni, nl, hours := domain.AccrueInterestHours(pos.DebtPrincipal, pos.DebtInterest, last, now, domain.DefaultMarginHourlyInterestRate)
+	if hours <= 0 {
+		return nil
+	}
+	pos.DebtInterest = ni
+	pos.LastInterestAt = nl
+	pos.UpdatedAt = now
+	liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
+	if err == nil {
+		pos.LiquidationPrice = liq
+	}
+	return s.store.UpdateMarginPosition(ctx, *pos)
+}
+
+func (s *Service) accrueAllOpenInterest(ctx context.Context, now time.Time) {
+	list, err := s.store.ListAllOpenMarginPositions(ctx)
+	if err != nil {
+		return
+	}
+	for i := range list {
+		_ = s.accruePositionInterest(ctx, &list[i], now)
+	}
 }
 
 // PlaceMarginOrder opens a market position immediately or rests a limit open order.
@@ -320,13 +475,23 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if avail+1e-9 < margin {
 		return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, margin, avail)
 	}
-	liq, err := domain.LiquidationPriceFromMargin(side, price, in.Quantity, margin, domain.DefaultMaintenanceMarginRate)
+	borrowP, debtAsset, err := domain.BorrowedPrincipalOnOpen(side, in.Quantity, price, in.Leverage)
 	if err != nil {
 		return nil, nil, err
 	}
+	borrowNotional := domain.DebtNotionalQuote(side, borrowP, 0, price)
+	if err := s.checkBorrowLimit(ctx, p, borrowNotional); err != nil {
+		return nil, nil, err
+	}
+	liq, err := s.liqPriceFor(side, price, in.Quantity, margin, borrowP, 0)
+	if err != nil {
+		return nil, nil, err
+	}
+	lastInt := now.Truncate(time.Hour)
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Side: side, Mode: mode,
 		Quantity: in.Quantity, EntryPrice: price, Leverage: in.Leverage, Margin: margin,
+		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
 	}
@@ -361,6 +526,16 @@ func (s *Service) ListMarginPositions(ctx context.Context, clientID string) ([]d
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
+	for i := range list {
+		_ = s.accruePositionInterest(ctx, &list[i], now)
+		s.markMarginPosition(ctx, &list[i])
+	}
+	// Re-list after accrual so debt fields are fresh
+	list, err = s.store.ListOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
 	for i := range list {
 		s.markMarginPosition(ctx, &list[i])
 	}
@@ -385,6 +560,11 @@ func (s *Service) GetMarginPosition(ctx context.Context, clientID, id string) (*
 		return nil, err
 	}
 	if pos.Status == domain.MarginPositionOpen {
+		_ = s.accruePositionInterest(ctx, pos, time.Now().UTC())
+		pos, err = s.store.GetMarginPosition(ctx, clientID, id)
+		if err != nil {
+			return nil, err
+		}
 		s.markMarginPosition(ctx, pos)
 	}
 	return pos, nil
@@ -400,6 +580,7 @@ func (s *Service) markMarginPosition(ctx context.Context, pos *domain.MarginPosi
 	}
 	pos.MarkPrice = mark
 	pos.UnrealizedPnL = domain.MarginUnrealizedPnL(pos.Side, pos.Quantity, pos.EntryPrice, mark)
+	pos.DebtNotional = domain.DebtNotionalQuote(pos.Side, pos.DebtPrincipal, pos.DebtInterest, mark)
 }
 
 // CloseMarginPosition closes full or partial size at market.
@@ -565,6 +746,9 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 	} else {
 		now = now.UTC()
 	}
+	// 0) Hourly interest on open debt (updates liquidation)
+	s.accrueAllOpenInterest(ctx, now)
+
 	// 1) Limit opens
 	orders, err := s.store.ListAllOpenMarginOrders(ctx)
 	if err != nil {
@@ -764,13 +948,23 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	if mode == "" {
 		mode = domain.MarginModeIsolated
 	}
-	liq, err := domain.LiquidationPriceFromMargin(o.Side, price, o.Quantity, margin, domain.DefaultMaintenanceMarginRate)
+	borrowP, debtAsset, err := domain.BorrowedPrincipalOnOpen(o.Side, o.Quantity, price, o.Leverage)
 	if err != nil {
 		return false
 	}
+	if err := s.checkBorrowLimit(ctx, p, domain.DebtNotionalQuote(o.Side, borrowP, 0, price)); err != nil {
+		_ = s.store.RejectMarginOrder(ctx, o.ID, "borrow limit", now)
+		return false
+	}
+	liq, err := s.liqPriceFor(o.Side, price, o.Quantity, margin, borrowP, 0)
+	if err != nil {
+		return false
+	}
+	lastInt := now.Truncate(time.Hour)
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol, Side: o.Side, Mode: mode,
 		Quantity: o.Quantity, EntryPrice: price, Leverage: o.Leverage, Margin: margin,
+		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
 	}
@@ -802,6 +996,12 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	if cur.Status != domain.MarginPositionOpen {
 		return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 	}
+	now := time.Now().UTC()
+	_ = s.accruePositionInterest(ctx, cur, now)
+	cur, err = s.store.GetMarginPosition(ctx, pos.ClientID, pos.ID)
+	if err != nil {
+		return nil, nil, err
+	}
 	if closeQty > cur.Quantity {
 		closeQty = cur.Quantity
 	}
@@ -810,12 +1010,28 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	}
 	full := closeQty+domain.PositionEpsilon >= cur.Quantity
 	frac := closeQty / cur.Quantity
-	// Proportional margin release for partial close (isolated and cross IM share).
+	if full {
+		frac = 1
+	}
+	// Proportional margin + debt release (full slice of principal and interest for the closed size).
 	marginRelease := cur.Margin * frac
-	realized := domain.MarginRealizedPnL(cur.Side, closeQty, cur.EntryPrice, price)
-	now := time.Now().UTC()
+	pp := cur.DebtPrincipal * frac
+	ip := cur.DebtInterest * frac
+	remainP := cur.DebtPrincipal - pp
+	remainI := cur.DebtInterest - ip
 
-	p.CashBalance += marginRelease + realized
+	realized := domain.MarginRealizedPnL(cur.Side, closeQty, cur.EntryPrice, price)
+
+	// Cash: return margin + PnL, then settle debt.
+	// Long: repay quote principal+interest. Short: principal coins closed with trade; interest coins cost mark.
+	cashDelta := marginRelease + realized
+	switch cur.DebtAsset {
+	case domain.DebtAssetBase:
+		cashDelta -= ip * price
+	default:
+		cashDelta -= pp + ip
+	}
+	p.CashBalance += cashDelta
 	p.RealizedPnLTotal += realized
 	p.UpdatedAt = now
 
@@ -834,7 +1050,8 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: cur.ClientID, PositionID: cur.ID, Exchange: cur.Exchange, Symbol: cur.Symbol,
 		Side: cur.Side, Action: action, Quantity: closeQty, Price: price, Notional: closeQty * price,
-		RealizedPnL: realized, MarginDelta: marginRelease, Leverage: cur.Leverage, CreatedAt: now,
+		RealizedPnL: realized, MarginDelta: cashDelta, PrincipalPaid: pp, InterestPaid: ip,
+		Leverage: cur.Leverage, CreatedAt: now,
 	}
 
 	updated := *cur
@@ -843,6 +1060,8 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	if full {
 		updated.Quantity = 0
 		updated.Margin = 0
+		updated.DebtPrincipal = 0
+		updated.DebtInterest = 0
 		updated.Status = domain.MarginPositionClosed
 		updated.CloseReason = reason
 		updated.ClosedAt = &now
@@ -854,7 +1073,15 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		if updated.Margin < 0 {
 			updated.Margin = 0
 		}
-		liq, lerr := domain.LiquidationPriceFromMargin(cur.Side, cur.EntryPrice, updated.Quantity, updated.Margin, domain.DefaultMaintenanceMarginRate)
+		updated.DebtPrincipal = remainP
+		updated.DebtInterest = remainI
+		if updated.DebtPrincipal < 0 {
+			updated.DebtPrincipal = 0
+		}
+		if updated.DebtInterest < 0 {
+			updated.DebtInterest = 0
+		}
+		liq, lerr := s.liqPriceFor(cur.Side, cur.EntryPrice, updated.Quantity, updated.Margin, updated.DebtPrincipal, updated.DebtInterest)
 		if lerr == nil {
 			updated.LiquidationPrice = liq
 		}

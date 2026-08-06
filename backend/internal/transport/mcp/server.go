@@ -74,6 +74,7 @@ type DataPort interface {
 	ListMarginTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	SetMarginMode(ctx context.Context, clientID, mode string) (json.RawMessage, error)
 	AdjustMargin(ctx context.Context, clientID, positionID string, delta float64) (json.RawMessage, error)
+	RepayMarginDebt(ctx context.Context, clientID, positionID string, amount float64) (json.RawMessage, error)
 	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -1001,6 +1002,31 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AdjustMargin(ctx, clientID, id, delta)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("repay_margin_debt",
+		mcp.WithDescription("Repay margin debt without closing: interest first, then principal. Amount in debt units (quote for long, base coins for short)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
+		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Debt units to repay")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("positionId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		amount, err := req.RequireFloat("amount")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.RepayMarginDebt(ctx, clientID, id, amount)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

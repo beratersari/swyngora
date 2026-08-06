@@ -1886,6 +1886,41 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/positions/{id}/repay:
+    post:
+      summary: Repay margin debt without closing
+      description: |
+        Pays interest first, then principal. Amount is in debt units (quote cash for long, base coins for short).
+        Short repay spends available cash at mark to cover coin debt.
+      operationId: repayMarginDebt
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount: { type: number, exclusiveMinimum: 0 }
+      responses:
+        '200':
+          description: Updated position and repay trade
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/margin/positions/{id}/brackets:
     put:
       summary: Set or clear stop-loss / take-profit on an open margin position
@@ -2986,6 +3021,17 @@ components:
         entryPrice: { type: number }
         leverage: { type: integer }
         margin: { type: number }
+        debtPrincipal:
+          type: number
+          description: Main borrowed amount (quote cash for long, base coins for short)
+        debtInterest:
+          type: number
+          description: Accrued interest in the same unit as debtPrincipal
+        debtAsset: { type: string, enum: [quote, base] }
+        debtNotional:
+          type: number
+          description: Principal+interest valued in quote (short uses mark)
+        lastInterestAt: { type: string, format: date-time }
         liquidationPrice: { type: number }
         stopLoss: { type: number, nullable: true }
         takeProfit: { type: number, nullable: true }

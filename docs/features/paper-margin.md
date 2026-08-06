@@ -30,8 +30,20 @@ Users want leveraged long/short paper trading without real money: market and lim
 - Cannot go below initial margin for remaining size
 - Liquidation price recalculated after adjust
 
+### Borrowing & interest
+- **Long:** borrowed **cash** = notional − margin (`debtAsset=quote`); principal and interest shown separately
+- **Short:** borrowed **base coins** = quantity (`debtAsset=base`)
+- **Interest:** simple hourly on principal (`DefaultMarginHourlyInterestRate`); applied on worker tick and when reading/closing/repaying
+- **Liquidation** uses principal + interest (long liq rises as interest grows)
+- **Borrow limit:** total debt notional ≤ `startingBalance * 9` (10x − own capital)
+
 ### Partial close
-- Releases **proportional** margin (`closeQty/qty * margin`) and realizes partial PnL; liq recalculated
+- Releases **proportional** margin and **proportional debt** (principal + interest); realizes partial PnL; liq recalculated
+
+### Repay without close
+- `POST .../repay` with `amount` in debt units (quote cash for long, coins for short)
+- Pays **interest first**, then principal
+- Short repay buys coins at mark from available cash
 
 ### Stop-loss / take-profit
 - Optional on open or `PUT .../brackets`; worker closes at market when hit
@@ -51,6 +63,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 | `GET` | `/api/v1/portfolio/margin/positions/{id}` | One position |
 | `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full/partial close |
 | `POST` | `/api/v1/portfolio/margin/positions/{id}/margin` | Add/remove isolated margin |
+| `POST` | `/api/v1/portfolio/margin/positions/{id}/repay` | Pay interest then principal |
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Set/clear SL/TP |
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 

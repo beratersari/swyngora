@@ -825,6 +825,19 @@ func (b *Backend) AdjustMargin(ctx context.Context, clientID, positionID string,
 	return mustJSON(marginPosMap(pos))
 }
 
+func (b *Backend) RepayMarginDebt(ctx context.Context, clientID, positionID string, amount float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, tr, err := b.Portfolio.RepayMarginDebt(ctx, portfolio.MarginRepayInput{
+		ClientID: clientID, PositionID: positionID, Amount: amount,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"position": marginPosMap(pos), "trade": marginTradeMap(tr)})
+}
+
 func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -944,11 +957,16 @@ func marginPosMap(p *domain.MarginPosition) map[string]any {
 	m := map[string]any{
 		"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,
 		"side": string(p.Side), "mode": mode, "quantity": p.Quantity, "entryPrice": p.EntryPrice, "leverage": p.Leverage,
-		"margin": p.Margin, "liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
+		"margin": p.Margin, "debtPrincipal": p.DebtPrincipal, "debtInterest": p.DebtInterest,
+		"debtAsset": string(p.DebtAsset), "debtNotional": p.DebtNotional,
+		"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
 		"markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL, "realizedPnL": p.RealizedPnL,
 		"closeReason": p.CloseReason,
 		"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !p.LastInterestAt.IsZero() {
+		m["lastInterestAt"] = p.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
 	if p.StopLoss != nil {
 		m["stopLoss"] = *p.StopLoss
@@ -984,7 +1002,8 @@ func marginTradeMap(t *domain.MarginTrade) map[string]any {
 	return map[string]any{
 		"id": t.ID, "positionId": t.PositionID, "exchange": string(t.Exchange), "symbol": t.Symbol,
 		"side": string(t.Side), "action": t.Action, "quantity": t.Quantity, "price": t.Price,
-		"notional": t.Notional, "realizedPnL": t.RealizedPnL, "marginDelta": t.MarginDelta, "leverage": t.Leverage,
+		"notional": t.Notional, "realizedPnL": t.RealizedPnL, "marginDelta": t.MarginDelta,
+		"principalPaid": t.PrincipalPaid, "interestPaid": t.InterestPaid, "leverage": t.Leverage,
 		"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
