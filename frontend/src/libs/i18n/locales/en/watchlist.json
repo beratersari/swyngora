@@ -12,5 +12,7 @@
   "addedToast": "Added to watchlist",
   "removedToast": "Removed from watchlist",
   "loadFailed": "Could not load watchlist",
+  "removeFailed": "Could not remove from watchlist",
+  "metricFailed": "Live quote unavailable",
   "resource": "watchlist"
 }

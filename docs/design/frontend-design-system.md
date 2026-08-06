@@ -58,25 +58,30 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 
 | Semantic | Maps to |
 |---|---|
-| `bg.canvas` | richBlack |
-| `bg.elevated` | basil |
-| `bg.muted` | darkGreen |
+| `bg.canvas` | richBlack (deepest shell) |
+| `bg.page` | darkGreen (page field) |
+| `bg.chrome` | pine (header / toolbars) |
+| `bg.muted` | darkGreen (cards / tables) |
+| `bg.elevated` | basil (popovers) |
+| `bg.hover` | frog @ ~22% |
+| `bg.tableHeader` | bangladeshGreen @ ~42% |
 | `text.primary` | antiFlashWhite |
-| `text.secondary` | stone |
-| `text.inverse` | richBlack |
-| `text.link` | mountainMeadow |
+| `text.secondary` | pistachio (readable secondary) |
+| `text.tertiary` | stone (muted meta) |
+| `text.link` / `accent` | mountainMeadow |
 | `action.primary` | bangladeshGreen |
 | `action.primaryHover` | frog |
 | `status.success` | mountainMeadow |
-| `chart.up` | caribbeanGreen |
+| `chart.up` | caribbeanGreen (**charts + focus only**) |
 | `chart.down` | `#E07A7A` (readable red; not in brand set) |
 
 **Rules**
 
-1. Import from `@/styles/tokens` (`palette`, `semanticColors`) — do not hardcode hex in features.
-2. Prefer **anti-flash white on rich black / dark green** for reading; **stone** for secondary.
-3. Status / chart up-down colors are for deltas, not decoration.
-4. Legacy aliases `navy` / `indigo` / `steel` / `cream` still exist on `colors` for old call sites; prefer named palette keys.
+1. Import from `@/styles/tokens` (`palette`, `semanticColors`, `withAlpha`) — do **not** hardcode hex/`rgba` in features.
+2. **anti-flash white** on dark greens for body; **pistachio** secondary; **stone** tertiary.
+3. **caribbeanGreen** is for chart up + `:focus-visible` only — never for tabs, badges, or pagination.
+4. UI accents / active states use **mountainMeadow**.
+5. Legacy aliases `navy` / `indigo` / `steel` / `cream` remain on `colors` for old call sites; prefer `semantic.*`.
 
 ```ts
 import { palette, semanticColors } from '@/styles/tokens';

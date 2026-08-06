@@ -29,7 +29,10 @@ func APIAuth(token string) func(http.Handler) http.Handler {
 			got := extractAPIToken(r)
 			if subtle.ConstantTimeCompare([]byte(got), want) != 1 {
 				w.Header().Set("WWW-Authenticate", `Bearer realm="swyngora"`)
-				http.Error(w, `{"error":"unauthorized","message":"valid API token required"}`, http.StatusUnauthorized)
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusUnauthorized)
+				// Same nested envelope as handler.writeError / OpenAPI Error schema.
+				_, _ = w.Write([]byte(`{"error":{"code":"unauthorized","message":"valid API token required"}}`))
 				return
 			}
 			next.ServeHTTP(w, r)

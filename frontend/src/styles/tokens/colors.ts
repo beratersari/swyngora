@@ -65,50 +65,115 @@ export const colors = {
 
 export type BrandColorName = keyof typeof colors;
 
-/** Semantic aliases mapped from the brand palette */
+/** Hex → rgba helper for token-only alpha variants (no ad-hoc hex in components). */
+export function withAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const full =
+    h.length === 3
+      ? h
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : h;
+  const n = Number.parseInt(full, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  const a = Math.min(1, Math.max(0, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/**
+ * Semantic aliases mapped from the brand palette.
+ *
+ * Role rules (professional dark UI):
+ * - Surfaces: canvas (richest black) → muted cards (darkGreen) → elevated (basil) → chrome (pine)
+ * - UI accents / links / active: mountainMeadow (not neon caribbean)
+ * - caribbeanGreen: chart “up” + focus ring only
+ * - Secondary text: pistachio (readable); stone = tertiary / muted chrome
+ */
 export const semanticColors = {
   bg: {
+    /** App shell / deepest canvas */
     canvas: palette.richBlack,
-    elevated: palette.basil,
+    /** Page background under content (slightly lifted from canvas) */
+    page: palette.darkGreen,
+    /** Cards, tables, panels */
     muted: palette.darkGreen,
+    /** Header / chrome bars */
+    chrome: palette.pine,
+    /** Popovers, dropdowns, elevated panels */
+    elevated: palette.basil,
+    /** Inverse (light) surfaces */
     inverse: palette.antiFlashWhite,
+    /** Row / control hover */
+    hover: withAlpha(palette.frog, 0.22),
+    /** Table header band */
+    tableHeader: withAlpha(palette.bangladeshGreen, 0.42),
+    /** Soft accent wash (badges, selected chips) */
+    accentSoft: withAlpha(palette.mountainMeadow, 0.12),
+    /** User chat bubble / selected surface */
+    accentMuted: palette.forest,
+    /** Error surface */
+    dangerSoft: withAlpha('#E07A7A', 0.16),
   },
   text: {
     primary: palette.antiFlashWhite,
-    secondary: neutralColors.stone,
+    /** Labels, captions — pistachio for contrast on dark greens */
+    secondary: neutralColors.pistachio,
+    /** Meta / disabled-looking chrome */
+    tertiary: neutralColors.stone,
     inverse: palette.richBlack,
     link: palette.mountainMeadow,
-    disabled: 'rgba(112, 125, 125, 0.55)', // stone @ 55%
+    linkHover: palette.mint,
+    disabled: withAlpha(neutralColors.stone, 0.55),
+    accent: palette.mountainMeadow,
   },
   border: {
-    default: 'rgba(170, 203, 196, 0.28)', // pistachio soft
+    default: withAlpha(neutralColors.pistachio, 0.28),
+    subtle: withAlpha(neutralColors.pistachio, 0.16),
     strong: palette.bangladeshGreen,
+    /** High-emphasis focus only */
     focus: palette.caribbeanGreen,
+    /** Soft accent outline (badges, selected) */
+    accent: withAlpha(palette.mountainMeadow, 0.55),
+    danger: withAlpha('#E07A7A', 0.65),
   },
   action: {
     primary: palette.bangladeshGreen,
     primaryHover: palette.frog,
+    primaryActive: palette.forest,
     primaryText: palette.antiFlashWhite,
+    /** Secondary / ghost button border */
+    secondaryBorder: withAlpha(neutralColors.pistachio, 0.4),
+  },
+  /** UI accent (tabs, badges, active nav) — not neon chart green */
+  accent: {
+    default: palette.mountainMeadow,
+    soft: withAlpha(palette.mountainMeadow, 0.14),
+    strong: palette.frog,
   },
   status: {
     success: palette.mountainMeadow,
-    warning: '#E0B86A', // keep readable warning (no brand yellow in set)
-    error: '#E07A7A', // keep readable error (no brand red in set)
+    warning: '#E0B86A', // readable warning (no brand yellow in set)
+    error: '#E07A7A', // readable error (no brand red in set)
     info: neutralColors.pistachio,
   },
   chart: {
+    /** Neon reserved for price direction / focus, not chrome */
     up: palette.caribbeanGreen,
     down: '#E07A7A',
-    grid: 'rgba(170, 203, 196, 0.18)',
+    grid: withAlpha(neutralColors.pistachio, 0.16),
     background: palette.richBlack,
-    text: neutralColors.stone,
+    text: neutralColors.pistachio,
     emaFast: palette.mountainMeadow,
     emaSlow: palette.frog,
     rsi: palette.antiFlashWhite,
   },
   skeleton: {
-    base: 'rgba(11, 69, 58, 0.55)', // basil
-    highlight: 'rgba(241, 247, 246, 0.1)', // anti-flash soft
+    base: withAlpha(palette.basil, 0.85),
+    mid: withAlpha(palette.forest, 0.9),
+    highlight: withAlpha(palette.mint, 0.18),
   },
 } as const;
 

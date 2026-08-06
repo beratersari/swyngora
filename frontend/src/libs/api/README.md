@@ -46,7 +46,20 @@ import {
 - **SpotList** tags are **arg-scoped** (`spotListTagId`) plus a shared `LIST` id so invalidation can target one filter set or all lists.
 - Detail series (candles / ticker / indicators / supply) use composite ids (exchange/symbol/…).
 - **Pump** tag type covers `getPumpEvents` / `scanPumpEvents`.
-- **Watchlist** tag is registered; send `VITE_CLIENT_ID` so `prepareHeaders` sets `X-Client-Id` when wiring mutations.
+- **Watchlist** tag is registered. `prepareHeaders` always sets `X-Client-Id` via `getOrCreateClientId()` (optional `VITE_CLIENT_ID` overrides the generated id).
+
+## Auth (dev proxy)
+
+The browser never embeds `API_AUTH_TOKEN`. When the backend enables `API_AUTH_TOKEN`, local Vite can inject the secret **only on the proxy hop**:
+
+```bash
+# shell that runs `npm run dev` (not VITE_* → not in the client bundle)
+export API_AUTH_TOKEN=dev-secret
+# or: export VITE_DEV_API_AUTH_TOKEN=dev-secret
+npm run dev
+```
+
+Without that, market routes stay public; watchlist/AI return 401 when the token is set.
 
 ## Codegen
 
@@ -54,4 +67,4 @@ import {
 npm run codegen:api   # writes into libs/api/generated/
 ```
 
-After OpenAPI changes in `backend/api/openapi/openapi.yaml`, regenerate in the same MR.
+After OpenAPI changes in `backend/api/openapi/openapi.yaml`, regenerate in the same MR. Pump event/hit shapes are named schemas (`PumpEvent`, `PumpScanHit`, …).

@@ -9,6 +9,8 @@
   "you": "Siz",
   "assistant": "Asistan",
   "thinking": "Düşünüyor… bu birkaç dakika sürebilir.",
+  "thinkingLabel": "Düşünme",
+  "toolsLabel": "Araçlar",
   "emptyHint": "Bir sohbet başlatın veya öneriyi deneyin:",
   "sessionLabel": "Oturum",
   "enterHint": "Göndermek için Enter · Yeni satır için Shift+Enter",

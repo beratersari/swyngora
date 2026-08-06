@@ -1,5 +1,6 @@
 {
   "title": "Markets",
+  "watchlistResource": "watchlist",
   "subtitle": "Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API — list refreshes every {{seconds}}s while this tab is visible. Click a row for chart and indicators.",
   "search": {
     "placeholder": "Search symbol, base, quote…",

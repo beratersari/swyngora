@@ -15,7 +15,7 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-table-thead > tr > th {
-    background: rgba(3, 98, 76, 0.45) !important;
+    background: ${({ theme }) => theme.semantic.bg.tableHeader} !important;
     color: ${({ theme }) => theme.semantic.text.primary} !important;
     border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
     font-weight: 600;
@@ -27,7 +27,7 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-table-tbody > tr:hover > td {
-    background: rgba(23, 135, 109, 0.28) !important;
+    background: ${({ theme }) => theme.semantic.bg.hover} !important;
   }
 
   .ant-table-tbody > tr.markets-row-clickable {
@@ -45,7 +45,7 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-item {
-    background: ${({ theme }) => theme.colors.pine};
+    background: ${({ theme }) => theme.semantic.bg.chrome};
     border-color: ${({ theme }) => theme.semantic.border.default};
   }
 
@@ -54,17 +54,17 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-item-active {
-    background: ${({ theme }) => theme.colors.bangladeshGreen};
-    border-color: ${({ theme }) => theme.colors.caribbeanGreen};
+    background: ${({ theme }) => theme.semantic.action.primary};
+    border-color: ${({ theme }) => theme.semantic.border.accent};
   }
 
   .ant-pagination .ant-pagination-item-active a {
-    color: ${({ theme }) => theme.colors.antiFlashWhite};
+    color: ${({ theme }) => theme.semantic.action.primaryText};
   }
 
   .ant-pagination .ant-pagination-prev .ant-pagination-item-link,
   .ant-pagination .ant-pagination-next .ant-pagination-item-link {
-    background: ${({ theme }) => theme.colors.pine};
+    background: ${({ theme }) => theme.semantic.bg.chrome};
     border-color: ${({ theme }) => theme.semantic.border.default};
     color: ${({ theme }) => theme.semantic.text.primary};
   }
@@ -74,13 +74,13 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-options .ant-select-selector {
-    background: ${({ theme }) => theme.colors.pine} !important;
+    background: ${({ theme }) => theme.semantic.bg.chrome} !important;
     border-color: ${({ theme }) => theme.semantic.border.default} !important;
     color: ${({ theme }) => theme.semantic.text.primary} !important;
   }
 
   .ant-pagination .ant-pagination-total-text {
-    color: ${({ theme }) => theme.colors.pistachio};
+    color: ${({ theme }) => theme.semantic.text.secondary};
     font-weight: 500;
   }
 

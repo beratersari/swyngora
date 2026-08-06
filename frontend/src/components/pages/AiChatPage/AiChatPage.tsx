@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Alert, Input, Tag } from 'antd';
+import { Input } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/Button';
 import { Text } from '@/components/atoms/Text';
 import { rtkErrorMessage, usePostAiChatMutation } from '@/libs/api';
-import { getOrCreateAiSessionId, resetAiSessionId } from '@/libs/utils';
+import {
+  getOrCreateAiSessionId,
+  persistAiSessionId,
+  resetAiSessionId,
+} from '@/libs/utils';
 import { MAX_MESSAGE_LENGTH, SUGGESTION_KEYS } from './AiChatPage.constants';
 import {
   canSendMessage,
@@ -18,7 +22,12 @@ import {
   BubbleRow,
   Composer,
   ComposerRow,
+  DisclaimerBanner,
+  DisclaimerBody,
+  DisclaimerIcon,
   EmptyState,
+  MetaChip,
+  MetaLabel,
   MetaRow,
   PageIntro,
   PageStack,
@@ -50,6 +59,10 @@ export function AiChatPage() {
 
     try {
       const res = await postChat({ message: text, sessionId }).unwrap();
+      if (res.sessionId && res.sessionId !== sessionId) {
+        persistAiSessionId(res.sessionId);
+        setSessionId(res.sessionId);
+      }
       setMessages((prev) => [
         ...prev,
         createAssistantMessage(res.reply ?? '', {
@@ -91,15 +104,18 @@ export function AiChatPage() {
         <Text variant="h2" color="primary">
           {t('ai:title')}
         </Text>
-        <Text variant="body" color="secondary">
+        <Text variant="body" color="primary">
           {t('ai:subtitle')}
         </Text>
       </PageIntro>
 
-      <Alert type="info" showIcon message={t('ai:disclaimer')} />
+      <DisclaimerBanner role="note">
+        <DisclaimerIcon aria-hidden />
+        <DisclaimerBody>{t('ai:disclaimer')}</DisclaimerBody>
+      </DisclaimerBanner>
 
       <ToolbarRow>
-        <Text variant="caption" color="secondary">
+        <Text variant="caption" color="primary">
           {t('ai:sessionLabel')}: {sessionId}
         </Text>
         <Button type="default" size="small" onClick={onNewChat} disabled={isLoading}>
@@ -131,27 +147,29 @@ export function AiChatPage() {
         {messages.map((m) => (
           <BubbleRow key={m.id} $role={m.role}>
             <Bubble $role={m.role} $error={m.isError}>
-              <Text variant="caption" color="secondary" as="div">
+              <Text variant="caption" color="primary" as="div" style={{ opacity: 0.85 }}>
                 {m.role === 'user' ? t('ai:you') : t('ai:assistant')}
               </Text>
-              <Text variant="body" color="primary" as="div">
+              <Text variant="body" color="primary" as="div" data-text-role="body">
                 {m.content}
               </Text>
               {m.thinking && m.thinking.length > 0 ? (
                 <MetaRow>
+                  <MetaLabel>{t('ai:thinkingLabel', { defaultValue: 'Thinking' })}</MetaLabel>
                   {m.thinking.map((line) => (
-                    <Tag key={line} color="blue">
+                    <MetaChip key={line} $kind="thinking">
                       {line}
-                    </Tag>
+                    </MetaChip>
                   ))}
                 </MetaRow>
               ) : null}
               {m.tools && m.tools.length > 0 ? (
                 <MetaRow>
+                  <MetaLabel>{t('ai:toolsLabel', { defaultValue: 'Tools' })}</MetaLabel>
                   {m.tools.map((tool) => (
-                    <Tag key={tool} color="green">
+                    <MetaChip key={tool} $kind="tool">
                       {tool}
-                    </Tag>
+                    </MetaChip>
                   ))}
                 </MetaRow>
               ) : null}

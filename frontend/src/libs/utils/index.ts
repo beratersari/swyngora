@@ -2,7 +2,11 @@ export { formatPrice } from './formatPrice';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
-export { getOrCreateAiSessionId, resetAiSessionId } from './aiSessionId';
+export {
+  getOrCreateAiSessionId,
+  resetAiSessionId,
+  persistAiSessionId,
+} from './aiSessionId';
 export {
   apiCandlesToChart,
   filterValidApiCandles,
@@ -40,6 +44,7 @@ export type { ChartLinePoint, RsiBandKey } from './indicators';
 export {
   DEFAULT_DETAIL_STATE,
   parseExchangeParam,
+  parseExchangeParamOrDefault,
   parseSymbolParam,
   parseDetailSearchParams,
   detailStateToSearchParams,

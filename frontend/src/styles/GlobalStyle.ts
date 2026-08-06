@@ -24,7 +24,7 @@ export const GlobalStyle = createGlobalStyle`
     font-family: ${({ theme }) => theme.fontFamilies.sans};
     font-size: ${({ theme }) => theme.typeScale.body.fontSize}px;
     line-height: ${({ theme }) => theme.typeScale.body.lineHeight};
-    background: ${({ theme }) => theme.semantic.bg.canvas};
+    background: ${({ theme }) => theme.semantic.bg.page};
     color: ${({ theme }) => theme.semantic.text.primary};
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -33,5 +33,34 @@ export const GlobalStyle = createGlobalStyle`
   code,
   pre {
     font-family: ${({ theme }) => theme.fontFamilies.mono};
+  }
+
+  /* Focus ring: caribbean green reserved for accessibility focus, not decoration */
+  :focus-visible {
+    outline: 2px solid ${({ theme }) => theme.semantic.border.focus};
+    outline-offset: 2px;
+  }
+
+  a {
+    color: ${({ theme }) => theme.semantic.text.link};
+  }
+
+  a:hover {
+    color: ${({ theme }) => theme.semantic.text.linkHover};
+  }
+
+  /* Ant Design surfaces that leak light defaults */
+  .ant-input,
+  .ant-input-affix-wrapper,
+  .ant-select-selector,
+  .ant-picker {
+    background: ${({ theme }) => theme.semantic.bg.chrome} !important;
+    color: ${({ theme }) => theme.semantic.text.primary} !important;
+  }
+
+  .ant-select-dropdown,
+  .ant-dropdown-menu,
+  .ant-picker-dropdown {
+    background: ${({ theme }) => theme.semantic.bg.elevated} !important;
   }
 `;

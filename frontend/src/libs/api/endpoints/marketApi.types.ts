@@ -57,50 +57,8 @@ export type ProductTagsResponse = {
   tags: string[];
 };
 
-/** Single-bar pump event from GET /pumps (and nested under scan hits). */
-export type PumpEventDto = {
-  index?: number;
-  openTime?: string;
-  closeTime?: string;
-  startPrice?: number;
-  endPrice?: number;
-  returnPct?: number;
-  high?: number;
-  low?: number;
-  volume?: number;
-  volumeRatio?: number;
-  mode?: string;
-  windowBars?: number;
-};
-
-export type PumpEventsResponse = {
-  symbol?: string;
-  exchange?: string;
-  interval?: string;
-  eventCount?: number;
-  events?: PumpEventDto[];
-  note?: string;
-  barsAnalyzed?: number;
-  minReturnPct?: number;
-  mode?: string;
-  direction?: string;
-};
-
-/** One symbol row from GET /pumps/scan — return/vol/time live on events[]. */
-export type PumpScanHitDto = {
-  symbol?: string;
-  exchange?: string;
-  interval?: string;
-  bestReturnPct?: number;
-  events?: PumpEventDto[];
-};
-
-export type ScanPumpEventsResponse = {
-  exchange?: string;
-  interval?: string;
-  lookbackHours?: number;
-  minReturnPct?: number;
-  hitCount?: number;
-  hits?: PumpScanHitDto[];
-  note?: string;
-};
+/** OpenAPI-generated pump shapes (schema.d.ts). */
+export type PumpEventDto = components['schemas']['PumpEvent'];
+export type PumpEventsResponse = components['schemas']['PumpEventsResponse'];
+export type PumpScanHitDto = components['schemas']['PumpScanHit'];
+export type ScanPumpEventsResponse = components['schemas']['PumpScanResponse'];

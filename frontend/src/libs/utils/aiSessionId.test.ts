@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { getOrCreateAiSessionId, resetAiSessionId } from './aiSessionId';
+import {
+  getOrCreateAiSessionId,
+  persistAiSessionId,
+  resetAiSessionId,
+} from './aiSessionId';
 
 describe('aiSessionId', () => {
   beforeEach(() => {
@@ -19,5 +23,11 @@ describe('aiSessionId', () => {
     expect(b).toMatch(/^web-ai-/);
     expect(b).not.toBe(a);
     expect(getOrCreateAiSessionId()).toBe(b);
+  });
+
+  it('persistAiSessionId adopts server-issued session ids', () => {
+    getOrCreateAiSessionId();
+    persistAiSessionId('server-session-abc');
+    expect(getOrCreateAiSessionId()).toBe('server-session-abc');
   });
 });

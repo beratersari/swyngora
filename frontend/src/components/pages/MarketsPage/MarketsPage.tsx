@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Tag } from 'antd';
+import { Alert, Button, Tag, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
@@ -91,7 +91,7 @@ export function MarketsPage() {
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
   const spotArgs = useMemo(() => toSpotListQuery(state, debouncedQ), [state, debouncedQ]);
-  const watchlistQuery = useGetWatchlistQuery();
+  const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const [addWatch] = useAddWatchlistItemMutation();
   const [removeWatch] = useRemoveWatchlistItemMutation();
 
@@ -311,11 +311,14 @@ export function MarketsPage() {
         }
         watchedKeys={watchedKeys}
         onToggleWatch={(symbol, watched) => {
-          if (watched) {
-            void removeWatch({ exchange: state.exchange, symbol });
-          } else {
-            void addWatch({ exchange: state.exchange, symbol });
-          }
+          const run = watched
+            ? removeWatch({ exchange: state.exchange, symbol }).unwrap()
+            : addWatch({ exchange: state.exchange, symbol }).unwrap();
+          void run.catch((err) => {
+            void message.error(
+              rtkErrorMessage(err, { resource: t('markets:watchlistResource') }),
+            );
+          });
         }}
         metrics={metricColumns.metrics}
       />

@@ -1,5 +1,6 @@
 {
   "title": "Piyasalar",
+  "watchlistResource": "izleme listesi",
   "subtitle": "Binance, Coinbase ve Bybit spot piyasaları. API üzerinden sıralama, filtre ve sayfalama — sekme görünürken liste her {{seconds}} sn yenilenir. Grafik ve göstergeler için bir satıra tıklayın.",
   "search": {
     "placeholder": "Sembol, base, quote ara…",

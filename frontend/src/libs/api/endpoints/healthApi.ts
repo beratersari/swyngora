@@ -1,9 +1,10 @@
 import { baseApi } from '../baseApi';
+import type { operations } from '../generated/schema';
 
-export type HealthResponse = {
-  status: string;
-  time?: string;
-};
+/** OpenAPI getHealth 200 body. */
+export type HealthResponse = NonNullable<
+  operations['getHealth']['responses']['200']['content']['application/json']
+>;
 
 export const healthApi = baseApi.injectEndpoints({
   endpoints: (build) => ({

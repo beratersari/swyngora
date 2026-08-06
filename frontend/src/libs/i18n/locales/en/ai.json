@@ -9,6 +9,8 @@
   "you": "You",
   "assistant": "Assistant",
   "thinking": "Thinking… this can take up to a few minutes.",
+  "thinkingLabel": "Thinking",
+  "toolsLabel": "Tools",
   "emptyHint": "Start a conversation, or try a suggestion:",
   "sessionLabel": "Session",
   "enterHint": "Enter to send · Shift+Enter for newline",

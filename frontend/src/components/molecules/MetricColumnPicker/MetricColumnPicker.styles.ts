@@ -41,9 +41,9 @@ export const MetricRow = styled.li<{ $dragging?: boolean; $dragOver?: boolean }>
   border-radius: ${({ theme }) => theme.radii.sm}px;
   border: 1px solid
     ${({ theme, $dragOver }) =>
-      $dragOver ? theme.colors.caribbeanGreen : theme.semantic.border.default};
+      $dragOver ? theme.semantic.border.focus : theme.semantic.border.default};
   background: ${({ theme, $dragging }) =>
-    $dragging ? 'rgba(23, 135, 109, 0.35)' : theme.semantic.bg.muted};
+    $dragging ? theme.semantic.bg.hover : theme.semantic.bg.muted};
   opacity: ${({ $dragging }) => ($dragging ? 0.7 : 1)};
   cursor: grab;
 

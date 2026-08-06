@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +29,14 @@ func TestAPIAuth_ProtectsTenantAndMCP(t *testing.T) {
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
 		if rec.Code != http.StatusUnauthorized {
 			t.Fatalf("%s: want 401 got %d", path, rec.Code)
+		}
+		ct := rec.Header().Get("Content-Type")
+		if !strings.Contains(ct, "application/json") {
+			t.Fatalf("%s: content-type=%q want application/json", path, ct)
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, `"code":"unauthorized"`) || !strings.Contains(body, `"message"`) {
+			t.Fatalf("%s: body not nested Error envelope: %s", path, body)
 		}
 	}
 

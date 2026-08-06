@@ -1,6 +1,7 @@
 {
   "appName": "Swyngora",
   "nav": {
+    "main": "Main navigation",
     "markets": "Markets",
     "watchlist": "Watchlist",
     "pumps": "Pumps",

@@ -1,6 +1,7 @@
 {
   "appName": "Swyngora",
   "nav": {
+    "main": "Ana gezinme",
     "markets": "Piyasalar",
     "watchlist": "İzleme",
     "pumps": "Pump",

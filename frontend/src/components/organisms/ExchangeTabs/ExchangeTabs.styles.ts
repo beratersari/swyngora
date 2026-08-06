@@ -12,9 +12,10 @@ export const StyledTabs = styled(Tabs)`
 
   .ant-tabs-tab-active .ant-tabs-tab-btn {
     color: ${({ theme }) => theme.semantic.text.primary} !important;
+    font-weight: 600;
   }
 
   .ant-tabs-ink-bar {
-    background: ${({ theme }) => theme.colors.caribbeanGreen};
+    background: ${({ theme }) => theme.semantic.accent.default};
   }
 `;

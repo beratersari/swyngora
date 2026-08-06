@@ -12,13 +12,14 @@ import {
   toSupplyAsset,
 } from './detailQuery';
 describe('parseExchangeParam', () => {
-  it('accepts known venues (case-insensitive) and defaults unknown', () => {
+  it('accepts known venues (case-insensitive) and rejects unknown', () => {
     expect(parseExchangeParam('coinbase')).toBe('coinbase');
     expect(parseExchangeParam('BINANCE')).toBe('binance');
     expect(parseExchangeParam('Bybit')).toBe('bybit');
-    expect(parseExchangeParam('NOPE')).toBe('binance');
-    expect(parseExchangeParam(undefined)).toBe('binance');
-    expect(parseExchangeParam('')).toBe('binance');
+    expect(parseExchangeParam('NOPE')).toBeNull();
+    expect(parseExchangeParam(undefined)).toBeNull();
+    expect(parseExchangeParam('')).toBeNull();
+    expect(parseExchangeParam('  ')).toBeNull();
   });
 });
 

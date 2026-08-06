@@ -16,7 +16,7 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-table-thead > tr > th {
-    background: rgba(3, 98, 76, 0.45) !important;
+    background: ${({ theme }) => theme.semantic.bg.tableHeader} !important;
     color: ${({ theme }) => theme.semantic.text.primary} !important;
     border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
     font-weight: 600;
@@ -29,7 +29,7 @@ export const StyledTable = styled(Table)`
   }
 
   .ant-table-tbody > tr:hover > td {
-    background: rgba(23, 135, 109, 0.28) !important;
+    background: ${({ theme }) => theme.semantic.bg.hover} !important;
   }
 
   .ant-table-placeholder .ant-table-cell {

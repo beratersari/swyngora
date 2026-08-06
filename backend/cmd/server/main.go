@@ -291,9 +291,9 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		// AI chat can take longer than market endpoints.
-		WriteTimeout:      180 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Must cover AI multi-agent turns (AITimeout, default 300s) plus a small buffer.
+		WriteTimeout: cfg.AITimeout + 30*time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func() {

@@ -29,7 +29,7 @@ import {
   overlaysSignature,
   toCandlestickData,
   toLineData,
-} from './helpers';
+} from './CandleChartHost.helpers';
 
 /**
  * Thin host for TradingView Lightweight Charts candlesticks.

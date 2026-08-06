@@ -21,29 +21,29 @@ function AppShell() {
   return (
     <AppLayout>
       <AppHeader>
-        <HeaderNav aria-label={t('nav.markets')}>
+        <HeaderNav aria-label={t('nav.main')}>
           <BrandLink to="/markets">
             <Text variant="h4" color="primary" as="span">
               {t('appName', { defaultValue: APP_NAME })}
             </Text>
           </BrandLink>
           <NavLink to="/markets">
-            <Text variant="label" color="secondary" as="span">
+            <Text variant="label" as="span">
               {t('nav.markets')}
             </Text>
           </NavLink>
           <NavLink to="/watchlist">
-            <Text variant="label" color="secondary" as="span">
+            <Text variant="label" as="span">
               {t('nav.watchlist')}
             </Text>
           </NavLink>
           <NavLink to="/pumps">
-            <Text variant="label" color="secondary" as="span">
+            <Text variant="label" as="span">
               {t('nav.pumps')}
             </Text>
           </NavLink>
           <NavLink to="/ai">
-            <Text variant="label" color="secondary" as="span">
+            <Text variant="label" as="span">
               {t('nav.ai')}
             </Text>
           </NavLink>

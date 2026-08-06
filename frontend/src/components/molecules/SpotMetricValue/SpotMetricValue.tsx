@@ -1,21 +1,10 @@
 import { Tag } from 'antd';
-import type { SpotMarket } from '@/libs/api';
 import { Text } from '@/components/atoms/Text';
-import {
-  changeTone,
-  formatChangePercent,
-  formatCompactUsd,
-  formatPrice,
-  formatTradeCount,
-  type SpotMetricDef,
-} from '@/libs/utils';
+import { changeTone } from '@/libs/utils';
+import { asTagList, formatSpotMetricDisplay } from './SpotMetricValue.helpers';
+import type { SpotMetricValueProps } from './SpotMetricValue.types';
 
-export type SpotMetricValueProps = {
-  metric: SpotMetricDef;
-  spot: SpotMarket | undefined | null;
-  exchange?: string;
-  isLoading?: boolean;
-};
+export type { SpotMetricValueProps } from './SpotMetricValue.types';
 
 /**
  * Renders one SpotMarket field using the shared metric catalog definition.
@@ -24,7 +13,7 @@ export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: S
   const raw = spot?.[metric.field];
 
   if (metric.format === 'tags') {
-    const tags = (raw as string[] | undefined) ?? [];
+    const tags = asTagList(raw);
     if (isLoading) {
       return (
         <Text variant="caption" color="secondary" isLoading skeletonWidth={80}>
@@ -49,31 +38,7 @@ export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: S
     );
   }
 
-  let display: string;
-  switch (metric.format) {
-    case 'price':
-      display = formatPrice(raw as string | number | null | undefined);
-      break;
-    case 'changePercent':
-      display = formatChangePercent(raw as string | number | null | undefined);
-      break;
-    case 'compactUsd':
-      display = formatCompactUsd(raw as string | number | null | undefined);
-      break;
-    case 'tradeCount':
-      display = formatTradeCount(raw as number | null | undefined, exchange);
-      break;
-    case 'number':
-      display =
-        raw == null || raw === ''
-          ? '—'
-          : typeof raw === 'number'
-            ? raw.toLocaleString()
-            : String(raw);
-      break;
-    default:
-      display = '—';
-  }
+  const display = formatSpotMetricDisplay(metric.format, raw, exchange);
 
   const color = metric.toneFromChange
     ? changeTone(raw as string | number | null | undefined)

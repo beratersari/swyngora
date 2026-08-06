@@ -31,12 +31,19 @@ export function getOrCreateAiSessionId(): string {
 /** Start a fresh conversation thread (new session id). */
 export function resetAiSessionId(): string {
   const created = `web-ai-${getOrCreateClientId()}-${randomSuffix()}`;
+  persistAiSessionId(created);
+  return created;
+}
+
+/** Persist a server- or client-issued session id for multi-turn continuity. */
+export function persistAiSessionId(id: string): void {
+  const trimmed = id.trim();
+  if (!trimmed) return;
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(STORAGE_KEY, created);
+      localStorage.setItem(STORAGE_KEY, trimmed);
     }
   } catch {
     /* ignore quota / private mode */
   }
-  return created;
 }
