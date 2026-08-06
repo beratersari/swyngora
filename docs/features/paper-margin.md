@@ -35,19 +35,21 @@ Users want leveraged long/short paper trading without real money: market and lim
 - **Short:** borrowed **base coins** = quantity (`debtAsset=base`)
 - **Interest (persistent background task):** `MarginInterestWorker` (`MARGIN_INTEREST_INTERVAL`, default `1m`)
   - **Catch-up after downtime:** O(1) formula `principal × rate × floor(hours offline)` — does **not** walk each missed hour
-  - **CAS on `last_interest_at`:** two workers cannot apply the same window; restarts do not reprocess a completed period
+  - **Full debt-snapshot CAS** (`debtPrincipal` + `debtInterest` + `lastInterestAt`): two workers cannot apply the same window; restarts do not reprocess a completed period; interest never accrues onto debt that was already repaid or reduced by a concurrent close
   - **Clock skew:** if wall clock moves backward, interest is neither removed nor re-added for past periods
-  - **Paid debt:** when `debtPrincipal` is 0, accrual stops
+  - **Paid debt:** when `debtPrincipal` is 0, accrual stops (no CAS write)
   - **Same operation after interest:** recompute liquidation price; if mark is already past liq, **liquidate immediately**
 - **Borrow limit:** total debt notional ≤ `startingBalance * 9` (10x − own capital)
 
 ### Partial close
 - Releases **proportional** margin and **proportional debt** (principal + interest); realizes partial PnL; liq recalculated
+- Uses the same debt-snapshot CAS as interest/repay and **retries** on conflict so concurrent interest cannot inflate remaining principal/interest incorrectly
 
 ### Repay without close
 - `POST .../repay` with `amount` in debt units (quote cash for long, coins for short)
 - Pays **interest first**, then principal
 - Short repay buys coins at mark from available cash
+- Accrues under CAS first, then writes repay with expected debt snapshot; on conflict with the interest worker, **retries** with a fresh read so payments are not lost
 
 ### Stop-loss / take-profit
 - Optional on open or `PUT .../brackets`; worker closes at market when hit

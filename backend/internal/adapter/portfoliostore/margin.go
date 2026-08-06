@@ -500,7 +500,8 @@ func (s *SQLite) ApplyMarginOpen(ctx context.Context, p *domain.Portfolio, pos d
 }
 
 // ApplyMarginClose credits cash, updates or closes position, inserts trade.
-func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade, fullClose bool) error {
+// expected debt snapshot must still match or returns ErrConflict.
+func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade, fullClose bool, expected domain.DebtSnapshot) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -515,35 +516,32 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 	if !pos.LastInterestAt.IsZero() {
 		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
+	var n int64
 	if fullClose {
-		res, err := tx.ExecContext(ctx, `
-			UPDATE margin_positions SET quantity = 0, margin = 0, debt_principal = 0, debt_interest = 0,
-				realized_pnl = ?, status = 'closed',
-				close_reason = ?, updated_at = ?, closed_at = ?, stop_loss = NULL, take_profit = NULL
-			WHERE id = ? AND status = 'open'
-		`, pos.RealizedPnL, pos.CloseReason, pos.UpdatedAt.UTC().Format(time.RFC3339Nano),
-			nullTime(pos.ClosedAt), pos.ID)
-		if err != nil {
-			return err
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
-			return domain.ErrNotFound
-		}
+		n, err = s.txUpdateDebtCAS(ctx, tx, pos.ID, expected, `
+			quantity = 0, margin = 0, debt_principal = 0, debt_interest = 0,
+			realized_pnl = ?, status = 'closed',
+			close_reason = ?, updated_at = ?, closed_at = ?, stop_loss = NULL, take_profit = NULL
+		`, pos.RealizedPnL, pos.CloseReason, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
 	} else {
-		res, err := tx.ExecContext(ctx, `
-			UPDATE margin_positions SET quantity = ?, margin = ?, debt_principal = ?, debt_interest = ?,
-				last_interest_at = ?, liquidation_price = ?, realized_pnl = ?, updated_at = ?
-			WHERE id = ? AND status = 'open'
+		n, err = s.txUpdateDebtCAS(ctx, tx, pos.ID, expected, `
+			quantity = ?, margin = ?, debt_principal = ?, debt_interest = ?,
+			last_interest_at = ?, liquidation_price = ?, realized_pnl = ?, updated_at = ?
 		`, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice, pos.RealizedPnL,
-			pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
-		if err != nil {
-			return err
-		}
-		n, _ := res.RowsAffected()
-		if n == 0 {
+			pos.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	}
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		// Distinguish missing vs concurrent debt change.
+		var st string
+		var prin float64
+		qerr := tx.QueryRowContext(ctx, `SELECT status, debt_principal FROM margin_positions WHERE id = ?`, pos.ID).Scan(&st, &prin)
+		if qerr == sql.ErrNoRows || st != "open" {
 			return domain.ErrNotFound
 		}
+		return domain.ErrConflict
 	}
 	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
 		return err
@@ -703,37 +701,41 @@ func (s *SQLite) ListOpenMarginPositionsWithDebt(ctx context.Context) ([]domain.
 	return scanMarginPositions(rows)
 }
 
-// AccrueInterestCAS compare-and-swaps interest using expected last_interest_at.
-// Prevents two workers from applying the same accrual window; never rewinds last_interest_at.
-func (s *SQLite) AccrueInterestCAS(ctx context.Context, id string, expectedLast time.Time, newInterest float64, newLast time.Time, liq float64, at time.Time) (bool, error) {
+// AccrueInterestCAS compare-and-swaps interest using full debt snapshot (principal, interest, last_interest_at).
+// Fails if repay/close changed principal/interest, or another worker advanced the cursor.
+// Never rewinds last_interest_at; never accrues when principal is zero (fully paid).
+func (s *SQLite) AccrueInterestCAS(ctx context.Context, id string, expected domain.DebtSnapshot, newInterest float64, newLast time.Time, liq float64, at time.Time) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if newLast.IsZero() || (!expectedLast.IsZero() && !newLast.After(expectedLast.UTC())) {
-		// Refuse non-forward cursor updates (clock / logic safety).
+	if newLast.IsZero() || (!expected.LastInterestAt.IsZero() && !newLast.After(expected.LastInterestAt.UTC())) {
+		return false, nil
+	}
+	// Do not accrue onto a fully paid principal snapshot.
+	if expected.Principal <= 0 {
 		return false, nil
 	}
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	newLastStr := newLast.UTC().Format(time.RFC3339Nano)
 	var res sql.Result
 	var err error
-	if expectedLast.IsZero() {
-		// Match empty/NULL last_interest_at only.
+	if expected.LastInterestAt.IsZero() {
 		res, err = s.db.ExecContext(ctx, `
 			UPDATE margin_positions
 			SET debt_interest = ?, last_interest_at = ?, liquidation_price = ?, updated_at = ?
-			WHERE id = ? AND status = 'open' AND debt_principal > 0
+			WHERE id = ? AND status = 'open'
+			  AND debt_principal = ? AND debt_interest = ? AND debt_principal > 0
 			  AND (last_interest_at IS NULL OR last_interest_at = '')
-		`, newInterest, newLastStr, liq, atStr, id)
+		`, newInterest, newLastStr, liq, atStr, id, expected.Principal, expected.Interest)
 	} else {
-		expStr := expectedLast.UTC().Format(time.RFC3339Nano)
-		// CAS on exact previous cursor; also require newLast strictly after stored value.
+		expStr := expected.LastInterestAt.UTC().Format(time.RFC3339Nano)
 		res, err = s.db.ExecContext(ctx, `
 			UPDATE margin_positions
 			SET debt_interest = ?, last_interest_at = ?, liquidation_price = ?, updated_at = ?
-			WHERE id = ? AND status = 'open' AND debt_principal > 0
+			WHERE id = ? AND status = 'open'
+			  AND debt_principal = ? AND debt_interest = ? AND debt_principal > 0
 			  AND last_interest_at = ?
 			  AND last_interest_at < ?
-		`, newInterest, newLastStr, liq, atStr, id, expStr, newLastStr)
+		`, newInterest, newLastStr, liq, atStr, id, expected.Principal, expected.Interest, expStr, newLastStr)
 	}
 	if err != nil {
 		return false, err
@@ -743,7 +745,8 @@ func (s *SQLite) AccrueInterestCAS(ctx context.Context, id string, expectedLast 
 }
 
 // ApplyMarginRepay updates cash and position debt after a repayment (interest first).
-func (s *SQLite) ApplyMarginRepay(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade) error {
+// expected must match row debt or returns ErrConflict (concurrent interest/close).
+func (s *SQLite) ApplyMarginRepay(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade, expected domain.DebtSnapshot) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -758,21 +761,42 @@ func (s *SQLite) ApplyMarginRepay(ctx context.Context, p *domain.Portfolio, pos 
 	if !pos.LastInterestAt.IsZero() {
 		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
-	res, err := tx.ExecContext(ctx, `
-		UPDATE margin_positions SET debt_principal = ?, debt_interest = ?, last_interest_at = ?,
-			liquidation_price = ?, updated_at = ?
-		WHERE id = ? AND status = 'open'
-	`, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice,
-		pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+	n, err := s.txUpdateDebtCAS(ctx, tx, pos.ID, expected, `
+		debt_principal = ?, debt_interest = ?, last_interest_at = ?, liquidation_price = ?, updated_at = ?
+	`, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice, pos.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return err
 	}
-	n, _ := res.RowsAffected()
 	if n == 0 {
-		return domain.ErrNotFound
+		return domain.ErrConflict
 	}
 	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+// txUpdateDebtCAS updates an open position only if debt snapshot still matches.
+// setClause is the SET body without "SET" (placeholders for setArgs).
+func (s *SQLite) txUpdateDebtCAS(ctx context.Context, tx *sql.Tx, id string, expected domain.DebtSnapshot, setClause string, setArgs ...any) (int64, error) {
+	var q string
+	args := append([]any{}, setArgs...)
+	args = append(args, id, expected.Principal, expected.Interest)
+	if expected.LastInterestAt.IsZero() {
+		q = `UPDATE margin_positions SET ` + setClause + `
+			WHERE id = ? AND status = 'open'
+			  AND debt_principal = ? AND debt_interest = ?
+			  AND (last_interest_at IS NULL OR last_interest_at = '')`
+	} else {
+		q = `UPDATE margin_positions SET ` + setClause + `
+			WHERE id = ? AND status = 'open'
+			  AND debt_principal = ? AND debt_interest = ?
+			  AND last_interest_at = ?`
+		args = append(args, expected.LastInterestAt.UTC().Format(time.RFC3339Nano))
+	}
+	res, err := tx.ExecContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }

@@ -2,7 +2,10 @@ package portfolio
 
 import (
 	"context"
+	"errors"
 	"math"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -301,22 +304,29 @@ func TestMargin_InterestThenLiquidateSameOp(t *testing.T) {
 	// Mark just above classic liq (~80.5); after interest 0.6, liq ~81.1 → liquidate at 81.
 	svc.market = &fakePx{prices: map[string]string{"binance|ETHUSDT": "81"}}
 	last := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
-	// Seed row so AccrueInterestHours runs 2h; then we inject interest via CAS path by
-	// temporarily replacing rate — instead call AccrueInterestCAS with high interest then liquidate check.
-	// Direct same-op: CAS apply interest 0.6, newLast = last+2h, then ShouldLiquidate + close inside accrueInterestAndMaybeLiquidate.
-	// Force hours path: set interest 0, last 2h ago; AccrueInterestHours adds tiny amount.
-	// Override: call store CAS with interest that breaches, then ProcessMarginMaintenance for liq.
+	// Inject high interest via full debt-snapshot CAS, then liquidate via maintenance.
 	liqAfter, _ := domain.LiquidationPriceWithDebt(domain.MarginLong, 100, 1, 20, 80, 0.6, domain.DefaultMaintenanceMarginRate)
 	if !domain.ShouldLiquidate(domain.MarginLong, 81, liqAfter) {
 		t.Fatalf("fixture liq=%v should breach mark 81", liqAfter)
 	}
-	ok, err := svc.store.AccrueInterestCAS(ctx, pos.ID, pos.LastInterestAt, 0.6, last.Add(2*time.Hour), liqAfter, time.Now().UTC())
+	cur, err := svc.store.GetMarginPosition(ctx, "mi2", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Align last_interest_at so CAS can advance the cursor past the seed window.
+	cur.LastInterestAt = last
+	cur.DebtInterest = 0
+	if err := svc.store.UpdateMarginPosition(ctx, *cur); err != nil {
+		t.Fatal(err)
+	}
+	cur, err = svc.store.GetMarginPosition(ctx, "mi2", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap := domain.DebtSnapshotFromPos(cur)
+	ok, err := svc.store.AccrueInterestCAS(ctx, pos.ID, snap, 0.6, last.Add(2*time.Hour), liqAfter, time.Now().UTC())
 	if err != nil || !ok {
-		cur, _ := svc.store.GetMarginPosition(ctx, "mi2", pos.ID)
-		ok, err = svc.store.AccrueInterestCAS(ctx, pos.ID, cur.LastInterestAt, 0.6, cur.LastInterestAt.Add(2*time.Hour), liqAfter, time.Now().UTC())
-		if err != nil || !ok {
-			t.Fatalf("cas ok=%v err=%v", ok, err)
-		}
+		t.Fatalf("cas ok=%v err=%v snap=%+v", ok, err, snap)
 	}
 	// Same-operation liquidate via accrue path with no further hours but process maintenance:
 	_, nLiq, _, err := svc.ProcessMarginMaintenance(ctx, time.Now().UTC())
@@ -440,5 +450,300 @@ func TestMargin_LimitReserveRelease(t *testing.T) {
 	// Mode change allowed when no open pos/order
 	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "m7", Mode: "cross"}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestMargin_ConcurrentInterestAndFullRepay ensures interest worker + full repay cannot
+// leave zombie interest on a paid-off principal, or lose a successful repayment.
+func TestMargin_ConcurrentInterestAndFullRepay(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "race-repay", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "race-repay", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Large offline window so interest wants to apply while repay runs.
+	last := time.Now().UTC().Add(-12 * time.Hour).Truncate(time.Hour)
+	pos.LastInterestAt = last
+	pos.DebtInterest = 0
+	if err := svc.store.UpdateMarginPosition(ctx, *pos); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	var wg sync.WaitGroup
+	var repayOK atomic.Int32
+	var hardErr atomic.Int32
+	// Many interest ticks + several full-repay attempts race on the same debt snapshot.
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, _, err := svc.ProcessMarginInterest(ctx, now); err != nil {
+				hardErr.Add(1)
+			}
+		}()
+	}
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, tr, err := svc.RepayMarginDebt(ctx, MarginRepayInput{
+				ClientID: "race-repay", PositionID: pos.ID, Amount: 1e9, // cover any accrued interest
+			})
+			if err == nil && tr != nil {
+				repayOK.Add(1)
+				return
+			}
+			if err == nil {
+				return
+			}
+			// Losers: already paid, or transient conflict exhausted — only unexpected errors count.
+			if errors.Is(err, domain.ErrInvalidArgument) || errors.Is(err, domain.ErrConflict) {
+				return
+			}
+			hardErr.Add(1)
+			t.Errorf("unexpected repay err: %v", err)
+		}()
+	}
+	wg.Wait()
+	if hardErr.Load() > 0 {
+		t.Fatalf("unexpected hard errors during race")
+	}
+	if repayOK.Load() < 1 {
+		t.Fatalf("expected at least one successful full repay, got %d", repayOK.Load())
+	}
+	got, err := svc.store.GetMarginPosition(ctx, "race-repay", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DebtPrincipal > domain.PositionEpsilon || got.DebtInterest > domain.PositionEpsilon {
+		t.Fatalf("debt must be fully cleared after concurrent repay: principal=%v interest=%v",
+			got.DebtPrincipal, got.DebtInterest)
+	}
+	// Interest must not reappear on a paid-off position.
+	a, _, err := svc.ProcessMarginInterest(ctx, now.Add(5*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a != 0 {
+		t.Fatalf("paid principal must not accrue further interest, applied=%d", a)
+	}
+	got2, _ := svc.store.GetMarginPosition(ctx, "race-repay", pos.ID)
+	if got2.DebtPrincipal > domain.PositionEpsilon || got2.DebtInterest > domain.PositionEpsilon {
+		t.Fatalf("zombie debt after post-repay interest tick: %+v", got2)
+	}
+	// Cash: open used 20 margin; successful repay(s) debited principal+interest once.
+	// At most one full clear should have debited ~80 (+tiny interest if it won the race first).
+	view, err := svc.View(ctx, "race-repay")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Floor: 10000 - 20 margin - 80 principal = 9900 (if interest was 0 at repay)
+	// Ceiling: slightly lower if interest was paid too. Never below 9900 - 1 (generous).
+	if view.CashBalance > 9900+1e-6 {
+		t.Fatalf("cash too high (repay lost?): %v", view.CashBalance)
+	}
+	if view.CashBalance < 9890 {
+		t.Fatalf("cash too low (double-charged repay?): %v", view.CashBalance)
+	}
+}
+
+// TestMargin_ConcurrentInterestAndPartialClose ensures interest cannot over-accrue on
+// pre-close principal after a partial close, and remaining debt stays proportional.
+func TestMargin_ConcurrentInterestAndPartialClose(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "race-close", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "race-close", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hours := 10
+	last := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Truncate(time.Hour)
+	pos.LastInterestAt = last
+	pos.DebtInterest = 0
+	if err := svc.store.UpdateMarginPosition(ctx, *pos); err != nil {
+		t.Fatal(err)
+	}
+	// Max interest if full principal accrued before any close (then half remains after 50% close).
+	maxFullInterest := 80 * domain.DefaultMarginHourlyInterestRate * float64(hours)
+	maxRemainInterest := maxFullInterest // if close loses CAS and interest applied after, re-accrual capped below
+
+	now := time.Now().UTC()
+	var wg sync.WaitGroup
+	var hardErr atomic.Int32
+	// Many interest workers race a single half-close (avoids a second 0.5 close finishing the pos).
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, _, err := svc.ProcessMarginInterest(ctx, now); err != nil {
+				hardErr.Add(1)
+			}
+		}()
+	}
+	var closeErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, _, closeErr = svc.CloseMarginPosition(ctx, MarginCloseInput{
+			ClientID: "race-close", PositionID: pos.ID, Quantity: 0.5,
+		})
+	}()
+	wg.Wait()
+	if hardErr.Load() > 0 {
+		t.Fatalf("unexpected hard errors during partial-close race")
+	}
+	if closeErr != nil {
+		t.Fatalf("partial close failed under interest race: %v", closeErr)
+	}
+	got, err := svc.store.GetMarginPosition(ctx, "race-close", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.MarginPositionOpen {
+		t.Fatalf("want still open after partial close, got %+v", got)
+	}
+	if math.Abs(got.Quantity-0.5) > 1e-9 {
+		t.Fatalf("qty=%v want ~0.5", got.Quantity)
+	}
+	// Remaining principal must be half of open principal (~40), never full 80 after half close.
+	if math.Abs(got.DebtPrincipal-40) > 0.5 {
+		t.Fatalf("remaining principal=%v want ~40 (interest race must not restore principal)", got.DebtPrincipal)
+	}
+	// Interest on remaining book: at most accrual computed on full 80 for the offline window
+	// (if interest won before close and half was paid). Never "double" that amount.
+	if got.DebtInterest > maxRemainInterest+1e-9 {
+		t.Fatalf("interest over-accrued under race: interest=%v max=%v", got.DebtInterest, maxRemainInterest)
+	}
+	// Further interest after settle must only use remaining principal (CAS + principal check).
+	a, _, err := svc.ProcessMarginInterest(ctx, now.Add(3*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got2, _ := svc.store.GetMarginPosition(ctx, "race-close", pos.ID)
+	if a > 0 {
+		// 40 * rate * ~3h ≈ very small; principal must stay ~40.
+		if math.Abs(got2.DebtPrincipal-40) > 0.5 {
+			t.Fatalf("principal drifted after later interest: %v", got2.DebtPrincipal)
+		}
+	}
+	// Absolute cap: original full-window on 80 + a few hours on remaining 40.
+	capI := maxFullInterest + 40*domain.DefaultMarginHourlyInterestRate*4
+	if got2.DebtInterest > capI+1e-9 {
+		t.Fatalf("interest ballooned: %v cap=%v", got2.DebtInterest, capI)
+	}
+}
+
+// TestMargin_DebtCASRejectsStaleInterest proves store CAS blocks interest after repay/close.
+func TestMargin_DebtCASRejectsStaleInterest(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "cas1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "cas1", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := time.Now().UTC().Add(-4 * time.Hour).Truncate(time.Hour)
+	pos.LastInterestAt = last
+	pos.DebtInterest = 0
+	if err := svc.store.UpdateMarginPosition(ctx, *pos); err != nil {
+		t.Fatal(err)
+	}
+	cur, err := svc.store.GetMarginPosition(ctx, "cas1", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := domain.DebtSnapshotFromPos(cur)
+	// Repay full principal+interest (repay path accrues first, so amount must cover both).
+	_, _, err = svc.RepayMarginDebt(ctx, MarginRepayInput{ClientID: "cas1", PositionID: pos.ID, Amount: 1e9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stale interest CAS must not re-apply on paid principal.
+	ok, err := svc.store.AccrueInterestCAS(ctx, pos.ID, stale, 1.0, last.Add(4*time.Hour), 90, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("AccrueInterestCAS claimed stale snapshot after principal repay")
+	}
+	got, err := svc.store.GetMarginPosition(ctx, "cas1", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DebtPrincipal > domain.PositionEpsilon || got.DebtInterest > domain.PositionEpsilon {
+		t.Fatalf("debt should be fully paid: principal=%v interest=%v", got.DebtPrincipal, got.DebtInterest)
+	}
+}
+
+// TestMargin_DebtCASRejectsStaleRepay proves repay fails when interest advanced the snapshot.
+func TestMargin_DebtCASRejectsStaleRepay(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "cas2", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "cas2", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := time.Now().UTC().Add(-3 * time.Hour).Truncate(time.Hour)
+	pos.LastInterestAt = last
+	pos.DebtInterest = 0
+	_ = svc.store.UpdateMarginPosition(ctx, *pos)
+	cur, _ := svc.store.GetMarginPosition(ctx, "cas2", pos.ID)
+	staleSnap := domain.DebtSnapshotFromPos(cur)
+	// Interest worker advances interest + cursor.
+	_, _, err = svc.ProcessMarginInterest(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, _ := svc.store.GetMarginPosition(ctx, "cas2", pos.ID)
+	if fresh.DebtInterest <= 0 {
+		t.Fatalf("expected interest to apply first, got %v", fresh.DebtInterest)
+	}
+	// Stale repay (snapshot before interest) must conflict.
+	p, _ := svc.store.GetPortfolio(ctx, "cas2")
+	p.CashBalance -= 10
+	p.UpdatedAt = time.Now().UTC()
+	updated := *fresh
+	// pretends to pay 10 against pre-interest debt state
+	updated.DebtPrincipal = staleSnap.Principal - 10
+	updated.DebtInterest = staleSnap.Interest
+	updated.UpdatedAt = time.Now().UTC()
+	tr := domain.MarginTrade{
+		ID: "stale-repay", ClientID: "cas2", PositionID: pos.ID, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Side: domain.MarginLong, Action: domain.MarginActionRepay, Quantity: 10, Price: 1, Notional: 10,
+		MarginDelta: -10, PrincipalPaid: 10, CreatedAt: time.Now().UTC(),
+	}
+	err = svc.store.ApplyMarginRepay(ctx, p, updated, tr, staleSnap)
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("want ErrConflict on stale repay, got %v", err)
+	}
+	// Debt unchanged by failed stale repay.
+	got, _ := svc.store.GetMarginPosition(ctx, "cas2", pos.ID)
+	if math.Abs(got.DebtPrincipal-fresh.DebtPrincipal) > 1e-9 || math.Abs(got.DebtInterest-fresh.DebtInterest) > 1e-12 {
+		t.Fatalf("stale repay mutated debt: got principal=%v interest=%v want principal=%v interest=%v",
+			got.DebtPrincipal, got.DebtInterest, fresh.DebtPrincipal, fresh.DebtInterest)
 	}
 }

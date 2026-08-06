@@ -625,19 +625,38 @@ type MarginPort interface {
 	// ApplyMarginOpen debits cash for margin, inserts position + trade atomically.
 	ApplyMarginOpen(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// ApplyMarginClose credits cash (margin release + realized), updates/closes position + trade atomically.
-	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool) error
+	// expected must match current debt; returns ErrConflict if interest/repay raced.
+	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool, expected DebtSnapshot) error
 	// ApplyMarginOpenFromOrder fills a limit order into a new position in one transaction.
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
 	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).
 	ApplyMarginAdjust(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
-	// ApplyMarginRepay pays interest then principal from cash (long) or cash bought coins (short simplified as cash).
-	ApplyMarginRepay(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
+	// ApplyMarginRepay pays interest then principal. expected must match current debt or ErrConflict.
+	ApplyMarginRepay(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, expected DebtSnapshot) error
 	// UpdatePortfolioMarginMode sets account margin mode.
 	UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode MarginMode, at time.Time) error
-	// AccrueInterestCAS applies interest only if last_interest_at still matches expectedLast
-	// (compare-and-swap). Returns false if another worker already advanced the cursor or
-	// principal is zero / position not open. Never rewinds last_interest_at.
-	AccrueInterestCAS(ctx context.Context, id string, expectedLast time.Time, newInterest float64, newLast time.Time, liq float64, at time.Time) (claimed bool, err error)
+	// AccrueInterestCAS applies interest only if debt snapshot still matches expected
+	// (principal, interest, last_interest_at). Returns false if another worker/repay/close
+	// changed debt, principal is zero, or position not open. Never rewinds last_interest_at.
+	AccrueInterestCAS(ctx context.Context, id string, expected DebtSnapshot, newInterest float64, newLast time.Time, liq float64, at time.Time) (claimed bool, err error)
 	// ListOpenMarginPositionsWithDebt returns open positions with debt_principal > 0.
 	ListOpenMarginPositionsWithDebt(ctx context.Context) ([]MarginPosition, error)
+}
+
+// DebtSnapshot is the optimistic-concurrency token for debt mutations.
+// Accrue, repay, and partial/full close must match this snapshot or return ErrConflict / claimed=false.
+type DebtSnapshot struct {
+	Principal      float64
+	Interest       float64
+	LastInterestAt time.Time
+}
+
+// DebtSnapshotFromPos captures debt fields for CAS.
+func DebtSnapshotFromPos(p *MarginPosition) DebtSnapshot {
+	if p == nil {
+		return DebtSnapshot{}
+	}
+	return DebtSnapshot{
+		Principal: p.DebtPrincipal, Interest: p.DebtInterest, LastInterestAt: p.LastInterestAt,
+	}
 }
