@@ -78,6 +78,9 @@ type Config struct {
 	PortfolioOrderCheckInterval time.Duration
 	// RecurringBuyInterval is how often due recurring buy plans are evaluated.
 	RecurringBuyInterval time.Duration
+	// MarginInterestInterval is how often open margin debts are interest-accrued.
+	// Catch-up after downtime is O(1) per position (not hour-by-hour).
+	MarginInterestInterval time.Duration
 
 	// ScannerDBPath is the SQLite file for technical indicator scanner rules/results.
 	ScannerDBPath string
@@ -175,6 +178,7 @@ func Load() Config {
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
 		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
 		RecurringBuyInterval:        positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
+		MarginInterestInterval:      positiveDurationEnv("MARGIN_INTEREST_INTERVAL", time.Minute),
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),

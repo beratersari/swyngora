@@ -270,6 +270,13 @@ func main() {
 	}
 	go recurringBuyWorker.Start(ctx)
 
+	marginInterestWorker := &portfolio.MarginInterestWorker{
+		Portfolio: portfolioSvc,
+		Interval:  cfg.MarginInterestInterval,
+		Logger:    logger,
+	}
+	go marginInterestWorker.Start(ctx)
+
 	scannerChecker := &scanner.Checker{
 		Scanner:  scannerSvc,
 		Interval: cfg.ScannerCheckInterval,

@@ -186,6 +186,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
 | `RECURRING_BUY_INTERVAL` | `30s` | How often due recurring buy plans are evaluated |
+| `MARGIN_INTEREST_INTERVAL` | `1m` | How often margin debt interest is catch-up accrued (O(1) per position) |
 | `PRICE_DIFF_DB_PATH` | `data/pricediff.db` | SQLite for cross-exchange price difference watches/opportunities |
 | `PRICE_DIFF_CHECK_INTERVAL` | `30s` | How often active price-diff watches are evaluated |
 | `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |

@@ -287,25 +287,42 @@ func DebtNotionalQuote(side MarginSide, principal, interest, mark float64) float
 	}
 }
 
-// AccrueInterestHours applies simple interest on principal for full elapsed hours.
-// Returns new interest total, new lastInterestAt, hours applied.
+// AccrueInterestHours applies simple interest on principal for full elapsed hours in O(1).
+// It never loops hour-by-hour: hours = floor((now-lastAt)/1h), add = principal*rate*hours.
+//
+// Monotonic / clock-safe:
+//   - if now is not strictly after lastAt (clock skew or already accrued), returns zero hours
+//     and leaves interest/lastAt unchanged (never reduces interest or rewinds lastAt)
+//   - newLast is always lastAt + hours (forward only)
+// Fully paid principal (principal <= 0) accrues nothing.
+//
+// Returns new interest total, new lastInterestAt, full hours applied.
 func AccrueInterestHours(principal, interest float64, lastAt, now time.Time, hourlyRate float64) (newInterest float64, newLast time.Time, hours int) {
-	if principal <= 0 || hourlyRate <= 0 {
+	if principal <= PositionEpsilon || hourlyRate <= 0 {
 		return interest, lastAt, 0
 	}
-	if lastAt.IsZero() {
-		lastAt = now.UTC().Truncate(time.Hour)
-	}
 	now = now.UTC()
+	// No baseline yet (caller should set last_interest_at on open) — do not invent past hours.
+	if lastAt.IsZero() {
+		return interest, lastAt, 0
+	}
 	lastAt = lastAt.UTC()
-	// Full hours since last accrual.
-	elapsed := now.Sub(lastAt)
-	hours = int(elapsed / time.Hour)
+	// Clock moved backward or same instant: do not remove or re-add interest.
+	if !now.After(lastAt) {
+		return interest, lastAt, 0
+	}
+	// O(1) catch-up for offline periods (no per-hour loop).
+	hours = int(now.Sub(lastAt) / time.Hour)
 	if hours <= 0 {
 		return interest, lastAt, 0
 	}
 	add := principal * hourlyRate * float64(hours)
-	return interest + add, lastAt.Add(time.Duration(hours) * time.Hour), hours
+	newLast = lastAt.Add(time.Duration(hours) * time.Hour)
+	// Guard: never move lastAt backward (should be impossible given hours > 0).
+	if newLast.Before(lastAt) {
+		return interest, lastAt, 0
+	}
+	return interest + add, newLast, hours
 }
 
 // AllocateRepayment pays interest first, then principal. amount is in debt units.
@@ -617,4 +634,10 @@ type MarginPort interface {
 	ApplyMarginRepay(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// UpdatePortfolioMarginMode sets account margin mode.
 	UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode MarginMode, at time.Time) error
+	// AccrueInterestCAS applies interest only if last_interest_at still matches expectedLast
+	// (compare-and-swap). Returns false if another worker already advanced the cursor or
+	// principal is zero / position not open. Never rewinds last_interest_at.
+	AccrueInterestCAS(ctx context.Context, id string, expectedLast time.Time, newInterest float64, newLast time.Time, liq float64, at time.Time) (claimed bool, err error)
+	// ListOpenMarginPositionsWithDebt returns open positions with debt_principal > 0.
+	ListOpenMarginPositionsWithDebt(ctx context.Context) ([]MarginPosition, error)
 }

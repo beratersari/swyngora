@@ -82,6 +82,29 @@ func TestAccrueInterestHours(t *testing.T) {
 	if !nl.Equal(last.Add(2 * time.Hour)) {
 		t.Fatalf("last=%v", nl)
 	}
+	// Long offline catch-up is O(1) product, not a loop of 100 hours.
+	ni2, nl2, h2 := AccrueInterestHours(100, 0, last, last.Add(100*time.Hour), 0.01)
+	if h2 != 100 || math.Abs(ni2-100) > 1e-9 {
+		t.Fatalf("catch-up ni=%v h=%d", ni2, h2)
+	}
+	if !nl2.Equal(last.Add(100 * time.Hour)) {
+		t.Fatalf("nl2=%v", nl2)
+	}
+	// Clock backward: no change
+	ni3, nl3, h3 := AccrueInterestHours(1000, 5, last, last.Add(-time.Hour), 0.01)
+	if h3 != 0 || ni3 != 5 || !nl3.Equal(last) {
+		t.Fatalf("backward h=%d ni=%v nl=%v", h3, ni3, nl3)
+	}
+	// Same last: no double period
+	ni4, _, h4 := AccrueInterestHours(1000, 5, last, last, 0.01)
+	if h4 != 0 || ni4 != 5 {
+		t.Fatalf("same instant h=%d ni=%v", h4, ni4)
+	}
+	// Fully paid principal: stop
+	_, _, h5 := AccrueInterestHours(0, 1, last, now, 0.01)
+	if h5 != 0 {
+		t.Fatalf("zero principal hours=%d", h5)
+	}
 }
 
 func TestLiquidationPriceWithDebtInterest(t *testing.T) {

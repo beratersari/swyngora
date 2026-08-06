@@ -33,8 +33,12 @@ Users want leveraged long/short paper trading without real money: market and lim
 ### Borrowing & interest
 - **Long:** borrowed **cash** = notional − margin (`debtAsset=quote`); principal and interest shown separately
 - **Short:** borrowed **base coins** = quantity (`debtAsset=base`)
-- **Interest:** simple hourly on principal (`DefaultMarginHourlyInterestRate`); applied on worker tick and when reading/closing/repaying
-- **Liquidation** uses principal + interest (long liq rises as interest grows)
+- **Interest (persistent background task):** `MarginInterestWorker` (`MARGIN_INTEREST_INTERVAL`, default `1m`)
+  - **Catch-up after downtime:** O(1) formula `principal × rate × floor(hours offline)` — does **not** walk each missed hour
+  - **CAS on `last_interest_at`:** two workers cannot apply the same window; restarts do not reprocess a completed period
+  - **Clock skew:** if wall clock moves backward, interest is neither removed nor re-added for past periods
+  - **Paid debt:** when `debtPrincipal` is 0, accrual stops
+  - **Same operation after interest:** recompute liquidation price; if mark is already past liq, **liquidate immediately**
 - **Borrow limit:** total debt notional ≤ `startingBalance * 9` (10x − own capital)
 
 ### Partial close
