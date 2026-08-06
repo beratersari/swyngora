@@ -26,6 +26,25 @@ func TestLiquidationPriceIsolated(t *testing.T) {
 	if err != nil || math.Abs(liq-109.5) > 1e-9 {
 		t.Fatalf("short liq=%v err=%v", liq, err)
 	}
+	// FromMargin with IM matches
+	liq2, err := LiquidationPriceFromMargin(MarginLong, 100, 1, 10, 0.005)
+	if err != nil || math.Abs(liq2-90.5) > 1e-9 {
+		t.Fatalf("from margin=%v err=%v", liq2, err)
+	}
+	// Extra margin moves long liq lower
+	liq3, _ := LiquidationPriceFromMargin(MarginLong, 100, 1, 20, 0.005)
+	if liq3 >= liq2 {
+		t.Fatalf("extra margin should lower long liq: %v vs %v", liq3, liq2)
+	}
+}
+
+func TestCrossLiquidationPrice(t *testing.T) {
+	// Single long: equityExcl = cash+margin = 100 (if cash=90 margin=10, no other U)
+	// totalMaint = 0.5, uNeed = 0.5-100 = -99.5, mark = 100 + (-99.5)/1 = 0.5
+	liq, err := CrossLiquidationPrice(MarginLong, 100, 1, 100, 0.5)
+	if err != nil || math.Abs(liq-0.5) > 1e-9 {
+		t.Fatalf("liq=%v err=%v", liq, err)
+	}
 }
 
 func TestMarginPnL(t *testing.T) {

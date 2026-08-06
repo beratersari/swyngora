@@ -39,8 +39,10 @@ type Portfolio struct {
 	StartingBalance  float64
 	CashBalance      float64
 	RealizedPnLTotal float64
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// MarginMode is isolated (default) or cross; locked while open margin pos/orders exist.
+	MarginMode MarginMode
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Position is an open (or zero) holding of a symbol on an exchange.
@@ -161,8 +163,10 @@ type PortfolioView struct {
 	ReservedMargin   float64 // margin limit-order reservations
 	AvailableCash    float64
 	PositionsValue   float64
-	// MarginLocked is isolated margin held in open margin positions (already deducted from cash).
-	MarginLocked     float64
+	// MarginMode is isolated or cross for this account.
+	MarginMode MarginMode
+	// MarginLocked is margin held in open margin positions (already deducted from cash).
+	MarginLocked float64
 	// MarginUnrealizedPnL is mark-to-market PnL of open margin positions.
 	MarginUnrealizedPnL float64
 	// MarginEquity is MarginLocked + MarginUnrealizedPnL.

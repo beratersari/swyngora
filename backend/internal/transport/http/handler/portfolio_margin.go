@@ -16,6 +16,7 @@ type marginPositionDTO struct {
 	Exchange         string   `json:"exchange"`
 	Symbol           string   `json:"symbol"`
 	Side             string   `json:"side"`
+	Mode             string   `json:"mode"`
 	Quantity         float64  `json:"quantity"`
 	EntryPrice       float64  `json:"entryPrice"`
 	Leverage         int      `json:"leverage"`
@@ -73,9 +74,13 @@ type marginTradeDTO struct {
 }
 
 func marginPosDTO(p *domain.MarginPosition) marginPositionDTO {
+	mode := string(p.Mode)
+	if mode == "" {
+		mode = string(domain.MarginModeIsolated)
+	}
 	d := marginPositionDTO{
 		ID: p.ID, ClientID: p.ClientID, Exchange: string(p.Exchange), Symbol: p.Symbol,
-		Side: string(p.Side), Quantity: p.Quantity, EntryPrice: p.EntryPrice, Leverage: p.Leverage,
+		Side: string(p.Side), Mode: mode, Quantity: p.Quantity, EntryPrice: p.EntryPrice, Leverage: p.Leverage,
 		Margin: p.Margin, LiquidationPrice: p.LiquidationPrice, Status: string(p.Status),
 		MarkPrice: p.MarkPrice, UnrealizedPnL: p.UnrealizedPnL, RealizedPnL: p.RealizedPnL,
 		CloseReason: p.CloseReason, StopLoss: p.StopLoss, TakeProfit: p.TakeProfit,
@@ -282,4 +287,52 @@ func (h *PortfolioHandler) ListMarginTrades(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, map[string]any{
 		"clientId": clientIDFrom(r), "trades": items, "count": len(items),
 	})
+}
+
+type setMarginModeBody struct {
+	ClientID string `json:"clientId"`
+	Mode     string `json:"mode"`
+}
+
+// SetMarginMode handles PUT /api/v1/portfolio/margin/mode
+func (h *PortfolioHandler) SetMarginMode(w http.ResponseWriter, r *http.Request) {
+	var body setMarginModeBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	clientID := body.ClientID
+	if clientID == "" {
+		clientID = clientIDFrom(r)
+	}
+	p, err := h.svc.SetMarginMode(r.Context(), portfolio.SetMarginModeInput{ClientID: clientID, Mode: body.Mode})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId": p.ClientID, "marginMode": string(p.MarginMode),
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+}
+
+type adjustMarginBody struct {
+	Delta float64 `json:"delta"`
+}
+
+// AdjustMargin handles POST /api/v1/portfolio/margin/positions/{id}/margin
+func (h *PortfolioHandler) AdjustMargin(w http.ResponseWriter, r *http.Request) {
+	var body adjustMarginBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	pos, err := h.svc.AdjustMargin(r.Context(), portfolio.MarginAdjustInput{
+		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"), Delta: body.Delta,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, marginPosDTO(pos))
 }

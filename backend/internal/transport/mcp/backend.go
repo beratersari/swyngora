@@ -798,6 +798,33 @@ func (b *Backend) ListRecurringBuyRuns(ctx context.Context, clientID, planID str
 	return mustJSON(map[string]any{"planId": planID, "runs": items, "count": len(items)})
 }
 
+func (b *Backend) SetMarginMode(ctx context.Context, clientID, mode string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	p, err := b.Portfolio.SetMarginMode(ctx, portfolio.SetMarginModeInput{ClientID: clientID, Mode: mode})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"clientId": p.ClientID, "marginMode": string(p.MarginMode),
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+}
+
+func (b *Backend) AdjustMargin(ctx context.Context, clientID, positionID string, delta float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	pos, err := b.Portfolio.AdjustMargin(ctx, portfolio.MarginAdjustInput{
+		ClientID: clientID, PositionID: positionID, Delta: delta,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(marginPosMap(pos))
+}
+
 func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -910,9 +937,13 @@ func (b *Backend) ListMarginTrades(ctx context.Context, clientID string, limit, 
 }
 
 func marginPosMap(p *domain.MarginPosition) map[string]any {
+	mode := string(p.Mode)
+	if mode == "" {
+		mode = string(domain.MarginModeIsolated)
+	}
 	m := map[string]any{
 		"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,
-		"side": string(p.Side), "quantity": p.Quantity, "entryPrice": p.EntryPrice, "leverage": p.Leverage,
+		"side": string(p.Side), "mode": mode, "quantity": p.Quantity, "entryPrice": p.EntryPrice, "leverage": p.Leverage,
 		"margin": p.Margin, "liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
 		"markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL, "realizedPnL": p.RealizedPnL,
 		"closeReason": p.CloseReason,

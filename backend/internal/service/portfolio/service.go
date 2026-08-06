@@ -79,6 +79,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 		StartingBalance:  in.StartingBalance,
 		CashBalance:      in.StartingBalance,
 		RealizedPnLTotal: 0,
+		MarginMode:       domain.MarginModeIsolated,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	})
@@ -156,6 +157,14 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 	// Cash already excludes locked margin; equity adds it back + unrealized + spot marks.
 	equity := p.CashBalance + posValue + marginLocked + marginUnreal
 	avail := domain.AvailableCash(p.CashBalance, reservedCash+reservedMargin)
+	mode := p.MarginMode
+	if mode == "" {
+		mode = domain.MarginModeIsolated
+	}
+	// Cross free margin includes open margin unrealized.
+	if mode == domain.MarginModeCross {
+		avail += marginUnreal
+	}
 	return &domain.PortfolioView{
 		ClientID:            p.ClientID,
 		Currency:            p.Currency,
@@ -165,6 +174,7 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		ReservedMargin:      reservedMargin,
 		AvailableCash:       avail,
 		PositionsValue:      posValue,
+		MarginMode:          mode,
 		MarginLocked:        marginLocked,
 		MarginUnrealizedPnL: marginUnreal,
 		MarginEquity:        marginLocked + marginUnreal,

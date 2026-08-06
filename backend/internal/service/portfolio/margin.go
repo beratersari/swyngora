@@ -26,6 +26,19 @@ type MarginOrderInput struct {
 	TakeProfit *float64 // optional
 }
 
+// MarginAdjustInput adds (positive) or removes (negative) margin from an isolated position.
+type MarginAdjustInput struct {
+	ClientID   string
+	PositionID string
+	Delta      float64 // >0 add from cash; <0 return to cash
+}
+
+// SetMarginModeInput changes account-wide margin mode.
+type SetMarginModeInput struct {
+	ClientID string
+	Mode     string // isolated | cross
+}
+
 // MarginCloseInput closes all or part of a margin position at market.
 type MarginCloseInput struct {
 	ClientID   string
@@ -45,7 +58,12 @@ type MarginBracketsInput struct {
 }
 
 // availableCashForTrading returns cash free of spot pending + margin limit reservations.
+// In cross mode, open margin unrealized PnL is added to free margin.
 func (s *Service) availableCashForTrading(ctx context.Context, clientID string, cashBalance float64) (float64, error) {
+	return s.availableCashForTradingMode(ctx, clientID, cashBalance, "")
+}
+
+func (s *Service) availableCashForTradingMode(ctx context.Context, clientID string, cashBalance float64, mode domain.MarginMode) (float64, error) {
 	reservedSpot, err := s.store.SumReservedCash(ctx, clientID)
 	if err != nil {
 		return 0, err
@@ -54,7 +72,148 @@ func (s *Service) availableCashForTrading(ctx context.Context, clientID string, 
 	if err != nil {
 		return 0, err
 	}
-	return domain.AvailableCash(cashBalance, reservedSpot+reservedMargin), nil
+	avail := domain.AvailableCash(cashBalance, reservedSpot+reservedMargin)
+	if mode == "" {
+		if p, err := s.store.GetPortfolio(ctx, clientID); err == nil {
+			mode = p.MarginMode
+		}
+	}
+	if mode == domain.MarginModeCross {
+		upnl, err := s.sumOpenMarginUnrealized(ctx, clientID)
+		if err != nil {
+			return 0, err
+		}
+		avail += upnl
+	}
+	return avail, nil
+}
+
+func (s *Service) sumOpenMarginUnrealized(ctx context.Context, clientID string) (float64, error) {
+	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return 0, err
+	}
+	var sum float64
+	for i := range list {
+		s.markMarginPosition(ctx, &list[i])
+		sum += list[i].UnrealizedPnL
+	}
+	return sum, nil
+}
+
+// SetMarginMode sets isolated|cross. Fails if any open margin position or pending margin order.
+func (s *Service) SetMarginMode(ctx context.Context, in SetMarginModeInput) (*domain.Portfolio, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	mode, err := domain.NormalizeMarginMode(in.Mode)
+	if err != nil {
+		return nil, err
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if p.MarginMode == mode {
+		return p, nil
+	}
+	nPos, err := s.store.CountOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	nOrd, err := s.store.CountOpenMarginOrders(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if nPos > 0 || nOrd > 0 {
+		return nil, fmt.Errorf("%w: cannot change margin mode while open positions or pending margin orders exist", domain.ErrInvalidArgument)
+	}
+	now := time.Now().UTC()
+	if err := s.store.UpdatePortfolioMarginMode(ctx, clientID, mode, now); err != nil {
+		return nil, err
+	}
+	return s.store.GetPortfolio(ctx, clientID)
+}
+
+// AdjustMargin adds or removes isolated margin and recalculates liquidation price.
+func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*domain.MarginPosition, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Delta == 0 || math.IsNaN(in.Delta) || math.IsInf(in.Delta, 0) {
+		return nil, fmt.Errorf("%w: delta must be a non-zero number", domain.ErrInvalidArgument)
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if p.MarginMode != domain.MarginModeIsolated {
+		return nil, fmt.Errorf("%w: add/remove margin is only allowed in isolated mode", domain.ErrInvalidArgument)
+	}
+	pos, err := s.store.GetMarginPosition(ctx, clientID, strings.TrimSpace(in.PositionID))
+	if err != nil {
+		return nil, err
+	}
+	if pos.Status != domain.MarginPositionOpen {
+		return nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
+	}
+	if pos.Mode != domain.MarginModeIsolated {
+		return nil, fmt.Errorf("%w: position is not isolated", domain.ErrInvalidArgument)
+	}
+	now := time.Now().UTC()
+	newMargin := pos.Margin + in.Delta
+	minM, err := domain.MinIsolatedMargin(pos.Quantity, pos.EntryPrice, pos.Leverage)
+	if err != nil {
+		return nil, err
+	}
+	if newMargin+1e-9 < minM {
+		return nil, fmt.Errorf("%w: margin cannot go below initial margin %g", domain.ErrInvalidArgument, minM)
+	}
+	if in.Delta > 0 {
+		avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, domain.MarginModeIsolated)
+		if err != nil {
+			return nil, err
+		}
+		if avail+1e-9 < in.Delta {
+			return nil, fmt.Errorf("%w: insufficient available cash to add margin", domain.ErrInvalidArgument)
+		}
+		p.CashBalance -= in.Delta
+	} else {
+		p.CashBalance += -in.Delta // remove from position back to cash
+	}
+	p.UpdatedAt = now
+	liq, err := domain.LiquidationPriceFromMargin(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, domain.DefaultMaintenanceMarginRate)
+	if err != nil {
+		return nil, err
+	}
+	pos.Margin = newMargin
+	pos.LiquidationPrice = liq
+	pos.UpdatedAt = now
+	action := domain.MarginActionAddMargin
+	if in.Delta < 0 {
+		action = domain.MarginActionRemoveMargin
+	}
+	tr := domain.MarginTrade{
+		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: pos.Exchange, Symbol: pos.Symbol,
+		Side: pos.Side, Action: action, Quantity: 0, Price: pos.EntryPrice, Notional: 0,
+		MarginDelta: -in.Delta, // cash delta: add margin → cash decreases
+		Leverage:    pos.Leverage, CreatedAt: now,
+	}
+	// Convention: MarginDelta is cash change. Add margin: cash -delta → MarginDelta = -in.Delta when in.Delta>0.
+	// Wait: if in.Delta>0 (add), cash -= in.Delta, MarginDelta should be -in.Delta. tr.MarginDelta = -in.Delta ✓
+	// if in.Delta<0 (remove), cash += -in.Delta, MarginDelta = -in.Delta which is positive ✓
+	if err := s.store.ApplyMarginAdjust(ctx, p, *pos, tr); err != nil {
+		return nil, err
+	}
+	return s.GetMarginPosition(ctx, clientID, pos.ID)
 }
 
 // PlaceMarginOrder opens a market position immediately or rests a limit open order.
@@ -100,6 +259,11 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 
 	now := time.Now().UTC()
 
+	mode := p.MarginMode
+	if mode == "" {
+		mode = domain.MarginModeIsolated
+	}
+
 	if typ == domain.MarginOrderLimit {
 		if in.LimitPrice < domain.MinTriggerPrice || in.LimitPrice > domain.MaxTriggerPrice ||
 			math.IsNaN(in.LimitPrice) || math.IsInf(in.LimitPrice, 0) {
@@ -119,13 +283,14 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 		if err != nil {
 			return nil, nil, err
 		}
-		avail, err := s.availableCashForTrading(ctx, clientID, p.CashBalance)
+		avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, mode)
 		if err != nil {
 			return nil, nil, err
 		}
 		if avail+1e-9 < need {
 			return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
 		}
+		// Reserve required margin; released on cancel/reject/fill (fill then debits cash).
 		o := domain.MarginOrder{
 			ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym,
 			Side: side, Type: domain.MarginOrderLimit, Quantity: in.Quantity, Leverage: in.Leverage,
@@ -148,19 +313,19 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
-	avail, err := s.availableCashForTrading(ctx, clientID, p.CashBalance)
+	avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, mode)
 	if err != nil {
 		return nil, nil, err
 	}
 	if avail+1e-9 < margin {
 		return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, margin, avail)
 	}
-	liq, err := domain.LiquidationPriceIsolated(side, price, in.Leverage, domain.DefaultMaintenanceMarginRate)
+	liq, err := domain.LiquidationPriceFromMargin(side, price, in.Quantity, margin, domain.DefaultMaintenanceMarginRate)
 	if err != nil {
 		return nil, nil, err
 	}
 	pos := domain.MarginPosition{
-		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Side: side,
+		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Side: side, Mode: mode,
 		Quantity: in.Quantity, EntryPrice: price, Leverage: in.Leverage, Margin: margin,
 		LiquidationPrice: liq, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
@@ -175,6 +340,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err := s.store.ApplyMarginOpen(ctx, p, pos, tr); err != nil {
 		return nil, nil, err
 	}
+	_ = s.recomputeCrossLiquidations(ctx, clientID, now)
 	out, err := s.store.GetMarginPosition(ctx, clientID, pos.ID)
 	return out, nil, err
 }
@@ -409,8 +575,20 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 			filled++
 		}
 	}
-	// 2) Liquidation + SL/TP on open positions
+	// 2) Refresh cross liquidation prices, then liquidation + SL/TP
 	positions, err := s.store.ListAllOpenMarginPositions(ctx)
+	if err != nil {
+		return filled, 0, 0, err
+	}
+	// Group by client for cross recompute
+	byClient := map[string][]domain.MarginPosition{}
+	for i := range positions {
+		byClient[positions[i].ClientID] = append(byClient[positions[i].ClientID], positions[i])
+	}
+	for clientID := range byClient {
+		_ = s.recomputeCrossLiquidations(ctx, clientID, now)
+	}
+	positions, err = s.store.ListAllOpenMarginPositions(ctx)
 	if err != nil {
 		return filled, 0, 0, err
 	}
@@ -422,7 +600,6 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 		}
 		// Liquidation first
 		if domain.ShouldLiquidate(pos.Side, mark, pos.LiquidationPrice) {
-			// Close at liquidation price (or mark if worse for realism use mark)
 			exit := pos.LiquidationPrice
 			if pos.Side == domain.MarginLong && mark < exit {
 				exit = mark
@@ -434,6 +611,10 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 				liquidated++
 			}
 			continue
+		}
+		// Cross: also liquidate if account equity below total maintenance
+		if pos.Mode == domain.MarginModeCross || pos.Mode == "" {
+			// checked per position once account-wide below; handled in recompute path below
 		}
 		// Stop loss
 		if domain.ShouldTriggerStopLoss(pos.Side, mark, pos.StopLoss) {
@@ -449,7 +630,92 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 			}
 		}
 	}
+	// Cross account-level: if equity < total maint, liquidate positions until healthy
+	for clientID := range byClient {
+		n, _ := s.liquidateCrossIfUnderMaint(ctx, clientID, now)
+		liquidated += n
+	}
 	return filled, liquidated, stopped, nil
+}
+
+// recomputeCrossLiquidations updates liquidation prices for cross-mode positions of a client.
+func (s *Service) recomputeCrossLiquidations(ctx context.Context, clientID string, now time.Time) error {
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if p.MarginMode != domain.MarginModeCross {
+		return nil
+	}
+	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if len(list) == 0 {
+		return nil
+	}
+	var totalMaint, sumMargin, sumU float64
+	for i := range list {
+		s.markMarginPosition(ctx, &list[i])
+		totalMaint += domain.MaintenanceMargin(list[i].Quantity, list[i].EntryPrice, domain.DefaultMaintenanceMarginRate)
+		sumMargin += list[i].Margin
+		sumU += list[i].UnrealizedPnL
+	}
+	// equity = cash + sum(margin) + sum(upnl); cash excludes locked margins
+	for i := range list {
+		// equity excluding this position's U: cash + sumMargin + (sumU - U_i)
+		equityExcl := p.CashBalance + sumMargin + (sumU - list[i].UnrealizedPnL)
+		liq, err := domain.CrossLiquidationPrice(list[i].Side, list[i].EntryPrice, list[i].Quantity, equityExcl, totalMaint)
+		if err != nil {
+			continue
+		}
+		list[i].LiquidationPrice = liq
+		list[i].UpdatedAt = now
+		_ = s.store.UpdateMarginPosition(ctx, list[i])
+	}
+	return nil
+}
+
+func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID string, now time.Time) (int, error) {
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return 0, err
+	}
+	if p.MarginMode != domain.MarginModeCross {
+		return 0, nil
+	}
+	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
+	if err != nil {
+		return 0, err
+	}
+	if len(list) == 0 {
+		return 0, nil
+	}
+	var totalMaint, sumMargin, sumU float64
+	for i := range list {
+		s.markMarginPosition(ctx, &list[i])
+		totalMaint += domain.MaintenanceMargin(list[i].Quantity, list[i].EntryPrice, domain.DefaultMaintenanceMarginRate)
+		sumMargin += list[i].Margin
+		sumU += list[i].UnrealizedPnL
+	}
+	equity := p.CashBalance + sumMargin + sumU
+	if equity+1e-9 >= totalMaint {
+		return 0, nil
+	}
+	// Liquidate worst (most negative U) first until equity recovers or none left
+	n := 0
+	// simple: close all if under maint (safe for paper)
+	for i := range list {
+		mark := list[i].MarkPrice
+		if mark <= 0 {
+			mark = list[i].EntryPrice
+		}
+		if _, _, e := s.closeMarginAt(ctx, &list[i], list[i].Quantity, mark, domain.MarginCloseLiquidation); e == nil {
+			n++
+		}
+	}
+	_ = now
+	return n, nil
 }
 
 func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder, now time.Time) bool {
@@ -494,12 +760,16 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		_ = s.store.RejectMarginOrder(ctx, o.ID, "max positions", now)
 		return false
 	}
-	liq, err := domain.LiquidationPriceIsolated(o.Side, price, o.Leverage, domain.DefaultMaintenanceMarginRate)
+	mode := p.MarginMode
+	if mode == "" {
+		mode = domain.MarginModeIsolated
+	}
+	liq, err := domain.LiquidationPriceFromMargin(o.Side, price, o.Quantity, margin, domain.DefaultMaintenanceMarginRate)
 	if err != nil {
 		return false
 	}
 	pos := domain.MarginPosition{
-		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol, Side: o.Side,
+		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol, Side: o.Side, Mode: mode,
 		Quantity: o.Quantity, EntryPrice: price, Leverage: o.Leverage, Margin: margin,
 		LiquidationPrice: liq, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
@@ -511,9 +781,11 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	}
 	p.CashBalance -= margin
 	p.UpdatedAt = now
+	// Reserved margin is released in ApplyMarginOpenFromOrder (reserved_margin=0 on fill).
 	if err := s.store.ApplyMarginOpenFromOrder(ctx, p, o.ID, pos, tr, now); err != nil {
 		return false
 	}
+	_ = s.recomputeCrossLiquidations(ctx, o.ClientID, now)
 	return true
 }
 
@@ -538,6 +810,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	}
 	full := closeQty+domain.PositionEpsilon >= cur.Quantity
 	frac := closeQty / cur.Quantity
+	// Proportional margin release for partial close (isolated and cross IM share).
 	marginRelease := cur.Margin * frac
 	realized := domain.MarginRealizedPnL(cur.Side, closeQty, cur.EntryPrice, price)
 	now := time.Now().UTC()
@@ -578,8 +851,10 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	} else {
 		updated.Quantity = cur.Quantity - closeQty
 		updated.Margin = cur.Margin - marginRelease
-		// Recalculate liquidation on remaining (entry/leverage unchanged)
-		liq, lerr := domain.LiquidationPriceIsolated(cur.Side, cur.EntryPrice, cur.Leverage, domain.DefaultMaintenanceMarginRate)
+		if updated.Margin < 0 {
+			updated.Margin = 0
+		}
+		liq, lerr := domain.LiquidationPriceFromMargin(cur.Side, cur.EntryPrice, updated.Quantity, updated.Margin, domain.DefaultMaintenanceMarginRate)
 		if lerr == nil {
 			updated.LiquidationPrice = liq
 		}
@@ -590,6 +865,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 	if err := s.store.ApplyMarginClose(ctx, p, updated, tr, full); err != nil {
 		return nil, nil, err
 	}
+	_ = s.recomputeCrossLiquidations(ctx, cur.ClientID, now)
 	out, err := s.store.GetMarginPosition(ctx, cur.ClientID, cur.ID)
 	if err != nil {
 		return &updated, &tr, nil

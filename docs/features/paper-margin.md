@@ -1,55 +1,60 @@
-# Feature: Paper margin trading (isolated)
+# Feature: Paper margin trading (isolated & cross)
 
 ## Problem / goal
 
-Users want leveraged long/short paper trading (similar to exchange margin) without real money: market and limit opens, leverage 1x–10x, correct margin / available balance / PnL / liquidation, automatic liquidation, partial closes, and stop-loss / take-profit.
+Users want leveraged long/short paper trading without real money: market and limit opens, leverage 1x–10x, **isolated or cross** margin mode, correct margin / available balance / PnL / liquidation, auto liquidation, partial closes, add/remove margin (isolated), and stop-loss / take-profit.
 
 ## Behavior
 
+### Margin modes (account-wide)
+
+| Mode | Meaning |
+|------|---------|
+| `isolated` (default) | Only margin assigned to a position backs that position. Add/remove margin allowed. |
+| `cross` | Wallet equity is shared; free margin includes open unrealized PnL; liq uses shared equity. |
+
+`PUT /api/v1/portfolio/margin/mode` changes mode. **Blocked** while any open margin position **or** pending margin limit order exists.
+
 ### Open
-- **Side:** `long` or `short`
-- **Leverage:** integer 1–10
-- **Type:** `market` (fill at last price) or `limit` (rest until trigger)
-- **Initial margin:** `qty * price / leverage` (isolated)
-- Debited from **available cash** (spot + margin reservations already excluded)
-- Limit opens **reserve** margin until fill/cancel/reject (cash not debited until fill)
+- **Side:** `long` or `short`; **leverage:** 1–10; **type:** `market` or `limit`
+- **Initial margin:** `qty * price / leverage` debited from available cash
+- **Limit:** reserves required margin until fill, cancel, or reject (released on cancel)
 
-### Liquidation (isolated, maintenance 0.5% of notional)
-- Long: `entry * (1 - 1/lev + mmr)`
-- Short: `entry * (1 + 1/lev - mmr)`
-- Worker auto-closes full size when last price crosses liquidation (reason `liquidation`)
+### Liquidation (maintenance 0.5% of notional)
+- **Isolated:** `liq` from assigned margin: long `entry − (margin − maint)/qty`
+- **Cross:** per-position liq from shared equity vs total maintenance; if equity &lt; total maint, liquidate open positions
+- Worker auto-closes when mark crosses liquidation (reason `liquidation`)
 
-### PnL
-- Long unrealized: `(mark - entry) * qty`
-- Short unrealized: `(entry - mark) * qty`
-- On close: realize same formula at exit; release proportional margin to cash
+### Add / remove margin (isolated only)
+- `POST .../positions/{id}/margin` with `delta` (+ add from cash, − return to cash)
+- Cannot go below initial margin for remaining size
+- Liquidation price recalculated after adjust
 
 ### Partial close
-- `POST .../close` with `quantity` &lt; open size releases proportional margin and realizes partial PnL; position stays open
+- Releases **proportional** margin (`closeQty/qty * margin`) and realizes partial PnL; liq recalculated
 
 ### Stop-loss / take-profit
-- Optional on open or via `PUT .../brackets`
-- Worker full-closes at market when triggered
-- Long: SL below / TP above entry; short inverted
+- Optional on open or `PUT .../brackets`; worker closes at market when hit
 
 ### Equity
-`equity = cashBalance + spotPositionsValue + marginLocked + marginUnrealizedPnL`  
-(`cashBalance` already excludes locked margin)
+`equity = cashBalance + spotPositionsValue + marginLocked + marginUnrealizedPnL`
 
 ## API
 
 | Method | Path | Description |
 |--------|------|-------------|
+| `PUT` | `/api/v1/portfolio/margin/mode` | Set `isolated` or `cross` |
 | `POST` | `/api/v1/portfolio/margin/orders` | Market open or limit rest |
 | `GET` | `/api/v1/portfolio/margin/orders` | List orders |
-| `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel limit |
+| `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel limit (releases reserve) |
 | `GET` | `/api/v1/portfolio/margin/positions` | Open positions |
 | `GET` | `/api/v1/portfolio/margin/positions/{id}` | One position |
 | `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full/partial close |
+| `POST` | `/api/v1/portfolio/margin/positions/{id}/margin` | Add/remove isolated margin |
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Set/clear SL/TP |
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 
-Snapshot fields on `GET /api/v1/portfolio`: `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `marginPositions`.
+Snapshot: `marginMode`, `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `marginPositions`.
 
 ## Code
 
@@ -58,12 +63,8 @@ Snapshot fields on `GET /api/v1/portfolio`: `reservedMargin`, `marginLocked`, `m
 | Domain | `backend/internal/domain/margin.go` |
 | Store | `backend/internal/adapter/portfoliostore/margin.go` |
 | Service | `backend/internal/service/portfolio/margin.go` |
-| Worker | same interval as spot filler (`ProcessMarginMaintenance` in `filler.go`) |
+| Worker | `ProcessMarginMaintenance` via portfolio filler |
 | HTTP | `backend/internal/transport/http/handler/portfolio_margin.go` |
-
-## Config
-
-Uses existing `PORTFOLIO_DB_PATH` and `PORTFOLIO_ORDER_CHECK_INTERVAL`.
 
 ## Tests
 
@@ -74,7 +75,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ -run Margin -count=1
 
 ## Limitations
 
-- Isolated margin only (no cross margin)
-- No funding rates or fees on open/close
-- One isolated position per open call (no size-add to existing id)
+- No funding rates or trading fees
+- Cross liquidation of under-maint account closes open positions (paper simplification)
 - Informational simulation — not real money / not financial advice

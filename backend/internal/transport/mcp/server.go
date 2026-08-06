@@ -72,6 +72,8 @@ type DataPort interface {
 	ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelMarginOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListMarginTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	SetMarginMode(ctx context.Context, clientID, mode string) (json.RawMessage, error)
+	AdjustMargin(ctx context.Context, clientID, positionID string, delta float64) (json.RawMessage, error)
 	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -960,8 +962,53 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("set_margin_mode",
+		mcp.WithDescription("Set paper portfolio margin mode isolated|cross. Blocked while open margin positions or pending margin orders exist."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("mode", mcp.Required(), mcp.Description("isolated | cross")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		mode, err := req.RequireString("mode")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.SetMarginMode(ctx, clientID, mode)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("adjust_margin",
+		mcp.WithDescription("Add (delta>0) or remove (delta<0) margin from an isolated paper position; recalculates liquidation. Isolated mode only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
+		mcp.WithNumber("delta", mcp.Required(), mcp.Description("Positive add, negative remove")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("positionId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		delta, err := req.RequireFloat("delta")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.AdjustMargin(ctx, clientID, id, delta)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("place_margin_order",
-		mcp.WithDescription("Paper isolated margin open: long|short, leverage 1-10, market or limit. Optional stopLoss/takeProfit. Simulated only."),
+		mcp.WithDescription("Paper margin open: long|short, leverage 1-10, market or limit (uses account isolated|cross mode). Optional stopLoss/takeProfit. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("long | short")),

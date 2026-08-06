@@ -184,3 +184,84 @@ func TestMargin_InsufficientCash(t *testing.T) {
 		t.Fatal("expected insufficient cash")
 	}
 }
+
+func TestMargin_ModeLockAndAdjustIsolated(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m6", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	p, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "m6", Mode: "cross"})
+	if err != nil || p.MarginMode != domain.MarginModeCross {
+		t.Fatalf("%+v %v", p, err)
+	}
+	// Back to isolated for adjust tests
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "m6", Mode: "isolated"}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m6", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cannot change mode with open position
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "m6", Mode: "cross"}); err == nil {
+		t.Fatal("expected mode lock")
+	}
+	oldLiq := pos.LiquidationPrice
+	// Add margin → long liq decreases
+	pos2, err := svc.AdjustMargin(ctx, MarginAdjustInput{ClientID: "m6", PositionID: pos.ID, Delta: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pos2.Margin < 39 || pos2.LiquidationPrice >= oldLiq {
+		t.Fatalf("after add margin=%v liq=%v oldLiq=%v", pos2.Margin, pos2.LiquidationPrice, oldLiq)
+	}
+	// Remove back toward min IM=20
+	pos3, err := svc.AdjustMargin(ctx, MarginAdjustInput{ClientID: "m6", PositionID: pos.ID, Delta: -10})
+	if err != nil || pos3.Margin < 29 {
+		t.Fatalf("%+v %v", pos3, err)
+	}
+	// Cannot remove below IM
+	if _, err := svc.AdjustMargin(ctx, MarginAdjustInput{ClientID: "m6", PositionID: pos.ID, Delta: -100}); err == nil {
+		t.Fatal("expected min margin error")
+	}
+}
+
+func TestMargin_LimitReserveRelease(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m7", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	_, ord, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m7", Symbol: "BTCUSDT", Side: "long", Type: "limit",
+		Quantity: 1, Leverage: 5, LimitPrice: 90,
+	})
+	if err != nil || ord == nil {
+		t.Fatal(err)
+	}
+	// need = 90/5=18 reserved
+	view, _ := svc.View(ctx, "m7")
+	if math.Abs(view.ReservedMargin-18) > 1e-6 {
+		t.Fatalf("reserved=%v", view.ReservedMargin)
+	}
+	// Available reduced
+	if view.AvailableCash > 1000-17 {
+		t.Fatalf("avail=%v", view.AvailableCash)
+	}
+	// Cancel releases
+	if _, err := svc.CancelMarginOrder(ctx, "m7", ord.ID); err != nil {
+		t.Fatal(err)
+	}
+	view, _ = svc.View(ctx, "m7")
+	if view.ReservedMargin > 1e-9 {
+		t.Fatalf("reserved after cancel=%v", view.ReservedMargin)
+	}
+	// Mode change allowed when no open pos/order
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "m7", Mode: "cross"}); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -9,22 +9,29 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const marginPosCols = `id, client_id, exchange, symbol, side, quantity, entry_price, leverage, margin,
+const marginPosCols = `id, client_id, exchange, symbol, side, COALESCE(mode, 'isolated'), quantity, entry_price, leverage, margin,
+	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
+
+const marginPosInsertCols = `id, client_id, exchange, symbol, side, mode, quantity, entry_price, leverage, margin,
 	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
 
 func scanMarginPos(row scannable) (*domain.MarginPosition, error) {
 	var p domain.MarginPosition
-	var ex, side, st, opened, updated string
+	var ex, side, mode, st, opened, updated string
 	var sl, tp sql.NullFloat64
 	var closed sql.NullString
 	if err := row.Scan(
-		&p.ID, &p.ClientID, &ex, &p.Symbol, &side, &p.Quantity, &p.EntryPrice, &p.Leverage, &p.Margin,
+		&p.ID, &p.ClientID, &ex, &p.Symbol, &side, &mode, &p.Quantity, &p.EntryPrice, &p.Leverage, &p.Margin,
 		&p.LiquidationPrice, &sl, &tp, &st, &p.RealizedPnL, &p.CloseReason, &opened, &updated, &closed,
 	); err != nil {
 		return nil, err
 	}
 	p.Exchange = domain.Exchange(ex)
 	p.Side = domain.MarginSide(side)
+	p.Mode = domain.MarginMode(mode)
+	if p.Mode == "" {
+		p.Mode = domain.MarginModeIsolated
+	}
 	p.Status = domain.MarginPositionStatus(st)
 	p.OpenedAt = parseTime(opened)
 	p.UpdatedAt = parseTime(updated)
@@ -54,10 +61,13 @@ func nullFloat(p *float64) any {
 func (s *SQLite) CreateMarginPosition(ctx context.Context, pos domain.MarginPosition) (*domain.MarginPosition, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if pos.Mode == "" {
+		pos.Mode = domain.MarginModeIsolated
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO margin_positions (`+marginPosCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), pos.Quantity, pos.EntryPrice,
+		INSERT INTO margin_positions (`+marginPosInsertCols+`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
 		pos.Leverage, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
 		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
@@ -557,15 +567,68 @@ func (s *SQLite) txUpdatePortfolioCash(ctx context.Context, tx *sql.Tx, p *domai
 }
 
 func (s *SQLite) txInsertMarginPos(ctx context.Context, tx *sql.Tx, pos domain.MarginPosition) error {
+	if pos.Mode == "" {
+		pos.Mode = domain.MarginModeIsolated
+	}
 	_, err := tx.ExecContext(ctx, `
-		INSERT INTO margin_positions (`+marginPosCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), pos.Quantity, pos.EntryPrice,
+		INSERT INTO margin_positions (`+marginPosInsertCols+`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
 		pos.Leverage, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
 		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
 	return err
 }
+
+// ApplyMarginAdjust updates portfolio cash and position margin/liq atomically.
+func (s *SQLite) ApplyMarginAdjust(ctx context.Context, p *domain.Portfolio, pos domain.MarginPosition, t domain.MarginTrade) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `
+		UPDATE margin_positions SET margin = ?, liquidation_price = ?, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, pos.Margin, pos.LiquidationPrice, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// UpdatePortfolioMarginMode sets the account margin mode.
+func (s *SQLite) UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode domain.MarginMode, at time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE portfolios SET margin_mode = ?, updated_at = ? WHERE client_id = ?
+	`, string(mode), at.UTC().Format(time.RFC3339Nano), clientID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 
 func (s *SQLite) txInsertMarginTrade(ctx context.Context, tx *sql.Tx, t domain.MarginTrade) error {
 	_, err := tx.ExecContext(ctx, `

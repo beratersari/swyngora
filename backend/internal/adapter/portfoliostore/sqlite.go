@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
 	starting_balance  REAL NOT NULL,
 	cash_balance      REAL NOT NULL,
 	realized_pnl_total REAL NOT NULL DEFAULT 0,
+	margin_mode       TEXT NOT NULL DEFAULT 'isolated',
 	created_at        TEXT NOT NULL,
 	updated_at        TEXT NOT NULL
 );
@@ -168,6 +169,7 @@ CREATE TABLE IF NOT EXISTS margin_positions (
 	exchange          TEXT NOT NULL,
 	symbol            TEXT NOT NULL,
 	side              TEXT NOT NULL,
+	mode              TEXT NOT NULL DEFAULT 'isolated',
 	quantity          REAL NOT NULL,
 	entry_price       REAL NOT NULL,
 	leverage          INTEGER NOT NULL,
@@ -244,6 +246,8 @@ CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, 
 		`ALTER TABLE pending_orders ADD COLUMN time_in_force TEXT NOT NULL DEFAULT 'gtc'`,
 		`ALTER TABLE pending_orders ADD COLUMN expires_at TEXT`,
 		`ALTER TABLE pending_orders ADD COLUMN cancel_reason TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE portfolios ADD COLUMN margin_mode TEXT NOT NULL DEFAULT 'isolated'`,
+		`ALTER TABLE margin_positions ADD COLUMN mode TEXT NOT NULL DEFAULT 'isolated'`,
 	}
 	for _, q := range alters {
 		if _, err := s.db.Exec(q); err != nil {
@@ -284,16 +288,22 @@ func (s *SQLite) Close() error {
 // GetPortfolio returns portfolio or ErrNotFound.
 func (s *SQLite) GetPortfolio(ctx context.Context, clientID string) (*domain.Portfolio, error) {
 	var p domain.Portfolio
-	var cAt, uAt string
+	var cAt, uAt, mode string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT client_id, currency, starting_balance, cash_balance, realized_pnl_total, created_at, updated_at
+		SELECT client_id, currency, starting_balance, cash_balance, realized_pnl_total,
+			COALESCE(margin_mode, 'isolated'), created_at, updated_at
 		FROM portfolios WHERE client_id = ?
-	`, clientID).Scan(&p.ClientID, &p.Currency, &p.StartingBalance, &p.CashBalance, &p.RealizedPnLTotal, &cAt, &uAt)
+	`, clientID).Scan(&p.ClientID, &p.Currency, &p.StartingBalance, &p.CashBalance, &p.RealizedPnLTotal,
+		&mode, &cAt, &uAt)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
+	}
+	p.MarginMode = domain.MarginMode(mode)
+	if p.MarginMode == "" {
+		p.MarginMode = domain.MarginModeIsolated
 	}
 	p.CreatedAt = parseTime(cAt)
 	p.UpdatedAt = parseTime(uAt)
@@ -310,10 +320,13 @@ func (s *SQLite) CreatePortfolio(ctx context.Context, p domain.Portfolio) (*doma
 	if p.UpdatedAt.IsZero() {
 		p.UpdatedAt = p.CreatedAt
 	}
+	if p.MarginMode == "" {
+		p.MarginMode = domain.MarginModeIsolated
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO portfolios (client_id, currency, starting_balance, cash_balance, realized_pnl_total, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, p.ClientID, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal,
+		INSERT INTO portfolios (client_id, currency, starting_balance, cash_balance, realized_pnl_total, margin_mode, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ClientID, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal, string(p.MarginMode),
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("portfolio create: %w", err)

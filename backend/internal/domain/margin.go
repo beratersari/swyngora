@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// Paper margin trading limits (isolated positions, simulated only).
+// Paper margin trading limits (simulated only).
 const (
 	MinMarginLeverage      = 1
 	MaxMarginLeverage      = 10
@@ -17,11 +17,24 @@ const (
 	// DefaultMaintenanceMarginRate is fraction of notional retained as maintenance (0.5%).
 	DefaultMaintenanceMarginRate = 0.005
 	// Margin close reasons.
-	MarginCloseUser         = "user"
-	MarginCloseLiquidation  = "liquidation"
-	MarginCloseStopLoss     = "stop_loss"
-	MarginCloseTakeProfit   = "take_profit"
-	MarginClosePartialUser  = "partial_close"
+	MarginCloseUser        = "user"
+	MarginCloseLiquidation = "liquidation"
+	MarginCloseStopLoss    = "stop_loss"
+	MarginCloseTakeProfit  = "take_profit"
+	MarginClosePartialUser = "partial_close"
+	// Margin trade actions (also used for adjust).
+	MarginActionAddMargin    = "add_margin"
+	MarginActionRemoveMargin = "remove_margin"
+)
+
+// MarginMode is account-wide margin style (locked while any open pos/order).
+type MarginMode string
+
+const (
+	// MarginModeIsolated: only margin assigned to a position backs that position.
+	MarginModeIsolated MarginMode = "isolated"
+	// MarginModeCross: wallet equity is shared across open margin positions.
+	MarginModeCross MarginMode = "cross"
 )
 
 // MarginSide is long or short.
@@ -58,17 +71,18 @@ const (
 	MarginPositionClosed MarginPositionStatus = "closed"
 )
 
-// MarginPosition is an isolated leveraged long/short paper position.
+// MarginPosition is a leveraged long/short paper position (isolated or cross).
 type MarginPosition struct {
 	ID               string
 	ClientID         string
 	Exchange         Exchange
 	Symbol           string
 	Side             MarginSide
-	Quantity         float64 // remaining open size
+	Mode             MarginMode // snapshot of account mode at open
+	Quantity         float64    // remaining open size
 	EntryPrice       float64
 	Leverage         int
-	Margin           float64 // isolated margin still locked (scales with partial closes)
+	Margin           float64 // margin assigned (isolated: only this backs the pos; cross: IM share)
 	LiquidationPrice float64
 	StopLoss         *float64
 	TakeProfit       *float64
@@ -122,6 +136,28 @@ type MarginTrade struct {
 	MarginDelta  float64 // cash change from margin lock/release (negative open, positive release)
 	Leverage     int
 	CreatedAt    time.Time
+}
+
+// IsValidMarginMode reports isolated|cross.
+func IsValidMarginMode(s string) bool {
+	switch MarginMode(strings.ToLower(strings.TrimSpace(s))) {
+	case MarginModeIsolated, MarginModeCross:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeMarginMode parses isolated|cross; empty defaults to isolated.
+func NormalizeMarginMode(s string) (MarginMode, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return MarginModeIsolated, nil
+	}
+	if !IsValidMarginMode(s) {
+		return "", fmt.Errorf("%w: marginMode must be isolated or cross", ErrInvalidArgument)
+	}
+	return MarginMode(s), nil
 }
 
 // IsValidMarginSide reports long|short.
@@ -181,11 +217,48 @@ func InitialMargin(qty, price float64, leverage int) (float64, error) {
 	return qty * price / float64(leverage), nil
 }
 
-// LiquidationPriceIsolated computes isolated-margin liquidation price.
-// mmr is maintenance margin as fraction of notional (e.g. 0.005).
-//
-//	long:  entry * (1 - 1/lev + mmr)
-//	short: entry * (1 + 1/lev - mmr)
+// MaintenanceMargin is mmr * notional for open size.
+func MaintenanceMargin(qty, entry, mmr float64) float64 {
+	if qty <= 0 || entry <= 0 || mmr <= 0 {
+		return 0
+	}
+	return qty * entry * mmr
+}
+
+// LiquidationPriceFromMargin computes liq from assigned margin (isolated, or IM share).
+// long:  entry - (margin - maint) / qty
+// short: entry + (margin - maint) / qty
+func LiquidationPriceFromMargin(side MarginSide, entry, qty, margin, mmr float64) (float64, error) {
+	if entry <= 0 || qty <= 0 || math.IsNaN(entry) || math.IsNaN(qty) || math.IsInf(entry, 0) || math.IsInf(qty, 0) {
+		return 0, fmt.Errorf("%w: entry and quantity must be positive", ErrInvalidArgument)
+	}
+	if margin < 0 || math.IsNaN(margin) || math.IsInf(margin, 0) {
+		return 0, fmt.Errorf("%w: margin must be non-negative", ErrInvalidArgument)
+	}
+	if mmr < 0 || mmr >= 1 || math.IsNaN(mmr) {
+		return 0, fmt.Errorf("%w: invalid maintenance margin rate", ErrInvalidArgument)
+	}
+	maint := MaintenanceMargin(qty, entry, mmr)
+	buffer := margin - maint
+	if buffer < 0 {
+		buffer = 0
+	}
+	switch side {
+	case MarginLong:
+		p := entry - buffer/qty
+		if p < 0 {
+			p = 0
+		}
+		return p, nil
+	case MarginShort:
+		return entry + buffer/qty, nil
+	default:
+		return 0, fmt.Errorf("%w: side must be long or short", ErrInvalidArgument)
+	}
+}
+
+// LiquidationPriceIsolated computes liq assuming initial margin = notional/leverage.
+// Equivalent to LiquidationPriceFromMargin with that IM.
 func LiquidationPriceIsolated(side MarginSide, entry float64, leverage int, mmr float64) (float64, error) {
 	if entry <= 0 || math.IsNaN(entry) || math.IsInf(entry, 0) {
 		return 0, fmt.Errorf("%w: entry price must be positive", ErrInvalidArgument)
@@ -193,22 +266,43 @@ func LiquidationPriceIsolated(side MarginSide, entry float64, leverage int, mmr 
 	if !IsValidMarginLeverage(leverage) {
 		return 0, fmt.Errorf("%w: leverage must be between %d and %d", ErrInvalidArgument, MinMarginLeverage, MaxMarginLeverage)
 	}
-	if mmr < 0 || mmr >= 1 || math.IsNaN(mmr) {
-		return 0, fmt.Errorf("%w: invalid maintenance margin rate", ErrInvalidArgument)
+	// unit qty — ratio-only formula matches FromMargin(qty=1, margin=entry/lev)
+	margin := entry / float64(leverage)
+	return LiquidationPriceFromMargin(side, entry, 1, margin, mmr)
+}
+
+// CrossLiquidationPrice is the mark of this position that would drive total equity
+// down to total maintenance, holding other positions' unrealized PnL fixed.
+//
+//	equityExclThisU + U_this(mark) = totalMaint
+//	long:  U = (mark-entry)*qty  → mark = entry + (totalMaint - equityExclThisU)/qty
+//	short: U = (entry-mark)*qty  → mark = entry - (totalMaint - equityExclThisU)/qty
+func CrossLiquidationPrice(side MarginSide, entry, qty, equityExclThisU, totalMaint float64) (float64, error) {
+	if entry <= 0 || qty <= 0 {
+		return 0, fmt.Errorf("%w: entry and quantity must be positive", ErrInvalidArgument)
 	}
-	inv := 1.0 / float64(leverage)
+	uNeed := totalMaint - equityExclThisU
 	switch side {
 	case MarginLong:
-		p := entry * (1 - inv + mmr)
+		p := entry + uNeed/qty
 		if p < 0 {
 			p = 0
 		}
 		return p, nil
 	case MarginShort:
-		return entry * (1 + inv - mmr), nil
+		p := entry - uNeed/qty
+		if p < 0 {
+			p = 0
+		}
+		return p, nil
 	default:
 		return 0, fmt.Errorf("%w: side must be long or short", ErrInvalidArgument)
 	}
+}
+
+// MinIsolatedMargin is the floor when removing margin: remaining IM at open leverage.
+func MinIsolatedMargin(qty, entry float64, leverage int) (float64, error) {
+	return InitialMargin(qty, entry, leverage)
 }
 
 // MarginUnrealizedPnL is mark-to-market PnL for an open size.
@@ -364,4 +458,8 @@ type MarginPort interface {
 	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool) error
 	// ApplyMarginOpenFromOrder fills a limit order into a new position in one transaction.
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
+	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).
+	ApplyMarginAdjust(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
+	// UpdatePortfolioMarginMode sets account margin mode.
+	UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode MarginMode, at time.Time) error
 }

@@ -30,6 +30,7 @@ type portfolioDTO struct {
 	ReservedMargin      float64             `json:"reservedMargin"`
 	AvailableCash       float64             `json:"availableCash"`
 	PositionsValue      float64             `json:"positionsValue"`
+	MarginMode          string              `json:"marginMode"`
 	MarginLocked        float64             `json:"marginLocked"`
 	MarginUnrealizedPnL float64             `json:"marginUnrealizedPnL"`
 	MarginEquity        float64             `json:"marginEquity"`
@@ -87,7 +88,7 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 	return portfolioDTO{
 		ClientID: v.ClientID, Currency: v.Currency, StartingBalance: v.StartingBalance,
 		CashBalance: v.CashBalance, ReservedCash: v.ReservedCash, ReservedMargin: v.ReservedMargin,
-		AvailableCash: v.AvailableCash, PositionsValue: v.PositionsValue,
+		AvailableCash: v.AvailableCash, PositionsValue: v.PositionsValue, MarginMode: string(v.MarginMode),
 		MarginLocked: v.MarginLocked, MarginUnrealizedPnL: v.MarginUnrealizedPnL, MarginEquity: v.MarginEquity,
 		Equity: v.Equity, UnrealizedPnL: v.UnrealizedPnL, RealizedPnLTotal: v.RealizedPnLTotal, TotalPnL: v.TotalPnL,
 		Positions: pos, MarginPositions: mpos, Note: v.Note,

@@ -578,6 +578,26 @@ func (c *APIClient) ListRecurringBuyRuns(ctx context.Context, clientID, planID s
 	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(planID)+"/runs", q)
 }
 
+// SetMarginMode sets isolated|cross.
+func (c *APIClient) SetMarginMode(ctx context.Context, clientID, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPut, "/api/v1/portfolio/margin/mode", map[string]any{
+		"clientId": clientID, "mode": mode,
+	})
+}
+
+// AdjustMargin adds/removes isolated position margin.
+func (c *APIClient) AdjustMargin(ctx context.Context, clientID, positionID string, delta float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/margin/positions/" + url.PathEscape(positionID) + "/margin"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{"delta": delta})
+}
+
 // PlaceMarginOrder opens paper margin long/short.
 func (c *APIClient) PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error) {
 	body := map[string]any{

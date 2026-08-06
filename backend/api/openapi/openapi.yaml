@@ -1675,13 +1675,36 @@ paths:
                   count: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/mode:
+    put:
+      summary: Set paper margin mode (isolated or cross)
+      description: |
+        Account-wide margin mode. Cannot change while any open margin position or pending
+        margin limit order exists. Default is isolated.
+      operationId: setMarginMode
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                clientId: { type: string }
+                mode: { type: string, enum: [isolated, cross] }
+      responses:
+        '200':
+          description: Mode updated
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/margin/orders:
     post:
       summary: Open paper margin long/short (market or limit)
       description: |
-        Isolated margin position. Leverage 1–10x. Market opens immediately at last price;
-        limit rests until last crosses limitPrice (long: last ≤ limit; short: last ≥ limit).
-        Initial margin = qty * price / leverage is taken from available cash (or reserved for limits).
+        Uses account marginMode (isolated or cross). Leverage 1–10x. Market opens immediately;
+        limit rests until last crosses limitPrice and reserves required margin until fill/cancel.
+        Initial margin = qty * price / leverage from available cash.
         Optional stopLoss / takeProfit. Simulated only — not real money.
       operationId: placeMarginOrder
       tags: [Portfolio]
@@ -1797,6 +1820,7 @@ paths:
   /api/v1/portfolio/margin/positions/{id}/close:
     post:
       summary: Close all or part of a paper margin position at market
+      description: Partial close releases proportional margin and recalculates liquidation.
       operationId: closeMarginPosition
       tags: [Portfolio]
       parameters:
@@ -1822,6 +1846,42 @@ paths:
       responses:
         '200':
           description: Updated or closed position plus close trade
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/margin/positions/{id}/margin:
+    post:
+      summary: Add or remove margin from an isolated position
+      description: |
+        delta > 0 adds cash into the position margin; delta < 0 returns excess to cash.
+        Cannot go below initial margin for remaining size. Liquidation price is recalculated.
+        Only allowed in isolated mode.
+      operationId: adjustMargin
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta]
+              properties:
+                delta: { type: number, description: Positive to add, negative to remove }
+      responses:
+        '200':
+          description: Updated position
         '400':
           $ref: '#/components/responses/Error'
         '404':
@@ -2893,11 +2953,12 @@ components:
           description: Margin reserved by open margin limit orders
         availableCash:
           type: number
-          description: cashBalance minus reservedCash and reservedMargin
+          description: Free cash after spot/margin reservations; cross mode also adds margin unrealized PnL
         positionsValue: { type: number }
+        marginMode: { type: string, enum: [isolated, cross] }
         marginLocked:
           type: number
-          description: Isolated margin in open margin positions (already deducted from cash)
+          description: Margin in open margin positions (already deducted from cash)
         marginUnrealizedPnL: { type: number }
         marginEquity: { type: number }
         equity: { type: number }
@@ -2920,6 +2981,7 @@ components:
         exchange: { type: string }
         symbol: { type: string }
         side: { type: string, enum: [long, short] }
+        mode: { type: string, enum: [isolated, cross] }
         quantity: { type: number }
         entryPrice: { type: number }
         leverage: { type: integer }

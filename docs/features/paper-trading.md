@@ -32,9 +32,9 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
 
-### Margin (isolated leverage)
+### Margin (isolated & cross)
 
-See `docs/features/paper-margin.md`. Snapshot includes `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `reservedMargin`, `marginPositions`. Liquidation and SL/TP run on the same worker as pending spot fills.
+See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mode locked while open positions or pending margin orders exist. Isolated supports add/remove margin. Limit orders reserve margin until fill/cancel. Snapshot includes `marginMode`, `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `reservedMargin`, `marginPositions`.
 
 ### Recurring buys (DCA)
 
