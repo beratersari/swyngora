@@ -747,3 +747,278 @@ func TestMargin_DebtCASRejectsStaleRepay(t *testing.T) {
 			got.DebtPrincipal, got.DebtInterest, fresh.DebtPrincipal, fresh.DebtInterest)
 	}
 }
+
+func countMarginCloseActions(t *testing.T, svc *Service, clientID, positionID string) (closes int, liquidations int, totalQty float64) {
+	t.Helper()
+	trades, err := svc.ListMarginTrades(ctxBg(), clientID, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tr := range trades {
+		if tr.PositionID != positionID {
+			continue
+		}
+		switch tr.Action {
+		case "close", "partial_close", "stop_loss", "take_profit":
+			closes++
+			totalQty += tr.Quantity
+		case "liquidation":
+			liquidations++
+			closes++
+			totalQty += tr.Quantity
+		}
+	}
+	return closes, liquidations, totalQty
+}
+
+func ctxBg() context.Context { return context.Background() }
+
+// setupUnderwaterLong opens a 5x long and forces interest so liq > mark (ready to liquidate).
+func setupUnderwaterLong(t *testing.T, clientID string, mark string) (*Service, *domain.MarginPosition) {
+	t.Helper()
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|ETHUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: clientID, StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: clientID, Symbol: "ETHUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Mark near classic liq; after interest 0.6, liq ~81.1 → liquidate.
+	svc.market = &fakePx{prices: map[string]string{"binance|ETHUSDT": mark}}
+	last := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
+	cur, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur.LastInterestAt = last
+	cur.DebtInterest = 0
+	if err := svc.store.UpdateMarginPosition(ctx, *cur); err != nil {
+		t.Fatal(err)
+	}
+	cur, _ = svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	liqAfter, _ := domain.LiquidationPriceWithDebt(domain.MarginLong, 100, 1, 20, 80, 0.6, domain.DefaultMaintenanceMarginRate)
+	snap := domain.DebtSnapshotFromPos(cur)
+	ok, err := svc.store.AccrueInterestCAS(ctx, pos.ID, snap, 0.6, last.Add(2*time.Hour), liqAfter, time.Now().UTC())
+	if err != nil || !ok {
+		t.Fatalf("seed interest cas ok=%v err=%v", ok, err)
+	}
+	got, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc, got
+}
+
+// TestMargin_ConcurrentLiquidateAndUserClose: interest-path liquidation races user full close.
+// Exactly one close trade; position closed once; qty and cash stay consistent.
+func TestMargin_ConcurrentLiquidateAndUserClose(t *testing.T) {
+	const clientID = "race-liq-close"
+	svc, pos := setupUnderwaterLong(t, clientID, "81")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	var wg sync.WaitGroup
+	var userCloseOK, liqOK atomic.Int32
+	// Interest worker may try liquidate after re-read; maintenance also liquidates; user closes.
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, nLiq, err := svc.ProcessMarginInterest(ctx, now); err == nil && nLiq > 0 {
+				liqOK.Add(int32(nLiq))
+			}
+		}()
+	}
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, nLiq, _, err := svc.ProcessMarginMaintenance(ctx, now); err == nil && nLiq > 0 {
+				liqOK.Add(int32(nLiq))
+			}
+		}()
+	}
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := svc.CloseMarginPosition(ctx, MarginCloseInput{
+				ClientID: clientID, PositionID: pos.ID,
+			})
+			if err == nil {
+				userCloseOK.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	got, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.MarginPositionClosed {
+		t.Fatalf("want closed, got status=%s qty=%v debtP=%v", got.Status, got.Quantity, got.DebtPrincipal)
+	}
+	if got.Quantity > domain.PositionEpsilon || got.DebtPrincipal > domain.PositionEpsilon || got.DebtInterest > domain.PositionEpsilon {
+		t.Fatalf("closed position residual: qty=%v debtP=%v debtI=%v", got.Quantity, got.DebtPrincipal, got.DebtInterest)
+	}
+	closes, _, totalQty := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes != 1 {
+		t.Fatalf("want exactly 1 close/liquidation trade, got closes=%d userOK=%d liqOK=%d", closes, userCloseOK.Load(), liqOK.Load())
+	}
+	if math.Abs(totalQty-1) > 1e-9 {
+		t.Fatalf("close qty sum=%v want 1 (no double size)", totalQty)
+	}
+	view, err := svc.View(ctx, clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cash must move once: not double-debited toward zero.
+	// Floor roughly 10000 - margin20 - loss - debt ≈ high 9800s; generous band.
+	if view.CashBalance < 9800 || view.CashBalance > 10000 {
+		t.Fatalf("cash out of expected band after single close: %v", view.CashBalance)
+	}
+}
+
+// TestMargin_ConcurrentLiquidateAndFullRepay: liquidation after interest races full debt repay.
+// At most one close trade; no zombie debt; cash not double-charged for principal.
+func TestMargin_ConcurrentLiquidateAndFullRepay(t *testing.T) {
+	const clientID = "race-liq-repay"
+	svc, pos := setupUnderwaterLong(t, clientID, "81")
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	var wg sync.WaitGroup
+	var repayOK, liqOK atomic.Int32
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, n, err := svc.ProcessMarginInterest(ctx, now); err == nil && n > 0 {
+				liqOK.Add(int32(n))
+			}
+			if _, n, _, err := svc.ProcessMarginMaintenance(ctx, now); err == nil && n > 0 {
+				liqOK.Add(int32(n))
+			}
+		}()
+	}
+	for i := 0; i < 6; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, err := svc.RepayMarginDebt(ctx, MarginRepayInput{
+				ClientID: clientID, PositionID: pos.ID, Amount: 1e9,
+			})
+			if err == nil {
+				repayOK.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	got, err := svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Either still open with zero debt (repay won, liq no longer required or not finished),
+	// or closed by liquidation (with debt cleared on close).
+	if got.Status == domain.MarginPositionOpen {
+		if got.DebtPrincipal > domain.PositionEpsilon || got.DebtInterest > domain.PositionEpsilon {
+			t.Fatalf("open position must not keep debt after full repay race: P=%v I=%v", got.DebtPrincipal, got.DebtInterest)
+		}
+		// Force maintenance once more — if still breached, single liquidate; if safe, stay open.
+		_, _, _, _ = svc.ProcessMarginMaintenance(ctx, now)
+		got, _ = svc.store.GetMarginPosition(ctx, clientID, pos.ID)
+	}
+	if got.Status == domain.MarginPositionClosed {
+		if got.DebtPrincipal > domain.PositionEpsilon || got.DebtInterest > domain.PositionEpsilon {
+			t.Fatalf("closed with residual debt: P=%v I=%v", got.DebtPrincipal, got.DebtInterest)
+		}
+		if got.Quantity > domain.PositionEpsilon {
+			t.Fatalf("closed with residual qty: %v", got.Quantity)
+		}
+	}
+	closes, _, totalQty := countMarginCloseActions(t, svc, clientID, pos.ID)
+	if closes > 1 {
+		t.Fatalf("want at most 1 close/liquidation trade, got %d (double close)", closes)
+	}
+	if closes == 1 && math.Abs(totalQty-1) > 1e-9 {
+		t.Fatalf("close qty sum=%v want 1", totalQty)
+	}
+	// At most one successful full repay (others see no debt or not open).
+	if repayOK.Load() > 1 {
+		t.Fatalf("multiple successful full repays: %d (payment double-applied?)", repayOK.Load())
+	}
+	view, err := svc.View(ctx, clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Principal ~80 paid at most once; cash should not drop as if paid twice (~160).
+	if view.CashBalance < 9850 {
+		t.Fatalf("cash too low (double principal charge?): %v repayOK=%d liqOK=%d", view.CashBalance, repayOK.Load(), liqOK.Load())
+	}
+}
+
+// TestMargin_CloseCASRejectsStaleQuantity: partial close invalidates a concurrent full-close snapshot.
+func TestMargin_CloseCASRejectsStaleQuantity(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "cas-qty", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "cas-qty", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur, _ := svc.store.GetMarginPosition(ctx, "cas-qty", pos.ID)
+	stale := domain.PositionCloseSnapshotFromPos(cur)
+	// User partial close lands first.
+	_, _, err = svc.CloseMarginPosition(ctx, MarginCloseInput{
+		ClientID: "cas-qty", PositionID: pos.ID, Quantity: 0.5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Stale full close (pre-partial snapshot) must not apply a second/full overwrite.
+	p, _ := svc.store.GetPortfolio(ctx, "cas-qty")
+	now := time.Now().UTC()
+	p.CashBalance += 10
+	p.UpdatedAt = now
+	closed := *cur
+	closed.Quantity = 0
+	closed.Margin = 0
+	closed.DebtPrincipal = 0
+	closed.DebtInterest = 0
+	closed.Status = domain.MarginPositionClosed
+	closed.CloseReason = domain.MarginCloseLiquidation
+	closed.ClosedAt = &now
+	closed.UpdatedAt = now
+	tr := domain.MarginTrade{
+		ID: "stale-full-close", ClientID: "cas-qty", PositionID: pos.ID, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Side: domain.MarginLong, Action: "liquidation", Quantity: 1, Price: 100, Notional: 100,
+		CreatedAt: now,
+	}
+	err = svc.store.ApplyMarginClose(ctx, p, closed, tr, true, stale)
+	if !errors.Is(err, domain.ErrConflict) {
+		// Quantity changed → conflict; if already fully closed would be NotFound.
+		if !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("want ErrConflict (or NotFound) on stale full close, got %v", err)
+		}
+	}
+	got, _ := svc.store.GetMarginPosition(ctx, "cas-qty", pos.ID)
+	if got.Status != domain.MarginPositionOpen || math.Abs(got.Quantity-0.5) > 1e-9 {
+		t.Fatalf("partial close must remain; got %+v", got)
+	}
+	closes, _, _ := countMarginCloseActions(t, svc, "cas-qty", pos.ID)
+	if closes != 1 {
+		t.Fatalf("want only the real partial close trade, got %d", closes)
+	}
+}

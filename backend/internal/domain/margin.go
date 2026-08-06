@@ -625,13 +625,15 @@ type MarginPort interface {
 	// ApplyMarginOpen debits cash for margin, inserts position + trade atomically.
 	ApplyMarginOpen(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// ApplyMarginClose credits cash (margin release + realized), updates/closes position + trade atomically.
-	// expected must match current debt; returns ErrConflict if interest/repay raced.
-	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool, expected DebtSnapshot) error
+	// expected must match current debt + quantity; returns ErrConflict if interest/repay/close raced,
+	// or ErrNotFound if the position is already closed (idempotent concurrent liquidation).
+	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool, expected PositionCloseSnapshot) error
 	// ApplyMarginOpenFromOrder fills a limit order into a new position in one transaction.
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
 	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).
 	ApplyMarginAdjust(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade) error
 	// ApplyMarginRepay pays interest then principal. expected must match current debt or ErrConflict.
+	// Returns ErrNotFound if the position was closed concurrently (e.g. liquidation).
 	ApplyMarginRepay(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, expected DebtSnapshot) error
 	// UpdatePortfolioMarginMode sets account margin mode.
 	UpdatePortfolioMarginMode(ctx context.Context, clientID string, mode MarginMode, at time.Time) error
@@ -651,6 +653,13 @@ type DebtSnapshot struct {
 	LastInterestAt time.Time
 }
 
+// PositionCloseSnapshot is the CAS token for close/liquidation: debt + open quantity.
+// Two concurrent full closes cannot both succeed; a partial close invalidates a stale full close.
+type PositionCloseSnapshot struct {
+	DebtSnapshot
+	Quantity float64
+}
+
 // DebtSnapshotFromPos captures debt fields for CAS.
 func DebtSnapshotFromPos(p *MarginPosition) DebtSnapshot {
 	if p == nil {
@@ -658,5 +667,16 @@ func DebtSnapshotFromPos(p *MarginPosition) DebtSnapshot {
 	}
 	return DebtSnapshot{
 		Principal: p.DebtPrincipal, Interest: p.DebtInterest, LastInterestAt: p.LastInterestAt,
+	}
+}
+
+// PositionCloseSnapshotFromPos captures debt + quantity for close CAS.
+func PositionCloseSnapshotFromPos(p *MarginPosition) PositionCloseSnapshot {
+	if p == nil {
+		return PositionCloseSnapshot{}
+	}
+	return PositionCloseSnapshot{
+		DebtSnapshot: DebtSnapshotFromPos(p),
+		Quantity:     p.Quantity,
 	}
 }

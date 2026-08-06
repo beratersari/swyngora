@@ -251,11 +251,14 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 		}
 		now := time.Now().UTC()
-		// Accrue first so repayment sees latest interest (CAS; no-op if no hours).
-		_ = s.accruePositionInterest(ctx, pos, now)
+		// Accrue only (never liquidate here — liquidation is a separate exclusive close).
+		_ = s.accrueInterestOnly(ctx, pos, now)
 		pos, err = s.store.GetMarginPosition(ctx, clientID, pos.ID)
 		if err != nil {
 			return nil, nil, err
+		}
+		if pos.Status != domain.MarginPositionOpen {
+			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 		}
 		expected := domain.DebtSnapshotFromPos(pos)
 		totalDebt := pos.DebtPrincipal + pos.DebtInterest
@@ -302,6 +305,10 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 			_ = s.recomputeCrossLiquidations(ctx, clientID, now)
 			out, gerr := s.GetMarginPosition(ctx, clientID, pos.ID)
 			return out, &tr, gerr
+		}
+		// Concurrent liquidation closed the position — repay cannot apply.
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 		}
 		if !errors.Is(err, domain.ErrConflict) {
 			return nil, nil, err
@@ -376,23 +383,28 @@ func (s *Service) ProcessMarginInterest(ctx context.Context, now time.Time) (acc
 	return accrued, liquidated, nil
 }
 
-// accruePositionInterest applies catch-up via CAS (used from repay/close/get paths).
+// accrueInterestOnly applies catch-up via CAS without liquidating.
+// Used from repay/close/get so a concurrent user action cannot nest a second close.
 // Safe under concurrent workers; no-op if principal is zero or clock is not ahead of last_interest_at.
-func (s *Service) accruePositionInterest(ctx context.Context, pos *domain.MarginPosition, now time.Time) error {
-	_, _, err := s.accrueInterestAndMaybeLiquidate(ctx, pos, now)
+func (s *Service) accrueInterestOnly(ctx context.Context, pos *domain.MarginPosition, now time.Time) error {
+	_, err := s.accrueInterestCAS(ctx, pos, now)
 	return err
 }
 
-// accrueInterestAndMaybeLiquidate accrues interest with CAS, updates liquidation price,
-// and if the mark has crossed the new liq after interest, closes the position in this path.
-// Returns (interestApplied, wasLiquidated, error).
-func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *domain.MarginPosition, now time.Time) (applied, liquidated bool, err error) {
+// accruePositionInterest is the safe catch-up used by read/repay/close paths (no liquidate).
+func (s *Service) accruePositionInterest(ctx context.Context, pos *domain.MarginPosition, now time.Time) error {
+	return s.accrueInterestOnly(ctx, pos, now)
+}
+
+// accrueInterestCAS applies interest with full debt snapshot CAS and updates pos in memory on success.
+// Does not liquidate. Returns whether interest (or cursor seed) was applied.
+func (s *Service) accrueInterestCAS(ctx context.Context, pos *domain.MarginPosition, now time.Time) (applied bool, err error) {
 	if pos == nil || pos.Status != domain.MarginPositionOpen {
-		return false, false, nil
+		return false, nil
 	}
 	// Fully paid principal: interest stops (no accrual, no CAS).
 	if pos.DebtPrincipal <= domain.PositionEpsilon {
-		return false, false, nil
+		return false, nil
 	}
 	now = now.UTC()
 	snap := domain.DebtSnapshotFromPos(pos)
@@ -405,53 +417,113 @@ func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *doma
 		liq, _ := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
 		claimed, cerr := s.store.AccrueInterestCAS(ctx, pos.ID, snap, pos.DebtInterest, seed, liq, now)
 		if cerr != nil {
-			return false, false, cerr
+			return false, cerr
 		}
 		if claimed {
 			pos.LastInterestAt = seed
 		}
-		return false, false, nil
+		return false, nil
 	}
 	// Clock backward or no full hour: do not remove interest or reprocess.
 	ni, nl, hours := domain.AccrueInterestHours(pos.DebtPrincipal, pos.DebtInterest, snap.LastInterestAt, now, domain.DefaultMarginHourlyInterestRate)
-	if hours > 0 {
-		liq, lerr := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, ni)
-		if lerr != nil {
-			return false, false, lerr
-		}
-		// Full debt CAS: repay/close that changed principal/interest causes claimed=false.
-		claimed, cerr := s.store.AccrueInterestCAS(ctx, pos.ID, snap, ni, nl, liq, now)
-		if cerr != nil {
-			return false, false, cerr
-		}
-		if !claimed {
-			// Another worker/repay/close changed debt or already advanced this period.
-			return false, false, nil
-		}
-		pos.DebtInterest = ni
-		pos.LastInterestAt = nl
-		pos.LiquidationPrice = liq
-		pos.UpdatedAt = now
-		applied = true
-
-		// Same operation: liquidate if mark already past new liquidation after interest.
-		if s.market != nil {
-			mark, merr := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
-			if merr == nil && mark > 0 && domain.ShouldLiquidate(pos.Side, mark, liq) {
-				exit := liq
-				if pos.Side == domain.MarginLong && mark < exit {
-					exit = mark
-				}
-				if pos.Side == domain.MarginShort && mark > exit {
-					exit = mark
-				}
-				if _, _, ce := s.closeMarginAt(ctx, pos, pos.Quantity, exit, domain.MarginCloseLiquidation); ce == nil {
-					return true, true, nil
-				}
-			}
-		}
+	if hours <= 0 {
+		return false, nil
 	}
-	return applied, false, nil
+	liq, lerr := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, ni)
+	if lerr != nil {
+		return false, lerr
+	}
+	// Full debt CAS: repay/close that changed principal/interest causes claimed=false.
+	claimed, cerr := s.store.AccrueInterestCAS(ctx, pos.ID, snap, ni, nl, liq, now)
+	if cerr != nil {
+		return false, cerr
+	}
+	if !claimed {
+		// Another worker/repay/close changed debt or already advanced this period.
+		return false, nil
+	}
+	pos.DebtInterest = ni
+	pos.LastInterestAt = nl
+	pos.LiquidationPrice = liq
+	pos.UpdatedAt = now
+	return true, nil
+}
+
+// accrueInterestAndMaybeLiquidate accrues interest with CAS, then may liquidate once if mark
+// is past the new liq. Liquidation is idempotent under concurrent user close/repay.
+// Returns (interestApplied, wasLiquidated, error).
+func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *domain.MarginPosition, now time.Time) (applied, liquidated bool, err error) {
+	applied, err = s.accrueInterestCAS(ctx, pos, now)
+	if err != nil || !applied {
+		return applied, false, err
+	}
+	// Same operation: re-read after interest, re-check liquidate (user may have repaid/closed).
+	if s.market == nil {
+		return true, false, nil
+	}
+	did, lerr := s.tryLiquidateIfBreached(ctx, pos.ClientID, pos.ID, now)
+	return true, did, lerr
+}
+
+// tryLiquidateIfBreached re-reads the position and closes it once if still open and underwater.
+// Concurrent user close/repay is safe: already-closed → no-op; debt/qty CAS + retries on conflict.
+// Returns true only when this call successfully applied a liquidation close trade.
+func (s *Service) tryLiquidateIfBreached(ctx context.Context, clientID, positionID string, now time.Time) (bool, error) {
+	cur, err := s.store.GetMarginPosition(ctx, clientID, positionID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if cur.Status != domain.MarginPositionOpen {
+		return false, nil
+	}
+	mark, merr := s.lastPrice(ctx, string(cur.Exchange), cur.Symbol)
+	if merr != nil || mark <= 0 {
+		return false, nil
+	}
+	// Recompute liq from current debt (may have been partially repaid after interest).
+	liq := cur.LiquidationPrice
+	if fresh, lerr := s.liqPriceFor(cur.Side, cur.EntryPrice, cur.Quantity, cur.Margin, cur.DebtPrincipal, cur.DebtInterest); lerr == nil {
+		liq = fresh
+	}
+	if !domain.ShouldLiquidate(cur.Side, mark, liq) {
+		return false, nil
+	}
+	exit := liq
+	if cur.Side == domain.MarginLong && mark < exit {
+		exit = mark
+	}
+	if cur.Side == domain.MarginShort && mark > exit {
+		exit = mark
+	}
+	_, _, cerr := s.closeMarginAt(ctx, cur, cur.Quantity, exit, domain.MarginCloseLiquidation)
+	if cerr == nil {
+		return true, nil
+	}
+	// Already closed by concurrent user close (or another liquidator): not an error.
+	if errors.Is(cerr, domain.ErrNotFound) || isPositionNotOpenErr(cerr) {
+		return false, nil
+	}
+	// Conflict exhausted or other — surface only unexpected failures.
+	if errors.Is(cerr, domain.ErrConflict) {
+		return false, nil
+	}
+	return false, cerr
+}
+
+func isPositionNotOpenErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, domain.ErrInvalidArgument) && strings.Contains(err.Error(), "position is not open") {
+		return true
+	}
+	if errors.Is(err, domain.ErrNotFound) {
+		return true
+	}
+	return false
 }
 
 // PlaceMarginOrder opens a market position immediately or rests a limit open order.
@@ -865,16 +937,9 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 		if merr != nil || mark <= 0 {
 			continue
 		}
-		// Liquidation first
+		// Liquidation first (idempotent if user/interest path already closed).
 		if domain.ShouldLiquidate(pos.Side, mark, pos.LiquidationPrice) {
-			exit := pos.LiquidationPrice
-			if pos.Side == domain.MarginLong && mark < exit {
-				exit = mark
-			}
-			if pos.Side == domain.MarginShort && mark > exit {
-				exit = mark
-			}
-			if _, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, exit, domain.MarginCloseLiquidation); e == nil {
+			if did, _ := s.tryLiquidateIfBreached(ctx, pos.ClientID, pos.ID, now); did {
 				liquidated++
 			}
 			continue
@@ -971,14 +1036,20 @@ func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID strin
 	}
 	// Liquidate worst (most negative U) first until equity recovers or none left
 	n := 0
-	// simple: close all if under maint (safe for paper)
+	// simple: close all if under maint (safe for paper); idempotent under concurrent user close
 	for i := range list {
 		mark := list[i].MarkPrice
 		if mark <= 0 {
 			mark = list[i].EntryPrice
 		}
-		if _, _, e := s.closeMarginAt(ctx, &list[i], list[i].Quantity, mark, domain.MarginCloseLiquidation); e == nil {
+		_, _, e := s.closeMarginAt(ctx, &list[i], list[i].Quantity, mark, domain.MarginCloseLiquidation)
+		if e == nil {
 			n++
+			continue
+		}
+		// Concurrent closer already finished — do not count as failure or second close.
+		if isPositionNotOpenErr(e) || errors.Is(e, domain.ErrNotFound) {
+			continue
 		}
 	}
 	_ = now
@@ -1079,11 +1150,12 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			return nil, nil, err
 		}
 		if cur.Status != domain.MarginPositionOpen {
+			// Concurrent liquidation/user close already finished — single-close invariant.
 			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 		}
 		now := time.Now().UTC()
-		// Accrue under CAS so close sees latest interest; then re-read for snapshot.
-		_ = s.accruePositionInterest(ctx, cur, now)
+		// Accrue only (no nested liquidate) so close and liquidate cannot both fire from here.
+		_ = s.accrueInterestOnly(ctx, cur, now)
 		cur, err = s.store.GetMarginPosition(ctx, clientID, id)
 		if err != nil {
 			return nil, nil, err
@@ -1091,7 +1163,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		if cur.Status != domain.MarginPositionOpen {
 			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 		}
-		expected := domain.DebtSnapshotFromPos(cur)
+		expected := domain.PositionCloseSnapshotFromPos(cur)
 
 		cq := closeQty
 		if cq > cur.Quantity {
@@ -1123,6 +1195,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		p.RealizedPnLTotal += realized
 		p.UpdatedAt = now
 
+		closeReason := reason
 		action := "close"
 		switch reason {
 		case domain.MarginCloseLiquidation:
@@ -1151,7 +1224,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			updated.DebtPrincipal = 0
 			updated.DebtInterest = 0
 			updated.Status = domain.MarginPositionClosed
-			updated.CloseReason = reason
+			updated.CloseReason = closeReason
 			updated.ClosedAt = &now
 			updated.StopLoss = nil
 			updated.TakeProfit = nil
@@ -1173,8 +1246,8 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			if lerr == nil {
 				updated.LiquidationPrice = liq
 			}
-			if reason == "" {
-				reason = domain.MarginClosePartialUser
+			if closeReason == "" {
+				closeReason = domain.MarginClosePartialUser
 			}
 		}
 		err = s.store.ApplyMarginClose(ctx, p, updated, tr, full, expected)
@@ -1189,10 +1262,14 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			}
 			return out, &tr, nil
 		}
+		// Another closer won — do not insert a second close trade.
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
+		}
 		if !errors.Is(err, domain.ErrConflict) {
 			return nil, nil, err
 		}
-		// Interest raced with close — retry with fresh debt snapshot.
+		// Interest, repay, or partial close raced — retry with fresh debt+qty snapshot.
 	}
 	return nil, nil, fmt.Errorf("%w: concurrent debt update, try again", domain.ErrConflict)
 }

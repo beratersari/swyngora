@@ -38,7 +38,8 @@ Users want leveraged long/short paper trading without real money: market and lim
   - **Full debt-snapshot CAS** (`debtPrincipal` + `debtInterest` + `lastInterestAt`): two workers cannot apply the same window; restarts do not reprocess a completed period; interest never accrues onto debt that was already repaid or reduced by a concurrent close
   - **Clock skew:** if wall clock moves backward, interest is neither removed nor re-added for past periods
   - **Paid debt:** when `debtPrincipal` is 0, accrual stops (no CAS write)
-  - **Same operation after interest:** recompute liquidation price; if mark is already past liq, **liquidate immediately**
+  - **Same operation after interest:** recompute liquidation price from a **fresh re-read**; if mark is already past liq, **liquidate once**
+  - **Single close under concurrency:** liquidation, user close, and repay share debt+quantity CAS; an already-closed position is a no-op for liquidators (no second close trade, no double cash/debt adjustment). Repay/close paths **accrue interest only** — they never nest a second liquidation close
 - **Borrow limit:** total debt notional ≤ `startingBalance * 9` (10x − own capital)
 
 ### Partial close
