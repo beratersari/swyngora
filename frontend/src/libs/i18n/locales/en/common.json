@@ -5,7 +5,9 @@
     "markets": "Markets",
     "watchlist": "Watchlist",
     "pumps": "Pumps",
-    "ai": "AI"
+    "ai": "AI",
+    "alerts": "Alerts",
+    "compare": "Compare"
   },
   "footer": {
     "disclaimer": "{{appName}} · informational market data · not financial advice"
@@ -18,7 +20,8 @@
   "actions": {
     "retry": "Retry",
     "refresh": "Refresh",
-    "reload": "Reload page"
+    "reload": "Reload page",
+    "cancel": "Cancel"
   },
   "status": {
     "updating": "updating…",

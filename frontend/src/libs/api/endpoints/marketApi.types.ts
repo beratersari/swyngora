@@ -62,3 +62,6 @@ export type PumpEventDto = components['schemas']['PumpEvent'];
 export type PumpEventsResponse = components['schemas']['PumpEventsResponse'];
 export type PumpScanHitDto = components['schemas']['PumpScanHit'];
 export type ScanPumpEventsResponse = components['schemas']['PumpScanResponse'];
+
+export type DelistScheduleResponse = components['schemas']['DelistScheduleResponse'];
+export type DelistScheduleItem = components['schemas']['DelistScheduleItem'];

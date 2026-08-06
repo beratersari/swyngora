@@ -12,6 +12,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
 | `list_spot_markets` | Search/sort spot list |
+| `list_delist_schedule` | Binance scheduled spot delists |
 | `get_indicators` | RSI/EMA |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |

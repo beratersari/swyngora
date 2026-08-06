@@ -1,0 +1,13 @@
+{
+  "title": "Karşılaştır",
+  "subtitle": "En fazla {{max}} çifti ilk bardan % değişim olarak üst üste bindirin. Yalnızca bilgilendirme.",
+  "exchange": "Borsa",
+  "symbol": "Sembol",
+  "interval": "Aralık",
+  "add": "Çift ekle",
+  "remove": "Kaldır",
+  "emptyHint": "Göreli performansı görmek için 2–3 çift ekleyin.",
+  "loadFailed": "Mum verisi yüklenemedi",
+  "resource": "karşılaştırma serisi",
+  "axisHint": "Y ekseni: penceredeki ilk mum kapanışına göre % değişim."
+}

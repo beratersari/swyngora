@@ -1,8 +1,16 @@
 import { Button, Tag } from 'antd';
 import { StarFilled, StarOutlined } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
-import { changeTone, formatChangePercent, formatPrice, formatSymbolDisplay } from '@/libs/utils';
+import {
+  changeTone,
+  formatChangePercent,
+  formatDelistDate,
+  formatPrice,
+  formatSymbolDisplay,
+} from '@/libs/utils';
 import {
   BackLink,
   HeaderCard,
@@ -24,8 +32,12 @@ export function DetailHeader({
   watched = false,
   onToggleWatch,
   watchLoading = false,
+  alertTo,
+  compareTo,
+  delistTime,
 }: DetailHeaderProps) {
-  const { t } = useTranslation(['detail', 'watchlist']);
+  const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets']);
+  const delistLabel = formatDelistDate(delistTime);
 
   return (
     <HeaderCard>
@@ -37,6 +49,11 @@ export function DetailHeader({
               {formatSymbolDisplay(symbol)}
             </Text>
             <Tag color="processing">{exchange}</Tag>
+            {delistLabel ? (
+              <BrandTag variant="delist">
+                {t('markets:table.delistTag', { date: delistLabel })}
+              </BrandTag>
+            ) : null}
             {onToggleWatch ? (
               <Button
                 type="text"
@@ -46,6 +63,20 @@ export function DetailHeader({
                 onClick={onToggleWatch}
                 aria-label={watched ? t('watchlist:remove') : t('watchlist:add')}
               />
+            ) : null}
+            {alertTo ? (
+              <Link to={alertTo}>
+                <Button size="small" type="link">
+                  {t('alerts:addFromDetail', { defaultValue: 'Add alert' })}
+                </Button>
+              </Link>
+            ) : null}
+            {compareTo ? (
+              <Link to={compareTo}>
+                <Button size="small" type="link">
+                  {t('alerts:addToCompare', { defaultValue: 'Compare' })}
+                </Button>
+              </Link>
             ) : null}
             {assetName ? (
               <Text variant="body" color="secondary">
@@ -61,10 +92,11 @@ export function DetailHeader({
           <Text
             variant="label"
             color={changeTone(priceChangePercent)}
+            mono
             isLoading={isLoading}
             skeletonWidth={72}
           >
-            {t('change24h', { change: formatChangePercent(priceChangePercent) })}
+            {formatChangePercent(priceChangePercent)}
           </Text>
         </PriceBlock>
       </TopRow>

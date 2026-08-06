@@ -1,0 +1,13 @@
+{
+  "title": "Compare",
+  "subtitle": "Overlay up to {{max}} pairs as % change from the first bar. Informational only.",
+  "exchange": "Exchange",
+  "symbol": "Symbol",
+  "interval": "Interval",
+  "add": "Add pair",
+  "remove": "Remove",
+  "emptyHint": "Add 2–3 pairs to compare relative performance.",
+  "loadFailed": "Could not load candles",
+  "resource": "compare series",
+  "axisHint": "Y-axis: % change from the first candle close in the window."
+}

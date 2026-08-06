@@ -32,6 +32,7 @@ const (
 type Client struct {
 	baseURL        string // official Spot REST (api.binance.com)
 	productBaseURL string // product catalog host (www.binance.com bapi)
+	apiKey         string // optional; required for delist schedule
 	httpClient     *http.Client
 	candles        *cache.TTL[[]domain.Candle]
 	tickers        *cache.TTL[*domain.Ticker24h]
@@ -53,6 +54,7 @@ type Client struct {
 type Options struct {
 	BaseURL         string
 	ProductBaseURL  string // default https://www.binance.com — product catalog with circulating supply
+	APIKey          string // optional BINANCE_API_KEY for delist schedule
 	HTTPClient      *http.Client
 	CandleCache     *cache.TTL[[]domain.Candle]
 	TickerCache     *cache.TTL[*domain.Ticker24h]
@@ -77,6 +79,7 @@ func NewClient(opts Options) *Client {
 	return &Client{
 		baseURL:        base,
 		productBaseURL: productBase,
+		apiKey:         strings.TrimSpace(opts.APIKey),
 		httpClient:     hc,
 		candles:        opts.CandleCache,
 		tickers:        opts.TickerCache,

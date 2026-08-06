@@ -18,9 +18,19 @@ export function MarketsToolbar({
 }: MarketsToolbarProps) {
   const { t } = useTranslation('markets');
 
+  // Put "Delist" first so it is obvious in the tag filter (not buried alphabetically).
+  const sortedTags = [...tags].sort((a, b) => {
+    const aD = a.toLowerCase() === 'delist' ? 0 : 1;
+    const bD = b.toLowerCase() === 'delist' ? 0 : 1;
+    if (aD !== bD) return aD - bD;
+    return a.localeCompare(b);
+  });
   const tagOptions = [
     { value: '', label: t('filters.allTags') },
-    ...tags.map((item) => ({ value: item, label: item })),
+    ...sortedTags.map((item) => ({
+      value: item,
+      label: item.toLowerCase() === 'delist' ? t('filters.delistTag') : item,
+    })),
   ];
 
   return (

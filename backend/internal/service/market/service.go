@@ -15,6 +15,8 @@ import (
 type Service struct {
 	markets map[domain.Exchange]domain.MarketDataPort
 	supply  domain.SupplyPort
+	delist  domain.SpotDelistStore
+	delistEnabled bool
 }
 
 // New constructs a market application service with a single market data port
@@ -34,6 +36,48 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 		}
 	}
 	return &Service{markets: cp, supply: supply}
+}
+
+// WithDelistStore attaches optional delist schedule for spot enrichment.
+func (s *Service) WithDelistStore(store domain.SpotDelistStore) *Service {
+	if s != nil {
+		s.delist = store
+	}
+	return s
+}
+
+// WithDelistEnabled marks whether hourly delist refresh is configured.
+func (s *Service) WithDelistEnabled(enabled bool) *Service {
+	if s != nil {
+		s.delistEnabled = enabled
+	}
+	return s
+}
+
+// DelistEnabled reports whether delist data can be populated.
+func (s *Service) DelistEnabled() bool {
+	return s != nil && s.delistEnabled
+}
+
+// ListDelistSchedule returns cached schedule for an exchange.
+func (s *Service) ListDelistSchedule(exchange string) ([]domain.SpotDelistEntry, error) {
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	if s.delist == nil {
+		return []domain.SpotDelistEntry{}, nil
+	}
+	return s.delist.List(ex), nil
+}
+
+// DelistTime looks up scheduled delist for one symbol.
+func (s *Service) DelistTime(exchange, symbol string) (time.Time, bool) {
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil || s.delist == nil {
+		return time.Time{}, false
+	}
+	return s.delist.DelistTime(ex, symbol)
 }
 
 func (s *Service) port(ex domain.Exchange) (domain.MarketDataPort, error) {
@@ -173,15 +217,22 @@ func (s *Service) ListProductTags(ctx context.Context, exchange string) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	if len(tags) > 0 || ex == domain.ExchangeBinance {
-		return tags, nil
+	if len(tags) == 0 && ex != domain.ExchangeBinance {
+		if bp, berr := s.port(domain.ExchangeBinance); berr == nil {
+			tags, err = bp.ListProductTags(ctx)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
-	// Cross-venue: reuse Binance marketing tags for the dropdown.
-	bp, berr := s.port(domain.ExchangeBinance)
-	if berr != nil {
-		return tags, nil
+	return s.withDelistFilterTag(ex, tags), nil
+}
+
+func (s *Service) withDelistFilterTag(ex domain.Exchange, tags []string) []string {
+	if s.delist == nil || len(s.delist.List(ex)) == 0 {
+		return tags
 	}
-	return bp.ListProductTags(ctx)
+	return ensureTag(tags, domain.TagDelist)
 }
 
 // normalizeSymbolForExchange delegates to domain.NormalizeSymbol (shared with watchlist).
@@ -220,6 +271,7 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 	// Attach Binance product tags by base when the venue has none (Coinbase/Bybit).
 	// Must run before tag filters so ?tag=Meme works on every exchange.
 	s.enrichProductTags(ctx, all)
+	s.enrichDelistTimes(ex, all)
 
 	filtered := filterSpotMarkets(all, q)
 
@@ -772,4 +824,34 @@ func cmpMcapMax(a, b domain.SpotMarket, desc bool) int {
 	default:
 		return 0
 	}
+}
+
+
+func (s *Service) enrichDelistTimes(ex domain.Exchange, items []domain.SpotMarket) {
+	if s.delist == nil || len(items) == 0 {
+		return
+	}
+	for i := range items {
+		if t, ok := s.delist.DelistTime(ex, items[i].Symbol); ok {
+			tt := t
+			items[i].DelistTime = &tt
+			items[i].Tags = ensureTag(items[i].Tags, domain.TagDelist)
+		}
+	}
+}
+
+func ensureTag(tags []string, tag string) []string {
+	if tag == "" {
+		return tags
+	}
+	want := strings.ToLower(tag)
+	for _, t := range tags {
+		if strings.ToLower(strings.TrimSpace(t)) == want {
+			return tags
+		}
+	}
+	out := make([]string, 0, len(tags)+1)
+	out = append(out, tag)
+	out = append(out, tags...)
+	return out
 }

@@ -10,4 +10,7 @@ export type DetailHeaderProps = WithLoadingProps & {
   watched?: boolean;
   onToggleWatch?: () => void;
   watchLoading?: boolean;
+  alertTo?: string;
+  compareTo?: string;
+  delistTime?: string | null;
 };

@@ -26,6 +26,7 @@ type DataPort interface {
 	DetectPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ScanPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListExchanges(ctx context.Context) (json.RawMessage, error)
+	ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error)
 	AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error)
 	RemoveWatchlistItem(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
@@ -291,6 +292,18 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithDescription("List configured market venues and the default exchange."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ListExchanges(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+
+	s.AddTool(mcp.NewTool("list_delist_schedule",
+		mcp.WithDescription("List scheduled Binance spot delistings (symbol + UTC delist time). Empty if schedule not configured."),
+		mcp.WithString("exchange", mcp.Description("Venue id; default binance")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ListDelistSchedule(ctx, req.GetString("exchange", "binance"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

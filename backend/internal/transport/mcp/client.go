@@ -187,6 +187,15 @@ func (c *APIClient) ListExchanges(ctx context.Context) (json.RawMessage, error) 
 }
 
 // GetWatchlist fetches a client watchlist.
+
+func (c *APIClient) ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/delist-schedule", q)
+}
+
 func (c *APIClient) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("clientId", clientID)

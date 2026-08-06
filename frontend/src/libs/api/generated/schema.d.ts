@@ -77,6 +77,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/delist-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scheduled spot delistings
+         * @description Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
+         */
+        get: operations["listDelistSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/spot": {
         parameters: {
             query?: never;
@@ -887,6 +907,22 @@ export interface components {
             marketCapTotal?: number | null;
             /** @description USD price x max supply, or the string "∞" when max supply is undefined */
             marketCapMax?: (number | "∞") | null;
+            /**
+             * Format: date-time
+             * @description Scheduled spot delist time (UTC) when known
+             */
+            delistTime?: string | null;
+        };
+        DelistScheduleResponse: {
+            exchange?: string;
+            /** @description False when BINANCE_API_KEY is not configured */
+            enabled?: boolean;
+            items?: components["schemas"]["DelistScheduleItem"][];
+        };
+        DelistScheduleItem: {
+            symbol?: string;
+            /** Format: date-time */
+            delistTime?: string;
         };
     };
     responses: {
@@ -1032,6 +1068,29 @@ export interface operations {
                 };
             };
             502: components["responses"]["Error"];
+        };
+    };
+    listDelistSchedule: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "coinbase" | "bybit";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delist schedule snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelistScheduleResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     listSpotMarkets: {

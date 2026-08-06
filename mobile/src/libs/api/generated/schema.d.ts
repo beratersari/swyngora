@@ -77,6 +77,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/delist-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scheduled spot delistings
+         * @description Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
+         */
+        get: operations["listDelistSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/spot": {
         parameters: {
             query?: never;
@@ -168,7 +188,7 @@ export interface paths {
          * @description Fetches OHLCV candles from the selected exchange and computes:
          *     - RSI (Wilder's smoothing, default period 14)
          *     - EMA (default periods 12 and 26; seed = SMA of first period)
-         *     Informational only — not financial advice.
+         *     Informational only - not financial advice.
          */
         get: operations["getIndicators"];
         put?: never;
@@ -190,7 +210,7 @@ export interface paths {
          * Detect pump/dump events on one symbol
          * @description Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
          *     Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
-         *     Informational only — not financial advice.
+         *     Informational only - not financial advice.
          */
         get: operations["getPumpEvents"];
         put?: never;
@@ -211,7 +231,10 @@ export interface paths {
         /**
          * Scan top-volume symbols for recent pumps
          * @description Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
-         *     Informational only — not financial advice.
+         *     Omitted optional parameters use documented defaults; the response metadata echoes the
+         *     resolved values (not zeros/empty strings).
+         *     maxTotalEvents caps the aggregate number of events across all hits (not the hit count).
+         *     Informational only - not financial advice.
          */
         get: operations["scanPumpEvents"];
         put?: never;
@@ -235,7 +258,7 @@ export interface paths {
          * Latest RSI/EMA for many symbols (one exchange)
          * @description Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
          *     Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
-         *     Upstream concurrency is bounded process-wide. Informational only — not financial advice.
+         *     Upstream concurrency is bounded process-wide. Informational only - not financial advice.
          */
         post: operations["postIndicatorsBatch"];
         delete?: never;
@@ -262,6 +285,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/alerts/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get price-alert webhook URL for a client */
+        get: operations["getAlertWebhook"];
+        /**
+         * Set price-alert webhook URL and notification preferences
+         * @description Stores an absolute http(s) URL and preferences:
+         *     - deliveryMode immediate (default) or hourly_digest
+         *     - timeZone (IANA) and quietHours local start/end (HH:MM); ranges may cross midnight
+         *     Notifications created during quiet hours wait until quiet hours end.
+         *     Pending deliveries survive restarts and retry on failure.
+         */
+        put: operations["putAlertWebhook"];
+        post?: never;
+        /** Clear price-alert webhook URL */
+        delete: operations["deleteAlertWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List price alerts for a client */
+        get: operations["listPriceAlerts"];
+        put?: never;
+        /**
+         * Create a price alert (one-time or repeating)
+         * @description Creates an active alert for when last price goes above or below targetPrice.
+         *     mode=one_time (default): fires once then status becomes triggered.
+         *     mode=repeating: fires on each edge into the condition zone; does not re-fire while price
+         *     stays on that side; re-arms when price returns to the safe side. Informational only.
+         */
+        post: operations["createPriceAlert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one price alert */
+        get: operations["getPriceAlert"];
+        put?: never;
+        post?: never;
+        /** Delete a price alert */
+        delete: operations["deletePriceAlert"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/watchlist/items": {
         parameters: {
             query?: never;
@@ -275,6 +366,234 @@ export interface paths {
         post: operations["addWatchlistItem"];
         /** Remove a watchlist item */
         delete: operations["removeWatchlistItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paper portfolio snapshot
+         * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
+         */
+        get: operations["getPortfolio"];
+        put?: never;
+        /**
+         * Create a paper-trading portfolio
+         * @description Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
+         *     Paper trading only - not real money. Not financial advice.
+         */
+        post: operations["createPortfolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List paper pending orders
+         * @description Defaults to open orders. status=open|filled|canceled|rejected|all
+         */
+        get: operations["listPortfolioOrders"];
+        put?: never;
+        /**
+         * Place a paper order (market or pending)
+         * @description type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
+         *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
+         *     may fill partially and stay open until remaining size is zero; each fill is a trade history row.
+         *     Paper trading only - not real money.
+         */
+        post: operations["placePortfolioOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open paper pending order
+         * @description Only open orders can be canceled. Filled/canceled/rejected return 404. Canceled orders never fill.
+         */
+        delete: operations["cancelPortfolioOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper trade history */
+        get: operations["listPortfolioTrades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scanner rules */
+        get: operations["listScannerRules"];
+        put?: never;
+        /**
+         * Create a technical scanner rule
+         * @description Creates a rule evaluated against the client's watchlist symbols.
+         *     Types: rsi, ma_crossover, volume_increase. Informational only - not financial advice.
+         */
+        post: operations["createScannerRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a scanner rule */
+        get: operations["getScannerRule"];
+        put?: never;
+        post?: never;
+        /** Delete a scanner rule */
+        delete: operations["deleteScannerRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scanner match history
+         * @description Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
+         *     (candle open time) so the same bar is not stored twice.
+         */
+        get: operations["listScannerResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scanner backtests */
+        get: operations["listScannerBacktests"];
+        put?: never;
+        /**
+         * Start a historical scanner backtest
+         * @description Runs a rule over a symbol and date range in the background. Identical jobs
+         *     (same client, rule, symbol, range) return the existing pending/running/completed job.
+         *     Progress and signalCount update while running. Informational only.
+         */
+        post: operations["startScannerBacktest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get scanner backtest progress and summary */
+        get: operations["getScannerBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending or running backtest */
+        post: operations["cancelScannerBacktest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List backtest signals with forward returns
+         * @description Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
+         *     (percent price change after 1/5/20 calendar days when data exists).
+         */
+        get: operations["listScannerBacktestSignals"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -294,7 +613,7 @@ export interface paths {
          * @description Proxies to the Python multi-agent service (`AI_SERVICE_URL`).
          *     Market figures must come from tools on the assistant side.
          *     Returns 503 when AI is not configured; 502 on upstream failure.
-         *     Informational only — not financial advice.
+         *     Informational only - not financial advice.
          */
         post: operations["postAiChat"];
         delete?: never;
@@ -398,6 +717,102 @@ export interface components {
             offset?: number;
             items?: components["schemas"]["SpotMarket"][];
         };
+        PriceAlert: {
+            id?: string;
+            clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            condition?: "above" | "below";
+            targetPrice?: number;
+            /** @enum {string} */
+            mode?: "one_time" | "repeating";
+            /** @description Repeating only - ready to fire on next cross into the condition zone */
+            armed?: boolean;
+            /** @enum {string} */
+            status?: "active" | "triggered";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            triggeredAt?: string | null;
+            triggeredPrice?: number;
+        };
+        AlertWebhook: {
+            clientId?: string;
+            url?: string;
+            /** @enum {string} */
+            deliveryMode?: "immediate" | "hourly_digest";
+            timeZone?: string;
+            quietHours?: {
+                enabled?: boolean;
+                start?: string;
+                end?: string;
+            };
+            configured?: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PortfolioView: {
+            clientId?: string;
+            currency?: string;
+            startingBalance?: number;
+            cashBalance?: number;
+            /** @description Cash locked by open buy pending orders */
+            reservedCash?: number;
+            /** @description cashBalance minus reservedCash */
+            availableCash?: number;
+            positionsValue?: number;
+            equity?: number;
+            unrealizedPnL?: number;
+            realizedPnLTotal?: number;
+            totalPnL?: number;
+            positions?: Record<string, never>[];
+            note?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PendingOrder: {
+            id?: string;
+            clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            type?: "limit_buy" | "limit_sell" | "stop_loss";
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            /** @description Original order size */
+            quantity?: number;
+            filledQuantity?: number;
+            remainingQuantity?: number;
+            triggerPrice?: number;
+            /** @description Cash reserved for remaining buy size (remaining * triggerPrice) */
+            reservedCash?: number;
+            /** @description Position quantity reserved for remaining sell size */
+            reservedQuantity?: number;
+            /** @enum {string} */
+            timeInForce?: "gtc" | "ioc" | "fok";
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** @enum {string} */
+            status?: "open" | "filled" | "canceled" | "rejected";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            filledAt?: string | null;
+            /** Format: date-time */
+            canceledAt?: string | null;
+            /** @description Latest fill trade id */
+            fillTradeId?: string;
+            /** @description Latest fill price */
+            fillPrice?: number;
+            rejectReason?: string;
+            /** @description user | expired | ioc_remainder | ioc_no_fill | fok_unfilled */
+            cancelReason?: string;
+        };
         Watchlist: {
             clientId?: string;
             /** Format: date-time */
@@ -409,6 +824,60 @@ export interface components {
                 /** Format: date-time */
                 addedAt?: string;
             }[];
+        };
+        /** @description Single mechanical pump/dump window on a candle series */
+        PumpEvent: {
+            index?: number;
+            /** Format: date-time */
+            openTime?: string;
+            /** Format: date-time */
+            closeTime?: string;
+            startPrice?: number;
+            endPrice?: number;
+            returnPct?: number;
+            high?: number;
+            low?: number;
+            volume?: number;
+            volumeRatio?: number;
+            mode?: string;
+            windowBars?: number;
+        };
+        PumpEventsResponse: {
+            symbol?: string;
+            exchange?: string;
+            interval?: string;
+            lookbackHours?: number;
+            barsAnalyzed?: number;
+            minReturnPct?: number;
+            windowBars?: number;
+            mode?: string;
+            direction?: string;
+            eventCount?: number;
+            events?: components["schemas"]["PumpEvent"][];
+            note?: string;
+        };
+        PumpScanHit: {
+            symbol?: string;
+            exchange?: string;
+            interval?: string;
+            bestReturnPct?: number;
+            events?: components["schemas"]["PumpEvent"][];
+        };
+        PumpScanResponse: {
+            exchange?: string;
+            quote?: string;
+            interval?: string;
+            lookbackHours?: number;
+            minReturnPct?: number;
+            windowBars?: number;
+            mode?: string;
+            direction?: string;
+            symbolLimit?: number;
+            maxTotalEvents?: number;
+            hitCount?: number;
+            eventCount?: number;
+            hits?: components["schemas"]["PumpScanHit"][];
+            note?: string;
         };
         SpotMarket: {
             symbol?: string;
@@ -432,12 +901,28 @@ export interface components {
             circulatingSupply?: number | null;
             totalSupply?: number | null;
             maxSupply?: number | null;
-            /** @description USD price × circulating supply */
+            /** @description USD price x circulating supply */
             marketCapCirculating?: number | null;
-            /** @description USD price × total supply */
+            /** @description USD price x total supply */
             marketCapTotal?: number | null;
-            /** @description USD price × max supply, or the string "∞" when max supply is undefined */
+            /** @description USD price x max supply, or the string "∞" when max supply is undefined */
             marketCapMax?: (number | "∞") | null;
+            /**
+             * Format: date-time
+             * @description Scheduled spot delist time (UTC) when known
+             */
+            delistTime?: string | null;
+        };
+        DelistScheduleResponse: {
+            exchange?: string;
+            /** @description False when BINANCE_API_KEY is not configured */
+            enabled?: boolean;
+            items?: components["schemas"]["DelistScheduleItem"][];
+        };
+        DelistScheduleItem: {
+            symbol?: string;
+            /** Format: date-time */
+            delistTime?: string;
         };
     };
     responses: {
@@ -585,6 +1070,29 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    listDelistSchedule: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "coinbase" | "bybit";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delist schedule snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelistScheduleResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     listSpotMarkets: {
         parameters: {
             query?: {
@@ -610,7 +1118,7 @@ export interface operations {
                 sort?: "quoteVolume" | "volume" | "priceChangePercent" | "lastPrice" | "tradeCount" | "symbol" | "baseAsset" | "marketCapCirculating" | "marketCapTotal" | "marketCapMax" | "tags";
                 /** @description Sort direction (default desc for metrics, asc for symbol/baseAsset) */
                 order?: "asc" | "desc";
-                /** @description Page size (1–500, default 50) */
+                /** @description Page size (1-500, default 50) */
                 limit?: number;
                 /** @description Rows to skip after filter+sort (default 0) */
                 offset?: number;
@@ -642,12 +1150,12 @@ export interface operations {
                 /** @description Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD) */
                 symbol: string;
                 /**
-                 * @description Candle interval (default 1h). Supported values are exchange-specific —
-                 *     call GET /api/v1/market/intervals?exchange=… for the authoritative list.
+                 * @description Candle interval (default 1h). Supported values are exchange-specific -
+                 *     call GET /api/v1/market/intervals?exchange=... for the authoritative list.
                  *     Coinbase/Bybit reject many Binance-only intervals with 400.
                  */
                 interval?: string;
-                /** @description Number of candles (1–1000, default 100) */
+                /** @description Number of candles (1-1000, default 100) */
                 limit?: number;
                 /** @description RFC3339 or Unix milliseconds */
                 startTime?: string;
@@ -815,14 +1323,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        symbol?: string;
-                        exchange?: string;
-                        interval?: string;
-                        eventCount?: number;
-                        events?: Record<string, never>[];
-                        note?: string;
-                    };
+                    "application/json": components["schemas"]["PumpEventsResponse"];
                 };
             };
             400: components["responses"]["Error"];
@@ -842,6 +1343,8 @@ export interface operations {
                 direction?: "up" | "down" | "both";
                 minVolumeRatio?: number;
                 symbolLimit?: number;
+                /** @description Maximum total events across all symbols (default 30). Hits are ranked by |return|; excess events/hits are dropped. */
+                maxTotalEvents?: number;
             };
             header?: never;
             path?: never;
@@ -849,17 +1352,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Ranked pump hits */
+            /** @description Ranked pump hits with resolved scan parameters */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        hitCount?: number;
-                        hits?: Record<string, never>[];
-                        note?: string;
-                    };
+                    "application/json": components["schemas"]["PumpScanResponse"];
                 };
             };
             400: components["responses"]["Error"];
@@ -991,6 +1490,240 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    getAlertWebhook: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook settings (url may be empty if not configured) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertWebhook"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    putAlertWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * Format: uri
+                     * @example https://hooks.example.com/swyngora
+                     */
+                    url: string;
+                    /**
+                     * @default immediate
+                     * @enum {string}
+                     */
+                    deliveryMode?: "immediate" | "hourly_digest";
+                    /**
+                     * @default UTC
+                     * @example Europe/Istanbul
+                     */
+                    timeZone?: string;
+                    quietHours?: {
+                        /** @default false */
+                        enabled?: boolean;
+                        /**
+                         * @description Local HH:MM
+                         * @example 22:00
+                         */
+                        start?: string;
+                        /**
+                         * @description Local HH:MM; may be earlier than start
+                         * @example 08:00
+                         */
+                        end?: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Saved webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertWebhook"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    deleteAlertWebhook: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listPriceAlerts: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alert list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        count?: number;
+                        alerts?: components["schemas"]["PriceAlert"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createPriceAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /** @enum {string} */
+                    condition: "above" | "below";
+                    targetPrice: number;
+                    /**
+                     * @description one_time fires once; repeating fires on each re-cross of the target
+                     * @default one_time
+                     * @enum {string}
+                     */
+                    mode?: "one_time" | "repeating";
+                };
+            };
+        };
+        responses: {
+            /** @description Created alert */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceAlert"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPriceAlert: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceAlert"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deletePriceAlert: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted?: boolean;
+                        id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     addWatchlistItem: {
         parameters: {
             query?: never;
@@ -1045,6 +1778,481 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    getPortfolio: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Portfolio view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioView"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example 10000 */
+                    startingBalance: number;
+                    /** @default USDT */
+                    currency?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created portfolio snapshot */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioView"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listPortfolioOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "rejected" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending order list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    placePortfolioOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /**
+                     * @default market
+                     * @enum {string}
+                     */
+                    type?: "market" | "limit_buy" | "limit_sell" | "stop_loss";
+                    /**
+                     * @description Required for market orders; derived for pending types
+                     * @enum {string}
+                     */
+                    side?: "buy" | "sell";
+                    quantity: number;
+                    /** @description Limit or stop price (required for pending types) */
+                    triggerPrice?: number;
+                    /**
+                     * @description gtc - rest until filled/canceled/expired;
+                     *     ioc - fill available on first try, cancel remainder;
+                     *     fok - fill fully on first try or cancel with no fill
+                     * @default gtc
+                     * @enum {string}
+                     */
+                    timeInForce?: "gtc" | "ioc" | "fok";
+                    /**
+                     * Format: date-time
+                     * @description Optional RFC3339 expiry (GTC only); cancels and releases reservation when reached
+                     */
+                    expiresAt?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Market fill and updated portfolio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pending order created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        type?: string;
+                        order?: components["schemas"]["PendingOrder"];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelPortfolioOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["PendingOrder"];
+                        note?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioTrades: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trade list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerRules: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createScannerRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    type: "rsi" | "ma_crossover" | "volume_increase";
+                    /** @default 1h */
+                    interval?: string;
+                    /** @default 14 */
+                    rsiPeriod?: number;
+                    /** @enum {string} */
+                    rsiCondition?: "above" | "below";
+                    rsiThreshold?: number;
+                    /** @default 12 */
+                    maFastPeriod?: number;
+                    /** @default 26 */
+                    maSlowPeriod?: number;
+                    /** @enum {string} */
+                    maDirection?: "golden_cross" | "death_cross";
+                    /** @default 20 */
+                    volumeLookback?: number;
+                    /** @default 2 */
+                    volumeMinRatio?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerResults: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listScannerBacktests: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backtest list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startScannerBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    ruleId: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /** Format: date-time */
+                    rangeStart: string;
+                    /** Format: date-time */
+                    rangeEnd: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Job accepted or existing job returned */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getScannerBacktest: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job with progressPct, signalCount, status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelScannerBacktest: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerBacktestSignals: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signals list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
         };
     };
     postAiChat: {

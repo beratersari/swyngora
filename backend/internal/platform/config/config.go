@@ -13,6 +13,9 @@ type Config struct {
 	HTTPAddr              string
 	BinanceBaseURL        string
 	BinanceProductBaseURL string
+	BinanceAPIKey         string
+	DelistRefreshEvery    time.Duration
+	DelistRefreshOnStartup bool
 	CoinbaseBaseURL       string
 	CoinbaseExchangeURL   string
 	BybitBaseURL          string
@@ -100,6 +103,9 @@ func Load() Config {
 		HTTPAddr:              getenv("HTTP_ADDR", ":8080"),
 		BinanceBaseURL:        getenv("BINANCE_BASE_URL", "https://api.binance.com"),
 		BinanceProductBaseURL: getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
+		BinanceAPIKey:         strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
+		DelistRefreshEvery:    positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
+		DelistRefreshOnStartup: boolEnv("DELIST_REFRESH_ON_STARTUP", true),
 		CoinbaseBaseURL:       getenv("COINBASE_BASE_URL", "https://api.coinbase.com"),
 		CoinbaseExchangeURL:   getenv("COINBASE_EXCHANGE_URL", "https://api.exchange.coinbase.com"),
 		BybitBaseURL:          getenv("BYBIT_BASE_URL", "https://api.bybit.com"),

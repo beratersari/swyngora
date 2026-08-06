@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 // SpotSortField is a metric or identity field used to order spot markets.
 type SpotSortField string
 
@@ -94,7 +96,11 @@ type SpotMarket struct {
 	// MarketCapMaxInfinite is true and MarketCapMax is nil.
 	MarketCapMax         *float64
 	MarketCapMaxInfinite bool
+
+	// DelistTime is set when the pair is on the venue's scheduled delist list.
+	DelistTime *time.Time
 }
+
 
 // SpotListQuery filters, sorts, and pages the spot market list.
 type SpotListQuery struct {

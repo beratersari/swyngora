@@ -54,6 +54,7 @@ export default defineConfig({
     },
   },
   test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/*.e2e.*'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],

@@ -21,11 +21,13 @@ import {
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetTicker24hQuery,
+  useListDelistScheduleQuery,
   useGetWatchlistQuery,
   useLazyGetCandlesQuery,
   useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
   useRemoveWatchlistItemMutation,
+  type MarketExchange,
   type PumpEventDto,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
@@ -140,6 +142,17 @@ export function CoinDetailPage() {
   const seriesKey = `${exchange}|${symbol}|${interval}`;
 
   const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
+  const delistQuery = useListDelistScheduleQuery(
+    { exchange: (exchange ?? 'binance') as MarketExchange },
+    { skip: !exchange || exchange !== 'binance' },
+  );
+  const delistTime = useMemo(() => {
+    if (!symbol || !delistQuery.data?.items?.length) return null;
+    const hit = delistQuery.data.items.find(
+      (it) => (it.symbol ?? '').toUpperCase() === String(symbol).toUpperCase(),
+    );
+    return hit?.delistTime ?? null;
+  }, [delistQuery.data?.items, symbol]);
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
@@ -423,6 +436,8 @@ export function CoinDetailPage() {
         isLoading={headerLoading}
         watched={watched}
         watchLoading={addWatchState.isLoading || removeWatchState.isLoading}
+        alertTo={exchange && symbol ? `/alerts?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(symbol)}` : undefined}
+        compareTo={exchange && symbol ? `/compare?pairs=${encodeURIComponent(`${exchange}:${symbol}`)}` : undefined}
         onToggleWatch={() => {
           const run = watched
             ? removeWatch({ exchange, symbol }).unwrap()
@@ -433,6 +448,7 @@ export function CoinDetailPage() {
             );
           });
         }}
+      delistTime={delistTime}
       />
 
       <DetailStats

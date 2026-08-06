@@ -42,6 +42,16 @@ function AppShell() {
               {t('nav.pumps')}
             </Text>
           </NavLink>
+          <NavLink to="/alerts">
+            <Text variant="label" as="span">
+              {t('nav.alerts')}
+            </Text>
+          </NavLink>
+          <NavLink to="/compare">
+            <Text variant="label" as="span">
+              {t('nav.compare')}
+            </Text>
+          </NavLink>
           <NavLink to="/ai">
             <Text variant="label" as="span">
               {t('nav.ai')}

@@ -248,6 +248,7 @@ type spotMarketDTO struct {
 	MarketCapTotal       *float64  `json:"marketCapTotal"`
 	// MarketCapMax is a number, the string "∞" when max supply is undefined, or null.
 	MarketCapMax any `json:"marketCapMax"`
+	DelistTime *string `json:"delistTime,omitempty"`
 }
 
 type spotListResponse struct {
@@ -361,7 +362,7 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 		if tags == nil {
 			tags = []string{}
 		}
-		out.Items = append(out.Items, spotMarketDTO{
+		dto := spotMarketDTO{
 			Symbol:               m.Symbol,
 			LastPrice:            m.LastPrice,
 			PriceChange:          m.PriceChange,
@@ -378,7 +379,12 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 			MarketCapCirculating: domain.CloneFloatPtr(m.MarketCapCirculating),
 			MarketCapTotal:       domain.CloneFloatPtr(m.MarketCapTotal),
 			MarketCapMax:         encodeMarketCapMax(m),
-		})
+		}
+		if m.DelistTime != nil && !m.DelistTime.IsZero() {
+			s := m.DelistTime.UTC().Format(time.RFC3339)
+			dto.DelistTime = &s
+		}
+		out.Items = append(out.Items, dto)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -392,4 +398,42 @@ func encodeMarketCapMax(m domain.SpotMarket) any {
 		return *m.MarketCapMax
 	}
 	return nil
+}
+
+
+type delistScheduleResponse struct {
+	Exchange string           `json:"exchange"`
+	Enabled  bool             `json:"enabled"`
+	Items    []delistEntryDTO `json:"items"`
+}
+
+type delistEntryDTO struct {
+	Symbol     string `json:"symbol"`
+	DelistTime string `json:"delistTime"`
+}
+
+// ListDelistSchedule handles GET /api/v1/market/delist-schedule
+func (h *MarketHandler) ListDelistSchedule(w http.ResponseWriter, r *http.Request) {
+	exchange := r.URL.Query().Get("exchange")
+	if exchange == "" {
+		exchange = string(domain.ExchangeBinance)
+	}
+	entries, err := h.svc.ListDelistSchedule(exchange)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	ex, _ := h.svc.ResolveExchange(exchange)
+	out := delistScheduleResponse{
+		Exchange: string(ex),
+		Enabled:  h.svc.DelistEnabled(),
+		Items:    make([]delistEntryDTO, 0, len(entries)),
+	}
+	for _, e := range entries {
+		out.Items = append(out.Items, delistEntryDTO{
+			Symbol:     e.Symbol,
+			DelistTime: e.DelistTime.UTC().Format(time.RFC3339),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }

@@ -14,6 +14,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
@@ -21,6 +22,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -83,6 +85,7 @@ func main() {
 	binanceClient := binance.NewClient(binance.Options{
 		BaseURL:         cfg.BinanceBaseURL,
 		ProductBaseURL:  cfg.BinanceProductBaseURL,
+		APIKey:          cfg.BinanceAPIKey,
 		HTTPClient:      httpClient,
 		CandleCache:     binanceCandles,
 		TickerCache:     binanceTickers,
@@ -105,11 +108,13 @@ func main() {
 		SpotMarketCache: bybitSpot,
 	})
 
+	delistStore := deliststore.NewMemory()
+	delistEnabled := cfg.BinanceAPIKey != ""
 	marketSvc := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
-	}, binanceClient)
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled)
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -235,6 +240,23 @@ func main() {
 		Logger:     logger,
 	}
 	go job.Start(ctx)
+
+	if cfg.BinanceAPIKey != "" {
+		go (&delistjob.Runner{
+			Source:     binanceClient,
+			Store:      delistStore,
+			Interval:   cfg.DelistRefreshEvery,
+			RunOnStart: cfg.DelistRefreshOnStartup,
+			Logger:     logger,
+			Exchange:   domain.ExchangeBinance,
+		}).Start(ctx)
+		logger.Info("delist schedule refresh enabled",
+			"every", cfg.DelistRefreshEvery.String(),
+			"on_startup", cfg.DelistRefreshOnStartup,
+		)
+	} else {
+		logger.Info("delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
+	}
 
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,

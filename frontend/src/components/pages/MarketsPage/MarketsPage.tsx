@@ -13,6 +13,7 @@ import {
   useGetWatchlistQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
+  useListDelistScheduleQuery,
   useListSpotMarketsQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
@@ -99,6 +100,12 @@ export function MarketsPage() {
     pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const delistQuery = useListDelistScheduleQuery(
+    { exchange: state.exchange },
+    { skip: state.exchange !== 'binance' },
+  );
+  const delistEnabled = delistQuery.data?.enabled !== false;
+  const delistCount = delistQuery.data?.items?.length ?? 0;
 
   const watchedKeys = useMemo(() => {
     const set = new Set<string>();
@@ -229,6 +236,20 @@ export function MarketsPage() {
           />
         }
       />
+
+      {state.exchange === 'binance' && delistQuery.isSuccess && !delistEnabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t('markets:delist.disabledTitle')}
+          description={t('markets:delist.disabledBody')}
+        />
+      ) : null}
+      {state.exchange === 'binance' && delistQuery.isSuccess && delistEnabled && delistCount > 0 ? (
+        <Text variant="caption" color="secondary">
+          {t('markets:delist.activeHint', { count: delistCount })}
+        </Text>
+      ) : null}
 
       <MetaRow>
         <MetaLeft>

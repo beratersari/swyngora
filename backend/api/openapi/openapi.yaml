@@ -139,6 +139,32 @@ paths:
         '502':
           $ref: '#/components/responses/Error'
 
+
+  /api/v1/market/delist-schedule:
+    get:
+      summary: List scheduled spot delistings
+      description: |
+        Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
+      operationId: listDelistSchedule
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          required: false
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit]
+      responses:
+        '200':
+          description: Delist schedule snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DelistScheduleResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+
   /api/v1/market/spot:
     get:
       summary: List Binance spot markets with search and sort
@@ -1797,3 +1823,25 @@ components:
             - type: number
             - type: string
               enum: ["∞"]
+        delistTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: Scheduled spot delist time (UTC) when known
+
+    DelistScheduleResponse:
+      type: object
+      properties:
+        exchange: { type: string }
+        enabled:
+          type: boolean
+          description: False when BINANCE_API_KEY is not configured
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DelistScheduleItem'
+    DelistScheduleItem:
+      type: object
+      properties:
+        symbol: { type: string }
+        delistTime: { type: string, format: date-time }
