@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -391,6 +393,128 @@ func statusOrDefault(s string) string {
 		return "open"
 	}
 	return s
+}
+
+// GetOrder handles GET /api/v1/portfolio/orders/{id}
+func (h *PortfolioHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	d, err := h.svc.GetPendingOrderDetail(r.Context(), clientIDFrom(r), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pendingOrderDetailDTO(d))
+}
+
+type amendOrderBody struct {
+	TriggerPrice      *float64 `json:"triggerPrice"`
+	RemainingQuantity *float64 `json:"remainingQuantity"`
+}
+
+// AmendOrder handles PATCH /api/v1/portfolio/orders/{id}
+func (h *PortfolioHandler) AmendOrder(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	var body amendOrderBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	o, view, err := h.svc.AmendPendingOrder(r.Context(), portfolio.AmendPendingOrderInput{
+		ClientID: clientIDFrom(r), OrderID: id,
+		TriggerPrice: body.TriggerPrice, RemainingQuantity: body.RemainingQuantity,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	note := "Order amended in place; reservations updated. Not real money."
+	if o.Status == domain.PendingStatusFilled {
+		note = "Order amended and filled at last price. Not real money."
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"order":     pendingOrderToDTO(o),
+		"portfolio": portfolioViewDTO(view),
+		"note":      note,
+	})
+}
+
+func pendingOrderDetailDTO(d *portfolio.PendingOrderDetail) map[string]any {
+	return map[string]any{
+		"order":     pendingOrderToDTO(&d.Order),
+		"lastPrice": d.LastPrice,
+		"editable":  d.Editable,
+		"amend": map[string]any{
+			"availableCashForOrder":     d.AvailableCashForOrder,
+			"availableQuantityForOrder": d.AvailableQuantityForOrder,
+			"maxRemainingQuantity":      d.MaxRemainingQuantity,
+			"minRemainingQuantity":      d.MinRemainingQuantity,
+		},
+		"note": "Paper pending order. Amend keeps the same id and updates reservations. Not real money.",
+	}
+}
+
+type cancelAllBody struct {
+	ClientID string `json:"clientId"`
+	Exchange string `json:"exchange"`
+	Symbol   string `json:"symbol"`
+}
+
+// CancelAllOrders handles POST /api/v1/portfolio/orders/cancel-all
+// Empty body/symbol cancels every open (and pending bracket-exit) order; symbol scopes to one market.
+func (h *PortfolioHandler) CancelAllOrders(w http.ResponseWriter, r *http.Request) {
+	var body cancelAllBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	clientID := body.ClientID
+	if clientID == "" {
+		clientID = clientIDFrom(r)
+	}
+	list, view, err := h.svc.CancelOpenPendingOrders(r.Context(), portfolio.CancelOpenOrdersInput{
+		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]pendingOrderDTO, 0, len(list))
+	for i := range list {
+		items = append(items, pendingOrderToDTO(&list[i]))
+	}
+	scope := "all"
+	if strings.TrimSpace(body.Symbol) != "" {
+		scope = "market"
+	} else if strings.TrimSpace(body.Exchange) != "" {
+		scope = "exchange"
+	}
+	note := "Open paper orders canceled; unused reservations released. Not real money."
+	if len(items) == 0 {
+		note = "No open paper orders to cancel."
+	}
+	out := map[string]any{
+		"orders":    items,
+		"canceled":  len(items),
+		"scope":     scope,
+		"note":      note,
+	}
+	if view != nil {
+		out["portfolio"] = portfolioViewDTO(view)
+	}
+	if scope == "market" || scope == "exchange" {
+		if len(list) > 0 {
+			out["exchange"] = string(list[0].Exchange)
+			if scope == "market" {
+				out["symbol"] = list[0].Symbol
+			}
+		} else if strings.TrimSpace(body.Symbol) != "" {
+			out["symbol"] = strings.ToUpper(strings.TrimSpace(body.Symbol))
+			if body.Exchange != "" {
+				out["exchange"] = strings.ToLower(strings.TrimSpace(body.Exchange))
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // CancelOrder handles DELETE /api/v1/portfolio/orders/{id}

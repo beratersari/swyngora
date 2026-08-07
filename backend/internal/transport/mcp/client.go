@@ -487,6 +487,35 @@ func (c *APIClient) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchan
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
+// GetPortfolioOrder returns one pending order plus amend hints.
+func (c *APIClient) GetPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	return c.get(ctx, "/api/v1/portfolio/orders/"+url.PathEscape(id), q)
+}
+
+// AmendPortfolioOrder patches triggerPrice and/or remainingQuantity of an open pending order.
+func (c *APIClient) AmendPortfolioOrder(ctx context.Context, clientID, id string, triggerPrice, remainingQuantity *float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/orders/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{}
+	if triggerPrice != nil {
+		body["triggerPrice"] = *triggerPrice
+	}
+	if remainingQuantity != nil {
+		body["remainingQuantity"] = *remainingQuantity
+	}
+	return c.sendJSON(ctx, http.MethodPatch, path, body)
+}
+
 // ListPortfolioOrders lists paper pending orders.
 func (c *APIClient) ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}
@@ -503,6 +532,18 @@ func (c *APIClient) ListPortfolioOrders(ctx context.Context, clientID, status st
 		q.Set("offset", strconv.Itoa(offset))
 	}
 	return c.get(ctx, "/api/v1/portfolio/orders", q)
+}
+
+// CancelAllPortfolioOrders cancels all open pending orders, or one market when symbol is set.
+func (c *APIClient) CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID}
+	if exchange != "" {
+		body["exchange"] = exchange
+	}
+	if symbol != "" {
+		body["symbol"] = symbol
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/cancel-all", body)
 }
 
 // CancelPortfolioOrder cancels an open pending paper order.

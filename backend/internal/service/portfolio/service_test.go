@@ -874,3 +874,254 @@ func TestPortfolio_PersistsAcrossReopen(t *testing.T) {
 		t.Fatalf("%+v total=%d err=%v", list, total, err)
 	}
 }
+
+func TestPortfolio_AmendPendingLimitBuyPriceAndRemaining(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "amd-1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-1", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 10, TriggerPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := svc.GetPendingOrderDetail(ctx, "amd-1", o.ID)
+	if err != nil || !detail.Editable || detail.LastPrice != 100 {
+		t.Fatalf("detail %+v err=%v", detail, err)
+	}
+	if math.Abs(detail.AvailableCashForOrder-10000) > 1e-6 {
+		t.Fatalf("cash for order=%v", detail.AvailableCashForOrder)
+	}
+	trig := 80.0
+	rem := 5.0
+	got, view, err := svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-1", OrderID: o.ID, TriggerPrice: &trig, RemainingQuantity: &rem,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(got.TriggerPrice-80) > 1e-12 || math.Abs(got.RemainingQuantity-5) > 1e-12 {
+		t.Fatalf("amended %+v", got)
+	}
+	if math.Abs(got.Quantity-5) > 1e-12 || math.Abs(got.ReservedCash-400) > 1e-9 {
+		t.Fatalf("qty/reserve %+v", got)
+	}
+	if got.ID != o.ID || got.Status != domain.PendingStatusOpen {
+		t.Fatalf("same id open: %+v", got)
+	}
+	if math.Abs(view.ReservedCash-400) > 1e-9 {
+		t.Fatalf("view reserve=%v", view.ReservedCash)
+	}
+}
+
+func TestPortfolio_AmendInsufficientCashAndRejectsSpecialTypes(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "binance|ETHUSDT": "50"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "amd-2", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-2", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 5, TriggerPrice: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trig := 250.0
+	_, _, err = svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-2", OrderID: o.ID, TriggerPrice: &trig,
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want insufficient cash: %v", err)
+	}
+	trail, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-2", Symbol: "ETHUSDT", Type: "trailing_stop", Quantity: 0.001,
+		TrailType: "percent", TrailValue: 0.05,
+	})
+	// trailing needs a sell position — may fail; if placed, amend must reject
+	if err == nil {
+		_, _, aerr := svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+			ClientID: "amd-2", OrderID: trail.ID, TriggerPrice: &trig,
+		})
+		if !errors.Is(aerr, domain.ErrInvalidArgument) {
+			t.Fatalf("trailing amend: %v", aerr)
+		}
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "amd-2", Symbol: "ETHUSDT", Side: "buy", Quantity: 1}); err != nil {
+		// may fail if cash reserved by limit buy (500 left after 5*100)
+	}
+	_, _, err = svc.AmendPendingOrder(ctx, AmendPendingOrderInput{ClientID: "amd-2", OrderID: o.ID})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("empty amend: %v", err)
+	}
+}
+
+func TestPortfolio_AmendLimitSellAndStopFillsImmediately(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "amd-3", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "amd-3", Symbol: "BTCUSDT", Side: "buy", Quantity: 2}); err != nil {
+		t.Fatal(err)
+	}
+	ls, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-3", Symbol: "BTCUSDT", Type: "limit_sell", Quantity: 1, TriggerPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rem := 0.4
+	got, view, err := svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-3", OrderID: ls.ID, RemainingQuantity: &rem,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(got.RemainingQuantity-0.4) > 1e-12 || math.Abs(got.ReservedQuantity-0.4) > 1e-12 {
+		t.Fatalf("%+v", got)
+	}
+	if view.Positions[0].AvailableQuantity < 1.5-1e-9 {
+		t.Fatalf("avail after shrink sell reserve: %+v", view.Positions[0])
+	}
+
+	sl, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-3", Symbol: "BTCUSDT", Type: "stop_loss", Quantity: 0.5, TriggerPrice: 80,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trig := 100.0
+	filled, _, err := svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-3", OrderID: sl.ID, TriggerPrice: &trig,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("stop should fill immediately after amend to last: %+v", filled)
+	}
+}
+
+func TestPortfolio_AmendRejectsOCOAndCanceled(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "amd-4", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "amd-4", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	tp, _, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "amd-4", Symbol: "BTCUSDT", Quantity: 1, TakeProfitPrice: 120, StopLossPrice: 80,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trig := 115.0
+	_, _, err = svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-4", OrderID: tp.ID, TriggerPrice: &trig,
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("oco amend: %v", err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-4", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CancelPendingOrder(ctx, "amd-4", o.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-4", OrderID: o.ID, TriggerPrice: &trig,
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("canceled amend: %v", err)
+	}
+	if _, err := svc.GetPendingOrder(ctx, "amd-4", "missing"); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("get missing: %v", err)
+	}
+}
+
+func TestPortfolio_AmendLimitBuyFillsWhenMovedToMarket(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "50"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "amd-5", StartingBalance: 5000}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "amd-5", Symbol: "ETHUSDT", Type: "limit_buy", Quantity: 2, TriggerPrice: 40,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trig := 50.0
+	got, view, err := svc.AmendPendingOrder(ctx, AmendPendingOrderInput{
+		ClientID: "amd-5", OrderID: o.ID, TriggerPrice: &trig,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != domain.PendingStatusFilled {
+		t.Fatalf("limit buy moved to last should fill: %+v", got)
+	}
+	if view.ReservedCash > 1e-9 {
+		t.Fatalf("reserve after fill=%v", view.ReservedCash)
+	}
+}
+
+func TestPortfolio_CancelAllOpenOrdersOneMarketAndAll(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "binance|ETHUSDT": "50"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "cxl-all", StartingBalance: 20000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "cxl-all", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 90,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "cxl-all", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 80,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "cxl-all", Symbol: "ETHUSDT", Type: "limit_buy", Quantity: 2, TriggerPrice: 40,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	btc, view, err := svc.CancelOpenPendingOrders(ctx, CancelOpenOrdersInput{
+		ClientID: "cxl-all", Symbol: "BTCUSDT",
+	})
+	if err != nil || len(btc) != 2 {
+		t.Fatalf("btc n=%d err=%v", len(btc), err)
+	}
+	if math.Abs(view.ReservedCash-80) > 1e-9 {
+		t.Fatalf("eth still reserved=%v", view.ReservedCash)
+	}
+	open, err := svc.ListPendingOrders(ctx, "cxl-all", "open", 20, 0)
+	if err != nil || len(open) != 1 || open[0].Symbol != "ETHUSDT" {
+		t.Fatalf("left open %+v err=%v", open, err)
+	}
+	all, view, err := svc.CancelOpenPendingOrders(ctx, CancelOpenOrdersInput{ClientID: "cxl-all"})
+	if err != nil || len(all) != 1 {
+		t.Fatalf("all n=%d err=%v", len(all), err)
+	}
+	if view.ReservedCash > 1e-9 {
+		t.Fatalf("reserved after all=%v", view.ReservedCash)
+	}
+	again, _, err := svc.CancelOpenPendingOrders(ctx, CancelOpenOrdersInput{ClientID: "cxl-all"})
+	if err != nil || len(again) != 0 {
+		t.Fatalf("idempotent %+v err=%v", again, err)
+	}
+}

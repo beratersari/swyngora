@@ -1438,7 +1438,125 @@ paths:
           description: Pending order list
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/orders/cancel-all:
+    post:
+      summary: Cancel all open paper pending orders
+      description: |
+        Cancels every open (and inactive bracket-exit `pending`) paper order for the client,
+        or only those on one market when `symbol` is set (optional `exchange`, default binance).
+        `exchange` without `symbol` cancels every pair on that venue.
+        Releases unused cash/position reservations. Empty result is success (`canceled: 0`).
+        Does not cancel margin limit orders. Paper trading only.
+      operationId: cancelAllPortfolioOrders
+      tags: [Portfolio]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                exchange: { type: string, enum: [binance, coinbase, bybit] }
+                symbol:
+                  type: string
+                  description: When set, cancel only this pair; omit to cancel all markets
+                  example: BTCUSDT
+      responses:
+        '200':
+          description: Canceled orders and updated portfolio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/PendingOrder' }
+                  canceled: { type: integer }
+                  scope: { type: string, enum: [all, market, exchange] }
+                  exchange: { type: string }
+                  symbol: { type: string }
+                  portfolio: { $ref: '#/components/schemas/PortfolioView' }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/orders/{id}:
+    get:
+      summary: Get one paper pending order
+      description: |
+        Returns the order plus last price and amend hints for the edit screen.
+        availableCashForOrder / availableQuantityForOrder include this order's current reservation
+        so the UI can compute max remaining at a typed price. editable is false for filled,
+        canceled, IOC/FOK, trailing, OCO, and bracket legs.
+      operationId: getPortfolioOrder
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order detail for display or edit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingOrderDetail'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Amend an open paper pending order
+      description: |
+        Change triggerPrice and/or remainingQuantity in place (same id). Recalculates cash or
+        position reservations. Only open GTC standalone limit_buy, limit_sell, and stop_loss.
+        remainingQuantity must stay above zero (use DELETE to cancel). Original quantity becomes
+        filledQuantity + remainingQuantity. If the new price is already marketable, one fill
+        attempt runs immediately. Concurrent fill/cancel returns 409.
+      operationId: amendPortfolioOrder
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AmendPendingOrderRequest'
+      responses:
+        '200':
+          description: Amended order and updated portfolio snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/PendingOrder' }
+                  portfolio: { $ref: '#/components/schemas/PortfolioView' }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Cancel an open paper pending order
       description: Only open orders can be canceled. Filled/canceled/rejected return 404. Canceled orders never fill.
@@ -3112,6 +3230,47 @@ components:
         cancelReason:
           type: string
           description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled
+    AmendPendingOrderRequest:
+      type: object
+      description: At least one of triggerPrice or remainingQuantity is required.
+      properties:
+        triggerPrice:
+          type: number
+          exclusiveMinimum: 0
+          description: New limit or stop price
+        remainingQuantity:
+          type: number
+          exclusiveMinimum: 0
+          description: New remaining size (must stay above zero; original quantity becomes filled + remaining)
+    PendingOrderAmendHints:
+      type: object
+      properties:
+        availableCashForOrder:
+          type: number
+          description: Available cash plus this order's current cash reservation (buy)
+        availableQuantityForOrder:
+          type: number
+          description: Available position plus this order's current qty reservation (sell)
+        maxRemainingQuantity:
+          type: number
+          description: Max remaining at the order's current triggerPrice
+        minRemainingQuantity:
+          type: number
+          description: Minimum remaining size (MinTradeQuantity)
+    PendingOrderDetail:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/PendingOrder'
+        lastPrice:
+          type: number
+          description: Last market price for the pair (0 if unavailable)
+        editable:
+          type: boolean
+          description: True when PATCH amend is allowed
+        amend:
+          $ref: '#/components/schemas/PendingOrderAmendHints'
+        note: { type: string }
     RecurringBuyPlan:
       type: object
       properties:
@@ -3381,15 +3540,15 @@ components:
         marketCapCirculating:
           type: number
           nullable: true
-          description: USD price Ã— circulating supply
+          description: USD price times circulating supply
         marketCapTotal:
           type: number
           nullable: true
-          description: USD price Ã— total supply
+          description: USD price times total supply
         marketCapMax:
-          description: USD price Ã— max supply, or the string "âˆ" when max supply is undefined
+          description: USD price times max supply, or infinity when max supply is undefined
           nullable: true
           oneOf:
             - type: number
             - type: string
-              enum: ["âˆ"]
+              enum: ["\u221E"]

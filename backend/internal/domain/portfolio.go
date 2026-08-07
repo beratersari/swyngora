@@ -275,6 +275,10 @@ type PortfolioPort interface {
 	UpdatePendingTrail(ctx context.Context, id string, newPeak, newTrigger float64, at time.Time) (updated bool, err error)
 	// GetPendingOrder returns one order for the client or ErrNotFound.
 	GetPendingOrder(ctx context.Context, clientID, id string) (*PendingOrder, error)
+	// AmendPendingOrder updates remaining size, trigger, original quantity, and reservations
+	// of an open order. ExpectedRemaining/ExpectedTrigger are compare-and-set guards.
+	// Returns ErrNotFound if missing; ErrConflict if not open or the CAS snapshot is stale.
+	AmendPendingOrder(ctx context.Context, clientID, id string, a PendingOrderAmend) (*PendingOrder, error)
 	// ListPendingOrders lists orders for a client, optionally filtered by status (empty = all).
 	ListPendingOrders(ctx context.Context, clientID string, status PendingOrderStatus, limit, offset int) ([]PendingOrder, error)
 	// CountOpenPendingOrders returns the number of open orders for a client.
@@ -288,6 +292,11 @@ type PortfolioPort interface {
 	// CancelPendingOrder sets status canceled only if still open and releases remaining reservation.
 	// reason is stored as cancel_reason (e.g. user, expired, ioc_remainder).
 	CancelPendingOrder(ctx context.Context, clientID, id string, at time.Time, reason string) (*PendingOrder, error)
+	// CancelOpenPendingOrders cancels open and pending (inactive bracket-exit) orders for the client.
+	// Empty exchange and symbol cancel every market. Non-empty symbol filters that venue+pair.
+	// Non-empty exchange with empty symbol cancels every pair on that venue.
+	// Returns the rows that were canceled (empty if none were open). Never ErrNotFound for an empty set.
+	CancelOpenPendingOrders(ctx context.Context, clientID string, exchange Exchange, symbol string, at time.Time, reason string) ([]PendingOrder, error)
 	// ExecutePendingFill applies a (possibly partial) fill for an open order.
 	// Updates remaining/reserved, inserts trade, marks filled only when remaining is zero.
 	// Returns ErrNotFound if not open.
@@ -659,4 +668,104 @@ func AfterSellFillReservation(remainingAfter float64) float64 {
 		return 0
 	}
 	return remainingAfter
+}
+
+// PendingOrderAmend is the store write for an in-place open-order edit (same id).
+type PendingOrderAmend struct {
+	RemainingQuantity float64
+	TriggerPrice      float64
+	Quantity          float64 // filled + remaining
+	ReservedCash      float64
+	ReservedQuantity  float64
+	ExpectedRemaining float64 // CAS: remaining at read time
+	ExpectedTrigger   float64 // CAS: trigger at read time
+	At                time.Time
+}
+
+// IsAmendablePendingType reports standalone types that support in-place price/size edit.
+func IsAmendablePendingType(t PendingOrderType) bool {
+	switch t {
+	case PendingLimitBuy, PendingLimitSell, PendingStopLoss:
+		return true
+	default:
+		return false
+	}
+}
+
+// CanAmendPendingOrder reports whether o may be edited in place (price / remaining).
+// Only open GTC standalone limit_buy, limit_sell, and stop_loss.
+func CanAmendPendingOrder(o PendingOrder) error {
+	if o.Status != PendingStatusOpen {
+		return fmt.Errorf("%w: only open orders can be amended", ErrConflict)
+	}
+	if !IsAmendablePendingType(o.Type) {
+		return fmt.Errorf("%w: only limit_buy, limit_sell, and stop_loss can be amended", ErrInvalidArgument)
+	}
+	tif := o.TimeInForce
+	if tif == "" {
+		tif = TimeInForceGTC
+	}
+	if tif != TimeInForceGTC {
+		return fmt.Errorf("%w: only gtc orders can be amended", ErrInvalidArgument)
+	}
+	if o.IsOCO() {
+		return fmt.Errorf("%w: oco legs cannot be amended", ErrInvalidArgument)
+	}
+	if strings.TrimSpace(o.BracketID) != "" {
+		return fmt.Errorf("%w: bracket legs cannot be amended", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// ValidateAmendTriggerPrice checks a new limit/stop price.
+func ValidateAmendTriggerPrice(p float64) error {
+	if p < MinTriggerPrice || p > MaxTriggerPrice || math.IsNaN(p) || math.IsInf(p, 0) {
+		return fmt.Errorf("%w: triggerPrice out of range", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// ValidateAmendRemaining checks a new remaining size (must stay open — not zero).
+func ValidateAmendRemaining(remaining float64) error {
+	if remaining < MinTradeQuantity || remaining > MaxTradeQuantity || math.IsNaN(remaining) || math.IsInf(remaining, 0) {
+		return fmt.Errorf("%w: remainingQuantity out of range", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// AmendOriginalQuantity is filled + remaining after an amend.
+func AmendOriginalQuantity(filled, remaining float64) float64 {
+	if filled < 0 {
+		filled = 0
+	}
+	if remaining <= PositionEpsilon {
+		return filled
+	}
+	return filled + remaining
+}
+
+// MaxAmendRemaining is the largest remaining size the account can back at triggerPrice.
+// availableCashForOrder / availableQtyForOrder must already include this order's current reservation.
+func MaxAmendRemaining(side TradeSide, triggerPrice, availableCashForOrder, availableQtyForOrder float64) float64 {
+	switch side {
+	case TradeSideBuy:
+		if triggerPrice <= 0 || availableCashForOrder <= 0 {
+			return 0
+		}
+		m := availableCashForOrder / triggerPrice
+		if m > MaxTradeQuantity {
+			return MaxTradeQuantity
+		}
+		return m
+	case TradeSideSell:
+		if availableQtyForOrder <= 0 {
+			return 0
+		}
+		if availableQtyForOrder > MaxTradeQuantity {
+			return MaxTradeQuantity
+		}
+		return availableQtyForOrder
+	default:
+		return 0
+	}
 }

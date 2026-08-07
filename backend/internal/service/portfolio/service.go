@@ -686,6 +686,199 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	return s.store.CreatePendingOrder(ctx, o)
 }
 
+// AmendPendingOrderInput changes trigger price and/or remaining size of an open pending order.
+// At least one of TriggerPrice or RemainingQuantity must be set.
+type AmendPendingOrderInput struct {
+	ClientID          string
+	OrderID           string
+	TriggerPrice      *float64
+	RemainingQuantity *float64
+}
+
+// PendingOrderDetail is one order plus last price and amend capacity for the edit screen.
+type PendingOrderDetail struct {
+	Order                     domain.PendingOrder
+	LastPrice                 float64
+	Editable                  bool
+	AvailableCashForOrder     float64
+	AvailableQuantityForOrder float64
+	MaxRemainingQuantity      float64
+	MinRemainingQuantity      float64
+}
+
+// GetPendingOrder returns one pending order for the client.
+func (s *Service) GetPendingOrder(ctx context.Context, clientID, id string) (*domain.PendingOrder, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
+	}
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return s.store.GetPendingOrder(ctx, clientID, id)
+}
+
+// GetPendingOrderDetail returns the order plus last price and amend hints for the edit UI.
+func (s *Service) GetPendingOrderDetail(ctx context.Context, clientID, id string) (*PendingOrderDetail, error) {
+	o, err := s.GetPendingOrder(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	p, err := s.store.GetPortfolio(ctx, o.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	cashFor, qtyFor, err := s.amendCapacity(ctx, p, *o)
+	if err != nil {
+		return nil, err
+	}
+	last, _ := s.lastPrice(ctx, string(o.Exchange), o.Symbol)
+	d := &PendingOrderDetail{
+		Order:                     *o,
+		LastPrice:                 last,
+		Editable:                  domain.CanAmendPendingOrder(*o) == nil,
+		AvailableCashForOrder:     cashFor,
+		AvailableQuantityForOrder: qtyFor,
+		MaxRemainingQuantity:      domain.MaxAmendRemaining(o.Side, o.TriggerPrice, cashFor, qtyFor),
+		MinRemainingQuantity:      domain.MinTradeQuantity,
+	}
+	return d, nil
+}
+
+// AmendPendingOrder changes trigger and/or remaining of an open limit/stop in place (same id).
+// Recalculates reservations; if the new price is already marketable, one fill attempt runs immediately.
+func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInput) (*domain.PendingOrder, *domain.PortfolioView, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	if in.TriggerPrice == nil && in.RemainingQuantity == nil {
+		return nil, nil, fmt.Errorf("%w: triggerPrice or remainingQuantity is required", domain.ErrInvalidArgument)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	id := strings.TrimSpace(in.OrderID)
+	if id == "" {
+		return nil, nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	o, err := s.store.GetPendingOrder(ctx, clientID, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := domain.CanAmendPendingOrder(*o); err != nil {
+		return nil, nil, err
+	}
+	newRemaining := o.RemainingQuantity
+	if in.RemainingQuantity != nil {
+		if err := domain.ValidateAmendRemaining(*in.RemainingQuantity); err != nil {
+			return nil, nil, err
+		}
+		newRemaining = *in.RemainingQuantity
+	}
+	newTrigger := o.TriggerPrice
+	if in.TriggerPrice != nil {
+		if err := domain.ValidateAmendTriggerPrice(*in.TriggerPrice); err != nil {
+			return nil, nil, err
+		}
+		newTrigger = *in.TriggerPrice
+	}
+	unchanged := math.Abs(newRemaining-o.RemainingQuantity) <= 1e-12 && math.Abs(newTrigger-o.TriggerPrice) <= 1e-12
+	if unchanged {
+		view, verr := s.View(ctx, clientID)
+		if verr != nil {
+			return o, nil, verr
+		}
+		return o, view, nil
+	}
+
+	cashFor, qtyFor, err := s.amendCapacity(ctx, p, *o)
+	if err != nil {
+		return nil, nil, err
+	}
+	var reservedCash, reservedQty float64
+	switch o.Side {
+	case domain.TradeSideBuy:
+		need := domain.BuyReserveCash(newRemaining, newTrigger)
+		if cashFor+1e-9 < need {
+			return nil, nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, cashFor)
+		}
+		reservedCash = need
+	case domain.TradeSideSell:
+		if qtyFor+domain.PositionEpsilon < newRemaining {
+			return nil, nil, fmt.Errorf("%w: insufficient available position to reserve (need %g, available %g)", domain.ErrInvalidArgument, newRemaining, qtyFor)
+		}
+		reservedQty = newRemaining
+	default:
+		return nil, nil, fmt.Errorf("%w: invalid order side", domain.ErrInvalidArgument)
+	}
+
+	now := time.Now().UTC()
+	updated, err := s.store.AmendPendingOrder(ctx, clientID, id, domain.PendingOrderAmend{
+		RemainingQuantity: newRemaining,
+		TriggerPrice:      newTrigger,
+		Quantity:          domain.AmendOriginalQuantity(o.FilledQuantity, newRemaining),
+		ReservedCash:      reservedCash,
+		ReservedQuantity:  reservedQty,
+		ExpectedRemaining: o.RemainingQuantity,
+		ExpectedTrigger:   o.TriggerPrice,
+		At:                now,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if last, lerr := s.lastPrice(ctx, string(updated.Exchange), updated.Symbol); lerr == nil && last > 0 {
+		if filled, ok, ferr := s.ProcessOpenOrder(ctx, *updated, last, now, 0); ferr == nil && ok && filled != nil {
+			updated = filled
+		}
+	}
+	view, err := s.View(ctx, clientID)
+	if err != nil {
+		return updated, nil, err
+	}
+	return updated, view, nil
+}
+
+// amendCapacity returns cash/qty available to back this order, including its current reservation.
+func (s *Service) amendCapacity(ctx context.Context, p *domain.Portfolio, o domain.PendingOrder) (cashFor, qtyFor float64, err error) {
+	availCash, err := s.availableCashForTrading(ctx, p.ClientID, p.CashBalance)
+	if err != nil {
+		return 0, 0, err
+	}
+	cashFor = availCash
+	if o.Status == domain.PendingStatusOpen && o.Side == domain.TradeSideBuy {
+		cashFor += o.ReservedCash
+	}
+	var held float64
+	pos, perr := s.store.GetPosition(ctx, p.ClientID, o.Exchange, o.Symbol)
+	if perr == nil && pos != nil {
+		held = pos.Quantity
+	} else if perr != nil && perr != domain.ErrNotFound {
+		return 0, 0, perr
+	}
+	resQty, rerr := s.store.SumReservedQuantity(ctx, p.ClientID, o.Exchange, o.Symbol)
+	if rerr != nil {
+		return 0, 0, rerr
+	}
+	qtyFor = domain.AvailablePosition(held, resQty)
+	if o.Status == domain.PendingStatusOpen && o.Side == domain.TradeSideSell {
+		qtyFor += o.ReservedQuantity
+	}
+	return cashFor, qtyFor, nil
+}
+
 // ListPendingOrders returns pending orders for a client (default: open only).
 func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status string, limit, offset int) ([]domain.PendingOrder, error) {
 	if s.store == nil {
@@ -722,6 +915,51 @@ func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status
 		}
 	}
 	return s.store.ListPendingOrders(ctx, clientID, st, limit, offset)
+}
+
+// CancelOpenOrdersInput cancels every open/pending paper order, or one market.
+type CancelOpenOrdersInput struct {
+	ClientID string
+	Exchange string // optional; default binance when Symbol is set
+	Symbol   string // empty = all markets (or all pairs on Exchange if only exchange is set)
+}
+
+// CancelOpenPendingOrders cancels open GTC/IOC/FOK/OCO/bracket/trailing orders in one action.
+// Empty Symbol (and empty Exchange) = all markets. Symbol set = that pair. Exchange only = that venue.
+func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrdersInput) ([]domain.PendingOrder, *domain.PortfolioView, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, nil, err
+	}
+	var ex domain.Exchange
+	var sym string
+	if strings.TrimSpace(in.Symbol) != "" {
+		ex, sym, err = normalizeExchangeSymbol(in.Exchange, in.Symbol)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else if strings.TrimSpace(in.Exchange) != "" {
+		raw := strings.TrimSpace(in.Exchange)
+		if !domain.IsValidExchange(raw) {
+			return nil, nil, fmt.Errorf("%w: exchange must be one of %v", domain.ErrInvalidArgument, domain.SupportedExchanges)
+		}
+		ex = domain.ParseExchange(raw)
+	}
+	list, err := s.store.CancelOpenPendingOrders(ctx, clientID, ex, sym, time.Now().UTC(), domain.CancelReasonUser)
+	if err != nil {
+		return nil, nil, err
+	}
+	view, err := s.View(ctx, clientID)
+	if err != nil {
+		return list, nil, err
+	}
+	return list, view, nil
 }
 
 // CancelPendingOrder cancels an open order; filled/canceled/rejected cannot be canceled.

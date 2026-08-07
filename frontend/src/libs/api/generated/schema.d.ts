@@ -168,7 +168,7 @@ export interface paths {
          * @description Fetches OHLCV candles from the selected exchange and computes:
          *     - RSI (Wilder's smoothing, default period 14)
          *     - EMA (default periods 12 and 26; seed = SMA of first period)
-         *     Informational only — not financial advice.
+         *     Informational only â€” not financial advice.
          */
         get: operations["getIndicators"];
         put?: never;
@@ -190,7 +190,7 @@ export interface paths {
          * Detect pump/dump events on one symbol
          * @description Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
          *     Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
-         *     Informational only — not financial advice.
+         *     Informational only â€” not financial advice.
          */
         get: operations["getPumpEvents"];
         put?: never;
@@ -211,6 +211,9 @@ export interface paths {
         /**
          * Scan top-volume symbols for recent pumps
          * @description Scans top quote-volume spot symbols with the same mechanical thresholds as /pumps.
+         *     Omitted optional parameters use documented defaults; the response metadata echoes the
+         *     resolved values (not zeros/empty strings).
+         *     maxTotalEvents caps the aggregate number of events across all hits (not the hit count).
          *     Informational only — not financial advice.
          */
         get: operations["scanPumpEvents"];
@@ -235,7 +238,7 @@ export interface paths {
          * Latest RSI/EMA for many symbols (one exchange)
          * @description Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
          *     Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
-         *     Upstream concurrency is bounded process-wide. Informational only — not financial advice.
+         *     Upstream concurrency is bounded process-wide. Informational only â€” not financial advice.
          */
         post: operations["postIndicatorsBatch"];
         delete?: never;
@@ -251,12 +254,91 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get watchlist for a client id */
+        /**
+         * Get watchlist for a client id
+         * @description Returns the actor's own list, or a list shared with them when `ownerClientId` is set.
+         *     Response includes `role` (owner|viewer|editor) and `ownerClientId`.
+         */
         get: operations["getWatchlist"];
-        /** Replace entire watchlist */
+        /**
+         * Replace entire watchlist (owner only)
+         * @description Full replace of items. Editors and viewers receive 403.
+         *     Multi-device: send `baseVersion` from the last GET. Different symbols added on two
+         *     devices auto-merge. Same-symbol delete vs update returns 409 with `conflict` details;
+         *     re-PUT with `baseVersion` = `serverVersion` and your resolved `items` to finish.
+         *     Optional `baseItems` improves 3-way merge accuracy.
+         */
         put: operations["putWatchlist"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get price-alert webhook URL for a client */
+        get: operations["getAlertWebhook"];
+        /**
+         * Set price-alert webhook URL and notification preferences
+         * @description Stores an absolute http(s) URL and preferences:
+         *     - deliveryMode immediate (default) or hourly_digest
+         *     - timeZone (IANA) and quietHours local start/end (HH:MM); ranges may cross midnight
+         *     Notifications created during quiet hours wait until quiet hours end.
+         *     Pending deliveries survive restarts and retry on failure.
+         */
+        put: operations["putAlertWebhook"];
+        post?: never;
+        /** Clear price-alert webhook URL */
+        delete: operations["deleteAlertWebhook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List price alerts for a client */
+        get: operations["listPriceAlerts"];
+        put?: never;
+        /**
+         * Create a price alert (one-time or repeating)
+         * @description Creates an active alert for when last price goes above or below targetPrice.
+         *     mode=one_time (default): fires once then status becomes triggered.
+         *     mode=repeating: fires on each edge into the condition zone; does not re-fire while price
+         *     stays on that side; re-arms when price returns to the safe side. Informational only.
+         */
+        post: operations["createPriceAlert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one price alert */
+        get: operations["getPriceAlert"];
+        put?: never;
+        post?: never;
+        /** Delete a price alert */
+        delete: operations["deletePriceAlert"];
         options?: never;
         head?: never;
         patch?: never;
@@ -271,10 +353,965 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Add or update a watchlist item */
+        /**
+         * Add or update a watchlist item
+         * @description Owner or editor may add/update symbols. Send `baseVersion` from last GET for multi-device
+         *     safety. Adding a symbol missing on the server auto-merges even if versions differ.
+         *     Conflicting notes on the same symbol return 409.
+         */
         post: operations["addWatchlistItem"];
-        /** Remove a watchlist item */
+        /**
+         * Remove a watchlist item
+         * @description Owner or editor may remove symbols. Send `baseVersion` (query or If-Match).
+         *     If another device changed the same symbol, returns 409 so the user can choose.
+         */
         delete: operations["removeWatchlistItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List shares granted on the owner's watchlist */
+        get: operations["listWatchlistShares"];
+        put?: never;
+        /**
+         * Share watchlist with another client (owner only)
+         * @description Grants viewer (read-only) or editor (add/remove symbols only) access.
+         *     Cannot share with self. Same grantee cannot be shared twice (use PATCH to change role).
+         *     Editors cannot delete the list or change sharing settings.
+         */
+        post: operations["shareWatchlist"];
+        /** Revoke share access (owner only) */
+        delete: operations["revokeWatchlistShare"];
+        options?: never;
+        head?: never;
+        /** Update share role (owner only) */
+        patch: operations["updateWatchlistShare"];
+        trace?: never;
+    };
+    "/api/v1/watchlist/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List watchlists shared with the caller */
+        get: operations["listSharedWatchlists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List watchlist change history (owner only)
+         * @description Returns audit events (share grant/update/revoke, item add/remove, list replace)
+         *     with actorClientId and createdAt.
+         */
+        get: operations["listWatchlistAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paper portfolio snapshot
+         * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
+         */
+        get: operations["getPortfolio"];
+        put?: never;
+        /**
+         * Create a paper-trading portfolio
+         * @description Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
+         *     Paper trading only — not real money. Not financial advice.
+         */
+        post: operations["createPortfolio"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List paper pending orders
+         * @description Defaults to open orders. status=open|filled|canceled|rejected|all
+         */
+        get: operations["listPortfolioOrders"];
+        put?: never;
+        /**
+         * Place a paper order (market or pending)
+         * @description type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
+         *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
+         *     may fill partially and stay open until remaining size is zero; each fill is a trade history row.
+         *     type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
+         *     shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
+         *     same price tick fills at most one leg (stop preferred if both trigger).
+         *     type=trailing_stop: sell stop that trails a high-water mark by percent or fixed offset; stop only moves up;
+         *     triggers once when last <= stop (including price gaps through the level).
+         *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
+         *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
+         *     Paper trading only — not real money.
+         */
+        post: operations["placePortfolioOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders/cancel-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel all open paper pending orders
+         * @description Cancels every open (and inactive bracket-exit `pending`) paper order for the client,
+         *     or only those on one market when `symbol` is set (optional `exchange`, default binance).
+         *     `exchange` without `symbol` cancels every pair on that venue.
+         *     Releases unused cash/position reservations. Empty result is success (`canceled: 0`).
+         *     Does not cancel margin limit orders. Paper trading only.
+         */
+        post: operations["cancelAllPortfolioOrders"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one paper pending order
+         * @description Returns the order plus last price and amend hints for the edit screen.
+         *     availableCashForOrder / availableQuantityForOrder include this order's current reservation
+         *     so the UI can compute max remaining at a typed price. editable is false for filled,
+         *     canceled, IOC/FOK, trailing, OCO, and bracket legs.
+         */
+        get: operations["getPortfolioOrder"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open paper pending order
+         * @description Only open orders can be canceled. Filled/canceled/rejected return 404. Canceled orders never fill.
+         */
+        delete: operations["cancelPortfolioOrder"];
+        options?: never;
+        head?: never;
+        /**
+         * Amend an open paper pending order
+         * @description Change triggerPrice and/or remainingQuantity in place (same id). Recalculates cash or
+         *     position reservations. Only open GTC standalone limit_buy, limit_sell, and stop_loss.
+         *     remainingQuantity must stay above zero (use DELETE to cancel). Original quantity becomes
+         *     filledQuantity + remainingQuantity. If the new price is already marketable, one fill
+         *     attempt runs immediately. Concurrent fill/cancel returns 409.
+         */
+        patch: operations["amendPortfolioOrder"];
+        trace?: never;
+    };
+    "/api/v1/portfolio/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper trade history */
+        get: operations["listPortfolioTrades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/recurring-buys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper recurring buy plans */
+        get: operations["listRecurringBuyPlans"];
+        put?: never;
+        /**
+         * Create a paper recurring buy plan
+         * @description Schedules cash buys of a symbol at market (last) price on a daily, weekly, or monthly cadence.
+         *     Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
+         *     Missed periods execute only the latest due slot (no backlog of intermediate buys).
+         *     Unique period keys prevent double execution across restarts or concurrent workers.
+         *     Paper trading only — not real money.
+         */
+        post: operations["createRecurringBuyPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/recurring-buys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a paper recurring buy plan */
+        get: operations["getRecurringBuyPlan"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a paper recurring buy plan
+         * @description Removes the plan and its run history (cascade).
+         */
+        delete: operations["deleteRecurringBuyPlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/recurring-buys/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a paper recurring buy plan
+         * @description Stops future executions; plan and history remain.
+         */
+        post: operations["pauseRecurringBuyPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/recurring-buys/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a paused paper recurring buy plan
+         * @description Sets status active. If nextRunAt is in the past, it is bumped to now (next worker tick).
+         */
+        post: operations["resumeRecurringBuyPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/recurring-buys/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List execution history for a recurring buy plan */
+        get: operations["listRecurringBuyRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set paper margin mode (isolated or cross)
+         * @description Account-wide margin mode. Cannot change while any open margin position or pending
+         *     margin limit order exists. Default is isolated.
+         */
+        put: operations["setMarginMode"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper margin orders */
+        get: operations["listMarginOrders"];
+        put?: never;
+        /**
+         * Open paper margin long/short (market or limit)
+         * @description Uses account marginMode (isolated or cross). Leverage 1–10x. Market opens immediately;
+         *     limit rests until last crosses limitPrice and reserves required margin until fill/cancel.
+         *     Initial margin = qty * price / leverage from available cash.
+         *     Optional stopLoss / takeProfit. Simulated only — not real money.
+         */
+        post: operations["placeMarginOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel an open paper margin limit order */
+        delete: operations["cancelMarginOrder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List open paper margin positions */
+        get: operations["listMarginPositions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a paper margin position */
+        get: operations["getMarginPosition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close all or part of a paper margin position at market
+         * @description Partial close releases proportional margin and recalculates liquidation.
+         */
+        post: operations["closeMarginPosition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions/{id}/margin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add or remove margin from an isolated position
+         * @description delta > 0 adds cash into the position margin; delta < 0 returns excess to cash.
+         *     Cannot go below initial margin for remaining size. Liquidation price is recalculated.
+         *     Only allowed in isolated mode.
+         */
+        post: operations["adjustMargin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions/{id}/repay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repay margin debt without closing
+         * @description Pays interest first, then principal. Amount is in debt units (quote cash for long, base coins for short).
+         *     Short repay spends available cash at mark to cover coin debt.
+         */
+        post: operations["repayMarginDebt"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/positions/{id}/brackets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear stop-loss / take-profit on an open margin position */
+        put: operations["setMarginBrackets"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/margin/trades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper margin trade history */
+        get: operations["listMarginTrades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List price difference watches */
+        get: operations["listPriceDiffWatches"];
+        put?: never;
+        /**
+         * Create a cross-exchange price difference watch
+         * @description Tracks last prices for a symbol on Binance, Coinbase, and Bybit.
+         *     When net edge after exchange fees exceeds minNetDiffPct, stores an opportunity
+         *     with buyExchange and sellExchange. Does not create a duplicate while open.
+         *     When net falls below the limit the opportunity closes; a later re-cross opens a new one.
+         *     Stale or missing exchange prices skip evaluation for that venue (no signal).
+         *     Open opportunities are durable (SQLite) and survive worker restarts.
+         *     Informational only — not financial advice / not executable trading.
+         */
+        post: operations["createPriceDiffWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a price difference watch */
+        get: operations["getPriceDiffWatch"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a price difference watch
+         * @description Removes the watch and its opportunities.
+         */
+        delete: operations["deletePriceDiffWatch"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/opportunities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List price difference opportunities */
+        get: operations["listPriceDiffOpportunities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/opportunities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a price difference opportunity */
+        get: operations["getPriceDiffOpportunity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scanner rules */
+        get: operations["listScannerRules"];
+        put?: never;
+        /**
+         * Create a technical scanner rule
+         * @description Creates a rule evaluated against the client's watchlist symbols.
+         *     Types: rsi, ma_crossover, volume_increase. Informational only — not financial advice.
+         */
+        post: operations["createScannerRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a scanner rule */
+        get: operations["getScannerRule"];
+        put?: never;
+        post?: never;
+        /** Delete a scanner rule */
+        delete: operations["deleteScannerRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scanner match history
+         * @description Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
+         *     (candle open time) so the same bar is not stored twice.
+         */
+        get: operations["listScannerResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List scanner backtests */
+        get: operations["listScannerBacktests"];
+        put?: never;
+        /**
+         * Start a historical scanner backtest
+         * @description Runs a rule over a symbol and date range in the background. Identical jobs
+         *     (same client, rule, symbol, range) return the existing pending/running/completed job.
+         *     Progress and signalCount update while running. Informational only.
+         */
+        post: operations["startScannerBacktest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get scanner backtest progress and summary */
+        get: operations["getScannerBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending or running backtest */
+        post: operations["cancelScannerBacktest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/scanner/backtests/{id}/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List backtest signals with forward returns
+         * @description Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
+         *     (percent price change after 1/5/20 calendar days when data exists).
+         */
+        get: operations["listScannerBacktestSignals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List export jobs for a client */
+        get: operations["listExports"];
+        put?: never;
+        /**
+         * Start a user data export
+         * @description Queues an export of the caller's own data as JSON or CSV.
+         *     Sections default to all of: watchlist, shares, alerts, backtests.
+         *     Only one pending/running export is allowed per clientId (409 conflict otherwise).
+         *     Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
+         */
+        post: operations["startExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get export job status and progress */
+        get: operations["getExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending or running export */
+        post: operations["cancelExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download a completed export file
+         * @description Only the owning clientId may download. Returns 400 if not completed, 404 if expired
+         *     or missing. Files are deleted automatically after EXPORT_FILE_TTL (default 1h).
+         */
+        get: operations["downloadExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get account close/reopen status for a clientId */
+        get: operations["getAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close account (7-day grace period)
+         * @description Marks the clientId closed. Product APIs return 403 for that clientId.
+         *     Shared watchlists owned by this client become inaccessible to grantees.
+         *     Data is retained until purgeAt (closedAt + 7 days). Active jobs are canceled.
+         */
+        post: operations["closeAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed account within the grace period */
+        post: operations["reopenAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload an export file and get a restore preview
+         * @description Accepts multipart form field `file` (or raw JSON/CSV body).
+         *     Parses watchlist, shares, alerts, and backtests; returns counts of valid, invalid,
+         *     willAdd (under merge), and duplicates. Does not apply data until confirm.
+         *     Ownership is always the uploading clientId (file clientId is ignored).
+         */
+        post: operations["previewImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List import jobs for a client */
+        get: operations["listImports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get import job status, progress, and preview counts */
+        get: operations["getImport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/{id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start applying a previewed import
+         * @description mode=merge adds only missing records (no duplicate symbols/shares/ids).
+         *     mode=replace clears existing section data for the client then imports from the file.
+         *     Only one pending/running import per client (409 otherwise). Runs in the background.
+         */
+        post: operations["confirmImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a previewed, pending, or running import */
+        post: operations["cancelImport"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -398,8 +1435,288 @@ export interface components {
             offset?: number;
             items?: components["schemas"]["SpotMarket"][];
         };
-        Watchlist: {
+        PriceAlert: {
+            id?: string;
             clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            condition?: "above" | "below";
+            targetPrice?: number;
+            /** @enum {string} */
+            mode?: "one_time" | "repeating";
+            /** @description Repeating only â€” ready to fire on next cross into the condition zone */
+            armed?: boolean;
+            /** @enum {string} */
+            status?: "active" | "triggered";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            triggeredAt?: string | null;
+            triggeredPrice?: number;
+        };
+        AlertWebhook: {
+            clientId?: string;
+            url?: string;
+            /** @enum {string} */
+            deliveryMode?: "immediate" | "hourly_digest";
+            timeZone?: string;
+            quietHours?: {
+                enabled?: boolean;
+                start?: string;
+                end?: string;
+            };
+            configured?: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PortfolioView: {
+            clientId?: string;
+            currency?: string;
+            startingBalance?: number;
+            cashBalance?: number;
+            /** @description Cash locked by open spot buy pending orders */
+            reservedCash?: number;
+            /** @description Margin reserved by open margin limit orders */
+            reservedMargin?: number;
+            /** @description Free cash after spot/margin reservations; cross mode also adds margin unrealized PnL */
+            availableCash?: number;
+            positionsValue?: number;
+            /** @enum {string} */
+            marginMode?: "isolated" | "cross";
+            /** @description Margin in open margin positions (already deducted from cash) */
+            marginLocked?: number;
+            marginUnrealizedPnL?: number;
+            marginEquity?: number;
+            equity?: number;
+            unrealizedPnL?: number;
+            realizedPnLTotal?: number;
+            totalPnL?: number;
+            positions?: Record<string, never>[];
+            marginPositions?: components["schemas"]["MarginPosition"][];
+            note?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        MarginPosition: {
+            id?: string;
+            clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            /** @enum {string} */
+            mode?: "isolated" | "cross";
+            quantity?: number;
+            entryPrice?: number;
+            leverage?: number;
+            margin?: number;
+            /** @description Main borrowed amount (quote cash for long, base coins for short) */
+            debtPrincipal?: number;
+            /** @description Accrued interest in the same unit as debtPrincipal */
+            debtInterest?: number;
+            /** @enum {string} */
+            debtAsset?: "quote" | "base";
+            /** @description Principal+interest valued in quote (short uses mark) */
+            debtNotional?: number;
+            /** Format: date-time */
+            lastInterestAt?: string;
+            liquidationPrice?: number;
+            stopLoss?: number | null;
+            takeProfit?: number | null;
+            /** @enum {string} */
+            status?: "open" | "closed";
+            markPrice?: number;
+            unrealizedPnL?: number;
+            realizedPnL?: number;
+            closeReason?: string;
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        PendingOrder: {
+            id?: string;
+            clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            type?: "limit_buy" | "limit_sell" | "stop_loss" | "trailing_stop";
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            /** @description Original order size */
+            quantity?: number;
+            filledQuantity?: number;
+            remainingQuantity?: number;
+            /** @description Limit/stop level; for trailing_stop the current ratcheted stop */
+            triggerPrice?: number;
+            /** @description Cash reserved for remaining buy size (remaining * triggerPrice) */
+            reservedCash?: number;
+            /** @description Position quantity reserved for remaining sell size */
+            reservedQuantity?: number;
+            /** @enum {string} */
+            timeInForce?: "gtc" | "ioc" | "fok";
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** @enum {string} */
+            status?: "open" | "filled" | "canceled" | "rejected" | "pending";
+            /** @description Shared id for OCO take-profit + stop-loss pair */
+            ocoGroupId?: string;
+            /** @description Id of the other OCO leg */
+            ocoPeerId?: string;
+            /** @description Shared id for bracket entry + exits */
+            bracketId?: string;
+            /** @enum {string} */
+            bracketRole?: "entry" | "take_profit" | "stop_loss";
+            /**
+             * @description Trailing distance mode
+             * @enum {string}
+             */
+            trailType?: "percent" | "offset";
+            /** @description Trail distance (fraction or price offset) */
+            trailValue?: number;
+            /** @description High-water mark for trailing stop (sell) */
+            trailPeak?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** Format: date-time */
+            filledAt?: string | null;
+            /** Format: date-time */
+            canceledAt?: string | null;
+            /** @description Latest fill trade id */
+            fillTradeId?: string;
+            /** @description Latest fill price */
+            fillPrice?: number;
+            rejectReason?: string;
+            /** @description user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled */
+            cancelReason?: string;
+        };
+        /** @description At least one of triggerPrice or remainingQuantity is required. */
+        AmendPendingOrderRequest: {
+            /** @description New limit or stop price */
+            triggerPrice?: number;
+            /** @description New remaining size (must stay above zero; original quantity becomes filled + remaining) */
+            remainingQuantity?: number;
+        };
+        PendingOrderAmendHints: {
+            /** @description Available cash plus this order's current cash reservation (buy) */
+            availableCashForOrder?: number;
+            /** @description Available position plus this order's current qty reservation (sell) */
+            availableQuantityForOrder?: number;
+            /** @description Max remaining at the order's current triggerPrice */
+            maxRemainingQuantity?: number;
+            /** @description Minimum remaining size (MinTradeQuantity) */
+            minRemainingQuantity?: number;
+        };
+        PendingOrderDetail: {
+            order?: components["schemas"]["PendingOrder"];
+            /** @description Last market price for the pair (0 if unavailable) */
+            lastPrice?: number;
+            /** @description True when PATCH amend is allowed */
+            editable?: boolean;
+            amend?: components["schemas"]["PendingOrderAmendHints"];
+            note?: string;
+        };
+        RecurringBuyPlan: {
+            id?: string;
+            clientId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @description Cash notional spent each successful run */
+            amount?: number;
+            /** @enum {string} */
+            frequency?: "daily" | "weekly" | "monthly";
+            /** @enum {string} */
+            status?: "active" | "paused";
+            /** Format: date-time */
+            nextRunAt?: string;
+            /** Format: date-time */
+            lastRunAt?: string | null;
+            /** @description Last claimed period key (idempotency) */
+            lastPeriodKey?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        RecurringBuyRun: {
+            id?: string;
+            planId?: string;
+            /** @description Calendar period key e.g. 2024-06-15 | 2024-W24 | 2024-06 */
+            periodKey?: string;
+            /** @enum {string} */
+            status?: "succeeded" | "failed";
+            amount?: number;
+            quantity?: number;
+            price?: number;
+            tradeId?: string;
+            /** @description e.g. insufficient cash balance, market price unavailable */
+            failReason?: string;
+            /** Format: date-time */
+            scheduledFor?: string;
+            /** Format: date-time */
+            executedAt?: string;
+        };
+        PriceDiffWatch: {
+            id?: string;
+            clientId?: string;
+            symbol?: string;
+            /** @description Minimum net % edge after fees to open an opportunity */
+            minNetDiffPct?: number;
+            feeBinancePct?: number;
+            feeCoinbasePct?: number;
+            feeBybitPct?: number;
+            /** @enum {string} */
+            status?: "active" | "paused";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PriceDiffOpportunity: {
+            id?: string;
+            watchId?: string;
+            clientId?: string;
+            symbol?: string;
+            /** @enum {string} */
+            buyExchange?: "binance" | "coinbase" | "bybit";
+            /** @enum {string} */
+            sellExchange?: "binance" | "coinbase" | "bybit";
+            buyPrice?: number;
+            sellPrice?: number;
+            grossDiffPct?: number;
+            netDiffPct?: number;
+            minNetDiffPct?: number;
+            /** @enum {string} */
+            status?: "open" | "closed";
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        Watchlist: {
+            /** @description List owner id (same as ownerClientId) */
+            clientId?: string;
+            /** @description List owner */
+            ownerClientId?: string;
+            /**
+             * @description Caller's access role on this list
+             * @enum {string}
+             */
+            role?: "owner" | "viewer" | "editor";
+            /**
+             * Format: int64
+             * @description Monotonic revision for multi-device optimistic concurrency (starts at 0)
+             */
+            version?: number;
             /** Format: date-time */
             updatedAt?: string;
             items?: {
@@ -409,6 +1726,137 @@ export interface components {
                 /** Format: date-time */
                 addedAt?: string;
             }[];
+        };
+        /** @description Returned in 409 responses when a write cannot be auto-merged */
+        WatchlistSyncConflict: {
+            /** Format: int64 */
+            baseVersion?: number;
+            /** Format: int64 */
+            serverVersion?: number;
+            server?: components["schemas"]["Watchlist"];
+            clientProposed?: {
+                exchange?: string;
+                symbol?: string;
+                note?: string;
+            }[];
+            /** @description Non-conflicting merge preview */
+            autoMerged?: {
+                exchange?: string;
+                symbol?: string;
+                note?: string;
+            }[];
+            conflicts?: {
+                exchange?: string;
+                symbol?: string;
+                /** @enum {string} */
+                type?: "update_vs_update" | "delete_vs_update" | "update_vs_delete";
+                serverItem?: Record<string, never> | null;
+                clientItem?: Record<string, never> | null;
+            }[];
+        };
+        WatchlistShare: {
+            ownerClientId?: string;
+            granteeClientId?: string;
+            /** @enum {string} */
+            role?: "viewer" | "editor";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        WatchlistAuditEvent: {
+            id?: string;
+            ownerClientId?: string;
+            actorClientId?: string;
+            /** @enum {string} */
+            action?: "share_granted" | "share_updated" | "share_revoked" | "item_added" | "item_removed" | "list_replaced";
+            exchange?: string;
+            symbol?: string;
+            detail?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ExportJob: {
+            id?: string;
+            clientId?: string;
+            /** @enum {string} */
+            format?: "json" | "csv";
+            sections?: ("watchlist" | "shares" | "alerts" | "backtests")[];
+            /** @enum {string} */
+            status?: "pending" | "running" | "completed" | "canceled" | "failed";
+            /** @description 0–100 */
+            progressPct?: number;
+            stage?: string;
+            errorMessage?: string;
+            fileName?: string;
+            /** Format: int64 */
+            byteSize?: number;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** @description Relative path when status=completed */
+            downloadUrl?: string;
+        };
+        ImportSectionCounts: {
+            valid?: number;
+            invalid?: number;
+            willAdd?: number;
+            duplicates?: number;
+        };
+        Account: {
+            clientId?: string;
+            /** @enum {string} */
+            status?: "active" | "closed" | "purged";
+            /** Format: date-time */
+            closedAt?: string;
+            /** Format: date-time */
+            purgeAt?: string;
+            /** Format: date-time */
+            reopenedAt?: string;
+            canReopen?: boolean;
+            /** @example 7 */
+            graceDays?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ImportJob: {
+            id?: string;
+            clientId?: string;
+            /** @enum {string} */
+            format?: "json" | "csv";
+            /** @enum {string} */
+            mode?: "merge" | "replace";
+            /** @enum {string} */
+            status?: "previewed" | "pending" | "running" | "completed" | "canceled" | "failed";
+            progressPct?: number;
+            stage?: string;
+            errorMessage?: string;
+            sections?: {
+                [key: string]: components["schemas"]["ImportSectionCounts"];
+            };
+            totals?: components["schemas"]["ImportSectionCounts"];
+            /** @description Records actually inserted after completed apply */
+            added?: {
+                [key: string]: number;
+            };
+            fileName?: string;
+            /** Format: int64 */
+            byteSize?: number;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
         };
         SpotMarket: {
             symbol?: string;
@@ -432,11 +1880,11 @@ export interface components {
             circulatingSupply?: number | null;
             totalSupply?: number | null;
             maxSupply?: number | null;
-            /** @description USD price × circulating supply */
+            /** @description USD price times circulating supply */
             marketCapCirculating?: number | null;
-            /** @description USD price × total supply */
+            /** @description USD price times total supply */
             marketCapTotal?: number | null;
-            /** @description USD price × max supply, or the string "∞" when max supply is undefined */
+            /** @description USD price times max supply, or infinity when max supply is undefined */
             marketCapMax?: (number | "∞") | null;
         };
     };
@@ -610,7 +2058,7 @@ export interface operations {
                 sort?: "quoteVolume" | "volume" | "priceChangePercent" | "lastPrice" | "tradeCount" | "symbol" | "baseAsset" | "marketCapCirculating" | "marketCapTotal" | "marketCapMax" | "tags";
                 /** @description Sort direction (default desc for metrics, asc for symbol/baseAsset) */
                 order?: "asc" | "desc";
-                /** @description Page size (1–500, default 50) */
+                /** @description Page size (1â€“500, default 50) */
                 limit?: number;
                 /** @description Rows to skip after filter+sort (default 0) */
                 offset?: number;
@@ -642,12 +2090,12 @@ export interface operations {
                 /** @description Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD) */
                 symbol: string;
                 /**
-                 * @description Candle interval (default 1h). Supported values are exchange-specific —
-                 *     call GET /api/v1/market/intervals?exchange=… for the authoritative list.
+                 * @description Candle interval (default 1h). Supported values are exchange-specific â€”
+                 *     call GET /api/v1/market/intervals?exchange=â€¦ for the authoritative list.
                  *     Coinbase/Bybit reject many Binance-only intervals with 400.
                  */
                 interval?: string;
-                /** @description Number of candles (1–1000, default 100) */
+                /** @description Number of candles (1â€“1000, default 100) */
                 limit?: number;
                 /** @description RFC3339 or Unix milliseconds */
                 startTime?: string;
@@ -842,6 +2290,8 @@ export interface operations {
                 direction?: "up" | "down" | "both";
                 minVolumeRatio?: number;
                 symbolLimit?: number;
+                /** @description Maximum total events across all symbols (default 30). Hits are ranked by |return|; excess events/hits are dropped. */
+                maxTotalEvents?: number;
             };
             header?: never;
             path?: never;
@@ -849,14 +2299,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Ranked pump hits */
+            /** @description Ranked pump hits with resolved scan parameters */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        exchange?: string;
+                        quote?: string;
+                        interval?: string;
+                        lookbackHours?: number;
+                        minReturnPct?: number;
+                        windowBars?: number;
+                        mode?: string;
+                        direction?: string;
+                        symbolLimit?: number;
+                        maxTotalEvents?: number;
                         hitCount?: number;
+                        /** @description Total events across all hits (≤ maxTotalEvents) */
+                        eventCount?: number;
                         hits?: Record<string, never>[];
                         note?: string;
                     };
@@ -934,8 +2396,10 @@ export interface operations {
     getWatchlist: {
         parameters: {
             query?: {
-                /** @description Required non-empty client tenancy key (not the shared name "default") */
+                /** @description Actor client tenancy key (not the shared name "default") */
                 clientId?: string;
+                /** @description List owner when viewing a shared watchlist; omit for own list */
+                ownerClientId?: string;
             };
             header?: {
                 /** @description Preferred alternative to clientId query */
@@ -946,7 +2410,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Watchlist */
+            /** @description Watchlist with access role */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -956,6 +2420,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
             429: components["responses"]["Error"];
         };
     };
@@ -970,6 +2435,19 @@ export interface operations {
             content: {
                 "application/json": {
                     clientId?: string;
+                    /** @description Must be the actor (owner only) */
+                    ownerClientId?: string;
+                    /**
+                     * Format: int64
+                     * @description Version from last GET; omit for unconditional write (legacy)
+                     */
+                    baseVersion?: number;
+                    /** @description Snapshot from last GET (recommended for accurate delete detection) */
+                    baseItems?: {
+                        exchange?: string;
+                        symbol?: string;
+                        note?: string;
+                    }[];
                     items?: {
                         exchange?: string;
                         symbol: string;
@@ -989,6 +2467,253 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            /** @description Version conflict — resolve and retry */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: components["schemas"]["Error"];
+                        conflict?: components["schemas"]["WatchlistSyncConflict"];
+                    };
+                };
+            };
+        };
+    };
+    getAlertWebhook: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook settings (url may be empty if not configured) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertWebhook"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    putAlertWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * Format: uri
+                     * @example https://hooks.example.com/swyngora
+                     */
+                    url: string;
+                    /**
+                     * @default immediate
+                     * @enum {string}
+                     */
+                    deliveryMode?: "immediate" | "hourly_digest";
+                    /**
+                     * @default UTC
+                     * @example Europe/Istanbul
+                     */
+                    timeZone?: string;
+                    quietHours?: {
+                        /** @default false */
+                        enabled?: boolean;
+                        /**
+                         * @description Local HH:MM
+                         * @example 22:00
+                         */
+                        start?: string;
+                        /**
+                         * @description Local HH:MM; may be earlier than start
+                         * @example 08:00
+                         */
+                        end?: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Saved webhook */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertWebhook"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    deleteAlertWebhook: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook cleared */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listPriceAlerts: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alert list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        count?: number;
+                        alerts?: components["schemas"]["PriceAlert"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createPriceAlert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /** @enum {string} */
+                    condition: "above" | "below";
+                    targetPrice: number;
+                    /**
+                     * @description one_time fires once; repeating fires on each re-cross of the target
+                     * @default one_time
+                     * @enum {string}
+                     */
+                    mode?: "one_time" | "repeating";
+                };
+            };
+        };
+        responses: {
+            /** @description Created alert */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceAlert"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPriceAlert: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Alert */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceAlert"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deletePriceAlert: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted?: boolean;
+                        id?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     addWatchlistItem: {
@@ -1001,7 +2726,12 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
+                    /** @description Actor client id */
                     clientId?: string;
+                    /** @description List owner when mutating a shared list */
+                    ownerClientId?: string;
+                    /** Format: int64 */
+                    baseVersion?: number;
                     /** @default binance */
                     exchange?: string;
                     symbol: string;
@@ -1020,6 +2750,19 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            /** @description Symbol note conflict with concurrent edit */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: components["schemas"]["Error"];
+                        conflict?: components["schemas"]["WatchlistSyncConflict"];
+                    };
+                };
+            };
         };
     };
     removeWatchlistItem: {
@@ -1028,8 +2771,15 @@ export interface operations {
                 exchange: string;
                 symbol: string;
                 clientId?: string;
+                /** @description List owner when mutating a shared list */
+                ownerClientId?: string;
+                baseVersion?: number;
             };
-            header?: never;
+            header?: {
+                /** @description Optional alternative to baseVersion (list version) */
+                "If-Match"?: string;
+                "X-Client-Id"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1045,6 +2795,1901 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            /** @description Delete vs concurrent update conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error?: components["schemas"]["Error"];
+                        conflict?: components["schemas"]["WatchlistSyncConflict"];
+                    };
+                };
+            };
+        };
+    };
+    listWatchlistShares: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Share list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ownerClientId?: string;
+                        count?: number;
+                        shares?: components["schemas"]["WatchlistShare"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    shareWatchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Owner client id */
+                    clientId?: string;
+                    granteeClientId: string;
+                    /** @enum {string} */
+                    role: "viewer" | "editor";
+                };
+            };
+        };
+        responses: {
+            /** @description Share created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistShare"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    revokeWatchlistShare: {
+        parameters: {
+            query: {
+                granteeClientId: string;
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        revoked?: boolean;
+                        granteeClientId?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateWatchlistShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    granteeClientId: string;
+                    /** @enum {string} */
+                    role: "viewer" | "editor";
+                };
+            };
+        };
+        responses: {
+            /** @description Updated share */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistShare"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listSharedWatchlists: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Incoming shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        count?: number;
+                        shares?: components["schemas"]["WatchlistShare"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listWatchlistAudit: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audit events (newest first) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        ownerClientId?: string;
+                        count?: number;
+                        events?: components["schemas"]["WatchlistAuditEvent"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPortfolio: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Portfolio view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioView"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    createPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example 10000 */
+                    startingBalance: number;
+                    /** @default USDT */
+                    currency?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created portfolio snapshot */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioView"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listPortfolioOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "rejected" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pending order list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    placePortfolioOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /**
+                     * @default market
+                     * @enum {string}
+                     */
+                    type?: "market" | "limit_buy" | "limit_sell" | "stop_loss" | "trailing_stop" | "oco" | "bracket";
+                    /**
+                     * @description Required for market orders; derived for pending types
+                     * @enum {string}
+                     */
+                    side?: "buy" | "sell";
+                    quantity: number;
+                    /** @description Limit/stop price, or bracket entry limit_buy price */
+                    triggerPrice?: number;
+                    /**
+                     * @description Trailing stop distance mode (required for type=trailing_stop)
+                     * @enum {string}
+                     */
+                    trailType?: "percent" | "offset";
+                    /**
+                     * @description Trail distance — percent as fraction (0.05 = 5% below peak), or fixed price offset.
+                     *     Required for type=trailing_stop.
+                     */
+                    trailValue?: number;
+                    /** @description OCO take-profit limit sell price (required for type=oco) */
+                    takeProfitPrice?: number;
+                    /** @description OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice) */
+                    stopLossPrice?: number;
+                    /**
+                     * @description gtc — rest until filled/canceled/expired;
+                     *     ioc — fill available on first try, cancel remainder;
+                     *     fok — fill fully on first try or cancel with no fill
+                     * @default gtc
+                     * @enum {string}
+                     */
+                    timeInForce?: "gtc" | "ioc" | "fok";
+                    /**
+                     * Format: date-time
+                     * @description Optional RFC3339 expiry (GTC only); cancels and releases reservation when reached
+                     */
+                    expiresAt?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Market fill and updated portfolio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pending order or OCO pair created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        type?: string;
+                        order?: components["schemas"]["PendingOrder"];
+                        ocoGroupId?: string;
+                        bracketId?: string;
+                        entry?: components["schemas"]["PendingOrder"];
+                        takeProfit?: components["schemas"]["PendingOrder"];
+                        stopLoss?: components["schemas"]["PendingOrder"];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelAllPortfolioOrders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    /**
+                     * @description When set, cancel only this pair; omit to cancel all markets
+                     * @example BTCUSDT
+                     */
+                    symbol?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Canceled orders and updated portfolio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        orders?: components["schemas"]["PendingOrder"][];
+                        canceled?: number;
+                        /** @enum {string} */
+                        scope?: "all" | "market" | "exchange";
+                        exchange?: string;
+                        symbol?: string;
+                        portfolio?: components["schemas"]["PortfolioView"];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Order detail for display or edit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingOrderDetail"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelPortfolioOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["PendingOrder"];
+                        note?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    amendPortfolioOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmendPendingOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Amended order and updated portfolio snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["PendingOrder"];
+                        portfolio?: components["schemas"]["PortfolioView"];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listPortfolioTrades: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trade list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listRecurringBuyPlans: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        plans?: components["schemas"]["RecurringBuyPlan"][];
+                        count?: number;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createRecurringBuyPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    /** @example BTCUSDT */
+                    symbol: string;
+                    /**
+                     * @description Cash notional spent each run
+                     * @example 50
+                     */
+                    amount: number;
+                    /** @enum {string} */
+                    frequency: "daily" | "weekly" | "monthly";
+                    /**
+                     * Format: date-time
+                     * @description First scheduled run (RFC3339); default is now (next worker tick)
+                     */
+                    startAt?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringBuyPlan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getRecurringBuyPlan: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringBuyPlan"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteRecurringBuyPlan: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted?: boolean;
+                        id?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    pauseRecurringBuyPlan: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringBuyPlan"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    resumeRecurringBuyPlan: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringBuyPlan"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listRecurringBuyRuns: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        planId?: string;
+                        runs?: components["schemas"]["RecurringBuyRun"][];
+                        count?: number;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    setMarginMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    mode: "isolated" | "cross";
+                };
+            };
+        };
+        responses: {
+            /** @description Mode updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listMarginOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "rejected" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Order list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    placeMarginOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /** @enum {string} */
+                    side: "long" | "short";
+                    /**
+                     * @default market
+                     * @enum {string}
+                     */
+                    type?: "market" | "limit";
+                    quantity: number;
+                    leverage: number;
+                    /** @description Required for type=limit */
+                    limitPrice?: number;
+                    stopLoss?: number;
+                    takeProfit?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Position opened (market) or limit order resting */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelMarginOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listMarginPositions: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open margin positions with marks and liquidation price */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getMarginPosition: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Position */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarginPosition"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    closeMarginPosition: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @description Omit or 0 for full close */
+                    quantity?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated or closed position plus close trade */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    adjustMargin: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Positive to add */
+                    delta: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated position */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    repayMarginDebt: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    amount: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated position and repay trade */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    setMarginBrackets: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    stopLoss?: number;
+                    takeProfit?: number;
+                    clearStopLoss?: boolean;
+                    clearTakeProfit?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated position */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listMarginTrades: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Margin trades */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPriceDiffWatches: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watch list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createPriceDiffWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example BTCUSDT */
+                    symbol: string;
+                    /**
+                     * @description Minimum net difference percent after fees (e.g. 0.5 = 0.5%)
+                     * @example 0.5
+                     */
+                    minNetDiffPct: number;
+                    /** @example 0.1 */
+                    feeBinancePct?: number;
+                    /** @example 0.6 */
+                    feeCoinbasePct?: number;
+                    /** @example 0.1 */
+                    feeBybitPct?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created watch */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deletePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPriceDiffOpportunities: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "closed" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opportunity list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPriceDiffOpportunity: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Opportunity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffOpportunity"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerRules: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createScannerRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    type: "rsi" | "ma_crossover" | "volume_increase";
+                    /** @default 1h */
+                    interval?: string;
+                    /** @default 14 */
+                    rsiPeriod?: number;
+                    /** @enum {string} */
+                    rsiCondition?: "above" | "below";
+                    rsiThreshold?: number;
+                    /** @default 12 */
+                    maFastPeriod?: number;
+                    /** @default 26 */
+                    maSlowPeriod?: number;
+                    /** @enum {string} */
+                    maDirection?: "golden_cross" | "death_cross";
+                    /** @default 20 */
+                    volumeLookback?: number;
+                    /** @default 2 */
+                    volumeMinRatio?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created rule */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerResults: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listScannerBacktests: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backtest list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    startScannerBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    ruleId: string;
+                    /**
+                     * @default binance
+                     * @enum {string}
+                     */
+                    exchange?: "binance" | "coinbase" | "bybit";
+                    symbol: string;
+                    /** Format: date-time */
+                    rangeStart: string;
+                    /** Format: date-time */
+                    rangeEnd: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Job accepted or existing job returned */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getScannerBacktest: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job with progressPct, signalCount, status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelScannerBacktest: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listScannerBacktestSignals: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signals list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listExports: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        count?: number;
+                        exports?: components["schemas"]["ExportJob"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    startExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @default json
+                     * @enum {string}
+                     */
+                    format?: "json" | "csv";
+                    /** @description Omit for all sections */
+                    sections?: ("watchlist" | "shares" | "alerts" | "backtests")[];
+                };
+            };
+        };
+        responses: {
+            /** @description Export job accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJob"];
+                };
+            };
+            400: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    getExport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Job with progressPct, status, downloadUrl when ready */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJob"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelExport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled (or already terminal) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportJob"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    downloadExport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Export file body (JSON or CSV) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                    "text/csv": string;
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getAccount: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    closeAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Closed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    reopenAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Reopened (active) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    previewImport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                format?: "json" | "csv";
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    format?: "json" | "csv";
+                    /** Format: binary */
+                    file?: string;
+                };
+                "application/json": Record<string, never>;
+                "text/csv": string;
+            };
+        };
+        responses: {
+            /** @description Preview with section counts (status=previewed) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listImports: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Import list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getImport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Import job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    confirmImport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @enum {string} */
+                    mode: "merge" | "replace";
+                };
+            };
+        };
+        responses: {
+            /** @description Import queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    cancelImport: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Canceled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     postAiChat: {

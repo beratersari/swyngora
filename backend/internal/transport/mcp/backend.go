@@ -751,6 +751,84 @@ func (b *Backend) ListPortfolioOrders(ctx context.Context, clientID, status stri
 	return mustJSON(map[string]any{"clientId": clientID, "orders": items, "count": len(items), "status": st})
 }
 
+func (b *Backend) GetPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	d, err := b.Portfolio.GetPendingOrderDetail(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"order":     pendingOrderMap(&d.Order),
+		"lastPrice": d.LastPrice,
+		"editable":  d.Editable,
+		"amend": map[string]any{
+			"availableCashForOrder":     d.AvailableCashForOrder,
+			"availableQuantityForOrder": d.AvailableQuantityForOrder,
+			"maxRemainingQuantity":      d.MaxRemainingQuantity,
+			"minRemainingQuantity":      d.MinRemainingQuantity,
+		},
+		"note": "Paper pending order. Amend keeps the same id and updates reservations. Not real money.",
+	})
+}
+
+func (b *Backend) AmendPortfolioOrder(ctx context.Context, clientID, id string, triggerPrice, remainingQuantity *float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	o, view, err := b.Portfolio.AmendPendingOrder(ctx, portfolio.AmendPendingOrderInput{
+		ClientID: clientID, OrderID: id, TriggerPrice: triggerPrice, RemainingQuantity: remainingQuantity,
+	})
+	if err != nil {
+		return nil, err
+	}
+	pv, err := portfolioViewJSON(view)
+	if err != nil {
+		return nil, err
+	}
+	var pmap map[string]any
+	_ = json.Unmarshal(pv, &pmap)
+	note := "Order amended in place; reservations updated. Not real money."
+	if o.Status == domain.PendingStatusFilled {
+		note = "Order amended and filled at last price. Not real money."
+	}
+	return mustJSON(map[string]any{"order": pendingOrderMap(o), "portfolio": pmap, "note": note})
+}
+
+func (b *Backend) CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, view, err := b.Portfolio.CancelOpenPendingOrders(ctx, portfolio.CancelOpenOrdersInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, pendingOrderMap(&list[i]))
+	}
+	scope := "all"
+	if strings.TrimSpace(symbol) != "" {
+		scope = "market"
+	} else if strings.TrimSpace(exchange) != "" {
+		scope = "exchange"
+	}
+	out := map[string]any{"orders": items, "canceled": len(items), "scope": scope, "note": "Open paper orders canceled; unused reservations released. Not real money."}
+	if view != nil {
+		pv, err := portfolioViewJSON(view)
+		if err != nil {
+			return nil, err
+		}
+		var pmap map[string]any
+		_ = json.Unmarshal(pv, &pmap)
+		out["portfolio"] = pmap
+	}
+	return mustJSON(out)
+}
+
 func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

@@ -827,6 +827,43 @@ func (s *SQLite) GetPendingOrder(ctx context.Context, clientID, id string) (*dom
 	return o, nil
 }
 
+// AmendPendingOrder updates an open order in place when remaining+trigger still match the CAS snapshot.
+func (s *SQLite) AmendPendingOrder(ctx context.Context, clientID, id string, a domain.PendingOrderAmend) (*domain.PendingOrder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at := a.At; at.IsZero() {
+		a.At = time.Now().UTC()
+	}
+	atStr := a.At.UTC().Format(time.RFC3339Nano)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET remaining_quantity = ?, trigger_price = ?, quantity = ?,
+		    reserved_cash = ?, reserved_quantity = ?, updated_at = ?
+		WHERE id = ? AND client_id = ? AND status = 'open'
+		  AND ABS(remaining_quantity - ?) < 1e-9
+		  AND ABS(trigger_price - ?) < 1e-9
+	`, a.RemainingQuantity, a.TriggerPrice, a.Quantity, a.ReservedCash, a.ReservedQuantity, atStr,
+		id, clientID, a.ExpectedRemaining, a.ExpectedTrigger)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		cur, gerr := scanPendingOrder(s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE client_id = ? AND id = ?`, clientID, id))
+		if gerr == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		if gerr != nil {
+			return nil, gerr
+		}
+		if cur.Status != domain.PendingStatusOpen {
+			return nil, fmt.Errorf("%w: order is no longer open", domain.ErrConflict)
+		}
+		return nil, fmt.Errorf("%w: order changed; refetch and retry", domain.ErrConflict)
+	}
+	return scanPendingOrder(s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE client_id = ? AND id = ?`, clientID, id))
+}
+
 // ListPendingOrders lists client orders, optional status filter.
 func (s *SQLite) ListPendingOrders(ctx context.Context, clientID string, status domain.PendingOrderStatus, limit, offset int) ([]domain.PendingOrder, error) {
 	if limit <= 0 {
@@ -972,6 +1009,87 @@ func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at
 	}
 	row := s.db.QueryRowContext(ctx, pendingOrderSelect+` WHERE id = ? AND client_id = ?`, id, clientID)
 	return scanPendingOrder(row)
+}
+
+// CancelOpenPendingOrders cancels matching open/pending orders in one transaction and releases reservations.
+func (s *SQLite) CancelOpenPendingOrders(ctx context.Context, clientID string, exchange domain.Exchange, symbol string, at time.Time, reason string) ([]domain.PendingOrder, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	if reason == "" {
+		reason = domain.CancelReasonUser
+	}
+	atStr := at.UTC().Format(time.RFC3339Nano)
+
+	where := `client_id = ? AND status IN ('open', 'pending')`
+	args := []any{clientID}
+	if symbol != "" {
+		where += ` AND exchange = ? AND symbol = ?`
+		args = append(args, string(exchange), symbol)
+	} else if exchange != "" {
+		where += ` AND exchange = ?`
+		args = append(args, string(exchange))
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	rows, err := tx.QueryContext(ctx, pendingOrderSelect+` WHERE `+where+` ORDER BY created_at ASC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	list, err := scanPendingOrders(rows)
+	_ = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return []domain.PendingOrder{}, nil
+	}
+
+	placeholders := make([]string, 0, len(list))
+	updArgs := []any{atStr, atStr, reason}
+	for i := range list {
+		placeholders = append(placeholders, "?")
+		updArgs = append(updArgs, list[i].ID)
+	}
+	q := fmt.Sprintf(`
+		UPDATE pending_orders
+		SET status = 'canceled', canceled_at = ?, updated_at = ?,
+		    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
+		WHERE id IN (%s) AND status IN ('open', 'pending')
+	`, strings.Join(placeholders, ","))
+	if _, err := tx.ExecContext(ctx, q, updArgs...); err != nil {
+		return nil, err
+	}
+
+	selArgs := make([]any, 0, len(list))
+	for i := range list {
+		selArgs = append(selArgs, list[i].ID)
+	}
+	rows, err = tx.QueryContext(ctx, pendingOrderSelect+`
+		WHERE id IN (`+strings.Join(placeholders, ",")+`) AND status = 'canceled'
+		ORDER BY created_at ASC`, selArgs...)
+	if err != nil {
+		return nil, err
+	}
+	out, err := scanPendingOrders(rows)
+	_ = rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // UpdatePendingTrail ratchets peak and stop for an open trailing_stop only when peak rises.

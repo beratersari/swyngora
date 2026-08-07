@@ -139,3 +139,130 @@ func TestPortfolioHTTP_PendingOrders(t *testing.T) {
 		t.Fatalf("cancel2 %d %s", rr.Code, rr.Body.String())
 	}
 }
+
+func TestPortfolioHTTP_GetAndAmendOrder(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "http-amd", "startingBalance": 10000,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-amd", "symbol": "BTCUSDT", "type": "limit_buy",
+		"quantity": 2, "triggerPrice": 90,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.PlaceOrder(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("pending %d %s", rr.Code, rr.Body.String())
+	}
+	var place map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &place)
+	id := place["order"].(map[string]any)["id"].(string)
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/orders/"+id+"?clientId=http-amd", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.GetOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get %d %s", rr.Code, rr.Body.String())
+	}
+	var detail map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &detail)
+	if detail["editable"] != true {
+		t.Fatalf("editable %v", detail)
+	}
+	if detail["lastPrice"].(float64) != 100 {
+		t.Fatalf("lastPrice %v", detail["lastPrice"])
+	}
+	amd := detail["amend"].(map[string]any)
+	if amd["availableCashForOrder"].(float64) != 10000 {
+		t.Fatalf("amend hints %v", amd)
+	}
+
+	body, _ = json.Marshal(map[string]any{"triggerPrice": 80.0, "remainingQuantity": 1.0})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/portfolio/orders/"+id+"?clientId=http-amd", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.AmendOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("amend %d %s", rr.Code, rr.Body.String())
+	}
+	var patched map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &patched)
+	order := patched["order"].(map[string]any)
+	if order["triggerPrice"].(float64) != 80 || order["remainingQuantity"].(float64) != 1 {
+		t.Fatalf("patched order %v", order)
+	}
+	if order["id"] != id {
+		t.Fatalf("id changed %v", order["id"])
+	}
+	pf := patched["portfolio"].(map[string]any)
+	if pf["reservedCash"].(float64) != 80 {
+		t.Fatalf("reserved %v", pf["reservedCash"])
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/orders/missing?clientId=http-amd", nil)
+	req.SetPathValue("id", "missing")
+	rr = httptest.NewRecorder()
+	h.GetOrder(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("missing get %d", rr.Code)
+	}
+}
+
+func TestPortfolioHTTP_CancelAllOrders(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-cxl", "startingBalance": 10000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	for _, trig := range []float64{90, 80} {
+		body, _ = json.Marshal(map[string]any{
+			"clientId": "http-cxl", "symbol": "BTCUSDT", "type": "limit_buy",
+			"quantity": 1, "triggerPrice": trig,
+		})
+		req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr = httptest.NewRecorder()
+		h.PlaceOrder(rr, req)
+		if rr.Code != http.StatusCreated {
+			t.Fatalf("place %d %s", rr.Code, rr.Body.String())
+		}
+	}
+	body, _ = json.Marshal(map[string]any{"clientId": "http-cxl", "symbol": "BTCUSDT"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders/cancel-all", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.CancelAllOrders(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("cancel-all %d %s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if int(got["canceled"].(float64)) != 2 || got["scope"] != "market" {
+		t.Fatalf("%v", got)
+	}
+	body, _ = json.Marshal(map[string]any{"clientId": "http-cxl"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders/cancel-all", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.CancelAllOrders(rr, req)
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if int(got["canceled"].(float64)) != 0 {
+		t.Fatalf("second cancel-all %v", got)
+	}
+}

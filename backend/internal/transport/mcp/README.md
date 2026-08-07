@@ -37,6 +37,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked) |
 | `place_portfolio_bracket_order` | Paper bracket: entry limit buy + pending TP/SL |
 | `list_portfolio_orders` | List pending paper orders |
+| `get_portfolio_order` | Get one pending order + last price + amend hints |
+| `amend_portfolio_order` | Amend open GTC limit/stop price and/or remaining size |
+| `cancel_all_portfolio_orders` | Cancel all open paper orders, or one market |
 | `cancel_portfolio_order` | Cancel open pending paper order |
 | `list_portfolio_trades` | Paper trade history |
 | `create_recurring_buy` | Create paper recurring buy (DCA) plan |

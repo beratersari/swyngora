@@ -79,6 +79,66 @@ func TestValidateBracketPrices(t *testing.T) {
 	}
 }
 
+func TestCanAmendPendingOrder(t *testing.T) {
+	ok := PendingOrder{
+		Type: PendingLimitBuy, Status: PendingStatusOpen, TimeInForce: TimeInForceGTC,
+	}
+	if err := CanAmendPendingOrder(ok); err != nil {
+		t.Fatalf("limit_buy gtc: %v", err)
+	}
+	sl := ok
+	sl.Type = PendingStopLoss
+	if err := CanAmendPendingOrder(sl); err != nil {
+		t.Fatalf("stop_loss: %v", err)
+	}
+	filled := ok
+	filled.Status = PendingStatusFilled
+	if err := CanAmendPendingOrder(filled); !errors.Is(err, ErrConflict) {
+		t.Fatalf("filled want conflict: %v", err)
+	}
+	trail := ok
+	trail.Type = PendingTrailingStop
+	if err := CanAmendPendingOrder(trail); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("trailing want invalid: %v", err)
+	}
+	ioc := ok
+	ioc.TimeInForce = TimeInForceIOC
+	if err := CanAmendPendingOrder(ioc); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("ioc want invalid: %v", err)
+	}
+	oco := ok
+	oco.OCOGroupID = "g1"
+	if err := CanAmendPendingOrder(oco); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("oco want invalid: %v", err)
+	}
+	br := ok
+	br.BracketID = "b1"
+	br.BracketRole = BracketRoleEntry
+	if err := CanAmendPendingOrder(br); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("bracket want invalid: %v", err)
+	}
+}
+
+func TestAmendOriginalQuantityAndMaxRemaining(t *testing.T) {
+	if q := AmendOriginalQuantity(1, 0.5); math.Abs(q-1.5) > 1e-12 {
+		t.Fatalf("qty=%v", q)
+	}
+	if err := ValidateAmendRemaining(0); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("zero remaining: %v", err)
+	}
+	if err := ValidateAmendTriggerPrice(0); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("zero trigger: %v", err)
+	}
+	maxBuy := MaxAmendRemaining(TradeSideBuy, 100, 250, 0)
+	if math.Abs(maxBuy-2.5) > 1e-12 {
+		t.Fatalf("max buy=%v", maxBuy)
+	}
+	maxSell := MaxAmendRemaining(TradeSideSell, 0, 0, 1.25)
+	if math.Abs(maxSell-1.25) > 1e-12 {
+		t.Fatalf("max sell=%v", maxSell)
+	}
+}
+
 func TestValidateOCOPrices(t *testing.T) {
 	if err := ValidateOCOPrices(120, 90); err != nil {
 		t.Fatal(err)

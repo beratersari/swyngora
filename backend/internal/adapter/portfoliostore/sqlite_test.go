@@ -2,6 +2,7 @@ package portfoliostore
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"testing"
 	"time"
@@ -134,6 +135,123 @@ func TestSQLite_PendingOrderLifecycle(t *testing.T) {
 	}
 	if _, err := s2.CancelPendingOrder(ctx, "c", "po2", now, domain.CancelReasonUser); err != domain.ErrNotFound {
 		t.Fatalf("cancel filled: %v", err)
+	}
+}
+
+func TestSQLite_AmendPendingOrderCAS(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "amend.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := s.CreatePortfolio(ctx, domain.Portfolio{
+		ClientID: "c", Currency: "USDT", StartingBalance: 1000, CashBalance: 1000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePendingOrder(ctx, domain.PendingOrder{
+		ID: "po-a", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Type: domain.PendingLimitBuy, Side: domain.TradeSideBuy, Quantity: 1, RemainingQuantity: 1,
+		TriggerPrice: 90, ReservedCash: 90, Status: domain.PendingStatusOpen, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.AmendPendingOrder(ctx, "c", "po-a", domain.PendingOrderAmend{
+		RemainingQuantity: 0.5, TriggerPrice: 80, Quantity: 0.5,
+		ReservedCash: 40, ExpectedRemaining: 1, ExpectedTrigger: 90, At: now,
+	})
+	if err != nil || got.RemainingQuantity != 0.5 || got.TriggerPrice != 80 || got.ReservedCash != 40 {
+		t.Fatalf("amend %+v %v", got, err)
+	}
+	sum, _ := s.SumReservedCash(ctx, "c")
+	if sum != 40 {
+		t.Fatalf("reserved=%v", sum)
+	}
+	// Stale CAS
+	_, err = s.AmendPendingOrder(ctx, "c", "po-a", domain.PendingOrderAmend{
+		RemainingQuantity: 0.4, TriggerPrice: 80, Quantity: 0.4,
+		ReservedCash: 32, ExpectedRemaining: 1, ExpectedTrigger: 90, At: now,
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("stale CAS want conflict: %v", err)
+	}
+	// Missing
+	if _, err := s.AmendPendingOrder(ctx, "c", "nope", domain.PendingOrderAmend{
+		RemainingQuantity: 1, TriggerPrice: 1, Quantity: 1, ExpectedRemaining: 1, ExpectedTrigger: 1, At: now,
+	}); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("missing: %v", err)
+	}
+	// Not open
+	if _, err := s.CancelPendingOrder(ctx, "c", "po-a", now, domain.CancelReasonUser); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.AmendPendingOrder(ctx, "c", "po-a", domain.PendingOrderAmend{
+		RemainingQuantity: 0.5, TriggerPrice: 80, Quantity: 0.5,
+		ReservedCash: 40, ExpectedRemaining: 0.5, ExpectedTrigger: 80, At: now,
+	})
+	if !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("canceled amend want conflict: %v", err)
+	}
+}
+
+func TestSQLite_CancelOpenPendingOrdersMarketAndAll(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "cancel-all.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := s.CreatePortfolio(ctx, domain.Portfolio{
+		ClientID: "c", Currency: "USDT", StartingBalance: 10000, CashBalance: 10000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mk := func(id, sym string, reserve float64) {
+		t.Helper()
+		if _, err := s.CreatePendingOrder(ctx, domain.PendingOrder{
+			ID: id, ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: sym,
+			Type: domain.PendingLimitBuy, Side: domain.TradeSideBuy, Quantity: 1, RemainingQuantity: 1,
+			TriggerPrice: reserve, ReservedCash: reserve, Status: domain.PendingStatusOpen, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("a", "BTCUSDT", 90)
+	mk("b", "BTCUSDT", 80)
+	mk("c1", "ETHUSDT", 50)
+	// Inactive bracket exit on BTC should also cancel with the market wipe
+	if _, err := s.CreatePendingOrder(ctx, domain.PendingOrder{
+		ID: "exit", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Type: domain.PendingLimitSell, Side: domain.TradeSideSell, Quantity: 0, RemainingQuantity: 0,
+		TriggerPrice: 120, Status: domain.PendingStatusPending, BracketID: "br", BracketRole: domain.BracketRoleTakeProfit,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.CancelOpenPendingOrders(ctx, "c", domain.ExchangeBinance, "BTCUSDT", now, domain.CancelReasonUser)
+	if err != nil || len(got) != 3 {
+		t.Fatalf("btc cancel n=%d err=%v", len(got), err)
+	}
+	sum, _ := s.SumReservedCash(ctx, "c")
+	if sum != 50 {
+		t.Fatalf("eth reserve left=%v", sum)
+	}
+	rest, err := s.CancelOpenPendingOrders(ctx, "c", "", "", now.Add(time.Second), domain.CancelReasonUser)
+	if err != nil || len(rest) != 1 || rest[0].Symbol != "ETHUSDT" {
+		t.Fatalf("all remaining %+v err=%v", rest, err)
+	}
+	sum, _ = s.SumReservedCash(ctx, "c")
+	if sum != 0 {
+		t.Fatalf("reserved after all=%v", sum)
+	}
+	none, err := s.CancelOpenPendingOrders(ctx, "c", "", "", now, domain.CancelReasonUser)
+	if err != nil || len(none) != 0 {
+		t.Fatalf("empty cancel %+v err=%v", none, err)
 	}
 }
 

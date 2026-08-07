@@ -12,6 +12,9 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
+| `GET` | `/api/v1/portfolio/orders/{id}` | One order + last price + amend hints for the edit screen |
+| `PATCH` | `/api/v1/portfolio/orders/{id}` | Amend open GTC limit/stop in place (`triggerPrice`, `remainingQuantity`) |
+| `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open orders, or one market (`symbol` + optional `exchange`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
 | `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create recurring buy (DCA) plan |
@@ -110,6 +113,34 @@ Optional pending fields:
 - `timeInForce`: `gtc` (default), `ioc`, or `fok` (single-leg pending; OCO is GTC)
 - `expiresAt`: RFC3339 timestamp (**GTC only**); when reached the order is canceled and unused reservation is released (OCO expires as a group)
 
+### Amend open limit / stop (`PATCH /api/v1/portfolio/orders/{id}`)
+
+Change **price** and/or **remaining size** without canceling. Same order id; partial fills and trade history stay attached.
+
+| Allowed | Not allowed (v1) |
+|---------|------------------|
+| `limit_buy`, `limit_sell`, `stop_loss` | `trailing_stop` (edit trail, not trigger) |
+| `status=open`, `timeInForce=gtc` | IOC / FOK, filled / canceled / rejected |
+| Standalone orders | OCO legs, bracket legs, margin limits |
+
+**Body:** at least one of `triggerPrice`, `remainingQuantity` (remaining must stay `> 0` — use DELETE to cancel). Original `quantity` becomes `filledQuantity + remainingQuantity`. Reservations are recalculated atomically (`remaining * trigger` cash on buys; remaining qty on sells). Extra cash/qty is checked against available **plus this order’s current reservation**.
+
+**Edit-screen GET** returns `lastPrice`, `editable`, and `amend` hints (`availableCashForOrder`, `availableQuantityForOrder`, `maxRemainingQuantity`, `minRemainingQuantity`) so the form can validate without guessing.
+
+**Concurrency:** store compare-and-set on open + remaining + trigger. If the filler filled or canceled in between → **409**. After a successful amend, one fill attempt runs immediately if the new price is already marketable.
+
+### Cancel all (`POST /api/v1/portfolio/orders/cancel-all`)
+
+One action for the open-orders table (and AI tools): wipe every resting paper order, or only one pair.
+
+| Scope | Body | Effect |
+|-------|------|--------|
+| All markets | `{}` or omit `symbol` | Every `open` + inactive bracket-exit `pending` order for the client |
+| One market | `{ "symbol": "BTCUSDT", "exchange": "binance" }` | That pair only (`exchange` defaults to binance) |
+| One venue | `{ "exchange": "binance" }` | Every pair on that exchange |
+
+Releases unused cash/position reservations in one store transaction. `canceled: 0` is success (nothing open). Does **not** cancel margin limit orders. Cancel reason is `user`.
+
 ## Behavior
 
 ### Time-in-force
@@ -139,6 +170,7 @@ Optional pending fields:
 ### Durability & safety
 - Portfolios, positions, trades, pending orders, remaining size, reservations, and recurring buy plans/runs are in SQLite (`PORTFOLIO_DB_PATH`).
 - Fill/cancel/reject use `status = open` predicates so a canceled order never fills and a completed order is not double-filled.
+- Amend uses `status = open` plus remaining/trigger compare-and-set so a concurrent fill cannot be overwritten (HTTP **409**).
 - Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
 - Recurring buy worker runs on `RECURRING_BUY_INTERVAL` and once on process start.
 
@@ -152,7 +184,7 @@ Optional pending fields:
 | Filler | `backend/internal/service/portfolio/filler.go` |
 | Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
 | HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_margin.go` |
-| MCP | portfolio tools + recurring buy tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
+| MCP | portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
 
 ## Config
 

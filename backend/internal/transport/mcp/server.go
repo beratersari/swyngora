@@ -57,7 +57,10 @@ type DataPort interface {
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	GetPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	AmendPortfolioOrder(ctx context.Context, clientID, id string, triggerPrice, remainingQuantity *float64) (json.RawMessage, error)
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error)
 	ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -876,6 +879,72 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListPortfolioOrders(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_portfolio_order",
+		mcp.WithDescription("Get one paper pending order plus last price and amend hints (editable, max remaining, available cash/qty including this order's reservation)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		orderID, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPortfolioOrder(ctx, clientID, orderID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("amend_portfolio_order",
+		mcp.WithDescription("Amend an open paper GTC limit_buy, limit_sell, or stop_loss in place (same id): triggerPrice and/or remainingQuantity. Recalculates reservations; fills immediately if newly marketable. OCO, bracket, trailing, IOC/FOK cannot be amended."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
+		mcp.WithNumber("triggerPrice", mcp.Description("New limit/stop price")),
+		mcp.WithNumber("remainingQuantity", mcp.Description("New remaining size (must stay > 0)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		orderID, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var trigger, remaining *float64
+		if v := req.GetFloat("triggerPrice", -1); v >= 0 {
+			trigger = &v
+		}
+		if v := req.GetFloat("remainingQuantity", -1); v >= 0 {
+			remaining = &v
+		}
+		raw, err := api.AmendPortfolioOrder(ctx, clientID, orderID, trigger, remaining)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("cancel_all_portfolio_orders",
+		mcp.WithDescription("Cancel all open paper pending orders for a client, or only one market when symbol is set. Releases reservations. Empty result is success."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Description("When set, cancel only this pair (e.g. BTCUSDT); omit for all markets")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit; default binance when symbol is set")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelAllPortfolioOrders(ctx, clientID, req.GetString("exchange", ""), req.GetString("symbol", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

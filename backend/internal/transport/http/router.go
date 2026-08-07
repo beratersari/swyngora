@@ -107,6 +107,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio", ph.Get)
 		mux.HandleFunc("POST /api/v1/portfolio/orders", ph.PlaceOrder)
 		mux.HandleFunc("GET /api/v1/portfolio/orders", ph.ListOrders)
+		mux.HandleFunc("POST /api/v1/portfolio/orders/cancel-all", ph.CancelAllOrders)
+		mux.HandleFunc("GET /api/v1/portfolio/orders/{id}", ph.GetOrder)
+		mux.HandleFunc("PATCH /api/v1/portfolio/orders/{id}", ph.AmendOrder)
 		mux.HandleFunc("DELETE /api/v1/portfolio/orders/{id}", ph.CancelOrder)
 		mux.HandleFunc("GET /api/v1/portfolio/trades", ph.ListTrades)
 		// Recurring buys: static subpaths before {id}
