@@ -639,7 +639,7 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
 }
 
-func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -658,6 +658,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	o, err := b.Portfolio.PlacePendingOrder(ctx, portfolio.PendingOrderInput{
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
+		TrailType: trailType, TrailValue: trailValue,
 	})
 	if err != nil {
 		return nil, err
@@ -666,6 +667,36 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 		"type":  string(o.Type),
 		"order": pendingOrderMap(o),
 		"note":  "Paper pending order (GTC/IOC/FOK) with reservations. Not real money.",
+	})
+}
+
+func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	var exp *time.Time
+	if expiresAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, expiresAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, expiresAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: expiresAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		exp = &tu
+	}
+	entry, tp, sl, err := b.Portfolio.PlaceBracketOrder(ctx, portfolio.BracketOrderInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
+		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"type": "bracket", "bracketId": entry.BracketID,
+		"entry": pendingOrderMap(entry), "takeProfit": pendingOrderMap(tp), "stopLoss": pendingOrderMap(sl),
+		"note": "Paper bracket: exits pending until entry fills; size tracks filled qty; OCO exits.",
 	})
 }
 
@@ -1077,6 +1108,8 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 		"timeInForce": tif,
 		"status":      string(o.Status),
 		"ocoGroupId":  o.OCOGroupID, "ocoPeerId": o.OCOPeerID,
+		"bracketId": o.BracketID, "bracketRole": o.BracketRole,
+		"trailType": o.TrailType, "trailValue": o.TrailValue, "trailPeak": o.TrailPeak,
 		"createdAt":   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,

@@ -40,6 +40,45 @@ func TestUnrealizedPnL(t *testing.T) {
 	}
 }
 
+func TestTrailingStopAdvanceAndTrigger(t *testing.T) {
+	// 5% trail, peak 100 → stop 95
+	if p := TrailStopPrice(100, 0.05, TrailTypePercent); math.Abs(p-95) > 1e-9 {
+		t.Fatalf("percent stop=%v", p)
+	}
+	if p := TrailStopPrice(100, 10, TrailTypeOffset); math.Abs(p-90) > 1e-9 {
+		t.Fatalf("offset stop=%v", p)
+	}
+	// Ratchet up only
+	peak, stop, moved := AdvanceTrailingStop(100, 120, 0.05, TrailTypePercent)
+	if !moved || math.Abs(peak-120) > 1e-9 || math.Abs(stop-114) > 1e-9 {
+		t.Fatalf("up peak=%v stop=%v moved=%v", peak, stop, moved)
+	}
+	// Pullback does not lower peak/stop
+	peak2, stop2, moved2 := AdvanceTrailingStop(120, 110, 0.05, TrailTypePercent)
+	if moved2 || peak2 != 120 || math.Abs(stop2-114) > 1e-9 {
+		t.Fatalf("pullback peak=%v stop=%v moved=%v", peak2, stop2, moved2)
+	}
+	// Gap through stop still triggers
+	if !PendingOrderTriggered(PendingTrailingStop, 114, 100) {
+		t.Fatal("gap through stop should trigger")
+	}
+	if PendingOrderTriggered(PendingTrailingStop, 114, 115) {
+		t.Fatal("above stop should not trigger")
+	}
+}
+
+func TestValidateBracketPrices(t *testing.T) {
+	if err := ValidateBracketPrices(100, 120, 90); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateBracketPrices(100, 90, 80); err == nil {
+		t.Fatal("tp must be above entry")
+	}
+	if err := ValidateBracketPrices(100, 120, 110); err == nil {
+		t.Fatal("sl must be below entry")
+	}
+}
+
 func TestValidateOCOPrices(t *testing.T) {
 	if err := ValidateOCOPrices(120, 90); err != nil {
 		t.Fatal(err)

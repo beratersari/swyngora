@@ -1329,6 +1329,10 @@ paths:
         type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
         shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
         same price tick fills at most one leg (stop preferred if both trigger).
+        type=trailing_stop: sell stop that trails a high-water mark by percent or fixed offset; stop only moves up;
+        triggers once when last <= stop (including price gaps through the level).
+        type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
+        entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
         Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
@@ -1345,7 +1349,7 @@ paths:
                 symbol: { type: string }
                 type:
                   type: string
-                  enum: [market, limit_buy, limit_sell, stop_loss, oco]
+                  enum: [market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, bracket]
                   default: market
                 side:
                   type: string
@@ -1355,7 +1359,17 @@ paths:
                 triggerPrice:
                   type: number
                   exclusiveMinimum: 0
-                  description: Limit or stop price (required for pending types)
+                  description: Limit/stop price, or bracket entry limit_buy price
+                trailType:
+                  type: string
+                  enum: [percent, offset]
+                  description: Trailing stop distance mode (required for type=trailing_stop)
+                trailValue:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: |
+                    Trail distance — percent as fraction (0.05 = 5% below peak), or fixed price offset.
+                    Required for type=trailing_stop.
                 takeProfitPrice:
                   type: number
                   exclusiveMinimum: 0
@@ -1389,6 +1403,8 @@ paths:
                   type: { type: string }
                   order: { $ref: '#/components/schemas/PendingOrder' }
                   ocoGroupId: { type: string }
+                  bracketId: { type: string }
+                  entry: { $ref: '#/components/schemas/PendingOrder' }
                   takeProfit: { $ref: '#/components/schemas/PendingOrder' }
                   stopLoss: { $ref: '#/components/schemas/PendingOrder' }
                   note: { type: string }
@@ -3064,12 +3080,12 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        type: { type: string, enum: [limit_buy, limit_sell, stop_loss] }
+        type: { type: string, enum: [limit_buy, limit_sell, stop_loss, trailing_stop] }
         side: { type: string, enum: [buy, sell] }
         quantity: { type: number, description: Original order size }
         filledQuantity: { type: number }
         remainingQuantity: { type: number }
-        triggerPrice: { type: number }
+        triggerPrice: { type: number, description: Limit/stop level; for trailing_stop the current ratcheted stop }
         reservedCash:
           type: number
           description: Cash reserved for remaining buy size (remaining * triggerPrice)
@@ -3078,9 +3094,14 @@ components:
           description: Position quantity reserved for remaining sell size
         timeInForce: { type: string, enum: [gtc, ioc, fok] }
         expiresAt: { type: string, format: date-time, nullable: true }
-        status: { type: string, enum: [open, filled, canceled, rejected] }
+        status: { type: string, enum: [open, filled, canceled, rejected, pending] }
         ocoGroupId: { type: string, description: Shared id for OCO take-profit + stop-loss pair }
         ocoPeerId: { type: string, description: Id of the other OCO leg }
+        bracketId: { type: string, description: Shared id for bracket entry + exits }
+        bracketRole: { type: string, enum: [entry, take_profit, stop_loss] }
+        trailType: { type: string, enum: [percent, offset], description: Trailing distance mode }
+        trailValue: { type: number, description: Trail distance (fraction or price offset) }
+        trailPeak: { type: number, description: High-water mark for trailing stop (sell) }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         filledAt: { type: string, format: date-time, nullable: true }

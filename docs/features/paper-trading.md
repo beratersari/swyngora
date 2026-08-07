@@ -60,7 +60,39 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 | `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `quantity * triggerPrice` cash |
 | `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
 | `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |
+| `trailing_stop` | `quantity`, `trailType`, `trailValue` | last ≤ ratcheted stop | sell | Reserves `quantity` of position |
 | `oco` | `quantity`, `takeProfitPrice`, `stopLossPrice` | TP: last ≥ TP; SL: last ≤ SL | sell + sell | Reserves **once** for the pair |
+| `bracket` | `quantity`, `triggerPrice` (entry), `takeProfitPrice`, `stopLossPrice` | Entry limit_buy; exits as OCO after fill | buy + sell pair | Entry reserves cash; exits reserve position only when active |
+
+### Bracket orders (entry + TP/SL)
+
+Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `status=pending` (not marketable) until the entry fills.
+
+| Rule | Behavior |
+|------|----------|
+| Place | Entry `open` limit_buy; TP + SL `pending` with size 0, linked by `bracketId` |
+| Partial entry fill | Exit legs activate for **filled amount only**; size grows as more entry fills |
+| Full entry fill | Exits open for full quantity |
+| Exit fill | TP/SL are OCO: full fill cancels peer; partial reduces peer remaining — no double sell of the same qty |
+| Cancel entry | Cancels pending/open exits (`bracket_entry_canceled`) |
+| Prices | `takeProfitPrice` > `triggerPrice` (entry) > `stopLossPrice` |
+
+### Trailing stop
+
+Sell stop that follows price higher and never moves back down.
+
+| Field | Meaning |
+|-------|---------|
+| `trailType` | `percent` (fraction below peak, e.g. `0.05` = 5%) or `offset` (fixed price units below peak) |
+| `trailValue` | Distance in the chosen mode |
+| `trailPeak` | High-water mark (seeded from last price at place; only increases) |
+| `triggerPrice` | Current stop = `peak × (1 − percent)` or `peak − offset` |
+
+**Rules**
+- As last price makes a new high, peak and stop ratchet **up** only.
+- Pullbacks that stay above the stop do **not** lower the stop.
+- When last ≤ stop, the order **fills once** (market sell at last) and closes (status `filled`).
+- If price **gaps** through the stop in one update (e.g. peak 120, stop 114, next last 100), it still triggers (`last ≤ stop`).
 
 ### OCO (one-cancels-the-other)
 

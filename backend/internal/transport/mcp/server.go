@@ -53,8 +53,9 @@ type DataPort interface {
 	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
-	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error)
+	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error)
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
+	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
@@ -739,12 +740,14 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("place_portfolio_pending_order",
-		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, or stop_loss. timeInForce gtc|ioc|fok; optional expiresAt (GTC). Simulated only."),
+		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. For trailing_stop use trailType+trailValue (triggerPrice optional/ignored). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithString("type", mcp.Required(), mcp.Description("limit_buy | limit_sell | stop_loss")),
+		mcp.WithString("type", mcp.Required(), mcp.Description("limit_buy | limit_sell | stop_loss | trailing_stop")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
-		mcp.WithNumber("triggerPrice", mcp.Required(), mcp.Description("Limit or stop price")),
+		mcp.WithNumber("triggerPrice", mcp.Description("Limit or stop price (not used for trailing_stop)")),
+		mcp.WithString("trailType", mcp.Description("trailing_stop: percent | offset")),
+		mcp.WithNumber("trailValue", mcp.Description("trailing_stop: fraction e.g. 0.05 or fixed offset")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("timeInForce", mcp.Description("gtc (default) | ioc | fok")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC only")),
@@ -765,12 +768,17 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		trig, err := req.RequireFloat("triggerPrice")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		trig := req.GetFloat("triggerPrice", 0)
+		if typ != "trailing_stop" {
+			var terr error
+			trig, terr = req.RequireFloat("triggerPrice")
+			if terr != nil {
+				return mcp.NewToolResultError(terr.Error()), nil
+			}
 		}
 		raw, err := api.PlacePortfolioPendingOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, typ, qty, trig,
-			req.GetString("timeInForce", "gtc"), req.GetString("expiresAt", ""))
+			req.GetString("timeInForce", "gtc"), req.GetString("expiresAt", ""),
+			req.GetString("trailType", ""), req.GetFloat("trailValue", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -808,6 +816,48 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("place_portfolio_bracket_order",
+		mcp.WithDescription("Place a paper bracket: limit-buy entry with take-profit + stop-loss. Exits stay pending until entry fills; exit size tracks filled qty; exits are OCO. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Entry size")),
+		mcp.WithNumber("entryPrice", mcp.Required(), mcp.Description("Limit buy price")),
+		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell above entry")),
+		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop below entry")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		entry, err := req.RequireFloat("entryPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		tp, err := req.RequireFloat("takeProfitPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		sl, err := req.RequireFloat("stopLossPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PlacePortfolioBracketOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, entry, tp, sl, req.GetString("expiresAt", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

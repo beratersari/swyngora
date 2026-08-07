@@ -37,6 +37,205 @@ func newSvc(t *testing.T, px *fakePx) *Service {
 	return New(st, px)
 }
 
+func TestPortfolio_BracketPartialEntrySizesExitsAndOCO(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "br1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	entry, tp, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
+		ClientID: "br1", Symbol: "BTCUSDT", Quantity: 2,
+		EntryPrice: 100, TakeProfitPrice: 120, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.Status != domain.PendingStatusOpen || tp.Status != domain.PendingStatusPending || sl.Status != domain.PendingStatusPending {
+		t.Fatalf("entry open, exits pending: e=%s tp=%s sl=%s", entry.Status, tp.Status, sl.Status)
+	}
+	if tp.RemainingQuantity != 0 || sl.Quantity != 0 {
+		t.Fatalf("exits must start at size 0: tp=%+v sl=%+v", tp, sl)
+	}
+	// Price at entry — fill 0.75 only
+	got, ok, err := svc.TryFillPendingOrder(ctx, *entry, 100, 0.75)
+	if err != nil || !ok {
+		t.Fatalf("entry partial ok=%v err=%v", ok, err)
+	}
+	if math.Abs(got.FilledQuantity-0.75) > 1e-9 {
+		t.Fatalf("entry filled=%v", got.FilledQuantity)
+	}
+	tp2, _ := svc.store.GetPendingOrder(ctx, "br1", tp.ID)
+	sl2, _ := svc.store.GetPendingOrder(ctx, "br1", sl.ID)
+	if tp2.Status != domain.PendingStatusOpen || sl2.Status != domain.PendingStatusOpen {
+		t.Fatalf("exits should be open after partial entry: tp=%s sl=%s", tp2.Status, sl2.Status)
+	}
+	if math.Abs(tp2.RemainingQuantity-0.75) > 1e-9 || math.Abs(sl2.RemainingQuantity-0.75) > 1e-9 {
+		t.Fatalf("exit size should match filled 0.75: tp=%v sl=%v", tp2.RemainingQuantity, sl2.RemainingQuantity)
+	}
+	// More entry fill → exits grow
+	got, ok, err = svc.TryFillPendingOrder(ctx, *got, 100, 0)
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	if got.Status != domain.PendingStatusFilled {
+		t.Fatalf("entry should be fully filled: %+v", got)
+	}
+	tp3, _ := svc.store.GetPendingOrder(ctx, "br1", tp.ID)
+	if math.Abs(tp3.RemainingQuantity-2) > 1e-9 {
+		t.Fatalf("exit size after full entry=%v want 2", tp3.RemainingQuantity)
+	}
+	// TP fill cancels SL (no double sell)
+	filledTP, ok, err := svc.TryFillPendingOrder(ctx, *tp3, 120, 0)
+	if err != nil || !ok || filledTP.Status != domain.PendingStatusFilled {
+		t.Fatalf("tp fill: ok=%v err=%v %+v", ok, err, filledTP)
+	}
+	sl3, _ := svc.store.GetPendingOrder(ctx, "br1", sl.ID)
+	if sl3.Status != domain.PendingStatusCanceled || sl3.CancelReason != domain.CancelReasonOCOPeerFilled {
+		t.Fatalf("sl should cancel after tp: %+v", sl3)
+	}
+	// Position flat after exit sell of 2
+	view, _ := svc.View(ctx, "br1")
+	if view.PositionsValue > 1e-6 {
+		t.Fatalf("want flat after exit, positionsValue=%v", view.PositionsValue)
+	}
+}
+
+func TestPortfolio_BracketExitsInactiveUntilEntry(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "br2", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	_, tp, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
+		ClientID: "br2", Symbol: "ETHUSDT", Quantity: 1,
+		EntryPrice: 95, TakeProfitPrice: 110, StopLossPrice: 80,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Price hits TP while entry not filled — exits pending, no fill
+	_, ok, err := svc.ProcessOpenOrder(ctx, *tp, 110, time.Now().UTC(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("pending exit must not fill before entry")
+	}
+	_, ok, err = svc.ProcessOCOPair(ctx, *tp, *sl, 110, time.Now().UTC(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("OCO pair must not fill pending exits")
+	}
+	tp2, _ := svc.store.GetPendingOrder(ctx, "br2", tp.ID)
+	if tp2.Status != domain.PendingStatusPending {
+		t.Fatalf("still pending: %s", tp2.Status)
+	}
+}
+
+func TestPortfolio_TrailingStopRatchetsAndFiresOnce(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "trail1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "trail1", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "trail1", Symbol: "BTCUSDT", Type: "trailing_stop",
+		Quantity: 1, TrailType: "percent", TrailValue: 0.10, // 10%
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(o.TrailPeak-100) > 1e-9 || math.Abs(o.TriggerPrice-90) > 1e-9 {
+		t.Fatalf("seed peak/stop: %+v", o)
+	}
+	// Price rises — stop ratchets up
+	_, _, err = svc.ProcessOpenOrder(ctx, *o, 120, time.Now().UTC(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Not filled; may return nil if only trail updated without fill
+	cur, err := svc.store.GetPendingOrder(ctx, "trail1", o.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(cur.TrailPeak-120) > 1e-9 || math.Abs(cur.TriggerPrice-108) > 1e-9 {
+		t.Fatalf("after rise peak/stop: %+v", cur)
+	}
+	if cur.Status != domain.PendingStatusOpen {
+		t.Fatalf("should still be open: %+v", cur)
+	}
+	// Pullback above stop — no fill, peak stays
+	_, okPull, err := svc.ProcessOpenOrder(ctx, *cur, 110, time.Now().UTC(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cur, _ = svc.store.GetPendingOrder(ctx, "trail1", o.ID)
+	if math.Abs(cur.TrailPeak-120) > 1e-9 || cur.Status != domain.PendingStatusOpen {
+		t.Fatalf("pullback must not lower peak or fill: %+v ok=%v", cur, okPull)
+	}
+	// Gap through stop: last 100 <= 108 → fill once
+	filled, ok, err := svc.ProcessOpenOrder(ctx, *cur, 100, time.Now().UTC(), 0)
+	if err != nil || !ok || filled == nil {
+		t.Fatalf("gap fill ok=%v err=%v filled=%v", ok, err, filled)
+	}
+	if filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("want filled once: %+v", filled)
+	}
+	// Second process: no re-fire
+	_, ok2, err := svc.ProcessOpenOrder(ctx, *filled, 50, time.Now().UTC(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok2 {
+		t.Fatal("trailing stop must not run twice after filled")
+	}
+	view, _ := svc.View(ctx, "trail1")
+	// buy 10000-100 + sell 100 = 10000
+	if math.Abs(view.CashBalance-10000) > 1e-6 {
+		t.Fatalf("cash=%v want 10000 after single fill @100", view.CashBalance)
+	}
+}
+
+func TestPortfolio_TrailingStopOffset(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "200"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "trail2", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "trail2", Symbol: "ETHUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "trail2", Symbol: "ETHUSDT", Type: "trailing_stop",
+		Quantity: 1, TrailType: "offset", TrailValue: 20,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(o.TriggerPrice-180) > 1e-9 {
+		t.Fatalf("offset stop=%v want 180", o.TriggerPrice)
+	}
+	_, _, _ = svc.ProcessOpenOrder(ctx, *o, 250, time.Now().UTC(), 0)
+	cur, _ := svc.store.GetPendingOrder(ctx, "trail2", o.ID)
+	if math.Abs(cur.TrailPeak-250) > 1e-9 || math.Abs(cur.TriggerPrice-230) > 1e-9 {
+		t.Fatalf("offset ratchet: %+v", cur)
+	}
+	// Touch stop exactly
+	filled, ok, err := svc.ProcessOpenOrder(ctx, *cur, 230, time.Now().UTC(), 0)
+	if err != nil || !ok || filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("touch fill: ok=%v err=%v %+v", ok, err, filled)
+	}
+}
+
 func TestPortfolio_OCOFullFillCancelsPeer(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

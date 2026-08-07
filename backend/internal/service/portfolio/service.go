@@ -334,16 +334,20 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 	return list, total, err
 }
 
-// PendingOrderInput creates a limit or stop resting order.
+// PendingOrderInput creates a limit, stop, or trailing_stop resting order.
 type PendingOrderInput struct {
 	ClientID     string
 	Exchange     string
 	Symbol       string
-	Type         string // limit_buy | limit_sell | stop_loss
+	Type         string // limit_buy | limit_sell | stop_loss | trailing_stop
 	Quantity     float64
-	TriggerPrice float64
-	TimeInForce  string     // gtc (default) | ioc | fok
-	ExpiresAt    *time.Time // optional; GTC only
+	TriggerPrice float64 // limit/stop; ignored for trailing_stop (derived from peak)
+	// TrailType: percent | offset (trailing_stop only).
+	TrailType string
+	// TrailValue: fraction e.g. 0.05 or fixed price offset (trailing_stop only).
+	TrailValue float64
+	TimeInForce string     // gtc (default) | ioc | fok
+	ExpiresAt   *time.Time // optional; GTC only
 }
 
 // OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
@@ -355,6 +359,107 @@ type OCOOrderInput struct {
 	TakeProfitPrice float64 // limit_sell trigger
 	StopLossPrice   float64 // stop_loss trigger
 	ExpiresAt       *time.Time
+}
+
+// BracketOrderInput places a limit-buy entry with inactive take-profit + stop-loss exits.
+// Exits stay pending until entry fills; exit size tracks cumulative entry filled quantity.
+type BracketOrderInput struct {
+	ClientID        string
+	Exchange        string
+	Symbol          string
+	Quantity        float64
+	EntryPrice      float64 // limit_buy trigger
+	TakeProfitPrice float64
+	StopLossPrice   float64
+	ExpiresAt       *time.Time
+}
+
+// PlaceBracketOrder creates entry (open limit_buy) + TP/SL (pending) linked by bracket id.
+// Exit OCO becomes open only for filled entry size; peer cancel prevents double-selling.
+func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (entry, tp, sl *domain.PendingOrder, err error) {
+	if s.store == nil {
+		return nil, nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
+		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
+		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
+	}
+	if err := domain.ValidateBracketPrices(in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice); err != nil {
+		return nil, nil, nil, err
+	}
+	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Entry counts as open; exits are pending until fill.
+	if n+1 > domain.MaxOpenPendingOrders {
+		return nil, nil, nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
+	}
+	need := domain.BuyReserveCash(in.Quantity, in.EntryPrice)
+	avail, rerr := s.availableCashForTrading(ctx, clientID, p.CashBalance)
+	if rerr != nil {
+		return nil, nil, nil, rerr
+	}
+	if avail+1e-9 < need {
+		return nil, nil, nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
+	}
+	now := time.Now().UTC()
+	var expiresAt *time.Time
+	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
+		exp := in.ExpiresAt.UTC()
+		if !exp.After(now) {
+			return nil, nil, nil, fmt.Errorf("%w: expiresAt must be in the future", domain.ErrInvalidArgument)
+		}
+		expiresAt = &exp
+	}
+	bracketID := uuid.NewString()
+	ocoID := uuid.NewString()
+	entryID := uuid.NewString()
+	tpID := uuid.NewString()
+	slID := uuid.NewString()
+	entryOrd := domain.PendingOrder{
+		ID: entryID, ClientID: clientID, Exchange: ex, Symbol: sym,
+		Type: domain.PendingLimitBuy, Side: domain.TradeSideBuy,
+		Quantity: in.Quantity, RemainingQuantity: in.Quantity,
+		TriggerPrice: in.EntryPrice, ReservedCash: need,
+		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+		Status: domain.PendingStatusOpen, BracketID: bracketID, BracketRole: domain.BracketRoleEntry,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	// Exits inactive: pending, zero size until entry fills.
+	tpOrd := domain.PendingOrder{
+		ID: tpID, ClientID: clientID, Exchange: ex, Symbol: sym,
+		Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
+		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.TakeProfitPrice,
+		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+		Status: domain.PendingStatusPending,
+		OCOGroupID: ocoID, OCOPeerID: slID,
+		BracketID: bracketID, BracketRole: domain.BracketRoleTakeProfit,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	slOrd := domain.PendingOrder{
+		ID: slID, ClientID: clientID, Exchange: ex, Symbol: sym,
+		Type: domain.PendingStopLoss, Side: domain.TradeSideSell,
+		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.StopLossPrice,
+		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+		Status: domain.PendingStatusPending,
+		OCOGroupID: ocoID, OCOPeerID: tpID,
+		BracketID: bracketID, BracketRole: domain.BracketRoleStopLoss,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	return s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
 }
 
 // PlaceOCOOrder creates take-profit + stop-loss legs that share one reserved position size.
@@ -451,23 +556,53 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	}
 	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
 	if !domain.IsValidPendingOrderType(string(typ)) {
-		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, or stop_loss", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, stop_loss, or trailing_stop", domain.ErrInvalidArgument)
 	}
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
-	if in.TriggerPrice < domain.MinTriggerPrice || in.TriggerPrice > domain.MaxTriggerPrice ||
-		math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
-		return nil, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
+	isTrail := typ == domain.PendingTrailingStop
+	var trailType string
+	var trailValue, trailPeak, trigger float64
+	if isTrail {
+		var nerr error
+		trailType, nerr = domain.NormalizeTrailType(in.TrailType)
+		if nerr != nil {
+			return nil, nerr
+		}
+		if err := domain.ValidateTrailValue(trailType, in.TrailValue); err != nil {
+			return nil, err
+		}
+		trailValue = in.TrailValue
+	} else {
+		if in.TriggerPrice < domain.MinTriggerPrice || in.TriggerPrice > domain.MaxTriggerPrice ||
+			math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
+			return nil, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
+		}
+		trigger = in.TriggerPrice
 	}
 	tif, err := domain.NormalizeTimeInForce(in.TimeInForce)
 	if err != nil {
 		return nil, err
 	}
+	if isTrail && tif != domain.TimeInForceGTC {
+		return nil, fmt.Errorf("%w: trailing_stop only supports gtc", domain.ErrInvalidArgument)
+	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
+	}
+	if isTrail {
+		last, lerr := s.lastPrice(ctx, string(ex), sym)
+		if lerr != nil || last <= 0 {
+			return nil, fmt.Errorf("%w: market price unavailable to seed trailing stop", domain.ErrUpstream)
+		}
+		trailPeak = last
+		trigger = domain.TrailStopPrice(trailPeak, trailValue, trailType)
+		if trigger <= 0 {
+			return nil, fmt.Errorf("%w: trail produces non-positive stop price at current market", domain.ErrInvalidArgument)
+		}
 	}
 	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
@@ -498,7 +633,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	var reservedCash, reservedQty float64
 	switch side {
 	case domain.TradeSideBuy:
-		need := domain.BuyReserveCash(in.Quantity, in.TriggerPrice)
+		need := domain.BuyReserveCash(in.Quantity, trigger)
 		avail, rerr := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 		if rerr != nil {
 			return nil, rerr
@@ -536,12 +671,15 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		Quantity:          in.Quantity,
 		FilledQuantity:    0,
 		RemainingQuantity: in.Quantity,
-		TriggerPrice:      in.TriggerPrice,
+		TriggerPrice:      trigger,
 		ReservedCash:      reservedCash,
 		ReservedQuantity:  reservedQty,
 		TimeInForce:       tif,
 		ExpiresAt:         expiresAt,
 		Status:            domain.PendingStatusOpen,
+		TrailType:         trailType,
+		TrailValue:        trailValue,
+		TrailPeak:         trailPeak,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
@@ -577,9 +715,10 @@ func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status
 		st = ""
 	} else {
 		switch st {
-		case domain.PendingStatusOpen, domain.PendingStatusFilled, domain.PendingStatusCanceled, domain.PendingStatusRejected:
+		case domain.PendingStatusOpen, domain.PendingStatusFilled, domain.PendingStatusCanceled,
+			domain.PendingStatusRejected, domain.PendingStatusPending:
 		default:
-			return nil, fmt.Errorf("%w: status must be open, filled, canceled, rejected, or all", domain.ErrInvalidArgument)
+			return nil, fmt.Errorf("%w: status must be open, filled, canceled, rejected, pending, or all", domain.ErrInvalidArgument)
 		}
 	}
 	return s.store.ListPendingOrders(ctx, clientID, st, limit, offset)
@@ -642,6 +781,30 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 			return nil, false, err
 		}
 		return canceled, true, nil
+	}
+
+	// Trailing stop: ratchet peak/stop on favorable moves before evaluating trigger.
+	// Gaps below the stop still fire (last <= trigger after update).
+	if o.Type == domain.PendingTrailingStop && lastPrice > 0 {
+		newPeak, newStop, moved := domain.AdvanceTrailingStop(o.TrailPeak, lastPrice, o.TrailValue, o.TrailType)
+		if moved && newPeak > o.TrailPeak+1e-15 {
+			okUp, uerr := s.store.UpdatePendingTrail(ctx, o.ID, newPeak, newStop, now)
+			if uerr != nil {
+				return nil, false, uerr
+			}
+			if okUp {
+				o.TrailPeak = newPeak
+				o.TriggerPrice = newStop
+			} else {
+				// Reload in case another worker advanced the trail.
+				if cur, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID); gerr == nil && cur != nil {
+					o = *cur
+				}
+			}
+		} else if o.TriggerPrice <= 0 && newStop > 0 {
+			o.TriggerPrice = newStop
+			o.TrailPeak = newPeak
+		}
 	}
 
 	triggered := domain.PendingOrderTriggered(o.Type, o.TriggerPrice, lastPrice)
@@ -939,6 +1102,10 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 			}
 			return nil, false, err
 		}
+	}
+	// Bracket entry: grow/activate TP+SL to match cumulative filled size (exits stay OCO).
+	if o.IsBracketEntry() && o.BracketID != "" {
+		_ = s.store.SyncBracketExitsToFilled(ctx, o.ClientID, o.BracketID, updated.FilledQuantity, now)
 	}
 	got, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
 	if gerr != nil {

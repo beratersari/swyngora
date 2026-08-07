@@ -74,9 +74,17 @@ type Trade struct {
 type PendingOrderType string
 
 const (
-	PendingLimitBuy  PendingOrderType = "limit_buy"
-	PendingLimitSell PendingOrderType = "limit_sell"
-	PendingStopLoss  PendingOrderType = "stop_loss"
+	PendingLimitBuy      PendingOrderType = "limit_buy"
+	PendingLimitSell     PendingOrderType = "limit_sell"
+	PendingStopLoss      PendingOrderType = "stop_loss"
+	// PendingTrailingStop sells when price falls from a ratcheting peak by a trail distance.
+	PendingTrailingStop PendingOrderType = "trailing_stop"
+)
+
+// Trailing stop distance mode.
+const (
+	TrailTypePercent = "percent" // trailValue is fraction e.g. 0.05 = 5% below peak
+	TrailTypeOffset  = "offset"  // trailValue is fixed price difference below peak
 )
 
 // PendingOrderStatus is the lifecycle of a resting order.
@@ -87,6 +95,15 @@ const (
 	PendingStatusFilled   PendingOrderStatus = "filled"
 	PendingStatusCanceled PendingOrderStatus = "canceled"
 	PendingStatusRejected PendingOrderStatus = "rejected" // condition met but insufficient cash/position
+	// PendingStatusPending: bracket exit leg waiting for entry fill (not marketable yet).
+	PendingStatusPending PendingOrderStatus = "pending"
+)
+
+// Bracket role on a pending order.
+const (
+	BracketRoleEntry      = "entry"
+	BracketRoleTakeProfit = "take_profit"
+	BracketRoleStopLoss   = "stop_loss"
 )
 
 // TimeInForce is the fill policy for a pending paper order.
@@ -112,6 +129,8 @@ const (
 	CancelReasonOCOPeerFilled = "oco_peer_filled"
 	// CancelReasonOCOGroup: user canceled one OCO leg (or group); peer is canceled too.
 	CancelReasonOCOGroup = "oco_group_canceled"
+	// CancelReasonBracketEntry: exit legs canceled because entry was canceled/rejected.
+	CancelReasonBracketEntry = "bracket_entry_canceled"
 )
 
 // PendingOrder is a limit or stop order waiting for a price condition.
@@ -128,7 +147,7 @@ type PendingOrder struct {
 	Quantity          float64   // original size
 	FilledQuantity    float64
 	RemainingQuantity float64
-	TriggerPrice      float64 // limit price or stop trigger
+	TriggerPrice      float64 // limit price or current stop trigger (trailing: derived from peak)
 	ReservedCash      float64 // open buy notional lock (remaining * trigger)
 	ReservedQuantity  float64 // open sell size lock
 	TimeInForce       TimeInForce
@@ -138,10 +157,20 @@ type PendingOrder struct {
 	OCOGroupID string
 	// OCOPeerID is the other leg's id when this order is part of an OCO pair.
 	OCOPeerID string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	FilledAt  *time.Time
-	CanceledAt *time.Time
+	// TrailType is percent|offset for trailing_stop (empty otherwise).
+	TrailType string
+	// TrailValue is the trail distance (fraction for percent, price units for offset).
+	TrailValue float64
+	// TrailPeak is the high-water mark for a sell trailing stop (only ratchets up).
+	TrailPeak float64
+	// BracketID links entry + take-profit + stop-loss of a bracket order.
+	BracketID string
+	// BracketRole is entry | take_profit | stop_loss when BracketID is set.
+	BracketRole string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	FilledAt    *time.Time
+	CanceledAt  *time.Time
 	FillTradeID string  // latest fill trade id
 	FillPrice   float64 // latest fill price
 	RejectReason string
@@ -151,6 +180,17 @@ type PendingOrder struct {
 // IsOCO reports whether this order is one leg of an OCO pair.
 func (o PendingOrder) IsOCO() bool {
 	return strings.TrimSpace(o.OCOGroupID) != ""
+}
+
+// IsBracketExit reports take-profit/stop-loss legs of a bracket (may be pending until entry fills).
+func (o PendingOrder) IsBracketExit() bool {
+	return strings.TrimSpace(o.BracketID) != "" &&
+		(o.BracketRole == BracketRoleTakeProfit || o.BracketRole == BracketRoleStopLoss)
+}
+
+// IsBracketEntry reports the entry leg of a bracket order.
+func (o PendingOrder) IsBracketEntry() bool {
+	return strings.TrimSpace(o.BracketID) != "" && o.BracketRole == BracketRoleEntry
 }
 
 // PositionView is a position with mark-to-market fields.
@@ -221,6 +261,18 @@ type PortfolioPort interface {
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
 	// CreateOCOPair inserts take-profit + stop-loss legs in one transaction (shared size reservation).
 	CreateOCOPair(ctx context.Context, takeProfit, stopLoss PendingOrder) (tp, sl *PendingOrder, err error)
+	// CreateBracket inserts entry (open) + take-profit/stop-loss (pending) in one transaction.
+	// Exit legs activate and size as entry fills.
+	CreateBracket(ctx context.Context, entry, takeProfit, stopLoss PendingOrder) (ent, tp, sl *PendingOrder, err error)
+	// SyncBracketExitsToFilled sets exit legs' size to entryFilled (activate from pending if needed).
+	// Does not increase size above entryFilled; preserves exit fills already taken.
+	// Returns ErrNotFound if entry missing.
+	SyncBracketExitsToFilled(ctx context.Context, clientID, bracketID string, entryFilled float64, at time.Time) error
+	// CancelBracket cancels all open/pending legs of a bracket.
+	CancelBracket(ctx context.Context, clientID, bracketID string, at time.Time, reason string) error
+	// UpdatePendingTrail ratchets trail peak and stop trigger for an open trailing_stop
+	// only when the new peak is strictly higher (never moves stop down). Returns false if not open / no move.
+	UpdatePendingTrail(ctx context.Context, id string, newPeak, newTrigger float64, at time.Time) (updated bool, err error)
 	// GetPendingOrder returns one order for the client or ErrNotFound.
 	GetPendingOrder(ctx context.Context, clientID, id string) (*PendingOrder, error)
 	// ListPendingOrders lists orders for a client, optionally filtered by status (empty = all).
@@ -326,14 +378,99 @@ func IsValidTradeSide(s string) bool {
 	}
 }
 
-// IsValidPendingOrderType reports limit_buy | limit_sell | stop_loss.
+// IsValidPendingOrderType reports limit_buy | limit_sell | stop_loss | trailing_stop.
 func IsValidPendingOrderType(s string) bool {
 	switch PendingOrderType(s) {
-	case PendingLimitBuy, PendingLimitSell, PendingStopLoss:
+	case PendingLimitBuy, PendingLimitSell, PendingStopLoss, PendingTrailingStop:
 		return true
 	default:
 		return false
 	}
+}
+
+// IsValidTrailType reports percent | offset.
+func IsValidTrailType(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case TrailTypePercent, TrailTypeOffset:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizeTrailType returns percent|offset.
+func NormalizeTrailType(s string) (string, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if !IsValidTrailType(s) {
+		return "", fmt.Errorf("%w: trailType must be percent or offset", ErrInvalidArgument)
+	}
+	return s, nil
+}
+
+// ValidateTrailValue checks trail distance for the given mode.
+// percent: (0, 1) exclusive; offset: positive price units.
+func ValidateTrailValue(trailType string, trailValue float64) error {
+	if trailValue <= 0 || math.IsNaN(trailValue) || math.IsInf(trailValue, 0) {
+		return fmt.Errorf("%w: trailValue must be positive", ErrInvalidArgument)
+	}
+	switch trailType {
+	case TrailTypePercent:
+		if trailValue >= 1 {
+			return fmt.Errorf("%w: trailValue percent must be less than 1 (e.g. 0.05 for 5%%)", ErrInvalidArgument)
+		}
+	case TrailTypeOffset:
+		// any positive offset ok
+	default:
+		return fmt.Errorf("%w: trailType must be percent or offset", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// TrailStopPrice is the sell stop level below peak for a trailing stop.
+// percent: peak * (1 - trailValue); offset: peak - trailValue (floored at 0).
+func TrailStopPrice(peak, trailValue float64, trailType string) float64 {
+	if peak <= 0 || trailValue <= 0 {
+		return 0
+	}
+	switch trailType {
+	case TrailTypePercent:
+		p := peak * (1 - trailValue)
+		if p < 0 {
+			return 0
+		}
+		return p
+	case TrailTypeOffset:
+		p := peak - trailValue
+		if p < 0 {
+			return 0
+		}
+		return p
+	default:
+		return 0
+	}
+}
+
+// RatchetTrailPeak returns the new high-water mark for a sell trailing stop (never decreases).
+func RatchetTrailPeak(peak, last float64) float64 {
+	if last > peak {
+		return last
+	}
+	return peak
+}
+
+// AdvanceTrailingStop applies last price to peak and stop for a sell trailing stop.
+// Peak only moves up; stop only moves up (or stays). Returns (newPeak, newStop, peakMoved).
+func AdvanceTrailingStop(peak, last, trailValue float64, trailType string) (newPeak, newStop float64, peakMoved bool) {
+	if peak <= 0 && last > 0 {
+		peak = last
+		peakMoved = true
+	}
+	newPeak = RatchetTrailPeak(peak, last)
+	if newPeak > peak+1e-15 {
+		peakMoved = true
+	}
+	newStop = TrailStopPrice(newPeak, trailValue, trailType)
+	return newPeak, newStop, peakMoved
 }
 
 // IsValidTimeInForce reports gtc | ioc | fok.
@@ -371,7 +508,7 @@ func SideForPendingType(t PendingOrderType) TradeSide {
 	switch t {
 	case PendingLimitBuy:
 		return TradeSideBuy
-	case PendingLimitSell, PendingStopLoss:
+	case PendingLimitSell, PendingStopLoss, PendingTrailingStop:
 		return TradeSideSell
 	default:
 		return ""
@@ -387,6 +524,23 @@ func ValidateOCOPrices(takeProfit, stopLoss float64) error {
 	}
 	if takeProfit <= stopLoss {
 		return fmt.Errorf("%w: takeProfitPrice must be greater than stopLossPrice", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// ValidateBracketPrices checks long entry limit with take-profit above and stop-loss below entry.
+func ValidateBracketPrices(entry, takeProfit, stopLoss float64) error {
+	if entry <= 0 || math.IsNaN(entry) || math.IsInf(entry, 0) {
+		return fmt.Errorf("%w: entry triggerPrice must be positive", ErrInvalidArgument)
+	}
+	if err := ValidateOCOPrices(takeProfit, stopLoss); err != nil {
+		return err
+	}
+	if takeProfit <= entry {
+		return fmt.Errorf("%w: takeProfitPrice must be above entry price", ErrInvalidArgument)
+	}
+	if stopLoss >= entry {
+		return fmt.Errorf("%w: stopLossPrice must be below entry price", ErrInvalidArgument)
 	}
 	return nil
 }
@@ -418,13 +572,13 @@ func OCOWinnerForTick(takeProfit, stopLoss *PendingOrder, last float64) *Pending
 //
 //	limit_buy:  last <= trigger (buy at or below limit)
 //	limit_sell: last >= trigger (sell at or above limit)
-//	stop_loss:  last <= trigger (sell when price falls to stop)
+//	stop_loss / trailing_stop: last <= trigger (sell when price falls to stop; gaps still trigger)
 func PendingOrderTriggered(orderType PendingOrderType, trigger, last float64) bool {
 	if trigger <= 0 || last <= 0 || math.IsNaN(trigger) || math.IsNaN(last) {
 		return false
 	}
 	switch orderType {
-	case PendingLimitBuy, PendingStopLoss:
+	case PendingLimitBuy, PendingStopLoss, PendingTrailingStop:
 		return last <= trigger+1e-12
 	case PendingLimitSell:
 		return last >= trigger-1e-12

@@ -441,14 +441,33 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 	})
 }
 
-// PlacePortfolioPendingOrder places a limit/stop paper order.
-func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error) {
+// PlacePortfolioPendingOrder places a limit/stop/trailing paper order.
+func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": orderType,
 		"quantity": quantity, "triggerPrice": triggerPrice,
 	}
 	if timeInForce != "" {
 		body["timeInForce"] = timeInForce
+	}
+	if expiresAt != "" {
+		body["expiresAt"] = expiresAt
+	}
+	if trailType != "" {
+		body["trailType"] = trailType
+	}
+	if trailValue > 0 {
+		body["trailValue"] = trailValue
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
+}
+
+// PlacePortfolioBracketOrder places limit-buy entry with pending TP/SL exits.
+func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": "bracket",
+		"quantity": quantity, "triggerPrice": entryPrice,
+		"takeProfitPrice": takeProfitPrice, "stopLossPrice": stopLossPrice,
 	}
 	if expiresAt != "" {
 		body["expiresAt"] = expiresAt
