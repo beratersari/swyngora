@@ -346,6 +346,100 @@ type PendingOrderInput struct {
 	ExpiresAt    *time.Time // optional; GTC only
 }
 
+// OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
+type OCOOrderInput struct {
+	ClientID        string
+	Exchange        string
+	Symbol          string
+	Quantity        float64
+	TakeProfitPrice float64 // limit_sell trigger
+	StopLossPrice   float64 // stop_loss trigger
+	ExpiresAt       *time.Time
+}
+
+// PlaceOCOOrder creates take-profit + stop-loss legs that share one reserved position size.
+// When one leg fully fills, the peer is canceled; partial fills shrink both remainings.
+func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *domain.PendingOrder, err error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
+		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
+		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
+	}
+	if err := domain.ValidateOCOPrices(in.TakeProfitPrice, in.StopLossPrice); err != nil {
+		return nil, nil, err
+	}
+	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
+	if err != nil {
+		return nil, nil, err
+	}
+	p, err := s.store.GetPortfolio(ctx, clientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	_ = p
+	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Two legs count toward the open-order cap.
+	if n+2 > domain.MaxOpenPendingOrders {
+		return nil, nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
+	}
+	var held float64
+	pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
+	if perr == nil && pos != nil {
+		held = pos.Quantity
+	} else if perr != nil && perr != domain.ErrNotFound {
+		return nil, nil, perr
+	}
+	resQty, rerr := s.store.SumReservedQuantity(ctx, clientID, ex, sym)
+	if rerr != nil {
+		return nil, nil, rerr
+	}
+	avail := domain.AvailablePosition(held, resQty)
+	if avail+domain.PositionEpsilon < in.Quantity {
+		return nil, nil, fmt.Errorf("%w: insufficient available position to reserve (need %g, available %g)", domain.ErrInvalidArgument, in.Quantity, avail)
+	}
+	now := time.Now().UTC()
+	var expiresAt *time.Time
+	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
+		exp := in.ExpiresAt.UTC()
+		if !exp.After(now) {
+			return nil, nil, fmt.Errorf("%w: expiresAt must be in the future", domain.ErrInvalidArgument)
+		}
+		expiresAt = &exp
+	}
+	groupID := uuid.NewString()
+	tpID := uuid.NewString()
+	slID := uuid.NewString()
+	// Reservation is counted once per OCO group (SumReservedQuantity); both legs store remaining size.
+	tpOrd := domain.PendingOrder{
+		ID: tpID, ClientID: clientID, Exchange: ex, Symbol: sym,
+		Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
+		Quantity: in.Quantity, FilledQuantity: 0, RemainingQuantity: in.Quantity,
+		TriggerPrice: in.TakeProfitPrice, ReservedQuantity: in.Quantity,
+		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: slID,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	slOrd := domain.PendingOrder{
+		ID: slID, ClientID: clientID, Exchange: ex, Symbol: sym,
+		Type: domain.PendingStopLoss, Side: domain.TradeSideSell,
+		Quantity: in.Quantity, FilledQuantity: 0, RemainingQuantity: in.Quantity,
+		TriggerPrice: in.StopLossPrice, ReservedQuantity: in.Quantity,
+		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: tpID,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	return s.store.CreateOCOPair(ctx, tpOrd, slOrd)
+}
+
 // PlacePendingOrder creates an open resting order and reserves cash or position.
 func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (*domain.PendingOrder, error) {
 	if s.store == nil {
@@ -598,6 +692,7 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 		maxFillQty = 0
 	}
 
+	// OCO legs: only the winner for this tick may fill (handled by ProcessOCOPair / caller).
 	filled, ok, err := s.TryFillPendingOrder(ctx, o, lastPrice, maxFillQty)
 	if err != nil {
 		return nil, false, err
@@ -647,10 +742,51 @@ func (s *Service) maxFillableQty(o domain.PendingOrder, remaining, lastPrice flo
 	}
 }
 
+// ProcessOCOPair evaluates an OCO take-profit + stop-loss pair against one last price.
+// At most one leg fills per tick; the peer is canceled on full fill or reduced on partial fill.
+func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	if s.store == nil {
+		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	// Fresh reload both legs.
+	var tp, sl *domain.PendingOrder
+	for _, o := range []domain.PendingOrder{a, b} {
+		cur, err := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
+		if err != nil {
+			if err == domain.ErrNotFound {
+				continue
+			}
+			return nil, false, err
+		}
+		if cur.Status != domain.PendingStatusOpen {
+			continue
+		}
+		// Expiry on either leg cancels the group.
+		if domain.PendingOrderExpired(*cur, now) {
+			_ = s.store.CancelOCOGroup(ctx, cur.ClientID, cur.OCOGroupID, now, domain.CancelReasonExpired)
+			return cur, true, nil
+		}
+		switch cur.Type {
+		case domain.PendingLimitSell:
+			tp = cur
+		case domain.PendingStopLoss:
+			sl = cur
+		}
+	}
+	winner := domain.OCOWinnerForTick(tp, sl, lastPrice)
+	if winner == nil {
+		return nil, false, nil
+	}
+	return s.TryFillPendingOrder(ctx, *winner, lastPrice, maxFillQty)
+}
+
 // TryFillPendingOrder evaluates one open order against lastPrice and applies a fill.
 // maxFillQty > 0 caps this execution (partial fill); <= 0 fills as much remaining as possible.
 // Returns (order, true, nil) when any quantity was filled; (nil, false, nil) when not triggered / no-op.
-// Prefer ProcessOpenOrder for TIF/expiry handling.
+// Prefer ProcessOpenOrder for TIF/expiry handling. OCO legs use ExecuteOCOFill (peer sync/cancel).
 func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
@@ -694,7 +830,7 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		}
 		fillQty = domain.ClampFillQty(remaining, fillQty, 0)
 	case domain.TradeSideSell:
-		// Bound by reserved quantity remaining.
+		// Bound by remaining size (OCO: reserved may mirror remaining on both legs).
 		maxByRes := o.ReservedQuantity
 		if maxByRes <= 0 {
 			maxByRes = remaining
@@ -723,6 +859,10 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	if err != nil {
 		// Reservation should prevent this; fail closed and release remainder.
 		reason := err.Error()
+		if o.IsOCO() && o.OCOGroupID != "" {
+			_ = s.store.CancelOCOGroup(ctx, o.ClientID, o.OCOGroupID, now, reason)
+			return nil, false, nil
+		}
 		if rerr := s.store.RejectPendingOrder(ctx, o.ID, reason, now); rerr != nil {
 			if rerr == domain.ErrNotFound {
 				return nil, false, nil
@@ -777,11 +917,28 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		RealizedPnL: realized, PendingOrderID: o.ID, CreatedAt: now,
 	}
 	updated.FillTradeID = tr.ID
-	if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now); err != nil {
-		if err == domain.ErrNotFound {
-			return nil, false, nil
+
+	if o.IsOCO() && o.OCOPeerID != "" {
+		peer, perr := s.store.GetPendingOrder(ctx, o.ClientID, o.OCOPeerID)
+		if perr != nil && perr != domain.ErrNotFound {
+			return nil, false, perr
 		}
-		return nil, false, err
+		if perr == domain.ErrNotFound {
+			peer = nil
+		}
+		if err := s.store.ExecuteOCOFill(ctx, &updated, peer, p, posOut, tr, now); err != nil {
+			if err == domain.ErrNotFound {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
+	} else {
+		if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now); err != nil {
+			if err == domain.ErrNotFound {
+				return nil, false, nil
+			}
+			return nil, false, err
+		}
 	}
 	got, gerr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
 	if gerr != nil {

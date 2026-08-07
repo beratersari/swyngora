@@ -40,6 +40,46 @@ func TestUnrealizedPnL(t *testing.T) {
 	}
 }
 
+func TestValidateOCOPrices(t *testing.T) {
+	if err := ValidateOCOPrices(120, 90); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateOCOPrices(90, 120); err == nil {
+		t.Fatal("want tp > sl")
+	}
+	if err := ValidateOCOPrices(0, 90); err == nil {
+		t.Fatal("want positive")
+	}
+}
+
+func TestOCOWinnerForTick(t *testing.T) {
+	tp := &PendingOrder{Type: PendingLimitSell, TriggerPrice: 120, Status: PendingStatusOpen}
+	sl := &PendingOrder{Type: PendingStopLoss, TriggerPrice: 90, Status: PendingStatusOpen}
+	if OCOWinnerForTick(tp, sl, 100) != nil {
+		t.Fatal("neither triggered")
+	}
+	if w := OCOWinnerForTick(tp, sl, 125); w != tp {
+		t.Fatal("tp only")
+	}
+	if w := OCOWinnerForTick(tp, sl, 80); w != sl {
+		t.Fatal("sl only")
+	}
+	// Gap through both: stop wins (single fill)
+	if w := OCOWinnerForTick(tp, sl, 50); w != sl {
+		// 50 triggers SL (last<=90) and also... limit sell triggers last>=120? 50 does not trigger TP.
+		t.Fatalf("sl at 50: got %v", w)
+	}
+	// Both: use price that hits both - for long OCO, TP is above and SL below entry, so one tick
+	// cannot hit both unless gap. Simulate both flags by using price above TP and... can't hit SL.
+	// Force: temporarily set TP trigger very low so both fire.
+	tpBoth := &PendingOrder{Type: PendingLimitSell, TriggerPrice: 100, Status: PendingStatusOpen}
+	slBoth := &PendingOrder{Type: PendingStopLoss, TriggerPrice: 110, Status: PendingStatusOpen}
+	// last=105: limit sell 100 triggers (>=100), stop 110 triggers (<=110)
+	if w := OCOWinnerForTick(tpBoth, slBoth, 105); w != slBoth {
+		t.Fatalf("both triggered want stop, got %+v", w)
+	}
+}
+
 func TestPendingOrderTriggered(t *testing.T) {
 	if !PendingOrderTriggered(PendingLimitBuy, 100, 99) {
 		t.Fatal("limit buy should trigger at or below")

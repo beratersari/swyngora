@@ -456,6 +456,18 @@ func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, ex
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
+// PlacePortfolioOCOOrder places linked take-profit + stop-loss paper orders.
+func (c *APIClient) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": "oco",
+		"quantity": quantity, "takeProfitPrice": takeProfitPrice, "stopLossPrice": stopLossPrice,
+	}
+	if expiresAt != "" {
+		body["expiresAt"] = expiresAt
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
+}
+
 // ListPortfolioOrders lists paper pending orders.
 func (c *APIClient) ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

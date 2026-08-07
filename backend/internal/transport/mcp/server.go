@@ -54,6 +54,7 @@ type DataPort interface {
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt string) (json.RawMessage, error)
+	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
@@ -770,6 +771,43 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		}
 		raw, err := api.PlacePortfolioPendingOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, typ, qty, trig,
 			req.GetString("timeInForce", "gtc"), req.GetString("expiresAt", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("place_portfolio_oco_order",
+		mcp.WithDescription("Place a paper OCO: take-profit limit sell + stop-loss for the same quantity. Full fill of one cancels the other; partial fill shrinks both remainings. Same tick fills at most one leg. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base size for both legs")),
+		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell price (must be above stop)")),
+		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop-loss trigger (must be below take-profit)")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC legs")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		tp, err := req.RequireFloat("takeProfitPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		sl, err := req.RequireFloat("stopLossPrice")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

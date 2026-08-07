@@ -523,12 +523,10 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 	if qerr == nil && st != "open" {
 		return domain.ErrNotFound
 	}
-	// Forced close already recorded (unique trade) even if status read races — refuse second cash credit.
-	if fullClose && domain.IsSystemForcedCloseAction(t.Action) {
+	// Deterministic full-close trade id already present — refuse second cash credit.
+	if fullClose && t.ID != "" {
 		var n int
-		_ = s.db.QueryRowContext(ctx, `
-			SELECT COUNT(1) FROM margin_trades WHERE position_id = ? AND action = ?
-		`, pos.ID, t.Action).Scan(&n)
+		_ = s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM margin_trades WHERE id = ?`, t.ID).Scan(&n)
 		if n > 0 {
 			return domain.ErrNotFound
 		}
@@ -590,6 +588,18 @@ func (s *SQLite) HasMarginTradeAction(ctx context.Context, positionID, action st
 	err := s.db.QueryRowContext(ctx, `
 		SELECT COUNT(1) FROM margin_trades WHERE position_id = ? AND action = ?
 	`, strings.TrimSpace(positionID), strings.TrimSpace(action)).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}
+
+// HasMarginTradeID reports whether a trade row with the given id exists.
+func (s *SQLite) HasMarginTradeID(ctx context.Context, tradeID string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(1) FROM margin_trades WHERE id = ?`, strings.TrimSpace(tradeID)).Scan(&n)
 	if err != nil {
 		return false, err
 	}

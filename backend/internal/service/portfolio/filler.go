@@ -133,7 +133,49 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 				f.Logger.Debug("bad last price for pending order", "symbol", k.sym, "last", tkr.LastPrice)
 				return
 			}
+			// OCO pairs share a tick: process as a unit so both legs cannot fill.
+			ocoGroups := map[string][]domain.PendingOrder{}
+			var singles []domain.PendingOrder
 			for _, o := range orders {
+				if o.IsOCO() {
+					ocoGroups[o.OCOGroupID] = append(ocoGroups[o.OCOGroupID], o)
+				} else {
+					singles = append(singles, o)
+				}
+			}
+			for gid, legs := range ocoGroups {
+				if len(legs) == 0 {
+					continue
+				}
+				var updated *domain.PendingOrder
+				var ok bool
+				var err error
+				if len(legs) >= 2 {
+					updated, ok, err = f.Portfolio.ProcessOCOPair(ctx, legs[0], legs[1], last, now, 0)
+				} else {
+					// Peer already gone — treat as standalone remainder.
+					updated, ok, err = f.Portfolio.ProcessOpenOrder(ctx, legs[0], last, now, 0)
+				}
+				if err != nil {
+					f.Logger.Debug("process oco group failed", "group", gid, "err", err)
+					continue
+				}
+				if !ok || updated == nil {
+					continue
+				}
+				f.Logger.Info("paper oco order processed",
+					"id", updated.ID,
+					"ocoGroupId", gid,
+					"clientId", updated.ClientID,
+					"type", updated.Type,
+					"status", updated.Status,
+					"cancelReason", updated.CancelReason,
+					"filledQuantity", updated.FilledQuantity,
+					"remainingQuantity", updated.RemainingQuantity,
+					"fillPrice", updated.FillPrice,
+				)
+			}
+			for _, o := range singles {
 				updated, ok, err := f.Portfolio.ProcessOpenOrder(ctx, o, last, now, 0)
 				if err != nil {
 					f.Logger.Debug("process pending order failed", "id", o.ID, "err", err)

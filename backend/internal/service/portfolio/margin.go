@@ -1068,13 +1068,14 @@ func pickWorstCrossPosition(list []domain.MarginPosition) *domain.MarginPosition
 	return worst
 }
 
-// liquidateCrossIfUnderMaint closes open cross positions one at a time while account equity
-// is below total maintenance. After each successful close it reloads cash, remaining positions,
-// and marks so later decisions use the new shared balance — never batch-closes on a stale snapshot.
+// liquidateCrossIfUnderMaint restores cross-margin health while equity is below total
+// maintenance. It liquidates only the worst position, and only the minimum quantity needed
+// (partial close when the account is slightly under). After each successful close it reloads
+// cash, remaining sizes, and marks — never batch-closes on a stale snapshot.
 func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID string, now time.Time) (int, error) {
 	n := 0
-	// Bound rounds by max open positions (+ spare for concurrent close races).
-	maxRounds := domain.MaxOpenMarginPositions + 5
+	// Bound rounds: partials may take more than one step per position.
+	maxRounds := domain.MaxOpenMarginPositions*3 + 5
 	for round := 0; round < maxRounds; round++ {
 		risk, err := s.loadCrossAccountRisk(ctx, clientID)
 		if err != nil {
@@ -1086,7 +1087,7 @@ func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID strin
 		if len(risk.positions) == 0 {
 			return n, nil
 		}
-		// Healthy: stop — remaining positions keep the updated shared balance.
+		// Healthy: stop — remaining quantity stays open with the updated shared balance.
 		if risk.equity+1e-9 >= risk.totalMaint {
 			if n > 0 {
 				_ = s.recomputeCrossLiquidations(ctx, clientID, now)
@@ -1101,7 +1102,16 @@ func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID strin
 		if mark <= 0 {
 			mark = worst.EntryPrice
 		}
-		_, _, e := s.closeMarginAt(ctx, worst, worst.Quantity, mark, domain.MarginCloseLiquidation)
+		cq := domain.CrossPartialLiquidationQty(
+			worst.Side, worst.Quantity, worst.EntryPrice, mark,
+			worst.DebtPrincipal, worst.DebtInterest, worst.DebtAsset,
+			risk.equity, risk.totalMaint, domain.DefaultMaintenanceMarginRate,
+		)
+		if cq <= domain.PositionEpsilon {
+			// Cannot improve health from this book (or already healthy race) — stop.
+			return n, nil
+		}
+		_, _, e := s.closeMarginAt(ctx, worst, cq, mark, domain.MarginCloseLiquidation)
 		if e == nil {
 			n++
 			// Refresh cross liq prices for survivors before next equity check.
@@ -1270,13 +1280,14 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			action = "partial_close"
 		}
 
-		// Deterministic trade id for full forced closes: restart cannot insert a second record.
+		// Full forced closes use a deterministic trade id (restart cannot double-apply).
+		// Partial liquidations use a unique id each time; debt+qty CAS prevents the same
+		// snapshot from inserting two records for the same quantity.
 		tradeID := uuid.NewString()
 		if full {
 			if sysID := domain.SystemCloseTradeID(action, cur.ID); sysID != "" {
 				tradeID = sysID
-				// Restart-safe: if this forced close already landed, stop without re-crediting cash.
-				if ok, herr := s.store.HasMarginTradeAction(ctx, cur.ID, action); herr == nil && ok {
+				if ok, herr := s.store.HasMarginTradeID(ctx, sysID); herr == nil && ok {
 					return nil, nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
 				}
 			}

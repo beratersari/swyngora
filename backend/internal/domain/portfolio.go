@@ -108,11 +108,16 @@ const (
 	CancelReasonIOCRemainder = "ioc_remainder"
 	CancelReasonIOCNoFill    = "ioc_no_fill"
 	CancelReasonFOKUnfilled  = "fok_unfilled"
+	// CancelReasonOCOPeerFilled: this leg was canceled because the OCO peer fully filled.
+	CancelReasonOCOPeerFilled = "oco_peer_filled"
+	// CancelReasonOCOGroup: user canceled one OCO leg (or group); peer is canceled too.
+	CancelReasonOCOGroup = "oco_group_canceled"
 )
 
 // PendingOrder is a limit or stop order waiting for a price condition.
 // Buy orders reserve cash (quantity * triggerPrice for remaining size).
 // Sell orders reserve position quantity so it cannot be spent by other orders.
+// OCO pairs (take-profit limit_sell + stop_loss) share one reserved size via OCOGroupID.
 type PendingOrder struct {
 	ID                string
 	ClientID          string
@@ -129,14 +134,23 @@ type PendingOrder struct {
 	TimeInForce       TimeInForce
 	ExpiresAt         *time.Time // optional; GTC only — cancel when now >= expiresAt
 	Status            PendingOrderStatus
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	FilledAt          *time.Time
-	CanceledAt        *time.Time
-	FillTradeID       string  // latest fill trade id
-	FillPrice         float64 // latest fill price
-	RejectReason      string
-	CancelReason      string
+	// OCOGroupID links take-profit + stop-loss legs (empty = standalone order).
+	OCOGroupID string
+	// OCOPeerID is the other leg's id when this order is part of an OCO pair.
+	OCOPeerID string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	FilledAt  *time.Time
+	CanceledAt *time.Time
+	FillTradeID string  // latest fill trade id
+	FillPrice   float64 // latest fill price
+	RejectReason string
+	CancelReason string
+}
+
+// IsOCO reports whether this order is one leg of an OCO pair.
+func (o PendingOrder) IsOCO() bool {
+	return strings.TrimSpace(o.OCOGroupID) != ""
 }
 
 // PositionView is a position with mark-to-market fields.
@@ -205,6 +219,8 @@ type PortfolioPort interface {
 
 	// CreatePendingOrder inserts a new open resting order with reservations.
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
+	// CreateOCOPair inserts take-profit + stop-loss legs in one transaction (shared size reservation).
+	CreateOCOPair(ctx context.Context, takeProfit, stopLoss PendingOrder) (tp, sl *PendingOrder, err error)
 	// GetPendingOrder returns one order for the client or ErrNotFound.
 	GetPendingOrder(ctx context.Context, clientID, id string) (*PendingOrder, error)
 	// ListPendingOrders lists orders for a client, optionally filtered by status (empty = all).
@@ -224,6 +240,12 @@ type PortfolioPort interface {
 	// Updates remaining/reserved, inserts trade, marks filled only when remaining is zero.
 	// Returns ErrNotFound if not open.
 	ExecutePendingFill(ctx context.Context, order *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time) error
+	// ExecuteOCOFill fills one OCO leg and, in the same transaction, either reduces the peer's
+	// remaining size to match or cancels the peer when this leg is fully filled.
+	// Guarantees a single cash/position update for the fill (no double apply).
+	ExecuteOCOFill(ctx context.Context, filled *PendingOrder, peer *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time) error
+	// CancelOCOGroup cancels both open legs of an OCO (or the remaining open leg) and releases reservation.
+	CancelOCOGroup(ctx context.Context, clientID, groupID string, at time.Time, reason string) error
 	// RejectPendingOrder marks an open order rejected and releases remaining reservation.
 	// Returns ErrNotFound if not open.
 	RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error
@@ -353,6 +375,42 @@ func SideForPendingType(t PendingOrderType) TradeSide {
 		return TradeSideSell
 	default:
 		return ""
+	}
+}
+
+// ValidateOCOPrices checks take-profit limit_sell and stop-loss prices for a long exit OCO.
+// takeProfit must be above stopLoss; both positive and distinct.
+func ValidateOCOPrices(takeProfit, stopLoss float64) error {
+	if takeProfit <= 0 || stopLoss <= 0 || math.IsNaN(takeProfit) || math.IsNaN(stopLoss) ||
+		math.IsInf(takeProfit, 0) || math.IsInf(stopLoss, 0) {
+		return fmt.Errorf("%w: takeProfitPrice and stopLossPrice must be positive", ErrInvalidArgument)
+	}
+	if takeProfit <= stopLoss {
+		return fmt.Errorf("%w: takeProfitPrice must be greater than stopLossPrice", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// OCOWinnerForTick picks which OCO leg may fill on a single price update.
+// If only one is triggered, that leg wins. If both are triggered (gap through both levels),
+// stop_loss wins so only one fill applies (balance/position change once).
+func OCOWinnerForTick(takeProfit, stopLoss *PendingOrder, last float64) *PendingOrder {
+	if takeProfit == nil && stopLoss == nil {
+		return nil
+	}
+	tpTrig := takeProfit != nil && takeProfit.Status == PendingStatusOpen &&
+		PendingOrderTriggered(takeProfit.Type, takeProfit.TriggerPrice, last)
+	slTrig := stopLoss != nil && stopLoss.Status == PendingStatusOpen &&
+		PendingOrderTriggered(stopLoss.Type, stopLoss.TriggerPrice, last)
+	switch {
+	case slTrig && tpTrig:
+		return stopLoss
+	case slTrig:
+		return stopLoss
+	case tpTrig:
+		return takeProfit
+	default:
+		return nil
 	}
 }
 

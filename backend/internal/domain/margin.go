@@ -472,6 +472,90 @@ func LiquidationPriceIsolated(side MarginSide, entry float64, leverage int, mmr 
 	return LiquidationPriceFromMargin(side, entry, 1, margin, mmr)
 }
 
+// CrossPartialLiquidationMinFraction avoids dust loops: never close less than this
+// fraction of open size unless that is already a full close (or min trade size).
+const CrossPartialLiquidationMinFraction = 0.01
+
+// CrossPartialLiquidationQty is the smallest quantity to close on pos so that, after a
+// proportional margin/debt reduction at mark, account equity >= totalMaint.
+//
+// Paper equity model: equity = cash + Σ margin + Σ unrealized.
+// Closing cq of this position (proportional debt/margin) changes:
+//
+//	Δequity ≈ −(debt paid in quote terms)
+//	Δmaint  = −mmr × entry × cq
+//
+// so gap = equity − maint improves by cq × (mmr×entry − debtQuote/qty) for long quote debt
+// (short uses interest×mark/qty). When the coefficient is ≤ 0, partial size cannot restore
+// health — returns full qty. Applies min-size / dust rules so we do not thrash on dust.
+//
+// Returns 0 if already healthy (equity >= totalMaint) or inputs invalid.
+func CrossPartialLiquidationQty(
+	side MarginSide,
+	qty, entry, mark, debtPrincipal, debtInterest float64,
+	debtAsset DebtAsset,
+	equity, totalMaint, mmr float64,
+) float64 {
+	if qty <= PositionEpsilon || entry <= 0 || mark <= 0 || mmr < 0 || math.IsNaN(qty) || math.IsInf(qty, 0) {
+		return 0
+	}
+	if equity+1e-9 >= totalMaint {
+		return 0
+	}
+	deficit := totalMaint - equity
+	if deficit <= 0 {
+		return 0
+	}
+	// Quote-equivalent debt paid per unit closed (proportional).
+	var debtPerUnit float64
+	switch {
+	case debtAsset == DebtAssetBase || side == MarginShort:
+		// Short: principal is coins (not quote cash on close); interest paid in quote.
+		debtPerUnit = debtInterest * mark / qty
+	default:
+		debtPerUnit = (debtPrincipal + debtInterest) / qty
+	}
+	// Gap improvement per unit closed: maint drop minus equity drop from debt payback.
+	coeff := mmr*entry - debtPerUnit
+	if coeff <= 1e-12 {
+		// Reducing size does not improve equity−maint; full-close this position.
+		return qty
+	}
+	cq := deficit / coeff
+	if cq <= 0 {
+		return 0
+	}
+	// Do not overshoot open size.
+	if cq > qty {
+		cq = qty
+	}
+	// Minimum meaningful size: max(min trade, fraction of position) to avoid dust loops.
+	minLot := MinTradeQuantity
+	minFrac := qty * CrossPartialLiquidationMinFraction
+	if minFrac > minLot {
+		minLot = minFrac
+	}
+	if cq+1e-15 < minLot {
+		cq = minLot
+	}
+	if cq > qty {
+		cq = qty
+	}
+	// If remainder would be dust / untradeable, take the full position once.
+	remain := qty - cq
+	if remain > PositionEpsilon && remain < MinTradeQuantity {
+		return qty
+	}
+	if remain > PositionEpsilon && remain < qty*CrossPartialLiquidationMinFraction {
+		return qty
+	}
+	// Near-full: close all (single record, no tiny leftover).
+	if cq+MinTradeQuantity >= qty {
+		return qty
+	}
+	return cq
+}
+
 // CrossLiquidationPrice is the mark of this position that would drive total equity
 // down to total maintenance, holding other positions' unrealized PnL fixed.
 //
@@ -660,9 +744,10 @@ type MarginPort interface {
 	// or ErrNotFound if the position is already closed (idempotent concurrent/restart liquidation).
 	// Forced closes (liquidation/SL/TP) should use SystemCloseTradeID so a restart cannot insert a second trade.
 	ApplyMarginClose(ctx context.Context, p *Portfolio, pos MarginPosition, t MarginTrade, fullClose bool, expected PositionCloseSnapshot) error
-	// HasMarginTradeAction reports whether a trade with the given action exists for the position
-	// (used for restart-safe forced-close checks).
+	// HasMarginTradeAction reports whether a trade with the given action exists for the position.
 	HasMarginTradeAction(ctx context.Context, positionID, action string) (bool, error)
+	// HasMarginTradeID reports whether a trade with the given id exists (deterministic full-close ids).
+	HasMarginTradeID(ctx context.Context, tradeID string) (bool, error)
 	// ApplyMarginOpenFromOrder fills a limit order into a new position in one transaction.
 	ApplyMarginOpenFromOrder(ctx context.Context, p *Portfolio, orderID string, pos MarginPosition, t MarginTrade, at time.Time) error
 	// ApplyMarginAdjust moves cash ↔ position.Margin and updates liquidation (isolated).

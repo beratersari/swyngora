@@ -149,15 +149,17 @@ func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type orderBody struct {
-	ClientID     string  `json:"clientId"`
-	Exchange     string  `json:"exchange"`
-	Symbol       string  `json:"symbol"`
-	Side         string  `json:"side"`
-	Quantity     float64 `json:"quantity"`
-	Type         string  `json:"type"`         // market (default) | limit_buy | limit_sell | stop_loss
-	TriggerPrice float64 `json:"triggerPrice"` // required for pending types
-	TimeInForce  string  `json:"timeInForce"`  // gtc (default) | ioc | fok
-	ExpiresAt    string  `json:"expiresAt"`    // RFC3339; GTC only
+	ClientID        string  `json:"clientId"`
+	Exchange        string  `json:"exchange"`
+	Symbol          string  `json:"symbol"`
+	Side            string  `json:"side"`
+	Quantity        float64 `json:"quantity"`
+	Type            string  `json:"type"`         // market | limit_buy | limit_sell | stop_loss | oco
+	TriggerPrice    float64 `json:"triggerPrice"` // pending single-leg
+	TakeProfitPrice float64 `json:"takeProfitPrice"` // oco limit_sell
+	StopLossPrice   float64 `json:"stopLossPrice"`   // oco stop_loss
+	TimeInForce     string  `json:"timeInForce"`     // gtc | ioc | fok
+	ExpiresAt       string  `json:"expiresAt"`       // RFC3339; GTC only
 }
 
 type pendingOrderDTO struct {
@@ -176,6 +178,8 @@ type pendingOrderDTO struct {
 	TimeInForce       string  `json:"timeInForce"`
 	ExpiresAt         *string `json:"expiresAt,omitempty"`
 	Status            string  `json:"status"`
+	OCOGroupID        string  `json:"ocoGroupId,omitempty"`
+	OCOPeerID         string  `json:"ocoPeerId,omitempty"`
 	CreatedAt         string  `json:"createdAt"`
 	UpdatedAt         string  `json:"updatedAt"`
 	FilledAt          *string `json:"filledAt,omitempty"`
@@ -198,6 +202,7 @@ func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 		TriggerPrice: o.TriggerPrice, ReservedCash: o.ReservedCash, ReservedQuantity: o.ReservedQuantity,
 		TimeInForce: tif,
 		Status:      string(o.Status),
+		OCOGroupID:  o.OCOGroupID, OCOPeerID: o.OCOPeerID,
 		CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
@@ -277,8 +282,38 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			"order": pendingOrderToDTO(o),
 			"note":  "Paper pending order (GTC/IOC/FOK) with reservations. GTC may expire; IOC/FOK act on first try. Not real money.",
 		})
+	case "oco":
+		var exp *time.Time
+		if body.ExpiresAt != "" {
+			t, perr := time.Parse(time.RFC3339Nano, body.ExpiresAt)
+			if perr != nil {
+				t, perr = time.Parse(time.RFC3339, body.ExpiresAt)
+			}
+			if perr != nil {
+				writeError(w, fmt.Errorf("%w: expiresAt must be RFC3339", domain.ErrInvalidArgument))
+				return
+			}
+			tu := t.UTC()
+			exp = &tu
+		}
+		tp, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
+			ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
+			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
+			ExpiresAt: exp,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"type":       "oco",
+			"ocoGroupId": tp.OCOGroupID,
+			"takeProfit": pendingOrderToDTO(tp),
+			"stopLoss":   pendingOrderToDTO(sl),
+			"note":       "Paper OCO: take-profit limit sell + stop-loss for the same size. One fill cancels or shrinks the other. Not real money.",
+		})
 	default:
-		writeError(w, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, or stop_loss", domain.ErrInvalidArgument))
+		writeError(w, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, or oco", domain.ErrInvalidArgument))
 	}
 }
 

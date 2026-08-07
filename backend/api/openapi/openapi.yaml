@@ -1326,6 +1326,9 @@ paths:
         type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
         type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
         may fill partially and stay open until remaining size is zero; each fill is a trade history row.
+        type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
+        shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
+        same price tick fills at most one leg (stop preferred if both trigger).
         Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
@@ -1342,7 +1345,7 @@ paths:
                 symbol: { type: string }
                 type:
                   type: string
-                  enum: [market, limit_buy, limit_sell, stop_loss]
+                  enum: [market, limit_buy, limit_sell, stop_loss, oco]
                   default: market
                 side:
                   type: string
@@ -1353,6 +1356,14 @@ paths:
                   type: number
                   exclusiveMinimum: 0
                   description: Limit or stop price (required for pending types)
+                takeProfitPrice:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: OCO take-profit limit sell price (required for type=oco)
+                stopLossPrice:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice)
                 timeInForce:
                   type: string
                   enum: [gtc, ioc, fok]
@@ -1369,7 +1380,7 @@ paths:
         '200':
           description: Market fill and updated portfolio
         '201':
-          description: Pending order created
+          description: Pending order or OCO pair created
           content:
             application/json:
               schema:
@@ -1377,6 +1388,9 @@ paths:
                 properties:
                   type: { type: string }
                   order: { $ref: '#/components/schemas/PendingOrder' }
+                  ocoGroupId: { type: string }
+                  takeProfit: { $ref: '#/components/schemas/PendingOrder' }
+                  stopLoss: { $ref: '#/components/schemas/PendingOrder' }
                   note: { type: string }
         '400':
           $ref: '#/components/responses/Error'
@@ -3065,6 +3079,8 @@ components:
         timeInForce: { type: string, enum: [gtc, ioc, fok] }
         expiresAt: { type: string, format: date-time, nullable: true }
         status: { type: string, enum: [open, filled, canceled, rejected] }
+        ocoGroupId: { type: string, description: Shared id for OCO take-profit + stop-loss pair }
+        ocoPeerId: { type: string, description: Id of the other OCO leg }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
         filledAt: { type: string, format: date-time, nullable: true }
@@ -3074,7 +3090,7 @@ components:
         rejectReason: { type: string }
         cancelReason:
           type: string
-          description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled
+          description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled
     RecurringBuyPlan:
       type: object
       properties:

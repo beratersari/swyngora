@@ -669,6 +669,38 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	})
 }
 
+func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	var exp *time.Time
+	if expiresAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, expiresAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, expiresAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: expiresAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		exp = &tu
+	}
+	tp, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
+		TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"type":       "oco",
+		"ocoGroupId": tp.OCOGroupID,
+		"takeProfit": pendingOrderMap(tp),
+		"stopLoss":   pendingOrderMap(sl),
+		"note":       "Paper OCO: take-profit + stop-loss for the same size; one fill cancels or shrinks the other.",
+	})
+}
+
 func (b *Backend) ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -1044,6 +1076,7 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 		"triggerPrice": o.TriggerPrice, "reservedCash": o.ReservedCash, "reservedQuantity": o.ReservedQuantity,
 		"timeInForce": tif,
 		"status":      string(o.Status),
+		"ocoGroupId":  o.OCOGroupID, "ocoPeerId": o.OCOPeerID,
 		"createdAt":   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,

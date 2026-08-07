@@ -37,6 +37,164 @@ func newSvc(t *testing.T, px *fakePx) *Service {
 	return New(st, px)
 }
 
+func TestPortfolio_OCOFullFillCancelsPeer(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco1", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco1", Symbol: "BTCUSDT", Quantity: 1,
+		TakeProfitPrice: 120, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tp.OCOGroupID == "" || tp.OCOPeerID != sl.ID || sl.OCOPeerID != tp.ID {
+		t.Fatalf("oco link tp=%+v sl=%+v", tp, sl)
+	}
+	// Shared reservation: available should be 0 for another sell of 1.
+	_, err = svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "oco1", Symbol: "BTCUSDT", Type: "limit_sell", Quantity: 1, TriggerPrice: 150,
+	})
+	if err == nil {
+		t.Fatal("expected insufficient available (reserved by OCO)")
+	}
+	// TP fill at 120 → SL canceled
+	px.prices["binance|BTCUSDT"] = "120"
+	got, ok, err := svc.ProcessOCOPair(ctx, *tp, *sl, 120, time.Now().UTC(), 0)
+	if err != nil || !ok || got == nil {
+		t.Fatalf("tp fill ok=%v err=%v got=%v", ok, err, got)
+	}
+	if got.Status != domain.PendingStatusFilled || got.Type != domain.PendingLimitSell {
+		t.Fatalf("want filled TP, got %+v", got)
+	}
+	peer, err := svc.store.GetPendingOrder(ctx, "oco1", sl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.Status != domain.PendingStatusCanceled || peer.CancelReason != domain.CancelReasonOCOPeerFilled {
+		t.Fatalf("peer want canceled oco_peer_filled: %+v", peer)
+	}
+	// One sell trade only
+	list, _, err := svc.ListTrades(ctx, "oco1", 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sells := 0
+	for _, tr := range list {
+		if tr.Side == domain.TradeSideSell {
+			sells++
+		}
+	}
+	if sells != 1 {
+		t.Fatalf("want 1 sell trade, got %d", sells)
+	}
+}
+
+func TestPortfolio_OCOSameTickOnlyStopFills(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco2", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco2", Symbol: "ETHUSDT", Side: "buy", Quantity: 2}); err != nil {
+		t.Fatal(err)
+	}
+	// Overlapping triggers so one price can hit both (engine still picks stop only).
+	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco2", Symbol: "ETHUSDT", Quantity: 2,
+		TakeProfitPrice: 100, StopLossPrice: 110, // invalid economically but Validate requires tp>sl
+	})
+	// ValidateOCO requires tp > sl — use normal prices and ProcessOCOPair with price that only hits one,
+	// plus unit test for both. For same-tick both: use internal winner with engineered types via direct fill path.
+	_ = tp
+	_ = sl
+	if err == nil {
+		// takeProfit must be > stopLoss — expect error
+		t.Fatal("expected validate error for tp < sl")
+	}
+	tp, sl, err = svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco2", Symbol: "ETHUSDT", Quantity: 2,
+		TakeProfitPrice: 120, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Crash to 50: only SL triggered (TP needs >=120). Full SL fill cancels TP.
+	got, ok, err := svc.ProcessOCOPair(ctx, *tp, *sl, 50, time.Now().UTC(), 0)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if got.Type != domain.PendingStopLoss || got.Status != domain.PendingStatusFilled {
+		t.Fatalf("want filled stop, got %+v", got)
+	}
+	peer, _ := svc.store.GetPendingOrder(ctx, "oco2", tp.ID)
+	if peer.Status != domain.PendingStatusCanceled {
+		t.Fatalf("tp should be canceled: %+v", peer)
+	}
+	// Balance: sold 2 @ 50 once
+	view, _ := svc.View(ctx, "oco2")
+	// start 10000 - 200 buy + 100 sell = 9900
+	if math.Abs(view.CashBalance-9900) > 1e-6 {
+		t.Fatalf("cash=%v want 9900 (single fill)", view.CashBalance)
+	}
+	if view.PositionsValue > 1e-6 {
+		t.Fatalf("position should be flat, value=%v", view.PositionsValue)
+	}
+}
+
+func TestPortfolio_OCOPartialSyncsPeerRemaining(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco3", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco3", Symbol: "BTCUSDT", Side: "buy", Quantity: 2}); err != nil {
+		t.Fatal(err)
+	}
+	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco3", Symbol: "BTCUSDT", Quantity: 2,
+		TakeProfitPrice: 120, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Partial TP fill 0.75
+	got, ok, err := svc.TryFillPendingOrder(ctx, *tp, 120, 0.75)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v", ok, err)
+	}
+	if math.Abs(got.RemainingQuantity-1.25) > 1e-9 || got.Status != domain.PendingStatusOpen {
+		t.Fatalf("tp after partial: %+v", got)
+	}
+	peer, err := svc.store.GetPendingOrder(ctx, "oco3", sl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.Status != domain.PendingStatusOpen || math.Abs(peer.RemainingQuantity-1.25) > 1e-9 {
+		t.Fatalf("sl remaining should match 1.25: %+v", peer)
+	}
+	// Second fill of remaining TP completes and cancels peer.
+	got, ok, err = svc.TryFillPendingOrder(ctx, *got, 120, 0)
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	if got.Status != domain.PendingStatusFilled {
+		t.Fatalf("tp full: %+v", got)
+	}
+	peer, _ = svc.store.GetPendingOrder(ctx, "oco3", sl.ID)
+	if peer.Status != domain.PendingStatusCanceled || peer.CancelReason != domain.CancelReasonOCOPeerFilled {
+		t.Fatalf("peer after full: %+v", peer)
+	}
+}
+
 func TestPortfolio_CreateBuySellAndPnL(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

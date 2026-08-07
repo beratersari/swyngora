@@ -60,10 +60,23 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 | `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `quantity * triggerPrice` cash |
 | `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
 | `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |
+| `oco` | `quantity`, `takeProfitPrice`, `stopLossPrice` | TP: last ≥ TP; SL: last ≤ SL | sell + sell | Reserves **once** for the pair |
+
+### OCO (one-cancels-the-other)
+
+Linked **take-profit** (`limit_sell` at `takeProfitPrice`) and **stop-loss** (`stop_loss` at `stopLossPrice`) for the **same quantity**.
+
+| Rule | Behavior |
+|------|----------|
+| Place | Both legs open with shared `ocoGroupId` / `ocoPeerId`; position size reserved **once** (not 2×) |
+| Full fill | Filling leg → `filled`; peer → `canceled` with `cancelReason=oco_peer_filled` |
+| Partial fill | Filling leg reduces remaining; peer remaining (and reserved size) **matches** the same remaining qty — one cash/position update only |
+| Same tick | If both levels are crossed in one price update, **only stop-loss fills** (peer TP canceled if full); balance/asset never change twice |
+| User cancel | Canceling one open leg cancels the peer (`oco_group_canceled`) |
 
 Optional pending fields:
-- `timeInForce`: `gtc` (default), `ioc`, or `fok`
-- `expiresAt`: RFC3339 timestamp (**GTC only**); when reached the order is canceled and unused reservation is released
+- `timeInForce`: `gtc` (default), `ioc`, or `fok` (single-leg pending; OCO is GTC)
+- `expiresAt`: RFC3339 timestamp (**GTC only**); when reached the order is canceled and unused reservation is released (OCO expires as a group)
 
 ## Behavior
 

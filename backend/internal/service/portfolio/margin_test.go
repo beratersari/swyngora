@@ -172,13 +172,12 @@ func TestMargin_LimitOrderFill(t *testing.T) {
 	}
 }
 
-// TestMargin_CrossLiquidateReevaluatesAfterEachClose ensures that when several cross
-// positions are open and equity is under maintenance, we liquidate the worst first,
-// then re-check with the new shared balance — survivors that no longer need liquidation stay open.
-func TestMargin_CrossLiquidateReevaluatesAfterEachClose(t *testing.T) {
-	// 1x longs: debt 0 so equity is conserved across a close while maintenance drops.
+// TestMargin_CrossPartialLiquidationClosesOnlyEnoughQty: slightly under maint → close only
+// the minimum quantity on the worst position; re-eval leaves the rest open.
+func TestMargin_CrossPartialLiquidationClosesOnlyEnoughQty(t *testing.T) {
+	// 1x longs: debt 0 so equity is conserved while maintenance drops with closed size.
 	// Start 1000; two positions qty 5 @ 100 → margin 500 each, cash 0.
-	// Marks chosen so equity is under total maint but above one position's maint after the worst closes.
+	// equity slightly under total maint; cq on B = deficit/(mmr*entry) = 0.5/0.5 = 1.
 	svc := newSvc(t, &fakePx{prices: map[string]string{
 		"binance|AAAUSDT": "100",
 		"binance|BBBUSDT": "100",
@@ -204,9 +203,7 @@ func TestMargin_CrossLiquidateReevaluatesAfterEachClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// U_A = (0.5-100)*5 = -497.5; U_B = (0.4-100)*5 = -498 → B is worse.
-	// equity = 1000 - 497.5 - 498 = 4.5; totalMaint = 2*2.5 = 5 → under.
-	// After closing B: equity stays ~4.5, maint = 2.5 → healthy; A must survive.
+	// U_A = -497.5; U_B = -498 → B worst. equity=4.5; totalMaint=5; deficit=0.5 → cq_B=1.
 	svc.market = &fakePx{prices: map[string]string{
 		"binance|AAAUSDT": "0.5",
 		"binance|BBBUSDT": "0.4",
@@ -216,41 +213,46 @@ func TestMargin_CrossLiquidateReevaluatesAfterEachClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != 1 {
-		t.Fatalf("want exactly 1 liquidation after re-eval, got %d", n)
+		t.Fatalf("want exactly 1 partial liquidation step, got %d", n)
 	}
 	gotB, err := svc.store.GetMarginPosition(ctx, "xliq", posB.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotB.Status != domain.MarginPositionClosed || gotB.CloseReason != domain.MarginCloseLiquidation {
-		t.Fatalf("worst position B should be liquidated: %+v", gotB)
+	if gotB.Status != domain.MarginPositionOpen {
+		t.Fatalf("B should remain open after partial liq, got %+v", gotB)
+	}
+	if math.Abs(gotB.Quantity-4) > 1e-6 {
+		t.Fatalf("B remaining qty=%v want ~4 (closed only 1)", gotB.Quantity)
 	}
 	gotA, err := svc.store.GetMarginPosition(ctx, "xliq", posA.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotA.Status != domain.MarginPositionOpen {
-		t.Fatalf("position A should survive after equity re-check, got status=%s", gotA.Status)
+	if gotA.Status != domain.MarginPositionOpen || math.Abs(gotA.Quantity-5) > 1e-9 {
+		t.Fatalf("A must be untouched: %+v", gotA)
 	}
-	// Second pass: still healthy — no further closes.
+	// Healthy — second pass no-ops (no dust thrash, no second record for same qty).
 	n2, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq", time.Now().UTC())
 	if err != nil || n2 != 0 {
 		t.Fatalf("second pass should close nothing: n=%d err=%v", n2, err)
 	}
-	// Old batch behavior would have closed both; ensure only one forced-close trade total.
-	closes, liqs, _ := countMarginCloseActions(t, svc, "xliq", posA.ID)
-	if closes != 0 || liqs != 0 {
-		t.Fatalf("A should have no close trades, closes=%d liqs=%d", closes, liqs)
-	}
-	closesB, liqsB, _ := countMarginCloseActions(t, svc, "xliq", posB.ID)
+	closesB, liqsB, qtyB := countMarginCloseActions(t, svc, "xliq", posB.ID)
 	if closesB != 1 || liqsB != 1 {
 		t.Fatalf("B should have exactly one liquidation trade, closes=%d liqs=%d", closesB, liqsB)
 	}
+	if math.Abs(qtyB-1) > 1e-6 {
+		t.Fatalf("liquidation qty sum=%v want 1 (not more than needed)", qtyB)
+	}
+	closesA, _, _ := countMarginCloseActions(t, svc, "xliq", posA.ID)
+	if closesA != 0 {
+		t.Fatalf("A should have no close trades, got %d", closesA)
+	}
 }
 
-// TestMargin_CrossLiquidateContinuesWhileStillUnder closes further positions only when
-// re-evaluated equity remains below maintenance after the first close.
-func TestMargin_CrossLiquidateContinuesWhileStillUnder(t *testing.T) {
+// TestMargin_CrossPartialLiquidationContinuesAcrossPositions: deep under maint may fully
+// close the worst, then only partially close the next until healthy.
+func TestMargin_CrossPartialLiquidationContinuesAcrossPositions(t *testing.T) {
 	svc := newSvc(t, &fakePx{prices: map[string]string{
 		"binance|AAAUSDT": "100",
 		"binance|BBBUSDT": "100",
@@ -276,8 +278,8 @@ func TestMargin_CrossLiquidateContinuesWhileStillUnder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Both deep red: equity = 1000 - 499.5*2 = 1; maint = 5 → under.
-	// After one close equity still 1 < maint 2.5 → must close the second as well.
+	// equity = 1000 - 499.5*2 = 1; maint = 5; deficit = 4.
+	// B full close (cq>=8 but qty=5); then A: deficit 1.5 → cq=3, remain 2 open.
 	svc.market = &fakePx{prices: map[string]string{
 		"binance|AAAUSDT": "0.1",
 		"binance|BBBUSDT": "0.1",
@@ -287,16 +289,88 @@ func TestMargin_CrossLiquidateContinuesWhileStillUnder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n != 2 {
-		t.Fatalf("want both liquidated while still under after re-eval, got %d", n)
+		t.Fatalf("want 2 liquidation steps (full one + partial other), got %d", n)
 	}
-	for _, id := range []string{posA.ID, posB.ID} {
-		got, err := svc.store.GetMarginPosition(ctx, "xliq2", id)
-		if err != nil {
+	gotA, err := svc.store.GetMarginPosition(ctx, "xliq2", posA.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotB, err := svc.store.GetMarginPosition(ctx, "xliq2", posB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Worst is full-closed first (UUID order when U ties); the other keeps residual ~2.
+	var closed, open *domain.MarginPosition
+	switch {
+	case gotA.Status == domain.MarginPositionClosed && gotB.Status == domain.MarginPositionOpen:
+		closed, open = gotA, gotB
+	case gotB.Status == domain.MarginPositionClosed && gotA.Status == domain.MarginPositionOpen:
+		closed, open = gotB, gotA
+	default:
+		t.Fatalf("want one full close + one partial residual, A=%s qty=%v B=%s qty=%v",
+			gotA.Status, gotA.Quantity, gotB.Status, gotB.Quantity)
+	}
+	_ = closed
+	if math.Abs(open.Quantity-2) > 1e-6 {
+		t.Fatalf("residual open qty=%v want ~2", open.Quantity)
+	}
+	// No further closes once healthy.
+	n2, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq2", time.Now().UTC())
+	if err != nil || n2 != 0 {
+		t.Fatalf("healthy book must not keep liquidating: n=%d err=%v", n2, err)
+	}
+}
+
+// TestMargin_CrossPartialLiquidationNoDuplicateQtyRecord: replay after a successful partial
+// does not insert another close for the same quantity or re-debit size.
+func TestMargin_CrossPartialLiquidationNoDuplicateQtyRecord(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "100",
+		"binance|BBBUSDT": "100",
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "xliq3", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.SetMarginMode(ctx, SetMarginModeInput{ClientID: "xliq3", Mode: "cross"}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq3", Symbol: "AAAUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	posB, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "xliq3", Symbol: "BBBUSDT", Side: "long", Type: "market",
+		Quantity: 5, Leverage: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.market = &fakePx{prices: map[string]string{
+		"binance|AAAUSDT": "0.5",
+		"binance|BBBUSDT": "0.4",
+	}}
+	if _, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq3", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	got1, _ := svc.store.GetMarginPosition(ctx, "xliq3", posB.ID)
+	_, liqs1, qty1 := countMarginCloseActions(t, svc, "xliq3", posB.ID)
+	// Simulate restart / second worker tick while healthy.
+	for i := 0; i < 3; i++ {
+		if _, err := svc.liquidateCrossIfUnderMaint(ctx, "xliq3", time.Now().UTC()); err != nil {
 			t.Fatal(err)
 		}
-		if got.Status != domain.MarginPositionClosed {
-			t.Fatalf("pos %s want closed, got %s", id, got.Status)
-		}
+	}
+	got2, _ := svc.store.GetMarginPosition(ctx, "xliq3", posB.ID)
+	_, liqs2, qty2 := countMarginCloseActions(t, svc, "xliq3", posB.ID)
+	if liqs2 != liqs1 || math.Abs(qty2-qty1) > 1e-12 {
+		t.Fatalf("duplicate liquidation records: before liqs=%d qty=%v after liqs=%d qty=%v", liqs1, qty1, liqs2, qty2)
+	}
+	if math.Abs(got2.Quantity-got1.Quantity) > 1e-12 {
+		t.Fatalf("quantity changed on healthy restarts: %v -> %v", got1.Quantity, got2.Quantity)
 	}
 }
 

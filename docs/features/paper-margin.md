@@ -22,7 +22,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 
 ### Liquidation (maintenance 0.5% of notional)
 - **Isolated:** `liq` from assigned margin: long `entry − (margin − maint)/qty`
-- **Cross:** per-position liq from shared equity vs total maintenance; if account equity &lt; total maint, liquidate **one position at a time** (worst unrealized PnL first). After each close, **re-read cash, remaining positions, and marks** and stop as soon as equity recovers — do not batch-close every open position on a stale snapshot
+- **Cross:** per-position liq from shared equity vs total maintenance; if account equity is **slightly** under total maint, **partially liquidate** only enough quantity on the worst position (by unrealized PnL) to restore health — not the full size when a smaller close suffices. After each (partial or full) close, **re-read cash, remaining sizes, and marks** and stop when equity recovers. Min-size / dust rules avoid thrashing on tiny closes; debt+qty CAS and deterministic full-close trade ids prevent duplicate records for the same quantity
 - Worker auto-closes when mark crosses liquidation (reason `liquidation`)
 
 ### Add / remove margin (isolated only)

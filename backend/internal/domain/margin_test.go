@@ -72,6 +72,35 @@ func TestAllocateRepaymentInterestFirst(t *testing.T) {
 	}
 }
 
+func TestCrossPartialLiquidationQty(t *testing.T) {
+	mmr := 0.005
+	// Already healthy → 0
+	if q := CrossPartialLiquidationQty(MarginLong, 5, 100, 100, 0, 0, DebtAssetQuote, 10, 5, mmr); q != 0 {
+		t.Fatalf("healthy q=%v", q)
+	}
+	// deficit 0.5, debt 0, entry 100 → cq = 0.5 / (0.005*100) = 1
+	q := CrossPartialLiquidationQty(MarginLong, 5, 100, 50, 0, 0, DebtAssetQuote, 4.5, 5, mmr)
+	if math.Abs(q-1) > 1e-9 {
+		t.Fatalf("slight under q=%v want 1", q)
+	}
+	// Large deficit needs more than size → full qty
+	q = CrossPartialLiquidationQty(MarginLong, 5, 100, 50, 0, 0, DebtAssetQuote, 1, 5, mmr)
+	if math.Abs(q-5) > 1e-9 {
+		t.Fatalf("deep under q=%v want full 5", q)
+	}
+	// High quote debt per unit can make coeff ≤ 0 → full close
+	q = CrossPartialLiquidationQty(MarginLong, 1, 100, 50, 80, 0, DebtAssetQuote, 0, 1, mmr)
+	if math.Abs(q-1) > 1e-9 {
+		t.Fatalf("leveraged coeff≤0 q=%v want full 1", q)
+	}
+	// Remainder dust rounds up to full
+	// qty=0.02, need tiny cq but min fraction 1% of 0.02 = 0.0002; force remain < min trade
+	q = CrossPartialLiquidationQty(MarginLong, 1e-7, 100, 50, 0, 0, DebtAssetQuote, 0, 1e-6, mmr)
+	if q < 1e-7-1e-20 {
+		t.Fatalf("dust position should full-close, q=%v", q)
+	}
+}
+
 func TestSystemCloseTradeID(t *testing.T) {
 	id := "pos-abc"
 	if got := SystemCloseTradeID(MarginCloseLiquidation, id); got != "margin-liq:pos-abc" {
