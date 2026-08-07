@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS portfolios (
 	starting_balance  REAL NOT NULL,
 	cash_balance      REAL NOT NULL,
 	realized_pnl_total REAL NOT NULL DEFAULT 0,
+	net_deposits      REAL NOT NULL DEFAULT 0,
 	margin_mode       TEXT NOT NULL DEFAULT 'isolated',
 	created_at        TEXT NOT NULL,
 	updated_at        TEXT NOT NULL
@@ -297,6 +298,18 @@ CREATE TABLE IF NOT EXISTS portfolio_equity_snapshots (
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_pf_equity_snap_time ON portfolio_equity_snapshots(bucket_at);
+CREATE TABLE IF NOT EXISTS cash_movements (
+	id                  TEXT PRIMARY KEY NOT NULL,
+	client_id           TEXT NOT NULL,
+	kind                TEXT NOT NULL,
+	amount              REAL NOT NULL,
+	cash_after          REAL NOT NULL,
+	net_deposits_after  REAL NOT NULL,
+	note                TEXT NOT NULL DEFAULT '',
+	created_at          TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_cash_movements_client ON cash_movements(client_id, created_at DESC);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -332,6 +345,19 @@ CREATE INDEX IF NOT EXISTS idx_pf_equity_snap_time ON portfolio_equity_snapshots
 		`ALTER TABLE recurring_buy_plans ADD COLUMN weekday TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN day_of_month INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN interval_hours INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE portfolios ADD COLUMN net_deposits REAL NOT NULL DEFAULT 0`,
+		`CREATE TABLE IF NOT EXISTS cash_movements (
+	id                  TEXT PRIMARY KEY NOT NULL,
+	client_id           TEXT NOT NULL,
+	kind                TEXT NOT NULL,
+	amount              REAL NOT NULL,
+	cash_after          REAL NOT NULL,
+	net_deposits_after  REAL NOT NULL,
+	note                TEXT NOT NULL DEFAULT '',
+	created_at          TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+)`,
+		`CREATE INDEX IF NOT EXISTS idx_cash_movements_client ON cash_movements(client_id, created_at DESC)`,
 		// Prefer SL/TP uniqueness only; drop older liquidation-inclusive unique index if present.
 		`DROP INDEX IF EXISTS idx_margin_trades_forced_close`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp ON margin_trades(position_id, action) WHERE action IN ('stop_loss', 'take_profit')`,
@@ -378,10 +404,10 @@ func (s *SQLite) GetPortfolio(ctx context.Context, clientID string) (*domain.Por
 	var cAt, uAt, mode string
 	err := s.db.QueryRowContext(ctx, `
 		SELECT client_id, currency, starting_balance, cash_balance, realized_pnl_total,
-			COALESCE(margin_mode, 'isolated'), created_at, updated_at
+			COALESCE(net_deposits, 0), COALESCE(margin_mode, 'isolated'), created_at, updated_at
 		FROM portfolios WHERE client_id = ?
 	`, clientID).Scan(&p.ClientID, &p.Currency, &p.StartingBalance, &p.CashBalance, &p.RealizedPnLTotal,
-		&mode, &cAt, &uAt)
+		&p.NetDeposits, &mode, &cAt, &uAt)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrNotFound
 	}
@@ -411,9 +437,9 @@ func (s *SQLite) CreatePortfolio(ctx context.Context, p domain.Portfolio) (*doma
 		p.MarginMode = domain.MarginModeIsolated
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO portfolios (client_id, currency, starting_balance, cash_balance, realized_pnl_total, margin_mode, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ClientID, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal, string(p.MarginMode),
+		INSERT INTO portfolios (client_id, currency, starting_balance, cash_balance, realized_pnl_total, net_deposits, margin_mode, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ClientID, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal, p.NetDeposits, string(p.MarginMode),
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("portfolio create: %w", err)

@@ -39,6 +39,8 @@ type Portfolio struct {
 	StartingBalance  float64
 	CashBalance      float64
 	RealizedPnLTotal float64
+	// NetDeposits is later deposits minus withdrawals (excludes opening startingBalance).
+	NetDeposits float64
 	// MarginMode is isolated (default) or cross; locked while open margin pos/orders exist.
 	MarginMode MarginMode
 	CreatedAt  time.Time
@@ -213,9 +215,13 @@ type PortfolioView struct {
 	Currency         string
 	StartingBalance  float64
 	CashBalance      float64
-	ReservedCash     float64 // spot pending buy reservations
-	ReservedMargin   float64 // margin limit-order reservations
-	AvailableCash    float64
+	// NetDeposits is subsequent deposits minus withdrawals (not the opening balance).
+	NetDeposits float64
+	// ContributedCapital is StartingBalance + NetDeposits (money the user put in).
+	ContributedCapital float64
+	ReservedCash       float64 // spot pending buy reservations
+	ReservedMargin     float64 // margin limit-order reservations
+	AvailableCash      float64
 	PositionsValue   float64
 	// MarginMode is isolated or cross for this account.
 	MarginMode MarginMode
@@ -228,7 +234,7 @@ type PortfolioView struct {
 	Equity           float64
 	UnrealizedPnL    float64 // spot + margin unrealized
 	RealizedPnLTotal float64
-	TotalPnL         float64 // equity - starting
+	TotalPnL         float64 // equity - contributed capital (deposits are not profit)
 	Positions        []PositionView
 	MarginPositions  []MarginPosition // open margin positions (with marks when listed via View)
 	Note             string
@@ -343,6 +349,11 @@ type PortfolioPort interface {
 	GetRiskLimits(ctx context.Context, clientID string) (*RiskLimits, error)
 	UpsertRiskLimits(ctx context.Context, lim RiskLimits) (*RiskLimits, error)
 	DeleteRiskLimits(ctx context.Context, clientID string) error
+
+	// Cash movements (user deposits / withdrawals; not trades).
+	ApplyCashMovement(ctx context.Context, p *Portfolio, m CashMovement) (*CashMovement, error)
+	ListCashMovements(ctx context.Context, clientID string, limit, offset int) ([]CashMovement, error)
+	CountCashMovements(ctx context.Context, clientID string) (int, error)
 
 	// Equity history for performance charts (one row per client + time bucket).
 	UpsertEquitySnapshot(ctx context.Context, snap EquitySnapshot) error

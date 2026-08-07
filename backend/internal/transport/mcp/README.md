@@ -33,6 +33,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `delete_alert_webhook` | Clear client webhook URL |
 | `create_portfolio` | Create paper portfolio with starting balance |
 | `get_portfolio` | Cash, positions, P&L snapshot |
+| `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
+| `withdraw_portfolio_cash` | Withdraw available virtual cash |
+| `list_portfolio_cash_movements` | Deposit/withdraw history |
 | `get_portfolio_performance` | Equity history + period P&L (1d/1w/1m/3m) |
 | `get_portfolio_risk_limits` | Optional risk limits + live status |
 | `set_portfolio_risk_limits` | Set daily-loss % and/or max coin weight % |

@@ -1321,6 +1321,105 @@ paths:
           $ref: '#/components/responses/Error'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/deposits:
+    post:
+      summary: Deposit virtual cash into a paper portfolio
+      description: |
+        Adds cash to the simulated account. Does not count as trading profit.
+        Opening startingBalance is unchanged; netDeposits increases.
+        Paper trading only — not real money.
+      operationId: depositPortfolioCash
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                clientId: { type: string }
+                amount: { type: number, exclusiveMinimum: 0, example: 500 }
+                note: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Movement and updated portfolio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioCashMoveResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/withdrawals:
+    post:
+      summary: Withdraw virtual cash from a paper portfolio
+      description: |
+        Removes available cash only (not reserved for open orders). Does not count as trading loss.
+        Paper trading only — not real money.
+      operationId: withdrawPortfolioCash
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                clientId: { type: string }
+                amount: { type: number, exclusiveMinimum: 0, example: 200 }
+                note: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Movement and updated portfolio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioCashMoveResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/cash-movements:
+    get:
+      summary: List paper cash deposits and withdrawals
+      description: Newest first. Includes the opening balance row created with the portfolio.
+      operationId: listPortfolioCashMovements
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Cash movement history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  movements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PortfolioCashMovement'
+                  count: { type: integer }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/performance:
     get:
       summary: Get paper portfolio performance history
@@ -3490,6 +3589,12 @@ components:
         currency: { type: string }
         startingBalance: { type: number }
         cashBalance: { type: number }
+        netDeposits:
+          type: number
+          description: Later deposits minus withdrawals (excludes opening startingBalance)
+        contributedCapital:
+          type: number
+          description: startingBalance + netDeposits
         reservedCash:
           type: number
           description: Cash locked by open spot buy pending orders
@@ -3509,7 +3614,9 @@ components:
         equity: { type: number }
         unrealizedPnL: { type: number }
         realizedPnLTotal: { type: number }
-        totalPnL: { type: number }
+        totalPnL:
+          type: number
+          description: equity minus contributedCapital (deposits/withdrawals are not P&L)
         positions: { type: array, items: { type: object } }
         marginPositions:
           type: array
@@ -3518,6 +3625,23 @@ components:
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PortfolioCashMovement:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [deposit, withdrawal] }
+        amount: { type: number }
+        cashAfter: { type: number }
+        netDepositsAfter: { type: number }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+    PortfolioCashMoveResponse:
+      type: object
+      properties:
+        movement:
+          $ref: '#/components/schemas/PortfolioCashMovement'
+        portfolio:
+          $ref: '#/components/schemas/PortfolioView'
     PortfolioPerformance:
       type: object
       description: Period P&L plus equity time series for a paper portfolio chart

@@ -673,6 +673,69 @@ func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMe
 	return portfolioViewJSON(v)
 }
 
+func (b *Backend) DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	m, v, err := b.Portfolio.Deposit(ctx, portfolio.CashMoveInput{ClientID: clientID, Amount: amount, Note: note})
+	if err != nil {
+		return nil, err
+	}
+	return cashMoveJSON(m, v)
+}
+
+func (b *Backend) WithdrawPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	m, v, err := b.Portfolio.Withdraw(ctx, portfolio.CashMoveInput{ClientID: clientID, Amount: amount, Note: note})
+	if err != nil {
+		return nil, err
+	}
+	return cashMoveJSON(m, v)
+}
+
+func (b *Backend) ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Portfolio.ListCashMovements(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, cashMovementMap(&list[i]))
+	}
+	return mustJSON(map[string]any{
+		"clientId": clientID, "movements": items, "count": len(items), "total": total, "limit": limit, "offset": offset,
+	})
+}
+
+func cashMovementMap(m *domain.CashMovement) map[string]any {
+	out := map[string]any{
+		"id": m.ID, "kind": string(m.Kind), "amount": m.Amount,
+		"cashAfter": m.CashAfter, "netDepositsAfter": m.NetDepositsAfter,
+		"createdAt": m.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if m.Note != "" {
+		out["note"] = m.Note
+	}
+	return out
+}
+
+func cashMoveJSON(m *domain.CashMovement, v *domain.PortfolioView) (json.RawMessage, error) {
+	pv, err := portfolioViewJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	var pmap map[string]any
+	if err := json.Unmarshal(pv, &pmap); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"movement": cashMovementMap(m), "portfolio": pmap})
+}
+
 func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -1539,7 +1602,8 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 	}
 	return mustJSON(map[string]any{
 		"clientId": v.ClientID, "currency": v.Currency, "startingBalance": v.StartingBalance,
-		"cashBalance": v.CashBalance, "reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
+		"cashBalance": v.CashBalance, "netDeposits": v.NetDeposits, "contributedCapital": v.ContributedCapital,
+		"reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
 		"positionsValue": v.PositionsValue, "equity": v.Equity,
 		"unrealizedPnL": v.UnrealizedPnL, "realizedPnLTotal": v.RealizedPnLTotal, "totalPnL": v.TotalPnL,
 		"positions": pos, "note": v.Note,

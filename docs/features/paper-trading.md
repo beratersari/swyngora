@@ -10,6 +10,9 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 |--------|------|-------------|
 | `POST` | `/api/v1/portfolio` | Create portfolio (`startingBalance`, optional `currency`) |
 | `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
+| `POST` | `/api/v1/portfolio/deposits` | Add virtual cash (`amount`, optional `note`) |
+| `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available cash (`amount`, optional `note`) |
+| `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history (newest first; includes opening) |
 | `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
@@ -45,6 +48,14 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
 
+### Deposits and withdrawals
+
+Users can add or remove virtual cash after create (`POST /deposits`, `POST /withdrawals`). Withdrawals use **available** cash only (not reserved for open orders). Each action is stored on `GET /cash-movements` (amount, kind, cash after, optional note, timestamp). Creating a portfolio writes an opening `deposit` row (`note=Opening balance`).
+
+**P&L:** `totalPnL = equity − startingBalance − netDeposits`. Depositing or withdrawing is not trading profit/loss. `contributedCapital` is starting + net deposits.
+
+MCP: `deposit_portfolio_cash`, `withdraw_portfolio_cash`, `list_portfolio_cash_movements`. Telegram: `/deposit`, `/withdraw`, `/cash`.
+
 ### Performance history
 
 `GET /api/v1/portfolio/performance?period=1w` returns how total equity moved over the lookback, for a chart and for “since start of window” P&L.
@@ -53,7 +64,7 @@ Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfo
 |-------|---------|
 | `period` | `1d` (24h), `1w` (7d, default), `1m` (30d), `3m` (90d) |
 | `startEquity` / `endEquity` | Mark-to-market equity at window start (carry-forward last sample) and now |
-| `changeAmount` | `endEquity - startEquity` (portfolio currency) |
+| `changeAmount` | `endEquity - startEquity` (portfolio currency; equity jumps if you deposit/withdraw) |
 | `changePct` | Percent vs `startEquity`; `null` if start is ~0 |
 | `partial` | Portfolio created after the requested window start |
 | `points[]` | `{ t, equity, cashBalance, positionsValue, marginEquity }` time series (includes live last point) |

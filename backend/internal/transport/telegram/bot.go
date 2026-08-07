@@ -67,6 +67,10 @@ func (b *Bot) Start(ctx context.Context) {
 			if u.UpdateID >= offset {
 				offset = u.UpdateID + 1
 			}
+			if u.CallbackQuery != nil {
+				b.dispatchCallback(ctx, u.CallbackQuery)
+				continue
+			}
 			if u.Message == nil || u.Message.Text == "" {
 				continue
 			}
@@ -93,10 +97,46 @@ func (b *Bot) dispatch(ctx context.Context, chatID, userID int64, text string) {
 		log = slog.Default()
 	}
 
-	reply := b.Router.Handle(ctx, chatID, userID, text)
-	if _, err := b.Client.SendMessage(ctx, chatID, reply); err != nil {
+	reply := b.Router.HandleMessage(ctx, chatID, userID, text)
+	markup := encodeInlineKeyboard(reply.Keyboard)
+	if _, err := b.Client.SendMessageMarkup(ctx, chatID, reply.Text, "HTML", markup); err != nil {
 		log.Warn("telegram HTML send failed, retry plain", "err", err)
-		_, _ = b.Client.SendMessageMode(ctx, chatID, PlainText(reply), "")
+		_, _ = b.Client.SendMessageMarkup(ctx, chatID, PlainText(reply.Text), "", markup)
+	}
+}
+
+func (b *Bot) dispatchCallback(ctx context.Context, cq *CallbackQuery) {
+	log := b.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+	if cq == nil {
+		return
+	}
+	var chatID int64
+	var msgID int64
+	if cq.Message != nil {
+		chatID = cq.Message.Chat.ID
+		msgID = cq.Message.MessageID
+	}
+	userID := chatID
+	if cq.From != nil {
+		userID = cq.From.ID
+	}
+	log.Info("telegram callback", "chat_id", chatID, "user_id", userID, "data", truncate(cq.Data, 40))
+	reply := b.Router.HandleCallback(ctx, chatID, userID, cq.Data)
+	_ = b.Client.AnswerCallbackQuery(ctx, cq.ID, reply.Toast)
+	if msgID == 0 || reply.Text == "" {
+		return
+	}
+	markup := encodeInlineKeyboard(reply.Keyboard)
+	if reply.ClearKeyboard || len(reply.Keyboard) == 0 {
+		markup = emptyInlineKeyboardJSON
+	}
+	if err := b.Client.EditMessageMarkup(ctx, chatID, msgID, reply.Text, "HTML", markup); err != nil {
+		if err2 := b.Client.EditMessageMarkup(ctx, chatID, msgID, PlainText(reply.Text), "", markup); err2 != nil {
+			log.Warn("telegram callback edit failed", "err", err, "plain_err", err2)
+		}
 	}
 }
 

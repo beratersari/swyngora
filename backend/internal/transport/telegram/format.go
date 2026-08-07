@@ -166,6 +166,181 @@ func footer() string {
 	return "\n" + divider() + Disclaimer
 }
 
+const paperDisclaimer = "<i>📄 Paper trading only — simulated fills. Not real money.</i>"
+
+// FormatPaperPortfolio renders cash, equity, P&L, and open positions.
+func FormatPaperPortfolio(v *domain.PortfolioView) string {
+	if v == nil {
+		return "No paper portfolio."
+	}
+	cur := v.Currency
+	if cur == "" {
+		cur = "USDT"
+	}
+	var b strings.Builder
+	b.WriteString(header("📊", "Paper portfolio"))
+	b.WriteString(italic("Simulated · "+cur) + "\n")
+	b.WriteString(divider())
+	b.WriteString(row("Cash", code(Float(v.CashBalance, 4)+" "+cur)))
+	if v.ReservedCash > 0 {
+		b.WriteString(row("Reserved", code(Float(v.ReservedCash, 4))))
+	}
+	b.WriteString(row("Available", code(Float(v.AvailableCash, 4))))
+	b.WriteString(row("Equity", code(Float(v.Equity, 4))))
+	b.WriteString(row("Unrealized", code(signedFloat(v.UnrealizedPnL, 4))))
+	b.WriteString(row("Realized", code(signedFloat(v.RealizedPnLTotal, 4))))
+	b.WriteString(row("Total P&L", code(signedFloat(v.TotalPnL, 4))))
+	if v.NetDeposits != 0 {
+		b.WriteString(row("Net deposits", code(signedFloat(v.NetDeposits, 4))))
+	}
+	if v.ContributedCapital > 0 {
+		b.WriteString(row("vs capital", code(signedFloat(v.TotalPnL/v.ContributedCapital*100, 2)+"%")))
+	}
+	if len(v.Positions) == 0 {
+		b.WriteString("\n" + italic("No open spot positions.") + "\n")
+	} else {
+		b.WriteString("\n" + bold("Positions") + "\n")
+		for _, p := range v.Positions {
+			b.WriteString(fmt.Sprintf("  • %s  %s @ %s  mark %s  uPnL %s\n",
+				code(p.Symbol),
+				code(Float(p.Quantity, 8)),
+				code(Float(p.AvgCost, 6)),
+				code(Float(p.MarkPrice, 6)),
+				code(signedFloat(p.UnrealizedPnL, 4)),
+			))
+		}
+	}
+	b.WriteString("\n" + paperDisclaimer)
+	return b.String()
+}
+
+// FormatCashMoved confirms a deposit or withdrawal.
+func FormatCashMoved(m *domain.CashMovement, v *domain.PortfolioView) string {
+	if m == nil {
+		return "Done.\n" + paperDisclaimer
+	}
+	title := "Deposit"
+	if m.Kind == domain.CashMovementWithdrawal {
+		title = "Withdrawal"
+	}
+	cur := "USDT"
+	if v != nil && v.Currency != "" {
+		cur = v.Currency
+	}
+	var b strings.Builder
+	b.WriteString(header("💵", "Paper "+title))
+	b.WriteString(divider())
+	b.WriteString(row("Amount", code(Float(m.Amount, 4)+" "+cur)))
+	if m.Note != "" {
+		b.WriteString(row("Note", esc(m.Note)))
+	}
+	b.WriteString(row("Cash now", code(Float(m.CashAfter, 4)+" "+cur)))
+	if v != nil {
+		b.WriteString(row("Equity", code(Float(v.Equity, 4))))
+		b.WriteString(row("Total P&L", code(signedFloat(v.TotalPnL, 4))))
+	}
+	b.WriteString("\n" + paperDisclaimer)
+	return b.String()
+}
+
+// FormatCashHistory lists recent deposits/withdrawals.
+func FormatCashHistory(items []domain.CashMovement, total int) string {
+	var b strings.Builder
+	b.WriteString(header("📒", "Cash history"))
+	b.WriteString(italic(fmt.Sprintf("%d shown · %d total", len(items), total)) + "\n")
+	b.WriteString(divider())
+	if len(items) == 0 {
+		b.WriteString(italic("No deposits or withdrawals yet.") + "\n")
+		b.WriteString(paperDisclaimer)
+		return b.String()
+	}
+	for _, m := range items {
+		label := "IN "
+		if m.Kind == domain.CashMovementWithdrawal {
+			label = "OUT"
+		}
+		note := ""
+		if m.Note != "" {
+			note = " · " + esc(m.Note)
+		}
+		b.WriteString(fmt.Sprintf("  %s %s  cash %s%s\n",
+			code(label), code(Float(m.Amount, 4)), code(Float(m.CashAfter, 4)), note))
+	}
+	b.WriteString("\n" + paperDisclaimer)
+	return b.String()
+}
+
+func signedFloat(f float64, frac int) string {
+	s := Float(f, frac)
+	if f > 0 {
+		return "+" + s
+	}
+	return s
+}
+
+// FormatTradePreview is the confirmation card shown before a paper fill.
+func FormatTradePreview(side domain.TradeSide, exchange, symbol string, qty, price, notional float64, currency string) string {
+	if currency == "" {
+		currency = "USDT"
+	}
+	action := "BUY"
+	if side == domain.TradeSideSell {
+		action = "SELL"
+	}
+	var b strings.Builder
+	b.WriteString(header("📝", "Confirm paper "+action))
+	b.WriteString(divider())
+	b.WriteString(row("Coin", code(symbol)))
+	b.WriteString(row("Venue", code(exchange)))
+	b.WriteString(row("Side", bold(action)))
+	b.WriteString(row("Amount", code(Float(qty, 8))))
+	b.WriteString(row("Price", code(Float(price, 8))))
+	b.WriteString(row("Total", code(Float(notional, 4)+" "+currency)))
+	b.WriteString("\n" + italic("Fills at last market price when you confirm (may differ slightly).") + "\n")
+	b.WriteString(paperDisclaimer)
+	return b.String()
+}
+
+// FormatTradeFilled is shown after a confirmed paper market order.
+func FormatTradeFilled(tr *domain.Trade, previewPrice float64, currency string, view *domain.PortfolioView) string {
+	if tr == nil {
+		return "✅ Order filled.\n" + paperDisclaimer
+	}
+	if currency == "" {
+		currency = "USDT"
+	}
+	action := strings.ToUpper(string(tr.Side))
+	var b strings.Builder
+	b.WriteString(header("✅", "Paper "+action+" filled"))
+	b.WriteString(divider())
+	b.WriteString(row("Coin", code(tr.Symbol)))
+	b.WriteString(row("Amount", code(Float(tr.Quantity, 8))))
+	b.WriteString(row("Fill price", code(Float(tr.Price, 8))))
+	if previewPrice > 0 && absFloat(tr.Price-previewPrice) > 1e-9 {
+		b.WriteString(row("Preview was", code(Float(previewPrice, 8))))
+	}
+	b.WriteString(row("Total", code(Float(tr.Notional, 4)+" "+currency)))
+	if view != nil {
+		b.WriteString(row("Cash now", code(Float(view.CashBalance, 4)+" "+view.Currency)))
+		b.WriteString(row("Equity", code(Float(view.Equity, 4))))
+	}
+	b.WriteString("\n" + paperDisclaimer)
+	return b.String()
+}
+
+// FormatTradeCanceled is shown when the user taps Cancel.
+func FormatTradeCanceled(side domain.TradeSide, symbol string) string {
+	return "❌ " + bold("Canceled") + "\n\nPaper " + strings.ToUpper(string(side)) + " " + code(symbol) +
+		" was not sent.\n\n" + paperDisclaimer
+}
+
+func absFloat(f float64) float64 {
+	if f < 0 {
+		return -f
+	}
+	return f
+}
+
 // FormatTicker formats a 24h ticker as a readable card.
 func FormatTicker(exchange string, t *domain.Ticker24h) string {
 	if t == nil {
@@ -413,6 +588,16 @@ func HelpText() string {
 	b.WriteString(cmdLine("/watch top", "", "live prices"))
 	b.WriteString("\n")
 
+	b.WriteString(bold("Paper portfolio") + "\n")
+	b.WriteString(cmdLine("/portfolio", "", "cash, positions, P&L"))
+	b.WriteString(cmdLine("/portfolio create", "[balance]", "new simulated account"))
+	b.WriteString(cmdLine("/buy", "<symbol> <qty> [ex]", "preview then confirm"))
+	b.WriteString(cmdLine("/sell", "<symbol> <qty> [ex]", "preview then confirm"))
+	b.WriteString(cmdLine("/deposit", "<amount> [note]", "add virtual cash"))
+	b.WriteString(cmdLine("/withdraw", "<amount> [note]", "take virtual cash out"))
+	b.WriteString(cmdLine("/cash", "[n]", "deposit/withdraw history"))
+	b.WriteString("\n")
+
 	b.WriteString(bold("Examples") + "\n")
 	b.WriteString("  " + code("/price BTCUSDT") + "\n")
 	b.WriteString("  " + code("/price BTC-USD coinbase") + "\n")
@@ -420,6 +605,8 @@ func HelpText() string {
 	b.WriteString("  " + code("/spot bybit SOL") + "\n")
 	b.WriteString("  " + code("/rsi ETHUSDT 1h") + "\n")
 	b.WriteString("  " + code("/ask What is BTC RSI and recent news?") + "\n")
+	b.WriteString("  " + code("/portfolio create 10000") + "\n")
+	b.WriteString("  " + code("/buy BTCUSDT 0.01") + "\n")
 	b.WriteString("\n")
 	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit"))
 	b.WriteString(footer())

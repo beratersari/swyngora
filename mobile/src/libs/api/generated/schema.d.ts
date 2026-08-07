@@ -479,6 +479,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/deposits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Deposit virtual cash into a paper portfolio
+         * @description Adds cash to the simulated account. Does not count as trading profit.
+         *     Opening startingBalance is unchanged; netDeposits increases.
+         *     Paper trading only — not real money.
+         */
+        post: operations["depositPortfolioCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/withdrawals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw virtual cash from a paper portfolio
+         * @description Removes available cash only (not reserved for open orders). Does not count as trading loss.
+         *     Paper trading only — not real money.
+         */
+        post: operations["withdrawPortfolioCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/cash-movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List paper cash deposits and withdrawals
+         * @description Newest first. Includes the opening balance row created with the portfolio.
+         */
+        get: operations["listPortfolioCashMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/performance": {
         parameters: {
             query?: never;
@@ -1642,6 +1705,10 @@ export interface components {
             currency?: string;
             startingBalance?: number;
             cashBalance?: number;
+            /** @description Later deposits minus withdrawals (excludes opening startingBalance) */
+            netDeposits?: number;
+            /** @description startingBalance + netDeposits */
+            contributedCapital?: number;
             /** @description Cash locked by open spot buy pending orders */
             reservedCash?: number;
             /** @description Margin reserved by open margin limit orders */
@@ -1658,6 +1725,7 @@ export interface components {
             equity?: number;
             unrealizedPnL?: number;
             realizedPnLTotal?: number;
+            /** @description equity minus contributedCapital (deposits/withdrawals are not P&L) */
             totalPnL?: number;
             positions?: Record<string, never>[];
             marginPositions?: components["schemas"]["MarginPosition"][];
@@ -1666,6 +1734,21 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        PortfolioCashMovement: {
+            id?: string;
+            /** @enum {string} */
+            kind?: "deposit" | "withdrawal";
+            amount?: number;
+            cashAfter?: number;
+            netDepositsAfter?: number;
+            note?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        PortfolioCashMoveResponse: {
+            movement?: components["schemas"]["PortfolioCashMovement"];
+            portfolio?: components["schemas"]["PortfolioView"];
         };
         /** @description Period P&L plus equity time series for a paper portfolio chart */
         PortfolioPerformance: {
@@ -3380,6 +3463,102 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    depositPortfolioCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example 500 */
+                    amount: number;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Movement and updated portfolio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioCashMoveResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    withdrawPortfolioCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example 200 */
+                    amount: number;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Movement and updated portfolio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioCashMoveResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioCashMovements: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cash movement history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        movements?: components["schemas"]["PortfolioCashMovement"][];
+                        count?: number;
+                        total?: number;
+                        limit?: number;
+                        offset?: number;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getPortfolioPerformance: {

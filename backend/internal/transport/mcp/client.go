@@ -436,6 +436,33 @@ func (c *APIClient) CreatePortfolio(ctx context.Context, clientID string, starti
 	})
 }
 
+// DepositPortfolioCash adds virtual cash.
+func (c *APIClient) DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/deposits", map[string]any{
+		"clientId": clientID, "amount": amount, "note": note,
+	})
+}
+
+// WithdrawPortfolioCash removes available virtual cash.
+func (c *APIClient) WithdrawPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/withdrawals", map[string]any{
+		"clientId": clientID, "amount": amount, "note": note,
+	})
+}
+
+// ListPortfolioCashMovements lists deposit/withdraw history.
+func (c *APIClient) ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/cash-movements", q)
+}
+
 // GetPortfolioPerformance fetches equity history + period P&L.
 func (c *APIClient) GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error) {
 	q := url.Values{}

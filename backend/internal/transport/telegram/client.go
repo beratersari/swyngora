@@ -33,8 +33,17 @@ func NewClient(token string, timeout time.Duration) *Client {
 
 // Update is a Telegram update.
 type Update struct {
-	UpdateID int64    `json:"update_id"`
-	Message  *Message `json:"message"`
+	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message"`
+	CallbackQuery *CallbackQuery `json:"callback_query"`
+}
+
+// CallbackQuery is an inline-button press.
+type CallbackQuery struct {
+	ID      string   `json:"id"`
+	From    *User    `json:"from"`
+	Message *Message `json:"message"`
+	Data    string   `json:"data"`
 }
 
 // Message is an incoming message.
@@ -69,7 +78,7 @@ func (c *Client) GetUpdates(ctx context.Context, offset int64, pollTimeoutSec in
 	if offset > 0 {
 		q.Set("offset", strconv.FormatInt(offset, 10))
 	}
-	q.Set("allowed_updates", `["message"]`)
+	q.Set("allowed_updates", `["message","callback_query"]`)
 	var updates []Update
 	if err := c.call(ctx, "getUpdates", q, nil, &updates); err != nil {
 		return nil, err
@@ -84,6 +93,11 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string) (in
 
 // SendMessageMode sends with parse_mode (empty = plain text). Returns message_id.
 func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseMode string) (int64, error) {
+	return c.SendMessageMarkup(ctx, chatID, text, parseMode, "")
+}
+
+// SendMessageMarkup sends text with optional inline keyboard JSON (reply_markup).
+func (c *Client) SendMessageMarkup(ctx context.Context, chatID int64, text, parseMode, replyMarkup string) (int64, error) {
 	text = clipTelegram(text)
 	form := url.Values{}
 	form.Set("chat_id", strconv.FormatInt(chatID, 10))
@@ -92,6 +106,9 @@ func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseM
 		form.Set("parse_mode", parseMode)
 	}
 	form.Set("disable_web_page_preview", "true")
+	if strings.TrimSpace(replyMarkup) != "" {
+		form.Set("reply_markup", replyMarkup)
+	}
 	var msg struct {
 		MessageID int64 `json:"message_id"`
 	}
@@ -103,6 +120,11 @@ func (c *Client) SendMessageMode(ctx context.Context, chatID int64, text, parseM
 
 // EditMessageText edits an existing message (plain or HTML).
 func (c *Client) EditMessageText(ctx context.Context, chatID, messageID int64, text, parseMode string) error {
+	return c.EditMessageMarkup(ctx, chatID, messageID, text, parseMode, "")
+}
+
+// EditMessageMarkup edits text and optional reply_markup JSON.
+func (c *Client) EditMessageMarkup(ctx context.Context, chatID, messageID int64, text, parseMode, replyMarkup string) error {
 	text = clipTelegram(text)
 	form := url.Values{}
 	form.Set("chat_id", strconv.FormatInt(chatID, 10))
@@ -112,7 +134,20 @@ func (c *Client) EditMessageText(ctx context.Context, chatID, messageID int64, t
 		form.Set("parse_mode", parseMode)
 	}
 	form.Set("disable_web_page_preview", "true")
+	if strings.TrimSpace(replyMarkup) != "" {
+		form.Set("reply_markup", replyMarkup)
+	}
 	return c.call(ctx, "editMessageText", nil, form, nil)
+}
+
+// AnswerCallbackQuery acknowledges an inline button press (stops the spinner).
+func (c *Client) AnswerCallbackQuery(ctx context.Context, callbackID, text string) error {
+	form := url.Values{}
+	form.Set("callback_query_id", callbackID)
+	if strings.TrimSpace(text) != "" {
+		form.Set("text", clipRunes(text, 180))
+	}
+	return c.call(ctx, "answerCallbackQuery", nil, form, nil)
 }
 
 func clipTelegram(text string) string {

@@ -209,6 +209,18 @@ class PortfolioPerformanceInput(BaseModel):
     period: str = Field(default="1w", description="Lookback window: 1d, 1w, 1m, or 3m")
 
 
+class PortfolioCashMoveInput(BaseModel):
+    client_id: str
+    amount: float = Field(gt=0, description="Positive cash amount")
+    note: str = ""
+
+
+class PortfolioCashListInput(BaseModel):
+    client_id: str
+    limit: int = 50
+    offset: int = 0
+
+
 class RiskLimitsSetInput(BaseModel):
     client_id: str
     max_daily_loss_pct: float = Field(default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables")
@@ -706,6 +718,26 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/portfolio/performance",
             {"clientId": client_id, "period": period},
+        )
+
+    def deposit_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
+        body: dict[str, Any] = {"clientId": client_id, "amount": amount}
+        if note:
+            body["note"] = note
+        return http.post("/api/v1/portfolio/deposits", body)
+
+    def withdraw_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
+        body: dict[str, Any] = {"clientId": client_id, "amount": amount}
+        if note:
+            body["note"] = note
+        return http.post("/api/v1/portfolio/withdrawals", body)
+
+    def list_portfolio_cash_movements(
+        client_id: str, limit: int = 50, offset: int = 0
+    ) -> str:
+        return http.get(
+            "/api/v1/portfolio/cash-movements",
+            {"clientId": client_id, "limit": limit, "offset": offset},
         )
 
     def place_portfolio_order(
@@ -1326,6 +1358,24 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_portfolio_performance",
             description="Paper portfolio equity history for 1d/1w/1m/3m plus P&L amount and percent from the start of that window.",
             args_schema=PortfolioPerformanceInput,
+        ),
+        StructuredTool.from_function(
+            deposit_portfolio_cash,
+            name="deposit_portfolio_cash",
+            description="Add virtual cash to a paper portfolio. Not trading profit.",
+            args_schema=PortfolioCashMoveInput,
+        ),
+        StructuredTool.from_function(
+            withdraw_portfolio_cash,
+            name="withdraw_portfolio_cash",
+            description="Withdraw available virtual cash from a paper portfolio. Not trading loss.",
+            args_schema=PortfolioCashMoveInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_cash_movements,
+            name="list_portfolio_cash_movements",
+            description="List paper deposits and withdrawals (newest first).",
+            args_schema=PortfolioCashListInput,
         ),
         StructuredTool.from_function(
             get_portfolio_risk_limits,

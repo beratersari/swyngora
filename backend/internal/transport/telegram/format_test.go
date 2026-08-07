@@ -35,6 +35,34 @@ func TestHelpHasLowmcap(t *testing.T) {
 	if !strings.Contains(help, "/ask") {
 		t.Fatal("help must document /ask AI command")
 	}
+	if !strings.Contains(help, "/portfolio") || !strings.Contains(help, "/buy") || !strings.Contains(help, "/sell") {
+		t.Fatal("help must document paper portfolio commands")
+	}
+	if !strings.Contains(help, "/deposit") || !strings.Contains(help, "/withdraw") || !strings.Contains(help, "/cash") {
+		t.Fatal("help must document paper cash commands")
+	}
+}
+
+func TestFormatPaperPortfolioAndPreview(t *testing.T) {
+	v := &domain.PortfolioView{
+		Currency: "USDT", StartingBalance: 10000, CashBalance: 9000,
+		AvailableCash: 9000, Equity: 11000, UnrealizedPnL: 1000, TotalPnL: 1000,
+		Positions: []domain.PositionView{{
+			Symbol: "BTCUSDT", Quantity: 0.1, AvgCost: 100, MarkPrice: 110, UnrealizedPnL: 1,
+		}},
+	}
+	s := FormatPaperPortfolio(v)
+	if !strings.Contains(s, "BTCUSDT") || !strings.Contains(s, "Paper") {
+		t.Fatalf("%s", s)
+	}
+	p := FormatTradePreview(domain.TradeSideBuy, "binance", "ETHUSDT", 2, 50, 100, "USDT")
+	if !strings.Contains(p, "ETHUSDT") || !strings.Contains(p, "BUY") || !strings.Contains(p, "100") {
+		t.Fatalf("%s", p)
+	}
+	c := FormatTradeCanceled(domain.TradeSideSell, "ETHUSDT")
+	if !strings.Contains(c, "Canceled") || !strings.Contains(c, "ETHUSDT") {
+		t.Fatalf("%s", c)
+	}
 }
 
 func TestPlainTextStripsTags(t *testing.T) {

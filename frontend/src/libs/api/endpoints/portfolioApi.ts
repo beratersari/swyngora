@@ -7,6 +7,18 @@ export type PortfolioEquityPoint = components['schemas']['PortfolioEquityPoint']
 export type PortfolioPerformancePeriod = NonNullable<
   NonNullable<components['schemas']['PortfolioPerformance']['period']>
 >;
+export type PortfolioCashMovement = components['schemas']['PortfolioCashMovement'];
+export type PortfolioCashMoveResponse = components['schemas']['PortfolioCashMoveResponse'];
+
+type CashMoveArg = { amount: number; note?: string };
+type CashMovementListResponse = {
+  clientId?: string;
+  movements?: PortfolioCashMovement[];
+  count?: number;
+  total?: number;
+  limit?: number;
+  offset?: number;
+};
 
 export const portfolioApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
@@ -21,7 +33,28 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    listPortfolioCashMovements: build.query<CashMovementListResponse, { limit?: number; offset?: number } | void>({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/cash-movements',
+        params: { limit: arg?.limit ?? 50, offset: arg?.offset ?? 0 },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    depositPortfolioCash: build.mutation<PortfolioCashMoveResponse, CashMoveArg>({
+      query: (body) => ({ url: '/api/v1/portfolio/deposits', method: 'POST', body }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    withdrawPortfolioCash: build.mutation<PortfolioCashMoveResponse, CashMoveArg>({
+      query: (body) => ({ url: '/api/v1/portfolio/withdrawals', method: 'POST', body }),
+      invalidatesTags: ['Portfolio'],
+    }),
   }),
 });
 
-export const { useGetPortfolioQuery, useGetPortfolioPerformanceQuery } = portfolioApi;
+export const {
+  useGetPortfolioQuery,
+  useGetPortfolioPerformanceQuery,
+  useListPortfolioCashMovementsQuery,
+  useDepositPortfolioCashMutation,
+  useWithdrawPortfolioCashMutation,
+} = portfolioApi;

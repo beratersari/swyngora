@@ -30,6 +30,56 @@ func newPortfolioHandler(t *testing.T) *PortfolioHandler {
 	return NewPortfolioHandler(portfolio.New(st, pfPx{}))
 }
 
+func TestPortfolioHTTP_CashMovements(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "http-cash", "startingBalance": 10000,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+
+	body, _ = json.Marshal(map[string]any{"clientId": "http-cash", "amount": 1500, "note": "bonus"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/deposits", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Deposit(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("deposit %d %s", rr.Code, rr.Body.String())
+	}
+	var dep map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &dep)
+	pf := dep["portfolio"].(map[string]any)
+	if pf["cashBalance"].(float64) != 11500 || pf["totalPnL"].(float64) != 0 {
+		t.Fatalf("after deposit %+v", pf)
+	}
+
+	body, _ = json.Marshal(map[string]any{"clientId": "http-cash", "amount": 500})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/withdrawals", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Withdraw(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("withdraw %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/cash-movements?clientId=http-cash", nil)
+	rr = httptest.NewRecorder()
+	h.ListCashMovements(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list %d %s", rr.Code, rr.Body.String())
+	}
+	var hist map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &hist)
+	if int(hist["total"].(float64)) != 3 {
+		t.Fatalf("hist %+v", hist)
+	}
+}
+
 func TestPortfolioHTTP_Performance(t *testing.T) {
 	h := newPortfolioHandler(t)
 	body, _ := json.Marshal(map[string]any{

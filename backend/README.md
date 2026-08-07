@@ -43,6 +43,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `POST` | `/api/v1/portfolio` | Create paper portfolio (starting balance) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, realized/unrealized P&L |
+| `POST` | `/api/v1/portfolio/deposits` | Add virtual cash |
+| `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available virtual cash |
+| `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history |
 | `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |
@@ -146,7 +149,7 @@ After editing `.env` / bot tokens, **restart the server** so config reloads.
 
 ### Telegram bot commands
 
-Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market** and **watchlist** services in-process (no HTTP hop).
+Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market**, **watchlist**, and **paper portfolio** services in-process (no HTTP hop).
 
 | Command | Description |
 |---------|-------------|
@@ -157,6 +160,10 @@ Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market** and **watchlist
 | `/rsi <symbol> [interval] [exchange]` | RSI + EMA |
 | `/exchanges` | Venues |
 | `/watch` · `add` · `del` · `top` | Per-user watchlist (`tg-<user_id>`) |
+| `/portfolio` · `/portfolio create [balance]` | Paper portfolio (`tg-<user_id>`) |
+| `/deposit` · `/withdraw` `<amount> [note]` | Add or remove virtual cash |
+| `/cash` | Deposit/withdraw history |
+| `/buy` · `/sell` `<symbol> <qty> [exchange]` | Paper trade with Confirm / Cancel buttons |
 
 See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 

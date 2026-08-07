@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -28,17 +29,21 @@ type Options struct {
 	AI *aiagent.Client
 	// AITimeout bounds /ask orchestration (default 120s).
 	AITimeout time.Duration
+	// Portfolio enables paper /portfolio /buy /sell (optional).
+	Portfolio *portfolio.Service
 }
 
 // Router dispatches Telegram text commands to application services.
 type Router struct {
-	market *market.Service
-	watch  *watchlist.Service
-	ai     *aiagent.Client
-	opts   Options
-	now    func() time.Time
-	mu     sync.Mutex
-	lastAt map[int64]time.Time
+	market    *market.Service
+	watch     *watchlist.Service
+	portfolio *portfolio.Service
+	ai        *aiagent.Client
+	opts      Options
+	now       func() time.Time
+	mu        sync.Mutex
+	lastAt    map[int64]time.Time
+	pending   *pendingStore
 }
 
 // NewRouter constructs a command router (thin transport → services).
@@ -56,12 +61,14 @@ func NewRouter(marketSvc *market.Service, watchSvc *watchlist.Service, opts Opti
 		opts.AITimeout = 120 * time.Second
 	}
 	return &Router{
-		market: marketSvc,
-		watch:  watchSvc,
-		ai:     opts.AI,
-		opts:   opts,
-		now:    time.Now,
-		lastAt: map[int64]time.Time{},
+		market:    marketSvc,
+		watch:     watchSvc,
+		portfolio: opts.Portfolio,
+		ai:        opts.AI,
+		opts:      opts,
+		now:       time.Now,
+		lastAt:    map[int64]time.Time{},
+		pending:   newPendingStore(),
 	}
 }
 
@@ -77,16 +84,21 @@ func (r *Router) Allowed(chatID int64) bool {
 
 // Handle processes one message text and returns the reply body.
 func (r *Router) Handle(ctx context.Context, chatID, userID int64, text string) string {
+	return r.HandleMessage(ctx, chatID, userID, text).Text
+}
+
+// HandleMessage is Handle plus optional inline keyboard (paper trade confirm).
+func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text string) Reply {
 	if !r.Allowed(chatID) {
-		return "This bot is private. Your chat is not allowed."
+		return textReply("This bot is private. Your chat is not allowed.")
 	}
 	if !r.allowRate(chatID) {
-		return "Slow down — try again in a second."
+		return textReply("Slow down — try again in a second.")
 	}
 
 	text = strings.TrimSpace(text)
 	if text == "" {
-		return HelpText()
+		return textReply(HelpText())
 	}
 
 	parts := strings.Fields(text)
@@ -98,32 +110,44 @@ func (r *Router) Handle(ctx context.Context, chatID, userID int64, text string) 
 
 	switch cmd {
 	case "/start", "/help":
-		return HelpText()
+		return textReply(HelpText())
 	case "/price":
-		return r.cmdPrice(ctx, args)
+		return textReply(r.cmdPrice(ctx, args))
 	case "/spot":
-		return r.cmdSpot(ctx, args)
+		return textReply(r.cmdSpot(ctx, args))
 	case "/lowmcap", "/lowcap":
-		return r.cmdLowMcap(ctx, args)
+		return textReply(r.cmdLowMcap(ctx, args))
 	case "/mcap", "/supply":
-		return r.cmdMcap(ctx, args)
+		return textReply(r.cmdMcap(ctx, args))
 	case "/rsi":
-		return r.cmdRSI(ctx, args)
+		return textReply(r.cmdRSI(ctx, args))
 	case "/exchanges":
-		return r.cmdExchanges()
+		return textReply(r.cmdExchanges())
 	case "/watch":
-		return r.cmdWatch(ctx, userID, args)
+		return textReply(r.cmdWatch(ctx, userID, args))
 	case "/ask", "/ai":
-		return r.cmdAsk(ctx, userID, args)
+		return textReply(r.cmdAsk(ctx, userID, args))
+	case "/portfolio", "/pf":
+		return r.cmdPortfolio(ctx, userID, args)
+	case "/buy":
+		return r.cmdTradePreview(ctx, chatID, userID, domain.TradeSideBuy, args)
+	case "/sell":
+		return r.cmdTradePreview(ctx, chatID, userID, domain.TradeSideSell, args)
+	case "/deposit":
+		return r.cmdCashMove(ctx, userID, domain.CashMovementDeposit, args)
+	case "/withdraw":
+		return r.cmdCashMove(ctx, userID, domain.CashMovementWithdrawal, args)
+	case "/cash":
+		return r.cmdCashHistory(ctx, userID, args)
 	default:
 		if strings.HasPrefix(cmd, "/") {
-			return "Unknown command. Try /help"
+			return textReply("Unknown command. Try /help")
 		}
 		// Free-text → AI when configured (e.g. "deep analysis for JUV").
 		if r.ai != nil {
-			return r.runAI(ctx, userID, text)
+			return textReply(r.runAI(ctx, userID, text))
 		}
-		return "Send a command, e.g. /price BTCUSDT or /ask what is BTC RSI? — try /help"
+		return textReply("Send a command, e.g. /price BTCUSDT or /ask what is BTC RSI? — try /help")
 	}
 }
 

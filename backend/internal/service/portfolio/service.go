@@ -87,6 +87,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 		return nil, err
 	}
 	s.recordCreateSnapshot(ctx, p)
+	s.recordOpeningCashMovement(ctx, p)
 	return p, nil
 }
 
@@ -175,6 +176,8 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		Currency:            p.Currency,
 		StartingBalance:     p.StartingBalance,
 		CashBalance:         p.CashBalance,
+		NetDeposits:         p.NetDeposits,
+		ContributedCapital:  domain.ContributedCapital(p.StartingBalance, p.NetDeposits),
 		ReservedCash:        reservedCash,
 		ReservedMargin:      reservedMargin,
 		AvailableCash:       avail,
@@ -186,7 +189,7 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		Equity:              equity,
 		UnrealizedPnL:       spotUnreal + marginUnreal,
 		RealizedPnLTotal:    p.RealizedPnLTotal,
-		TotalPnL:            equity - p.StartingBalance,
+		TotalPnL:            domain.PortfolioTotalPnL(equity, p.StartingBalance, p.NetDeposits),
 		Positions:           views,
 		MarginPositions:     marginPositions,
 		Note:                paperNote,

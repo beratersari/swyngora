@@ -434,6 +434,7 @@ func main() {
 				AllowAll:        cfg.TelegramAllowAll,
 				AI:              aiClient,
 				AITimeout:       cfg.AITimeout,
+				Portfolio:       portfolioSvc,
 			})
 			bot := &telegram.Bot{
 				Client:      tgClient,
