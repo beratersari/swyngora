@@ -256,6 +256,24 @@ CREATE INDEX IF NOT EXISTS idx_margin_trades_client ON margin_trades(client_id, 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp
 	ON margin_trades(position_id, action)
 	WHERE action IN ('stop_loss', 'take_profit');
+
+CREATE TABLE IF NOT EXISTS allocation_baskets (
+	id         TEXT PRIMARY KEY NOT NULL,
+	client_id  TEXT NOT NULL,
+	name       TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_allocation_baskets_client ON allocation_baskets(client_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS allocation_targets (
+	basket_id  TEXT NOT NULL,
+	asset      TEXT NOT NULL,
+	exchange   TEXT NOT NULL DEFAULT '',
+	weight_pct REAL NOT NULL,
+	PRIMARY KEY (basket_id, asset),
+	FOREIGN KEY (basket_id) REFERENCES allocation_baskets(id) ON DELETE CASCADE
+);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -1730,4 +1748,178 @@ func (s *SQLite) ListRecurringBuyRuns(ctx context.Context, clientID, planID stri
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLite) loadAllocationTargets(ctx context.Context, basketID string) ([]domain.AllocationTarget, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT asset, exchange, weight_pct FROM allocation_targets WHERE basket_id = ? ORDER BY asset ASC
+	`, basketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.AllocationTarget
+	for rows.Next() {
+		var t domain.AllocationTarget
+		var ex string
+		if err := rows.Scan(&t.Asset, &ex, &t.WeightPct); err != nil {
+			return nil, err
+		}
+		t.Exchange = domain.Exchange(ex)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) replaceAllocationTargetsTx(ctx context.Context, tx *sql.Tx, basketID string, targets []domain.AllocationTarget) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM allocation_targets WHERE basket_id = ?`, basketID); err != nil {
+		return err
+	}
+	for _, t := range targets {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO allocation_targets (basket_id, asset, exchange, weight_pct) VALUES (?, ?, ?, ?)
+		`, basketID, t.Asset, string(t.Exchange), t.WeightPct); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CreateAllocationBasket inserts a basket and its targets.
+func (s *SQLite) CreateAllocationBasket(ctx context.Context, b domain.AllocationBasket) (*domain.AllocationBasket, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if b.CreatedAt.IsZero() {
+		b.CreatedAt = time.Now().UTC()
+	}
+	if b.UpdatedAt.IsZero() {
+		b.UpdatedAt = b.CreatedAt
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO allocation_baskets (id, client_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+	`, b.ID, b.ClientID, b.Name, b.CreatedAt.UTC().Format(time.RFC3339Nano), b.UpdatedAt.UTC().Format(time.RFC3339Nano)); err != nil {
+		return nil, err
+	}
+	if err := s.replaceAllocationTargetsTx(ctx, tx, b.ID, b.Targets); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.GetAllocationBasket(ctx, b.ClientID, b.ID)
+}
+
+// GetAllocationBasket returns one basket with targets.
+func (s *SQLite) GetAllocationBasket(ctx context.Context, clientID, id string) (*domain.AllocationBasket, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, client_id, name, created_at, updated_at FROM allocation_baskets WHERE id = ? AND client_id = ?
+	`, id, clientID)
+	var b domain.AllocationBasket
+	var cAt, uAt string
+	if err := row.Scan(&b.ID, &b.ClientID, &b.Name, &cAt, &uAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	b.CreatedAt = parseTime(cAt)
+	b.UpdatedAt = parseTime(uAt)
+	tg, err := s.loadAllocationTargets(ctx, b.ID)
+	if err != nil {
+		return nil, err
+	}
+	b.Targets = tg
+	return &b, nil
+}
+
+// ListAllocationBaskets lists baskets for a client.
+func (s *SQLite) ListAllocationBaskets(ctx context.Context, clientID string) ([]domain.AllocationBasket, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, client_id, name, created_at, updated_at FROM allocation_baskets
+		WHERE client_id = ? ORDER BY created_at DESC
+	`, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.AllocationBasket
+	for rows.Next() {
+		var b domain.AllocationBasket
+		var cAt, uAt string
+		if err := rows.Scan(&b.ID, &b.ClientID, &b.Name, &cAt, &uAt); err != nil {
+			return nil, err
+		}
+		b.CreatedAt = parseTime(cAt)
+		b.UpdatedAt = parseTime(uAt)
+		out = append(out, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		tg, err := s.loadAllocationTargets(ctx, out[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		out[i].Targets = tg
+	}
+	return out, nil
+}
+
+// CountAllocationBaskets counts baskets for a client.
+func (s *SQLite) CountAllocationBaskets(ctx context.Context, clientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM allocation_baskets WHERE client_id = ?`, clientID).Scan(&n)
+	return n, err
+}
+
+// UpdateAllocationBasket replaces name and targets.
+func (s *SQLite) UpdateAllocationBasket(ctx context.Context, clientID, id string, b domain.AllocationBasket) (*domain.AllocationBasket, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if b.UpdatedAt.IsZero() {
+		b.UpdatedAt = time.Now().UTC()
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `
+		UPDATE allocation_baskets SET name = ?, updated_at = ? WHERE id = ? AND client_id = ?
+	`, b.Name, b.UpdatedAt.UTC().Format(time.RFC3339Nano), id, clientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	if err := s.replaceAllocationTargetsTx(ctx, tx, id, b.Targets); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.GetAllocationBasket(ctx, clientID, id)
+}
+
+// DeleteAllocationBasket removes a basket and its targets.
+func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `DELETE FROM allocation_baskets WHERE id = ? AND client_id = ?`, id, clientID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }

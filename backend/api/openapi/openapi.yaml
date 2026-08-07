@@ -1608,6 +1608,178 @@ paths:
           description: Trade list
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/baskets:
+    post:
+      summary: Create a paper allocation basket
+      description: |
+        Named target mix (e.g. 50% BTC, 30% ETH, 20% USDT). Weights must sum to 100.
+        Saving a basket does not trade. Rebalance is a separate explicit action.
+        Spot only; margin positions are ignored. Paper trading — not real money.
+      operationId: createPortfolioBasket
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, targets]
+              properties:
+                clientId: { type: string }
+                name: { type: string, example: Core 50/30/20 }
+                targets:
+                  type: array
+                  items: { $ref: '#/components/schemas/AllocationTarget' }
+      responses:
+        '201':
+          description: Created basket
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AllocationBasket' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List paper allocation baskets
+      operationId: listPortfolioBaskets
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Basket list
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/baskets/{id}/preview:
+    get:
+      summary: Preview a paper basket rebalance
+      description: Shows actual vs target weights and proposed market sells/buys. Does not trade.
+      operationId: previewPortfolioBasketRebalance
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Drift + proposed legs
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/baskets/{id}/rebalance:
+    post:
+      summary: Execute a paper basket rebalance
+      description: |
+        User-triggered only. Sells overweight (and coins not in the basket), then buys
+        underweight sleeves at last price. Drift is allowed until this is called.
+        Paper trading — not real money. Not financial advice.
+      operationId: rebalancePortfolioBasket
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Trades plus updated drift
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/baskets/{id}:
+    get:
+      summary: Get a paper allocation basket with live drift
+      operationId: getPortfolioBasket
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Basket + actual vs target
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update a paper allocation basket
+      description: Change name and/or targets. Does not trade.
+      operationId: updatePortfolioBasket
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                targets:
+                  type: array
+                  items: { $ref: '#/components/schemas/AllocationTarget' }
+      responses:
+        '200':
+          description: Updated basket
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a paper allocation basket
+      operationId: deletePortfolioBasket
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/recurring-buys:
     post:
       summary: Create a paper recurring buy plan
@@ -3390,6 +3562,33 @@ components:
           description: e.g. insufficient cash balance, market price unavailable
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
+    AllocationTarget:
+      type: object
+      required: [asset, weightPct]
+      properties:
+        asset:
+          type: string
+          description: Coin ticker or portfolio cash currency (e.g. BTC, ETH, USDT)
+          example: BTC
+        exchange:
+          type: string
+          enum: [binance, coinbase, bybit]
+          description: Venue used to trade this asset (ignored for cash)
+        weightPct:
+          type: number
+          description: Target percent of spot equity (0.01–100); all targets must sum to 100
+          example: 50
+    AllocationBasket:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        name: { type: string }
+        targets:
+          type: array
+          items: { $ref: '#/components/schemas/AllocationTarget' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     PriceDiffWatch:
       type: object
       properties:

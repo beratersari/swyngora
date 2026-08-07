@@ -956,6 +956,178 @@ func (b *Backend) ResumeRecurringBuyPlan(ctx context.Context, clientID, id strin
 	return mustJSON(recurringPlanMap(plan))
 }
 
+func parseAllocationTargetsJSON(raw string) ([]domain.AllocationTarget, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("%w: targetsJSON is required", domain.ErrInvalidArgument)
+	}
+	var items []struct {
+		Asset     string  `json:"asset"`
+		Exchange  string  `json:"exchange"`
+		WeightPct float64 `json:"weightPct"`
+	}
+	if err := json.Unmarshal([]byte(raw), &items); err != nil {
+		return nil, fmt.Errorf("%w: targetsJSON must be a JSON array of {asset,weightPct}", domain.ErrInvalidArgument)
+	}
+	out := make([]domain.AllocationTarget, 0, len(items))
+	for _, it := range items {
+		out = append(out, domain.AllocationTarget{
+			Asset: it.Asset, Exchange: domain.Exchange(it.Exchange), WeightPct: it.WeightPct,
+		})
+	}
+	return out, nil
+}
+
+func allocationBasketMap(b *domain.AllocationBasket) map[string]any {
+	tg := make([]map[string]any, 0, len(b.Targets))
+	for _, t := range b.Targets {
+		m := map[string]any{"asset": t.Asset, "weightPct": t.WeightPct}
+		if t.Exchange != "" {
+			m["exchange"] = string(t.Exchange)
+		}
+		tg = append(tg, m)
+	}
+	return map[string]any{
+		"id": b.ID, "clientId": b.ClientID, "name": b.Name, "targets": tg,
+		"createdAt": b.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": b.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func allocationViewMap(v *portfolio.AllocationBasketView, trades []domain.Trade) map[string]any {
+	lines := make([]map[string]any, 0, len(v.Plan.Lines))
+	for _, ln := range v.Plan.Lines {
+		lines = append(lines, map[string]any{
+			"asset": ln.Asset, "exchange": string(ln.Exchange), "symbol": ln.Symbol, "isCash": ln.IsCash,
+			"targetPct": ln.TargetPct, "actualPct": ln.ActualPct,
+			"currentValue": ln.CurrentValue, "targetValue": ln.TargetValue, "deltaValue": ln.DeltaValue,
+			"markPrice": ln.MarkPrice,
+		})
+	}
+	legs := make([]map[string]any, 0, len(v.Plan.Legs))
+	for _, l := range v.Plan.Legs {
+		legs = append(legs, map[string]any{
+			"side": string(l.Side), "asset": l.Asset, "exchange": string(l.Exchange), "symbol": l.Symbol,
+			"quantity": l.Quantity, "price": l.Price, "notional": l.Notional, "reason": l.Reason,
+		})
+	}
+	out := map[string]any{
+		"basket": allocationBasketMap(&v.Basket), "currency": v.Plan.Currency,
+		"equity": v.Plan.Equity, "cash": v.Plan.Cash, "availableCash": v.Plan.AvailableCash,
+		"allocations": lines, "legs": legs, "note": v.Note,
+	}
+	if trades != nil {
+		items := make([]map[string]any, 0, len(trades))
+		for i := range trades {
+			t := trades[i]
+			items = append(items, map[string]any{
+				"id": t.ID, "symbol": t.Symbol, "side": string(t.Side),
+				"quantity": t.Quantity, "price": t.Price, "notional": t.Notional,
+			})
+		}
+		out["trades"] = items
+		out["tradeCount"] = len(items)
+	}
+	return out
+}
+
+func (b *Backend) CreatePortfolioBasket(ctx context.Context, clientID, name, targetsJSON string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	tg, err := parseAllocationTargetsJSON(targetsJSON)
+	if err != nil {
+		return nil, err
+	}
+	basket, err := b.Portfolio.CreateAllocationBasket(ctx, portfolio.AllocationBasketCreateInput{
+		ClientID: clientID, Name: name, Targets: tg,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(allocationBasketMap(basket))
+}
+
+func (b *Backend) ListPortfolioBaskets(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListAllocationBaskets(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, allocationBasketMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "baskets": items, "count": len(items)})
+}
+
+func (b *Backend) GetPortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.PreviewAllocationRebalance(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(allocationViewMap(v, nil))
+}
+
+func (b *Backend) UpdatePortfolioBasket(ctx context.Context, clientID, id, name, targetsJSON string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	in := portfolio.AllocationBasketUpdateInput{ClientID: clientID, BasketID: id}
+	if name != "" {
+		in.Name = &name
+	}
+	if strings.TrimSpace(targetsJSON) != "" {
+		tg, err := parseAllocationTargetsJSON(targetsJSON)
+		if err != nil {
+			return nil, err
+		}
+		in.Targets = tg
+	}
+	basket, err := b.Portfolio.UpdateAllocationBasket(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(allocationBasketMap(basket))
+}
+
+func (b *Backend) DeletePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if err := b.Portfolio.DeleteAllocationBasket(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func (b *Backend) PreviewPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.PreviewAllocationRebalance(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(allocationViewMap(v, nil))
+}
+
+func (b *Backend) RebalancePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, trades, err := b.Portfolio.ExecuteAllocationRebalance(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(allocationViewMap(v, trades))
+}
+
 func (b *Backend) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

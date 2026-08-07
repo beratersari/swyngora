@@ -258,6 +258,26 @@ class RecurringBuyUpdateInput(BaseModel):
     start_at: str = ""
 
 
+class BasketCreateInput(BaseModel):
+    client_id: str
+    name: str
+    targets_json: str = Field(
+        description='JSON array e.g. [{"asset":"BTC","weightPct":50},{"asset":"ETH","weightPct":30},{"asset":"USDT","weightPct":20}]'
+    )
+
+
+class BasketIdInput(BaseModel):
+    client_id: str
+    basket_id: str
+
+
+class BasketUpdateInput(BaseModel):
+    client_id: str
+    basket_id: str
+    name: str = ""
+    targets_json: str = ""
+
+
 class RecurringBuyPlanInput(BaseModel):
     client_id: str
     plan_id: str
@@ -804,6 +824,53 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
         )
 
+    def create_portfolio_basket(client_id: str, name: str, targets_json: str) -> str:
+        targets = json.loads(targets_json)
+        return http.post(
+            "/api/v1/portfolio/baskets",
+            {"clientId": client_id, "name": name, "targets": targets},
+        )
+
+    def list_portfolio_baskets(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/baskets", {"clientId": client_id})
+
+    def get_portfolio_basket(client_id: str, basket_id: str) -> str:
+        return http.get(
+            f"/api/v1/portfolio/baskets/{basket_id}",
+            {"clientId": client_id},
+        )
+
+    def update_portfolio_basket(
+        client_id: str, basket_id: str, name: str = "", targets_json: str = ""
+    ) -> str:
+        body: dict[str, Any] = {}
+        if name:
+            body["name"] = name
+        if targets_json:
+            body["targets"] = json.loads(targets_json)
+        return http.patch(
+            f"/api/v1/portfolio/baskets/{basket_id}?clientId={client_id}",
+            body,
+        )
+
+    def delete_portfolio_basket(client_id: str, basket_id: str) -> str:
+        return http.delete(
+            f"/api/v1/portfolio/baskets/{basket_id}",
+            {"clientId": client_id},
+        )
+
+    def preview_portfolio_rebalance(client_id: str, basket_id: str) -> str:
+        return http.get(
+            f"/api/v1/portfolio/baskets/{basket_id}/preview",
+            {"clientId": client_id},
+        )
+
+    def rebalance_portfolio_basket(client_id: str, basket_id: str) -> str:
+        return http.post(
+            f"/api/v1/portfolio/baskets/{basket_id}/rebalance?clientId={client_id}",
+            {},
+        )
+
     def place_margin_order(
         client_id: str,
         symbol: str,
@@ -1300,6 +1367,48 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_recurring_buy_runs",
             description="List execution history for a paper recurring buy plan.",
             args_schema=RecurringBuyRunsInput,
+        ),
+        StructuredTool.from_function(
+            create_portfolio_basket,
+            name="create_portfolio_basket",
+            description="Create a named paper allocation basket (target % mix). Does not trade.",
+            args_schema=BasketCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_baskets,
+            name="list_portfolio_baskets",
+            description="List saved paper allocation baskets.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio_basket,
+            name="get_portfolio_basket",
+            description="Get a basket with live actual vs target weights (no trades).",
+            args_schema=BasketIdInput,
+        ),
+        StructuredTool.from_function(
+            update_portfolio_basket,
+            name="update_portfolio_basket",
+            description="Update basket name/targets. Does not trade.",
+            args_schema=BasketUpdateInput,
+        ),
+        StructuredTool.from_function(
+            delete_portfolio_basket,
+            name="delete_portfolio_basket",
+            description="Delete a paper allocation basket. Does not trade.",
+            args_schema=BasketIdInput,
+        ),
+        StructuredTool.from_function(
+            preview_portfolio_rebalance,
+            name="preview_portfolio_rebalance",
+            description="Preview sells/buys to move toward a basket. Does not trade. Never automatic.",
+            args_schema=BasketIdInput,
+        ),
+        StructuredTool.from_function(
+            rebalance_portfolio_basket,
+            name="rebalance_portfolio_basket",
+            description="USER-TRIGGERED paper rebalance toward a basket. Drift is allowed until this is called.",
+            args_schema=BasketIdInput,
         ),
         StructuredTool.from_function(
             place_margin_order,

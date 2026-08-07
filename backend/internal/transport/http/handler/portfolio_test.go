@@ -308,3 +308,62 @@ func TestPortfolioHTTP_RecurringBuyNamedInterval(t *testing.T) {
 		t.Fatalf("%v", plan)
 	}
 }
+
+func TestPortfolioHTTP_AllocationBasketRebalance(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-bsk", "startingBalance": 10000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("pf %d %s", rr.Code, rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-bsk", "symbol": "BTCUSDT", "side": "buy", "quantity": 80,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.PlaceOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("buy %d %s", rr.Code, rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-bsk", "name": "Core 50/30/20",
+		"targets": []map[string]any{
+			{"asset": "BTC", "weightPct": 50},
+			{"asset": "ETH", "weightPct": 30},
+			{"asset": "USDT", "weightPct": 20},
+		},
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/baskets", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.CreateBasket(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("basket %d %s", rr.Code, rr.Body.String())
+	}
+	var created map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &created)
+	id := created["id"].(string)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/baskets/"+id+"?clientId=http-bsk", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.GetBasket(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get %d %s", rr.Code, rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/baskets/"+id+"/rebalance?clientId=http-bsk", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.RebalanceBasket(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("rebalance %d %s", rr.Code, rr.Body.String())
+	}
+	var out map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	if int(out["tradeCount"].(float64)) == 0 {
+		t.Fatalf("expected trades %v", out)
+	}
+}

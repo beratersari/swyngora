@@ -331,6 +331,14 @@ type PortfolioPort interface {
 	AdvanceRecurringBuyPlan(ctx context.Context, planID string, nextRunAt time.Time, lastPeriodKey string, at time.Time) error
 	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) ([]RecurringBuyRun, error)
 
+	// Allocation baskets (spot target mix; rebalance is user-triggered only).
+	CreateAllocationBasket(ctx context.Context, b AllocationBasket) (*AllocationBasket, error)
+	GetAllocationBasket(ctx context.Context, clientID, id string) (*AllocationBasket, error)
+	ListAllocationBaskets(ctx context.Context, clientID string) ([]AllocationBasket, error)
+	CountAllocationBaskets(ctx context.Context, clientID string) (int, error)
+	UpdateAllocationBasket(ctx context.Context, clientID, id string, b AllocationBasket) (*AllocationBasket, error)
+	DeleteAllocationBasket(ctx context.Context, clientID, id string) error
+
 	// Margin (isolated leverage) — see MarginPort methods embedded below.
 	MarginPort
 }

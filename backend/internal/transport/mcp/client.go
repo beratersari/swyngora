@@ -671,6 +671,77 @@ func (c *APIClient) ResumeRecurringBuyPlan(ctx context.Context, clientID, id str
 	return c.sendJSON(ctx, http.MethodPost, path, nil)
 }
 
+// CreatePortfolioBasket creates a named allocation basket.
+func (c *APIClient) CreatePortfolioBasket(ctx context.Context, clientID, name, targetsJSON string) (json.RawMessage, error) {
+	var targets any
+	if err := json.Unmarshal([]byte(targetsJSON), &targets); err != nil {
+		return nil, err
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/baskets", map[string]any{
+		"clientId": clientID, "name": name, "targets": targets,
+	})
+}
+
+func (c *APIClient) ListPortfolioBaskets(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/baskets", q)
+}
+
+func (c *APIClient) GetPortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/baskets/"+url.PathEscape(id), q)
+}
+
+func (c *APIClient) UpdatePortfolioBasket(ctx context.Context, clientID, id, name, targetsJSON string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/baskets/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{}
+	if name != "" {
+		body["name"] = name
+	}
+	if strings.TrimSpace(targetsJSON) != "" {
+		var targets any
+		if err := json.Unmarshal([]byte(targetsJSON), &targets); err != nil {
+			return nil, err
+		}
+		body["targets"] = targets
+	}
+	return c.sendJSON(ctx, http.MethodPatch, path, body)
+}
+
+func (c *APIClient) DeletePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	path := "/api/v1/portfolio/baskets/" + url.PathEscape(id) + "?" + q.Encode()
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+func (c *APIClient) PreviewPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/baskets/"+url.PathEscape(id)+"/preview", q)
+}
+
+func (c *APIClient) RebalancePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/baskets/" + url.PathEscape(id) + "/rebalance"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
+}
+
 // DeleteRecurringBuyPlan deletes a plan.
 func (c *APIClient) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

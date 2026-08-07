@@ -569,6 +569,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/baskets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper allocation baskets */
+        get: operations["listPortfolioBaskets"];
+        put?: never;
+        /**
+         * Create a paper allocation basket
+         * @description Named target mix (e.g. 50% BTC, 30% ETH, 20% USDT). Weights must sum to 100.
+         *     Saving a basket does not trade. Rebalance is a separate explicit action.
+         *     Spot only; margin positions are ignored. Paper trading — not real money.
+         */
+        post: operations["createPortfolioBasket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/baskets/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview a paper basket rebalance
+         * @description Shows actual vs target weights and proposed market sells/buys. Does not trade.
+         */
+        get: operations["previewPortfolioBasketRebalance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/baskets/{id}/rebalance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Execute a paper basket rebalance
+         * @description User-triggered only. Sells overweight (and coins not in the basket), then buys
+         *     underweight sleeves at last price. Drift is allowed until this is called.
+         *     Paper trading — not real money. Not financial advice.
+         */
+        post: operations["rebalancePortfolioBasket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/baskets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a paper allocation basket with live drift */
+        get: operations["getPortfolioBasket"];
+        put?: never;
+        post?: never;
+        /** Delete a paper allocation basket */
+        delete: operations["deletePortfolioBasket"];
+        options?: never;
+        head?: never;
+        /**
+         * Update a paper allocation basket
+         * @description Change name and/or targets. Does not trade.
+         */
+        patch: operations["updatePortfolioBasket"];
+        trace?: never;
+    };
     "/api/v1/portfolio/recurring-buys": {
         parameters: {
             query?: never;
@@ -1678,6 +1765,33 @@ export interface components {
             scheduledFor?: string;
             /** Format: date-time */
             executedAt?: string;
+        };
+        AllocationTarget: {
+            /**
+             * @description Coin ticker or portfolio cash currency (e.g. BTC, ETH, USDT)
+             * @example BTC
+             */
+            asset: string;
+            /**
+             * @description Venue used to trade this asset (ignored for cash)
+             * @enum {string}
+             */
+            exchange?: "binance" | "coinbase" | "bybit";
+            /**
+             * @description Target percent of spot equity (0.01–100); all targets must sum to 100
+             * @example 50
+             */
+            weightPct: number;
+        };
+        AllocationBasket: {
+            id?: string;
+            clientId?: string;
+            name?: string;
+            targets?: components["schemas"]["AllocationTarget"][];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         PriceDiffWatch: {
             id?: string;
@@ -3340,6 +3454,194 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioBaskets: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Basket list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    createPortfolioBasket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example Core 50/30/20 */
+                    name: string;
+                    targets: components["schemas"]["AllocationTarget"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Created basket */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllocationBasket"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    previewPortfolioBasketRebalance: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Drift + proposed legs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    rebalancePortfolioBasket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trades plus updated drift */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioBasket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Basket + actual vs target */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deletePortfolioBasket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updatePortfolioBasket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    targets?: components["schemas"]["AllocationTarget"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated basket */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

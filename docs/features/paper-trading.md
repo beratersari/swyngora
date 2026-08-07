@@ -25,6 +25,13 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Execution history |
+| `POST` | `/api/v1/portfolio/baskets` | Create named allocation basket (target % mix; no trades) |
+| `GET` | `/api/v1/portfolio/baskets` | List baskets |
+| `GET` | `/api/v1/portfolio/baskets/{id}` | Basket + live actual vs target |
+| `PATCH` | `/api/v1/portfolio/baskets/{id}` | Update name/targets (no trades) |
+| `DELETE` | `/api/v1/portfolio/baskets/{id}` | Delete basket |
+| `GET` | `/api/v1/portfolio/baskets/{id}/preview` | Proposed rebalance legs (no trades) |
+| `POST` | `/api/v1/portfolio/baskets/{id}/rebalance` | User-triggered rebalance at last price |
 | `POST` | `/api/v1/portfolio/margin/orders` | Margin market/limit long or short (1x–10x) |
 | `GET` | `/api/v1/portfolio/margin/orders` | List margin orders |
 | `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel margin limit order |
@@ -183,13 +190,13 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go` |
+| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go`, `allocation.go` |
 | Store | `backend/internal/adapter/portfoliostore` |
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |
 | Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
-| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_margin.go` |
-| MCP | portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
+| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_allocation.go`, `portfolio_margin.go` |
+| MCP | portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + allocation basket / rebalance tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
 
 ## Config
 
@@ -203,5 +210,5 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run 'Portfolio|Recurring' -count=1
+go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run 'Portfolio|Recurring|Allocation' -count=1
 ```
