@@ -1,5 +1,6 @@
 {
   "title": "Piyasalar",
+  "watchlistResource": "izleme listesi",
   "subtitle": "Binance, Coinbase ve Bybit spot piyasaları. API üzerinden sıralama, filtre ve sayfalama — sekme görünürken liste her {{seconds}} sn yenilenir. Grafik ve göstergeler için bir satıra tıklayın.",
   "search": {
     "placeholder": "Sembol, base, quote ara…",
@@ -9,7 +10,8 @@
     "quoteAria": "Quote varlık",
     "tagAria": "Ürün etiketi",
     "tagPlaceholder": "Etiket",
-    "allTags": "Tüm etiketler"
+    "allTags": "Tüm etiketler",
+    "delistTag": "Delist (planlı)"
   },
   "results": {
     "loading": "Piyasalar yükleniyor…",
@@ -39,7 +41,8 @@
     "loadErrorTitle": "Piyasalar yüklenemedi",
     "emptyTitle": "Filtrelere uyan piyasa yok",
     "emptyHint": "Başka borsa, quote, etiket veya arama deneyin",
-    "openDetail": "{{symbol}} detayını aç"
+    "openDetail": "{{symbol}} detayını aç",
+    "delistTag": "Delist {{date}}"
   },
   "columns": {
     "button": "Sütunlar",
@@ -55,5 +58,10 @@
     "upstreamMcap": "Üst kaynak veya arz anlık görüntüsü yok. Mcap sıralaması için ılık arz önbelleği gerekir — quote hacim deneyin.",
     "refreshFailed": "Piyasalar yenilenemedi — son başarılı veri gösteriliyor."
   },
-  "resource": "piyasalar"
+  "resource": "piyasalar",
+  "delist": {
+    "disabledTitle": "Delist etiketleri kullanılamıyor",
+    "disabledBody": "Binance spot delist takvimini yüklemek için backend’de BINANCE_API_KEY ayarlayın.",
+    "activeHint": "Delist takviminde {{count}} çift var — Etiketler sütununa bakın."
+  }
 }

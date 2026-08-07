@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Tag } from 'antd';
+import { Alert, Button, Tag, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
@@ -13,6 +13,7 @@ import {
   useGetWatchlistQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
+  useListDelistScheduleQuery,
   useListSpotMarketsQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
@@ -91,7 +92,7 @@ export function MarketsPage() {
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
   const spotArgs = useMemo(() => toSpotListQuery(state, debouncedQ), [state, debouncedQ]);
-  const watchlistQuery = useGetWatchlistQuery();
+  const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const [addWatch] = useAddWatchlistItemMutation();
   const [removeWatch] = useRemoveWatchlistItemMutation();
 
@@ -99,6 +100,12 @@ export function MarketsPage() {
     pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const delistQuery = useListDelistScheduleQuery(
+    { exchange: state.exchange },
+    { skip: state.exchange !== 'binance' },
+  );
+  const delistEnabled = delistQuery.data?.enabled !== false;
+  const delistCount = delistQuery.data?.items?.length ?? 0;
 
   const watchedKeys = useMemo(() => {
     const set = new Set<string>();
@@ -230,6 +237,20 @@ export function MarketsPage() {
         }
       />
 
+      {state.exchange === 'binance' && delistQuery.isSuccess && !delistEnabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t('markets:delist.disabledTitle')}
+          description={t('markets:delist.disabledBody')}
+        />
+      ) : null}
+      {state.exchange === 'binance' && delistQuery.isSuccess && delistEnabled && delistCount > 0 ? (
+        <Text variant="caption" color="secondary">
+          {t('markets:delist.activeHint', { count: delistCount })}
+        </Text>
+      ) : null}
+
       <MetaRow>
         <MetaLeft>
           {isInitialLoading ? (
@@ -311,11 +332,14 @@ export function MarketsPage() {
         }
         watchedKeys={watchedKeys}
         onToggleWatch={(symbol, watched) => {
-          if (watched) {
-            void removeWatch({ exchange: state.exchange, symbol });
-          } else {
-            void addWatch({ exchange: state.exchange, symbol });
-          }
+          const run = watched
+            ? removeWatch({ exchange: state.exchange, symbol }).unwrap()
+            : addWatch({ exchange: state.exchange, symbol }).unwrap();
+          void run.catch((err) => {
+            void message.error(
+              rtkErrorMessage(err, { resource: t('markets:watchlistResource') }),
+            );
+          });
         }}
         metrics={metricColumns.metrics}
       />

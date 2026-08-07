@@ -1,30 +1,37 @@
 import { Tag } from 'antd';
-import type { SpotMarket } from '@/libs/api';
+import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import {
   changeTone,
   formatChangePercent,
   formatCompactUsd,
+  formatDelistDate,
   formatPrice,
   formatTradeCount,
-  type SpotMetricDef,
 } from '@/libs/utils';
-
-export type SpotMetricValueProps = {
-  metric: SpotMetricDef;
-  spot: SpotMarket | undefined | null;
-  exchange?: string;
-  isLoading?: boolean;
-};
+import { TagsWrap } from './SpotMetricValue.styles';
+import type { SpotMetricValueProps } from './SpotMetricValue.types';
 
 /**
  * Renders one SpotMarket field using the shared metric catalog definition.
  */
-export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: SpotMetricValueProps) {
+export function SpotMetricValue({
+  metric,
+  spot,
+  exchange,
+  isLoading = false,
+  locale: localeProp,
+}: SpotMetricValueProps) {
+  const { t, i18n } = useTranslation(['markets', 'common']);
+  const locale = localeProp ?? i18n.language;
   const raw = spot?.[metric.field];
 
   if (metric.format === 'tags') {
     const tags = (raw as string[] | undefined) ?? [];
+    const delistLabel = formatDelistDate(spot?.delistTime, locale);
+    // Backend injects synthetic "Delist" into tags[]; avoid duplicating plain Tag + BrandTag.
+    const productTags = tags.filter((tag) => tag.toLowerCase() !== 'delist');
     if (isLoading) {
       return (
         <Text variant="caption" color="secondary" isLoading skeletonWidth={80}>
@@ -32,7 +39,7 @@ export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: S
         </Text>
       );
     }
-    if (!tags.length) {
+    if (!productTags.length && !delistLabel) {
       return (
         <Text variant="caption" color="secondary">
           —
@@ -40,12 +47,19 @@ export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: S
       );
     }
     return (
-      <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4, maxWidth: 200 }}>
-        {tags.slice(0, 4).map((tag) => (
+      <TagsWrap>
+        {delistLabel ? (
+          <BrandTag variant="delist">
+            {t('markets:table.delistTag', { date: delistLabel })}
+          </BrandTag>
+        ) : null}
+        {productTags.slice(0, delistLabel ? 3 : 4).map((tag) => (
           <Tag key={tag}>{tag}</Tag>
         ))}
-        {tags.length > 4 ? <Tag>+{tags.length - 4}</Tag> : null}
-      </span>
+        {productTags.length > (delistLabel ? 3 : 4) ? (
+          <Tag>+{productTags.length - (delistLabel ? 3 : 4)}</Tag>
+        ) : null}
+      </TagsWrap>
     );
   }
 
@@ -68,7 +82,7 @@ export function SpotMetricValue({ metric, spot, exchange, isLoading = false }: S
         raw == null || raw === ''
           ? '—'
           : typeof raw === 'number'
-            ? raw.toLocaleString()
+            ? raw.toLocaleString(locale)
             : String(raw);
       break;
     default:

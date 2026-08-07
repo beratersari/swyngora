@@ -1,5 +1,6 @@
 {
   "title": "Markets",
+  "watchlistResource": "watchlist",
   "subtitle": "Spot markets across Binance, Coinbase, and Bybit. Sort, filter, and page via the API — list refreshes every {{seconds}}s while this tab is visible. Click a row for chart and indicators.",
   "search": {
     "placeholder": "Search symbol, base, quote…",
@@ -9,7 +10,8 @@
     "quoteAria": "Quote asset",
     "tagAria": "Product tag",
     "tagPlaceholder": "Tag",
-    "allTags": "All tags"
+    "allTags": "All tags",
+    "delistTag": "Delist (scheduled)"
   },
   "results": {
     "loading": "Loading markets…",
@@ -39,7 +41,8 @@
     "loadErrorTitle": "Could not load markets",
     "emptyTitle": "No markets match filters",
     "emptyHint": "Try another exchange, quote, tag, or search",
-    "openDetail": "Open {{symbol}} detail"
+    "openDetail": "Open {{symbol}} detail",
+    "delistTag": "Delist {{date}}"
   },
   "columns": {
     "button": "Columns",
@@ -55,5 +58,10 @@
     "upstreamMcap": "Upstream or supply snapshot unavailable. Market-cap sorts need a warm supply cache — try quote volume sort or retry shortly.",
     "refreshFailed": "Could not refresh markets — showing last successful data."
   },
-  "resource": "markets"
+  "resource": "markets",
+  "delist": {
+    "disabledTitle": "Delist tags unavailable",
+    "disabledBody": "Set BINANCE_API_KEY on the backend to load Binance’s spot delist schedule. Delist dates then appear as tags in the Tags column.",
+    "activeHint": "{{count}} pair(s) on the delist schedule — see the Tags column (amber Delist tag)."
+  }
 }

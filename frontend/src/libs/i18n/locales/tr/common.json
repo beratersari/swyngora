@@ -1,9 +1,13 @@
 {
   "appName": "Swyngora",
   "nav": {
+    "main": "Ana gezinme",
     "markets": "Piyasalar",
     "watchlist": "İzleme",
-    "pumps": "Pump"
+    "pumps": "Pump",
+    "ai": "AI",
+    "alerts": "Uyarılar",
+    "compare": "Karşılaştır"
   },
   "footer": {
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"
@@ -16,7 +20,8 @@
   "actions": {
     "retry": "Yeniden dene",
     "refresh": "Yenile",
-    "reload": "Sayfayı yenile"
+    "reload": "Sayfayı yenile",
+    "cancel": "İptal"
   },
   "status": {
     "updating": "güncelleniyor…",

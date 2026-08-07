@@ -99,6 +99,12 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
   });
 
+  it('rejects unknown exchange path segments', async () => {
+    renderDetail('/markets/kraken/BTCUSDT');
+    expect(await screen.findByText('Unknown exchange')).toBeInTheDocument();
+    expect(screen.queryByTestId('candle-chart')).not.toBeInTheDocument();
+  });
+
   it('shows hard candle error when no chart data', async () => {
     mockCandles.mockReturnValue({
       data: undefined,

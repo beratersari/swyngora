@@ -1,9 +1,13 @@
 {
   "appName": "Swyngora",
   "nav": {
+    "main": "Main navigation",
     "markets": "Markets",
     "watchlist": "Watchlist",
-    "pumps": "Pumps"
+    "pumps": "Pumps",
+    "ai": "AI",
+    "alerts": "Alerts",
+    "compare": "Compare"
   },
   "footer": {
     "disclaimer": "{{appName}} · informational market data · not financial advice"
@@ -16,7 +20,8 @@
   "actions": {
     "retry": "Retry",
     "refresh": "Refresh",
-    "reload": "Reload page"
+    "reload": "Reload page",
+    "cancel": "Cancel"
   },
   "status": {
     "updating": "updating…",

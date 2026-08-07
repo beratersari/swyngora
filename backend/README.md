@@ -26,6 +26,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
+| `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
+| `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
+| `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
 | `POST` | `/api/v1/watchlist/items` | Add symbol (owner or editor; optional `baseVersion`) |
 | `DELETE` | `/api/v1/watchlist/items?exchange=&symbol=` | Remove symbol (`baseVersion` / If-Match) |
@@ -90,6 +93,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/account` | Account status (active/closed, purgeAt, canReopen) |
 | `POST` | `/api/v1/account/close` | Close account (7-day grace; data retained) |
 | `POST` | `/api/v1/account/reopen` | Reopen within grace period |
+| `POST` | `/api/v1/ai/chat` | Proxy to Python multi-agent assistant |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -102,7 +106,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. Configure path via `WATCHLIST_DB_PATH`. **Sharing:** owners grant `viewer` or `editor` access to other `clientId`s; editors may add/remove symbols only; all mutations write an audit log (`docs/features/watchlist-sharing.md`). **Multi-device sync:** each list has a monotonic `version`; send `baseVersion` on writes — non-overlapping adds auto-merge; delete-vs-update conflicts return **409** with both sides (`docs/features/watchlist-sync.md`).
 
-**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts.
+**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts. Webhook URLs are **SSRF-hardened** (no loopback/RFC1918/link-local/metadata; no HTTP redirects). Set `WEBHOOK_ALLOW_PRIVATE=true` only for local tests.
 
 **Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`).
 
@@ -116,7 +120,9 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; after grace, watchlists/shares/alerts/backtests/import-export files and jobs are purged. See `docs/features/account-close.md`.
 
-**Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore.
+**Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`**; optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); **`MCP_ENABLED=false`** unmounts MCP.
+
+**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Full multi-user identity (JWT/session) is a separate follow-up.
 
 ## Run
 
@@ -158,6 +164,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
+| `API_AUTH_TOKEN` | _(empty = open local mode)_ | When set, require `Authorization: Bearer` or `X-API-Key` for tenant routes + `/mcp` |
+| `MCP_ENABLED` | `true` | Mount streamable MCP at `/mcp`; set `false` to disable |
+| `WEBHOOK_ALLOW_PRIVATE` | `false` | Allow loopback/private webhook targets (local tests only; SSRF risk if true) |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |
 | `TELEGRAM_CHAT_ID` | — | Allowed chat id (or use `TELEGRAM_ALLOWED_CHAT_IDS`) |
 | `TELEGRAM_ALLOWED_CHAT_IDS` | — | Comma-separated allowed chat ids |
@@ -167,6 +176,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `BOT_POLL_TIMEOUT` | `30s` | Telegram long-poll wait |
 | `BOT_LOWMCAP_LIMIT` | `10` | Default `/lowmcap` size (max 25) |
 | `BINANCE_BASE_URL` | `https://api.binance.com` | Binance Spot REST base |
+| `BINANCE_API_KEY` | _(empty)_ | Enables hourly spot delist schedule refresh |
+| `DELIST_REFRESH_EVERY` | `1h` | Delist schedule poll interval |
+| `DELIST_REFRESH_ON_STARTUP` | `true` | Fetch delist schedule once on start |
 | `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
 | `COINBASE_BASE_URL` | `https://api.coinbase.com` | Coinbase public market products |
 | `COINBASE_EXCHANGE_URL` | `https://api.exchange.coinbase.com` | Coinbase public candles |

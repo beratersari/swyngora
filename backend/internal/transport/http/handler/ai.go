@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -49,8 +50,8 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	if session == "" {
 		session = "http-default"
 	}
-	ctx := r.Context()
-	// Parent context may have short write deadline; still respect request cancel.
+	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
+	defer cancel()
 	res, err := h.client.Chat(ctx, msg, session)
 	if err != nil {
 		writeError(w, fmt.Errorf("%w: %v", domain.ErrUpstream, err))

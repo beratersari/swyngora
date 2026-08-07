@@ -33,6 +33,7 @@ import type {
   Ticker24h,
   Ticker24hQuery,
 } from './marketApi.types';
+// delist types re-exported below
 
 export type {
   SpotMarket,
@@ -61,6 +62,7 @@ export type {
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
 } from './marketApi.types';
+// delist types re-exported below
 
 export {
   compactParams,
@@ -181,6 +183,19 @@ export const marketApi = baseApi.injectEndpoints({
       ],
     }),
 
+    listDelistSchedule: build.query<
+      import('./marketApi.types').DelistScheduleResponse,
+      { exchange?: import('./marketApi.types').MarketExchange } | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/delist-schedule',
+        params: {
+          exchange: arg && typeof arg === 'object' && 'exchange' in arg ? arg.exchange : undefined,
+        },
+      }),
+      keepUnusedDataFor: 300,
+    }),
+
     postIndicatorsBatch: build.mutation<
       {
         exchange?: string;
@@ -214,6 +229,7 @@ export const {
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
+  useListDelistScheduleQuery,
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,

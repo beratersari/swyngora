@@ -12,5 +12,7 @@
   "addedToast": "İzleme listesine eklendi",
   "removedToast": "İzleme listesinden çıkarıldı",
   "loadFailed": "İzleme listesi yüklenemedi",
+  "removeFailed": "İzleme listesinden kaldırılamadı",
+  "metricFailed": "Canlı kotasyon yok",
   "resource": "izleme listesi"
 }

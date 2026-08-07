@@ -1,0 +1,48 @@
+{
+  "title": "Alerts",
+  "subtitle": "Server-side price alerts (one-time or repeating). Informational only — not financial advice.",
+  "createTitle": "Create alert",
+  "createHint": "Fires when the condition is true (with a short cooldown). Enable browser notifications for desktop pop-ups.",
+  "listTitle": "Your alerts",
+  "create": "Create alert",
+  "createFailed": "Could not create alert",
+  "createSuccess": "Alert created",
+  "loadFailed": "Could not load alerts",
+  "resource": "alerts",
+  "exchange": "Exchange",
+  "symbol": "Symbol",
+  "kind": "Condition",
+  "condition": "Condition",
+  "threshold": "Threshold",
+  "note": "Note",
+  "muted": "Muted",
+  "triggers": "Fires",
+  "actions": "Actions",
+  "open": "Open",
+  "delete": "Delete",
+  "deleteConfirm": "Delete this alert?",
+  "muteAria": "Mute alert for {{symbol}}",
+  "empty": "No alerts yet",
+  "enableNotifications": "Enable browser notifications",
+  "permissionStatus": "Notification permission: {{status}}",
+  "firedToast": "Alert: {{label}}",
+  "monitoringChip": "Monitoring {{count}} alert(s) · tab must stay open",
+  "kinds": {
+    "price_above": "Price ≥",
+    "price_below": "Price ≤",
+    "change_pct_above": "24h change % ≥",
+    "change_pct_below": "24h change % ≤"
+  },
+  "addFromDetail": "Add alert",
+  "addToCompare": "Compare",
+  "conditions": {
+    "above": "Price above",
+    "below": "Price below"
+  },
+  "modes": {
+    "one_time": "One-time",
+    "repeating": "Repeating"
+  },
+  "status": "Status",
+  "mode": "Mode"
+}

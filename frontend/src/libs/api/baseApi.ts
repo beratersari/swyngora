@@ -12,6 +12,7 @@ export const baseApi = createApi({
     },
   }),
   tagTypes: [
+    'Alert',
     'SpotList',
     'Exchange',
     'ProductTag',

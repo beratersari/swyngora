@@ -17,8 +17,10 @@ export type RtkErrorMessageOptions = {
 };
 
 type ApiErrorBody = {
-  error?: { code?: string; message?: string };
+  /** Nested OpenAPI Error shape, or legacy flat string. */
+  error?: { code?: string; message?: string } | string;
   message?: string;
+  code?: string;
 };
 
 function defaultStatusMessage(status: number | string): string | undefined {
@@ -62,8 +64,15 @@ export function getRtkErrorRawMessage(error: unknown): string | undefined {
     if (typeof data === 'string' && data.trim()) return data.trim();
     if (isRecord(data)) {
       const body = data as ApiErrorBody;
-      const nested = body.error?.message;
-      if (typeof nested === 'string' && nested.trim()) return nested.trim();
+      if (typeof body.error === 'string' && body.error.trim()) {
+        // Prefer explicit message when present (legacy flat auth body).
+        if (typeof body.message === 'string' && body.message.trim()) return body.message.trim();
+        return body.error.trim();
+      }
+      if (isRecord(body.error)) {
+        const nested = body.error.message;
+        if (typeof nested === 'string' && nested.trim()) return nested.trim();
+      }
       if (typeof body.message === 'string' && body.message.trim()) return body.message.trim();
     }
   }

@@ -1,4 +1,4 @@
-import { Alert, Button } from 'antd';
+import { Alert, Button, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
@@ -24,7 +24,15 @@ function WatchlistLiveMetric({
   symbol: string;
   metric: SpotMetricDef;
 }) {
-  const { spot, isLoading } = useWatchlistSpot(exchange, symbol);
+  const { t } = useTranslation('watchlist');
+  const { spot, isLoading, isError } = useWatchlistSpot(exchange, symbol);
+  if (isError && !spot) {
+    return (
+      <Text variant="caption" color="secondary" title={t('metricFailed')}>
+        —
+      </Text>
+    );
+  }
   return (
     <SpotMetricValue metric={metric} spot={spot} exchange={exchange} isLoading={isLoading} />
   );
@@ -33,7 +41,7 @@ function WatchlistLiveMetric({
 export function WatchlistPage() {
   const { t } = useTranslation(['watchlist', 'markets', 'common']);
   const navigate = useNavigate();
-  const wl = useGetWatchlistQuery();
+  const wl = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const [removeItem, removeState] = useRemoveWatchlistItemMutation();
   const metricColumns = useSpotMetricColumns('watchlist');
 
@@ -64,6 +72,17 @@ export function WatchlistPage() {
         />
       ) : null}
 
+      {removeState.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message={t('watchlist:removeFailed')}
+          description={rtkErrorMessage(removeState.error, {
+            resource: t('watchlist:resource'),
+          })}
+        />
+      ) : null}
+
       <ToolbarRow>
         <MetricColumnPicker
           available={metricColumns.available}
@@ -89,7 +108,13 @@ export function WatchlistPage() {
           <WatchlistLiveMetric exchange={exchange} symbol={symbol} metric={metric} />
         )}
         onRemove={(exchange, symbol) => {
-          void removeItem({ exchange, symbol });
+          void removeItem({ exchange, symbol })
+            .unwrap()
+            .catch((err) => {
+              void message.error(
+                rtkErrorMessage(err, { resource: t('watchlist:resource') }),
+              );
+            });
         }}
         onOpen={(exchange, symbol) => {
           navigate(

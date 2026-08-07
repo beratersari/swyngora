@@ -214,6 +214,28 @@ func (b *Backend) ListExchanges(ctx context.Context) (json.RawMessage, error) {
 	})
 }
 
+
+func (b *Backend) ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error) {
+	_ = ctx
+	entries, err := b.Market.ListDelistSchedule(exchange)
+	if err != nil {
+		return nil, err
+	}
+	ex, _ := b.Market.ResolveExchange(exchange)
+	items := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		items = append(items, map[string]any{
+			"symbol":     e.Symbol,
+			"delistTime": e.DelistTime.UTC().Format(time.RFC3339),
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": string(ex),
+		"enabled":  b.Market.DelistEnabled(),
+		"items":    items,
+	})
+}
+
 func (b *Backend) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {
 	return b.GetWatchlistOwned(ctx, clientID, "")
 }

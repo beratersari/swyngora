@@ -19,7 +19,28 @@ func newSvc(t *testing.T) (*Service, *alertstore.SQLite) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return New(store), store
+	// Tests use httptest (loopback) and offline hostnames; production leaves this false.
+	svc := New(store)
+	svc.AllowPrivateWebhooks = true
+	return svc, store
+}
+
+func TestService_SetWebhook_SSRFBlockedByDefault(t *testing.T) {
+	store, err := alertstore.Open(filepath.Join(t.TempDir(), "ssrf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	svc := New(store) // AllowPrivateWebhooks == false
+	_, err = svc.SetWebhook(context.Background(), "ssrf-user", domain.WebhookSettings{
+		URL: "http://127.0.0.1/hook", DeliveryMode: "immediate",
+	})
+	if err == nil {
+		t.Fatal("expected SSRF rejection for loopback webhook")
+	}
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("want ErrInvalidArgument, got %v", err)
+	}
 }
 
 func TestService_CreateListGetDelete(t *testing.T) {

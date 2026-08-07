@@ -43,6 +43,14 @@ PUT /api/v1/alerts/webhook
 | `one_time` | Fire once → `triggered` |
 | `repeating` | Edge-cross re-fire with re-arm |
 
+## Webhook security (SSRF)
+
+- Only absolute `http`/`https` URLs without userinfo.
+- By default, **private/local destinations are rejected** after DNS resolution (loopback, RFC1918, link-local, CGNAT, cloud metadata hostnames such as `metadata.google.internal`).
+- Delivery **does not follow HTTP redirects**.
+- URL is re-validated at delivery time.
+- `WEBHOOK_ALLOW_PRIVATE=true` opts into loopback/private targets for local testing only.
+
 ## Config
 
 | Env | Default |
@@ -52,6 +60,8 @@ PUT /api/v1/alerts/webhook
 | `WEBHOOK_DELIVERY_INTERVAL` | `5s` |
 | `WEBHOOK_HTTP_TIMEOUT` | `10s` |
 | `WEBHOOK_MAX_ATTEMPTS` | `8` |
+| `WEBHOOK_ALLOW_PRIVATE` | `false` |
+| `API_AUTH_TOKEN` | empty (open local mode) — when set, protects alert APIs + MCP |
 
 ## Tests
 

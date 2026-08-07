@@ -6,6 +6,24 @@ import react from '@vitejs/plugin-react';
 // Use 127.0.0.1 (not localhost) inside WSL so we hit the Linux stack reliably.
 const API_PROXY_TARGET = process.env.VITE_DEV_PROXY_TARGET || 'http://127.0.0.1:8080';
 
+/**
+ * Optional: inject API auth for local dev when backend has API_AUTH_TOKEN set.
+ * Read from process env only (Vite server) — never bundled into client JS.
+ * Prefer VITE_DEV_API_AUTH_TOKEN or API_AUTH_TOKEN in the shell that runs `npm run dev`.
+ */
+const DEV_API_AUTH_TOKEN = (
+  process.env.VITE_DEV_API_AUTH_TOKEN ||
+  process.env.API_AUTH_TOKEN ||
+  ''
+).trim();
+
+function injectDevApiAuth(
+  proxyReq: { setHeader: (name: string, value: string) => void },
+): void {
+  if (!DEV_API_AUTH_TOKEN) return;
+  proxyReq.setHeader('Authorization', `Bearer ${DEV_API_AUTH_TOKEN}`);
+}
+
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -22,6 +40,12 @@ export default defineConfig({
       '/api': {
         target: API_PROXY_TARGET,
         changeOrigin: true,
+        // AI multi-agent turns can exceed default proxy idle timeouts.
+        timeout: 360_000,
+        proxyTimeout: 360_000,
+        configure: (proxy) => {
+          proxy.on('proxyReq', injectDevApiAuth);
+        },
       },
       '/health': {
         target: API_PROXY_TARGET,
@@ -30,6 +54,7 @@ export default defineConfig({
     },
   },
   test: {
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/*.e2e.*'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],

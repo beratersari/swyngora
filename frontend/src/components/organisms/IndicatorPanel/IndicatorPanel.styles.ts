@@ -29,8 +29,8 @@ export const SnapshotCard = styled.div`
   flex-direction: column;
   gap: 4px;
   padding: ${({ theme }) => theme.spacing[3]}px;
-  background: ${({ theme }) => theme.semantic.bg.canvas};
-  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  background: ${({ theme }) => theme.semantic.bg.chrome};
+  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
   border-radius: ${({ theme }) => theme.radii.md}px;
 `;
 

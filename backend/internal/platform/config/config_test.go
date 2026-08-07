@@ -94,6 +94,15 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.ScannerCheckInterval != 60*time.Second {
 		t.Fatalf("ScannerCheckInterval default=%v", cfg.ScannerCheckInterval)
 	}
+	if cfg.APIAuthToken != "" {
+		t.Fatalf("APIAuthToken default empty, got %q", cfg.APIAuthToken)
+	}
+	if !cfg.MCPEnabled {
+		t.Fatal("MCPEnabled default true")
+	}
+	if cfg.WebhookAllowPrivate {
+		t.Fatal("WebhookAllowPrivate default false")
+	}
 }
 
 func TestLoad_EnvOverrides(t *testing.T) {

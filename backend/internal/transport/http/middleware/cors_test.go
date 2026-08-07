@@ -29,8 +29,8 @@ func TestCORS_PassesThroughGET(t *testing.T) {
 	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, PUT, POST, PATCH, DELETE, OPTIONS" {
 		t.Fatalf("ACA-Methods=%q", got)
 	}
-	if got := rr.Header().Get("Access-Control-Allow-Headers"); got == "" {
-		t.Fatal("missing ACA-Headers")
+	if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Accept, Content-Type, X-Client-Id, Authorization, X-API-Key" {
+		t.Fatalf("ACA-Headers=%q", got)
 	}
 }
 

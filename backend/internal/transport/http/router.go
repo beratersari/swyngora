@@ -25,6 +25,8 @@ type RouterOptions struct {
 	RateLimitBurst int
 	// CORSAllowOrigins: empty or ["*"] = any origin; otherwise exact match list.
 	CORSAllowOrigins []string
+	// APIAuthToken when set requires Bearer / X-API-Key on non-public routes (see middleware.APIAuth).
+	APIAuthToken string
 	// MCPHandler mounts streamable MCP (typically at /mcp) in the same process.
 	MCPHandler http.Handler
 	// AI client for POST /api/v1/ai/chat (optional).
@@ -69,6 +71,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/intervals", mh.GetIntervals)
 	mux.HandleFunc("GET /api/v1/market/tags", mh.ListProductTags)
 	mux.HandleFunc("GET /api/v1/market/spot", mh.ListSpotMarkets)
+	mux.HandleFunc("GET /api/v1/market/delist-schedule", mh.ListDelistSchedule)
 	mux.HandleFunc("GET /api/v1/market/indicators", mh.GetIndicators)
 	mux.HandleFunc("POST /api/v1/market/indicators/batch", mh.PostIndicatorsBatch)
 	mux.HandleFunc("GET /api/v1/market/pumps", mh.GetPumpEvents)
@@ -211,6 +214,8 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	var h http.Handler = mux
 	h = middleware.AccountGate(opts.Accounts)(h)
+	// Auth wraps the mux so /mcp and tenant APIs are protected when a token is configured.
+	h = middleware.APIAuth(opts.APIAuthToken)(h)
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
 	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h

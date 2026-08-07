@@ -145,28 +145,61 @@ export function toLineData(points: ChartLinePoint[]): LineData<Time>[] {
 }
 
 /**
- * Stable signature for candle data so we only setData/fitContent when bars change.
- * Includes every bar OHLC — a tip-only signature missed middle-bar updates.
+ * Cheap content fingerprint for large series (O(n) scan, O(1) string size).
+ * Samples ends + evenly spaced middles so mid-series edits still change the key.
  */
-export function candleDataSignature(data: ChartCandle[]): string {
-  if (!data.length) return '0';
-  return data
-    .map((d) => `${d.time},${d.open},${d.high},${d.low},${d.close}`)
-    .join(';');
+function seriesFingerprint(
+  length: number,
+  sample: (index: number) => string,
+): string {
+  if (length <= 0) return '0';
+  if (length === 1) return `1|${sample(0)}`;
+  const parts: string[] = [String(length), sample(0), sample(length - 1)];
+  // Up to 6 interior samples for long histories (keeps main-thread cost low).
+  const interior = Math.min(6, Math.max(0, length - 2));
+  for (let s = 1; s <= interior; s += 1) {
+    const idx = Math.floor((s * (length - 1)) / (interior + 1));
+    if (idx > 0 && idx < length - 1) parts.push(sample(idx));
+  }
+  // Rolling hash over all points so any bar change is detected without huge strings.
+  let h = 2166136261;
+  for (let i = 0; i < length; i += 1) {
+    const token = sample(i);
+    for (let c = 0; c < token.length; c += 1) {
+      h ^= token.charCodeAt(c);
+      h = Math.imul(h, 16777619);
+    }
+    h ^= 124;
+  }
+  parts.push((h >>> 0).toString(36));
+  return parts.join('|');
 }
 
 /**
- * Stable signature for overlays — include every point so mid-series EMA
- * recalculations trigger setData (tip-only signatures missed interior updates).
+ * Stable signature for candle data so we only setData/fitContent when bars change.
+ */
+export function candleDataSignature(data: ChartCandle[]): string {
+  return seriesFingerprint(
+    data.length,
+    (i) => {
+      const d = data[i]!;
+      return `${d.time},${d.open},${d.high},${d.low},${d.close}`;
+    },
+  );
+}
+
+/**
+ * Stable signature for overlays — detects mid-series EMA recalculations.
  */
 export function overlaysSignature(overlays: CandleChartOverlay[]): string {
   if (!overlays.length) return '';
   return overlays
     .map((o) => {
       const title = o.title ?? '';
-      const points = o.data
-        .map((p) => `${p.time},${p.value}`)
-        .join(';');
+      const points = seriesFingerprint(o.data.length, (i) => {
+        const p = o.data[i]!;
+        return `${p.time},${p.value}`;
+      });
       return `${o.id}:${o.color}:${title}:${points}`;
     })
     .join('|');

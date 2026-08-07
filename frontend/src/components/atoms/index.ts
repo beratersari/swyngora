@@ -4,3 +4,6 @@ export { Text } from './Text';
 export type { TextProps } from './Text';
 export { Skeleton } from './Skeleton';
 export type { SkeletonProps, SkeletonVariant } from './Skeleton';
+
+export { BrandTag } from './BrandTag';
+export type { BrandTagProps, BrandTagVariant } from './BrandTag';

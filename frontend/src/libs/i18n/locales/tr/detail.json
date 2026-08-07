@@ -3,6 +3,9 @@
   "change24h": "{{change}} · 24s",
   "missingSymbolTitle": "Sembol eksik",
   "missingSymbolBody": "URL'de işlem çifti yok.",
+  "invalidExchangeTitle": "Bilinmeyen borsa",
+  "invalidExchangeBody": "Desteklenen borsalar: binance, coinbase, bybit.",
+  "watchFailed": "İzleme listesi güncellenemedi",
   "chart": {
     "title": "Fiyat grafiği",
     "meta": "{{interval}} · {{bars}} bar yüklü · sola kaydırın (1000+ geçmiş sayfalı)",

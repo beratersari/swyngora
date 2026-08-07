@@ -6,7 +6,7 @@ import {
   overlaysSignature,
   toCandlestickData,
   toLineData,
-} from './helpers';
+} from './CandleChartHost.helpers';
 import type { ChartCandle } from '@/libs/utils';
 
 function bar(close: number, opts?: Partial<ChartCandle>): ChartCandle {

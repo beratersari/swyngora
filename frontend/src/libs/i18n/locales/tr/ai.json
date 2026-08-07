@@ -1,0 +1,25 @@
+{
+  "title": "AI asistan",
+  "subtitle": "Piyasalar, göstergeler ve izleme listesi hakkında sorun. Yanıtlar mümkünse canlı araçları kullanır.",
+  "resource": "AI asistan",
+  "disclaimer": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Rakamlar model bellekten değil, araçlardan gelmelidir.",
+  "placeholder": "BTC RSI, pump veya Binance’te bir coin hakkında sorun…",
+  "send": "Gönder",
+  "newChat": "Yeni sohbet",
+  "you": "Siz",
+  "assistant": "Asistan",
+  "thinking": "Düşünüyor… bu birkaç dakika sürebilir.",
+  "thinkingLabel": "Düşünme",
+  "toolsLabel": "Araçlar",
+  "emptyHint": "Bir sohbet başlatın veya öneriyi deneyin:",
+  "sessionLabel": "Oturum",
+  "enterHint": "Göndermek için Enter · Yeni satır için Shift+Enter",
+  "errors": {
+    "unavailable": "AI servisi kullanılamıyor. Python AI servisini (8090) başlatın ve Ollama veya Grok yapılandırmasını kontrol edin."
+  },
+  "suggestions": {
+    "btcRsi": "Binance 1s BTC RSI nedir?",
+    "ethPrice": "Binance’te ETH fiyatı nedir?",
+    "pumps": "Binance USDT çiftlerinde son pump var mı?"
+  }
+}

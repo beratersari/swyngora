@@ -62,12 +62,25 @@ export function analyticsBarLimit(
   return Math.min(apiMax, Math.max(floor, Math.floor(loadedBars)));
 }
 
-export function parseExchangeParam(raw: string | undefined): SupportedExchange {
-  const v = (raw ?? '').toLowerCase();
+/**
+ * Parse a path/query exchange token.
+ * Returns null when missing or not a supported venue (caller should show an error).
+ */
+export function parseExchangeParam(raw: string | undefined): SupportedExchange | null {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (!v) return null;
   if ((SUPPORTED_EXCHANGES as readonly string[]).includes(v)) {
     return v as SupportedExchange;
   }
-  return 'binance';
+  return null;
+}
+
+/** Like parseExchangeParam but falls back to binance for list defaults only. */
+export function parseExchangeParamOrDefault(
+  raw: string | undefined,
+  fallback: SupportedExchange = 'binance',
+): SupportedExchange {
+  return parseExchangeParam(raw) ?? fallback;
 }
 
 /** Decode path symbol (Coinbase uses BTC-USD). */

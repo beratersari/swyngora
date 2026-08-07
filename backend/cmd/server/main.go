@@ -9,12 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
@@ -24,9 +25,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
@@ -91,6 +93,7 @@ func main() {
 	binanceClient := binance.NewClient(binance.Options{
 		BaseURL:         cfg.BinanceBaseURL,
 		ProductBaseURL:  cfg.BinanceProductBaseURL,
+		APIKey:          cfg.BinanceAPIKey,
 		HTTPClient:      httpClient,
 		CandleCache:     binanceCandles,
 		TickerCache:     binanceTickers,
@@ -113,11 +116,13 @@ func main() {
 		SpotMarketCache: bybitSpot,
 	})
 
+	delistStore := deliststore.NewMemory()
+	delistEnabled := cfg.BinanceAPIKey != ""
 	marketSvc := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
-	}, binanceClient)
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled)
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -143,6 +148,7 @@ func main() {
 		}
 	}()
 	alertSvc := pricealert.New(alertStore)
+	alertSvc.AllowPrivateWebhooks = cfg.WebhookAllowPrivate
 	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
 
 	portfolioStore, err := portfoliostore.Open(cfg.PortfolioDBPath)
@@ -336,24 +342,28 @@ func main() {
 
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
-	// MCP tools run in-process (same binary / same port as REST). No second server.
-	mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc)
-	mcpHTTP := mcpx.NewHTTPHandler(mcpServer)
+	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
+	var mcpHTTP http.Handler
+	if cfg.MCPEnabled {
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc)
+		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
+	}
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
 		RateLimitRPS:     cfg.RateLimitRPS,
 		RateLimitBurst:   cfg.RateLimitBurst,
 		CORSAllowOrigins: cfg.CORSAllowOrigins,
+		APIAuthToken:     cfg.APIAuthToken,
 		MCPHandler:       mcpHTTP,
-		AI:              aiClient,
-		AITimeout:       cfg.AITimeout,
-		Alerts:          alertSvc,
-		Portfolio:       portfolioSvc,
-		PriceDiff:       priceDiffSvc,
-		Scanner:         scannerSvc,
-		Export:          exportSvc,
-		Import:          importSvc,
-		Accounts:        accountSvc,
+		AI:               aiClient,
+		AITimeout:        cfg.AITimeout,
+		Alerts:           alertSvc,
+		Portfolio:        portfolioSvc,
+		PriceDiff:        priceDiffSvc,
+		Scanner:          scannerSvc,
+		Export:           exportSvc,
+		Import:           importSvc,
+		Accounts:         accountSvc,
 	})
 
 	job := &supplyjob.Runner{
@@ -366,6 +376,23 @@ func main() {
 	}
 	go job.Start(ctx)
 
+	if cfg.BinanceAPIKey != "" {
+		go (&delistjob.Runner{
+			Source:     binanceClient,
+			Store:      delistStore,
+			Interval:   cfg.DelistRefreshEvery,
+			RunOnStart: cfg.DelistRefreshOnStartup,
+			Logger:     logger,
+			Exchange:   domain.ExchangeBinance,
+		}).Start(ctx)
+		logger.Info("delist schedule refresh enabled",
+			"every", cfg.DelistRefreshEvery.String(),
+			"on_startup", cfg.DelistRefreshOnStartup,
+		)
+	} else {
+		logger.Info("delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
+	}
+
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,
 		Market:   marketSvc,
@@ -374,9 +401,11 @@ func main() {
 	}
 	go alertChecker.Start(ctx)
 
+	webhookClient := &http.Client{Timeout: cfg.WebhookHTTPTimeout}
+	// Deliverer hardens CheckRedirect; explicit client keeps timeout from config.
 	webhookDeliverer := &pricealert.Deliverer{
 		Alerts:      alertSvc,
-		HTTP:        &http.Client{Timeout: cfg.WebhookHTTPTimeout},
+		HTTP:        webhookClient,
 		Interval:    cfg.WebhookDeliveryInterval,
 		MaxAttempts: cfg.WebhookMaxAttempts,
 		Logger:      logger,
@@ -419,16 +448,23 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		// AI chat can take longer than market endpoints.
-		WriteTimeout:      180 * time.Second,
-		IdleTimeout:       60 * time.Second,
+		// Must cover AI multi-agent turns (AITimeout, default 300s) plus a small buffer.
+		WriteTimeout: cfg.AITimeout + 30*time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func() {
+		mcpPath := ""
+		if cfg.MCPEnabled {
+			mcpPath = "/mcp"
+		}
 		logger.Info("server listening",
 			"addr", cfg.HTTPAddr,
 			"exchanges", []string{"binance", "coinbase", "bybit"},
-			"mcp", "/mcp",
+			"mcp", mcpPath,
+			"mcp_enabled", cfg.MCPEnabled,
+			"api_auth", cfg.APIAuthToken != "",
+			"webhook_allow_private", cfg.WebhookAllowPrivate,
 			"ai_service", cfg.AIServiceURL,
 		)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

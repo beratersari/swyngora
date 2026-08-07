@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, message } from 'antd';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
@@ -21,11 +21,13 @@ import {
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetTicker24hQuery,
+  useListDelistScheduleQuery,
   useGetWatchlistQuery,
   useLazyGetCandlesQuery,
   useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
   useRemoveWatchlistItemMutation,
+  type MarketExchange,
   type PumpEventDto,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
@@ -91,9 +93,16 @@ export function CoinDetailPage() {
     DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
   );
   const [showPumpMarkers, setShowPumpMarkers] = useState(true);
+  /** Guards against applying history pages after exchange/symbol/interval change. */
+  const historyRequestIdRef = useRef(0);
 
-  const skip = !symbol;
-  const intervalsQuery = useListIntervalsQuery({ exchange });
+  const skip = !symbol || !exchange;
+  // RTK args require a concrete exchange; skipped when path venue is invalid.
+  const exchangeArg = exchange ?? 'binance';
+  const intervalsQuery = useListIntervalsQuery(
+    { exchange: exchangeArg },
+    { skip: !exchange },
+  );
   const supportedIntervals = intervalsQuery.data?.intervals;
   // Only block series on the first intervals load. On error, fall through with
   // resolveInterval defaults so candles are not stuck on skeleton forever.
@@ -107,11 +116,19 @@ export function CoinDetailPage() {
 
   // New pair / interval → drop paged history and restart from the live window.
   useEffect(() => {
+    historyRequestIdRef.current += 1;
     setHistoryCandles([]);
     setHistoryPumpEvents([]);
     setHistoryExhausted(false);
     setHistoryLoading(false);
   }, [exchange, symbol, interval]);
+
+  // Threshold / marker toggle: drop history pumps (API minReturnPct or skip changed).
+  // Candles stay; live pumps refetch via RTK args; re-pan reloads history markers.
+  useEffect(() => {
+    historyRequestIdRef.current += 1;
+    setHistoryPumpEvents([]);
+  }, [pumpThresholdPct, showPumpMarkers]);
 
   useEffect(() => {
     if (!supportedIntervals?.length) return;
@@ -124,7 +141,18 @@ export function CoinDetailPage() {
   const supplyAsset = toSupplyAsset(symbol);
   const seriesKey = `${exchange}|${symbol}|${interval}`;
 
-  const watchlistQuery = useGetWatchlistQuery();
+  const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
+  const delistQuery = useListDelistScheduleQuery(
+    { exchange: (exchange ?? 'binance') as MarketExchange },
+    { skip: !exchange || exchange !== 'binance' },
+  );
+  const delistTime = useMemo(() => {
+    if (!symbol || !delistQuery.data?.items?.length) return null;
+    const hit = delistQuery.data.items.find(
+      (it) => (it.symbol ?? '').toUpperCase() === String(symbol).toUpperCase(),
+    );
+    return hit?.delistTime ?? null;
+  }, [delistQuery.data?.items, symbol]);
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
@@ -136,7 +164,7 @@ export function CoinDetailPage() {
   );
 
   const tickerQuery = useGetTicker24hQuery(
-    { exchange, symbol },
+    { exchange: exchangeArg, symbol },
     {
       skip,
       pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
@@ -155,7 +183,7 @@ export function CoinDetailPage() {
 
   // Live head only — polled. Deeper history is paged with endTime (see onNeedMoreHistory).
   const candlesQuery = useGetCandlesQuery(
-    { exchange, symbol, interval, limit: DEFAULT_DETAIL_CANDLE_LIMIT },
+    { exchange: exchangeArg, symbol, interval, limit: DEFAULT_DETAIL_CANDLE_LIMIT },
     {
       skip: skipSeries,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
@@ -182,7 +210,7 @@ export function CoinDetailPage() {
   // Live pump window matches the polled candle head (API max 1000).
   const pumpsQuery = useGetPumpEventsQuery(
     {
-      exchange,
+      exchange: exchangeArg,
       symbol,
       interval,
       limit: DEFAULT_DETAIL_CANDLE_LIMIT,
@@ -190,12 +218,16 @@ export function CoinDetailPage() {
       direction: 'both',
       maxEvents: 40,
     },
-    { skip: skipSeries || !showPumpMarkers },
+    {
+      skip: skipSeries || !showPumpMarkers,
+      pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
   );
 
   const indicatorsQuery = useGetIndicatorsQuery(
     {
-      exchange,
+      exchange: exchangeArg,
       symbol,
       interval,
       // Indicators stay on a fixed recent window (not full multi-page history).
@@ -219,7 +251,7 @@ export function CoinDetailPage() {
   const isLoadingMore = historyLoading;
 
   const onNeedMoreHistory = useCallback(() => {
-    if (historyLoading || historyExhausted || skipSeries || !symbol) return;
+    if (historyLoading || historyExhausted || skipSeries || !symbol || !exchange) return;
     if (allCandles.length >= DETAIL_CANDLE_MAX_LIMIT) {
       setHistoryExhausted(true);
       return;
@@ -228,6 +260,8 @@ export function CoinDetailPage() {
     if (oldestMs == null) return;
 
     const endTime = new Date(oldestMs - 1).toISOString();
+    const requestId = ++historyRequestIdRef.current;
+    const seriesKey = `${exchange}|${symbol}|${interval}`;
     setHistoryLoading(true);
 
     const candleReq = fetchOlderCandles({
@@ -257,6 +291,10 @@ export function CoinDetailPage() {
 
     void Promise.all([candleReq, pumpReq])
       .then(([candleRes, pumpRes]) => {
+        // Drop stale responses after pair/interval change mid-flight.
+        if (requestId !== historyRequestIdRef.current) return;
+        if (`${exchange}|${symbol}|${interval}` !== seriesKey) return;
+
         const batch = filterValidApiCandles(candleRes.candles);
         if (batch.length === 0) {
           setHistoryExhausted(true);
@@ -279,7 +317,9 @@ export function CoinDetailPage() {
         // Keep hasMore true so the user can retry by panning again.
       })
       .finally(() => {
-        setHistoryLoading(false);
+        if (requestId === historyRequestIdRef.current) {
+          setHistoryLoading(false);
+        }
       });
   }, [
     allCandles,
@@ -343,7 +383,18 @@ export function CoinDetailPage() {
     }
   };
 
-  const backTo = marketsBackPath(exchange);
+  if (!exchange) {
+    return (
+      <PageStack>
+        <Alert
+          type="error"
+          showIcon
+          message={t('detail:invalidExchangeTitle')}
+          description={t('detail:invalidExchangeBody')}
+        />
+      </PageStack>
+    );
+  }
 
   if (!symbol) {
     return (
@@ -357,6 +408,8 @@ export function CoinDetailPage() {
       </PageStack>
     );
   }
+
+  const backTo = marketsBackPath(exchange);
 
   const headerLoading = tickerQuery.isLoading && !tickerQuery.data;
   const statsLoading =
@@ -383,13 +436,19 @@ export function CoinDetailPage() {
         isLoading={headerLoading}
         watched={watched}
         watchLoading={addWatchState.isLoading || removeWatchState.isLoading}
+        alertTo={exchange && symbol ? `/alerts?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(symbol)}` : undefined}
+        compareTo={exchange && symbol ? `/compare?pairs=${encodeURIComponent(`${exchange}:${symbol}`)}` : undefined}
         onToggleWatch={() => {
-          if (watched) {
-            void removeWatch({ exchange, symbol });
-          } else {
-            void addWatch({ exchange, symbol });
-          }
+          const run = watched
+            ? removeWatch({ exchange, symbol }).unwrap()
+            : addWatch({ exchange, symbol }).unwrap();
+          void run.catch((err) => {
+            void message.error(
+              rtkErrorMessage(err, { resource: t('detail:watchFailed') }),
+            );
+          });
         }}
+      delistTime={delistTime}
       />
 
       <DetailStats

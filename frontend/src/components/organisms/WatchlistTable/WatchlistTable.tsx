@@ -109,6 +109,10 @@ export function WatchlistTable({
           },
           tabIndex: record.symbol ? 0 : undefined,
           role: record.symbol ? 'link' : undefined,
+          'aria-label':
+            record.symbol != null
+              ? t('watchlist:open', { symbol: record.symbol })
+              : undefined,
           style: { cursor: record.symbol ? 'pointer' : undefined },
         })}
         locale={{

@@ -77,6 +77,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/delist-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scheduled spot delistings
+         * @description Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
+         */
+        get: operations["listDelistSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/spot": {
         parameters: {
             query?: never;
@@ -168,7 +188,7 @@ export interface paths {
          * @description Fetches OHLCV candles from the selected exchange and computes:
          *     - RSI (Wilder's smoothing, default period 14)
          *     - EMA (default periods 12 and 26; seed = SMA of first period)
-         *     Informational only â€” not financial advice.
+         *     Informational only - not financial advice.
          */
         get: operations["getIndicators"];
         put?: never;
@@ -190,7 +210,7 @@ export interface paths {
          * Detect pump/dump events on one symbol
          * @description Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
          *     Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
-         *     Informational only â€” not financial advice.
+         *     Informational only - not financial advice.
          */
         get: operations["getPumpEvents"];
         put?: never;
@@ -214,7 +234,7 @@ export interface paths {
          *     Omitted optional parameters use documented defaults; the response metadata echoes the
          *     resolved values (not zeros/empty strings).
          *     maxTotalEvents caps the aggregate number of events across all hits (not the hit count).
-         *     Informational only — not financial advice.
+         *     Informational only - not financial advice.
          */
         get: operations["scanPumpEvents"];
         put?: never;
@@ -238,7 +258,7 @@ export interface paths {
          * Latest RSI/EMA for many symbols (one exchange)
          * @description Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
          *     Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
-         *     Upstream concurrency is bounded process-wide. Informational only â€” not financial advice.
+         *     Upstream concurrency is bounded process-wide. Informational only - not financial advice.
          */
         post: operations["postIndicatorsBatch"];
         delete?: never;
@@ -450,10 +470,39 @@ export interface paths {
         /**
          * Create a paper-trading portfolio
          * @description Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
-         *     Paper trading only — not real money. Not financial advice.
+         *     Paper trading only - not real money. Not financial advice.
          */
         post: operations["createPortfolio"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/risk-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paper risk limits and live status
+         * @description Optional user-set brakes. Limits never close existing positions.
+         *     Daily loss uses UTC start-of-day equity vs current equity (spot+margin MTM).
+         *     maxAssetWeightPct blocks new buys/opens that would push one coin over the cap.
+         *     Returns limits plus status (daily PnL, per-asset weights, blockReasons) for the settings screen.
+         */
+        get: operations["getPortfolioRiskLimits"];
+        /**
+         * Set or update paper risk limits
+         * @description Replace both rules. Omit a field or send null to disable that rule.
+         *     Does not close positions. New spot buys and new margin long/short are blocked when a rule is hit.
+         */
+        put: operations["putPortfolioRiskLimits"];
+        post?: never;
+        /** Clear all paper risk limits */
+        delete: operations["deletePortfolioRiskLimits"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1055,7 +1104,7 @@ export interface paths {
         /**
          * Create a technical scanner rule
          * @description Creates a rule evaluated against the client's watchlist symbols.
-         *     Types: rsi, ma_crossover, volume_increase. Informational only — not financial advice.
+         *     Types: rsi, ma_crossover, volume_increase. Informational only - not financial advice.
          */
         post: operations["createScannerRule"];
         delete?: never;
@@ -1426,7 +1475,7 @@ export interface paths {
          * @description Proxies to the Python multi-agent service (`AI_SERVICE_URL`).
          *     Market figures must come from tools on the assistant side.
          *     Returns 503 when AI is not configured; 502 on upstream failure.
-         *     Informational only — not financial advice.
+         *     Informational only - not financial advice.
          */
         post: operations["postAiChat"];
         delete?: never;
@@ -1540,7 +1589,7 @@ export interface components {
             targetPrice?: number;
             /** @enum {string} */
             mode?: "one_time" | "repeating";
-            /** @description Repeating only â€” ready to fire on next cross into the condition zone */
+            /** @description Repeating only - ready to fire on next cross into the condition zone */
             armed?: boolean;
             /** @enum {string} */
             status?: "active" | "triggered";
@@ -1793,6 +1842,38 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /** @description Settings screen DTO — current rules plus live daily PnL and per-asset weights */
+        RiskLimitsView: {
+            clientId?: string;
+            limits?: {
+                maxDailyLossPct?: number | null;
+                maxAssetWeightPct?: number | null;
+                /** Format: date-time */
+                updatedAt?: string;
+            };
+            status?: {
+                /** @description UTC calendar day YYYY-MM-DD */
+                dayKey?: string;
+                /** @example UTC */
+                timezone?: string;
+                startOfDayEquity?: number;
+                equity?: number;
+                dailyPnl?: number;
+                dailyPnlPct?: number;
+                dailyLossLimitHit?: boolean;
+                assets?: {
+                    asset?: string;
+                    value?: number;
+                    weightPct?: number;
+                    atOrOverLimit?: boolean;
+                }[];
+                /** @description False when daily-loss rule is currently hit (concentration is per-coin on each order) */
+                canOpenSpotBuy?: boolean;
+                canOpenMargin?: boolean;
+                blockReasons?: string[];
+            };
+            note?: string;
+        };
         PriceDiffWatch: {
             id?: string;
             clientId?: string;
@@ -1988,6 +2069,60 @@ export interface components {
             /** Format: date-time */
             finishedAt?: string;
         };
+        /** @description Single mechanical pump/dump window on a candle series */
+        PumpEvent: {
+            index?: number;
+            /** Format: date-time */
+            openTime?: string;
+            /** Format: date-time */
+            closeTime?: string;
+            startPrice?: number;
+            endPrice?: number;
+            returnPct?: number;
+            high?: number;
+            low?: number;
+            volume?: number;
+            volumeRatio?: number;
+            mode?: string;
+            windowBars?: number;
+        };
+        PumpEventsResponse: {
+            symbol?: string;
+            exchange?: string;
+            interval?: string;
+            lookbackHours?: number;
+            barsAnalyzed?: number;
+            minReturnPct?: number;
+            windowBars?: number;
+            mode?: string;
+            direction?: string;
+            eventCount?: number;
+            events?: components["schemas"]["PumpEvent"][];
+            note?: string;
+        };
+        PumpScanHit: {
+            symbol?: string;
+            exchange?: string;
+            interval?: string;
+            bestReturnPct?: number;
+            events?: components["schemas"]["PumpEvent"][];
+        };
+        PumpScanResponse: {
+            exchange?: string;
+            quote?: string;
+            interval?: string;
+            lookbackHours?: number;
+            minReturnPct?: number;
+            windowBars?: number;
+            mode?: string;
+            direction?: string;
+            symbolLimit?: number;
+            maxTotalEvents?: number;
+            hitCount?: number;
+            eventCount?: number;
+            hits?: components["schemas"]["PumpScanHit"][];
+            note?: string;
+        };
         SpotMarket: {
             symbol?: string;
             lastPrice?: string;
@@ -2016,6 +2151,22 @@ export interface components {
             marketCapTotal?: number | null;
             /** @description USD price times max supply, or infinity when max supply is undefined */
             marketCapMax?: (number | "∞") | null;
+            /**
+             * Format: date-time
+             * @description Scheduled spot delist time (UTC) when known
+             */
+            delistTime?: string | null;
+        };
+        DelistScheduleResponse: {
+            exchange?: string;
+            /** @description False when BINANCE_API_KEY is not configured */
+            enabled?: boolean;
+            items?: components["schemas"]["DelistScheduleItem"][];
+        };
+        DelistScheduleItem: {
+            symbol?: string;
+            /** Format: date-time */
+            delistTime?: string;
         };
     };
     responses: {
@@ -2163,6 +2314,29 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    listDelistSchedule: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "coinbase" | "bybit";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Delist schedule snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelistScheduleResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     listSpotMarkets: {
         parameters: {
             query?: {
@@ -2188,7 +2362,7 @@ export interface operations {
                 sort?: "quoteVolume" | "volume" | "priceChangePercent" | "lastPrice" | "tradeCount" | "symbol" | "baseAsset" | "marketCapCirculating" | "marketCapTotal" | "marketCapMax" | "tags";
                 /** @description Sort direction (default desc for metrics, asc for symbol/baseAsset) */
                 order?: "asc" | "desc";
-                /** @description Page size (1â€“500, default 50) */
+                /** @description Page size (1-500, default 50) */
                 limit?: number;
                 /** @description Rows to skip after filter+sort (default 0) */
                 offset?: number;
@@ -2220,12 +2394,12 @@ export interface operations {
                 /** @description Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD) */
                 symbol: string;
                 /**
-                 * @description Candle interval (default 1h). Supported values are exchange-specific â€”
-                 *     call GET /api/v1/market/intervals?exchange=â€¦ for the authoritative list.
+                 * @description Candle interval (default 1h). Supported values are exchange-specific -
+                 *     call GET /api/v1/market/intervals?exchange=... for the authoritative list.
                  *     Coinbase/Bybit reject many Binance-only intervals with 400.
                  */
                 interval?: string;
-                /** @description Number of candles (1â€“1000, default 100) */
+                /** @description Number of candles (1-1000, default 100) */
                 limit?: number;
                 /** @description RFC3339 or Unix milliseconds */
                 startTime?: string;
@@ -2393,14 +2567,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        symbol?: string;
-                        exchange?: string;
-                        interval?: string;
-                        eventCount?: number;
-                        events?: Record<string, never>[];
-                        note?: string;
-                    };
+                    "application/json": components["schemas"]["PumpEventsResponse"];
                 };
             };
             400: components["responses"]["Error"];
@@ -2435,23 +2602,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        exchange?: string;
-                        quote?: string;
-                        interval?: string;
-                        lookbackHours?: number;
-                        minReturnPct?: number;
-                        windowBars?: number;
-                        mode?: string;
-                        direction?: string;
-                        symbolLimit?: number;
-                        maxTotalEvents?: number;
-                        hitCount?: number;
-                        /** @description Total events across all hits (≤ maxTotalEvents) */
-                        eventCount?: number;
-                        hits?: Record<string, never>[];
-                        note?: string;
-                    };
+                    "application/json": components["schemas"]["PumpScanResponse"];
                 };
             };
             400: components["responses"]["Error"];
@@ -3178,6 +3329,95 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    getPortfolioRiskLimits: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Limits + live status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskLimitsView"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    putPortfolioRiskLimits: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * @description Block new risk when today's MTM loss reaches this % of UTC start-of-day equity
+                     * @example 5
+                     */
+                    maxDailyLossPct?: number | null;
+                    /**
+                     * @description Block new buys/opens that would make one coin more than this % of equity
+                     * @example 30
+                     */
+                    maxAssetWeightPct?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated limits + status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskLimitsView"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    deletePortfolioRiskLimits: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Limits removed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
     listPortfolioOrders: {
         parameters: {
             query?: {
@@ -3249,9 +3489,9 @@ export interface operations {
                     /** @description OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice) */
                     stopLossPrice?: number;
                     /**
-                     * @description gtc — rest until filled/canceled/expired;
-                     *     ioc — fill available on first try, cancel remainder;
-                     *     fok — fill fully on first try or cancel with no fill
+                     * @description gtc - rest until filled/canceled/expired;
+                     *     ioc - fill available on first try, cancel remainder;
+                     *     fok - fill fully on first try or cancel with no fill
                      * @default gtc
                      * @enum {string}
                      */

@@ -40,6 +40,24 @@ describe('rtkErrorMessage', () => {
     ).toBe('bad quote filter');
   });
 
+  it('reads nested unauthorized envelope (API auth middleware)', () => {
+    expect(
+      rtkErrorMessage({
+        status: 401,
+        data: { error: { code: 'unauthorized', message: 'valid API token required' } },
+      }),
+    ).toBe('valid API token required');
+  });
+
+  it('reads legacy flat error string with message', () => {
+    expect(
+      rtkErrorMessage({
+        status: 401,
+        data: { error: 'unauthorized', message: 'valid API token required' },
+      }),
+    ).toBe('valid API token required');
+  });
+
   it('uses top-level data.message and string data', () => {
     expect(rtkErrorMessage({ status: 400, data: { message: 'top level' } })).toBe('top level');
     expect(rtkErrorMessage({ status: 400, data: '  plain string  ' })).toBe('plain string');

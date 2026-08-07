@@ -1,5 +1,5 @@
-/** Default UI poll interval for spot list (ms). Backend spot TTL ~5s. */
-export const DEFAULT_SPOT_POLL_MS = 10_000;
+/** Default UI poll interval for spot list (ms). Matches backend SPOT_MARKET_CACHE_TTL default (5s). */
+export const DEFAULT_SPOT_POLL_MS = 5_000;
 
 /** Detail ticker / supply refresh while tab is visible (ms). Backend ticker TTL ~15s. */
 export const DEFAULT_DETAIL_TICKER_POLL_MS = 15_000;

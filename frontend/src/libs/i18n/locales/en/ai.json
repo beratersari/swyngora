@@ -1,0 +1,25 @@
+{
+  "title": "AI assistant",
+  "subtitle": "Ask about markets, indicators, and watchlists. Answers use live tools when available.",
+  "resource": "AI assistant",
+  "disclaimer": "Informational only — not financial advice. Figures should come from tools, not model memory.",
+  "placeholder": "Ask about BTC RSI, pumps, or a coin on Binance…",
+  "send": "Send",
+  "newChat": "New chat",
+  "you": "You",
+  "assistant": "Assistant",
+  "thinking": "Thinking… this can take up to a few minutes.",
+  "thinkingLabel": "Thinking",
+  "toolsLabel": "Tools",
+  "emptyHint": "Start a conversation, or try a suggestion:",
+  "sessionLabel": "Session",
+  "enterHint": "Enter to send · Shift+Enter for newline",
+  "errors": {
+    "unavailable": "AI service is unavailable. Start the Python AI service (port 8090) and ensure Ollama or Grok is configured."
+  },
+  "suggestions": {
+    "btcRsi": "What is BTC RSI on binance 1h?",
+    "ethPrice": "What is the ETH price on binance?",
+    "pumps": "Any recent pumps on binance USDT pairs?"
+  }
+}

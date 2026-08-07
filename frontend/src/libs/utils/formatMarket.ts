@@ -2,6 +2,32 @@ import { formatPrice } from './formatPrice';
 
 const DASH = '—';
 
+/**
+ * Compact UTC delist label for tags, e.g. "17 Aug 2026 03:00 UTC".
+ */
+export function formatDelistDate(
+  value: string | number | Date | null | undefined,
+  locale?: string,
+): string {
+  if (value === null || value === undefined || value === '') return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const loc = locale || undefined;
+  const datePart = d.toLocaleDateString(loc, {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const timePart = d.toLocaleTimeString(loc, {
+    timeZone: 'UTC',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${datePart} ${timePart} UTC`;
+}
+
 export function formatChangePercent(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return DASH;
   const n = typeof value === 'number' ? value : Number(value);
@@ -48,4 +74,21 @@ export function formatTradeCount(
 export function formatMarketCapMax(value: number | '∞' | null | undefined): string {
   if (value === '∞') return '∞';
   return formatCompactUsd(value);
+}
+
+
+export function formatDateTime(
+  value: string | number | Date | null | undefined,
+  locale?: string,
+): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(locale || undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

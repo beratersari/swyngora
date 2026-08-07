@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Empty, Select, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
@@ -6,12 +6,22 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import {
   rtkErrorMessage,
+  useListIntervalsQuery,
   useScanPumpEventsQuery,
   type MarketExchange,
 } from '@/libs/api';
 import { defaultQuoteForExchange, formatSymbolDisplay } from '@/libs/utils';
 import { pumpScanHitsToRows, type PumpScanRow } from './PumpsPage.helpers';
 import { Field, PageIntro, PageStack, Toolbar } from './PumpsPage.styles';
+
+/** Prefer 15m when supported; otherwise first venue interval. */
+function pickDefaultInterval(intervals: string[] | undefined, current: string): string {
+  if (!intervals?.length) return current;
+  if (intervals.includes(current)) return current;
+  if (intervals.includes('15m')) return '15m';
+  if (intervals.includes('1h')) return '1h';
+  return intervals[0]!;
+}
 
 export function PumpsPage() {
   const { t } = useTranslation(['pumps', 'common']);
@@ -21,6 +31,13 @@ export function PumpsPage() {
   const [interval, setInterval] = useState('15m');
   /** False until the user runs the first scan (skip query until then). */
   const [hasScanned, setHasScanned] = useState(false);
+
+  const intervalsQuery = useListIntervalsQuery({ exchange });
+  const intervalOptions = intervalsQuery.data?.intervals ?? [];
+
+  useEffect(() => {
+    setInterval((prev) => pickDefaultInterval(intervalOptions, prev));
+  }, [exchange, intervalOptions]);
 
   const scan = useScanPumpEventsQuery(
     {
@@ -103,10 +120,11 @@ export function PumpsPage() {
 
       <Toolbar>
         <Field>
-          <Text variant="caption" color="secondary">
+          <Text variant="caption" color="secondary" id="pumps-exchange-label">
             {t('pumps:exchange')}
           </Text>
           <Select
+            aria-labelledby="pumps-exchange-label"
             value={exchange}
             style={{ minWidth: 120 }}
             options={[
@@ -121,10 +139,11 @@ export function PumpsPage() {
           />
         </Field>
         <Field>
-          <Text variant="caption" color="secondary">
+          <Text variant="caption" color="secondary" id="pumps-quote-label">
             {t('pumps:quote')}
           </Text>
           <Select
+            aria-labelledby="pumps-quote-label"
             value={quote}
             style={{ minWidth: 100 }}
             options={['USDT', 'USD', 'USDC', 'EUR'].map((q) => ({ value: q, label: q }))}
@@ -132,13 +151,18 @@ export function PumpsPage() {
           />
         </Field>
         <Field>
-          <Text variant="caption" color="secondary">
+          <Text variant="caption" color="secondary" id="pumps-interval-label">
             {t('pumps:interval')}
           </Text>
           <Select
+            aria-labelledby="pumps-interval-label"
             value={interval}
             style={{ minWidth: 100 }}
-            options={['5m', '15m', '1h', '4h'].map((iv) => ({ value: iv, label: iv }))}
+            loading={intervalsQuery.isLoading}
+            options={(intervalOptions.length
+              ? intervalOptions
+              : ['5m', '15m', '1h']
+            ).map((iv) => ({ value: iv, label: iv }))}
             onChange={setInterval}
           />
         </Field>
@@ -179,14 +203,29 @@ export function PumpsPage() {
         dataSource={hasScanned ? rows : []}
         columns={columns}
         pagination={{ pageSize: 20 }}
-        onRow={(record) => ({
-          onClick: () => {
+        onRow={(record) => {
+          const open = () => {
             navigate(
               `/markets/${encodeURIComponent(record.exchange)}/${encodeURIComponent(record.symbol)}`,
             );
-          },
-          style: { cursor: 'pointer' },
-        })}
+          };
+          return {
+            onClick: open,
+            onKeyDown: (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                open();
+              }
+            },
+            tabIndex: 0,
+            role: 'link',
+            'aria-label': t('pumps:openDetail', {
+              defaultValue: 'Open {{symbol}}',
+              symbol: formatSymbolDisplay(record.symbol),
+            }),
+            style: { cursor: 'pointer' },
+          };
+        }}
         locale={{
           emptyText: (
             <Empty
