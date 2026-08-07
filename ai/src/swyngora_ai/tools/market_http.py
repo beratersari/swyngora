@@ -204,6 +204,11 @@ class PortfolioGetInput(BaseModel):
     client_id: str
 
 
+class PortfolioPerformanceInput(BaseModel):
+    client_id: str
+    period: str = Field(default="1w", description="Lookback window: 1d, 1w, 1m, or 3m")
+
+
 class RiskLimitsSetInput(BaseModel):
     client_id: str
     max_daily_loss_pct: float = Field(default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables")
@@ -696,6 +701,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
 
     def get_portfolio(client_id: str) -> str:
         return http.get("/api/v1/portfolio", {"clientId": client_id})
+
+    def get_portfolio_performance(client_id: str, period: str = "1w") -> str:
+        return http.get(
+            "/api/v1/portfolio/performance",
+            {"clientId": client_id, "period": period},
+        )
 
     def place_portfolio_order(
         client_id: str,
@@ -1309,6 +1320,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_portfolio",
             description="Get paper portfolio cash, positions, realized/unrealized P&L.",
             args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio_performance,
+            name="get_portfolio_performance",
+            description="Paper portfolio equity history for 1d/1w/1m/3m plus P&L amount and percent from the start of that window.",
+            args_schema=PortfolioPerformanceInput,
         ),
         StructuredTool.from_function(
             get_portfolio_risk_limits,

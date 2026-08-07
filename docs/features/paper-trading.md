@@ -10,6 +10,7 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 |--------|------|-------------|
 | `POST` | `/api/v1/portfolio` | Create portfolio (`startingBalance`, optional `currency`) |
 | `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
+| `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
@@ -43,6 +44,23 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
+
+### Performance history
+
+`GET /api/v1/portfolio/performance?period=1w` returns how total equity moved over the lookback, for a chart and for “since start of window” P&L.
+
+| Field | Meaning |
+|-------|---------|
+| `period` | `1d` (24h), `1w` (7d, default), `1m` (30d), `3m` (90d) |
+| `startEquity` / `endEquity` | Mark-to-market equity at window start (carry-forward last sample) and now |
+| `changeAmount` | `endEquity - startEquity` (portfolio currency) |
+| `changePct` | Percent vs `startEquity`; `null` if start is ~0 |
+| `partial` | Portfolio created after the requested window start |
+| `points[]` | `{ t, equity, cashBalance, positionsValue, marginEquity }` time series (includes live last point) |
+
+**How it is stored:** a background `SnapshotWorker` writes one SQLite row per client per 15-minute UTC bucket (`PORTFOLIO_SNAPSHOT_INTERVAL`, default `15m`). Creating a portfolio records the starting equity immediately. Samples older than `PORTFOLIO_SNAPSHOT_RETENTION` (default 100 days) are pruned. History only exists while the server is running — gaps stay as missing buckets; the API still carry-forwards the last known equity.
+
+MCP: `get_portfolio_performance`.
 
 ### Margin (isolated & cross)
 

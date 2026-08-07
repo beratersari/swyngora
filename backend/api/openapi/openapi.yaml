@@ -1321,6 +1321,42 @@ paths:
           $ref: '#/components/responses/Error'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/performance:
+    get:
+      summary: Get paper portfolio performance history
+      description: |
+        Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
+        that window as amount and percent. Background worker stores mark-to-market
+        buckets (default 15m). Live equity is always the last point.
+        Paper trading only — not real money.
+      operationId: getPortfolioPerformance
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: period
+          in: query
+          required: false
+          description: Lookback window. Default 1w.
+          schema:
+            type: string
+            enum: [1d, 1w, 1m, 3m]
+            default: 1w
+      responses:
+        '200':
+          description: Period P&L and equity series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPerformance'
+        '404':
+          $ref: '#/components/responses/Error'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/risk-limits:
     get:
       summary: Get paper risk limits and live status
@@ -3482,6 +3518,41 @@ components:
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    PortfolioPerformance:
+      type: object
+      description: Period P&L plus equity time series for a paper portfolio chart
+      properties:
+        clientId: { type: string }
+        currency: { type: string }
+        period: { type: string, enum: [1d, 1w, 1m, 3m] }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        startEquity: { type: number }
+        endEquity: { type: number }
+        changeAmount:
+          type: number
+          description: endEquity minus startEquity (portfolio currency)
+        changePct:
+          type: number
+          nullable: true
+          description: Percent change vs startEquity; null when startEquity is ~0
+        partial:
+          type: boolean
+          description: True when the portfolio is younger than the requested period
+        pointCount: { type: integer }
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioEquityPoint'
+        note: { type: string }
+    PortfolioEquityPoint:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        equity: { type: number }
+        cashBalance: { type: number }
+        positionsValue: { type: number }
+        marginEquity: { type: number }
     MarginPosition:
       type: object
       properties:

@@ -436,6 +436,16 @@ func (c *APIClient) CreatePortfolio(ctx context.Context, clientID string, starti
 	})
 }
 
+// GetPortfolioPerformance fetches equity history + period P&L.
+func (c *APIClient) GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if strings.TrimSpace(period) != "" {
+		q.Set("period", period)
+	}
+	return c.get(ctx, "/api/v1/portfolio/performance", q)
+}
+
 // GetPortfolio fetches paper portfolio view.
 func (c *APIClient) GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error) {
 	q := url.Values{}

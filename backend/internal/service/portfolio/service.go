@@ -73,7 +73,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 		return nil, err
 	}
 	now := time.Now().UTC()
-	return s.store.CreatePortfolio(ctx, domain.Portfolio{
+	p, err := s.store.CreatePortfolio(ctx, domain.Portfolio{
 		ClientID:         clientID,
 		Currency:         cur,
 		StartingBalance:  in.StartingBalance,
@@ -83,6 +83,11 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.recordCreateSnapshot(ctx, p)
+	return p, nil
 }
 
 // Get returns portfolio row or ErrNotFound.

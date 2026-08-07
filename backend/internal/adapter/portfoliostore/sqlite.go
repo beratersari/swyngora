@@ -283,6 +283,20 @@ CREATE TABLE IF NOT EXISTS risk_limits (
 	updated_at            TEXT NOT NULL,
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS portfolio_equity_snapshots (
+	client_id        TEXT NOT NULL,
+	bucket_at        TEXT NOT NULL,
+	taken_at         TEXT NOT NULL,
+	equity           REAL NOT NULL,
+	cash_balance     REAL NOT NULL,
+	positions_value  REAL NOT NULL,
+	margin_equity    REAL NOT NULL,
+	unrealized_pnl   REAL NOT NULL,
+	realized_pnl     REAL NOT NULL,
+	PRIMARY KEY (client_id, bucket_at),
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_pf_equity_snap_time ON portfolio_equity_snapshots(bucket_at);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err

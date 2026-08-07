@@ -108,6 +108,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		ph := handler.NewPortfolioHandler(opts.Portfolio)
 		mux.HandleFunc("POST /api/v1/portfolio", ph.Create)
 		mux.HandleFunc("GET /api/v1/portfolio", ph.Get)
+		mux.HandleFunc("GET /api/v1/portfolio/performance", ph.GetPerformance)
 		mux.HandleFunc("GET /api/v1/portfolio/risk-limits", ph.GetRiskLimits)
 		mux.HandleFunc("PUT /api/v1/portfolio/risk-limits", ph.PutRiskLimits)
 		mux.HandleFunc("DELETE /api/v1/portfolio/risk-limits", ph.DeleteRiskLimits)

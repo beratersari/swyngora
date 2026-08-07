@@ -37,6 +37,35 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetPortfolioPerformance(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/portfolio/performance" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("clientId") != "c1" || r.URL.Query().Get("period") != "1m" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"period": "1m", "startEquity": 10000, "endEquity": 11000, "changeAmount": 1000, "changePct": 10,
+			"points": []any{},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetPortfolioPerformance(context.Background(), "c1", "1m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["period"] != "1m" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_ErrorStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

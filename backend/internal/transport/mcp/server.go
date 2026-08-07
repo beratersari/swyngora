@@ -53,6 +53,7 @@ type DataPort interface {
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -712,6 +713,22 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPortfolio(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_portfolio_performance",
+		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window. Use for history/charts. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("period", mcp.Description("Lookback: 1d, 1w (default), 1m, or 3m")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPortfolioPerformance(ctx, clientID, req.GetString("period", "1w"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

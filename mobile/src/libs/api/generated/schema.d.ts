@@ -479,6 +479,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get paper portfolio performance history
+         * @description Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
+         *     that window as amount and percent. Background worker stores mark-to-market
+         *     buckets (default 15m). Live equity is always the last point.
+         *     Paper trading only — not real money.
+         */
+        get: operations["getPortfolioPerformance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/risk-limits": {
         parameters: {
             query?: never;
@@ -1643,6 +1666,36 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /** @description Period P&L plus equity time series for a paper portfolio chart */
+        PortfolioPerformance: {
+            clientId?: string;
+            currency?: string;
+            /** @enum {string} */
+            period?: "1d" | "1w" | "1m" | "3m";
+            /** Format: date-time */
+            startAt?: string;
+            /** Format: date-time */
+            endAt?: string;
+            startEquity?: number;
+            endEquity?: number;
+            /** @description endEquity minus startEquity (portfolio currency) */
+            changeAmount?: number;
+            /** @description Percent change vs startEquity; null when startEquity is ~0 */
+            changePct?: number | null;
+            /** @description True when the portfolio is younger than the requested period */
+            partial?: boolean;
+            pointCount?: number;
+            points?: components["schemas"]["PortfolioEquityPoint"][];
+            note?: string;
+        };
+        PortfolioEquityPoint: {
+            /** Format: date-time */
+            t?: string;
+            equity?: number;
+            cashBalance?: number;
+            positionsValue?: number;
+            marginEquity?: number;
         };
         MarginPosition: {
             id?: string;
@@ -3327,6 +3380,34 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    getPortfolioPerformance: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                /** @description Lookback window. Default 1w. */
+                period?: "1d" | "1w" | "1m" | "3m";
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Period P&L and equity series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioPerformance"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     getPortfolioRiskLimits: {

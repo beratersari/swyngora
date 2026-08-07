@@ -30,6 +30,52 @@ func newPortfolioHandler(t *testing.T) *PortfolioHandler {
 	return NewPortfolioHandler(portfolio.New(st, pfPx{}))
 }
 
+func TestPortfolioHTTP_Performance(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "http-perf", "startingBalance": 10000,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/performance?clientId=http-perf&period=1d", nil)
+	rr = httptest.NewRecorder()
+	h.GetPerformance(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("perf %d %s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	if got["period"] != "1d" {
+		t.Fatalf("%v", got)
+	}
+	if got["startEquity"].(float64) != 10000 {
+		t.Fatalf("start=%v", got["startEquity"])
+	}
+	if got["endEquity"].(float64) != 10000 {
+		t.Fatalf("end=%v", got["endEquity"])
+	}
+	if got["changeAmount"].(float64) != 0 {
+		t.Fatalf("chg=%v", got["changeAmount"])
+	}
+	pts, ok := got["points"].([]any)
+	if !ok || len(pts) < 1 {
+		t.Fatalf("points=%v", got["points"])
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/performance?clientId=http-perf&period=nope", nil)
+	rr = httptest.NewRecorder()
+	h.GetPerformance(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("bad period status=%d", rr.Code)
+	}
+}
+
 func TestPortfolioHTTP_CreateOrderTrades(t *testing.T) {
 	h := newPortfolioHandler(t)
 	body, _ := json.Marshal(map[string]any{

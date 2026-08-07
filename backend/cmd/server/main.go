@@ -276,6 +276,14 @@ func main() {
 	}
 	go recurringBuyWorker.Start(ctx)
 
+	snapshotWorker := &portfolio.SnapshotWorker{
+		Portfolio: portfolioSvc,
+		Interval:  cfg.PortfolioSnapshotInterval,
+		Retention: cfg.PortfolioSnapshotRetention,
+		Logger:    logger,
+	}
+	go snapshotWorker.Start(ctx)
+
 	marginInterestWorker := &portfolio.MarginInterestWorker{
 		Portfolio: portfolioSvc,
 		Interval:  cfg.MarginInterestInterval,

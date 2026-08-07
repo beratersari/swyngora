@@ -88,6 +88,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PortfolioOrderCheckInterval != 15*time.Second {
 		t.Fatalf("PortfolioOrderCheckInterval default=%v", cfg.PortfolioOrderCheckInterval)
 	}
+	if cfg.PortfolioSnapshotInterval != 15*time.Minute {
+		t.Fatalf("PortfolioSnapshotInterval default=%v", cfg.PortfolioSnapshotInterval)
+	}
+	if cfg.PortfolioSnapshotRetention != 100*24*time.Hour {
+		t.Fatalf("PortfolioSnapshotRetention default=%v", cfg.PortfolioSnapshotRetention)
+	}
 	if cfg.ScannerDBPath != "data/scanner.db" {
 		t.Fatalf("ScannerDBPath default=%q", cfg.ScannerDBPath)
 	}

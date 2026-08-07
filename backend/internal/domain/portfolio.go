@@ -344,6 +344,13 @@ type PortfolioPort interface {
 	UpsertRiskLimits(ctx context.Context, lim RiskLimits) (*RiskLimits, error)
 	DeleteRiskLimits(ctx context.Context, clientID string) error
 
+	// Equity history for performance charts (one row per client + time bucket).
+	UpsertEquitySnapshot(ctx context.Context, snap EquitySnapshot) error
+	ListEquitySnapshots(ctx context.Context, clientID string, from, to time.Time) ([]EquitySnapshot, error)
+	LatestEquitySnapshotBefore(ctx context.Context, clientID string, before time.Time) (*EquitySnapshot, error)
+	DeleteEquitySnapshotsBefore(ctx context.Context, before time.Time) (int64, error)
+	ListPortfolioClientIDs(ctx context.Context) ([]string, error)
+
 	// Margin (isolated leverage) — see MarginPort methods embedded below.
 	MarginPort
 }

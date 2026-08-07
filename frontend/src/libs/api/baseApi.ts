@@ -24,6 +24,7 @@ export const baseApi = createApi({
     'Interval',
     'Indicator',
     'Pump',
+    'Portfolio',
   ],
   endpoints: () => ({}),
 });

@@ -81,6 +81,10 @@ type Config struct {
 	PortfolioOrderCheckInterval time.Duration
 	// RecurringBuyInterval is how often due recurring buy plans are evaluated.
 	RecurringBuyInterval time.Duration
+	// PortfolioSnapshotInterval is how often equity is sampled for performance charts.
+	PortfolioSnapshotInterval time.Duration
+	// PortfolioSnapshotRetention is how long equity samples are kept (must cover 3m).
+	PortfolioSnapshotRetention time.Duration
 	// MarginInterestInterval is how often open margin debts are interest-accrued.
 	// Catch-up after downtime is O(1) per position (not hour-by-hour).
 	MarginInterestInterval time.Duration
@@ -191,9 +195,11 @@ func Load() Config {
 		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
 
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
-		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
-		RecurringBuyInterval:        positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
-		MarginInterestInterval:      positiveDurationEnv("MARGIN_INTEREST_INTERVAL", time.Minute),
+		PortfolioOrderCheckInterval:  positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
+		RecurringBuyInterval:         positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
+		PortfolioSnapshotInterval:    positiveDurationEnv("PORTFOLIO_SNAPSHOT_INTERVAL", 15*time.Minute),
+		PortfolioSnapshotRetention:   positiveDurationEnv("PORTFOLIO_SNAPSHOT_RETENTION", 100*24*time.Hour),
+		MarginInterestInterval:       positiveDurationEnv("MARGIN_INTEREST_INTERVAL", time.Minute),
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),

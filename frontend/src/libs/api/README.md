@@ -11,6 +11,7 @@ libs/api/
 │   ├── marketApi.ts     # RTK endpoints
 │   ├── marketApi.helpers.ts  # pure transforms + cache tag ids (unit-tested)
 │   ├── marketApi.types.ts
+│   ├── portfolioApi.ts  # paper portfolio + performance history
 │   └── healthApi.ts
 ├── generated/           # OpenAPI codegen output — DO NOT hand-edit
 └── index.ts             # public barrel
@@ -38,6 +39,7 @@ import {
   useGetWatchlistQuery,
   useAddWatchlistItemMutation,
   usePostAiChatMutation,
+  useGetPortfolioPerformanceQuery,
 } from '@/libs/api';
 ```
 

@@ -43,6 +43,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `POST` | `/api/v1/portfolio` | Create paper portfolio (starting balance) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, realized/unrealized P&L |
+| `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
@@ -205,6 +206,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PORTFOLIO_DB_PATH` | `data/portfolio.db` | SQLite file for paper-trading portfolios |
 | `PORTFOLIO_ORDER_CHECK_INTERVAL` | `15s` | How often open pending paper orders are evaluated |
 | `RECURRING_BUY_INTERVAL` | `30s` | How often due recurring buy plans are evaluated |
+| `PORTFOLIO_SNAPSHOT_INTERVAL` | `15m` | Equity sample cadence for performance charts |
+| `PORTFOLIO_SNAPSHOT_RETENTION` | `2400h` | How long equity samples are kept (~100 days) |
 | `MARGIN_INTEREST_INTERVAL` | `1m` | How often margin debt interest is catch-up accrued (O(1) per position) |
 | `PRICE_DIFF_DB_PATH` | `data/pricediff.db` | SQLite for cross-exchange price difference watches/opportunities |
 | `PRICE_DIFF_CHECK_INTERVAL` | `30s` | How often active price-diff watches are evaluated |

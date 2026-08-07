@@ -673,6 +673,33 @@ func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMe
 	return portfolioViewJSON(v)
 }
 
+func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	p, err := b.Portfolio.GetPerformance(ctx, clientID, period)
+	if err != nil {
+		return nil, err
+	}
+	pts := make([]map[string]any, 0, len(p.Points))
+	for _, pt := range p.Points {
+		pts = append(pts, map[string]any{
+			"t": pt.Time.UTC().Format(time.RFC3339Nano),
+			"equity": pt.Equity, "cashBalance": pt.CashBalance,
+			"positionsValue": pt.PositionsValue, "marginEquity": pt.MarginEquity,
+		})
+	}
+	m := map[string]any{
+		"clientId": p.ClientID, "currency": p.Currency, "period": string(p.Period),
+		"startAt": p.StartAt.UTC().Format(time.RFC3339Nano),
+		"endAt":   p.EndAt.UTC().Format(time.RFC3339Nano),
+		"startEquity": p.StartEquity, "endEquity": p.EndEquity,
+		"changeAmount": p.ChangeAmount, "changePct": p.ChangePct,
+		"partial": p.Partial, "pointCount": p.PointCount, "points": pts, "note": p.Note,
+	}
+	return mustJSON(m)
+}
+
 func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
