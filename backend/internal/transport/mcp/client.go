@@ -434,6 +434,37 @@ func (c *APIClient) GetPortfolio(ctx context.Context, clientID string) (json.Raw
 	return c.get(ctx, "/api/v1/portfolio", q)
 }
 
+func (c *APIClient) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/risk-limits", q)
+}
+
+func (c *APIClient) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/risk-limits"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{}
+	if maxDailyLossPct != nil {
+		body["maxDailyLossPct"] = *maxDailyLossPct
+	}
+	if maxAssetWeightPct != nil {
+		body["maxAssetWeightPct"] = *maxAssetWeightPct
+	}
+	return c.sendJSON(ctx, http.MethodPut, path, body)
+}
+
+func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolio/risk-limits?"+q.Encode(), nil)
+}
+
 // PlacePortfolioOrder places a paper market order.
 func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", map[string]any{

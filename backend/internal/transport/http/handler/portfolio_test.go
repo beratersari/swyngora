@@ -367,3 +367,42 @@ func TestPortfolioHTTP_AllocationBasketRebalance(t *testing.T) {
 		t.Fatalf("expected trades %v", out)
 	}
 }
+
+func TestPortfolioHTTP_RiskLimits(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-risk", "startingBalance": 10000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("pf %d", rr.Code)
+	}
+	w := 30.0
+	body, _ = json.Marshal(map[string]any{"maxAssetWeightPct": w})
+	req = httptest.NewRequest(http.MethodPut, "/api/v1/portfolio/risk-limits?clientId=http-risk", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.PutRiskLimits(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("put %d %s", rr.Code, rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/risk-limits?clientId=http-risk", nil)
+	rr = httptest.NewRecorder()
+	h.GetRiskLimits(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get %d %s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	lim := got["limits"].(map[string]any)
+	if lim["maxAssetWeightPct"].(float64) != 30 {
+		t.Fatalf("%v", lim)
+	}
+	req = httptest.NewRequest(http.MethodDelete, "/api/v1/portfolio/risk-limits?clientId=http-risk", nil)
+	rr = httptest.NewRecorder()
+	h.DeleteRiskLimits(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("del %d", rr.Code)
+	}
+}

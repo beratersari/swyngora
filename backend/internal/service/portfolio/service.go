@@ -219,6 +219,12 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
+	if side == domain.TradeSideBuy {
+		base, _ := domain.SplitBaseQuote(ex, sym)
+		if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*price); err != nil {
+			return nil, nil, err
+		}
+	}
 	availCash, err := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 	if err != nil {
 		return nil, nil, err
@@ -397,6 +403,10 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	}
 	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	base, _ := domain.SplitBaseQuote(ex, sym)
+	if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*in.EntryPrice); err != nil {
 		return nil, nil, nil, err
 	}
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
@@ -592,6 +602,12 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
+	}
+	if typ == domain.PendingLimitBuy {
+		base, _ := domain.SplitBaseQuote(ex, sym)
+		if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*trigger); err != nil {
+			return nil, err
+		}
 	}
 	if isTrail {
 		last, lerr := s.lastPrice(ctx, string(ex), sym)
@@ -813,6 +829,12 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 		need := domain.BuyReserveCash(newRemaining, newTrigger)
 		if cashFor+1e-9 < need {
 			return nil, nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, cashFor)
+		}
+		if need > o.ReservedCash+1e-9 {
+			base, _ := domain.SplitBaseQuote(o.Exchange, o.Symbol)
+			if err := s.guardNewRisk(ctx, clientID, base, need); err != nil {
+				return nil, nil, err
+			}
 		}
 		reservedCash = need
 	case domain.TradeSideSell:

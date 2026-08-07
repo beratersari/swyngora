@@ -581,6 +581,65 @@ func (b *Backend) CreatePortfolio(ctx context.Context, clientID string, starting
 	return b.GetPortfolio(ctx, clientID)
 }
 
+func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.GetRiskLimitsView(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(riskLimitsViewMap(v))
+}
+
+func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.SetRiskLimits(ctx, portfolio.RiskLimitsInput{
+		ClientID: clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(riskLimitsViewMap(v))
+}
+
+func (b *Backend) DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if err := b.Portfolio.ClearRiskLimits(ctx, clientID); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "clientId": clientID})
+}
+
+func riskLimitsViewMap(v *portfolio.RiskLimitsView) map[string]any {
+	lim := map[string]any{"maxDailyLossPct": v.Limits.MaxDailyLossPct, "maxAssetWeightPct": v.Limits.MaxAssetWeightPct}
+	if !v.Limits.UpdatedAt.IsZero() {
+		lim["updatedAt"] = v.Limits.UpdatedAt.UTC().Format(time.RFC3339Nano)
+	}
+	assets := make([]map[string]any, 0, len(v.Status.Assets))
+	for _, a := range v.Status.Assets {
+		assets = append(assets, map[string]any{
+			"asset": a.Asset, "value": a.Value, "weightPct": a.WeightPct, "atOrOverLimit": a.AtOrOverLimit,
+		})
+	}
+	return map[string]any{
+		"clientId": v.Limits.ClientID, "limits": lim,
+		"status": map[string]any{
+			"dayKey": v.Status.DayKey, "timezone": "UTC",
+			"startOfDayEquity": v.Status.StartOfDayEquity, "equity": v.Status.Equity,
+			"dailyPnl": v.Status.DailyPnL, "dailyPnlPct": v.Status.DailyPnLPct,
+			"dailyLossLimitHit": v.Status.DailyLossLimitHit, "assets": assets,
+			"canOpenSpotBuy": v.Status.CanOpenSpotBuy, "canOpenMargin": v.Status.CanOpenMargin,
+			"blockReasons": v.Status.BlockReasons,
+		},
+		"note": v.Note,
+	}
+}
+
 func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

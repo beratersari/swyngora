@@ -579,6 +579,10 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 			math.IsNaN(in.LimitPrice) || math.IsInf(in.LimitPrice, 0) {
 			return nil, nil, fmt.Errorf("%w: limitPrice out of range", domain.ErrInvalidArgument)
 		}
+		base, _ := domain.SplitBaseQuote(ex, sym)
+		if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*in.LimitPrice); err != nil {
+			return nil, nil, err
+		}
 		if err := domain.ValidateMarginBrackets(side, in.LimitPrice, in.StopLoss, in.TakeProfit); err != nil {
 			return nil, nil, err
 		}
@@ -614,6 +618,10 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	// Market open
 	price, err := s.lastPrice(ctx, string(ex), sym)
 	if err != nil {
+		return nil, nil, err
+	}
+	base, _ := domain.SplitBaseQuote(ex, sym)
+	if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*price); err != nil {
 		return nil, nil, err
 	}
 	if err := domain.ValidateMarginBrackets(side, price, in.StopLoss, in.TakeProfit); err != nil {

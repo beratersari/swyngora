@@ -52,6 +52,9 @@ type DataPort interface {
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
+	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
+	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error)
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
@@ -696,6 +699,60 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPortfolio(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_portfolio_risk_limits",
+		mcp.WithDescription("Get optional paper risk limits and live status (daily loss %, per-coin weights, whether new buys/margin opens are blocked). Limits never close positions."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPortfolioRiskLimits(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("set_portfolio_risk_limits",
+		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. Omit a value to disable that rule. Does not close positions."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("maxDailyLossPct", mcp.Description("0 or omit to disable; else 0.01-100")),
+		mcp.WithNumber("maxAssetWeightPct", mcp.Description("0 or omit to disable; else 0.01-100")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var daily, weight *float64
+		if v := req.GetFloat("maxDailyLossPct", 0); v > 0 {
+			daily = &v
+		}
+		if v := req.GetFloat("maxAssetWeightPct", 0); v > 0 {
+			weight = &v
+		}
+		raw, err := api.PutPortfolioRiskLimits(ctx, clientID, daily, weight)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("clear_portfolio_risk_limits",
+		mcp.WithDescription("Remove all paper risk limits for a client."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeletePortfolioRiskLimits(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

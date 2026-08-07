@@ -10,6 +10,7 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 |--------|------|-------------|
 | `POST` | `/api/v1/portfolio` | Create portfolio (`startingBalance`, optional `currency`) |
 | `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
+| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One order + last price + amend hints for the edit screen |
@@ -190,7 +191,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go`, `allocation.go` |
+| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go`, `allocation.go`, `risk.go` |
 | Store | `backend/internal/adapter/portfoliostore` |
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |

@@ -1319,6 +1319,94 @@ paths:
           $ref: '#/components/responses/Error'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/risk-limits:
+    get:
+      summary: Get paper risk limits and live status
+      description: |
+        Optional user-set brakes. Limits never close existing positions.
+        Daily loss uses UTC start-of-day equity vs current equity (spot+margin MTM).
+        maxAssetWeightPct blocks new buys/opens that would push one coin over the cap.
+        Returns limits plus status (daily PnL, per-asset weights, blockReasons) for the settings screen.
+      operationId: getPortfolioRiskLimits
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Limits + live status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskLimitsView'
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Set or update paper risk limits
+      description: |
+        Replace both rules. Omit a field or send null to disable that rule.
+        Does not close positions. New spot buys and new margin long/short are blocked when a rule is hit.
+      operationId: putPortfolioRiskLimits
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxDailyLossPct:
+                  type: number
+                  nullable: true
+                  exclusiveMinimum: 0
+                  maximum: 100
+                  description: Block new risk when today's MTM loss reaches this % of UTC start-of-day equity
+                  example: 5
+                maxAssetWeightPct:
+                  type: number
+                  nullable: true
+                  exclusiveMinimum: 0
+                  maximum: 100
+                  description: Block new buys/opens that would make one coin more than this % of equity
+                  example: 30
+      responses:
+        '200':
+          description: Updated limits + status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskLimitsView'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Clear all paper risk limits
+      operationId: deletePortfolioRiskLimits
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Limits removed
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/orders:
     post:
       summary: Place a paper order (market or pending)
@@ -3589,6 +3677,44 @@ components:
           items: { $ref: '#/components/schemas/AllocationTarget' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    RiskLimitsView:
+      type: object
+      description: Settings screen DTO — current rules plus live daily PnL and per-asset weights
+      properties:
+        clientId: { type: string }
+        limits:
+          type: object
+          properties:
+            maxDailyLossPct: { type: number, nullable: true }
+            maxAssetWeightPct: { type: number, nullable: true }
+            updatedAt: { type: string, format: date-time }
+        status:
+          type: object
+          properties:
+            dayKey: { type: string, description: UTC calendar day YYYY-MM-DD }
+            timezone: { type: string, example: UTC }
+            startOfDayEquity: { type: number }
+            equity: { type: number }
+            dailyPnl: { type: number }
+            dailyPnlPct: { type: number }
+            dailyLossLimitHit: { type: boolean }
+            assets:
+              type: array
+              items:
+                type: object
+                properties:
+                  asset: { type: string }
+                  value: { type: number }
+                  weightPct: { type: number }
+                  atOrOverLimit: { type: boolean }
+            canOpenSpotBuy:
+              type: boolean
+              description: False when daily-loss rule is currently hit (concentration is per-coin on each order)
+            canOpenMargin: { type: boolean }
+            blockReasons:
+              type: array
+              items: { type: string }
+        note: { type: string }
     PriceDiffWatch:
       type: object
       properties:

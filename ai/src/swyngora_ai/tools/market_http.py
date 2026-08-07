@@ -204,6 +204,12 @@ class PortfolioGetInput(BaseModel):
     client_id: str
 
 
+class RiskLimitsSetInput(BaseModel):
+    client_id: str
+    max_daily_loss_pct: float = Field(default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables")
+    max_asset_weight_pct: float = Field(default=0, description="e.g. 30 = max one coin % of equity; 0 disables")
+
+
 class PortfolioOrderInput(BaseModel):
     client_id: str
     symbol: str
@@ -666,6 +672,27 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "currency": currency,
             },
         )
+
+    def get_portfolio_risk_limits(client_id: str) -> str:
+        return http.get("/api/v1/portfolio/risk-limits", {"clientId": client_id})
+
+    def set_portfolio_risk_limits(
+        client_id: str,
+        max_daily_loss_pct: float = 0,
+        max_asset_weight_pct: float = 0,
+    ) -> str:
+        body: dict[str, Any] = {}
+        if max_daily_loss_pct:
+            body["maxDailyLossPct"] = max_daily_loss_pct
+        if max_asset_weight_pct:
+            body["maxAssetWeightPct"] = max_asset_weight_pct
+        return http.put(
+            f"/api/v1/portfolio/risk-limits?clientId={client_id}",
+            body,
+        )
+
+    def clear_portfolio_risk_limits(client_id: str) -> str:
+        return http.delete("/api/v1/portfolio/risk-limits", {"clientId": client_id})
 
     def get_portfolio(client_id: str) -> str:
         return http.get("/api/v1/portfolio", {"clientId": client_id})
@@ -1281,6 +1308,24 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             get_portfolio,
             name="get_portfolio",
             description="Get paper portfolio cash, positions, realized/unrealized P&L.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio_risk_limits,
+            name="get_portfolio_risk_limits",
+            description="Get optional paper risk limits and live daily-loss / concentration status.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            set_portfolio_risk_limits,
+            name="set_portfolio_risk_limits",
+            description="Set optional risk limits (daily loss % and/or max coin weight %). Does not close positions.",
+            args_schema=RiskLimitsSetInput,
+        ),
+        StructuredTool.from_function(
+            clear_portfolio_risk_limits,
+            name="clear_portfolio_risk_limits",
+            description="Remove all paper risk limits.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

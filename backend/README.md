@@ -40,6 +40,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `POST` | `/api/v1/portfolio` | Create paper portfolio (starting balance) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, realized/unrealized P&L |
+| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One pending order + last price + amend hints |

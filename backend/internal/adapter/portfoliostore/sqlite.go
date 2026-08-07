@@ -274,6 +274,15 @@ CREATE TABLE IF NOT EXISTS allocation_targets (
 	PRIMARY KEY (basket_id, asset),
 	FOREIGN KEY (basket_id) REFERENCES allocation_baskets(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS risk_limits (
+	client_id             TEXT PRIMARY KEY NOT NULL,
+	max_daily_loss_pct    REAL,
+	max_asset_weight_pct  REAL,
+	day_key               TEXT NOT NULL DEFAULT '',
+	day_start_equity      REAL NOT NULL DEFAULT 0,
+	updated_at            TEXT NOT NULL,
+	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
+);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -1922,4 +1931,75 @@ func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+func scanRiskLimits(row scannable) (*domain.RiskLimits, error) {
+	var lim domain.RiskLimits
+	var loss, weight sql.NullFloat64
+	var updated string
+	if err := row.Scan(&lim.ClientID, &loss, &weight, &lim.DayKey, &lim.DayStartEquity, &updated); err != nil {
+		return nil, err
+	}
+	if loss.Valid {
+		v := loss.Float64
+		lim.MaxDailyLossPct = &v
+	}
+	if weight.Valid {
+		v := weight.Float64
+		lim.MaxAssetWeightPct = &v
+	}
+	lim.UpdatedAt = parseTime(updated)
+	return &lim, nil
+}
+
+func nullFloatPtr(p *float64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// GetRiskLimits returns saved limits or ErrNotFound.
+func (s *SQLite) GetRiskLimits(ctx context.Context, clientID string) (*domain.RiskLimits, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at
+		FROM risk_limits WHERE client_id = ?
+	`, clientID)
+	lim, err := scanRiskLimits(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	return lim, err
+}
+
+// UpsertRiskLimits inserts or updates the single risk-limits row for a client.
+func (s *SQLite) UpsertRiskLimits(ctx context.Context, lim domain.RiskLimits) (*domain.RiskLimits, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if lim.UpdatedAt.IsZero() {
+		lim.UpdatedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(client_id) DO UPDATE SET
+			max_daily_loss_pct = excluded.max_daily_loss_pct,
+			max_asset_weight_pct = excluded.max_asset_weight_pct,
+			day_key = excluded.day_key,
+			day_start_equity = excluded.day_start_equity,
+			updated_at = excluded.updated_at
+	`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct),
+		lim.DayKey, lim.DayStartEquity, lim.UpdatedAt.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return nil, err
+	}
+	return s.GetRiskLimits(ctx, lim.ClientID)
+}
+
+// DeleteRiskLimits removes all risk rules for a client.
+func (s *SQLite) DeleteRiskLimits(ctx context.Context, clientID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `DELETE FROM risk_limits WHERE client_id = ?`, clientID)
+	return err
 }

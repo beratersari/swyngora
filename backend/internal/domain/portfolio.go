@@ -339,6 +339,11 @@ type PortfolioPort interface {
 	UpdateAllocationBasket(ctx context.Context, clientID, id string, b AllocationBasket) (*AllocationBasket, error)
 	DeleteAllocationBasket(ctx context.Context, clientID, id string) error
 
+	// Risk limits (optional user brakes; no auto-close).
+	GetRiskLimits(ctx context.Context, clientID string) (*RiskLimits, error)
+	UpsertRiskLimits(ctx context.Context, lim RiskLimits) (*RiskLimits, error)
+	DeleteRiskLimits(ctx context.Context, clientID string) error
+
 	// Margin (isolated leverage) — see MarginPort methods embedded below.
 	MarginPort
 }
