@@ -6,7 +6,17 @@ export const DEFAULT_LOCALE: AppLocale = 'en';
 export const FALLBACK_LOCALE: AppLocale = 'en';
 
 /** i18next namespaces (one JSON file per namespace per locale). */
-export const I18N_NAMESPACES = ['common', 'markets', 'detail', 'watchlist', 'pumps', 'ai', 'alerts', 'compare'] as const;
+export const I18N_NAMESPACES = [
+  'common',
+  'markets',
+  'detail',
+  'watchlist',
+  'pumps',
+  'ai',
+  'alerts',
+  'compare',
+  'signals',
+] as const;
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];
 
 export const DEFAULT_NAMESPACE: I18nNamespace = 'common';

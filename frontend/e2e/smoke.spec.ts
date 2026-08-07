@@ -13,9 +13,11 @@ test.describe('Swyngora web shell', () => {
 
     await expect(page.getByRole('link', { name: /markets|piyasalar/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /watchlist|izleme/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /signals|sinyaller/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /pumps|pump/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /alerts|uyarılar/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /compare|karşılaştır/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^ai$|yapay zeka/i }).first()).toBeVisible();
   });
 
   test('alerts route accepts exchange/symbol prefill query', async ({ page }) => {
@@ -27,10 +29,17 @@ test.describe('Swyngora web shell', () => {
     await expect(page.getByRole('button', { name: /create alert|uyarı oluştur/i })).toBeVisible();
   });
 
-  test('pumps page exposes min return control', async ({ page }) => {
+  test('signals page renders swing desk', async ({ page }) => {
+    await page.goto('/signals');
+    await expect(page.getByRole('heading', { name: /swing signals|salınım sinyalleri/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole('tab', { name: /setups|kurulumlar/i })).toBeVisible();
+  });
+
+  test('pumps page renders scan controls', async ({ page }) => {
     await page.goto('/pumps');
     await expect(page.getByText(/pump scanner|pump tarayıcı/i)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByLabel(/min return|min getiri/i).first()).toBeVisible();
     await expect(page.getByRole('button', { name: /scan|tara/i })).toBeVisible();
   });
 
@@ -40,11 +49,11 @@ test.describe('Swyngora web shell', () => {
     await expect(compare).toHaveAttribute('aria-current', 'page');
   });
 
-  test('shows API unreachable banner when backend is down', async ({ page }) => {
+  test('markets page shows an API error when backend is down', async ({ page }) => {
     await page.goto('/markets');
-    // Without backend, health fails → banner (or markets error). Prefer health title when present.
+    // No global health banner — markets RTK FETCH_ERROR copy.
     await expect(
-      page.getByText(/API unreachable|API erişilemiyor|Could not reach the API|API'ye ulaşılamıyor/i).first(),
+      page.getByText(/Could not reach the API|API'ye ulaşılamıyor|API unreachable|API erişilemiyor/i).first(),
     ).toBeVisible({ timeout: 20_000 });
   });
 });

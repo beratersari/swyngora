@@ -7,9 +7,21 @@
     "pumps": "Pumps",
     "ai": "AI",
     "alerts": "Alerts",
+    "signals": "Signals",
     "compare": "Compare"
   },
+  "brand": {
+    "tagline": "Market desk"
+  },
+  "search": {
+    "placeholder": "Jump to pair…",
+    "aria": "Jump to market"
+  },
+  "tape": {
+    "aria": "Top USDT pairs by volume"
+  },
   "footer": {
+    "venues": "Binance · Coinbase · Bybit · live spot books",
     "disclaimer": "{{appName}} · informational market data · not financial advice"
   },
   "language": {
@@ -26,7 +38,13 @@
   "status": {
     "updating": "updating…",
     "loading": "Loading…",
-    "pollingPaused": "polling paused"
+    "pollingPaused": "polling paused",
+    "connection": {
+      "live": "Live",
+      "offline": "API offline",
+      "paused": "Paused",
+      "loading": "Connecting"
+    }
   },
   "a11y": {
     "loadingChart": "Loading chart",

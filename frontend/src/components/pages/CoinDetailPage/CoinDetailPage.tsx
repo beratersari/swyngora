@@ -26,6 +26,7 @@ import {
   useLazyGetCandlesQuery,
   useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
+  useListScannerResultsQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
   type PumpEventDto,
@@ -62,7 +63,12 @@ import {
   DETAIL_INDICATOR_LIMIT,
 } from '@/config/constants';
 import { ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
-import { mergePumpEvents, pumpEventsToChartMarkers } from './CoinDetailPage.helpers';
+import {
+  mergeChartMarkers,
+  mergePumpEvents,
+  pumpEventsToChartMarkers,
+  scannerResultsToChartMarkers,
+} from './CoinDetailPage.helpers';
 
 /**
  * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis.
@@ -93,6 +99,7 @@ export function CoinDetailPage() {
     DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
   );
   const [showPumpMarkers, setShowPumpMarkers] = useState(true);
+  const [showSignalMarkers, setShowSignalMarkers] = useState(true);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -113,21 +120,27 @@ export function CoinDetailPage() {
     !intervalsQuery.isError;
 
   const interval = resolveInterval(urlState.interval, supportedIntervals);
+  const seriesKey = `${exchange}|${symbol}|${interval}`;
 
-  // New pair / interval → drop paged history and restart from the live window.
-  useEffect(() => {
+  // Reset paged history during render when the series identity changes so the
+  // first paint after navigation is not mixed old-history + new live candles.
+  const [historySeriesKey, setHistorySeriesKey] = useState(seriesKey);
+  if (historySeriesKey !== seriesKey) {
+    setHistorySeriesKey(seriesKey);
     historyRequestIdRef.current += 1;
     setHistoryCandles([]);
     setHistoryPumpEvents([]);
     setHistoryExhausted(false);
     setHistoryLoading(false);
-  }, [exchange, symbol, interval]);
+  }
 
   // Threshold / marker toggle: drop history pumps (API minReturnPct or skip changed).
   // Candles stay; live pumps refetch via RTK args; re-pan reloads history markers.
+  // Clear historyLoading so an in-flight page cannot leave the loader stuck.
   useEffect(() => {
     historyRequestIdRef.current += 1;
     setHistoryPumpEvents([]);
+    setHistoryLoading(false);
   }, [pumpThresholdPct, showPumpMarkers]);
 
   useEffect(() => {
@@ -139,7 +152,6 @@ export function CoinDetailPage() {
 
   const skipSeries = skip || waitingForIntervals;
   const supplyAsset = toSupplyAsset(symbol);
-  const seriesKey = `${exchange}|${symbol}|${interval}`;
 
   const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const delistQuery = useListDelistScheduleQuery(
@@ -157,6 +169,10 @@ export function CoinDetailPage() {
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
   const [fetchOlderPumps] = useLazyGetPumpEventsQuery();
+  const scannerResultsQuery = useListScannerResultsQuery(
+    { limit: 100, offset: 0 },
+    { skip, pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0, refetchOnFocus: true },
+  );
   const watched = Boolean(
     watchlistQuery.data?.items?.some(
       (it) => it.exchange === exchange && it.symbol === symbol,
@@ -349,21 +365,36 @@ export function CoinDetailPage() {
   }, [showEma, latestEma, indicatorPoints, t]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
-    if (!showPumpMarkers) return [];
-    // Live (right edge) + history-page pumps (older bars loaded while panning left).
-    const allEvents = mergePumpEvents(pumpsQuery.data?.events, historyPumpEvents);
-    const raw = pumpEventsToChartMarkers(allEvents, pumpThresholdPct);
     const barSec = intervalToSeconds(interval);
     const maxDist = barSec > 0 ? barSec * 1.5 : 3600;
-    return snapMarkersToCandleTimes(raw, chartData, { maxDistanceSec: maxDist });
+    const pumpRaw =
+      showPumpMarkers
+        ? pumpEventsToChartMarkers(
+            mergePumpEvents(pumpsQuery.data?.events, historyPumpEvents),
+            pumpThresholdPct,
+          )
+        : [];
+    const signalRaw =
+      showSignalMarkers && exchange && symbol
+        ? scannerResultsToChartMarkers(scannerResultsQuery.data?.results, exchange, symbol)
+        : [];
+    const pumpSnapped = snapMarkersToCandleTimes(pumpRaw, chartData, { maxDistanceSec: maxDist });
+    const signalSnapped = snapMarkersToCandleTimes(signalRaw, chartData, { maxDistanceSec: maxDist });
+    return mergeChartMarkers(pumpSnapped, signalSnapped);
   }, [
     showPumpMarkers,
+    showSignalMarkers,
     pumpsQuery.data?.events,
     historyPumpEvents,
     pumpThresholdPct,
+    scannerResultsQuery.data?.results,
+    exchange,
+    symbol,
     chartData,
     interval,
-  ]);  const patchUrl = (patch: Partial<{ interval: string }>) => {
+  ]);
+
+  const patchUrl = (patch: Partial<{ interval: string }>) => {
     setSearchParams(
       detailStateToSearchParams({
         interval: patch.interval ?? interval,
@@ -380,6 +411,9 @@ export function CoinDetailPage() {
     void indicatorsQuery.refetch();
     if (showPumpMarkers) {
       void pumpsQuery.refetch();
+    }
+    if (showSignalMarkers) {
+      void scannerResultsQuery.refetch();
     }
   };
 
@@ -426,6 +460,9 @@ export function CoinDetailPage() {
 
   return (
     <PageStack>
+      <Text variant="caption" color="secondary">
+        {t('detail:eyebrow')}
+      </Text>
       <DetailHeader
         symbol={symbol}
         exchange={exchange}
@@ -438,6 +475,7 @@ export function CoinDetailPage() {
         watchLoading={addWatchState.isLoading || removeWatchState.isLoading}
         alertTo={exchange && symbol ? `/alerts?exchange=${encodeURIComponent(exchange)}&symbol=${encodeURIComponent(symbol)}` : undefined}
         compareTo={exchange && symbol ? `/compare?pairs=${encodeURIComponent(`${exchange}:${symbol}`)}` : undefined}
+        signalsTo="/signals"
         onToggleWatch={() => {
           const run = watched
             ? removeWatch({ exchange, symbol }).unwrap()
@@ -497,11 +535,14 @@ export function CoinDetailPage() {
           onPumpThresholdChange={setPumpThresholdPct}
           showPumpMarkers={showPumpMarkers}
           onShowPumpMarkersChange={setShowPumpMarkers}
+          showSignalMarkers={showSignalMarkers}
+          onShowSignalMarkersChange={setShowSignalMarkers}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
             historyLoading ||
-            (showPumpMarkers && pumpsQuery.isFetching)
+            (showPumpMarkers && pumpsQuery.isFetching) ||
+            (showSignalMarkers && scannerResultsQuery.isFetching)
           }
         />
 

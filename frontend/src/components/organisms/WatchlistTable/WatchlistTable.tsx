@@ -4,6 +4,7 @@ import { Button, Empty } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import type { WatchlistItem } from '@/libs/api';
 import {
@@ -31,7 +32,7 @@ export function WatchlistTable({
     [metricsProp],
   );
 
-  const columns: ColumnsType<WatchlistItem> = [
+  const columns: ColumnsType<WatchlistItem> = useMemo(() => [
     {
       title: t('watchlist:symbol'),
       key: 'symbol',
@@ -48,7 +49,8 @@ export function WatchlistTable({
       title: t('watchlist:exchange'),
       dataIndex: 'exchange',
       key: 'exchange',
-      render: (ex: string | undefined) => <Text variant="label">{ex ?? '—'}</Text>,
+      render: (ex: string | undefined) =>
+        ex ? <BrandTag variant="exchange">{ex}</BrandTag> : <Text variant="caption">—</Text>,
     },
     ...metrics.map((def) => ({
       title: metricColumnTitle(t, def.labelKey),
@@ -84,7 +86,7 @@ export function WatchlistTable({
         />
       ),
     },
-  ];
+  ], [metrics, onOpen, onRemove, removeLoading, renderMetric, t]);
 
   return (
     <TableCard>

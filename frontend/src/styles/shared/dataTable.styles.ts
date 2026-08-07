@@ -29,6 +29,8 @@ export const DataTable = styled(Table)`
     border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
     color: ${({ theme }) => theme.semantic.text.primary};
     background: transparent !important;
+    transition: background-color ${({ theme }) => theme.motion.duration.fast}
+      ${({ theme }) => theme.motion.ease.standard};
   }
 
   .ant-table-tbody > tr:hover > td {

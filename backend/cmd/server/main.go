@@ -353,7 +353,7 @@ func main() {
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler
 	if cfg.MCPEnabled {
-		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc)
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, accountSvc)
 		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
 	}
 

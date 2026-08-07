@@ -1,7 +1,7 @@
-import { Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
+import { FlashValue } from '@/components/molecules/FlashValue';
 import {
   changeTone,
   formatChangePercent,
@@ -54,10 +54,12 @@ export function SpotMetricValue({
           </BrandTag>
         ) : null}
         {productTags.slice(0, delistLabel ? 3 : 4).map((tag) => (
-          <Tag key={tag}>{tag}</Tag>
+          <BrandTag key={tag} variant="status">
+            {tag}
+          </BrandTag>
         ))}
         {productTags.length > (delistLabel ? 3 : 4) ? (
-          <Tag>+{productTags.length - (delistLabel ? 3 : 4)}</Tag>
+          <BrandTag variant="paused">+{productTags.length - (delistLabel ? 3 : 4)}</BrandTag>
         ) : null}
       </TagsWrap>
     );
@@ -96,13 +98,15 @@ export function SpotMetricValue({
       : 'secondary';
 
   return (
-    <Text
-      variant="numeric"
-      color={color}
-      isLoading={isLoading}
-      skeletonWidth={metric.format === 'changePercent' ? 56 : 72}
-    >
-      {display}
-    </Text>
+    <FlashValue value={raw}>
+      <Text
+        variant="numeric"
+        color={color}
+        isLoading={isLoading}
+        skeletonWidth={metric.format === 'changePercent' ? 56 : 72}
+      >
+        {display}
+      </Text>
+    </FlashValue>
   );
 }

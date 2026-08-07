@@ -6,6 +6,21 @@ Users define **RSI**, **EMA crossover**, and **volume increase** rules. The back
 
 Informational only — not financial advice.
 
+## Product web UI
+
+Route **`/signals`** (nav: Signals) is the swing-signal desk:
+
+| Tab | Behavior |
+|-----|----------|
+| Setups | Client-side confluence: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
+| Hits | Raw scanner match history (jump to coin chart). |
+| Rules | Create/delete RSI, EMA crossover, volume rules. One-click **4h swing stack** adds the three expert long-side filters. |
+| Lab | Historical backtest on one symbol with 1/5/20d forward returns. |
+
+Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
+
+**Not financial advice.** Live checker may match a forming bar; treat hits as informational until you confirm on a closed candle.
+
 ## API
 
 | Method | Path | Description |

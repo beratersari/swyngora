@@ -1,5 +1,6 @@
-import { Button, Select, Switch, Tag } from 'antd';
+import { Button, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DETAIL_PUMP_THRESHOLD_OPTIONS } from '@/config/constants';
 import { Field, InlineField, ToolbarRow } from './DetailChartToolbar.styles';
@@ -16,6 +17,8 @@ export function DetailChartToolbar({
   onPumpThresholdChange,
   showPumpMarkers = true,
   onShowPumpMarkersChange,
+  showSignalMarkers = true,
+  onShowSignalMarkersChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -79,12 +82,26 @@ export function DetailChartToolbar({
         </InlineField>
       ) : null}
 
+      {onShowSignalMarkersChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.signalMarkers')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showSignalMarkers}
+            onChange={onShowSignalMarkersChange}
+            aria-label={t('detail:chart.signalMarkers')}
+          />
+        </InlineField>
+      ) : null}
+
       {onRefresh ? (
         <Button size="small" onClick={onRefresh} loading={isFetching}>
           {t('common:actions.refresh')}
         </Button>
       ) : null}
-      {isFetching ? <Tag color="processing">{t('common:status.updating')}</Tag> : null}
+      {isFetching ? <BrandTag variant="live">{t('common:status.updating')}</BrandTag> : null}
     </ToolbarRow>
   );
 }

@@ -4,6 +4,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import {
   rtkErrorMessage,
   useListIntervalsQuery,
@@ -12,7 +13,7 @@ import {
 } from '@/libs/api';
 import { defaultQuoteForExchange, formatSymbolDisplay } from '@/libs/utils';
 import { pumpScanHitsToRows, type PumpScanRow } from './PumpsPage.helpers';
-import { Field, PageIntro, PageStack, Toolbar } from './PumpsPage.styles';
+import { Field, PageStack, Toolbar } from './PumpsPage.styles';
 
 /** Prefer 15m when supported; otherwise first venue interval. */
 function pickDefaultInterval(intervals: string[] | undefined, current: string): string {
@@ -109,14 +110,11 @@ export function PumpsPage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary">
-          {t('pumps:title')}
-        </Text>
-        <Text variant="body" color="secondary">
-          {t('pumps:subtitle')}
-        </Text>
-      </PageIntro>
+      <PageHeader
+        eyebrow={t('pumps:eyebrow')}
+        title={t('pumps:title')}
+        subtitle={t('pumps:subtitle')}
+      />
 
       <Toolbar>
         <Field>

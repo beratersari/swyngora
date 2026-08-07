@@ -1,5 +1,6 @@
 {
   "title": "Watchlist",
+  "eyebrow": "Portfolio radar",
   "subtitle": "Live price, 24h change, volume, and mcap for pairs you track. Stored for this browser client.",
   "emptyTitle": "No pairs yet",
   "emptyHint": "Star a row on Markets or open a coin detail and add it.",

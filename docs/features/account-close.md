@@ -20,7 +20,7 @@ Users need to close their account (opaque `clientId` tenancy). While closed they
 | `POST` | `/api/v1/account/close` | Close account; sets `purgeAt = now + 7d` |
 | `POST` | `/api/v1/account/reopen` | Restore access if still before `purgeAt` |
 
-Middleware blocks closed `X-Client-Id` / `clientId` on other user-scoped routes. Public market routes are unaffected.
+Middleware blocks closed `X-Client-Id` / query `clientId` on other user-scoped REST routes. Public market routes are unaffected. **`/mcp` is not header-gated** (tools pass `clientId` in the JSON body); in-process MCP tools call `RequireActive` when `clientId` is present so closed accounts cannot mutate via agents.
 
 ### Purge contents (after grace)
 
@@ -60,5 +60,6 @@ go test ./internal/service/account/... -count=1
 ## Known limitations
 
 - “Login” is the clientId model; there is no separate auth provider yet.  
-- Body-only `clientId` (no header/query) is not gated by middleware (handlers still validate). Prefer `X-Client-Id`.  
+- Body-only `clientId` (no header/query) is not gated by REST middleware. Prefer `X-Client-Id`.  
+- MCP tools with `clientId` are blocked while closed (same `RequireActive` error as REST).  
 - Paper portfolio purge is not included in this change.

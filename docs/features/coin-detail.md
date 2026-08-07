@@ -74,6 +74,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 
 - Indicators = RSI + EMA only  
 - Supply = Binance marketing-list coverage  
-- No watchlist / alerts / paper trading on this page  
+- Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules)  
+- Header links to alerts, compare, and the Signals desk; watchlist star on the pair
 
 DET-1…4 accepted and applied on the product frontend branch.

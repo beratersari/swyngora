@@ -1,6 +1,7 @@
 import { Button, Empty, Popconfirm, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import type { PriceAlert } from '@/libs/api/endpoints/alertsApi';
 import { formatSymbolDisplay } from '@/libs/utils';
@@ -30,6 +31,8 @@ export function AlertsTable({
       title: t('alerts:exchange'),
       dataIndex: 'exchange',
       key: 'exchange',
+      render: (ex: string | undefined) =>
+        ex ? <BrandTag variant="exchange">{ex}</BrandTag> : <Text variant="caption">—</Text>,
     },
     {
       title: t('alerts:condition'),
@@ -45,6 +48,12 @@ export function AlertsTable({
       title: t('alerts:status', { defaultValue: 'Status' }),
       dataIndex: 'status',
       key: 'status',
+      render: (status: string | undefined) =>
+        status ? (
+          <BrandTag variant={status === 'triggered' ? 'live' : 'status'}>{status}</BrandTag>
+        ) : (
+          <Text variant="caption">—</Text>
+        ),
     },
     {
       title: t('alerts:actions'),

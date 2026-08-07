@@ -24,6 +24,8 @@ export const StyledTable = styled(Table)`
   .ant-table-tbody > tr > td {
     border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
     color: ${({ theme }) => theme.semantic.text.primary};
+    transition: background-color ${({ theme }) => theme.motion.duration.fast}
+      ${({ theme }) => theme.motion.ease.standard};
   }
 
   .ant-table-tbody > tr:hover > td {

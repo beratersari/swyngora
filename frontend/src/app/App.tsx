@@ -1,82 +1,126 @@
+import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Providers } from './providers';
 import { AppRoutes } from './routes';
+import { AppJumpSearch } from './AppJumpSearch';
+import { BrandMark } from '@/components/atoms/BrandMark';
 import { Text } from '@/components/atoms/Text';
+import { ConnectionStatus, type ConnectionStatusKind } from '@/components/molecules/ConnectionStatus';
 import { LanguageSwitcher } from '@/components/molecules/LanguageSwitcher';
-import { APP_NAME } from '@/config/constants';
+import { PageEnter } from '@/components/molecules/PageEnter';
+import { TickerTape, toTickerTapeItem } from '@/components/molecules/TickerTape';
 import {
-  AppContent,
-  AppFooter,
-  AppHeader,
-  AppLayout,
+  AppShell,
+  BrandCopy,
   BrandLink,
-  HeaderNav,
-  HeaderSpacer,
+  BrandName,
+  BrandTagline,
   NavLink,
-} from './App.styles';
+} from '@/components/templates/AppShell';
+import { APP_NAME, DEFAULT_SPOT_POLL_MS } from '@/config/constants';
+import { useGetHealthQuery, useListSpotMarketsQuery } from '@/libs/api';
+import { useDocumentVisible } from '@/libs/hooks';
 
-function AppShell() {
+const NAV_ITEMS = [
+  { to: '/markets', key: 'nav.markets' as const },
+  { to: '/watchlist', key: 'nav.watchlist' as const },
+  { to: '/signals', key: 'nav.signals' as const },
+  { to: '/pumps', key: 'nav.pumps' as const },
+  { to: '/alerts', key: 'nav.alerts' as const },
+  { to: '/compare', key: 'nav.compare' as const },
+  { to: '/ai', key: 'nav.ai' as const },
+];
+
+function DeskShell() {
   const { t } = useTranslation('common');
+  const location = useLocation();
+  const visible = useDocumentVisible();
+  const health = useGetHealthQuery(undefined, {
+    pollingInterval: visible ? 15_000 : 0,
+    refetchOnFocus: true,
+  });
+  const tapeQuery = useListSpotMarketsQuery(
+    {
+      exchange: 'binance',
+      quote: 'USDT',
+      sort: 'quoteVolume',
+      order: 'desc',
+      limit: 12,
+      offset: 0,
+      status: 'TRADING',
+    },
+    { pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0, refetchOnFocus: true },
+  );
+
+  const tapeItems = useMemo(() => {
+    const rows = tapeQuery.data?.items ?? [];
+    return rows
+      .map((row) => toTickerTapeItem({ ...row, exchange: 'binance' }))
+      .filter((item): item is NonNullable<typeof item> => item != null);
+  }, [tapeQuery.data?.items]);
+
+  let connection: ConnectionStatusKind = 'loading';
+  if (!visible) connection = 'paused';
+  else if (health.isError) connection = 'offline';
+  else if (health.isSuccess || health.data) connection = 'live';
 
   return (
-    <AppLayout>
-      <AppHeader>
-        <HeaderNav aria-label={t('nav.main')}>
-          <BrandLink to="/markets">
-            <Text variant="h4" color="primary" as="span">
-              {t('appName', { defaultValue: APP_NAME })}
-            </Text>
-          </BrandLink>
-          <NavLink to="/markets">
-            <Text variant="label" as="span">
-              {t('nav.markets')}
-            </Text>
-          </NavLink>
-          <NavLink to="/watchlist">
-            <Text variant="label" as="span">
-              {t('nav.watchlist')}
-            </Text>
-          </NavLink>
-          <NavLink to="/pumps">
-            <Text variant="label" as="span">
-              {t('nav.pumps')}
-            </Text>
-          </NavLink>
-          <NavLink to="/alerts">
-            <Text variant="label" as="span">
-              {t('nav.alerts')}
-            </Text>
-          </NavLink>
-          <NavLink to="/compare">
-            <Text variant="label" as="span">
-              {t('nav.compare')}
-            </Text>
-          </NavLink>
-          <NavLink to="/ai">
-            <Text variant="label" as="span">
-              {t('nav.ai')}
-            </Text>
-          </NavLink>
-        </HeaderNav>
-        <HeaderSpacer />
-        <LanguageSwitcher />
-      </AppHeader>
-      <AppContent>
+    <AppShell
+      wide
+      navAriaLabel={t('nav.main')}
+      brand={
+        <BrandLink to="/markets">
+          <BrandMark size={28} />
+          <BrandCopy>
+            <BrandName>{t('appName', { defaultValue: APP_NAME })}</BrandName>
+            <BrandTagline>{t('brand.tagline')}</BrandTagline>
+          </BrandCopy>
+        </BrandLink>
+      }
+      nav={
+        <>
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to}>
+              {t(item.key)}
+            </NavLink>
+          ))}
+        </>
+      }
+      tools={
+        <>
+          <AppJumpSearch />
+          <ConnectionStatus status={connection} label={t(`status.connection.${connection}`)} />
+          <LanguageSwitcher />
+        </>
+      }
+      banner={
+        tapeItems.length > 0 ? (
+          <TickerTape items={tapeItems} ariaLabel={t('tape.aria')} paused={!visible} />
+        ) : null
+      }
+      footer={
+        <>
+          <Text variant="caption" color="secondary">
+            {t('footer.venues')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {t('footer.disclaimer', { appName: t('appName', { defaultValue: APP_NAME }) })}
+          </Text>
+        </>
+      }
+    >
+      <PageEnter motionKey={location.pathname}>
         <AppRoutes />
-      </AppContent>
-      <AppFooter>
-        <Text variant="caption" color="secondary">
-          {t('footer.disclaimer', { appName: t('appName', { defaultValue: APP_NAME }) })}
-        </Text>
-      </AppFooter>
-    </AppLayout>
+      </PageEnter>
+    </AppShell>
   );
 }
 
 export function App() {
   return (
     <Providers>
-      <AppShell />
+      <DeskShell />
     </Providers>
   );
 }

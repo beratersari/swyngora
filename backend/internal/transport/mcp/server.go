@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -119,6 +120,7 @@ type DataPort interface {
 type ServerOptions struct {
 	// Data is preferred (in-process). If nil, APIBaseURL is used via HTTP client.
 	Data       DataPort
+	Accounts   *account.Service // when set, tools with clientId require an active account
 	APIBaseURL string
 	Name       string
 	Version    string
@@ -142,15 +144,16 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 		opts.Version,
 		server.WithToolCapabilities(true),
 	)
-	registerTools(s, data)
+	registerTools(s, data, opts.Accounts)
 	return s
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, accountSvc *account.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc},
-		Name: "swyngora-mcp",
+		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc},
+		Accounts: accountSvc,
+		Name:     "swyngora-mcp",
 	})
 }
 
@@ -162,8 +165,32 @@ func NewHTTPHandler(mcpServer *server.MCPServer) http.Handler {
 	)
 }
 
-func registerTools(s *server.MCPServer, api DataPort) {
-	s.AddTool(mcp.NewTool("get_ticker",
+// toolClientActiveError rejects tenant MCP calls when the clientId account is closed.
+// Tools without clientId (market data, health) are unchanged.
+func toolClientActiveError(ctx context.Context, accounts *account.Service, req mcp.CallToolRequest) error {
+	if accounts == nil {
+		return nil
+	}
+	id := strings.TrimSpace(req.GetString("clientId", ""))
+	if id == "" {
+		return nil
+	}
+	return accounts.RequireActive(ctx, id)
+}
+
+func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service) {
+	// HTTP AccountGate skips /mcp (tools pass clientId in JSON, not headers).
+	// Enforce the same active-account rule here when clientId is present.
+	addTool := func(tool mcp.Tool, h func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+		s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if err := toolClientActiveError(ctx, accounts, req); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+			return h(ctx, req)
+		})
+	}
+
+	addTool(mcp.NewTool("get_ticker",
 		mcp.WithDescription("Get 24h price, volume, and change for a trading pair on an exchange (binance|coinbase|bybit). Use for live quotes."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("Venue id: binance (default), coinbase, bybit")),
@@ -179,7 +206,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_candles",
+	addTool(mcp.NewTool("get_candles",
 		mcp.WithDescription("Fetch OHLCV candlesticks for a symbol. Chronological oldest-first."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
@@ -197,7 +224,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_supply",
+	addTool(mcp.NewTool("get_supply",
 		mcp.WithDescription("Get circulating/total/max supply and snapshot USD price for a base asset (e.g. BTC, ETH). Cache-only daily Binance snapshot."),
 		mcp.WithString("asset", mcp.Required(), mcp.Description("Base asset ticker e.g. BTC")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -212,7 +239,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_spot_markets",
+	addTool(mcp.NewTool("list_spot_markets",
 		mcp.WithDescription("List/search/sort spot markets on an exchange. Supports quote filter, product tags, mcap sorts, pagination."),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("q", mcp.Description("Search substring on symbol/base/quote")),
@@ -239,7 +266,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_indicators",
+	addTool(mcp.NewTool("get_indicators",
 		mcp.WithDescription("Compute RSI (Wilder) and EMA series for a symbol. Informational only — not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
@@ -266,7 +293,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("detect_pump_events",
+	addTool(mcp.NewTool("detect_pump_events",
 		mcp.WithDescription(
 			"Detect pump/dump events on one symbol from OHLCV candles. "+
 				"Configurable minReturnPct, windowBars, candle interval, lookbackHours or start/end time, "+
@@ -313,7 +340,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("scan_pump_events",
+	addTool(mcp.NewTool("scan_pump_events",
 		mcp.WithDescription(
 			"Scan top quote-volume symbols on an exchange for recent pump/dump events. "+
 				"Same thresholds as detect_pump_events (minReturnPct, interval, lookbackHours, mode, direction, minVolumeRatio). "+
@@ -351,7 +378,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_exchanges",
+	addTool(mcp.NewTool("list_exchanges",
 		mcp.WithDescription("List configured market venues and the default exchange."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ListExchanges(ctx)
@@ -362,7 +389,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 
-	s.AddTool(mcp.NewTool("list_delist_schedule",
+	addTool(mcp.NewTool("list_delist_schedule",
 		mcp.WithDescription("List scheduled Binance spot delistings (symbol + UTC delist time). Empty if schedule not configured."),
 		mcp.WithString("exchange", mcp.Description("Venue id; default binance")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -373,7 +400,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_watchlist",
+	addTool(mcp.NewTool("get_watchlist",
 		mcp.WithDescription("Get a watchlist by clientId. Optional ownerClientId reads a list shared with the actor (viewer/editor/owner)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id (not 'default')")),
 		mcp.WithString("ownerClientId", mcp.Description("List owner when viewing a shared list; omit for own list")),
@@ -389,7 +416,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("add_watchlist_item",
+	addTool(mcp.NewTool("add_watchlist_item",
 		mcp.WithDescription("Add or update a symbol on a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
@@ -413,7 +440,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("remove_watchlist_item",
+	addTool(mcp.NewTool("remove_watchlist_item",
 		mcp.WithDescription("Remove a symbol from a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
@@ -436,7 +463,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("share_watchlist",
+	addTool(mcp.NewTool("share_watchlist",
 		mcp.WithDescription("Share your watchlist with another clientId as viewer (read-only) or editor (add/remove symbols). Owner only; cannot share twice with same user."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to share with")),
@@ -461,7 +488,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("update_watchlist_share",
+	addTool(mcp.NewTool("update_watchlist_share",
 		mcp.WithDescription("Change role (viewer|editor) for an existing watchlist share. Owner only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Shared-with client id")),
@@ -486,7 +513,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("revoke_watchlist_share",
+	addTool(mcp.NewTool("revoke_watchlist_share",
 		mcp.WithDescription("Remove a user's access to your watchlist. Owner only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to revoke")),
@@ -506,7 +533,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_watchlist_shares",
+	addTool(mcp.NewTool("list_watchlist_shares",
 		mcp.WithDescription("List who has access to your watchlist and their roles. Owner only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -521,7 +548,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_shared_watchlists",
+	addTool(mcp.NewTool("list_shared_watchlists",
 		mcp.WithDescription("List watchlists shared with this clientId (incoming shares)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Grantee client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -536,7 +563,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_watchlist_audit",
+	addTool(mcp.NewTool("list_watchlist_audit",
 		mcp.WithDescription("List who changed a watchlist and when (share grants, item add/remove, replace). Owner only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithNumber("limit", mcp.Description("Max events (default 50, max 200)")),
@@ -555,7 +582,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_price_alerts",
+	addTool(mcp.NewTool("list_price_alerts",
 		mcp.WithDescription("List price alerts for a clientId (active and triggered)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -570,7 +597,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_price_alert",
+	addTool(mcp.NewTool("create_price_alert",
 		mcp.WithDescription("Create a price alert (above/below). mode=one_time (default) fires once; mode=repeating re-fires on each re-cross after returning to the safe side."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT")),
@@ -602,7 +629,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_price_alert",
+	addTool(mcp.NewTool("delete_price_alert",
 		mcp.WithDescription("Delete a price alert by id for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Alert id")),
@@ -622,7 +649,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_alert_webhook",
+	addTool(mcp.NewTool("get_alert_webhook",
 		mcp.WithDescription("Get the client's price-alert webhook URL (empty if not set)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -637,7 +664,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("set_alert_webhook",
+	addTool(mcp.NewTool("set_alert_webhook",
 		mcp.WithDescription("Set webhook URL, deliveryMode (immediate|hourly_digest), timeZone, and optional quietHours (start/end HH:MM, may cross midnight)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("url", mcp.Required(), mcp.Description("https://hooks.example.com/...")),
@@ -668,7 +695,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_alert_webhook",
+	addTool(mcp.NewTool("delete_alert_webhook",
 		mcp.WithDescription("Clear the client's price-alert webhook URL."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -683,7 +710,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_portfolio",
+	addTool(mcp.NewTool("create_portfolio",
 		mcp.WithDescription("Create a paper-trading portfolio with a starting cash balance (one per clientId). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("startingBalance", mcp.Required(), mcp.Description("Starting cash e.g. 10000")),
@@ -704,7 +731,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_portfolio",
+	addTool(mcp.NewTool("get_portfolio",
 		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -719,7 +746,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_portfolio_performance",
+	addTool(mcp.NewTool("get_portfolio_performance",
 		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window. Use for history/charts. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("period", mcp.Description("Lookback: 1d, 1w (default), 1m, or 3m")),
@@ -735,7 +762,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_portfolio_risk_limits",
+	addTool(mcp.NewTool("get_portfolio_risk_limits",
 		mcp.WithDescription("Get optional paper risk limits and live status (daily loss %, per-coin weights, whether new buys/margin opens are blocked). Limits never close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -750,7 +777,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("set_portfolio_risk_limits",
+	addTool(mcp.NewTool("set_portfolio_risk_limits",
 		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. Omit a value to disable that rule. Does not close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("maxDailyLossPct", mcp.Description("0 or omit to disable; else 0.01-100")),
@@ -774,7 +801,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("clear_portfolio_risk_limits",
+	addTool(mcp.NewTool("clear_portfolio_risk_limits",
 		mcp.WithDescription("Remove all paper risk limits for a client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -789,7 +816,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("place_portfolio_order",
+	addTool(mcp.NewTool("place_portfolio_order",
 		mcp.WithDescription("Paper market buy/sell at last price. Simulated only — not real trading."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -820,7 +847,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_portfolio_trades",
+	addTool(mcp.NewTool("list_portfolio_trades",
 		mcp.WithDescription("List paper trade history for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
@@ -837,7 +864,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("place_portfolio_pending_order",
+	addTool(mcp.NewTool("place_portfolio_pending_order",
 		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. For trailing_stop use trailType+trailValue (triggerPrice optional/ignored). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -883,7 +910,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("place_portfolio_oco_order",
+	addTool(mcp.NewTool("place_portfolio_oco_order",
 		mcp.WithDescription("Place a paper OCO: take-profit limit sell + stop-loss for the same quantity. Full fill of one cancels the other; partial fill shrinks both remainings. Same tick fills at most one leg. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -920,7 +947,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("place_portfolio_bracket_order",
+	addTool(mcp.NewTool("place_portfolio_bracket_order",
 		mcp.WithDescription("Place a paper bracket: limit-buy entry with take-profit + stop-loss. Exits stay pending until entry fills; exit size tracks filled qty; exits are OCO. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -962,7 +989,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_portfolio_orders",
+	addTool(mcp.NewTool("list_portfolio_orders",
 		mcp.WithDescription("List paper pending orders (default status=open)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
@@ -980,7 +1007,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_portfolio_order",
+	addTool(mcp.NewTool("get_portfolio_order",
 		mcp.WithDescription("Get one paper pending order plus last price and amend hints (editable, max remaining, available cash/qty including this order's reservation)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
@@ -1000,7 +1027,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("amend_portfolio_order",
+	addTool(mcp.NewTool("amend_portfolio_order",
 		mcp.WithDescription("Amend an open paper GTC limit_buy, limit_sell, or stop_loss in place (same id): triggerPrice and/or remainingQuantity. Recalculates reservations; fills immediately if newly marketable. OCO, bracket, trailing, IOC/FOK cannot be amended."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
@@ -1029,7 +1056,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("cancel_all_portfolio_orders",
+	addTool(mcp.NewTool("cancel_all_portfolio_orders",
 		mcp.WithDescription("Cancel all open paper pending orders for a client, or only one market when symbol is set. Releases reservations. Empty result is success."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Description("When set, cancel only this pair (e.g. BTCUSDT); omit for all markets")),
@@ -1046,7 +1073,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("cancel_portfolio_order",
+	addTool(mcp.NewTool("cancel_portfolio_order",
 		mcp.WithDescription("Cancel an open paper pending order. Canceled orders never fill."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
@@ -1066,7 +1093,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_recurring_buy",
+	addTool(mcp.NewTool("create_recurring_buy",
 		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -1103,7 +1130,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("update_recurring_buy",
+	addTool(mcp.NewTool("update_recurring_buy",
 		mcp.WithDescription("Update a paper recurring buy name, amount, or schedule (frequency/weekday/dayOfMonth/intervalHours). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1131,7 +1158,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_recurring_buys",
+	addTool(mcp.NewTool("list_recurring_buys",
 		mcp.WithDescription("List paper recurring buy plans for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1146,7 +1173,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_recurring_buy",
+	addTool(mcp.NewTool("get_recurring_buy",
 		mcp.WithDescription("Get one paper recurring buy plan by id."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1166,7 +1193,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("pause_recurring_buy",
+	addTool(mcp.NewTool("pause_recurring_buy",
 		mcp.WithDescription("Pause a paper recurring buy plan (no further executions until resume)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1186,7 +1213,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("resume_recurring_buy",
+	addTool(mcp.NewTool("resume_recurring_buy",
 		mcp.WithDescription("Resume a paused paper recurring buy plan."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1206,7 +1233,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_recurring_buy",
+	addTool(mcp.NewTool("delete_recurring_buy",
 		mcp.WithDescription("Delete a paper recurring buy plan and its run history."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1226,7 +1253,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_recurring_buy_runs",
+	addTool(mcp.NewTool("list_recurring_buy_runs",
 		mcp.WithDescription("List execution history for a paper recurring buy plan (succeeded/failed runs)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -1248,7 +1275,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_portfolio_basket",
+	addTool(mcp.NewTool("create_portfolio_basket",
 		mcp.WithDescription("Create a named paper allocation basket (target percent mix). targetsJSON example: [{\"asset\":\"BTC\",\"weightPct\":50},{\"asset\":\"ETH\",\"weightPct\":30},{\"asset\":\"USDT\",\"weightPct\":20}]. Does not trade. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Basket label e.g. Core 50/30/20")),
@@ -1273,7 +1300,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_portfolio_baskets",
+	addTool(mcp.NewTool("list_portfolio_baskets",
 		mcp.WithDescription("List saved paper allocation baskets for a client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1288,7 +1315,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_portfolio_basket",
+	addTool(mcp.NewTool("get_portfolio_basket",
 		mcp.WithDescription("Get a paper allocation basket with live actual vs target weights and proposed rebalance legs (preview, no trades)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -1308,7 +1335,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("update_portfolio_basket",
+	addTool(mcp.NewTool("update_portfolio_basket",
 		mcp.WithDescription("Update a paper allocation basket name and/or targetsJSON. Does not trade."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -1330,7 +1357,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_portfolio_basket",
+	addTool(mcp.NewTool("delete_portfolio_basket",
 		mcp.WithDescription("Delete a paper allocation basket. Does not trade."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -1350,7 +1377,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("preview_portfolio_rebalance",
+	addTool(mcp.NewTool("preview_portfolio_rebalance",
 		mcp.WithDescription("Preview market sells/buys to move a paper portfolio toward a basket. Does not trade. Rebalance is never automatic."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -1370,7 +1397,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("rebalance_portfolio_basket",
+	addTool(mcp.NewTool("rebalance_portfolio_basket",
 		mcp.WithDescription("USER-TRIGGERED paper rebalance toward a basket (sell overweight, buy underweight at last price). Drift is allowed until this is called. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -1390,7 +1417,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("set_margin_mode",
+	addTool(mcp.NewTool("set_margin_mode",
 		mcp.WithDescription("Set paper portfolio margin mode isolated|cross. Blocked while open margin positions or pending margin orders exist."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("mode", mcp.Required(), mcp.Description("isolated | cross")),
@@ -1410,7 +1437,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("adjust_margin",
+	addTool(mcp.NewTool("adjust_margin",
 		mcp.WithDescription("Add (delta>0) or remove (delta<0) margin from an isolated paper position; recalculates liquidation. Isolated mode only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
@@ -1435,7 +1462,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("repay_margin_debt",
+	addTool(mcp.NewTool("repay_margin_debt",
 		mcp.WithDescription("Repay margin debt without closing: interest first, then principal. Amount in debt units (quote for long, base coins for short)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
@@ -1460,7 +1487,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("place_margin_order",
+	addTool(mcp.NewTool("place_margin_order",
 		mcp.WithDescription("Paper margin open: long|short, leverage 1-10, market or limit (uses account isolated|cross mode). Optional stopLoss/takeProfit. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -1508,7 +1535,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_margin_positions",
+	addTool(mcp.NewTool("list_margin_positions",
 		mcp.WithDescription("List open paper margin positions with mark, unrealized PnL, liquidation price."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1523,7 +1550,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("close_margin_position",
+	addTool(mcp.NewTool("close_margin_position",
 		mcp.WithDescription("Close all or part of a paper margin position at market. quantity 0 = full close."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
@@ -1544,7 +1571,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("set_margin_brackets",
+	addTool(mcp.NewTool("set_margin_brackets",
 		mcp.WithDescription("Set or clear stop-loss / take-profit on an open paper margin position."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
@@ -1577,7 +1604,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_margin_orders",
+	addTool(mcp.NewTool("list_margin_orders",
 		mcp.WithDescription("List paper margin orders (default status=open)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
@@ -1595,7 +1622,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("cancel_margin_order",
+	addTool(mcp.NewTool("cancel_margin_order",
 		mcp.WithDescription("Cancel an open paper margin limit order."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Margin order id")),
@@ -1615,7 +1642,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_margin_trades",
+	addTool(mcp.NewTool("list_margin_trades",
 		mcp.WithDescription("List paper margin trade history (open/close/liquidation/sl/tp)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows")),
@@ -1632,7 +1659,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_scanner_rule",
+	addTool(mcp.NewTool("create_scanner_rule",
 		mcp.WithDescription("Create a technical scanner rule for the client's watchlist: rsi, ma_crossover, or volume_increase."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("rsi | ma_crossover | volume_increase")),
@@ -1669,7 +1696,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_scanner_rules",
+	addTool(mcp.NewTool("list_scanner_rules",
 		mcp.WithDescription("List technical scanner rules for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1684,7 +1711,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_scanner_rule",
+	addTool(mcp.NewTool("delete_scanner_rule",
 		mcp.WithDescription("Delete a scanner rule by id."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("ruleId", mcp.Required(), mcp.Description("Rule id")),
@@ -1704,7 +1731,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_scanner_results",
+	addTool(mcp.NewTool("list_scanner_results",
 		mcp.WithDescription("List saved scanner match history for a clientId (deduped by rule/symbol/bar)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
@@ -1721,7 +1748,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("start_export",
+	addTool(mcp.NewTool("start_export",
 		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, and/or backtests as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),
@@ -1747,7 +1774,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_export",
+	addTool(mcp.NewTool("get_export",
 		mcp.WithDescription("Get export job status and progressPct (0-100). When completed, downloadUrl is set for HTTP download."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("exportId", mcp.Required(), mcp.Description("Export job id")),
@@ -1767,7 +1794,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_exports",
+	addTool(mcp.NewTool("list_exports",
 		mcp.WithDescription("List recent data export jobs for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 20")),
@@ -1784,7 +1811,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("cancel_export",
+	addTool(mcp.NewTool("cancel_export",
 		mcp.WithDescription("Cancel a pending or running data export job."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("exportId", mcp.Required(), mcp.Description("Export job id")),
@@ -1804,7 +1831,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("preview_import",
+	addTool(mcp.NewTool("preview_import",
 		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests. Returns valid/invalid/willAdd counts without applying. Pass export JSON as content. Then call confirm_import with mode merge|replace."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
@@ -1827,7 +1854,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("confirm_import",
+	addTool(mcp.NewTool("confirm_import",
 		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). One active apply per client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id from preview")),
@@ -1852,7 +1879,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_import",
+	addTool(mcp.NewTool("get_import",
 		mcp.WithDescription("Get import job status, progress, and section counts."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id")),
@@ -1872,7 +1899,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_imports",
+	addTool(mcp.NewTool("list_imports",
 		mcp.WithDescription("List recent data import jobs for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 20")),
@@ -1889,7 +1916,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("cancel_import",
+	addTool(mcp.NewTool("cancel_import",
 		mcp.WithDescription("Cancel a previewed, pending, or running import."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id")),
@@ -1909,7 +1936,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("create_price_diff_watch",
+	addTool(mcp.NewTool("create_price_diff_watch",
 		mcp.WithDescription("Track cross-exchange price differences for a coin (Binance/Coinbase/Bybit). Opens opportunities when net edge after fees exceeds minNetDiffPct."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -1938,7 +1965,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_price_diff_watches",
+	addTool(mcp.NewTool("list_price_diff_watches",
 		mcp.WithDescription("List cross-exchange price difference watches for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1953,7 +1980,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_price_diff_watch",
+	addTool(mcp.NewTool("get_price_diff_watch",
 		mcp.WithDescription("Get one price-diff watch by id."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
@@ -1973,7 +2000,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("delete_price_diff_watch",
+	addTool(mcp.NewTool("delete_price_diff_watch",
 		mcp.WithDescription("Delete a price-diff watch and its opportunities."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
@@ -1993,7 +2020,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("list_price_diff_opportunities",
+	addTool(mcp.NewTool("list_price_diff_opportunities",
 		mcp.WithDescription("List cross-exchange price opportunities (status open|closed|all). Open opportunities persist across restarts."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("status", mcp.Description("open | closed | all")),
@@ -2011,7 +2038,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("get_price_diff_opportunity",
+	addTool(mcp.NewTool("get_price_diff_opportunity",
 		mcp.WithDescription("Get one price-diff opportunity by id."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("opportunityId", mcp.Required(), mcp.Description("Opportunity id")),
@@ -2031,7 +2058,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
-	s.AddTool(mcp.NewTool("health",
+	addTool(mcp.NewTool("health",
 		mcp.WithDescription("Check Swyngora MCP connectivity (in-process when embedded in API server)."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.Health(ctx)

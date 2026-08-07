@@ -19,7 +19,8 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:5174 npm run test:e2e
 
 - Shell navigation landmarks and routes
 - Alerts query prefill (`?exchange=&symbol=`)
-- Pumps min-return control
+- Pumps scan button (no min-return control in the current UI)
 - Active `aria-current` on nav
+- Markets page API error copy when the backend is down
 
 These tests do **not** require a live backend; API-dependent pages may show error banners.

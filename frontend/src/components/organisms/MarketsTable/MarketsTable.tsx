@@ -1,7 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Alert, Button, Empty, Space } from 'antd';
-import { StarFilled, StarOutlined } from '@ant-design/icons';
+import { WatchStar } from '@/components/molecules/WatchStar';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
 import { useTranslation } from 'react-i18next';
@@ -76,45 +76,12 @@ export function MarketsTable({
     [metricsProp],
   );
 
-  if (errorMessage) {
-    return (
-      <TableCard>
-        <EmptyWrap>
-          <Alert
-            type="error"
-            showIcon
-            message={t('markets:table.loadErrorTitle')}
-            description={errorMessage}
-            action={
-              onRetry ? (
-                <Button size="small" type="primary" onClick={onRetry}>
-                  {t('common:actions.retry')}
-                </Button>
-              ) : undefined
-            }
-          />
-        </EmptyWrap>
-      </TableCard>
-    );
-  }
-
-  if (isLoading && items.length === 0) {
-    return (
-      <TableCard>
-        <MarketsTableSkeleton
-          rows={Math.min(10, Math.max(6, limit > 20 ? 10 : 8))}
-          label={t('common:a11y.loadingMarketsTable')}
-        />
-      </TableCard>
-    );
-  }
-
   // Server-side sort only (sorter: true). Never allow Ant Design's third-click
   // "clear sort" — that sets order=null while our URL still holds a sort, which
   // fights controlled sortOrder and makes the header feel unstable.
   // Metric columns come from the shared catalog + column picker selection.
-  const columns: ColumnsType<SpotMarket> = [
-    ...(onToggleWatch
+  const columns: ColumnsType<SpotMarket> = useMemo(() => {
+    const watchCol: ColumnsType<SpotMarket> = onToggleWatch
       ? [
           {
             title: '',
@@ -125,13 +92,10 @@ export function MarketsTable({
               const key = `${exchange}:${sym}`;
               const watched = watchedKeys?.has(key) ?? false;
               return (
-                <Button
-                  type="text"
-                  size="small"
-                  aria-label={
-                    watched ? t('watchlist:remove') : t('watchlist:add')
-                  }
-                  icon={watched ? <StarFilled /> : <StarOutlined />}
+                <WatchStar
+                  watched={watched}
+                  addLabel={t('watchlist:add')}
+                  removeLabel={t('watchlist:remove')}
                   onClick={(e: MouseEvent) => {
                     e.stopPropagation();
                     if (sym) onToggleWatch(sym, watched);
@@ -139,24 +103,11 @@ export function MarketsTable({
                 />
               );
             },
-          } as ColumnsType<SpotMarket>[number],
+          },
         ]
-      : []),
-    {
-      title: t('markets:table.symbol'),
-      dataIndex: 'symbol',
-      key: 'symbol',
-      sorter: true,
-      sortDirections: [...SORT_DIRECTIONS],
-      sortOrder: toAntdSortOrder(order, sort === 'symbol'),
-      // Display BASE/QUOTE consistently; row navigation still uses native `symbol`.
-      render: (symbol: string | undefined) => (
-        <Text variant="label" color="primary" mono>
-          {formatSymbolDisplay(symbol)}
-        </Text>
-      ),
-    },
-    ...metrics.map((def) => {
+      : [];
+
+    const metricCols: ColumnsType<SpotMarket> = metrics.map((def) => {
       const sortable = Boolean(def.sortField);
       return {
         title: metricColumnTitle(t, def.labelKey),
@@ -173,9 +124,27 @@ export function MarketsTable({
         render: (_: unknown, row: SpotMarket) => (
           <SpotMetricValue metric={def} spot={row} exchange={exchange} />
         ),
-      } as ColumnsType<SpotMarket>[number];
-    }),
-  ];
+      };
+    });
+
+    return [
+      ...watchCol,
+      {
+        title: t('markets:table.symbol'),
+        dataIndex: 'symbol',
+        key: 'symbol',
+        sorter: true,
+        sortDirections: [...SORT_DIRECTIONS],
+        sortOrder: toAntdSortOrder(order, sort === 'symbol'),
+        render: (symbol: string | undefined) => (
+          <Text variant="label" color="primary" mono>
+            {formatSymbolDisplay(symbol)}
+          </Text>
+        ),
+      },
+      ...metricCols,
+    ];
+  }, [exchange, metrics, onToggleWatch, order, sort, t, watchedKeys]);
 
   const range = getResultsRange(offset, limit, total);
   const pagination: TablePaginationConfig = {
@@ -197,7 +166,7 @@ export function MarketsTable({
     position: ['bottomCenter'],
   };
 
-  const handleChange = (
+  const handleChange = useCallback((
     pag: TablePaginationConfig,
     _filters: Record<string, FilterValue | null>,
     sorter: SorterResult<SpotMarket> | SorterResult<SpotMarket>[],
@@ -239,7 +208,40 @@ export function MarketsTable({
     if (sortResult.type === 'sort') {
       onSortChange(sortResult.field as SpotSortField, sortResult.order);
     }
-  };
+  }, [limit, offset, onPageChange, onSortChange, order, sort]);
+
+  if (errorMessage) {
+    return (
+      <TableCard>
+        <EmptyWrap>
+          <Alert
+            type="error"
+            showIcon
+            message={t('markets:table.loadErrorTitle')}
+            description={errorMessage}
+            action={
+              onRetry ? (
+                <Button size="small" type="primary" onClick={onRetry}>
+                  {t('common:actions.retry')}
+                </Button>
+              ) : undefined
+            }
+          />
+        </EmptyWrap>
+      </TableCard>
+    );
+  }
+
+  if (isLoading && items.length === 0) {
+    return (
+      <TableCard>
+        <MarketsTableSkeleton
+          rows={Math.min(10, Math.max(6, limit > 20 ? 10 : 8))}
+          label={t('common:a11y.loadingMarketsTable')}
+        />
+      </TableCard>
+    );
+  }
 
   return (
     <TableCard>

@@ -7,3 +7,6 @@ export type { SkeletonProps, SkeletonVariant } from './Skeleton';
 
 export { BrandTag } from './BrandTag';
 export type { BrandTagProps, BrandTagVariant } from './BrandTag';
+
+export { BrandMark } from './BrandMark';
+export type { BrandMarkProps } from './BrandMark';

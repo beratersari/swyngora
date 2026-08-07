@@ -4,29 +4,33 @@ import type { BrandTagVariant } from './BrandTag.types';
 
 const variants: Record<BrandTagVariant, ReturnType<typeof css>> = {
   status: css`
-    background: rgba(3, 98, 76, 0.45) !important;
+    background: ${({ theme }) => theme.palette.bangladeshGreen} !important;
+    border: 1px solid ${({ theme }) => theme.palette.frog} !important;
+    color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
+  `,
+  live: css`
+    background: ${({ theme }) => theme.semantic.bg.accentSoft} !important;
     border: 1px solid ${({ theme }) => theme.palette.frog} !important;
     color: ${({ theme }) => theme.palette.mint} !important;
   `,
-  live: css`
-    background: rgba(0, 255, 129, 0.12) !important;
-    border: 1px solid ${({ theme }) => theme.palette.caribbeanGreen} !important;
-    color: ${({ theme }) => theme.palette.caribbeanGreen} !important;
-  `,
   exchange: css`
-    background: ${({ theme }) => theme.palette.pine} !important;
-    border: 1px solid ${({ theme }) => theme.semantic.border.default} !important;
-    color: ${({ theme }) => theme.palette.pistachio} !important;
+    background: ${({ theme }) => theme.palette.bangladeshGreen} !important;
+    border: 1px solid ${({ theme }) => theme.palette.frog} !important;
+    color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 11px;
+    font-weight: 700;
   `,
   paused: css`
-    background: rgba(112, 125, 125, 0.2) !important;
+    background: ${({ theme }) => theme.semantic.bg.chrome} !important;
     border: 1px solid ${({ theme }) => theme.semantic.border.default} !important;
-    color: ${({ theme }) => theme.semantic.text.secondary} !important;
+    color: ${({ theme }) => theme.semantic.text.primary} !important;
   `,
   delist: css`
-    background: rgba(224, 184, 106, 0.16) !important;
+    background: rgba(224, 184, 106, 0.18) !important;
     border: 1px solid ${({ theme }) => theme.semantic.status.warning} !important;
-    color: ${({ theme }) => theme.semantic.status.warning} !important;
+    color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
   `,
 };
 
@@ -35,6 +39,10 @@ export const StyledBrandTag = styled(Tag)<{ $variant: BrandTagVariant }>`
     margin-inline-end: 0;
     line-height: 1.4;
     font-weight: 500;
+    transition:
+      background ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
+      border-color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
+      color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard};
     ${({ $variant }) => variants[$variant]}
   }
 `;

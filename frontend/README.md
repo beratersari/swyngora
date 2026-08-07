@@ -2,7 +2,7 @@
 
 Production React application for Swyngora.
 
-> **Status:** Markets, coin detail, watchlist, pumps, and **AI chat** (`/ai`).  
+> **Status:** Markets, coin detail, watchlist, **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a trading-desk chrome (ticker tape, jump search, live status).  
 > Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 
@@ -29,7 +29,7 @@ Design system: [`docs/design/frontend-design-system.md`](../docs/design/frontend
 | Caribbean Green | `#00FF81` | Mint | `#74F9BC` | | |
 | Anti-Flash White | `#F1F7F6` | | | | |
 
-Tokens: `src/styles/tokens/colors.ts` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
+Tokens: `src/styles/tokens/colors.ts` · Motion: `src/styles/tokens/motion.ts` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
 
 **Styling:** styled-components only. Colocate `ComponentName.styles.ts` — do not add `.css` / CSS modules.
 
@@ -71,7 +71,7 @@ frontend/
 ### Localization
 
 - **i18next** catalogs: `src/libs/i18n/locales/{en,tr}/`
-- Namespaces: `common`, `markets`, `detail`, `watchlist`, `pumps`, `ai`
+- Namespaces: `common`, `markets`, `detail`, `watchlist`, `pumps`, `ai`, `alerts`, `compare`, `signals`
 - Language switcher in the app header (persists to `localStorage`)
 - Add a language: new locale folder + register in `libs/i18n/resources.ts` + `SUPPORTED_LOCALES`
 
@@ -116,6 +116,7 @@ npm run format:check   # CI-friendly check
 npm run lint           # ESLint (prettier-compatible)
 npm test               # Vitest unit/component tests
 npm run test:coverage  # Coverage (line + branch) via @vitest/coverage-v8
+npm run test:e2e       # Playwright smoke (see e2e/README.md; install browsers once)
 ```
 
 Config: `.prettierrc.json` · ignore: `.prettierignore`

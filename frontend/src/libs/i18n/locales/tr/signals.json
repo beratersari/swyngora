@@ -1,0 +1,103 @@
+{
+  "title": "Salınım sinyalleri",
+  "eyebrow": "İzleme tarayıcısı",
+  "subtitle": "İzleme listenizdeki RSI, EMA kesişimi ve hacim kurallarından birleşik kurulumlar. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "disclaimer": "Kurulumlar mekanik kural eşleşmeleridir, emir değildir. 2–3 faktörün uyumunu bekleyin ve grafikte doğrulayın. Canlı tarayıcı henüz kapanmamış mumu da değerlendirebilir.",
+  "loadFailed": "Sinyaller yüklenemedi",
+  "resource": "tarayıcı",
+  "openChart": "Grafiği aç",
+  "symbol": "Sembol",
+  "exchange": "Borsa",
+  "interval": "Aralık",
+  "factor": "Faktör",
+  "summary": "Özet",
+  "matchedAt": "Eşleşme",
+  "actions": "İşlemler",
+  "watchlistEmptyTitle": "İzleme listesi boş",
+  "watchlistEmptyBody": "Tarayıcı yalnızca izleme listenizdeki coinleri değerlendirir. Önce çift ekleyin:",
+  "metrics": {
+    "rules": "Aktif kurallar",
+    "hits24h": "Eşleşme · 24s",
+    "setups": "Birleşik kurulumlar",
+    "backtests": "Çalışan lab"
+  },
+  "tabs": {
+    "setups": "Kurulumlar",
+    "hits": "Eşleşmeler",
+    "rules": "Kurallar",
+    "lab": "Lab"
+  },
+  "setups": {
+    "empty": "Henüz birleşim yok. 4s salınım paketini ekleyip kapanan mumları bekleyin.",
+    "hint": "Kurulum için son 24 saatte trend (EMA), momentum (RSI) ve hacimden en az ikisi gerekir. A notu 3/3’tür.",
+    "grade": "Not {{grade}} · {{score}}/3",
+    "sameBar": "Aynı mum",
+    "window": "24s pencere"
+  },
+  "hits": {
+    "empty": "Henüz tarayıcı eşleşmesi yok. Kurallar izleme listenize yaklaşık dakikada bir bakılır."
+  },
+  "types": {
+    "rsi": "RSI eşiği",
+    "ma_crossover": "EMA kesişimi",
+    "volume_increase": "Hacim artışı"
+  },
+  "rules": {
+    "createTitle": "Yeni kural",
+    "createHint": "Tek faktörlü kurallar birleşim ızgarasını besler. Salınım için trend + momentum + hacim ekleyin.",
+    "create": "Kural oluştur",
+    "createSuccess": "Kural oluşturuldu",
+    "createFailed": "Kural oluşturulamadı",
+    "listTitle": "Kurallarınız",
+    "type": "Tür",
+    "params": "Parametreler",
+    "enabled": "Durum",
+    "on": "Açık",
+    "off": "Kapalı",
+    "delete": "Sil",
+    "deleteConfirm": "Bu kural ve kayıtlı eşleşmeler silinsin mi?",
+    "deleteSuccess": "Kural silindi",
+    "empty": "Henüz kural yok. Bir tane oluşturun veya 4s salınım paketini ekleyin.",
+    "addStack": "4s salınım paketi ekle",
+    "stackSuccess": "4s RSI + EMA + hacim paketi eklendi",
+    "rsiPeriod": "RSI periyodu",
+    "rsiCondition": "Koşul",
+    "rsiThreshold": "Eşik",
+    "below": "Altında",
+    "above": "Üstünde",
+    "maFast": "Hızlı EMA",
+    "maSlow": "Yavaş EMA",
+    "maDirection": "Yön",
+    "goldenCross": "Altın kesişim",
+    "deathCross": "Ölüm kesişimi",
+    "volLookback": "Geriye bakış",
+    "volRatio": "Min hacim ×"
+  },
+  "lab": {
+    "title": "Tarihsel lab",
+    "hint": "Kayıtlı bir kuralı tek sembolde yeniden çalıştırın. İleri getiriler, veri varsa takvim günü kapanıştandır.",
+    "rule": "Kural",
+    "pickRule": "Kural seçin",
+    "range": "Aralık",
+    "start": "Geriye dönük test",
+    "startSuccess": "Test başlatıldı",
+    "startFailed": "Test başlatılamadı",
+    "status": "Durum",
+    "progress": "İlerleme",
+    "signals": "Sinyaller",
+    "view": "Görüntüle",
+    "empty": "Henüz geriye dönük test yok",
+    "noSignals": "Bu aralıkta tarihsel eşleşme yok",
+    "signalAt": "Sinyal zamanı",
+    "close": "Kapanış",
+    "ret1d": "+1g",
+    "ret5d": "+5g",
+    "ret20d": "+20g",
+    "ranges": {
+      "30d": "30 gün",
+      "90d": "90 gün",
+      "180d": "180 gün",
+      "365d": "365 gün"
+    }
+  }
+}

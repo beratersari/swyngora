@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Paper portfolio performance:** `GET /api/v1/portfolio/performance?period=1d|1w|1m|3m` returns equity time series plus period P&L amount and percent; 15m snapshot worker; MCP `get_portfolio_performance` (`docs/features/paper-trading.md`)
+- **Desk motion:** page enter, watchlist star pop, live price flash, connection pulse, hover lifts; ticker tape GPU + pause when tab hidden; Markets/Watchlist table columns memoized to cut poll jank (`frontend/src/styles/tokens/motion.ts`)
+- **Swing signals desk (`/signals`):** watchlist scanner UI — confluence setup cards (EMA + RSI + volume), rule CRUD + 4h swing stack, live hits, historical lab with 1/5/20d returns; coin-detail chart markers (`docs/features/indicator-scanner.md`)
+- **Web desk chrome:** sticky two-row header, brand mark, jump-to-pair search, live/offline connection pill, volume ticker tape, 1600px desk canvas, shared page headers (`frontend/`)
+
+### Fixed
+- **AI chat layout:** assistant reply renders as markdown; thinking is a collapsed step list; tool chips show names only (no JSON dumps)
+- **Dark UI contrast:** exchange/status chips no longer use Ant `Tag color="processing"` (unreadable green-on-green); BrandTag + global Tag overrides; tertiary text/placeholders raised off stone (`frontend/`)
+- **Paper cash races:** serialize portfolio cash/position mutations per `clientId` so concurrent multi-symbol fills and HTTP orders cannot last-write-wins balances (`docs/features/paper-trading.md`)
+- **MCP + account close:** in-process tools with `clientId` now require an active account (HTTP `/mcp` still skips header AccountGate because clientId is in the tool body)
+- **Coin detail history:** reset paged candles on series change during render (no mixed old/new chart); pump-threshold toggle no longer sticks `historyLoading`
+- **Docs:** paper-margin equity/liq/debt, risk-limit UTC first-touch baseline + DCA `order failed`, account-close MCP note
+
+### Added
 - **Paper order amend:** `GET`/`PATCH /api/v1/portfolio/orders/{id}` to change trigger price and remaining size of an open GTC limit/stop without canceling; same id, reservation recalc, 409 on concurrent fill; MCP `get_portfolio_order` / `amend_portfolio_order` (`docs/features/paper-trading.md`)
 - **Paper cancel-all:** `POST /api/v1/portfolio/orders/cancel-all` cancels every open paper order or one market (`symbol`); MCP `cancel_all_portfolio_orders`
 - **Named recurring buys:** plan `name` plus `weekly`+`weekday`, `monthly`+`dayOfMonth` (salary day), and `interval`+`intervalHours` (e.g. every 12h); `PATCH` to rename/reschedule; MCP `update_recurring_buy`

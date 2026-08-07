@@ -3,6 +3,7 @@ import { Button, Select } from 'antd';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import {
   CompareChartHost,
@@ -32,7 +33,6 @@ import {
   Field,
   Legend,
   LegendItem,
-  PageIntro,
   PageStack,
   Toolbar,
 } from './ComparePage.styles';
@@ -125,14 +125,11 @@ export function ComparePage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary">
-          {t('compare:title')}
-        </Text>
-        <Text variant="body" color="secondary">
-          {t('compare:subtitle', { max: MAX_COMPARE_PAIRS })}
-        </Text>
-      </PageIntro>
+      <PageHeader
+        eyebrow={t('compare:eyebrow')}
+        title={t('compare:title')}
+        subtitle={t('compare:subtitle', { max: MAX_COMPARE_PAIRS })}
+      />
 
       <Toolbar>
         <Field>

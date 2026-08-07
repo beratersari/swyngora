@@ -1,4 +1,5 @@
 {
+  "eyebrow": "Coin masası",
   "backToMarkets": "← Piyasalar",
   "change24h": "{{change}} · 24s",
   "missingSymbolTitle": "Sembol eksik",
@@ -18,6 +19,7 @@
     "pumpThreshold": "Pump eşiği",
     "pumpPresets": "Hazır",
     "pumpMarkers": "Pump işaretleri",
+    "signalMarkers": "Salınım işaretleri",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)"

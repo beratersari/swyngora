@@ -14,6 +14,7 @@ export function SymbolSuggest({
   exchange,
   value,
   onChange,
+  onPick,
   placeholder = 'BTCUSDT',
   disabled,
   'aria-label': ariaLabel,
@@ -70,6 +71,7 @@ export function SymbolSuggest({
         const next = String(v).toUpperCase();
         setQuery(next);
         onChange(next);
+        onPick?.(next);
       }}
       onChange={(text) => {
         const next = String(text).toUpperCase();

@@ -119,6 +119,8 @@ func (s *Service) SetMarginMode(ctx context.Context, in SetMarginModeInput) (*do
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	mode, err := domain.NormalizeMarginMode(in.Mode)
 	if err != nil {
 		return nil, err
@@ -157,6 +159,8 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Delta == 0 || math.IsNaN(in.Delta) || math.IsInf(in.Delta, 0) {
 		return nil, fmt.Errorf("%w: delta must be a non-zero number", domain.ErrInvalidArgument)
 	}
@@ -235,6 +239,8 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Amount <= 0 || math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
 		return nil, nil, fmt.Errorf("%w: amount must be positive", domain.ErrInvalidArgument)
 	}
@@ -469,6 +475,8 @@ func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *doma
 // Concurrent user close/repay is safe: already-closed → no-op; debt/qty CAS + retries on conflict.
 // Returns true only when this call successfully applied a liquidation close trade.
 func (s *Service) tryLiquidateIfBreached(ctx context.Context, clientID, positionID string, now time.Time) (bool, error) {
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	cur, err := s.store.GetMarginPosition(ctx, clientID, positionID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -535,6 +543,8 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	side, err := domain.NormalizeMarginSide(in.Side)
 	if err != nil {
 		return nil, nil, err
@@ -755,6 +765,8 @@ func (s *Service) CloseMarginPosition(ctx context.Context, in MarginCloseInput) 
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id := strings.TrimSpace(in.PositionID)
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: position id is required", domain.ErrInvalidArgument)
@@ -871,6 +883,8 @@ func (s *Service) CancelMarginOrder(ctx context.Context, clientID, id string) (*
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
@@ -957,14 +971,20 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 		}
 		// Stop loss
 		if domain.ShouldTriggerStopLoss(pos.Side, mark, pos.StopLoss) {
-			if _, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseStopLoss); e == nil {
+			unlock := s.lockClient(pos.ClientID)
+			_, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseStopLoss)
+			unlock()
+			if e == nil {
 				stopped++
 			}
 			continue
 		}
 		// Take profit
 		if domain.ShouldTriggerTakeProfit(pos.Side, mark, pos.TakeProfit) {
-			if _, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseTakeProfit); e == nil {
+			unlock := s.lockClient(pos.ClientID)
+			_, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseTakeProfit)
+			unlock()
+			if e == nil {
 				stopped++
 			}
 		}
@@ -1081,6 +1101,8 @@ func pickWorstCrossPosition(list []domain.MarginPosition) *domain.MarginPosition
 // (partial close when the account is slightly under). After each successful close it reloads
 // cash, remaining sizes, and marks — never batch-closes on a stale snapshot.
 func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID string, now time.Time) (int, error) {
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	n := 0
 	// Bound rounds: partials may take more than one step per position.
 	maxRounds := domain.MaxOpenMarginPositions*3 + 5
@@ -1140,6 +1162,8 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	if o == nil || o.Status != domain.MarginOrderOpen {
 		return false
 	}
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
 	last, err := s.lastPrice(ctx, string(o.Exchange), o.Symbol)
 	if err != nil || last <= 0 {
 		return false

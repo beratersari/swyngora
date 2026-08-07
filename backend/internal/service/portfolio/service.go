@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,8 +26,9 @@ type PriceFetcher interface {
 
 // Service orchestrates paper-trading portfolios.
 type Service struct {
-	store  domain.PortfolioPort
-	market PriceFetcher
+	store    domain.PortfolioPort
+	market   PriceFetcher
+	clientMu sync.Map // clientID → *sync.Mutex; serializes RMW per client
 }
 
 // New constructs a portfolio service.
@@ -59,6 +61,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.StartingBalance < domain.MinStartingBalance || in.StartingBalance > domain.MaxStartingBalance ||
 		math.IsNaN(in.StartingBalance) || math.IsInf(in.StartingBalance, 0) {
 		return nil, fmt.Errorf("%w: startingBalance must be between %g and %g", domain.ErrInvalidArgument, domain.MinStartingBalance, domain.MaxStartingBalance)
@@ -204,6 +208,8 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return nil, nil, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -395,6 +401,8 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -487,6 +495,8 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -569,6 +579,8 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
 	if !domain.IsValidPendingOrderType(string(typ)) {
 		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, stop_loss, or trailing_stop", domain.ErrInvalidArgument)
@@ -961,6 +973,8 @@ func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrde
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
 		return nil, nil, err
 	}
@@ -998,6 +1012,8 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
@@ -1026,6 +1042,8 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -1121,7 +1139,7 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 	}
 
 	// OCO legs: only the winner for this tick may fill (handled by ProcessOCOPair / caller).
-	filled, ok, err := s.TryFillPendingOrder(ctx, o, lastPrice, maxFillQty)
+	filled, ok, err := s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1176,6 +1194,8 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
+	unlock := s.lockClient(a.ClientID)
+	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -1208,7 +1228,7 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 	if winner == nil {
 		return nil, false, nil
 	}
-	return s.TryFillPendingOrder(ctx, *winner, lastPrice, maxFillQty)
+	return s.tryFillPendingOrderLocked(ctx, *winner, lastPrice, maxFillQty)
 }
 
 // TryFillPendingOrder evaluates one open order against lastPrice and applies a fill.
@@ -1219,6 +1239,17 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
+	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	// Direct callers (tests, amend fill attempt). ProcessOpenOrder/ProcessOCOPair
+	// already hold lockClient and call tryFillPendingOrderLocked instead.
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
+	return s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
+}
+
+func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}

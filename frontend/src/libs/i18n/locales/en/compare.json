@@ -1,5 +1,6 @@
 {
   "title": "Compare",
+  "eyebrow": "Relative performance",
   "subtitle": "Overlay up to {{max}} pairs as % change from the first bar. Informational only.",
   "exchange": "Exchange",
   "symbol": "Symbol",

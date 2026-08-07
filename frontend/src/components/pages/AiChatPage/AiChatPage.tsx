@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Input } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/Button';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { rtkErrorMessage, usePostAiChatMutation } from '@/libs/api';
 import {
   getOrCreateAiSessionId,
@@ -15,6 +16,10 @@ import {
   clampMessage,
   createAssistantMessage,
   createUserMessage,
+  parseChatMarkdown,
+  parseInlineMd,
+  sanitizeThinkingLines,
+  uniqueToolNames,
 } from './AiChatPage.helpers';
 import type { ChatMessage } from './AiChatPage.types';
 import {
@@ -26,15 +31,65 @@ import {
   DisclaimerBody,
   DisclaimerIcon,
   EmptyState,
+  MdCode,
+  MdList,
+  MdOl,
+  MdP,
+  MdPre,
+  MdStack,
+  MdStrong,
   MetaChip,
   MetaLabel,
   MetaRow,
-  PageIntro,
   PageStack,
   Suggestions,
   Thread,
   ToolbarRow,
+  TraceDetails,
+  TraceList,
+  UserBody,
 } from './AiChatPage.styles';
+
+function renderInline(text: string): ReactNode[] {
+  return parseInlineMd(text).map((tok, i) => {
+    if (tok.t === 'strong') return <MdStrong key={i}>{tok.v}</MdStrong>;
+    if (tok.t === 'code') return <MdCode key={i}>{tok.v}</MdCode>;
+    return <span key={i}>{tok.v}</span>;
+  });
+}
+
+function AssistantMarkdown({ text }: { text: string }) {
+  const blocks = parseChatMarkdown(text);
+  if (blocks.length === 0) return <UserBody data-text-role="body">{text}</UserBody>;
+  return (
+    <MdStack data-text-role="body">
+      {blocks.map((b, i) => {
+        if (b.type === 'ul') {
+          return (
+            <MdList key={i}>
+              {b.items.map((item) => (
+                <li key={item}>{renderInline(item)}</li>
+              ))}
+            </MdList>
+          );
+        }
+        if (b.type === 'ol') {
+          return (
+            <MdOl key={i}>
+              {b.items.map((item) => (
+                <li key={item}>{renderInline(item)}</li>
+              ))}
+            </MdOl>
+          );
+        }
+        if (b.type === 'pre') {
+          return <MdPre key={i}>{b.text}</MdPre>;
+        }
+        return <MdP key={i}>{renderInline(b.text)}</MdP>;
+      })}
+    </MdStack>
+  );
+}
 
 export function AiChatPage() {
   const { t } = useTranslation(['ai', 'common']);
@@ -100,14 +155,7 @@ export function AiChatPage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary">
-          {t('ai:title')}
-        </Text>
-        <Text variant="body" color="primary">
-          {t('ai:subtitle')}
-        </Text>
-      </PageIntro>
+      <PageHeader eyebrow={t('ai:eyebrow')} title={t('ai:title')} subtitle={t('ai:subtitle')} />
 
       <DisclaimerBanner role="note">
         <DisclaimerIcon aria-hidden />
@@ -144,38 +192,46 @@ export function AiChatPage() {
           </EmptyState>
         ) : null}
 
-        {messages.map((m) => (
-          <BubbleRow key={m.id} $role={m.role}>
-            <Bubble $role={m.role} $error={m.isError}>
-              <Text variant="caption" color="primary" as="div" style={{ opacity: 0.85 }}>
-                {m.role === 'user' ? t('ai:you') : t('ai:assistant')}
-              </Text>
-              <Text variant="body" color="primary" as="div" data-text-role="body">
-                {m.content}
-              </Text>
-              {m.thinking && m.thinking.length > 0 ? (
-                <MetaRow>
-                  <MetaLabel>{t('ai:thinkingLabel', { defaultValue: 'Thinking' })}</MetaLabel>
-                  {m.thinking.map((line) => (
-                    <MetaChip key={line} $kind="thinking">
-                      {line}
-                    </MetaChip>
-                  ))}
-                </MetaRow>
-              ) : null}
-              {m.tools && m.tools.length > 0 ? (
-                <MetaRow>
-                  <MetaLabel>{t('ai:toolsLabel', { defaultValue: 'Tools' })}</MetaLabel>
-                  {m.tools.map((tool) => (
-                    <MetaChip key={tool} $kind="tool">
-                      {tool}
-                    </MetaChip>
-                  ))}
-                </MetaRow>
-              ) : null}
-            </Bubble>
-          </BubbleRow>
-        ))}
+        {messages.map((m) => {
+          const think = sanitizeThinkingLines(m.thinking, m.content);
+          const tools = uniqueToolNames(m.tools);
+          return (
+            <BubbleRow key={m.id} $role={m.role}>
+              <Bubble $role={m.role} $error={m.isError}>
+                <Text variant="caption" color="primary" as="div" style={{ opacity: 0.85 }}>
+                  {m.role === 'user' ? t('ai:you') : t('ai:assistant')}
+                </Text>
+                {m.role === 'assistant' && !m.isError ? (
+                  <AssistantMarkdown text={m.content} />
+                ) : (
+                  <UserBody data-text-role="body">{m.content}</UserBody>
+                )}
+                {think.length > 0 ? (
+                  <TraceDetails>
+                    <summary>
+                      {t('ai:thinkingSummary', { count: think.length, defaultValue: `Thinking · ${think.length}` })}
+                    </summary>
+                    <TraceList>
+                      {think.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </TraceList>
+                  </TraceDetails>
+                ) : null}
+                {tools.length > 0 ? (
+                  <MetaRow>
+                    <MetaLabel>{t('ai:toolsLabel', { defaultValue: 'Tools' })}</MetaLabel>
+                    {tools.map((tool) => (
+                      <MetaChip key={tool} $kind="tool" title={tool}>
+                        {tool}
+                      </MetaChip>
+                    ))}
+                  </MetaRow>
+                ) : null}
+              </Bubble>
+            </BubbleRow>
+          );
+        })}
 
         {isLoading ? (
           <BubbleRow $role="assistant">

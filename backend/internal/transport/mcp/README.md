@@ -107,6 +107,7 @@ cd backend && go run ./cmd/server
 | Control | Env | Notes |
 |---------|-----|--------|
 | Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires `Authorization: Bearer <token>` or `X-API-Key` (same as tenant REST) |
+| Closed account | (in-process tools) | Tools that send `clientId` call `RequireActive` — closed clients get a tool error (HTTP AccountGate cannot read JSON body on `/mcp`) |
 | Disable MCP | `MCP_ENABLED=false` | Do not mount `/mcp` at all |
 | Webhooks | (service) | `set_alert_webhook` rejects private/local targets unless `WEBHOOK_ALLOW_PRIVATE=true` |
 

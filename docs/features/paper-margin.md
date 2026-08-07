@@ -20,10 +20,10 @@ Users want leveraged long/short paper trading without real money: market and lim
 - **Initial margin:** `qty * price / leverage` debited from available cash
 - **Limit:** reserves required margin until fill, cancel, or reject (released on cancel)
 
-### Liquidation (maintenance 0.5% of notional)
-- **Isolated:** `liq` from assigned margin: long `entry − (margin − maint)/qty`
-- **Cross:** per-position liq from shared equity vs total maintenance; if account equity is **slightly** under total maint, **partially liquidate** only enough quantity on the worst position (by unrealized PnL) to restore health — not the full size when a smaller close suffices. After each (partial or full) close, **re-read cash, remaining sizes, and marks** and stop when equity recovers. Min-size / dust rules avoid thrashing on tiny closes; debt+qty CAS and deterministic full-close trade ids prevent duplicate records for the same quantity
-- Worker auto-closes when mark crosses liquidation (reason `liquidation`)
+### Liquidation (maintenance 0.5% of **entry** notional)
+- **Isolated:** assigned-margin formula, interest-adjusted (`LiquidationPriceWithDebt`). Long buffer is `margin − maint − debtInterest`; short divides by coin debt including interest. Without extra margin/interest this is `entry × (1 − 1/lev + mmr)` long and `entry × (1 + 1/lev − mmr)` short.
+- **Cross:** per-position display liq holds other UPNL fixed so this symbol’s mark would drive account equity to total maint. Execution is **account-level**: if equity is under total maint, close the worst position (most negative UPNL) — partial qty when quote debt is tiny (e.g. 1x / no borrow); leveraged longs with quote debt typically **full-close** that position. After each close, re-read cash, sizes, and marks. Debt+qty CAS and deterministic full-close trade ids prevent duplicate records.
+- Worker auto-closes when mark crosses liquidation (reason `liquidation`). Last price is used (no separate mark/index).
 
 ### Add / remove margin (isolated only)
 - `POST .../positions/{id}/margin` with `delta` (+ add from cash, − return to cash)
@@ -56,8 +56,16 @@ Users want leveraged long/short paper trading without real money: market and lim
 ### Stop-loss / take-profit
 - Optional on open or `PUT .../brackets`; worker closes at market when hit
 
-### Equity
-`equity = cashBalance + spotPositionsValue + marginLocked + marginUnrealizedPnL`
+### Equity vs close cash (read before building UI)
+
+Snapshot `equity = cashBalance + spotPositionsValue + marginLocked + marginUnrealizedPnL`.
+
+That figure **does not subtract** outstanding margin debt. Cross liquidation health also uses `cash + Σmargin + ΣUPNL` and **ignores** spot inventory, quote principal, and accrued interest.
+
+**Long close cash** (implemented and tested): `marginRelease + realized − (principalShare + interestShare)`. Opening a long only debits IM; closing still **repays quote principal from cash**. Wallet move is therefore not `IM + UPNL`. Shorts settle without that principal drain (`marginRelease + realized − interest×mark`). Preview close cash with that formula — do not tell users they receive UPNL as cash.
+
+### Paper concurrency
+Cash/position read-modify-write is **serialized per `clientId`** in the portfolio service (plus store write mutex and margin debt CAS). The filler may fetch tickers for different symbols in parallel; mutations for the same client wait on one lock.
 
 ## API
 
@@ -97,5 +105,7 @@ go test ./internal/domain/ ./internal/service/portfolio/ -run Margin -count=1
 ## Limitations
 
 - No funding rates or trading fees
-- Cross liquidation of under-maint account closes open positions (paper simplification)
+- MMR is a flat 0.5% of **entry** notional (not mark, not tiered)
+- Cross health ignores spot collateral and outstanding debt/interest; View.Equity includes spot so it is **not** margin level
+- Cross “partial” liquidation often full-closes leveraged quote-debt longs (paper simplification)
 - Informational simulation — not real money / not financial advice

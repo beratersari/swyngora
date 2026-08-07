@@ -1,5 +1,6 @@
 {
   "title": "AI assistant",
+  "eyebrow": "Research desk",
   "subtitle": "Ask about markets, indicators, and watchlists. Answers use live tools when available.",
   "resource": "AI assistant",
   "disclaimer": "Informational only — not financial advice. Figures should come from tools, not model memory.",
@@ -10,6 +11,7 @@
   "assistant": "Assistant",
   "thinking": "Thinking… this can take up to a few minutes.",
   "thinkingLabel": "Thinking",
+  "thinkingSummary": "Thinking · {{count}} steps",
   "toolsLabel": "Tools",
   "emptyHint": "Start a conversation, or try a suggestion:",
   "sessionLabel": "Session",

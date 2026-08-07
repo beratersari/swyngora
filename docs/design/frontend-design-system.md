@@ -16,6 +16,7 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 | Brand + semantic colors | `frontend/src/styles/tokens/colors.ts` |
 | Type scale + fonts | `frontend/src/styles/tokens/typography.ts` |
 | Spacing / radius | `frontend/src/styles/tokens/spacing.ts` |
+| Motion | `frontend/src/styles/tokens/motion.ts` |
 | styled-components theme | `frontend/src/styles/theme.ts` + `GlobalStyle.ts` |
 | Ant Design theme map | `frontend/src/styles/antdTheme.ts` |
 | Text atom | `frontend/src/components/atoms/Text/` |
@@ -74,6 +75,21 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 | `status.success` | mountainMeadow |
 | `chart.up` | caribbeanGreen (**charts + focus only**) |
 | `chart.down` | `#E07A7A` (readable red; not in brand set) |
+
+## 2b. Motion
+
+Desk UI uses **short, functional** motion — never cinematic. Tokens: `theme.motion.duration` (`instant` / `fast` / `base` / `slow`) and `theme.motion.ease`.
+
+| Pattern | Where |
+|---|---|
+| Page enter (fade + 10px rise) | `PageEnter` on route change |
+| Star pop | `WatchStar` when a pair is added |
+| Price flash (green/red wash) | `FlashValue` on live ticks |
+| Live pulse | `ConnectionStatus` while API is live |
+| Hover lift | buttons, nav pills, setup cards |
+| Tape pause | ticker marquee pauses when the tab is hidden |
+
+Always wrap new animations in `@media (prefers-reduced-motion: reduce)`. `GlobalStyle` disables long transitions globally for that query.
 
 **Rules**
 

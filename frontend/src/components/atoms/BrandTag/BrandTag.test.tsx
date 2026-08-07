@@ -8,4 +8,9 @@ describe('BrandTag', () => {
     renderWithTheme(<BrandTag variant="live">updating…</BrandTag>);
     expect(screen.getByText('updating…')).toBeInTheDocument();
   });
+
+  it('renders exchange chips', () => {
+    renderWithTheme(<BrandTag variant="exchange">binance</BrandTag>);
+    expect(screen.getByText('binance')).toBeInTheDocument();
+  });
 });
