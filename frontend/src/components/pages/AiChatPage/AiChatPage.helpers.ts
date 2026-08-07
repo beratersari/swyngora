@@ -18,7 +18,12 @@ export function createUserMessage(content: string): ChatMessage {
 
 export function createAssistantMessage(
   content: string,
-  opts?: { tools?: string[]; thinking?: string[]; isError?: boolean },
+  opts?: {
+    tools?: string[];
+    thinking?: string[];
+    references?: ChatMessage['references'];
+    isError?: boolean;
+  },
 ): ChatMessage {
   return {
     id: newId(),
@@ -26,9 +31,32 @@ export function createAssistantMessage(
     content: content.trim() || '—',
     tools: opts?.tools?.filter(Boolean),
     thinking: opts?.thinking?.filter(Boolean),
+    references: sanitizeChatReferences(opts?.references),
     isError: opts?.isError,
     createdAt: Date.now(),
   };
+}
+
+export function sanitizeChatReferences(
+  refs: ChatMessage['references'] | undefined,
+  limit = 12,
+): ChatMessage['references'] {
+  if (!refs?.length) return undefined;
+  const out: NonNullable<ChatMessage['references']> = [];
+  const seen = new Set<string>();
+  for (const r of refs) {
+    const url = (r.url ?? '').trim();
+    if (!/^https?:\/\//i.test(url) || seen.has(url)) continue;
+    seen.add(url);
+    out.push({
+      url,
+      title: (r.title ?? '').trim() || url,
+      source: r.source,
+      snippet: r.snippet,
+    });
+    if (out.length >= limit) break;
+  }
+  return out.length ? out : undefined;
 }
 
 export function canSendMessage(draft: string, isPending: boolean): boolean {

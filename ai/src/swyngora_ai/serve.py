@@ -88,6 +88,7 @@ class Handler(BaseHTTPRequestHandler):
                     "sessionId": result.session_id,
                     "tools": result.tools,
                     "thinking": result.thinking,
+                    "references": result.references,
                 },
             )
         except Exception as e:  # noqa: BLE001
@@ -110,6 +111,7 @@ class Handler(BaseHTTPRequestHandler):
                         "reply": result.reply,
                         "tools": result.tools,
                         "thinking": result.thinking,
+                        "references": result.references,
                         "sessionId": result.session_id,
                     }
                 )
@@ -161,8 +163,16 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"failed to start orchestrator: {e}", file=sys.stderr)
         return 1
+    from swyngora_ai.config import get_settings
+
+    cfg = get_settings()
+    model = cfg.grok_model if cfg.llm_provider == "grok" else cfg.ollama_model
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"swyngora-ai listening on http://{args.host}:{args.port}", flush=True)
+    print(
+        f"swyngora-ai listening on http://{args.host}:{args.port} "
+        f"provider={cfg.llm_provider} model={model}",
+        flush=True,
+    )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

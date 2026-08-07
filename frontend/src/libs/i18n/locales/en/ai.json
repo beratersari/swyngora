@@ -13,11 +13,12 @@
   "thinkingLabel": "Thinking",
   "thinkingSummary": "Thinking · {{count}} steps",
   "toolsLabel": "Tools",
+  "sourcesLabel": "Sources",
   "emptyHint": "Start a conversation, or try a suggestion:",
   "sessionLabel": "Session",
   "enterHint": "Enter to send · Shift+Enter for newline",
   "errors": {
-    "unavailable": "AI service is unavailable. Start the Python AI service (port 8090) and ensure Ollama or Grok is configured."
+    "unavailable": "AI assistant is unavailable. Start the Python AI service (port 8090). Use Grok (XAI_API_KEY) or run Ollama locally."
   },
   "suggestions": {
     "btcRsi": "What is BTC RSI on binance 1h?",

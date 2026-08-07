@@ -58,10 +58,11 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"reply":     res.Reply,
-		"sessionId": session,
-		"tools":     res.Tools,
-		"thinking":  res.Thinking,
-		"note":      "Informational only — not financial advice.",
+		"reply":      res.Reply,
+		"sessionId":  session,
+		"tools":      res.Tools,
+		"thinking":   res.Thinking,
+		"references": res.References,
+		"note":       "Informational only — not financial advice.",
 	})
 }

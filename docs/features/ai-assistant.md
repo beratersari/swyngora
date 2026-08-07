@@ -28,6 +28,7 @@ User → Orchestrator (LangGraph create_react_agent)
 
 - Market numbers must come from tools (ticker, candles, supply, indicators, spot).
 - Social/X results are labeled weak and incomplete.
+- Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
 - Session memory is in-process (not durable across restarts).
 
@@ -70,6 +71,8 @@ Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_dif
 - X agent is not official X API
 - Telegram AI mode (`/ask`) not wired yet
 - Streaming UI not shipped
+- Web research prefers Wikipedia, Google News RSS, CoinGecko, and Hacker News (free). DuckDuckGo is optional and often times out.
+- X is StockTwits/HN proxies, not the official API
 
 ## Mobile client
 

@@ -7,6 +7,7 @@ import {
   createUserMessage,
   parseChatMarkdown,
   parseInlineMd,
+  sanitizeChatReferences,
   sanitizeThinkingLines,
   uniqueToolNames,
 } from './AiChatPage.helpers';
@@ -67,6 +68,18 @@ describe('parseChatMarkdown', () => {
     expect(blocks[0]).toEqual({ type: 'p', text: '**BTCUSDT 1h RSI (14):** 59.32' });
     expect(blocks[1]).toEqual({ type: 'ul', items: ['Neutral zone', 'Price above EMA'] });
     expect(blocks[2]).toEqual({ type: 'pre', text: 'raw' });
+  });
+});
+
+describe('sanitizeChatReferences', () => {
+  it('keeps http(s) urls and drops junk', () => {
+    const out = sanitizeChatReferences([
+      { url: 'https://coinmarketcap.com/currencies/bitcoin/', title: 'Bitcoin' },
+      { url: 'javascript:alert(1)', title: 'bad' },
+      { url: 'https://coinmarketcap.com/currencies/bitcoin/', title: 'dup' },
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out?.[0]?.title).toBe('Bitcoin');
   });
 });
 

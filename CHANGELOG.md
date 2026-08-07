@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AI chat sources:** assistant returns `references` (title + URL) from web/X research; `/ai` shows a Sources list; `web_research` uses Wikipedia + Google News RSS + CoinGecko + HN (DuckDuckGo is timed/optional) (`docs/features/ai-assistant.md`)
 - **Paper portfolio performance:** `GET /api/v1/portfolio/performance?period=1d|1w|1m|3m` returns equity time series plus period P&L amount and percent; 15m snapshot worker; MCP `get_portfolio_performance` (`docs/features/paper-trading.md`)
 - **Desk motion:** page enter, watchlist star pop, live price flash, connection pulse, hover lifts; ticker tape GPU + pause when tab hidden; Markets/Watchlist table columns memoized to cut poll jank (`frontend/src/styles/tokens/motion.ts`)
 - **Swing signals desk (`/signals`):** watchlist scanner UI — confluence setup cards (EMA + RSI + volume), rule CRUD + 4h swing stack, live hits, historical lab with 1/5/20d returns; coin-detail chart markers (`docs/features/indicator-scanner.md`)

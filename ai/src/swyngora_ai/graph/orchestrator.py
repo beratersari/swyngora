@@ -13,6 +13,7 @@ from swyngora_ai.agents.specialists import build_specialist_tools
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.progress import emit, reset_progress, set_progress
+from swyngora_ai.references import extract_references
 
 
 @dataclass
@@ -23,6 +24,7 @@ class ChatResult:
     tools: list[str] = field(default_factory=list)
     thinking: list[str] = field(default_factory=list)
     session_id: str = "default"
+    references: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -214,12 +216,17 @@ class Orchestrator:
                 if "not financial advice" not in reply.lower():
                     reply = f"{reply}\n\n{self.settings.disclaimer}"
 
+            refs = extract_references(
+                *[_content_text(getattr(m, "content", "")) for m in turn_msgs if isinstance(m, ToolMessage)],
+                reply,
+            )
             emit("final", reply[:200])
             return ChatResult(
                 reply=reply,
                 tools=tools_acc,
                 thinking=thinking_acc,
                 session_id=session_id,
+                references=[r.as_dict() for r in refs],
             )
         finally:
             reset_progress(token)

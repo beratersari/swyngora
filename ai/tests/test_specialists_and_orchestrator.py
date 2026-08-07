@@ -65,6 +65,7 @@ def test_orchestrator_chat_with_scripted_model():
     assert out.reply
     assert isinstance(out.tools, list)
     assert isinstance(out.thinking, list)
+    assert isinstance(out.references, list)
 
 
 def test_extract_trace_tools():

@@ -3324,9 +3324,29 @@ components:
           type: array
           items: { type: string }
           description: High-level plan lines (optional)
+        references:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiChatReference'
+          description: Public web/X/news URLs gathered by research tools (optional)
         note:
           type: string
           description: Disclaimer (e.g. not financial advice)
+    AiChatReference:
+      type: object
+      required: [url]
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+          format: uri
+        source:
+          type: string
+          enum: [web, news, x, hn]
+          description: Origin bucket for the UI chip
+        snippet:
+          type: string
     CandlesResponse:
       type: object
       properties:

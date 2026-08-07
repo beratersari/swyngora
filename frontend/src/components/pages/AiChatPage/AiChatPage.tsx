@@ -48,6 +48,10 @@ import {
   TraceDetails,
   TraceList,
   UserBody,
+  RefItem,
+  RefLink,
+  RefList,
+  RefUrl,
 } from './AiChatPage.styles';
 
 function renderInline(text: string): ReactNode[] {
@@ -123,6 +127,7 @@ export function AiChatPage() {
         createAssistantMessage(res.reply ?? '', {
           tools: res.tools ?? undefined,
           thinking: res.thinking ?? undefined,
+          references: res.references ?? undefined,
         }),
       ]);
     } catch (err) {
@@ -226,6 +231,21 @@ export function AiChatPage() {
                         {tool}
                       </MetaChip>
                     ))}
+                  </MetaRow>
+                ) : null}
+                {m.references && m.references.length > 0 ? (
+                  <MetaRow>
+                    <MetaLabel>{t('ai:sourcesLabel', { defaultValue: 'Sources' })}</MetaLabel>
+                    <RefList>
+                      {m.references.map((ref, i) => (
+                        <RefItem key={ref.url}>
+                          <RefLink href={ref.url} target="_blank" rel="noopener noreferrer">
+                            {i + 1}. {ref.title || ref.url}
+                          </RefLink>
+                          <RefUrl>{ref.url}</RefUrl>
+                        </RefItem>
+                      ))}
+                    </RefList>
                   </MetaRow>
                 ) : null}
               </Bubble>

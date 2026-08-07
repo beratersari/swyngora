@@ -81,6 +81,28 @@ describe('AiChatPage', () => {
     expect(screen.getByText('get_indicators')).toBeInTheDocument();
   });
 
+  it('shows clickable source URLs from research', async () => {
+    const user = userEvent.setup();
+    postChat.mockResolvedValue({
+      reply: 'BTC near 65k. Not financial advice.',
+      sessionId: 'web-ai-test',
+      tools: ['web_agent'],
+      thinking: ['research'],
+      references: [
+        {
+          title: 'Bitcoin price',
+          url: 'https://coinmarketcap.com/currencies/bitcoin/',
+          source: 'web',
+        },
+      ],
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await user.type(screen.getByRole('textbox'), 'btc news');
+    await user.click(screen.getByRole('button', { name: /send|gönder/i }));
+    const link = await screen.findByRole('link', { name: /bitcoin price/i });
+    expect(link).toHaveAttribute('href', 'https://coinmarketcap.com/currencies/bitcoin/');
+  });
+
   it('shows error bubble when the API fails', async () => {
     const user = userEvent.setup();
     postChat.mockRejectedValue({ status: 502 });

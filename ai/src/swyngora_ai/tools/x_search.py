@@ -158,7 +158,10 @@ def _fetch_stocktwits(symbol: str, limit: int) -> list[str]:
         likes = ((msg.get("likes") or {}).get("total")) or 0
         if len(body) > 220:
             body = body[:217] + "…"
-        lines.append(f"@{user} ({created}, likes={likes}) [{title}]: {body}")
+        lines.append(
+            f"@{user} ({created}, likes={likes}) [{title}]: {body}\n"
+            f"   URL: https://stocktwits.com/symbol/{urllib.parse.quote(symbol)}"
+        )
     return lines
 
 

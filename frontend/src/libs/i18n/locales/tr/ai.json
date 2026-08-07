@@ -13,6 +13,7 @@
   "thinkingLabel": "Düşünme",
   "thinkingSummary": "Düşünme · {{count}} adım",
   "toolsLabel": "Araçlar",
+  "sourcesLabel": "Kaynaklar",
   "emptyHint": "Bir sohbet başlatın veya öneriyi deneyin:",
   "sessionLabel": "Oturum",
   "enterHint": "Göndermek için Enter · Yeni satır için Shift+Enter",

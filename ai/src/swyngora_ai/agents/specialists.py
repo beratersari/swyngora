@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,7 @@ from swyngora_ai.agents.prompts import (
 )
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.progress import emit
+from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
 from swyngora_ai.tools.web_search import build_web_tools
 from swyngora_ai.tools.x_search import build_x_tools
@@ -109,8 +110,21 @@ def _run_react(
     for t in nested_tools[:30]:
         emit("tool", f"{specialist}: {t}")
     emit("status", f"{specialist} finished")
-    # Return answer only — do not embed tool dumps into the model transcript.
+    # Keep URLs on the specialist return so the orchestrator can list Sources.
+    blobs = [_content_text_local(getattr(m, "content", "")) for m in msgs if isinstance(m, ToolMessage)]
+    refs = extract_references(*blobs, reply)
+    if refs:
+        lines = "\n".join(f"- [{r.title}]({r.url})" for r in refs[:12])
+        reply = f"{reply.rstrip()}\n\nSOURCES:\n{lines}"
     return reply
+
+
+def _content_text_local(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return str(content)
 
 
 class TaskInput(BaseModel):

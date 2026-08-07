@@ -257,6 +257,45 @@ export const MetaChip = styled.span<{ $kind?: 'tool' | 'thinking' }>`
       $kind === 'thinking' ? theme.palette.frog : theme.palette.mountainMeadow};
 `;
 
+export const RefList = styled.ol`
+  margin: ${({ theme }) => theme.spacing[2]}px 0 0;
+  padding: 0;
+  width: 100%;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+export const RefItem = styled.li`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  background: ${({ theme }) => theme.palette.richBlack};
+`;
+
+export const RefLink = styled.a`
+  color: ${({ theme }) => theme.palette.mint} !important;
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-word;
+
+  &:hover {
+    color: ${({ theme }) => theme.palette.caribbeanGreen} !important;
+    text-decoration: underline;
+  }
+`;
+
+export const RefUrl = styled.span`
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 11px;
+  color: ${({ theme }) => theme.palette.pistachio};
+  word-break: break-all;
+`;
+
 export const MetaLabel = styled.span`
   display: block;
   width: 100%;

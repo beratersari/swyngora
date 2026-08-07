@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -79,10 +80,24 @@ func mapError(err error) (status int, code, message string) {
 	case errors.Is(err, domain.ErrRateLimited):
 		return http.StatusTooManyRequests, "rate_limited", "rate limited; try again later"
 	case errors.Is(err, domain.ErrUpstream):
+		if isAIUpstream(err) {
+			return http.StatusBadGateway, "ai_unavailable",
+				"AI assistant is unavailable. Start the Python AI service and ensure Ollama is running or AI_LLM_PROVIDER=grok with XAI_API_KEY."
+		}
 		return http.StatusBadGateway, "upstream_error", "upstream data source unavailable"
 	default:
 		return http.StatusInternalServerError, "internal_error", "internal error"
 	}
+}
+
+func isAIUpstream(err error) bool {
+	if err == nil {
+		return false
+	}
+	m := strings.ToLower(err.Error())
+	return strings.Contains(m, "ai service") || strings.Contains(m, "ai error") ||
+		strings.Contains(m, "ai returned") || strings.Contains(m, "ai_failed") ||
+		strings.Contains(m, "/v1/chat")
 }
 
 // publicInvalidArgument returns a short client-safe validation message.
