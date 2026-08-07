@@ -266,3 +266,45 @@ func TestPortfolioHTTP_CancelAllOrders(t *testing.T) {
 		t.Fatalf("second cancel-all %v", got)
 	}
 }
+
+func TestPortfolioHTTP_RecurringBuyNamedInterval(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-rb", "startingBalance": 10000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-rb", "symbol": "ETHUSDT", "name": "Every 12h ETH",
+		"amount": 1500, "frequency": "interval", "intervalHours": 12,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/recurring-buys", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.CreateRecurringBuy(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("plan %d %s", rr.Code, rr.Body.String())
+	}
+	var plan map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["name"] != "Every 12h ETH" || plan["intervalHours"].(float64) != 12 {
+		t.Fatalf("%v", plan)
+	}
+	id := plan["id"].(string)
+	body, _ = json.Marshal(map[string]any{"name": "Renamed 12h"})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/portfolio/recurring-buys/"+id+"?clientId=http-rb", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.UpdateRecurringBuy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch %d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["name"] != "Renamed 12h" {
+		t.Fatalf("%v", plan)
+	}
+}

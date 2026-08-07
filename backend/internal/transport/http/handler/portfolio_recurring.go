@@ -15,8 +15,12 @@ type recurringBuyPlanDTO struct {
 	ClientID      string  `json:"clientId"`
 	Exchange      string  `json:"exchange"`
 	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
 	Amount        float64 `json:"amount"`
 	Frequency     string  `json:"frequency"`
+	Weekday       string  `json:"weekday,omitempty"`
+	DayOfMonth    int     `json:"dayOfMonth,omitempty"`
+	IntervalHours int     `json:"intervalHours,omitempty"`
 	Status        string  `json:"status"`
 	NextRunAt     string  `json:"nextRunAt"`
 	LastRunAt     *string `json:"lastRunAt,omitempty"`
@@ -41,8 +45,9 @@ type recurringBuyRunDTO struct {
 
 func recurringPlanDTO(p *domain.RecurringBuyPlan) recurringBuyPlanDTO {
 	d := recurringBuyPlanDTO{
-		ID: p.ID, ClientID: p.ClientID, Exchange: string(p.Exchange), Symbol: p.Symbol,
-		Amount: p.Amount, Frequency: string(p.Frequency), Status: string(p.Status),
+		ID: p.ID, ClientID: p.ClientID, Exchange: string(p.Exchange), Symbol: p.Symbol, Name: p.Name,
+		Amount: p.Amount, Frequency: string(p.Frequency), Weekday: p.Weekday, DayOfMonth: p.DayOfMonth,
+		IntervalHours: p.IntervalHours, Status: string(p.Status),
 		NextRunAt: p.NextRunAt.UTC().Format(time.RFC3339Nano), LastPeriodKey: p.LastPeriodKey,
 		CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -65,12 +70,26 @@ func recurringRunDTO(r *domain.RecurringBuyRun) recurringBuyRunDTO {
 }
 
 type createRecurringBody struct {
-	ClientID  string  `json:"clientId"`
-	Exchange  string  `json:"exchange"`
-	Symbol    string  `json:"symbol"`
-	Amount    float64 `json:"amount"`
-	Frequency string  `json:"frequency"`
-	StartAt   string  `json:"startAt"`
+	ClientID      string  `json:"clientId"`
+	Exchange      string  `json:"exchange"`
+	Symbol        string  `json:"symbol"`
+	Name          string  `json:"name"`
+	Amount        float64 `json:"amount"`
+	Frequency     string  `json:"frequency"`
+	Weekday       string  `json:"weekday"`
+	DayOfMonth    int     `json:"dayOfMonth"`
+	IntervalHours int     `json:"intervalHours"`
+	StartAt       string  `json:"startAt"`
+}
+
+type updateRecurringBody struct {
+	Name          *string  `json:"name"`
+	Amount        *float64 `json:"amount"`
+	Frequency     *string  `json:"frequency"`
+	Weekday       *string  `json:"weekday"`
+	DayOfMonth    *int     `json:"dayOfMonth"`
+	IntervalHours *int     `json:"intervalHours"`
+	StartAt       string   `json:"startAt"`
 }
 
 // CreateRecurringBuy handles POST /api/v1/portfolio/recurring-buys
@@ -98,8 +117,9 @@ func (h *PortfolioHandler) CreateRecurringBuy(w http.ResponseWriter, r *http.Req
 		start = &u
 	}
 	plan, err := h.svc.CreateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyCreateInput{
-		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol,
-		Amount: body.Amount, Frequency: body.Frequency, StartAt: start,
+		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol, Name: body.Name,
+		Amount: body.Amount, Frequency: body.Frequency, Weekday: body.Weekday,
+		DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -122,6 +142,38 @@ func (h *PortfolioHandler) ListRecurringBuys(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{
 		"clientId": clientIDFrom(r), "plans": items, "count": len(items),
 	})
+}
+
+// UpdateRecurringBuy handles PATCH /api/v1/portfolio/recurring-buys/{id}
+func (h *PortfolioHandler) UpdateRecurringBuy(w http.ResponseWriter, r *http.Request) {
+	var body updateRecurringBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	var start *time.Time
+	if body.StartAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, body.StartAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, body.StartAt)
+		}
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: startAt must be RFC3339", domain.ErrInvalidArgument))
+			return
+		}
+		u := t.UTC()
+		start = &u
+	}
+	plan, err := h.svc.UpdateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyUpdateInput{
+		ClientID: clientIDFrom(r), PlanID: r.PathValue("id"),
+		Name: body.Name, Amount: body.Amount, Frequency: body.Frequency,
+		Weekday: body.Weekday, DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, recurringPlanDTO(plan))
 }
 
 // GetRecurringBuy handles GET /api/v1/portfolio/recurring-buys/{id}

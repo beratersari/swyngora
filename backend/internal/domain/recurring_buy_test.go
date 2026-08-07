@@ -44,3 +44,49 @@ func TestAdvanceRecurringRunAt(t *testing.T) {
 		}
 	}
 }
+
+func TestRecurringIntervalAndSalaryDay(t *testing.T) {
+	from := time.Date(2024, 6, 10, 9, 0, 0, 0, time.UTC)
+	iv := RecurringBuyPlan{Frequency: RecurringInterval, IntervalHours: 12}
+	next := AdvanceRecurringSchedule(from, iv)
+	if !next.Equal(from.Add(12 * time.Hour)) {
+		t.Fatalf("interval +12h: %v", next)
+	}
+	if k := RecurringPeriodKeyPlan(from, iv); k != "i12-1718002800" && k[:4] != "i12-" {
+		t.Fatalf("interval key=%s", k)
+	}
+	// Salary day 31 from Jan 31 → Feb 29 2024
+	jan := time.Date(2024, 1, 31, 8, 0, 0, 0, time.UTC)
+	feb := AdvanceRecurringSchedule(jan, RecurringBuyPlan{Frequency: RecurringMonthly, DayOfMonth: 31})
+	if feb.Month() != time.February || feb.Day() != 29 {
+		t.Fatalf("clamp 31 → %v", feb)
+	}
+	// Next Monday on or after Wednesday
+	wed := time.Date(2024, 6, 5, 10, 0, 0, 0, time.UTC) // Wednesday
+	mon := AlignRecurringStart(wed, RecurringBuyPlan{Frequency: RecurringWeekly, Weekday: "monday"})
+	if mon.Weekday() != time.Monday || mon.Day() != 10 {
+		t.Fatalf("next monday=%v", mon)
+	}
+	now := time.Date(2024, 6, 26, 12, 0, 0, 0, time.UTC) // after the 15th
+	first := FirstRecurringRunAt(now, nil, RecurringBuyPlan{Frequency: RecurringMonthly, DayOfMonth: 15})
+	if first.Month() != time.July || first.Day() != 15 {
+		t.Fatalf("salary next=%v", first)
+	}
+	name, err := NormalizeRecurringBuyName("Salary Day Buy", "BTCUSDT", RecurringMonthly)
+	if err != nil || name != "Salary Day Buy" {
+		t.Fatalf("%q %v", name, err)
+	}
+	def, err := NormalizeRecurringBuyName("", "ETHUSDT", RecurringInterval)
+	if err != nil || def != "ETHUSDT interval" {
+		t.Fatalf("default name %q %v", def, err)
+	}
+	if err := ValidateRecurringSchedule(RecurringInterval, "", 0, 12); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateRecurringSchedule(RecurringWeekly, "monday", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateRecurringSchedule(RecurringDaily, "monday", 0, 0); err == nil {
+		t.Fatal("daily+weekday")
+	}
+}

@@ -17,9 +17,10 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open orders, or one market (`symbol` + optional `exchange`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
 | `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
-| `POST` | `/api/v1/portfolio/recurring-buys` | Create recurring buy (DCA) plan |
+| `POST` | `/api/v1/portfolio/recurring-buys` | Create named recurring buy (DCA) plan |
 | `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}` | Get plan |
+| `PATCH` | `/api/v1/portfolio/recurring-buys/{id}` | Update name / amount / schedule |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |
@@ -43,9 +44,13 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 
 | Field | Description |
 |-------|-------------|
+| `name` | Optional label (`Salary Day Buy`); default `"SYMBOL frequency"` |
 | `symbol` + `exchange` | Coin pair to buy |
 | `amount` | Cash notional spent each run at last market price (`qty = amount / price`) |
-| `frequency` | `daily` \| `weekly` \| `monthly` |
+| `frequency` | `daily` \| `weekly` \| `monthly` \| `interval` |
+| `weekday` | Weekly: `monday`…`sunday` (UTC) |
+| `dayOfMonth` | Monthly: 1–31 (salary day; clamped on short months) |
+| `intervalHours` | Interval: 1–168 hours (e.g. `12`) |
 | `startAt` | Optional first run (RFC3339); default now |
 
 **Lifecycle:** create (active) → pause / resume → delete. Failed runs (e.g. insufficient cash) keep the plan active and only that period is recorded as failed.

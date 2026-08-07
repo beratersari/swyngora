@@ -141,8 +141,12 @@ CREATE TABLE IF NOT EXISTS recurring_buy_plans (
 	client_id       TEXT NOT NULL,
 	exchange        TEXT NOT NULL,
 	symbol          TEXT NOT NULL,
+	name            TEXT NOT NULL DEFAULT '',
 	amount          REAL NOT NULL,
 	frequency       TEXT NOT NULL,
+	weekday         TEXT NOT NULL DEFAULT '',
+	day_of_month    INTEGER NOT NULL DEFAULT 0,
+	interval_hours  INTEGER NOT NULL DEFAULT 0,
 	status          TEXT NOT NULL,
 	next_run_at     TEXT NOT NULL,
 	last_run_at     TEXT,
@@ -283,6 +287,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp
 		`ALTER TABLE margin_positions ADD COLUMN last_interest_at TEXT`,
 		`ALTER TABLE margin_trades ADD COLUMN principal_paid REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE margin_trades ADD COLUMN interest_paid REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN weekday TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN day_of_month INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN interval_hours INTEGER NOT NULL DEFAULT 0`,
 		// Prefer SL/TP uniqueness only; drop older liquidation-inclusive unique index if present.
 		`DROP INDEX IF EXISTS idx_margin_trades_forced_close`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp ON margin_trades(position_id, action) WHERE action IN ('stop_loss', 'take_profit')`,
@@ -1462,7 +1470,7 @@ func parseTime(raw string) time.Time {
 	return t.UTC()
 }
 
-const recurringPlanCols = `id, client_id, exchange, symbol, amount, frequency, status,
+const recurringPlanCols = `id, client_id, exchange, symbol, name, amount, frequency, weekday, day_of_month, interval_hours, status,
 	next_run_at, last_run_at, last_period_key, created_at, updated_at`
 
 func scanRecurringPlan(row scannable) (*domain.RecurringBuyPlan, error) {
@@ -1470,7 +1478,7 @@ func scanRecurringPlan(row scannable) (*domain.RecurringBuyPlan, error) {
 	var ex, freq, st, next, cAt, uAt string
 	var lastRun sql.NullString
 	if err := row.Scan(
-		&p.ID, &p.ClientID, &ex, &p.Symbol, &p.Amount, &freq, &st,
+		&p.ID, &p.ClientID, &ex, &p.Symbol, &p.Name, &p.Amount, &freq, &p.Weekday, &p.DayOfMonth, &p.IntervalHours, &st,
 		&next, &lastRun, &p.LastPeriodKey, &cAt, &uAt,
 	); err != nil {
 		return nil, err
@@ -1494,8 +1502,8 @@ func (s *SQLite) CreateRecurringBuyPlan(ctx context.Context, p domain.RecurringB
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO recurring_buy_plans (`+recurringPlanCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ID, p.ClientID, string(p.Exchange), p.Symbol, p.Amount, string(p.Frequency), string(p.Status),
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ID, p.ClientID, string(p.Exchange), p.Symbol, p.Name, p.Amount, string(p.Frequency), p.Weekday, p.DayOfMonth, p.IntervalHours, string(p.Status),
 		p.NextRunAt.UTC().Format(time.RFC3339Nano), nullTime(p.LastRunAt), p.LastPeriodKey,
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -1552,6 +1560,30 @@ func (s *SQLite) UpdateRecurringBuyPlanStatus(ctx context.Context, clientID, id 
 		UPDATE recurring_buy_plans SET status = ?, next_run_at = ?, updated_at = ?
 		WHERE id = ? AND client_id = ?
 	`, string(status), nextRunAt.UTC().Format(time.RFC3339Nano), at.UTC().Format(time.RFC3339Nano), id, clientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.GetRecurringBuyPlan(ctx, clientID, id)
+}
+
+// UpdateRecurringBuyPlan updates name, amount, and schedule (status unchanged).
+func (s *SQLite) UpdateRecurringBuyPlan(ctx context.Context, clientID, id string, p domain.RecurringBuyPlan) (*domain.RecurringBuyPlan, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p.UpdatedAt.IsZero() {
+		p.UpdatedAt = time.Now().UTC()
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE recurring_buy_plans
+		SET name = ?, amount = ?, frequency = ?, weekday = ?, day_of_month = ?, interval_hours = ?,
+		    next_run_at = ?, updated_at = ?
+		WHERE id = ? AND client_id = ?
+	`, p.Name, p.Amount, string(p.Frequency), p.Weekday, p.DayOfMonth, p.IntervalHours,
+		p.NextRunAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano), id, clientID)
 	if err != nil {
 		return nil, err
 	}

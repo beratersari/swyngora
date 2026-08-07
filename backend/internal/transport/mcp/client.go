@@ -573,7 +573,7 @@ func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, li
 }
 
 // CreateRecurringBuyPlan creates a paper recurring buy plan.
-func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error) {
+func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol,
 		"amount": amount, "frequency": frequency,
@@ -581,7 +581,54 @@ func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchan
 	if startAt != "" {
 		body["startAt"] = startAt
 	}
+	if name != "" {
+		body["name"] = name
+	}
+	if weekday != "" {
+		body["weekday"] = weekday
+	}
+	if dayOfMonth > 0 {
+		body["dayOfMonth"] = dayOfMonth
+	}
+	if intervalHours > 0 {
+		body["intervalHours"] = intervalHours
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/recurring-buys", body)
+}
+
+// UpdateRecurringBuyPlan patches name/amount/schedule. Zero/empty optional fields are omitted.
+func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/recurring-buys/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	body := map[string]any{}
+	if name != "" {
+		body["name"] = name
+	}
+	if frequency != "" {
+		body["frequency"] = frequency
+	}
+	if weekday != "" {
+		body["weekday"] = weekday
+	}
+	if startAt != "" {
+		body["startAt"] = startAt
+	}
+	if amount > 0 {
+		body["amount"] = amount
+	}
+	if dayOfMonth > 0 {
+		body["dayOfMonth"] = dayOfMonth
+	}
+	if intervalHours > 0 {
+		body["intervalHours"] = intervalHours
+	}
+	return c.sendJSON(ctx, http.MethodPatch, path, body)
 }
 
 // ListRecurringBuyPlans lists paper recurring buy plans.

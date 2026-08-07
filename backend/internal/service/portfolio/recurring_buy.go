@@ -14,13 +14,31 @@ import (
 
 // RecurringBuyCreateInput creates a paper recurring buy plan.
 type RecurringBuyCreateInput struct {
-	ClientID  string
-	Exchange  string
-	Symbol    string
-	Amount    float64 // cash notional per run
-	Frequency string  // daily | weekly | monthly
+	ClientID      string
+	Exchange      string
+	Symbol        string
+	Name          string // optional label; default "<symbol> <frequency>"
+	Amount        float64 // cash notional per run
+	Frequency     string  // daily | weekly | monthly | interval
+	Weekday       string  // monday..sunday; weekly
+	DayOfMonth    int     // 1-31; monthly salary day
+	IntervalHours int     // 1-168; interval frequency
 	// StartAt is the first scheduled run (default: now — first worker tick after create).
 	StartAt *time.Time
+}
+
+// RecurringBuyUpdateInput patches name / amount / schedule of an existing plan.
+// Nil / empty optional fields keep the current value. Frequency set to non-empty replaces schedule extras.
+type RecurringBuyUpdateInput struct {
+	ClientID      string
+	PlanID        string
+	Name          *string
+	Amount        *float64
+	Frequency     *string
+	Weekday       *string
+	DayOfMonth    *int
+	IntervalHours *int
+	StartAt       *time.Time // if set, next run is recomputed from this instant
 }
 
 // CreateRecurringBuyPlan validates and stores an active plan.
@@ -48,6 +66,14 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if err != nil {
 		return nil, err
 	}
+	weekday := strings.ToLower(strings.TrimSpace(in.Weekday))
+	if err := domain.ValidateRecurringSchedule(freq, weekday, in.DayOfMonth, in.IntervalHours); err != nil {
+		return nil, err
+	}
+	name, err := domain.NormalizeRecurringBuyName(in.Name, sym, freq)
+	if err != nil {
+		return nil, err
+	}
 	n, err := s.store.CountRecurringBuyPlans(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -56,16 +82,89 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 		return nil, fmt.Errorf("%w: max %d recurring buy plans per client", domain.ErrInvalidArgument, domain.MaxRecurringBuyPlansPerClient)
 	}
 	now := time.Now().UTC()
-	start := now
-	if in.StartAt != nil && !in.StartAt.IsZero() {
-		start = in.StartAt.UTC()
+	draft := domain.RecurringBuyPlan{
+		Frequency: freq, Weekday: weekday, DayOfMonth: in.DayOfMonth, IntervalHours: in.IntervalHours,
 	}
+	next := domain.FirstRecurringRunAt(now, in.StartAt, draft)
 	plan := domain.RecurringBuyPlan{
-		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym,
-		Amount: in.Amount, Frequency: freq, Status: domain.RecurringBuyActive,
-		NextRunAt: start, CreatedAt: now, UpdatedAt: now,
+		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Name: name,
+		Amount: in.Amount, Frequency: freq, Weekday: weekday, DayOfMonth: in.DayOfMonth, IntervalHours: in.IntervalHours,
+		Status: domain.RecurringBuyActive, NextRunAt: next, CreatedAt: now, UpdatedAt: now,
 	}
 	return s.store.CreateRecurringBuyPlan(ctx, plan)
+}
+
+// UpdateRecurringBuyPlan changes name, amount, and/or schedule of a plan.
+func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpdateInput) (*domain.RecurringBuyPlan, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	id := strings.TrimSpace(in.PlanID)
+	if id == "" {
+		return nil, fmt.Errorf("%w: plan id is required", domain.ErrInvalidArgument)
+	}
+	cur, err := s.store.GetRecurringBuyPlan(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	amount := cur.Amount
+	if in.Amount != nil {
+		if *in.Amount < domain.MinRecurringBuyAmount || *in.Amount > domain.MaxRecurringBuyAmount ||
+			math.IsNaN(*in.Amount) || math.IsInf(*in.Amount, 0) {
+			return nil, fmt.Errorf("%w: amount must be between %g and %g", domain.ErrInvalidArgument,
+				domain.MinRecurringBuyAmount, domain.MaxRecurringBuyAmount)
+		}
+		amount = *in.Amount
+	}
+	freq := cur.Frequency
+	weekday := cur.Weekday
+	dom := cur.DayOfMonth
+	ih := cur.IntervalHours
+	if in.Frequency != nil {
+		freq, err = domain.NormalizeRecurringBuyFrequency(*in.Frequency)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if in.Weekday != nil {
+		weekday = strings.ToLower(strings.TrimSpace(*in.Weekday))
+	}
+	if in.DayOfMonth != nil {
+		dom = *in.DayOfMonth
+	}
+	if in.IntervalHours != nil {
+		ih = *in.IntervalHours
+	}
+	if err := domain.ValidateRecurringSchedule(freq, weekday, dom, ih); err != nil {
+		return nil, err
+	}
+	name := cur.Name
+	if in.Name != nil {
+		name, err = domain.NormalizeRecurringBuyName(*in.Name, cur.Symbol, freq)
+		if err != nil {
+			return nil, err
+		}
+	}
+	now := time.Now().UTC()
+	draft := domain.RecurringBuyPlan{Frequency: freq, Weekday: weekday, DayOfMonth: dom, IntervalHours: ih}
+	next := cur.NextRunAt
+	if in.Frequency != nil || in.Weekday != nil || in.DayOfMonth != nil || in.IntervalHours != nil || in.StartAt != nil {
+		next = domain.FirstRecurringRunAt(now, in.StartAt, draft)
+	}
+	updated := *cur
+	updated.Name = name
+	updated.Amount = amount
+	updated.Frequency = freq
+	updated.Weekday = weekday
+	updated.DayOfMonth = dom
+	updated.IntervalHours = ih
+	updated.NextRunAt = next
+	updated.UpdatedAt = now
+	return s.store.UpdateRecurringBuyPlan(ctx, clientID, id, updated)
 }
 
 // ListRecurringBuyPlans lists plans for a client.
@@ -186,12 +285,12 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 		return nil
 	}
 	// Latest missed slot only (skip intermediate catch-up buys).
-	scheduledFor := domain.LatestDueRunAt(plan.NextRunAt, now, plan.Frequency)
+	scheduledFor := domain.LatestDueRunAtPlan(plan.NextRunAt, now, *plan)
 	if scheduledFor.After(now) {
 		return nil
 	}
-	periodKey := domain.RecurringPeriodKey(scheduledFor, plan.Frequency)
-	nextAfter := domain.AdvanceRecurringRunAt(scheduledFor, plan.Frequency)
+	periodKey := domain.RecurringPeriodKeyPlan(scheduledFor, *plan)
+	nextAfter := domain.AdvanceRecurringSchedule(scheduledFor, *plan)
 
 	runID := uuid.NewString()
 	claim := domain.RecurringBuyRun{

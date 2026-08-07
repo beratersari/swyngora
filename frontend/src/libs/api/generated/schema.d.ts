@@ -581,7 +581,11 @@ export interface paths {
         put?: never;
         /**
          * Create a paper recurring buy plan
-         * @description Schedules cash buys of a symbol at market (last) price on a daily, weekly, or monthly cadence.
+         * @description Schedules named cash buys of a symbol at market (last) price.
+         *     frequency: daily | weekly | monthly | interval.
+         *     weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
+         *     interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+         *     Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
          *     Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
          *     Missed periods execute only the latest due slot (no backlog of intermediate buys).
          *     Unique period keys prevent double execution across restarts or concurrent workers.
@@ -612,7 +616,11 @@ export interface paths {
         delete: operations["deleteRecurringBuyPlan"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update a paper recurring buy plan
+         * @description Change name, amount, and/or schedule. Status still uses pause/resume.
+         */
+        patch: operations["updateRecurringBuyPlan"];
         trace?: never;
     };
     "/api/v1/portfolio/recurring-buys/{id}/pause": {
@@ -1628,10 +1636,18 @@ export interface components {
             clientId?: string;
             exchange?: string;
             symbol?: string;
+            /** @description User label e.g. Salary Day Buy */
+            name?: string;
             /** @description Cash notional spent each successful run */
             amount?: number;
             /** @enum {string} */
-            frequency?: "daily" | "weekly" | "monthly";
+            frequency?: "daily" | "weekly" | "monthly" | "interval";
+            /** @enum {string} */
+            weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+            /** @description Monthly calendar day 1-31 */
+            dayOfMonth?: number;
+            /** @description Hours between interval buys */
+            intervalHours?: number;
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -3375,12 +3391,26 @@ export interface operations {
                     /** @example BTCUSDT */
                     symbol: string;
                     /**
+                     * @description User label e.g. Salary Day Buy; default is symbol + frequency
+                     * @example Salary Day Buy
+                     */
+                    name?: string;
+                    /**
                      * @description Cash notional spent each run
-                     * @example 50
+                     * @example 500
                      */
                     amount: number;
                     /** @enum {string} */
-                    frequency: "daily" | "weekly" | "monthly";
+                    frequency: "daily" | "weekly" | "monthly" | "interval";
+                    /**
+                     * @description Weekly — buy on this UTC weekday
+                     * @enum {string}
+                     */
+                    weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+                    /** @description Monthly — calendar day (clamped to last day of short months) */
+                    dayOfMonth?: number;
+                    /** @description Interval frequency — hours between buys (e.g. 12) */
+                    intervalHours?: number;
                     /**
                      * Format: date-time
                      * @description First scheduled run (RFC3339); default is now (next worker tick)
@@ -3457,6 +3487,49 @@ export interface operations {
                     };
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateRecurringBuyPlan: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name?: string;
+                    amount?: number;
+                    /** @enum {string} */
+                    frequency?: "daily" | "weekly" | "monthly" | "interval";
+                    /** @enum {string} */
+                    weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+                    dayOfMonth?: number;
+                    intervalHours?: number;
+                    /** Format: date-time */
+                    startAt?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecurringBuyPlan"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

@@ -318,6 +318,8 @@ type PortfolioPort interface {
 	CountRecurringBuyPlans(ctx context.Context, clientID string) (int, error)
 	// UpdateRecurringBuyPlanStatus sets active/paused.
 	UpdateRecurringBuyPlanStatus(ctx context.Context, clientID, id string, status RecurringBuyPlanStatus, nextRunAt time.Time, at time.Time) (*RecurringBuyPlan, error)
+	// UpdateRecurringBuyPlan writes name, amount, and schedule fields (not status).
+	UpdateRecurringBuyPlan(ctx context.Context, clientID, id string, p RecurringBuyPlan) (*RecurringBuyPlan, error)
 	DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) error
 	// ListDueRecurringBuyPlans returns active plans with next_run_at <= now.
 	ListDueRecurringBuyPlans(ctx context.Context, now time.Time, limit int) ([]RecurringBuyPlan, error)

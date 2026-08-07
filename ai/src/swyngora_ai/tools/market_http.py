@@ -237,9 +237,25 @@ class RecurringBuyCreateInput(BaseModel):
     client_id: str
     symbol: str
     amount: float = Field(gt=0, description="Cash notional per run")
-    frequency: str = Field(description="daily | weekly | monthly")
+    frequency: str = Field(description="daily | weekly | monthly | interval")
     exchange: str = "binance"
+    name: str = Field(default="", description="Label e.g. Salary Day Buy")
+    weekday: str = Field(default="", description="Weekly: monday..sunday")
+    day_of_month: int = Field(default=0, description="Monthly salary day 1-31")
+    interval_hours: int = Field(default=0, description="Interval frequency hours 1-168")
     start_at: str = Field(default="", description="RFC3339 first run; default now")
+
+
+class RecurringBuyUpdateInput(BaseModel):
+    client_id: str
+    plan_id: str
+    name: str = ""
+    amount: float = 0
+    frequency: str = ""
+    weekday: str = ""
+    day_of_month: int = 0
+    interval_hours: int = 0
+    start_at: str = ""
 
 
 class RecurringBuyPlanInput(BaseModel):
@@ -696,6 +712,10 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         amount: float,
         frequency: str,
         exchange: str = "binance",
+        name: str = "",
+        weekday: str = "",
+        day_of_month: int = 0,
+        interval_hours: int = 0,
         start_at: str = "",
     ) -> str:
         body: dict[str, Any] = {
@@ -705,9 +725,48 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "frequency": frequency,
             "exchange": exchange,
         }
+        if name:
+            body["name"] = name
+        if weekday:
+            body["weekday"] = weekday
+        if day_of_month:
+            body["dayOfMonth"] = day_of_month
+        if interval_hours:
+            body["intervalHours"] = interval_hours
         if start_at:
             body["startAt"] = start_at
         return http.post("/api/v1/portfolio/recurring-buys", body)
+
+    def update_recurring_buy(
+        client_id: str,
+        plan_id: str,
+        name: str = "",
+        amount: float = 0,
+        frequency: str = "",
+        weekday: str = "",
+        day_of_month: int = 0,
+        interval_hours: int = 0,
+        start_at: str = "",
+    ) -> str:
+        body: dict[str, Any] = {}
+        if name:
+            body["name"] = name
+        if amount:
+            body["amount"] = amount
+        if frequency:
+            body["frequency"] = frequency
+        if weekday:
+            body["weekday"] = weekday
+        if day_of_month:
+            body["dayOfMonth"] = day_of_month
+        if interval_hours:
+            body["intervalHours"] = interval_hours
+        if start_at:
+            body["startAt"] = start_at
+        return http.patch(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}?clientId={client_id}",
+            body,
+        )
 
     def list_recurring_buys(client_id: str) -> str:
         return http.get("/api/v1/portfolio/recurring-buys", {"clientId": client_id})
@@ -1194,10 +1253,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             create_recurring_buy,
             name="create_recurring_buy",
             description=(
-                "Create a paper recurring buy (DCA) plan: cash amount at market price "
-                "on daily|weekly|monthly schedule. Simulated only."
+                "Create a named paper recurring buy: cash amount at market on "
+                "daily|weekly|monthly|interval. weekday for weekly, dayOfMonth for salary day, "
+                "intervalHours (e.g. 12) for interval. Simulated only."
             ),
             args_schema=RecurringBuyCreateInput,
+        ),
+        StructuredTool.from_function(
+            update_recurring_buy,
+            name="update_recurring_buy",
+            description="Update a paper recurring buy name, amount, or schedule.",
+            args_schema=RecurringBuyUpdateInput,
         ),
         StructuredTool.from_function(
             list_recurring_buys,

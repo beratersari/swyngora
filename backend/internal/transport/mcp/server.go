@@ -62,7 +62,8 @@ type DataPort interface {
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt string) (json.RawMessage, error)
+	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error)
+	UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error)
 	ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -972,11 +973,15 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("create_recurring_buy",
-		mcp.WithDescription("Create a paper recurring buy (DCA) plan: cash amount at market price on daily|weekly|monthly schedule. Simulated only."),
+		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Cash notional per run e.g. 50")),
-		mcp.WithString("frequency", mcp.Required(), mcp.Description("daily | weekly | monthly")),
+		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Cash notional per run e.g. 500")),
+		mcp.WithString("frequency", mcp.Required(), mcp.Description("daily | weekly | monthly | interval")),
+		mcp.WithString("name", mcp.Description("Label e.g. Salary Day Buy")),
+		mcp.WithString("weekday", mcp.Description("Weekly: monday..sunday")),
+		mcp.WithNumber("dayOfMonth", mcp.Description("Monthly salary day 1-31")),
+		mcp.WithNumber("intervalHours", mcp.Description("Interval frequency: 1-168 hours")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 first run; default now")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -996,7 +1001,36 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.CreateRecurringBuyPlan(ctx, clientID, req.GetString("exchange", "binance"), symbol, amount, freq, req.GetString("startAt", ""))
+		raw, err := api.CreateRecurringBuyPlan(ctx, clientID, req.GetString("exchange", "binance"), symbol, amount, freq, req.GetString("startAt", ""),
+			req.GetString("name", ""), req.GetString("weekday", ""), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("update_recurring_buy",
+		mcp.WithDescription("Update a paper recurring buy name, amount, or schedule (frequency/weekday/dayOfMonth/intervalHours). Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+		mcp.WithString("name", mcp.Description("New label")),
+		mcp.WithNumber("amount", mcp.Description("New cash notional per run")),
+		mcp.WithString("frequency", mcp.Description("daily | weekly | monthly | interval")),
+		mcp.WithString("weekday", mcp.Description("monday..sunday")),
+		mcp.WithNumber("dayOfMonth", mcp.Description("1-31")),
+		mcp.WithNumber("intervalHours", mcp.Description("1-168")),
+		mcp.WithString("startAt", mcp.Description("RFC3339 to reschedule first/next run")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.UpdateRecurringBuyPlan(ctx, clientID, planID, req.GetString("name", ""), req.GetString("frequency", ""),
+			req.GetString("weekday", ""), req.GetString("startAt", ""), req.GetFloat("amount", 0), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

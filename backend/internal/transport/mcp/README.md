@@ -42,7 +42,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `cancel_all_portfolio_orders` | Cancel all open paper orders, or one market |
 | `cancel_portfolio_order` | Cancel open pending paper order |
 | `list_portfolio_trades` | Paper trade history |
-| `create_recurring_buy` | Create paper recurring buy (DCA) plan |
+| `create_recurring_buy` | Create named paper recurring buy (daily/weekly/monthly/interval) |
+| `update_recurring_buy` | Update recurring buy name, amount, or schedule |
 | `list_recurring_buys` | List recurring buy plans |
 | `get_recurring_buy` | Get one recurring buy plan |
 | `pause_recurring_buy` | Pause a plan |

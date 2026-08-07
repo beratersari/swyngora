@@ -1612,7 +1612,11 @@ paths:
     post:
       summary: Create a paper recurring buy plan
       description: |
-        Schedules cash buys of a symbol at market (last) price on a daily, weekly, or monthly cadence.
+        Schedules named cash buys of a symbol at market (last) price.
+        frequency: daily | weekly | monthly | interval.
+        weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
+        interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+        Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
         Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
         Missed periods execute only the latest due slot (no backlog of intermediate buys).
         Unique period keys prevent double execution across restarts or concurrent workers.
@@ -1630,14 +1634,33 @@ paths:
                 clientId: { type: string }
                 exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
                 symbol: { type: string, example: BTCUSDT }
+                name:
+                  type: string
+                  maxLength: 80
+                  description: User label e.g. Salary Day Buy; default is symbol + frequency
+                  example: Salary Day Buy
                 amount:
                   type: number
                   exclusiveMinimum: 0
                   description: Cash notional spent each run
-                  example: 50
+                  example: 500
                 frequency:
                   type: string
-                  enum: [daily, weekly, monthly]
+                  enum: [daily, weekly, monthly, interval]
+                weekday:
+                  type: string
+                  enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+                  description: Weekly — buy on this UTC weekday
+                dayOfMonth:
+                  type: integer
+                  minimum: 1
+                  maximum: 31
+                  description: Monthly — calendar day (clamped to last day of short months)
+                intervalHours:
+                  type: integer
+                  minimum: 1
+                  maximum: 168
+                  description: Interval frequency — hours between buys (e.g. 12)
                 startAt:
                   type: string
                   format: date-time
@@ -1703,6 +1726,47 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecurringBuyPlan'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update a paper recurring buy plan
+      description: Change name, amount, and/or schedule. Status still uses pause/resume.
+      operationId: updateRecurringBuyPlan
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 80 }
+                amount: { type: number, exclusiveMinimum: 0 }
+                frequency: { type: string, enum: [daily, weekly, monthly, interval] }
+                weekday: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
+                dayOfMonth: { type: integer, minimum: 1, maximum: 31 }
+                intervalHours: { type: integer, minimum: 1, maximum: 168 }
+                startAt: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Updated plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecurringBuyPlan'
+        '400':
+          $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
     delete:
@@ -3278,12 +3342,24 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
+        name:
+          type: string
+          description: User label e.g. Salary Day Buy
         amount:
           type: number
           description: Cash notional spent each successful run
         frequency:
           type: string
-          enum: [daily, weekly, monthly]
+          enum: [daily, weekly, monthly, interval]
+        weekday:
+          type: string
+          enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
+        dayOfMonth:
+          type: integer
+          description: Monthly calendar day 1-31
+        intervalHours:
+          type: integer
+          description: Hours between interval buys
         status:
           type: string
           enum: [active, paused]

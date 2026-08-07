@@ -47,8 +47,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open paper orders, or one market (`symbol`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
-| `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list paper recurring buy (DCA) plans |
-| `GET`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / delete plan |
+| `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name-schedule / delete plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Recurring buy execution history |

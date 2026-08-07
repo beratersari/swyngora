@@ -38,6 +38,53 @@ func TestRecurringBuy_CreatePauseResumeDelete(t *testing.T) {
 	}
 }
 
+func TestRecurringBuy_NameWeekdayIntervalAndUpdate(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "binance|ETHUSDT": "50"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-named", StartingBalance: 20000}); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-named", Symbol: "BTCUSDT", Name: "Salary Day Buy",
+		Amount: 500, Frequency: "monthly", DayOfMonth: 25,
+	})
+	if err != nil || plan.Name != "Salary Day Buy" || plan.DayOfMonth != 25 {
+		t.Fatalf("%+v %v", plan, err)
+	}
+	if plan.NextRunAt.Day() != 25 {
+		t.Fatalf("next run day=%v", plan.NextRunAt)
+	}
+	mon, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-named", Symbol: "ETHUSDT", Name: "Monday ETH stack",
+		Amount: 1500, Frequency: "weekly", Weekday: "monday",
+	})
+	if err != nil || mon.Weekday != "monday" || mon.NextRunAt.Weekday() != time.Monday {
+		t.Fatalf("%+v %v", mon, err)
+	}
+	iv, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-named", Symbol: "ETHUSDT", Name: "Buy Coins With 30% of My Money",
+		Amount: 1500, Frequency: "interval", IntervalHours: 12,
+	})
+	if err != nil || iv.IntervalHours != 12 || iv.Name != "Buy Coins With 30% of My Money" {
+		t.Fatalf("%+v %v", iv, err)
+	}
+	newName := "Payday BTC"
+	amt := 600.0
+	got, err := svc.UpdateRecurringBuyPlan(ctx, RecurringBuyUpdateInput{
+		ClientID: "rb-named", PlanID: plan.ID, Name: &newName, Amount: &amt,
+	})
+	if err != nil || got.Name != "Payday BTC" || got.Amount != 600 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	n, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = past
+	_ = n
+}
+
 func TestRecurringBuy_ExecuteAndInsufficientCash(t *testing.T) {
 	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
 	ctx := context.Background()
