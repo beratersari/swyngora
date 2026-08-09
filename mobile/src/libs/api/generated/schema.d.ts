@@ -626,6 +626,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transfer virtual cash between own paper portfolios
+         * @description Owner only. Moves available cash from one of your books to another.
+         *     Recorded as transfer_out / transfer_in (not deposit/withdrawal) on both histories.
+         *     Contributed capital moves with the cash so trading P&L is unchanged.
+         *     Shared traders/viewers cannot transfer. Paper trading only — not real money.
+         *
+         */
+        post: operations["transferPortfolioCash"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/cash-movements": {
         parameters: {
             query?: never;
@@ -634,8 +658,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List paper cash deposits and withdrawals
-         * @description Newest first. Includes the opening balance row created with the portfolio.
+         * List paper cash deposits, withdrawals, and internal transfers
+         * @description Newest first. Includes the opening balance row created with the portfolio. Transfer rows include the other book id and name.
          */
         get: operations["listPortfolioCashMovements"];
         put?: never;
@@ -1957,17 +1981,28 @@ export interface components {
         PortfolioCashMovement: {
             id?: string;
             /** @enum {string} */
-            kind?: "deposit" | "withdrawal";
+            kind?: "deposit" | "withdrawal" | "transfer_out" | "transfer_in";
             amount?: number;
             cashAfter?: number;
             netDepositsAfter?: number;
             note?: string;
+            /** @description Other book on an internal transfer */
+            counterpartyPortfolioId?: string;
+            /** @description Other book name at transfer time */
+            counterpartyPortfolioName?: string;
+            /** @description Matching ledger row on the other book */
+            peerMovementId?: string;
             /** Format: date-time */
             createdAt?: string;
         };
         PortfolioCashMoveResponse: {
             movement?: components["schemas"]["PortfolioCashMovement"];
             portfolio?: components["schemas"]["PortfolioView"];
+        };
+        PortfolioTransferResponse: {
+            from?: components["schemas"]["PortfolioCashMoveResponse"];
+            to?: components["schemas"]["PortfolioCashMoveResponse"];
+            note?: string;
         };
         /** @description Period P&L plus equity time series for a paper portfolio chart */
         PortfolioPerformance: {
@@ -4011,6 +4046,41 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    transferPortfolioCash: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @description Source book; omit if the client has only one other selected book */
+                    fromPortfolioId?: string;
+                    toPortfolioId: string;
+                    /** @example 500 */
+                    amount: number;
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Paired movements and both portfolio snapshots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioTransferResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            403: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

@@ -80,6 +80,54 @@ func TestPortfolioHTTP_CashMovements(t *testing.T) {
 	}
 }
 
+func TestPortfolioHTTP_TransferBetweenBooks(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-xfer", "startingBalance": 10000, "name": "Main"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create main %d %s", rr.Code, rr.Body.String())
+	}
+	var main map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &main)
+	mainID, _ := main["id"].(string)
+
+	body, _ = json.Marshal(map[string]any{"clientId": "http-xfer", "startingBalance": 500, "name": "Risky"})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create risky %d %s", rr.Code, rr.Body.String())
+	}
+	var risky map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &risky)
+	riskyID, _ := risky["id"].(string)
+
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-xfer", "fromPortfolioId": mainID, "toPortfolioId": riskyID, "amount": 2000,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/transfers", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Transfer(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("transfer %d %s", rr.Code, rr.Body.String())
+	}
+	var out map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &out)
+	fromM := out["from"].(map[string]any)["movement"].(map[string]any)
+	toM := out["to"].(map[string]any)["movement"].(map[string]any)
+	if fromM["kind"] != "transfer_out" || toM["kind"] != "transfer_in" {
+		t.Fatalf("kinds %+v %+v", fromM, toM)
+	}
+	if fromM["counterpartyPortfolioName"] != "Risky" || toM["counterpartyPortfolioName"] != "Main" {
+		t.Fatalf("names %+v %+v", fromM, toM)
+	}
+}
+
 func TestPortfolioHTTP_Performance(t *testing.T) {
 	h := newPortfolioHandler(t)
 	body, _ := json.Marshal(map[string]any{

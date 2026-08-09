@@ -144,3 +144,91 @@ func (s *Service) ListCashMovements(ctx context.Context, clientID string, limit,
 	}
 	return list, total, nil
 }
+
+// TransferInput moves virtual cash between two books the same owner controls.
+type TransferInput struct {
+	ClientID        string
+	FromPortfolioID string
+	ToPortfolioID   string
+	Amount          float64
+	Note            string
+}
+
+// Transfer moves available cash from one owned book to another. Not a deposit/withdrawal.
+// Contributed capital moves with the cash so neither book's trading P&L changes.
+func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMov *domain.CashMovement, fromView, toView *domain.PortfolioView, err error) {
+	if s.store == nil {
+		return nil, nil, nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	from, err := s.requireBook(ctx, in.ClientID, in.FromPortfolioID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	to, err := s.requireBook(ctx, in.ClientID, in.ToPortfolioID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if from.BookID() == to.BookID() {
+		return nil, nil, nil, nil, fmt.Errorf("%w: from and to portfolios must be different", domain.ErrInvalidArgument)
+	}
+	if from.ClientID != to.ClientID {
+		return nil, nil, nil, nil, fmt.Errorf("%w: can only transfer between your own portfolios", domain.ErrForbidden)
+	}
+	if err := domain.ValidateCashMovementAmount(in.Amount); err != nil {
+		return nil, nil, nil, nil, err
+	}
+	note, err := normalizeCashNote(in.Note)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	reservedCash, err := s.store.SumReservedCash(ctx, from.BookID())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	reservedMargin, err := s.store.SumReservedMargin(ctx, from.BookID())
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	avail := domain.AvailableCash(from.CashBalance, reservedCash+reservedMargin)
+	if in.Amount > avail+1e-9 {
+		return nil, nil, nil, nil, fmt.Errorf("%w: insufficient available cash (have %g)", domain.ErrInvalidArgument, avail)
+	}
+	if to.CashBalance+in.Amount > domain.MaxCashBalance {
+		return nil, nil, nil, nil, fmt.Errorf("%w: destination cash balance would exceed %g", domain.ErrInvalidArgument, domain.MaxCashBalance)
+	}
+	now := time.Now().UTC()
+	from.CashBalance -= in.Amount
+	from.NetDeposits -= in.Amount
+	from.UpdatedAt = now
+	to.CashBalance += in.Amount
+	to.NetDeposits += in.Amount
+	to.UpdatedAt = now
+	outID, inID := uuid.NewString(), uuid.NewString()
+	out := domain.CashMovement{
+		ID: outID, Kind: domain.CashMovementTransferOut, Amount: in.Amount,
+		CashAfter: from.CashBalance, NetDepositsAfter: from.NetDeposits, Note: note,
+		CounterpartyPortfolioID: to.BookID(), CounterpartyPortfolioName: to.Name,
+		PeerMovementID: inID, CreatedAt: now,
+	}
+	inRow := domain.CashMovement{
+		ID: inID, Kind: domain.CashMovementTransferIn, Amount: in.Amount,
+		CashAfter: to.CashBalance, NetDepositsAfter: to.NetDeposits, Note: note,
+		CounterpartyPortfolioID: from.BookID(), CounterpartyPortfolioName: from.Name,
+		PeerMovementID: outID, CreatedAt: now,
+	}
+	fromMov, toMov, err = s.store.ApplyInternalTransfer(ctx, from, to, out, inRow)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	fromView, err = s.View(ctx, from.ClientID, from.ID)
+	if err != nil {
+		return fromMov, toMov, nil, nil, err
+	}
+	toView, err = s.View(ctx, to.ClientID, to.ID)
+	if err != nil {
+		return fromMov, toMov, fromView, nil, err
+	}
+	_ = s.recordViewSnapshot(ctx, fromView, now)
+	_ = s.recordViewSnapshot(ctx, toView, now)
+	return fromMov, toMov, fromView, toView, nil
+}

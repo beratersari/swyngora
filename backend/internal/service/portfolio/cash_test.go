@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"testing"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 func TestCash_DepositWithdrawHistoryAndPnL(t *testing.T) {
@@ -47,5 +49,84 @@ func TestCash_DepositWithdrawHistoryAndPnL(t *testing.T) {
 
 	if _, _, err := svc.Withdraw(ctx, CashMoveInput{ClientID: "cash1", Amount: 999999}); err == nil {
 		t.Fatal("want insufficient cash")
+	}
+}
+
+func TestCash_TransferBetweenOwnBooks(t *testing.T) {
+	svc := newSvc(t, nil)
+	ctx := context.Background()
+	main, err := svc.Create(ctx, CreateInput{ClientID: "xfer1", StartingBalance: 10000, Name: "Main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	risky, err := svc.Create(ctx, CreateInput{ClientID: "xfer1", StartingBalance: 1000, Name: "Risky"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, in, fromV, toV, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer1", FromPortfolioID: main.ID, ToPortfolioID: risky.ID, Amount: 2500, Note: "seed risky",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Kind != domain.CashMovementTransferOut || in.Kind != domain.CashMovementTransferIn {
+		t.Fatalf("kinds %s %s", out.Kind, in.Kind)
+	}
+	if out.CounterpartyPortfolioID != risky.ID || out.CounterpartyPortfolioName != "Risky" {
+		t.Fatalf("out counterpart %+v", out)
+	}
+	if in.CounterpartyPortfolioID != main.ID || in.CounterpartyPortfolioName != "Main" {
+		t.Fatalf("in counterpart %+v", in)
+	}
+	if out.PeerMovementID != in.ID || in.PeerMovementID != out.ID {
+		t.Fatalf("peer %s %s", out.PeerMovementID, in.PeerMovementID)
+	}
+	if math.Abs(fromV.CashBalance-7500) > 1e-9 || math.Abs(toV.CashBalance-3500) > 1e-9 {
+		t.Fatalf("cash from=%v to=%v", fromV.CashBalance, toV.CashBalance)
+	}
+	if math.Abs(fromV.TotalPnL) > 1e-9 || math.Abs(toV.TotalPnL) > 1e-9 {
+		t.Fatalf("transfer must not change P&L from=%v to=%v", fromV.TotalPnL, toV.TotalPnL)
+	}
+	hist, total, err := svc.ListCashMovements(ctx, "xfer1", 10, 0, main.ID)
+	if err != nil || total < 2 || hist[0].Kind != domain.CashMovementTransferOut {
+		t.Fatalf("main hist %+v total=%d err=%v", hist, total, err)
+	}
+	hist2, _, err := svc.ListCashMovements(ctx, "xfer1", 10, 0, risky.ID)
+	if err != nil || hist2[0].Kind != domain.CashMovementTransferIn {
+		t.Fatalf("risky hist %+v err=%v", hist2, err)
+	}
+	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer1", FromPortfolioID: main.ID, ToPortfolioID: main.ID, Amount: 10,
+	}); err == nil {
+		t.Fatal("same book")
+	}
+}
+
+func TestCash_TransferOwnerOnlyAndNotOtherClient(t *testing.T) {
+	svc := newSvc(t, nil)
+	ctx := context.Background()
+	alice, err := svc.Create(ctx, CreateInput{ClientID: "alice-x", StartingBalance: 5000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	risky, err := svc.Create(ctx, CreateInput{ClientID: "alice-x", Name: "Risky", StartingBalance: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "bob-x", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Share(ctx, "alice-x", alice.ID, "bob-x", "trader"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "bob-x", FromPortfolioID: alice.ID, ToPortfolioID: risky.ID, Amount: 10,
+	}); err == nil {
+		t.Fatal("trader must not transfer")
+	}
+	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "alice-x", FromPortfolioID: alice.ID, ToPortfolioID: "bob-x", Amount: 10,
+	}); err == nil {
+		t.Fatal("must not transfer to another client's book")
 	}
 }

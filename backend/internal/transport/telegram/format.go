@@ -218,6 +218,41 @@ func FormatPaperPortfolio(v *domain.PortfolioView) string {
 	return b.String()
 }
 
+// FormatCashTransferred confirms an internal book-to-book move.
+func FormatCashTransferred(out, in *domain.CashMovement, fromV, toV *domain.PortfolioView) string {
+	cur := "USDT"
+	if fromV != nil && fromV.Currency != "" {
+		cur = fromV.Currency
+	}
+	fromName, toName := "source", "destination"
+	if fromV != nil && fromV.Name != "" {
+		fromName = fromV.Name
+	}
+	if toV != nil && toV.Name != "" {
+		toName = toV.Name
+	}
+	amt := 0.0
+	if out != nil {
+		amt = out.Amount
+	}
+	var b strings.Builder
+	b.WriteString(header("🔁", "Paper transfer"))
+	b.WriteString(divider())
+	b.WriteString(row("From", code(fromName)))
+	b.WriteString(row("To", code(toName)))
+	b.WriteString(row("Amount", code(Float(amt, 4)+" "+cur)))
+	if fromV != nil {
+		b.WriteString(row(fromName+" cash", code(Float(fromV.CashBalance, 4))))
+	}
+	if toV != nil {
+		b.WriteString(row(toName+" cash", code(Float(toV.CashBalance, 4))))
+	}
+	_ = in
+	b.WriteString("\n" + italic("Internal move — not a deposit or withdrawal.") + "\n")
+	b.WriteString(paperDisclaimer)
+	return b.String()
+}
+
 // FormatCashMoved confirms a deposit or withdrawal.
 func FormatCashMoved(m *domain.CashMovement, v *domain.PortfolioView) string {
 	if m == nil {
@@ -260,12 +295,24 @@ func FormatCashHistory(items []domain.CashMovement, total int) string {
 	}
 	for _, m := range items {
 		label := "IN "
-		if m.Kind == domain.CashMovementWithdrawal {
+		extra := ""
+		switch m.Kind {
+		case domain.CashMovementWithdrawal:
 			label = "OUT"
+		case domain.CashMovementTransferOut:
+			label = "TO "
+			if m.CounterpartyPortfolioName != "" {
+				extra = " → " + esc(m.CounterpartyPortfolioName)
+			}
+		case domain.CashMovementTransferIn:
+			label = "FROM"
+			if m.CounterpartyPortfolioName != "" {
+				extra = " ← " + esc(m.CounterpartyPortfolioName)
+			}
 		}
-		note := ""
+		note := extra
 		if m.Note != "" {
-			note = " · " + esc(m.Note)
+			note += " · " + esc(m.Note)
 		}
 		b.WriteString(fmt.Sprintf("  %s %s  cash %s%s\n",
 			code(label), code(Float(m.Amount, 4)), code(Float(m.CashAfter, 4)), note))
@@ -603,7 +650,8 @@ func HelpText() string {
 	b.WriteString(cmdLine("/sell", "<symbol> <qty> [ex]", "preview then confirm"))
 	b.WriteString(cmdLine("/deposit", "<amount> [note]", "add virtual cash"))
 	b.WriteString(cmdLine("/withdraw", "<amount> [note]", "take virtual cash out"))
-	b.WriteString(cmdLine("/cash", "[n]", "deposit/withdraw history"))
+	b.WriteString(cmdLine("/transfer", "<amount> NAME", "move cash to another of your books"))
+	b.WriteString(cmdLine("/cash", "[n]", "deposit/withdraw/transfer history"))
 	b.WriteString("\n")
 
 	b.WriteString(bold("Examples") + "\n")
@@ -616,6 +664,7 @@ func HelpText() string {
 	b.WriteString("  " + code("/portfolio create 10000") + "\n")
 	b.WriteString("  " + code("/portfolio create 5000 Risky") + "\n")
 	b.WriteString("  " + code("/portfolio use Risky") + "\n")
+	b.WriteString("  " + code("/transfer 500 Risky") + "\n")
 	b.WriteString("  " + code("/buy BTCUSDT 0.01") + "\n")
 	b.WriteString("\n")
 	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit"))

@@ -70,6 +70,7 @@ type DataPort interface {
 	DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error)
 	WithdrawPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error)
 	ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -1004,8 +1005,35 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("transfer_portfolio_cash",
+		mcp.WithDescription("Move virtual cash from one of your paper portfolios to another. Owner only. Recorded as transfer_out/transfer_in, not deposit/withdrawal. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("fromPortfolioId", mcp.Description("Source book id or name")),
+		mcp.WithString("toPortfolioId", mcp.Required(), mcp.Description("Destination book id or name")),
+		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Positive cash to move")),
+		mcp.WithString("note", mcp.Description("Optional label")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		toID, err := req.RequireString("toPortfolioId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		amt, err := req.RequireFloat("amount")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.TransferPortfolioCash(ctx, clientID, req.GetString("fromPortfolioId", ""), toID, amt, req.GetString("note", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("list_portfolio_cash_movements",
-		mcp.WithDescription("List paper portfolio deposits and withdrawals (newest first), including the opening balance."),
+		mcp.WithDescription("List paper portfolio deposits, withdrawals, and internal transfers (newest first), including the opening balance."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows (default 50)")),
 		mcp.WithNumber("offset", mcp.Description("Pagination offset")),

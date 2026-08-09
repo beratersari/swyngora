@@ -10,6 +10,7 @@ export type PortfolioPerformancePeriod = NonNullable<
 >;
 export type PortfolioCashMovement = components['schemas']['PortfolioCashMovement'];
 export type PortfolioCashMoveResponse = components['schemas']['PortfolioCashMoveResponse'];
+export type PortfolioTransferResponse = components['schemas']['PortfolioTransferResponse'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 
@@ -84,6 +85,13 @@ export const portfolioApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/api/v1/portfolio/withdrawals', method: 'POST', body }),
       invalidatesTags: ['Portfolio'],
     }),
+    transferPortfolioCash: build.mutation<
+      PortfolioTransferResponse,
+      { fromPortfolioId?: string; toPortfolioId: string; amount: number; note?: string }
+    >({
+      query: (body) => ({ url: '/api/v1/portfolio/transfers', method: 'POST', body }),
+      invalidatesTags: ['Portfolio'],
+    }),
     listPortfolioShares: build.query<
       { ownerClientId?: string; count?: number; shares?: PortfolioShare[] },
       BookArg | void
@@ -139,6 +147,7 @@ export const {
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
+  useTransferPortfolioCashMutation,
   useListPortfolioSharesQuery,
   useListSharedPortfoliosQuery,
   useSharePortfolioMutation,

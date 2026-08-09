@@ -19,21 +19,28 @@ const (
 type CashMovementKind string
 
 const (
-	CashMovementDeposit    CashMovementKind = "deposit"
-	CashMovementWithdrawal CashMovementKind = "withdrawal"
+	CashMovementDeposit     CashMovementKind = "deposit"
+	CashMovementWithdrawal  CashMovementKind = "withdrawal"
+	CashMovementTransferOut CashMovementKind = "transfer_out"
+	CashMovementTransferIn  CashMovementKind = "transfer_in"
 )
 
-// IsValidCashMovementKind reports deposit|withdrawal.
+// IsValidCashMovementKind reports known ledger kinds.
 func IsValidCashMovementKind(s string) bool {
 	switch CashMovementKind(strings.ToLower(strings.TrimSpace(s))) {
-	case CashMovementDeposit, CashMovementWithdrawal:
+	case CashMovementDeposit, CashMovementWithdrawal, CashMovementTransferOut, CashMovementTransferIn:
 		return true
 	default:
 		return false
 	}
 }
 
-// CashMovement is one deposit or withdrawal ledger row.
+// IsInternalTransfer reports a move between the owner's own paper books.
+func (k CashMovementKind) IsInternalTransfer() bool {
+	return k == CashMovementTransferOut || k == CashMovementTransferIn
+}
+
+// CashMovement is one deposit, withdrawal, or internal transfer ledger row.
 type CashMovement struct {
 	ID               string
 	ClientID         string
@@ -42,7 +49,13 @@ type CashMovement struct {
 	CashAfter        float64
 	NetDepositsAfter float64
 	Note             string
-	CreatedAt        time.Time
+	// CounterpartyPortfolioID is the other book on an internal transfer.
+	CounterpartyPortfolioID string
+	// CounterpartyPortfolioName is the other book's name at transfer time.
+	CounterpartyPortfolioName string
+	// PeerMovementID is the matching ledger row on the other book.
+	PeerMovementID string
+	CreatedAt      time.Time
 }
 
 // ContributedCapital is opening cash plus later net deposits (external money in).

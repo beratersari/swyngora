@@ -453,8 +453,10 @@ type PortfolioPort interface {
 	UpsertRiskLimits(ctx context.Context, lim RiskLimits) (*RiskLimits, error)
 	DeleteRiskLimits(ctx context.Context, clientID string) error
 
-	// Cash movements (user deposits / withdrawals; not trades).
+	// Cash movements (user deposits / withdrawals / internal transfers; not trades).
 	ApplyCashMovement(ctx context.Context, p *Portfolio, m CashMovement) (*CashMovement, error)
+	// ApplyInternalTransfer moves cash between two books the same owner controls, atomically.
+	ApplyInternalTransfer(ctx context.Context, from, to *Portfolio, out, in CashMovement) (fromMov, toMov *CashMovement, err error)
 	ListCashMovements(ctx context.Context, clientID string, limit, offset int) ([]CashMovement, error)
 	CountCashMovements(ctx context.Context, clientID string) (int, error)
 

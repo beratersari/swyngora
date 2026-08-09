@@ -307,6 +307,9 @@ CREATE TABLE IF NOT EXISTS cash_movements (
 	cash_after          REAL NOT NULL,
 	net_deposits_after  REAL NOT NULL,
 	note                TEXT NOT NULL DEFAULT '',
+	counterparty_portfolio_id   TEXT NOT NULL DEFAULT '',
+	counterparty_portfolio_name TEXT NOT NULL DEFAULT '',
+	peer_movement_id            TEXT NOT NULL DEFAULT '',
 	created_at          TEXT NOT NULL,
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
@@ -369,10 +372,16 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	cash_after          REAL NOT NULL,
 	net_deposits_after  REAL NOT NULL,
 	note                TEXT NOT NULL DEFAULT '',
+	counterparty_portfolio_id   TEXT NOT NULL DEFAULT '',
+	counterparty_portfolio_name TEXT NOT NULL DEFAULT '',
+	peer_movement_id            TEXT NOT NULL DEFAULT '',
 	created_at          TEXT NOT NULL,
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 )`,
 		`CREATE INDEX IF NOT EXISTS idx_cash_movements_client ON cash_movements(client_id, created_at DESC)`,
+		`ALTER TABLE cash_movements ADD COLUMN counterparty_portfolio_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE cash_movements ADD COLUMN counterparty_portfolio_name TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE cash_movements ADD COLUMN peer_movement_id TEXT NOT NULL DEFAULT ''`,
 		// Prefer SL/TP uniqueness only; drop older liquidation-inclusive unique index if present.
 		`DROP INDEX IF EXISTS idx_margin_trades_forced_close`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp ON margin_trades(position_id, action) WHERE action IN ('stop_loss', 'take_profit')`,

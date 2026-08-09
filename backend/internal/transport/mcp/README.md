@@ -45,6 +45,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_shared_portfolios` | Books shared with you |
 | `get_portfolio` | Cash, positions, P&L snapshot (optional `portfolioId`) |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
+| `transfer_portfolio_cash` | Move cash between your own books (owner only; not deposit/withdrawal) |
 | `withdraw_portfolio_cash` | Withdraw available virtual cash |
 | `list_portfolio_cash_movements` | Deposit/withdraw history |
 | `get_portfolio_performance` | Equity history + period P&L (1d/1w/1m/3m) |

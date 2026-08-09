@@ -903,7 +903,43 @@ func cashMovementMap(m *domain.CashMovement) map[string]any {
 	if m.Note != "" {
 		out["note"] = m.Note
 	}
+	if m.CounterpartyPortfolioID != "" {
+		out["counterpartyPortfolioId"] = m.CounterpartyPortfolioID
+		out["counterpartyPortfolioName"] = m.CounterpartyPortfolioName
+		out["peerMovementId"] = m.PeerMovementID
+	}
 	return out
+}
+
+func (b *Backend) TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if fromPortfolioID == "" {
+		fromPortfolioID = PortfolioIDFrom(ctx)
+	}
+	out, in, fromV, toV, err := b.Portfolio.Transfer(ctx, portfolio.TransferInput{
+		ClientID: clientID, FromPortfolioID: fromPortfolioID, ToPortfolioID: toPortfolioID,
+		Amount: amount, Note: note,
+	})
+	if err != nil {
+		return nil, err
+	}
+	fromJSON, err := cashMoveJSON(out, fromV)
+	if err != nil {
+		return nil, err
+	}
+	toJSON, err := cashMoveJSON(in, toV)
+	if err != nil {
+		return nil, err
+	}
+	var fromMap, toMap map[string]any
+	_ = json.Unmarshal(fromJSON, &fromMap)
+	_ = json.Unmarshal(toJSON, &toMap)
+	return mustJSON(map[string]any{
+		"from": fromMap, "to": toMap,
+		"note": "Internal transfer between your paper portfolios. Not a deposit or withdrawal.",
+	})
 }
 
 func cashMoveJSON(m *domain.CashMovement, v *domain.PortfolioView) (json.RawMessage, error) {

@@ -253,6 +253,14 @@ class PortfolioCashMoveInput(BaseModel):
     note: str = ""
 
 
+class PortfolioTransferInput(BaseModel):
+    client_id: str
+    to_portfolio_id: str
+    amount: float = Field(gt=0, description="Positive cash to move")
+    from_portfolio_id: str = ""
+    note: str = ""
+
+
 class PortfolioCashListInput(BaseModel):
     client_id: str
     limit: int = 50
@@ -845,6 +853,24 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         if note:
             body["note"] = note
         return http.post("/api/v1/portfolio/deposits", body)
+
+    def transfer_portfolio_cash(
+        client_id: str,
+        to_portfolio_id: str,
+        amount: float,
+        from_portfolio_id: str = "",
+        note: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "toPortfolioId": to_portfolio_id,
+            "amount": amount,
+        }
+        if from_portfolio_id:
+            body["fromPortfolioId"] = from_portfolio_id
+        if note:
+            body["note"] = note
+        return http.post("/api/v1/portfolio/transfers", body)
 
     def withdraw_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
         body: dict[str, Any] = {"clientId": client_id, "amount": amount}
@@ -1556,6 +1582,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="withdraw_portfolio_cash",
             description="Withdraw available virtual cash from a paper portfolio. Not trading loss.",
             args_schema=PortfolioCashMoveInput,
+        ),
+        StructuredTool.from_function(
+            transfer_portfolio_cash,
+            name="transfer_portfolio_cash",
+            description="Move virtual cash between your own paper portfolios. Owner only. Not a deposit or withdrawal.",
+            args_schema=PortfolioTransferInput,
         ),
         StructuredTool.from_function(
             list_portfolio_cash_movements,

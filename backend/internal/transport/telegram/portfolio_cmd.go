@@ -105,6 +105,8 @@ func (r *Router) cmdPortfolio(ctx context.Context, userID int64, args []string) 
 			return r.cmdCashMove(ctx, userID, domain.CashMovementWithdrawal, args[1:])
 		case "cash", "history":
 			return r.cmdCashHistory(ctx, userID, args[1:])
+		case "transfer":
+			return r.cmdPortfolioTransfer(ctx, userID, args[1:])
 		}
 	}
 	_, bookID, err := r.resolveBook(ctx, userID)
@@ -295,6 +297,35 @@ func (r *Router) cmdPortfolioCreate(ctx context.Context, userID int64, clientID 
 		return textReply("✅ Paper portfolio created with " + code(Float(p.StartingBalance, 2)+" "+p.Currency) + ".")
 	}
 	return textReply("✅ " + bold("Paper portfolio created") + " — " + code(p.Name) + "\n\n" + FormatPaperPortfolio(view))
+}
+
+func (r *Router) cmdPortfolioTransfer(ctx context.Context, userID int64, args []string) Reply {
+	if r.portfolio == nil {
+		return textReply("Paper trading is not configured on this bot.")
+	}
+	if len(args) < 2 {
+		return textReply("Usage: /transfer <amount> <toName>\nExample: " + code("/transfer 500 Risky") +
+			"\nMoves cash from the selected book to another of yours.")
+	}
+	amt, err := strconv.ParseFloat(strings.ReplaceAll(args[0], ",", ""), 64)
+	if err != nil || amt <= 0 {
+		return textReply("Amount must be a positive number.")
+	}
+	toRef := strings.Join(args[1:], " ")
+	clientID, fromID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return textReply("No paper portfolio yet. Create one:\n" + code("/portfolio create 10000"))
+		}
+		return textReply(friendlyErr(err))
+	}
+	out, in, fromV, toV, err := r.portfolio.Transfer(ctx, portfolio.TransferInput{
+		ClientID: clientID, FromPortfolioID: fromID, ToPortfolioID: toRef, Amount: amt,
+	})
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	return textReply(FormatCashTransferred(out, in, fromV, toV))
 }
 
 func (r *Router) cmdCashMove(ctx context.Context, userID int64, kind domain.CashMovementKind, args []string) Reply {

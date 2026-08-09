@@ -1626,10 +1626,46 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/transfers:
+    post:
+      summary: Transfer virtual cash between own paper portfolios
+      description: |
+        Owner only. Moves available cash from one of your books to another.
+        Recorded as transfer_out / transfer_in (not deposit/withdrawal) on both histories.
+        Contributed capital moves with the cash so trading P&L is unchanged.
+        Shared traders/viewers cannot transfer. Paper trading only — not real money.
+      operationId: transferPortfolioCash
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toPortfolioId, amount]
+              properties:
+                clientId: { type: string }
+                fromPortfolioId: { type: string, description: Source book; omit if the client has only one other selected book }
+                toPortfolioId: { type: string }
+                amount: { type: number, exclusiveMinimum: 0, example: 500 }
+                note: { type: string, maxLength: 200 }
+      responses:
+        '200':
+          description: Paired movements and both portfolio snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioTransferResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/cash-movements:
     get:
-      summary: List paper cash deposits and withdrawals
-      description: Newest first. Includes the opening balance row created with the portfolio.
+      summary: List paper cash deposits, withdrawals, and internal transfers
+      description: Newest first. Includes the opening balance row created with the portfolio. Transfer rows include the other book id and name.
       operationId: listPortfolioCashMovements
       tags: [Portfolio]
       parameters:
@@ -4012,11 +4048,14 @@ components:
       type: object
       properties:
         id: { type: string }
-        kind: { type: string, enum: [deposit, withdrawal] }
+        kind: { type: string, enum: [deposit, withdrawal, transfer_out, transfer_in] }
         amount: { type: number }
         cashAfter: { type: number }
         netDepositsAfter: { type: number }
         note: { type: string }
+        counterpartyPortfolioId: { type: string, description: Other book on an internal transfer }
+        counterpartyPortfolioName: { type: string, description: Other book name at transfer time }
+        peerMovementId: { type: string, description: Matching ledger row on the other book }
         createdAt: { type: string, format: date-time }
     PortfolioCashMoveResponse:
       type: object
@@ -4025,6 +4064,14 @@ components:
           $ref: '#/components/schemas/PortfolioCashMovement'
         portfolio:
           $ref: '#/components/schemas/PortfolioView'
+    PortfolioTransferResponse:
+      type: object
+      properties:
+        from:
+          $ref: '#/components/schemas/PortfolioCashMoveResponse'
+        to:
+          $ref: '#/components/schemas/PortfolioCashMoveResponse'
+        note: { type: string }
     PortfolioPerformance:
       type: object
       description: Period P&L plus equity time series for a paper portfolio chart

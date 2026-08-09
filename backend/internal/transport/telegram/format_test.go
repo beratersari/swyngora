@@ -41,6 +41,9 @@ func TestHelpHasLowmcap(t *testing.T) {
 	if !strings.Contains(help, "/deposit") || !strings.Contains(help, "/withdraw") || !strings.Contains(help, "/cash") {
 		t.Fatal("help must document paper cash commands")
 	}
+	if !strings.Contains(help, "/transfer") {
+		t.Fatal("help must document paper transfer")
+	}
 }
 
 func TestFormatPaperPortfolioAndPreview(t *testing.T) {

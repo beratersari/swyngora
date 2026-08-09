@@ -141,6 +141,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return r.cmdCashMove(ctx, userID, domain.CashMovementWithdrawal, args)
 	case "/cash":
 		return r.cmdCashHistory(ctx, userID, args)
+	case "/transfer":
+		return r.cmdPortfolioTransfer(ctx, userID, args)
 	default:
 		if strings.HasPrefix(cmd, "/") {
 			return textReply("Unknown command. Try /help")

@@ -49,7 +49,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST`/`GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/shares` | Share a book (`viewer`/`trader`), list, update, revoke |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available virtual cash |
-| `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history |
+| `POST` | `/api/v1/portfolio/transfers` | Move cash between own books (owner only) |
+| `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history |
 | `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |

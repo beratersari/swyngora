@@ -6,8 +6,8 @@ Users want to let a friend or bot **see** a paper book, or **trade** on it, with
 
 ## Behavior
 
-| Role | Snapshot, positions, trades, performance | Place / amend / cancel orders (incl. margin, DCA, baskets) | Deposit / withdraw | Delete book | Share / unshare / change role |
-|------|------------------------------------------|-------------------------------------------------------------|--------------------|-------------|-------------------------------|
+| Role | Snapshot, positions, trades, performance | Place / amend / cancel orders (incl. margin, DCA, baskets) | Deposit / withdraw / transfer | Delete book | Share / unshare / change role |
+|------|------------------------------------------|-------------------------------------------------------------|-------------------------------|-------------|-------------------------------|
 | **owner** | yes | yes | yes | yes | yes |
 | **trader** | yes | yes | no | no | no |
 | **viewer** | yes | no | no | no | no |

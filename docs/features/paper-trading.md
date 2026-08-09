@@ -15,7 +15,8 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `GET` | `/api/v1/portfolio` | Snapshot of the selected book (`portfolioId` / `X-Portfolio-Id`) |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash (`amount`, optional `note`) |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available cash (`amount`, optional `note`) |
-| `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history (newest first; includes opening) |
+| `POST` | `/api/v1/portfolio/transfers` | Move cash between your own books (`fromPortfolioId`, `toPortfolioId`, `amount`) — owner only |
+| `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history (newest first; includes opening) |
 | `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
@@ -55,8 +56,8 @@ Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists. Each clien
 
 The owner can share **one book** with another `clientId`:
 
-| Role | View snapshot / positions / trades / performance | Place & cancel orders | Deposit / withdraw / delete / manage shares |
-|------|--------------------------------------------------|------------------------|---------------------------------------------|
+| Role | View snapshot / positions / trades / performance | Place & cancel orders | Deposit / withdraw / **transfer** / delete / manage shares |
+|------|--------------------------------------------------|------------------------|------------------------------------------------------------|
 | **owner** | yes | yes | yes |
 | **trader** | yes | yes | no |
 | **viewer** | yes | no | no |
@@ -77,9 +78,11 @@ MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_p
 
 Users can add or remove virtual cash after create (`POST /deposits`, `POST /withdrawals`). Withdrawals use **available** cash only (not reserved for open orders). Each action is stored on `GET /cash-movements` (amount, kind, cash after, optional note, timestamp). Creating a portfolio writes an opening `deposit` row (`note=Opening balance`).
 
+**Internal transfer:** `POST /transfers` moves available cash from one of **your** books to another. Owner only (shared traders/viewers cannot). Both ledgers get a row: `transfer_out` / `transfer_in` with `counterpartyPortfolioId`, `counterpartyPortfolioName`, and `peerMovementId` — not a deposit or withdrawal. Contributed capital moves with the cash so neither book's trading P&L changes.
+
 **P&L:** `totalPnL = equity − startingBalance − netDeposits`. Depositing or withdrawing is not trading profit/loss. `contributedCapital` is starting + net deposits.
 
-MCP: `deposit_portfolio_cash`, `withdraw_portfolio_cash`, `list_portfolio_cash_movements`. Telegram: `/deposit`, `/withdraw`, `/cash`.
+MCP: `deposit_portfolio_cash`, `withdraw_portfolio_cash`, `transfer_portfolio_cash`, `list_portfolio_cash_movements`. Telegram: `/deposit`, `/withdraw`, `/transfer`, `/cash`.
 
 ### Performance history
 

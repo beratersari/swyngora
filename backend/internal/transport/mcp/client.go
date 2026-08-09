@@ -543,6 +543,17 @@ func (c *APIClient) WithdrawPortfolioCash(ctx context.Context, clientID string, 
 	})
 }
 
+func (c *APIClient) TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID, "toPortfolioId": toPortfolioID, "amount": amount}
+	if strings.TrimSpace(fromPortfolioID) != "" {
+		body["fromPortfolioId"] = fromPortfolioID
+	}
+	if note != "" {
+		body["note"] = note
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/transfers", body)
+}
+
 // ListPortfolioCashMovements lists deposit/withdraw history.
 func (c *APIClient) ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

@@ -23,7 +23,8 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 | `/watch` … | Watchlist |
 | `/portfolio` · `/portfolio list` · `/portfolio create [balance] [name]` · `/portfolio use NAME` · `/portfolio share CLIENT role` · `/portfolio shared` | Paper books (client `tg-<user_id>`); select one then `/buy` `/sell` apply to it; share as viewer or trader |
 | `/deposit` · `/withdraw` `<amount> [note]` | Add or remove virtual cash |
-| `/cash` `[n]` | Deposit/withdraw history |
+| `/transfer` `<amount> NAME` | Move cash to another of your books (owner only) |
+| `/cash` `[n]` | Deposit / withdraw / transfer history |
 | `/buy` · `/sell` `<symbol> <qty> [exchange]` | Paper market trade — preview, then **Confirm** / **Cancel** buttons |
 | **`/ask <question>`** | Multi-agent AI (market tools + web + X) |
 | **`/ai <question>`** | Alias of `/ask` |
