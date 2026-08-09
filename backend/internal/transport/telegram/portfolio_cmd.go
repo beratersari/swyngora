@@ -44,9 +44,6 @@ func (r *Router) resolveBook(ctx context.Context, userID int64) (clientID, bookI
 	if err != nil {
 		return clientID, "", err
 	}
-	if len(list) == 0 {
-		return clientID, "", domain.ErrNotFound
-	}
 	sel := r.selectedBookID(userID)
 	if sel != "" {
 		for _, p := range list {
@@ -54,13 +51,27 @@ func (r *Router) resolveBook(ctx context.Context, userID int64) (clientID, bookI
 				return clientID, p.ID, nil
 			}
 		}
+		if p, gerr := r.portfolio.Get(ctx, clientID, sel); gerr == nil && p != nil {
+			return clientID, p.ID, nil
+		}
 	}
 	if len(list) == 1 {
 		r.setSelectedBook(userID, list[0].ID)
 		return clientID, list[0].ID, nil
 	}
-	r.setSelectedBook(userID, list[0].ID)
-	return clientID, list[0].ID, nil
+	if len(list) > 1 {
+		r.setSelectedBook(userID, list[0].ID)
+		return clientID, list[0].ID, nil
+	}
+	shared, err := r.portfolio.ListSharedWithMe(ctx, clientID)
+	if err != nil {
+		return clientID, "", err
+	}
+	if len(shared) == 0 {
+		return clientID, "", domain.ErrNotFound
+	}
+	r.setSelectedBook(userID, shared[0].Portfolio.ID)
+	return clientID, shared[0].Portfolio.ID, nil
 }
 
 func (r *Router) cmdPortfolio(ctx context.Context, userID int64, args []string) Reply {
@@ -80,6 +91,14 @@ func (r *Router) cmdPortfolio(ctx context.Context, userID int64, args []string) 
 			return r.cmdPortfolioRename(ctx, userID, args[1:])
 		case "delete":
 			return r.cmdPortfolioDelete(ctx, userID, args[1:])
+		case "share":
+			return r.cmdPortfolioShare(ctx, userID, args[1:])
+		case "unshare", "revoke":
+			return r.cmdPortfolioUnshare(ctx, userID, args[1:])
+		case "shares":
+			return r.cmdPortfolioShares(ctx, userID)
+		case "shared":
+			return r.cmdPortfolioShared(ctx, userID)
 		case "deposit":
 			return r.cmdCashMove(ctx, userID, domain.CashMovementDeposit, args[1:])
 		case "withdraw":
@@ -179,6 +198,75 @@ func (r *Router) cmdPortfolioDelete(ctx context.Context, userID int64, args []st
 		r.setSelectedBook(userID, "")
 	}
 	return textReply("✅ Deleted " + code(p.Name) + ".")
+}
+
+func (r *Router) cmdPortfolioShare(ctx context.Context, userID int64, args []string) Reply {
+	if len(args) < 2 {
+		return textReply("Usage: /portfolio share <clientId> viewer|trader\nExample: " + code("/portfolio share bob trader"))
+	}
+	clientID, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	role := args[len(args)-1]
+	grantee := strings.Join(args[:len(args)-1], " ")
+	sh, err := r.portfolio.Share(ctx, clientID, bookID, grantee, role)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	return textReply(fmt.Sprintf("✅ Shared with %s as %s.", code(sh.GranteeClientID), code(string(sh.Role))))
+}
+
+func (r *Router) cmdPortfolioUnshare(ctx context.Context, userID int64, args []string) Reply {
+	if len(args) < 1 {
+		return textReply("Usage: /portfolio unshare <clientId>")
+	}
+	clientID, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	grantee := strings.Join(args, " ")
+	if err := r.portfolio.RevokeShare(ctx, clientID, bookID, grantee); err != nil {
+		return textReply(friendlyErr(err))
+	}
+	return textReply("✅ Revoked access for " + code(grantee) + ".")
+}
+
+func (r *Router) cmdPortfolioShares(ctx context.Context, userID int64) Reply {
+	clientID, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	list, err := r.portfolio.ListShares(ctx, clientID, bookID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	if len(list) == 0 {
+		return textReply("No one else can access this book.\n" + code("/portfolio share clientId trader"))
+	}
+	var b strings.Builder
+	b.WriteString(bold("Shared with") + "\n")
+	for _, sh := range list {
+		b.WriteString(fmt.Sprintf("• %s  %s\n", code(sh.GranteeClientID), esc(string(sh.Role))))
+	}
+	return textReply(b.String())
+}
+
+func (r *Router) cmdPortfolioShared(ctx context.Context, userID int64) Reply {
+	list, err := r.portfolio.ListSharedWithMe(ctx, telegramClientID(userID))
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	if len(list) == 0 {
+		return textReply("No paper books have been shared with you.")
+	}
+	var b strings.Builder
+	b.WriteString(bold("Shared with you") + "\n")
+	for _, item := range list {
+		b.WriteString(fmt.Sprintf("• %s  %s  (%s)\n", code(item.Portfolio.Name), esc(string(item.Role)), code(item.Portfolio.ClientID)))
+	}
+	b.WriteString("\n" + italic("Select: ") + code("/portfolio use NAME"))
+	return textReply(b.String())
 }
 
 func (r *Router) cmdPortfolioCreate(ctx context.Context, userID int64, clientID string, args []string) Reply {

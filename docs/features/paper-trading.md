@@ -51,7 +51,27 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists. Each client may own **up to 20 named paper books**. The first book keeps id = `clientId` and default name `Main` (legacy). Additional books get a UUID id. All action routes (`/orders`, `/deposits`, `/performance`, …) accept optional `portfolioId` query, `X-Portfolio-Id` header, or body field. Omit it when there is exactly one book; if several exist, the API returns 400 until you select one.
 
-MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`.
+### Sharing
+
+The owner can share **one book** with another `clientId`:
+
+| Role | View snapshot / positions / trades / performance | Place & cancel orders | Deposit / withdraw / delete / manage shares |
+|------|--------------------------------------------------|------------------------|---------------------------------------------|
+| **owner** | yes | yes | yes |
+| **trader** | yes | yes | no |
+| **viewer** | yes | no | no |
+
+| Method | Path | Who |
+|--------|------|-----|
+| `POST` | `/api/v1/portfolio/shares` | owner `{ granteeClientId, role: viewer\|trader, portfolioId }` |
+| `PATCH` | `/api/v1/portfolio/shares` | owner change role |
+| `GET` | `/api/v1/portfolio/shares` | owner list outgoing |
+| `DELETE` | `/api/v1/portfolio/shares?granteeClientId=` | owner revoke |
+| `GET` | `/api/v1/portfolios/shared` | grantee incoming books |
+
+Grantees select the book with `portfolioId` (UUID) or `ownerClientId` + name. Cannot share with yourself. Max 50 shares per book.
+
+MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`, `share_portfolio`, `update_portfolio_share`, `revoke_portfolio_share`, `list_portfolio_shares`, `list_shared_portfolios`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`, `/portfolio share CLIENT trader`, `/portfolio shared`.
 
 ### Deposits and withdrawals
 

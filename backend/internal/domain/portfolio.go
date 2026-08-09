@@ -11,9 +11,10 @@ import (
 
 // Paper trading limits and defaults (informational / simulation only).
 const (
-	MaxPortfoliosPerClient = 20
-	DefaultPortfolioName   = "Main"
-	MaxPortfolioNameLen    = 64
+	MaxPortfoliosPerClient     = 20
+	MaxPortfolioSharesPerBook  = 50
+	DefaultPortfolioName       = "Main"
+	MaxPortfolioNameLen        = 64
 	DefaultPaperCurrency   = "USDT"
 	MinStartingBalance     = 1.0
 	MaxStartingBalance     = 10_000_000.0
@@ -268,8 +269,65 @@ type PortfolioView struct {
 	Positions        []PositionView
 	MarginPositions  []MarginPosition // open margin positions (with marks when listed via View)
 	Note             string
+	// Role is owner | trader | viewer for the calling client.
+	Role             PortfolioShareRole
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+}
+
+// PortfolioShareRole is viewer (read), trader (trade), or owner.
+type PortfolioShareRole string
+
+const (
+	PortfolioRoleViewer PortfolioShareRole = "viewer"
+	PortfolioRoleTrader PortfolioShareRole = "trader"
+	PortfolioRoleOwner  PortfolioShareRole = "owner"
+)
+
+// PortfolioShare grants another client access to one paper book.
+type PortfolioShare struct {
+	PortfolioID     string
+	OwnerClientID   string
+	GranteeClientID string
+	Role            PortfolioShareRole
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// PortfolioRank returns 0 viewer, 1 trader, 2 owner.
+func PortfolioRoleRank(r PortfolioShareRole) int {
+	switch r {
+	case PortfolioRoleOwner:
+		return 2
+	case PortfolioRoleTrader:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// RoleAtLeast reports whether have meets the minimum role.
+func RoleAtLeast(have, min PortfolioShareRole) bool {
+	return PortfolioRoleRank(have) >= PortfolioRoleRank(min)
+}
+
+// IsValidPortfolioShareRole reports viewer|trader.
+func IsValidPortfolioShareRole(s string) bool {
+	switch PortfolioShareRole(strings.ToLower(strings.TrimSpace(s))) {
+	case PortfolioRoleViewer, PortfolioRoleTrader:
+		return true
+	default:
+		return false
+	}
+}
+
+// NormalizePortfolioShareRole parses viewer|trader.
+func NormalizePortfolioShareRole(s string) (PortfolioShareRole, error) {
+	r := PortfolioShareRole(strings.ToLower(strings.TrimSpace(s)))
+	if !IsValidPortfolioShareRole(string(r)) {
+		return "", fmt.Errorf("%w: role must be viewer or trader", ErrInvalidArgument)
+	}
+	return r, nil
 }
 
 // PortfolioPort persists paper portfolios, positions, trades, and pending orders.
@@ -283,6 +341,16 @@ type PortfolioPort interface {
 	CreatePortfolio(ctx context.Context, p Portfolio) (*Portfolio, error)
 	UpdatePortfolioName(ctx context.Context, clientID, id, name string, at time.Time) (*Portfolio, error)
 	DeletePortfolio(ctx context.Context, clientID, id string) error
+
+	CreatePortfolioShare(ctx context.Context, share PortfolioShare) (*PortfolioShare, error)
+	UpdatePortfolioShareRole(ctx context.Context, portfolioID, granteeClientID string, role PortfolioShareRole, at time.Time) (*PortfolioShare, error)
+	GetPortfolioShare(ctx context.Context, portfolioID, granteeClientID string) (*PortfolioShare, error)
+	ListPortfolioSharesByBook(ctx context.Context, portfolioID string) ([]PortfolioShare, error)
+	ListPortfolioSharesByOwner(ctx context.Context, ownerClientID string) ([]PortfolioShare, error)
+	ListPortfolioSharesForGrantee(ctx context.Context, granteeClientID string) ([]PortfolioShare, error)
+	DeletePortfolioShare(ctx context.Context, portfolioID, granteeClientID string) error
+	CountPortfolioShares(ctx context.Context, portfolioID string) (int, error)
+
 	// UpdateCashAndRealized updates cash and realized total atomically with optional timestamp.
 	UpdateCashAndRealized(ctx context.Context, bookID string, cash, realizedTotal float64, at time.Time) error
 

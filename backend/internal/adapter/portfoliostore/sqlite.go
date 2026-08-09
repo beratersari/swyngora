@@ -311,6 +311,17 @@ CREATE TABLE IF NOT EXISTS cash_movements (
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_cash_movements_client ON cash_movements(client_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS portfolio_shares (
+	portfolio_id      TEXT NOT NULL,
+	owner_client_id   TEXT NOT NULL,
+	grantee_client_id TEXT NOT NULL,
+	role              TEXT NOT NULL,
+	created_at        TEXT NOT NULL,
+	updated_at        TEXT NOT NULL,
+	PRIMARY KEY (portfolio_id, grantee_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_shares_grantee ON portfolio_shares(grantee_client_id);
+CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_client_id);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
@@ -547,6 +558,7 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM margin_trades WHERE client_id = ?`,
 		`DELETE FROM margin_orders WHERE client_id = ?`,
 		`DELETE FROM margin_positions WHERE client_id = ?`,
+		`DELETE FROM portfolio_shares WHERE portfolio_id = ?`,
 		`DELETE FROM portfolios WHERE id = ?`,
 	} {
 		if _, err := tx.ExecContext(ctx, q, id); err != nil {

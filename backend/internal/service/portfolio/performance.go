@@ -10,7 +10,7 @@ import (
 
 // GetPerformance returns equity history + period P&L (amount and percent) for a lookback window.
 func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string, portfolioID ...string) (*domain.PortfolioPerformance, error) {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
 	if err != nil {
 		return nil, err
 	}

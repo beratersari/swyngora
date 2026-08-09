@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Paper portfolio sharing:** owner grants `viewer` (read snapshot/trades/performance) or `trader` (also place/cancel orders) to another clientId; deposit/withdraw/delete/share stay owner-only; `POST/GET/PATCH/DELETE /api/v1/portfolio/shares` and `GET /api/v1/portfolios/shared` (`docs/features/paper-trading.md`)
 - **Multiple named paper portfolios:** each client can create up to 20 books with their own cash, positions, orders, and performance; `GET /api/v1/portfolios`, `PATCH`/`DELETE /api/v1/portfolios/{id}`, optional `portfolioId` / `X-Portfolio-Id` on actions; MCP `list_portfolios` / `rename_portfolio` / `delete_portfolio`; Telegram `/portfolio list` `/use` (`docs/features/paper-trading.md`)
 - **Per-account API keys:** named `read` or `trade` keys (`POST/GET/DELETE /api/v1/account/api-keys`); bots use `swy_…` secrets instead of the process master token (`docs/features/api-keys.md`)
 - **Paper cash in/out:** `POST /portfolio/deposits` and `/withdrawals` plus `GET /cash-movements` history; deposits do not count as P&L; MCP + Telegram `/deposit` `/withdraw` `/cash` (`docs/features/paper-trading.md`)

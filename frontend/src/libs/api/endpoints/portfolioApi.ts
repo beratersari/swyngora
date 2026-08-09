@@ -10,6 +10,8 @@ export type PortfolioPerformancePeriod = NonNullable<
 >;
 export type PortfolioCashMovement = components['schemas']['PortfolioCashMovement'];
 export type PortfolioCashMoveResponse = components['schemas']['PortfolioCashMoveResponse'];
+export type PortfolioShare = components['schemas']['PortfolioShare'];
+export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 
 type BookArg = { portfolioId?: string };
 type CashMoveArg = { amount: number; note?: string; portfolioId?: string };
@@ -82,6 +84,48 @@ export const portfolioApi = baseApi.injectEndpoints({
       query: (body) => ({ url: '/api/v1/portfolio/withdrawals', method: 'POST', body }),
       invalidatesTags: ['Portfolio'],
     }),
+    listPortfolioShares: build.query<
+      { ownerClientId?: string; count?: number; shares?: PortfolioShare[] },
+      BookArg | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/shares',
+        params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    listSharedPortfolios: build.query<
+      { clientId?: string; count?: number; portfolios?: SharedPortfolioSummary[] },
+      void
+    >({
+      query: () => '/api/v1/portfolios/shared',
+      providesTags: ['Portfolio'],
+    }),
+    sharePortfolio: build.mutation<
+      PortfolioShare,
+      { granteeClientId: string; role: 'viewer' | 'trader'; portfolioId?: string }
+    >({
+      query: (body) => ({ url: '/api/v1/portfolio/shares', method: 'POST', body }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    updatePortfolioShare: build.mutation<
+      PortfolioShare,
+      { granteeClientId: string; role: 'viewer' | 'trader'; portfolioId?: string }
+    >({
+      query: (body) => ({ url: '/api/v1/portfolio/shares', method: 'PATCH', body }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    revokePortfolioShare: build.mutation<
+      { revoked?: boolean; granteeClientId?: string },
+      { granteeClientId: string; portfolioId?: string }
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/shares',
+        method: 'DELETE',
+        params: { granteeClientId: arg.granteeClientId, ...bookParams(arg.portfolioId) },
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
   }),
 });
 
@@ -95,4 +139,9 @@ export const {
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
+  useListPortfolioSharesQuery,
+  useListSharedPortfoliosQuery,
+  useSharePortfolioMutation,
+  useUpdatePortfolioShareMutation,
+  useRevokePortfolioShareMutation,
 } = portfolioApi;

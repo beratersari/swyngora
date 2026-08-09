@@ -38,6 +38,11 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_portfolios` | List paper books for a client |
 | `rename_portfolio` | Rename a paper book |
 | `delete_portfolio` | Delete a paper book and its data |
+| `share_portfolio` | Share a book with another client (`viewer` or `trader`) |
+| `update_portfolio_share` | Change share role |
+| `revoke_portfolio_share` | Remove a share |
+| `list_portfolio_shares` | Outgoing shares (owner) |
+| `list_shared_portfolios` | Books shared with you |
 | `get_portfolio` | Cash, positions, P&L snapshot (optional `portfolioId`) |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `withdraw_portfolio_cash` | Withdraw available virtual cash |

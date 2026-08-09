@@ -709,6 +709,81 @@ func (b *Backend) DeletePortfolio(ctx context.Context, clientID, id string) (jso
 	return mustJSON(map[string]any{"deleted": true, "id": id, "clientId": clientID})
 }
 
+func (b *Backend) SharePortfolio(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	sh, err := b.Portfolio.Share(ctx, clientID, portfolioID, granteeClientID, role)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolioShareMap(sh))
+}
+
+func (b *Backend) UpdatePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	sh, err := b.Portfolio.UpdateShareRole(ctx, clientID, portfolioID, granteeClientID, role)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolioShareMap(sh))
+}
+
+func (b *Backend) RevokePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if err := b.Portfolio.RevokeShare(ctx, clientID, portfolioID, granteeClientID); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"revoked": true, "granteeClientId": granteeClientID})
+}
+
+func (b *Backend) ListPortfolioShares(ctx context.Context, clientID, portfolioID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListShares(ctx, clientID, portfolioID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, portfolioShareMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"ownerClientId": clientID, "shares": items, "count": len(items)})
+}
+
+func (b *Backend) ListSharedPortfolios(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListSharedWithMe(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, bkn := range list {
+		p := bkn.Portfolio
+		items = append(items, map[string]any{
+			"id": p.ID, "clientId": p.ClientID, "name": p.Name, "role": string(bkn.Role),
+			"currency": p.Currency, "cashBalance": p.CashBalance,
+		})
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "portfolios": items, "count": len(items)})
+}
+
+func portfolioShareMap(sh *domain.PortfolioShare) map[string]any {
+	return map[string]any{
+		"portfolioId": sh.PortfolioID, "ownerClientId": sh.OwnerClientID, "granteeClientId": sh.GranteeClientID,
+		"role": string(sh.Role),
+		"createdAt": sh.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": sh.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -1720,7 +1795,7 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 		})
 	}
 	return mustJSON(map[string]any{
-		"id": v.ID, "clientId": v.ClientID, "name": v.Name, "currency": v.Currency, "startingBalance": v.StartingBalance,
+		"id": v.ID, "clientId": v.ClientID, "name": v.Name, "role": string(v.Role), "currency": v.Currency, "startingBalance": v.StartingBalance,
 		"cashBalance": v.CashBalance, "netDeposits": v.NetDeposits, "contributedCapital": v.ContributedCapital,
 		"reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
 		"positionsValue": v.PositionsValue, "equity": v.Equity,

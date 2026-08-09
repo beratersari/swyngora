@@ -27,6 +27,7 @@ type portfolioDTO struct {
 	ID                  string              `json:"id"`
 	ClientID            string              `json:"clientId"`
 	Name                string              `json:"name"`
+	Role                string              `json:"role,omitempty"`
 	Currency            string              `json:"currency"`
 	StartingBalance     float64             `json:"startingBalance"`
 	CashBalance         float64             `json:"cashBalance"`
@@ -92,7 +93,7 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 		mpos = append(mpos, marginPosDTO(&v.MarginPositions[i]))
 	}
 	return portfolioDTO{
-		ID: v.ID, ClientID: v.ClientID, Name: v.Name,
+		ID: v.ID, ClientID: v.ClientID, Name: v.Name, Role: string(v.Role),
 		Currency: v.Currency, StartingBalance: v.StartingBalance,
 		CashBalance: v.CashBalance, NetDeposits: v.NetDeposits, ContributedCapital: v.ContributedCapital,
 		ReservedCash: v.ReservedCash, ReservedMargin: v.ReservedMargin,
@@ -213,7 +214,7 @@ func (h *PortfolioHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /api/v1/portfolio
 func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
-	view, err := h.svc.View(r.Context(), clientIDFrom(r), portfolioIDFrom(r))
+	view, err := h.svc.View(r.Context(), clientIDFrom(r), portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -224,6 +225,7 @@ func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 type orderBody struct {
 	ClientID        string  `json:"clientId"`
 	PortfolioID     string  `json:"portfolioId"`
+	OwnerClientID   string  `json:"ownerClientId"`
 	Exchange        string  `json:"exchange"`
 	Symbol          string  `json:"symbol"`
 	Side            string  `json:"side"`
@@ -318,6 +320,10 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		clientID = clientIDFrom(r)
 	}
 	pfID := coalescePortfolioID(r, body.PortfolioID)
+	ownerID := ownerClientIDFrom(r)
+	if body.OwnerClientID != "" {
+		ownerID = body.OwnerClientID
+	}
 	typ := body.Type
 	if typ == "" {
 		typ = "market"
@@ -325,7 +331,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	switch typ {
 	case "market":
 		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
-			ClientID: clientID, PortfolioID: pfID, Exchange: body.Exchange, Symbol: body.Symbol,
+			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Side: body.Side, Quantity: body.Quantity,
 		})
 		if err != nil {
@@ -353,7 +359,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			exp = &tu
 		}
 		o, err := h.svc.PlacePendingOrder(r.Context(), portfolio.PendingOrderInput{
-			ClientID: clientID, PortfolioID: pfID, Exchange: body.Exchange, Symbol: body.Symbol,
+			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Type: typ, Quantity: body.Quantity, TriggerPrice: body.TriggerPrice,
 			TrailType: body.TrailType, TrailValue: body.TrailValue,
 			TimeInForce: body.TimeInForce, ExpiresAt: exp,
@@ -386,7 +392,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			exp = &tu
 		}
 		tp, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
-			ClientID: clientID, PortfolioID: pfID, Exchange: body.Exchange, Symbol: body.Symbol,
+			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 			ExpiresAt: exp,
 		})
@@ -416,7 +422,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			exp = &tu
 		}
 		entry, tp, sl, err := h.svc.PlaceBracketOrder(r.Context(), portfolio.BracketOrderInput{
-			ClientID: clientID, PortfolioID: pfID, Exchange: body.Exchange, Symbol: body.Symbol,
+			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, EntryPrice: body.TriggerPrice,
 			TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 			ExpiresAt: exp,
@@ -444,7 +450,7 @@ func (h *PortfolioHandler) ListOrders(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
 	status := q.Get("status")
-	list, err := h.svc.ListPendingOrders(r.Context(), clientIDFrom(r), status, limit, offset, portfolioIDFrom(r))
+	list, err := h.svc.ListPendingOrders(r.Context(), clientIDFrom(r), status, limit, offset, portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -471,7 +477,7 @@ func statusOrDefault(s string) string {
 // GetOrder handles GET /api/v1/portfolio/orders/{id}
 func (h *PortfolioHandler) GetOrder(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
-	d, err := h.svc.GetPendingOrderDetail(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r))
+	d, err := h.svc.GetPendingOrderDetail(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -493,7 +499,7 @@ func (h *PortfolioHandler) AmendOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o, view, err := h.svc.AmendPendingOrder(r.Context(), portfolio.AmendPendingOrderInput{
-		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), OrderID: id,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), OwnerClientID: ownerClientIDFrom(r), OrderID: id,
 		TriggerPrice: body.TriggerPrice, RemainingQuantity: body.RemainingQuantity,
 	})
 	if err != nil {
@@ -527,10 +533,11 @@ func pendingOrderDetailDTO(d *portfolio.PendingOrderDetail) map[string]any {
 }
 
 type cancelAllBody struct {
-	ClientID    string `json:"clientId"`
-	PortfolioID string `json:"portfolioId"`
-	Exchange    string `json:"exchange"`
-	Symbol      string `json:"symbol"`
+	ClientID      string `json:"clientId"`
+	PortfolioID   string `json:"portfolioId"`
+	OwnerClientID string `json:"ownerClientId"`
+	Exchange      string `json:"exchange"`
+	Symbol        string `json:"symbol"`
 }
 
 // CancelAllOrders handles POST /api/v1/portfolio/orders/cancel-all
@@ -546,7 +553,8 @@ func (h *PortfolioHandler) CancelAllOrders(w http.ResponseWriter, r *http.Reques
 		clientID = clientIDFrom(r)
 	}
 	list, view, err := h.svc.CancelOpenPendingOrders(r.Context(), portfolio.CancelOpenOrdersInput{
-		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol,
+		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), OwnerClientID: coalesceOwner(r, body.OwnerClientID),
+		Exchange: body.Exchange, Symbol: body.Symbol,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -594,7 +602,7 @@ func (h *PortfolioHandler) CancelAllOrders(w http.ResponseWriter, r *http.Reques
 // CancelOrder handles DELETE /api/v1/portfolio/orders/{id}
 func (h *PortfolioHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.PathValue("id"))
-	o, err := h.svc.CancelPendingOrder(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r))
+	o, err := h.svc.CancelPendingOrder(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -610,7 +618,7 @@ func (h *PortfolioHandler) ListTrades(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, total, err := h.svc.ListTrades(r.Context(), clientIDFrom(r), limit, offset, portfolioIDFrom(r))
+	list, total, err := h.svc.ListTrades(r.Context(), clientIDFrom(r), limit, offset, portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

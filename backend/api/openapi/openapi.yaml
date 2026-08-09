@@ -1321,6 +1321,10 @@ paths:
         - name: X-Portfolio-Id
           in: header
           schema: { type: string }
+        - name: ownerClientId
+          in: query
+          description: Book owner's clientId when viewing a shared portfolio
+          schema: { type: string }
       responses:
         '200':
           description: Portfolio view
@@ -1331,6 +1335,8 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '400':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
   /api/v1/portfolios:
     get:
@@ -1359,6 +1365,153 @@ paths:
                     items:
                       $ref: '#/components/schemas/PortfolioSummary'
         '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolios/shared:
+    get:
+      summary: List paper portfolios shared with the caller
+      operationId: listSharedPortfolios
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Incoming shares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  count: { type: integer }
+                  portfolios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SharedPortfolioSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/shares:
+    get:
+      summary: List outgoing paper portfolio shares (owner)
+      operationId: listPortfolioShares
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          description: Limit to one book; omit to list all shares the owner granted
+          schema: { type: string }
+      responses:
+        '200':
+          description: Share list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ownerClientId: { type: string }
+                  count: { type: integer }
+                  shares:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PortfolioShare'
+        '400':
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Share a paper portfolio with another client (owner only)
+      description: |
+        Grants viewer (read snapshot, positions, trades, performance) or trader (also place/cancel orders).
+        Deposit, withdraw, delete, and share management stay owner-only. Cannot share with self.
+      operationId: sharePortfolio
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [granteeClientId, role]
+              properties:
+                clientId: { type: string }
+                portfolioId: { type: string }
+                granteeClientId: { type: string }
+                role: { type: string, enum: [viewer, trader] }
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioShare'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Change a paper portfolio share role (owner only)
+      operationId: updatePortfolioShare
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [granteeClientId, role]
+              properties:
+                clientId: { type: string }
+                portfolioId: { type: string }
+                granteeClientId: { type: string }
+                role: { type: string, enum: [viewer, trader] }
+      responses:
+        '200':
+          description: Updated share
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioShare'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Revoke paper portfolio share (owner only)
+      operationId: revokePortfolioShare
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: granteeClientId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: { type: boolean }
+                  granteeClientId: { type: string }
+        '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolios/{id}:
     parameters:
@@ -3788,12 +3941,34 @@ components:
         cashBalance: { type: number }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    SharedPortfolioSummary:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        name: { type: string }
+        role: { type: string, enum: [viewer, trader] }
+        currency: { type: string }
+        startingBalance: { type: number }
+        cashBalance: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PortfolioShare:
+      type: object
+      properties:
+        portfolioId: { type: string }
+        ownerClientId: { type: string }
+        granteeClientId: { type: string }
+        role: { type: string, enum: [viewer, trader] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     PortfolioView:
       type: object
       properties:
         id: { type: string }
         clientId: { type: string }
         name: { type: string }
+        role: { type: string, enum: [owner, viewer, trader] }
         currency: { type: string }
         startingBalance: { type: number }
         cashBalance: { type: number }

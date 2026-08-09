@@ -53,7 +53,7 @@ func performanceToDTO(p *domain.PortfolioPerformance) performanceDTO {
 // GetPerformance handles GET /api/v1/portfolio/performance
 func (h *PortfolioHandler) GetPerformance(w http.ResponseWriter, r *http.Request) {
 	period := r.URL.Query().Get("period")
-	perf, err := h.svc.GetPerformance(r.Context(), clientIDFrom(r), period, portfolioIDFrom(r))
+	perf, err := h.svc.GetPerformance(r.Context(), clientIDFrom(r), period, portfolioIDFrom(r), ownerClientIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

@@ -57,6 +57,11 @@ type DataPort interface {
 	ListPortfolios(ctx context.Context, clientID string) (json.RawMessage, error)
 	RenamePortfolio(ctx context.Context, clientID, id, name string) (json.RawMessage, error)
 	DeletePortfolio(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	SharePortfolio(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error)
+	UpdatePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error)
+	RevokePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID string) (json.RawMessage, error)
+	ListPortfolioShares(ctx context.Context, clientID, portfolioID string) (json.RawMessage, error)
+	ListSharedPortfolios(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error)
 	ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -832,8 +837,112 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("share_portfolio",
+		mcp.WithDescription("Share one of your paper portfolios with another client as viewer (read) or trader (can place/cancel orders). Owner only. Deposit/withdraw/delete/share stay owner-only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to share with")),
+		mcp.WithString("role", mcp.Required(), mcp.Description("viewer or trader")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		role, err := req.RequireString("role")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.SharePortfolio(ctx, clientID, req.GetString("portfolioId", ""), grantee, role)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("update_portfolio_share",
+		mcp.WithDescription("Change a paper portfolio share role (viewer|trader). Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Shared-with client")),
+		mcp.WithString("role", mcp.Required(), mcp.Description("viewer or trader")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		role, err := req.RequireString("role")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.UpdatePortfolioShare(ctx, clientID, req.GetString("portfolioId", ""), grantee, role)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("revoke_portfolio_share",
+		mcp.WithDescription("Remove another client's access to a paper portfolio. Owner only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name")),
+		mcp.WithString("granteeClientId", mcp.Required(), mcp.Description("Client to revoke")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		grantee, err := req.RequireString("granteeClientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.RevokePortfolioShare(ctx, clientID, req.GetString("portfolioId", ""), grantee)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_portfolio_shares",
+		mcp.WithDescription("List who you shared a paper portfolio with (owner)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("portfolioId", mcp.Description("Optional book id; omit for all books")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPortfolioShares(ctx, clientID, req.GetString("portfolioId", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_shared_portfolios",
+		mcp.WithDescription("List paper portfolios other clients shared with you, plus your role (viewer|trader)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Your client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListSharedPortfolios(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Pass portfolioId when the client has more than one book."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

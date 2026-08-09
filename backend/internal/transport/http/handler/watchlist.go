@@ -54,6 +54,13 @@ func coalescePortfolioID(r *http.Request, bodyID string) string {
 	return portfolioIDFrom(r)
 }
 
+func coalesceOwner(r *http.Request, bodyOwner string) string {
+	if v := strings.TrimSpace(bodyOwner); v != "" {
+		return v
+	}
+	return ownerClientIDFrom(r)
+}
+
 type watchlistItemDTO struct {
 	Exchange string `json:"exchange"`
 	Symbol   string `json:"symbol"`

@@ -228,6 +228,19 @@ class PortfolioDeleteInput(BaseModel):
     portfolio_id: str
 
 
+class PortfolioShareInput(BaseModel):
+    client_id: str
+    grantee_client_id: str
+    role: str = Field(description="viewer or trader")
+    portfolio_id: str = ""
+
+
+class PortfolioShareRevokeInput(BaseModel):
+    client_id: str
+    grantee_client_id: str
+    portfolio_id: str = ""
+
+
 class PortfolioPerformanceInput(BaseModel):
     client_id: str
     period: str = Field(default="1w", description="Lookback window: 1d, 1w, 1m, or 3m")
@@ -747,6 +760,50 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             f"/api/v1/portfolios/{portfolio_id}",
             {"clientId": client_id},
         )
+
+    def share_portfolio(
+        client_id: str, grantee_client_id: str, role: str, portfolio_id: str = ""
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "granteeClientId": grantee_client_id,
+            "role": role,
+        }
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        return http.post("/api/v1/portfolio/shares", body)
+
+    def update_portfolio_share(
+        client_id: str, grantee_client_id: str, role: str, portfolio_id: str = ""
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "granteeClientId": grantee_client_id,
+            "role": role,
+        }
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        return http.patch("/api/v1/portfolio/shares", body)
+
+    def revoke_portfolio_share(
+        client_id: str, grantee_client_id: str, portfolio_id: str = ""
+    ) -> str:
+        params: dict[str, Any] = {
+            "clientId": client_id,
+            "granteeClientId": grantee_client_id,
+        }
+        if portfolio_id:
+            params["portfolioId"] = portfolio_id
+        return http.delete("/api/v1/portfolio/shares", params)
+
+    def list_portfolio_shares(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/shares", q)
+
+    def list_shared_portfolios(client_id: str) -> str:
+        return http.get("/api/v1/portfolios/shared", {"clientId": client_id})
 
     def get_portfolio_risk_limits(client_id: str) -> str:
         return http.get("/api/v1/portfolio/risk-limits", {"clientId": client_id})
@@ -1445,6 +1502,36 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="delete_portfolio",
             description="Delete a paper portfolio and all of its positions, orders, and history.",
             args_schema=PortfolioDeleteInput,
+        ),
+        StructuredTool.from_function(
+            share_portfolio,
+            name="share_portfolio",
+            description="Share one of your paper books with another client as viewer (read) or trader (can place orders). Owner only.",
+            args_schema=PortfolioShareInput,
+        ),
+        StructuredTool.from_function(
+            update_portfolio_share,
+            name="update_portfolio_share",
+            description="Change a paper portfolio share role to viewer or trader. Owner only.",
+            args_schema=PortfolioShareInput,
+        ),
+        StructuredTool.from_function(
+            revoke_portfolio_share,
+            name="revoke_portfolio_share",
+            description="Remove another client's access to a paper portfolio. Owner only.",
+            args_schema=PortfolioShareRevokeInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_shares,
+            name="list_portfolio_shares",
+            description="List who you shared a paper portfolio with.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            list_shared_portfolios,
+            name="list_shared_portfolios",
+            description="List paper portfolios shared with you and your role.",
+            args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
             get_portfolio,

@@ -597,6 +597,8 @@ func HelpText() string {
 	b.WriteString(cmdLine("/portfolio list", "", "all paper books"))
 	b.WriteString(cmdLine("/portfolio create", "[balance] [name]", "new simulated book"))
 	b.WriteString(cmdLine("/portfolio use", "NAME", "select a paper book"))
+	b.WriteString(cmdLine("/portfolio share", "CLIENT role", "viewer or trader"))
+	b.WriteString(cmdLine("/portfolio shared", "", "books shared with you"))
 	b.WriteString(cmdLine("/buy", "<symbol> <qty> [ex]", "preview then confirm"))
 	b.WriteString(cmdLine("/sell", "<symbol> <qty> [ex]", "preview then confirm"))
 	b.WriteString(cmdLine("/deposit", "<amount> [note]", "add virtual cash"))

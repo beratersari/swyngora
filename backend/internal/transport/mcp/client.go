@@ -494,6 +494,41 @@ func (c *APIClient) DeletePortfolio(ctx context.Context, clientID, id string) (j
 	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolios/"+url.PathEscape(id)+"?"+q.Encode(), nil)
 }
 
+func (c *APIClient) SharePortfolio(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/shares", map[string]any{
+		"clientId": clientID, "portfolioId": portfolioID, "granteeClientId": granteeClientID, "role": role,
+	})
+}
+
+func (c *APIClient) UpdatePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID, role string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/portfolio/shares", map[string]any{
+		"clientId": clientID, "portfolioId": portfolioID, "granteeClientId": granteeClientID, "role": role,
+	})
+}
+
+func (c *APIClient) RevokePortfolioShare(ctx context.Context, clientID, portfolioID, granteeClientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	q.Set("portfolioId", portfolioID)
+	q.Set("granteeClientId", granteeClientID)
+	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolio/shares?"+q.Encode(), nil)
+}
+
+func (c *APIClient) ListPortfolioShares(ctx context.Context, clientID, portfolioID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if strings.TrimSpace(portfolioID) != "" {
+		q.Set("portfolioId", portfolioID)
+	}
+	return c.get(ctx, "/api/v1/portfolio/shares", q)
+}
+
+func (c *APIClient) ListSharedPortfolios(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolios/shared", q)
+}
+
 // DepositPortfolioCash adds virtual cash.
 func (c *APIClient) DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/deposits", map[string]any{

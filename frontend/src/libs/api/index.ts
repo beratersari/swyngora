@@ -82,6 +82,11 @@ export {
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
+  useListPortfolioSharesQuery,
+  useListSharedPortfoliosQuery,
+  useSharePortfolioMutation,
+  useUpdatePortfolioShareMutation,
+  useRevokePortfolioShareMutation,
 } from './endpoints/portfolioApi';
 export {
   useListAccountAPIKeysQuery,
@@ -97,4 +102,6 @@ export type {
   PortfolioPerformancePeriod,
   PortfolioCashMovement,
   PortfolioCashMoveResponse,
+  PortfolioShare,
+  SharedPortfolioSummary,
 } from './endpoints/portfolioApi';

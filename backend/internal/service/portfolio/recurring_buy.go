@@ -16,6 +16,7 @@ import (
 type RecurringBuyCreateInput struct {
 	ClientID      string
 	PortfolioID   string
+	OwnerClientID string
 	Exchange      string
 	Symbol        string
 	Name          string // optional label; default "<symbol> <frequency>"
@@ -33,6 +34,7 @@ type RecurringBuyCreateInput struct {
 type RecurringBuyUpdateInput struct {
 	ClientID      string
 	PortfolioID   string
+	OwnerClientID string
 	PlanID        string
 	Name          *string
 	Amount        *float64
@@ -48,7 +50,7 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
+	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +101,7 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
+	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +172,7 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 
 // ListRecurringBuyPlans lists plans for a client.
 func (s *Service) ListRecurringBuyPlans(ctx context.Context, clientID string, portfolioID ...string) ([]domain.RecurringBuyPlan, error) {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +181,7 @@ func (s *Service) ListRecurringBuyPlans(ctx context.Context, clientID string, po
 
 // GetRecurringBuyPlan returns one plan.
 func (s *Service) GetRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +203,7 @@ func (s *Service) ResumeRecurringBuyPlan(ctx context.Context, clientID, id strin
 }
 
 func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, status domain.RecurringBuyPlanStatus, bumpPastNext bool, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +222,7 @@ func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, s
 
 // DeleteRecurringBuyPlan removes a plan and its run history.
 func (s *Service) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) error {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...)
 	if err != nil {
 		return err
 	}
@@ -234,7 +236,7 @@ func (s *Service) DeleteRecurringBuyPlan(ctx context.Context, clientID, id strin
 
 // ListRecurringBuyRuns lists execution history for a plan.
 func (s *Service) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int, portfolioID ...string) ([]domain.RecurringBuyRun, error) {
-	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
 	if err != nil {
 		return nil, err
 	}

@@ -44,7 +44,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio` | Create named paper book (starting balance, optional name) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, P&L for selected book (`portfolioId`) |
 | `GET` | `/api/v1/portfolios` | List paper books |
+| `GET` | `/api/v1/portfolios/shared` | Books shared with the caller |
 | `PATCH`/`DELETE` | `/api/v1/portfolios/{id}` | Rename or delete a book |
+| `POST`/`GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/shares` | Share a book (`viewer`/`trader`), list, update, revoke |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available virtual cash |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history |
