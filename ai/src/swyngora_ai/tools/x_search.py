@@ -59,11 +59,8 @@ def _http_json(url: str, timeout: float = 12.0) -> dict[str, Any]:
 
 def _guess_symbols(query: str) -> list[str]:
     """Extract likely tickers from free text (BTC, $ETH, JUVUSDT, bitcoin, …)."""
-    found: list[str] = []
     upper = query.upper()
-
-    for m in re.finditer(r"\$([A-Z]{2,10})", upper):
-        found.append(m.group(1))
+    found: list[str] = [m.group(1) for m in re.finditer(r"\$([A-Z]{2,10})", upper)]
 
     for raw in re.findall(r"[A-Za-z]{2,12}", query):
         w = raw.upper()
@@ -239,9 +236,9 @@ def _x_search(query: str, max_results: int = 8) -> str:
     symbols = _guess_symbols(query)
     if not symbols:
         # default popular crypto if query is vague social question
-        if re.search(r"\b(btc|bitcoin)\b", query, re.I):
+        if re.search(r"\b(btc|bitcoin)\b", query, re.IGNORECASE):
             symbols = ["BTC"]
-        elif re.search(r"\b(eth|ethereum)\b", query, re.I):
+        elif re.search(r"\b(eth|ethereum)\b", query, re.IGNORECASE):
             symbols = ["ETH"]
 
     sections: list[str] = []

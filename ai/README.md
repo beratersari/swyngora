@@ -89,7 +89,7 @@ Unit tests use scripted/fake models and mocked HTTP — no live LLM or network r
 ```bash
 cd ai
 source .venv/bin/activate
-ruff check .              # lint (E, W, F, I, UP)
+ruff check .              # lint (see pyproject.toml [tool.ruff.lint].select)
 ruff format --check .     # formatter dry-run
 ruff check --fix . && ruff format .   # apply auto-fixes + format
 ty check                  # type checker (Astral ty; default error rules)

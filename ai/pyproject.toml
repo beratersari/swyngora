@@ -41,11 +41,39 @@ extend-exclude = [".venv", "src/*.egg-info"]
 
 [tool.ruff.lint]
 select = [
-  "E",  # pycodestyle errors
-  "W",  # pycodestyle warnings
-  "F",  # pyflakes
-  "I",  # isort
-  "UP", # pyupgrade (3.11+)
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes
+  "I",   # isort
+  "UP",  # pyupgrade (3.11+)
+  "SLF", # flake8-self: do not access private members of other objects
+  "PTH", # flake8-use-pathlib: prefer pathlib over os.path / open()
+  "T10", # flake8-debugger: no leftover debugger breakpoints
+  "PIE", # flake8-pie: misc tidy Python idioms
+  "FLY",  # flynt: prefer f-strings over % / .format / join of static pieces
+  "PERF", # perflint: performance anti-patterns
+  "FURB", # refurb: modern Python refreshes
+  "PLR0124", # comparison-with-itself
+  "PLR0133", # comparison-of-constant
+  "PLR0206", # property-with-parameters
+  "PLR0402", # manual-from-import
+  "PLR1704", # redefined-argument-from-local
+  "PLR1708", # stop-iteration-return
+  "PLR1711", # useless-return
+  "PLR1714", # repeated-equality-comparison
+  "PLR1716", # boolean-chained-comparison
+  "PLR1722", # sys-exit-alias
+  "PLR1730", # if-stmt-min-max
+  "PLR1733", # unnecessary-dict-index-lookup
+  "PLR1736", # unnecessary-list-index-lookup
+  "PLR2044", # empty-comment
+  "PLR5501", # collapsible-else-if
+  "PLW",     # pylint warning
+  "PLE",     # pylint error
+  "TRY400",  # error-instead-of-exception
+  "TRY004",  # type-check-without-type-error
+  "RUF013",  # implicit-optional
+  "RUF034",  # useless-if-else
 ]
 ignore = [
   "E501",  # line length owned by the formatter; prompt/URL strings may exceed 100
@@ -55,7 +83,12 @@ ignore = [
   "E114",
   "E117",
   "W191",
+  "FURB110",  # x if x else y → or is less explicit for list fallbacks
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may call module-private helpers (_wikipedia, etc.). SLF still applies in src/.
+"tests/**" = ["SLF001"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["swyngora_ai"]

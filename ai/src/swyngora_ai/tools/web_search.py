@@ -290,7 +290,7 @@ def _wiki_title(topic: str) -> str:
     }
     if upper in aliases:
         return aliases[upper]
-    m = re.fullmatch(r"([A-Za-z]{2,10})(USDT|USD)", t, re.I)
+    m = re.fullmatch(r"([A-Za-z]{2,10})(USDT|USD)", t, re.IGNORECASE)
     if m and m.group(1).upper() in aliases:
         return aliases[m.group(1).upper()]
     return t

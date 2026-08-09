@@ -6,7 +6,7 @@ import re
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 
-_URL_RE = re.compile(r"https?://[^\s\)\]\>\"']+", re.I)
+_URL_RE = re.compile(r"https?://[^\s\)\]\>\"']+", re.IGNORECASE)
 _LABELED_URL_RE = re.compile(r"(?im)^\s*(?:URL|Link)\s*:\s*(https?://\S+)")
 _MD_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^)\s]+)\)")
 _HN_RE = re.compile(r"(?im)^\s*(?:HN:|\d+\.\s*\[Hacker News\])\s*(.+?)\s+(https?://\S+)")
@@ -62,7 +62,7 @@ def _title_from_context(text: str, url: str) -> str:
     for ln in reversed(lines):
         cleaned = re.sub(r"^\d+\.\s*", "", ln)
         cleaned = re.sub(r"^\[.*?\]\s*", "", cleaned)
-        cleaned = re.sub(r"^URL\s*:\s*", "", cleaned, flags=re.I)
+        cleaned = re.sub(r"^URL\s*:\s*", "", cleaned, flags=re.IGNORECASE)
         if cleaned and "http" not in cleaned.lower() and len(cleaned) > 3:
             return cleaned[:160]
     host = _host(url)

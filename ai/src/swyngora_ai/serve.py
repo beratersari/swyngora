@@ -25,7 +25,7 @@ _orch: Orchestrator | None = None
 
 
 def get_orch() -> Orchestrator:
-    global _orch
+    global _orch  # noqa: PLW0603 — process-wide HTTP singleton
     if _orch is None:
         _orch = build_orchestrator()
     return _orch
