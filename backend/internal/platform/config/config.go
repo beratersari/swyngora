@@ -75,6 +75,9 @@ type Config struct {
 	// WebhookMaxAttempts is permanent failure threshold for webhook deliveries.
 	WebhookMaxAttempts int
 
+	// RealtimePriceInterval is how often subscribed tickers are pushed on the WebSocket.
+	RealtimePriceInterval time.Duration
+
 	// PortfolioDBPath is the SQLite file for paper-trading portfolios.
 	PortfolioDBPath string
 	// PortfolioOrderCheckInterval is how often open pending paper orders are evaluated.
@@ -193,6 +196,8 @@ func Load() Config {
 		WebhookDeliveryInterval: positiveDurationEnv("WEBHOOK_DELIVERY_INTERVAL", 5*time.Second),
 		WebhookHTTPTimeout:      positiveDurationEnv("WEBHOOK_HTTP_TIMEOUT", 10*time.Second),
 		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
+
+		RealtimePriceInterval:       positiveDurationEnv("REALTIME_PRICE_INTERVAL", 5*time.Second),
 
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
 		PortfolioOrderCheckInterval:  positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),

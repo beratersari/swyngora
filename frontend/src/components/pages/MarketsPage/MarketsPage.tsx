@@ -23,6 +23,7 @@ import {
 } from '@/libs/api';
 import { MetricColumnPicker } from '@/components/molecules/MetricColumnPicker';
 import { useDebouncedValue, useDocumentVisible, useSpotMetricColumns } from '@/libs/hooks';
+import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
 import {
   defaultQuoteForExchange,
   marketsStateToSearchParams,
@@ -95,9 +96,10 @@ export function MarketsPage() {
   const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const [addWatch] = useAddWatchlistItemMutation();
   const [removeWatch] = useRemoveWatchlistItemMutation();
+  const livePrices = useRealtimeConnected();
 
   const spotQuery = useListSpotMarketsQuery(spotArgs, {
-    pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
+    pollingInterval: visible && !livePrices ? DEFAULT_SPOT_POLL_MS : 0,
     refetchOnFocus: true,
   });
   const delistQuery = useListDelistScheduleQuery(
@@ -142,6 +144,14 @@ export function MarketsPage() {
   const cachedForFilter = rowCache.key === filterKey ? rowCache : null;
   // Prefer current query data; while a new sort/page is loading keep last rows.
   const items = spotQuery.data?.items ?? cachedForFilter?.items ?? [];
+  const liveSymbols = useMemo(
+    () =>
+      items
+        .filter((it) => it.symbol)
+        .map((it) => ({ exchange: state.exchange, symbol: String(it.symbol) })),
+    [items, state.exchange],
+  );
+  usePriceSubscription(liveSymbols, visible);
   const total = spotQuery.data?.total ?? cachedForFilter?.total ?? 0;
   const hasRows = items.length > 0;
   const loadErrorText = spotQuery.isError

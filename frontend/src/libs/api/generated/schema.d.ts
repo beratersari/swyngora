@@ -21,6 +21,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/realtime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Realtime WebSocket protocol description
+         * @description Returns how to connect to `GET /api/v1/ws` (JSON messages).
+         *     Subscribe/unsubscribe selected coins for price ticks and one paper portfolio
+         *     for order/position/cash events. Resubscribe after reconnect; access is
+         *     enforced per book (owner, trader, or viewer). Paper trading only.
+         */
+        get: operations["getRealtimeInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ws": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * WebSocket realtime stream
+         * @description Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
+         *     browsers may pass `?token=` and must pass `?clientId=`.
+         *
+         *     Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
+         *     `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
+         *
+         *     Server JSON: `hello`, `ack`, `price`, `portfolio` (snapshot / order / position / fill),
+         *     `error`, `pong`. After reconnect, resend subscriptions; the server snapshots current state.
+         *     Portfolio events are sent only if this clientId can view the book.
+         */
+        get: operations["realtimeWebSocket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/exchanges": {
         parameters: {
             query?: never;
@@ -67,7 +118,6 @@ export interface paths {
          * @description Unique crypto product tags from Binance product catalog (e.g. Meme, defi, Layer1_Layer2).
          *     Used to power spot list tag filters. Non-crypto tags (bStocks, tCommodities) are excluded.
          *     Tags are only populated for Binance; other exchanges return an empty list.
-         *
          */
         get: operations["listProductTags"];
         put?: never;
@@ -88,7 +138,6 @@ export interface paths {
         /**
          * List scheduled spot delistings
          * @description Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
-         *
          */
         get: operations["listDelistSchedule"];
         put?: never;
@@ -111,7 +160,6 @@ export interface paths {
          * @description Returns spot-tradable pairs from Binance `exchangeInfo`, joined with
          *     24h ticker metrics. Supports substring search (`q`), quote/base/status
          *     filters, sorting by volume and other metrics, and offset pagination.
-         *
          */
         get: operations["listSpotMarkets"];
         put?: never;
@@ -169,7 +217,6 @@ export interface paths {
          *     on the request path). Accepts base asset (`BTC`) or a pair (`BTCUSDT`);
          *     USD-stable quote suffixes are stripped for convenience. `maxSupply` is null
          *     when Binance does not publish a hard cap.
-         *
          */
         get: operations["getSupply"];
         put?: never;
@@ -193,7 +240,6 @@ export interface paths {
          *     - RSI (Wilder's smoothing, default period 14)
          *     - EMA (default periods 12 and 26; seed = SMA of first period)
          *     Informational only - not financial advice.
-         *
          */
         get: operations["getIndicators"];
         put?: never;
@@ -216,7 +262,6 @@ export interface paths {
          * @description Mechanical threshold detection over OHLCV candles (close-to-close, candle body, or high-from-low).
          *     Configure minReturnPct, windowBars, interval, lookbackHours or limit, mode, direction, minVolumeRatio.
          *     Informational only - not financial advice.
-         *
          */
         get: operations["getPumpEvents"];
         put?: never;
@@ -241,7 +286,6 @@ export interface paths {
          *     resolved values (not zeros/empty strings).
          *     maxTotalEvents caps the aggregate number of events across all hits (not the hit count).
          *     Informational only - not financial advice.
-         *
          */
         get: operations["scanPumpEvents"];
         put?: never;
@@ -266,7 +310,6 @@ export interface paths {
          * @description Computes latest RSI and EMA for up to 50 symbols on a single exchange/interval.
          *     Per-symbol failures return `error: unavailable` on that item rather than failing the batch.
          *     Upstream concurrency is bounded process-wide. Informational only - not financial advice.
-         *
          */
         post: operations["postIndicatorsBatch"];
         delete?: never;
@@ -286,7 +329,6 @@ export interface paths {
          * Get watchlist for a client id
          * @description Returns the actor's own list, or a list shared with them when `ownerClientId` is set.
          *     Response includes `role` (owner|viewer|editor) and `ownerClientId`.
-         *
          */
         get: operations["getWatchlist"];
         /**
@@ -296,7 +338,6 @@ export interface paths {
          *     devices auto-merge. Same-symbol delete vs update returns 409 with `conflict` details;
          *     re-PUT with `baseVersion` = `serverVersion` and your resolved `items` to finish.
          *     Optional `baseItems` improves 3-way merge accuracy.
-         *
          */
         put: operations["putWatchlist"];
         post?: never;
@@ -322,7 +363,6 @@ export interface paths {
          *     - timeZone (IANA) and quietHours local start/end (HH:MM); ranges may cross midnight
          *     Notifications created during quiet hours wait until quiet hours end.
          *     Pending deliveries survive restarts and retry on failure.
-         *
          */
         put: operations["putAlertWebhook"];
         post?: never;
@@ -349,7 +389,6 @@ export interface paths {
          *     mode=one_time (default): fires once then status becomes triggered.
          *     mode=repeating: fires on each edge into the condition zone; does not re-fire while price
          *     stays on that side; re-arms when price returns to the safe side. Informational only.
-         *
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -390,14 +429,12 @@ export interface paths {
          * @description Owner or editor may add/update symbols. Send `baseVersion` from last GET for multi-device
          *     safety. Adding a symbol missing on the server auto-merges even if versions differ.
          *     Conflicting notes on the same symbol return 409.
-         *
          */
         post: operations["addWatchlistItem"];
         /**
          * Remove a watchlist item
          * @description Owner or editor may remove symbols. Send `baseVersion` (query or If-Match).
          *     If another device changed the same symbol, returns 409 so the user can choose.
-         *
          */
         delete: operations["removeWatchlistItem"];
         options?: never;
@@ -420,7 +457,6 @@ export interface paths {
          * @description Grants viewer (read-only) or editor (add/remove symbols only) access.
          *     Cannot share with self. Same grantee cannot be shared twice (use PATCH to change role).
          *     Editors cannot delete the list or change sharing settings.
-         *
          */
         post: operations["shareWatchlist"];
         /** Revoke share access (owner only) */
@@ -459,7 +495,6 @@ export interface paths {
          * List watchlist change history (owner only)
          * @description Returns audit events (share grant/update/revoke, item add/remove, list replace)
          *     with actorClientId and createdAt.
-         *
          */
         get: operations["listWatchlistAudit"];
         put?: never;
@@ -481,7 +516,6 @@ export interface paths {
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
-         *
          */
         get: operations["getPortfolio"];
         put?: never;
@@ -489,7 +523,6 @@ export interface paths {
          * Create a paper-trading portfolio
          * @description Creates a named simulated portfolio with starting cash. A clientId may own up to 20 books
          *     (e.g. Main vs Risky). Duplicate names are rejected. Paper trading only - not real money.
-         *
          */
         post: operations["createPortfolio"];
         delete?: never;
@@ -546,7 +579,6 @@ export interface paths {
          * Share a paper portfolio with another client (owner only)
          * @description Grants viewer (read snapshot, positions, trades, performance) or trader (also place/cancel orders).
          *     Deposit, withdraw, delete, and share management stay owner-only. Cannot share with self.
-         *
          */
         post: operations["sharePortfolio"];
         /** Revoke paper portfolio share (owner only) */
@@ -595,7 +627,6 @@ export interface paths {
          * @description Adds cash to the simulated account. Does not count as trading profit.
          *     Opening startingBalance is unchanged; netDeposits increases.
          *     Paper trading only — not real money.
-         *
          */
         post: operations["depositPortfolioCash"];
         delete?: never;
@@ -617,7 +648,6 @@ export interface paths {
          * Withdraw virtual cash from a paper portfolio
          * @description Removes available cash only (not reserved for open orders). Does not count as trading loss.
          *     Paper trading only — not real money.
-         *
          */
         post: operations["withdrawPortfolioCash"];
         delete?: never;
@@ -641,7 +671,6 @@ export interface paths {
          *     Recorded as transfer_out / transfer_in (not deposit/withdrawal) on both histories.
          *     Contributed capital moves with the cash so trading P&L is unchanged.
          *     Shared traders/viewers cannot transfer. Paper trading only — not real money.
-         *
          */
         post: operations["transferPortfolioCash"];
         delete?: never;
@@ -683,7 +712,6 @@ export interface paths {
          *     that window as amount and percent. Background worker stores mark-to-market
          *     buckets (default 15m). Live equity is always the last point.
          *     Paper trading only — not real money.
-         *
          */
         get: operations["getPortfolioPerformance"];
         put?: never;
@@ -707,14 +735,12 @@ export interface paths {
          *     Daily loss uses UTC start-of-day equity vs current equity (spot+margin MTM).
          *     maxAssetWeightPct blocks new buys/opens that would push one coin over the cap.
          *     Returns limits plus status (daily PnL, per-asset weights, blockReasons) for the settings screen.
-         *
          */
         get: operations["getPortfolioRiskLimits"];
         /**
          * Set or update paper risk limits
          * @description Replace both rules. Omit a field or send null to disable that rule.
          *     Does not close positions. New spot buys and new margin long/short are blocked when a rule is hit.
-         *
          */
         put: operations["putPortfolioRiskLimits"];
         post?: never;
@@ -751,7 +777,6 @@ export interface paths {
          *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
          *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
          *     Paper trading only — not real money.
-         *
          */
         post: operations["placePortfolioOrder"];
         delete?: never;
@@ -776,7 +801,6 @@ export interface paths {
          *     `exchange` without `symbol` cancels every pair on that venue.
          *     Releases unused cash/position reservations. Empty result is success (`canceled: 0`).
          *     Does not cancel margin limit orders. Paper trading only.
-         *
          */
         post: operations["cancelAllPortfolioOrders"];
         delete?: never;
@@ -798,7 +822,6 @@ export interface paths {
          *     availableCashForOrder / availableQuantityForOrder include this order's current reservation
          *     so the UI can compute max remaining at a typed price. editable is false for filled,
          *     canceled, IOC/FOK, trailing, OCO, and bracket legs.
-         *
          */
         get: operations["getPortfolioOrder"];
         put?: never;
@@ -817,7 +840,6 @@ export interface paths {
          *     remainingQuantity must stay above zero (use DELETE to cancel). Original quantity becomes
          *     filledQuantity + remainingQuantity. If the new price is already marketable, one fill
          *     attempt runs immediately. Concurrent fill/cancel returns 409.
-         *
          */
         patch: operations["amendPortfolioOrder"];
         trace?: never;
@@ -854,7 +876,6 @@ export interface paths {
          * @description Named target mix (e.g. 50% BTC, 30% ETH, 20% USDT). Weights must sum to 100.
          *     Saving a basket does not trade. Rebalance is a separate explicit action.
          *     Spot only; margin positions are ignored. Paper trading — not real money.
-         *
          */
         post: operations["createPortfolioBasket"];
         delete?: never;
@@ -897,7 +918,6 @@ export interface paths {
          * @description User-triggered only. Sells overweight (and coins not in the basket), then buys
          *     underweight sleeves at last price. Drift is allowed until this is called.
          *     Paper trading — not real money. Not financial advice.
-         *
          */
         post: operations["rebalancePortfolioBasket"];
         delete?: never;
@@ -949,7 +969,6 @@ export interface paths {
          *     Missed periods execute only the latest due slot (no backlog of intermediate buys).
          *     Unique period keys prevent double execution across restarts or concurrent workers.
          *     Paper trading only — not real money.
-         *
          */
         post: operations["createRecurringBuyPlan"];
         delete?: never;
@@ -1052,7 +1071,6 @@ export interface paths {
          * Set paper margin mode (isolated or cross)
          * @description Account-wide margin mode. Cannot change while any open margin position or pending
          *     margin limit order exists. Default is isolated.
-         *
          */
         put: operations["setMarginMode"];
         post?: never;
@@ -1078,7 +1096,6 @@ export interface paths {
          *     limit rests until last crosses limitPrice and reserves required margin until fill/cancel.
          *     Initial margin = qty * price / leverage from available cash.
          *     Optional stopLoss / takeProfit. Simulated only — not real money.
-         *
          */
         post: operations["placeMarginOrder"];
         delete?: never;
@@ -1172,7 +1189,6 @@ export interface paths {
          * @description delta > 0 adds cash into the position margin; delta < 0 returns excess to cash.
          *     Cannot go below initial margin for remaining size. Liquidation price is recalculated.
          *     Only allowed in isolated mode.
-         *
          */
         post: operations["adjustMargin"];
         delete?: never;
@@ -1194,7 +1210,6 @@ export interface paths {
          * Repay margin debt without closing
          * @description Pays interest first, then principal. Amount is in debt units (quote cash for long, base coins for short).
          *     Short repay spends available cash at mark to cover coin debt.
-         *
          */
         post: operations["repayMarginDebt"];
         delete?: never;
@@ -1256,7 +1271,6 @@ export interface paths {
          *     Stale or missing exchange prices skip evaluation for that venue (no signal).
          *     Open opportunities are durable (SQLite) and survive worker restarts.
          *     Informational only — not financial advice / not executable trading.
-         *
          */
         post: operations["createPriceDiffWatch"];
         delete?: never;
@@ -1334,7 +1348,6 @@ export interface paths {
          * Create a technical scanner rule
          * @description Creates a rule evaluated against the client's watchlist symbols.
          *     Types: rsi, ma_crossover, volume_increase. Informational only - not financial advice.
-         *
          */
         post: operations["createScannerRule"];
         delete?: never;
@@ -1372,7 +1385,6 @@ export interface paths {
          * List scanner match history
          * @description Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
          *     (candle open time) so the same bar is not stored twice.
-         *
          */
         get: operations["listScannerResults"];
         put?: never;
@@ -1398,7 +1410,6 @@ export interface paths {
          * @description Runs a rule over a symbol and date range in the background. Identical jobs
          *     (same client, rule, symbol, range) return the existing pending/running/completed job.
          *     Progress and signalCount update while running. Informational only.
-         *
          */
         post: operations["startScannerBacktest"];
         delete?: never;
@@ -1452,7 +1463,6 @@ export interface paths {
          * List backtest signals with forward returns
          * @description Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
          *     (percent price change after 1/5/20 calendar days when data exists).
-         *
          */
         get: operations["listScannerBacktestSignals"];
         put?: never;
@@ -1479,7 +1489,6 @@ export interface paths {
          *     Sections default to all of: watchlist, shares, alerts, backtests.
          *     Only one pending/running export is allowed per clientId (409 conflict otherwise).
          *     Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
-         *
          */
         post: operations["startExport"];
         delete?: never;
@@ -1533,7 +1542,6 @@ export interface paths {
          * Download a completed export file
          * @description Only the owning clientId may download. Returns 400 if not completed, 404 if expired
          *     or missing. Files are deleted automatically after EXPORT_FILE_TTL (default 1h).
-         *
          */
         get: operations["downloadExport"];
         put?: never;
@@ -1575,7 +1583,6 @@ export interface paths {
          * @description Marks the clientId closed. Product APIs return 403 for that clientId.
          *     Shared watchlists owned by this client become inaccessible to grantees.
          *     Data is retained until purgeAt (closedAt + 7 days). Active jobs are canceled.
-         *
          */
         post: operations["closeAccount"];
         delete?: never;
@@ -1613,7 +1620,6 @@ export interface paths {
          * @description Named keys for bots/apps. Secrets are never listed. Manage keys with the
          *     main account (`X-Client-Id` plus optional process `API_AUTH_TOKEN`).
          *     User-issued keys cannot list or create other keys.
-         *
          */
         get: operations["listAccountAPIKeys"];
         put?: never;
@@ -1622,7 +1628,6 @@ export interface paths {
          * @description permission=read → GET only. permission=trade → can place/cancel paper trades
          *     and other mutations except account close and key management.
          *     The full secret is returned once.
-         *
          */
         post: operations["createAccountAPIKey"];
         delete?: never;
@@ -1666,7 +1671,6 @@ export interface paths {
          *     Parses watchlist, shares, alerts, and backtests; returns counts of valid, invalid,
          *     willAdd (under merge), and duplicates. Does not apply data until confirm.
          *     Ownership is always the uploading clientId (file clientId is ignored).
-         *
          */
         post: operations["previewImport"];
         delete?: never;
@@ -1723,7 +1727,6 @@ export interface paths {
          * @description mode=merge adds only missing records (no duplicate symbols/shares/ids).
          *     mode=replace clears existing section data for the client then imports from the file.
          *     Only one pending/running import per client (409 otherwise). Runs in the background.
-         *
          */
         post: operations["confirmImport"];
         delete?: never;
@@ -1764,7 +1767,6 @@ export interface paths {
          *     Market figures must come from tools on the assistant side.
          *     Returns 503 when AI is not configured; 502 on upstream failure.
          *     Informational only - not financial advice.
-         *
          */
         post: operations["postAiChat"];
         delete?: never;
@@ -1783,12 +1785,27 @@ export interface components {
                 message?: string;
             };
         };
+        RealtimeInfo: {
+            /** @example /api/v1/ws */
+            path?: string;
+            /** @example 1 */
+            protocol?: number;
+            /** @example 100 */
+            maxSymbols?: number;
+            auth?: string;
+            reconnect?: string;
+            channels?: string[];
+            clientTypes?: string[];
+            serverTypes?: string[];
+            access?: string;
+        };
         AiChatRequest: {
             /** @description User message (non-empty after trim) */
             message: string;
-            /** @description Optional multi-turn session key. Server defaults to http-default
+            /**
+             * @description Optional multi-turn session key. Server defaults to http-default
              *     when omitted. Clients should send a stable device session id.
-             *      */
+             */
             sessionId?: string;
         };
         AiChatResponse: {
@@ -2622,6 +2639,52 @@ export interface operations {
             };
         };
     };
+    getRealtimeInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Connection and message protocol */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeInfo"];
+                };
+            };
+        };
+    };
+    realtimeWebSocket: {
+        parameters: {
+            query: {
+                clientId: string;
+                /** @description API token when the browser cannot set Authorization */
+                token?: string;
+                /** @description Optional initial book (still send subscribe_portfolio) */
+                portfolioId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switching Protocols (WebSocket) */
+            101: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
     listExchanges: {
         parameters: {
             query?: never;
@@ -2638,11 +2701,13 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        /** @example [
+                        /**
+                         * @example [
                          *       "binance",
                          *       "coinbase",
                          *       "bybit"
-                         *     ] */
+                         *     ]
+                         */
                         exchanges?: string[];
                         /** @example binance */
                         default?: string;
@@ -2672,12 +2737,14 @@ export interface operations {
                     "application/json": {
                         /** @example binance */
                         exchange?: string;
-                        /** @example [
+                        /**
+                         * @example [
                          *       "1m",
                          *       "5m",
                          *       "1h",
                          *       "1d"
-                         *     ] */
+                         *     ]
+                         */
                         intervals?: string[];
                     };
                 };
@@ -2705,12 +2772,14 @@ export interface operations {
                     "application/json": {
                         /** @example binance */
                         exchange?: string;
-                        /** @example [
+                        /**
+                         * @example [
                          *       "AI",
                          *       "Layer1_Layer2",
                          *       "Meme",
                          *       "defi"
-                         *     ] */
+                         *     ]
+                         */
                         tags?: string[];
                     };
                 };
@@ -2754,10 +2823,11 @@ export interface operations {
                 base?: string;
                 /** @description Filter by exchange status (e.g. TRADING) */
                 status?: string;
-                /** @description Filter by Binance product-catalog tag (case-insensitive).
+                /**
+                 * @description Filter by Binance product-catalog tag (case-insensitive).
                  *     Comma-separated or repeated `tag` params use OR semantics (has any).
                  *     Examples: `Meme`, `defi,AI`, `Layer1_Layer2`.
-                 *      */
+                 */
                 tag?: string;
                 /** @description Alias of `tag` (comma-separated product tags, OR match) */
                 tags?: string;
@@ -2796,10 +2866,11 @@ export interface operations {
                 exchange?: "binance" | "coinbase" | "bybit";
                 /** @description Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD) */
                 symbol: string;
-                /** @description Candle interval (default 1h). Supported values are exchange-specific -
+                /**
+                 * @description Candle interval (default 1h). Supported values are exchange-specific -
                  *     call GET /api/v1/market/intervals?exchange=... for the authoritative list.
                  *     Coinbase/Bybit reject many Binance-only intervals with 400.
-                 *      */
+                 */
                 interval?: string;
                 /** @description Number of candles (1-1000, default 100) */
                 limit?: number;
@@ -3031,10 +3102,12 @@ export interface operations {
                      * @default 1h
                      */
                     interval?: string;
-                    /** @example [
+                    /**
+                     * @example [
                      *       "BTCUSDT",
                      *       "ETHUSDT"
-                     *     ] */
+                     *     ]
+                     */
                     symbols: string[];
                     /** @default 14 */
                     rsiPeriod?: number;
@@ -4298,9 +4371,10 @@ export interface operations {
                      * @enum {string}
                      */
                     trailType?: "percent" | "offset";
-                    /** @description Trail distance — percent as fraction (0.05 = 5% below peak), or fixed price offset.
+                    /**
+                     * @description Trail distance — percent as fraction (0.05 = 5% below peak), or fixed price offset.
                      *     Required for type=trailing_stop.
-                     *      */
+                     */
                     trailValue?: number;
                     /** @description OCO take-profit limit sell price (required for type=oco) */
                     takeProfitPrice?: number;
@@ -4310,7 +4384,6 @@ export interface operations {
                      * @description gtc - rest until filled/canceled/expired;
                      *     ioc - fill available on first try, cancel remainder;
                      *     fok - fill fully on first try or cancel with no fill
-                     *
                      * @default gtc
                      * @enum {string}
                      */
@@ -6231,10 +6304,12 @@ export interface operations {
         };
         requestBody: {
             content: {
-                /** @example {
+                /**
+                 * @example {
                  *       "message": "What is BTC RSI on binance 1h?",
                  *       "sessionId": "mobile-ai-example"
-                 *     } */
+                 *     }
+                 */
                 "application/json": components["schemas"]["AiChatRequest"];
             };
         };

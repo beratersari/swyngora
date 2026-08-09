@@ -7,6 +7,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | Tool | Purpose |
 |------|---------|
 | `health` | API liveness |
+| `realtime_stream_info` | WebSocket subscribe/unsubscribe protocol for live prices + paper portfolio |
 | `list_exchanges` | Configured venues |
 | `get_ticker` | 24h ticker |
 | `get_candles` | OHLCV |

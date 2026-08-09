@@ -13,6 +13,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
@@ -49,6 +50,8 @@ type RouterOptions struct {
 	Import *dataimport.Service
 	// Accounts enables account close/reopen and closed-client gate when non-nil.
 	Accounts *account.Service
+	// Realtime is the WebSocket hub for live prices + paper portfolio events.
+	Realtime *realtime.Hub
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -67,6 +70,11 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mh := handler.NewMarketHandler(marketSvc)
 
 	mux.Handle("GET /health", health)
+	if opts.Realtime != nil {
+		rh := handler.NewRealtimeHandler(opts.Realtime, opts.CORSAllowOrigins)
+		mux.HandleFunc("GET /api/v1/realtime", rh.Info)
+		mux.HandleFunc("GET /api/v1/ws", rh.ServeWS)
+	}
 	mux.HandleFunc("GET /api/v1/market/candles", mh.GetCandles)
 	mux.HandleFunc("GET /api/v1/market/ticker/24h", mh.GetTicker24h)
 	mux.HandleFunc("GET /api/v1/market/supply", mh.GetSupply)

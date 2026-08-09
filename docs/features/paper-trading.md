@@ -4,6 +4,8 @@
 
 Simulated portfolios with starting cash, market buy/sell at last price, **pending limit/stop orders with reservations and partial fills**, open positions, realized/unrealized P&L, and trade history. **Not real money.** Data is stored in SQLite and survives restarts.
 
+Live order/position/cash updates for a selected book (and price ticks for selected coins) go over **`GET /api/v1/ws`** — see [`realtime.md`](realtime.md).
+
 ## API
 
 | Method | Path | Description |

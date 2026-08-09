@@ -33,6 +33,7 @@ import (
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
@@ -165,6 +166,13 @@ func main() {
 	portfolioSvc := portfolio.New(portfolioStore, marketSvc)
 	logger.Info("paper portfolio store ready", "driver", "sqlite", "path", portfolioStore.Path())
 
+	realtimeHub := realtime.NewHub(realtime.Options{
+		Market:   marketSvc,
+		Access:   portfolioSvc,
+		Interval: cfg.RealtimePriceInterval,
+	})
+	portfolioSvc.SetChangeSink(realtimeHub)
+
 	scannerStore, err := scannerstore.Open(cfg.ScannerDBPath)
 	if err != nil {
 		logger.Error("scanner sqlite open failed", "path", cfg.ScannerDBPath, "err", err)
@@ -263,6 +271,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	go realtimeHub.Start(ctx)
 
 	orderFiller := &portfolio.OrderFiller{
 		Portfolio: portfolioSvc,
@@ -376,6 +386,7 @@ func main() {
 		Export:           exportSvc,
 		Import:           importSvc,
 		Accounts:         accountSvc,
+		Realtime:         realtimeHub,
 	})
 
 	job := &supplyjob.Runner{

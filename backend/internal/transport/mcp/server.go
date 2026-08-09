@@ -2374,4 +2374,28 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		}
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
+
+	s.AddTool(mcp.NewTool("realtime_stream_info",
+		mcp.WithDescription("Describe the WebSocket realtime API: subscribe/unsubscribe prices and paper portfolio order/position updates. Use when a user asks how live prices or portfolio updates work."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, _ := json.Marshal(map[string]any{
+			"path":        "/api/v1/ws",
+			"httpInfo":    "GET /api/v1/realtime",
+			"protocol":    1,
+			"maxSymbols":  100,
+			"auth":        "Same as REST (Bearer / X-API-Key). Browsers may pass ?token= and ?clientId=.",
+			"reconnect":   "On reconnect, resend subscribe_prices and subscribe_portfolio. Server snapshots current state.",
+			"clientTypes": []string{"subscribe_prices", "unsubscribe_prices", "subscribe_portfolio", "unsubscribe_portfolio", "ping"},
+			"serverTypes": []string{"hello", "ack", "price", "portfolio", "error", "pong"},
+			"access":      "Portfolio events only if the client can view that book (owner, trader, or viewer).",
+			"exampleSubscribePrices": map[string]any{
+				"type": "subscribe_prices",
+				"symbols": []map[string]string{{"exchange": "binance", "symbol": "BTCUSDT"}},
+			},
+			"exampleSubscribePortfolio": map[string]any{
+				"type": "subscribe_portfolio", "portfolioId": "<book-id>",
+			},
+		})
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
 }

@@ -4,8 +4,9 @@ Shared non-UI layers for the product frontend. **Import from here** instead of s
 
 | Package   | Path          | Responsibility                                                                                 |
 | --------- | ------------- | ---------------------------------------------------------------------------------------------- |
-| **api**   | `libs/api/`   | RTK Query `baseApi`, OpenAPI-generated clients, endpoint injectors, Redux store wiring for API |
-| **hooks** | `libs/hooks/` | Shared React hooks (visibility, debounce, media, etc.) — not feature page containers           |
+| **api**      | `libs/api/`      | RTK Query `baseApi`, OpenAPI-generated clients, endpoint injectors, Redux store wiring for API |
+| **realtime** | `libs/realtime/` | WebSocket client: subscribe selected coins + paper portfolio; patches RTK caches             |
+| **hooks**    | `libs/hooks/`    | Shared React hooks (visibility, debounce, media, etc.) — not feature page containers           |
 | **utils** | `libs/utils/` | Pure helpers (formatters, guards, query builders) — no React components                        |
 | **types** | `libs/types/` | Shared app/view types re-exports (not hand-written OpenAPI DTOs)                               |
 

@@ -49,6 +49,7 @@ import {
 - Detail series (candles / ticker / indicators / supply) use composite ids (exchange/symbol/…).
 - **Pump** tag type covers `getPumpEvents` / `scanPumpEvents`.
 - **Watchlist** tag is registered. `prepareHeaders` always sets `X-Client-Id` via `getOrCreateClientId()` (optional `VITE_CLIENT_ID` overrides the generated id).
+- Live prices/portfolio patch these caches from `libs/realtime` (WebSocket). Polling is only the fallback while disconnected.
 
 ## Auth (dev proxy)
 

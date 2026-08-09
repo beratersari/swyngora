@@ -12,8 +12,8 @@ Production React application for Swyngora.
 | --------- | --------------------------------------------------------- |
 | UI kit    | **Ant Design** (`antd`)                                   |
 | Charts    | **TradingView Lightweight Charts** (`lightweight-charts`) |
-| Data      | RTK Query + OpenAPI → `src/libs/api`                      |
-| Structure | Atomic Design UI + `src/libs/{api,hooks,utils}`           |
+| Data      | RTK Query + OpenAPI → `src/libs/api`; live ticks via `src/libs/realtime` |
+| Structure | Atomic Design UI + `src/libs/{api,realtime,hooks,utils}`  |
 
 Decision: `project-management/decisions/001-antd-and-lightweight-charts.md`  
 Design system: [`docs/design/frontend-design-system.md`](../docs/design/frontend-design-system.md)

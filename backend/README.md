@@ -6,9 +6,10 @@ Go HTTP API for market data across **Binance**, **Coinbase**, and **Bybit** (spo
 
 | Layer | Path | Role |
 |---|---|---|
-| Transport | `internal/transport/http` | HTTP handlers, CORS, rate limit, JSON mapping |
+| Transport | `internal/transport/http` | HTTP + WebSocket handlers, CORS, rate limit, JSON mapping |
 | Transport | `internal/transport/telegram` | Optional Telegram bot (long-poll → same services) |
 | Application | `internal/service/market` | Validation + use-case orchestration |
+| Application | `internal/service/realtime` | WebSocket hub: price pump + portfolio event fan-out |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
 | Infrastructure | `internal/adapter/*` | Binance (market + supply), TTL cache, **SQLite watchlist** |
 | Platform | `internal/platform/config` | Env config |
@@ -20,6 +21,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/health` | Liveness |
+| `GET` | `/api/v1/realtime` | WebSocket protocol description |
+| `GET` | `/api/v1/ws` | WebSocket: live prices + paper portfolio events |
 | `GET` | `/api/v1/market/exchanges` | Supported venues |
 | `GET` | `/api/v1/market/intervals` | Candle intervals (per `exchange`) |
 | `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
@@ -121,7 +124,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`).
 
-**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`).
+**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price, pending limit/stop orders with cash/position **reservations**, **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`).
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
 
@@ -202,6 +205,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL (latest-N queries only; ranges not cached) |
 | `CANDLE_CACHE_MAX_ENTRIES` | `512` | Max candle cache keys (memory bound) |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
+| `REALTIME_PRICE_INTERVAL` | `5s` | How often subscribed WebSocket prices are pushed |
 | `SUPPLY_CACHE_TTL` | `48h` | Safety TTL for supply snapshot (`0` = never expire until successful replace) |
 | `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |
 | `SUPPLY_REFRESH_HOUR` | `3` | Daily product-catalog snapshot hour (local to TZ) |

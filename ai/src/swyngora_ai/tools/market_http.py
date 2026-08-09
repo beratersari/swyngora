@@ -492,6 +492,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def health() -> str:
         return http.get("/health")
 
+    def realtime_stream_info() -> str:
+        return http.get("/api/v1/realtime")
+
     def list_exchanges() -> str:
         return http.get("/api/v1/market/exchanges")
 
@@ -1320,6 +1323,11 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             health,
             name="health",
             description="Check Swyngora API health.",
+        ),
+        StructuredTool.from_function(
+            realtime_stream_info,
+            name="realtime_stream_info",
+            description="How to use the WebSocket for live coin prices and paper portfolio order/position updates.",
         ),
         StructuredTool.from_function(
             list_exchanges,

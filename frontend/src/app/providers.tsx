@@ -10,6 +10,7 @@ import { antdTheme } from '@/styles/antdTheme';
 import { appTheme } from '@/styles/theme';
 import { GlobalStyle } from '@/styles/GlobalStyle';
 import { ErrorBoundary } from './ErrorBoundary';
+import { RealtimeBridge } from './RealtimeBridge';
 
 type ProvidersProps = {
   children: ReactNode;
@@ -43,7 +44,10 @@ export function Providers({ children }: ProvidersProps) {
         <GlobalStyle />
         <AntdLocaleBridge>
           <ErrorBoundary>
-            <BrowserRouter>{children}</BrowserRouter>
+            <BrowserRouter>
+              <RealtimeBridge />
+              {children}
+            </BrowserRouter>
           </ErrorBoundary>
         </AntdLocaleBridge>
       </ThemeProvider>

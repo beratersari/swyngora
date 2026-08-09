@@ -82,6 +82,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.WebhookMaxAttempts != 8 {
 		t.Fatalf("WebhookMaxAttempts default=%d", cfg.WebhookMaxAttempts)
 	}
+	if cfg.RealtimePriceInterval != 5*time.Second {
+		t.Fatalf("RealtimePriceInterval default=%v", cfg.RealtimePriceInterval)
+	}
 	if cfg.PortfolioDBPath != "data/portfolio.db" {
 		t.Fatalf("PortfolioDBPath default=%q", cfg.PortfolioDBPath)
 	}

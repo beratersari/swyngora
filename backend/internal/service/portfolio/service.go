@@ -27,11 +27,68 @@ type PriceFetcher interface {
 type Service struct {
 	store  domain.PortfolioPort
 	market PriceFetcher
+	sink   domain.PortfolioChangeSink
 }
 
 // New constructs a portfolio service.
 func New(store domain.PortfolioPort, market PriceFetcher) *Service {
 	return &Service{store: store, market: market}
+}
+
+// SetChangeSink receives order/position/cash mutations for realtime subscribers.
+func (s *Service) SetChangeSink(sink domain.PortfolioChangeSink) {
+	if s != nil {
+		s.sink = sink
+	}
+}
+
+func (s *Service) notifyChange(ctx context.Context, bookID, reason string, order *domain.PendingOrder, trade *domain.Trade, view *domain.PortfolioView) {
+	if s == nil || s.sink == nil {
+		return
+	}
+	if view == nil && bookID != "" && s.store != nil {
+		if p, err := s.store.GetPortfolio(ctx, bookID); err == nil && p != nil {
+			view, _ = s.buildView(ctx, p, domain.PortfolioRoleOwner)
+			if view != nil {
+				bookID = view.ID
+			}
+		}
+	}
+	if bookID == "" && view != nil {
+		bookID = view.ID
+	}
+	if bookID == "" && order != nil {
+		bookID = order.ClientID
+	}
+	if bookID == "" {
+		return
+	}
+	s.sink.OnPortfolioChange(domain.PortfolioChange{
+		PortfolioID: bookID,
+		Reason:      reason,
+		Order:       order,
+		Trade:       trade,
+		View:        view,
+	})
+}
+
+// CanViewPortfolio reports whether actor may read the book (owner / trader / viewer).
+func (s *Service) CanViewPortfolio(ctx context.Context, actorClientID, portfolioID string) error {
+	_, err := s.requireAccessErr(ctx, actorClientID, domain.PortfolioRoleViewer, portfolioID)
+	return err
+}
+
+// RealtimeSnapshot is the selected book's view plus open pending orders.
+func (s *Service) RealtimeSnapshot(ctx context.Context, actorClientID, portfolioID string) (*domain.PortfolioView, []domain.PendingOrder, error) {
+	view, err := s.View(ctx, actorClientID, portfolioID)
+	if err != nil {
+		return nil, nil, err
+	}
+	orders, err := s.ListPendingOrders(ctx, actorClientID, string(domain.PendingStatusOpen), 200, 0, view.ID)
+	if err != nil {
+		return view, nil, err
+	}
+	return view, orders, nil
 }
 
 // CreateInput creates a paper portfolio.
@@ -179,6 +236,10 @@ func (s *Service) View(ctx context.Context, clientID string, portfolioID ...stri
 	if err != nil {
 		return nil, err
 	}
+	return s.buildView(ctx, p, role)
+}
+
+func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domain.PortfolioShareRole) (*domain.PortfolioView, error) {
 	bookID := p.BookID()
 	reservedCash, err := s.store.SumReservedCash(ctx, bookID)
 	if err != nil {
@@ -386,6 +447,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return &tr, nil, err
 	}
+	s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderFilled, nil, &tr, view)
 	return &tr, view, nil
 }
 
@@ -545,7 +607,12 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		BracketID: bracketID, BracketRole: domain.BracketRoleStopLoss,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	return s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
+	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, entry, nil, nil)
+	return entry, tp, sl, nil
 }
 
 // PlaceOCOOrder creates take-profit + stop-loss legs that share one reserved position size.
@@ -624,7 +691,12 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: tpID,
 		CreatedAt: now, UpdatedAt: now,
 	}
-	return s.store.CreateOCOPair(ctx, tpOrd, slOrd)
+	tp, sl, err = s.store.CreateOCOPair(ctx, tpOrd, slOrd)
+	if err != nil {
+		return nil, nil, err
+	}
+	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, tp, nil, nil)
+	return tp, sl, nil
 }
 
 // PlacePendingOrder creates an open resting order and reserves cash or position.
@@ -768,7 +840,12 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
-	return s.store.CreatePendingOrder(ctx, o)
+	created, err := s.store.CreatePendingOrder(ctx, o)
+	if err != nil {
+		return nil, err
+	}
+	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, created, nil, nil)
+	return created, nil
 }
 
 // AmendPendingOrderInput changes trigger price and/or remaining size of an open pending order.
@@ -932,6 +1009,7 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	if err != nil {
 		return updated, nil, err
 	}
+	s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderAmended, updated, nil, view)
 	return updated, view, nil
 }
 
@@ -1036,6 +1114,7 @@ func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrde
 	if err != nil {
 		return list, nil, err
 	}
+	s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderCancelled, nil, nil, view)
 	return list, view, nil
 }
 
@@ -1049,7 +1128,12 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string, p
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.CancelPendingOrder(ctx, p.BookID(), id, time.Now().UTC(), domain.CancelReasonUser)
+	canceled, err := s.store.CancelPendingOrder(ctx, p.BookID(), id, time.Now().UTC(), domain.CancelReasonUser)
+	if err != nil {
+		return nil, err
+	}
+	s.notifyChange(ctx, p.BookID(), domain.PortfolioChangeOrderCancelled, canceled, nil, nil)
+	return canceled, nil
 }
 
 // ListAllOpenPendingOrders is used by the background order filler.
@@ -1062,7 +1146,19 @@ func (s *Service) ListAllOpenPendingOrders(ctx context.Context) ([]domain.Pendin
 
 // ProcessOpenOrder runs expiry checks and one fill attempt according to time-in-force.
 // Returns the order when something changed (fill and/or cancel), ok=true; otherwise (nil,false,nil).
-func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (out *domain.PendingOrder, changed bool, err error) {
+	defer func() {
+		if err == nil && changed && out != nil {
+			reason := domain.PortfolioChangeOrderUpdated
+			switch out.Status {
+			case domain.PendingStatusFilled:
+				reason = domain.PortfolioChangeOrderFilled
+			case domain.PendingStatusCanceled, domain.PendingStatusRejected:
+				reason = domain.PortfolioChangeOrderCancelled
+			}
+			s.notifyChange(ctx, o.ClientID, reason, out, nil, nil)
+		}
+	}()
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
@@ -1258,7 +1354,12 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 // maxFillQty > 0 caps this execution (partial fill); <= 0 fills as much remaining as possible.
 // Returns (order, true, nil) when any quantity was filled; (nil, false, nil) when not triggered / no-op.
 // Prefer ProcessOpenOrder for TIF/expiry handling. OCO legs use ExecuteOCOFill (peer sync/cancel).
-func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (out *domain.PendingOrder, filled bool, err error) {
+	defer func() {
+		if err == nil && filled && out != nil {
+			s.notifyChange(ctx, o.ClientID, domain.PortfolioChangeOrderFilled, out, nil, nil)
+		}
+	}()
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}

@@ -31,6 +31,7 @@ import {
   type PumpEventDto,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
+import { usePriceSubscription } from '@/libs/realtime';
 import {
   apiCandlesToChart,
   detailStateToSearchParams,
@@ -163,11 +164,16 @@ export function CoinDetailPage() {
     ),
   );
 
+  const { connected: livePrices } = usePriceSubscription(
+    symbol && exchangeArg ? [{ exchange: exchangeArg, symbol }] : [],
+    Boolean(visible && !skip),
+  );
+
   const tickerQuery = useGetTicker24hQuery(
     { exchange: exchangeArg, symbol },
     {
       skip,
-      pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+      pollingInterval: visible && !livePrices ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );

@@ -115,6 +115,7 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 		return m, nil, err
 	}
 	_ = s.recordViewSnapshot(ctx, view, now)
+	s.notifyChange(ctx, p.ID, domain.PortfolioChangeCash, nil, nil, view)
 	return m, view, nil
 }
 
@@ -230,5 +231,7 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 	}
 	_ = s.recordViewSnapshot(ctx, fromView, now)
 	_ = s.recordViewSnapshot(ctx, toView, now)
+	s.notifyChange(ctx, from.ID, domain.PortfolioChangeCash, nil, nil, fromView)
+	s.notifyChange(ctx, to.ID, domain.PortfolioChangeCash, nil, nil, toView)
 	return fromMov, toMov, fromView, toView, nil
 }

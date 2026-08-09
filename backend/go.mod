@@ -2,7 +2,11 @@ module gitlab.com/trace-analysis/swyngora/backend
 
 go 1.26.5
 
-require golang.org/x/sync v0.22.0
+require (
+	github.com/gorilla/websocket v1.5.3
+	golang.org/x/sync v0.22.0
+	modernc.org/sqlite v1.54.0
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -13,12 +17,11 @@ require (
 	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.54.0 // indirect
 )
 
 require (
 	github.com/google/jsonschema-go v0.4.2 // indirect
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/uuid v1.6.0
 	github.com/mark3labs/mcp-go v0.57.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/spf13/cast v1.7.1 // indirect

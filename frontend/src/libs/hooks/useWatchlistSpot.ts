@@ -4,6 +4,7 @@ import {
   type SpotMarket,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks/useDocumentVisible';
+import { usePriceSubscription } from '@/libs/realtime';
 import { DEFAULT_SPOT_POLL_MS } from '@/config/constants';
 
 /** Prefer exact symbol match from a spot search result list. */
@@ -42,6 +43,10 @@ export function useWatchlistSpot(
   isError: boolean;
 } {
   const visible = useDocumentVisible();
+  const { connected: livePrices } = usePriceSubscription(
+    exchange && symbol ? [{ exchange, symbol }] : [],
+    visible,
+  );
   const q = useListSpotMarketsQuery(
     {
       exchange: exchange as MarketExchange,
@@ -53,7 +58,7 @@ export function useWatchlistSpot(
     },
     {
       skip: !exchange || !symbol,
-      pollingInterval: visible ? DEFAULT_SPOT_POLL_MS : 0,
+      pollingInterval: visible && !livePrices ? DEFAULT_SPOT_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );

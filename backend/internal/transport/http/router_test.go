@@ -88,6 +88,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		}},
 		{"/api/v1/market/spot?limit=5&tag=Payments", http.StatusOK, nil},
 		{"/api/v1/market/indicators?symbol=BTCUSDT&interval=1h&limit=30", http.StatusOK, nil},
+		{"/api/v1/realtime", http.StatusNotFound, nil}, // hub not wired in this test
 		{"/nope", http.StatusNotFound, nil},
 	}
 

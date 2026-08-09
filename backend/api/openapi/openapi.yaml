@@ -20,6 +20,9 @@ info:
     - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`,
       plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
       quiet hours end; pending notifications survive restarts.
+    - Realtime WebSocket (`GET /api/v1/ws`): subscribe/unsubscribe selected coin prices
+      and one paper portfolio for order/position/cash events. Reconnect by resubscribing;
+      access is checked per book. See `GET /api/v1/realtime`.
     - Paper trading: one or more named virtual portfolios per client (own cash, positions,
       orders, and performance), market buy/sell at last price,
       pending limit buy/sell and stop-loss orders with balance/position reservations and
@@ -66,6 +69,58 @@ paths:
                   time:
                     type: string
                     format: date-time
+  /api/v1/realtime:
+    get:
+      summary: Realtime WebSocket protocol description
+      description: |
+        Returns how to connect to `GET /api/v1/ws` (JSON messages).
+        Subscribe/unsubscribe selected coins for price ticks and one paper portfolio
+        for order/position/cash events. Resubscribe after reconnect; access is
+        enforced per book (owner, trader, or viewer). Paper trading only.
+      operationId: getRealtimeInfo
+      tags: [Realtime]
+      responses:
+        '200':
+          description: Connection and message protocol
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeInfo'
+  /api/v1/ws:
+    get:
+      summary: WebSocket realtime stream
+      description: |
+        Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
+        browsers may pass `?token=` and must pass `?clientId=`.
+
+        Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
+        `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
+
+        Server JSON: `hello`, `ack`, `price`, `portfolio` (snapshot / order / position / fill),
+        `error`, `pong`. After reconnect, resend subscriptions; the server snapshots current state.
+        Portfolio events are sent only if this clientId can view the book.
+      operationId: realtimeWebSocket
+      tags: [Realtime]
+      parameters:
+        - in: query
+          name: clientId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: token
+          schema: { type: string }
+          description: API token when the browser cannot set Authorization
+        - in: query
+          name: portfolioId
+          schema: { type: string }
+          description: Optional initial book (still send subscribe_portfolio)
+      responses:
+        '101':
+          description: Switching Protocols (WebSocket)
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /api/v1/market/exchanges:
     get:
       summary: List supported spot exchanges
@@ -3776,6 +3831,33 @@ components:
               type: string
             message:
               type: string
+    RealtimeInfo:
+      type: object
+      properties:
+        path:
+          type: string
+          example: /api/v1/ws
+        protocol:
+          type: integer
+          example: 1
+        maxSymbols:
+          type: integer
+          example: 100
+        auth:
+          type: string
+        reconnect:
+          type: string
+        channels:
+          type: array
+          items: { type: string }
+        clientTypes:
+          type: array
+          items: { type: string }
+        serverTypes:
+          type: array
+          items: { type: string }
+        access:
+          type: string
 
     AiChatRequest:
       type: object

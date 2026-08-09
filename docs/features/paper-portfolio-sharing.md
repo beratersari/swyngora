@@ -30,6 +30,7 @@ Rules:
 | `DELETE` | `/api/v1/portfolio/shares?granteeClientId=` | owner revoke |
 | `GET` | `/api/v1/portfolios/shared` | grantee incoming |
 | `GET` | `/api/v1/portfolio?portfolioId=` | owner / viewer / trader |
+| `GET` | `/api/v1/ws` `subscribe_portfolio` | same as GET portfolio (see [`realtime.md`](realtime.md)) |
 
 ## Where the code lives
 

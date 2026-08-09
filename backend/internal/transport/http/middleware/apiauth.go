@@ -147,7 +147,11 @@ func extractAPIToken(r *http.Request) string {
 	}
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 	if auth == "" {
-		return ""
+		// Browsers cannot set WS headers; allow the same secret on the query string.
+		if v := strings.TrimSpace(r.URL.Query().Get("token")); v != "" {
+			return v
+		}
+		return strings.TrimSpace(r.URL.Query().Get("apiKey"))
 	}
 	const prefix = "Bearer "
 	if len(auth) > len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
@@ -163,6 +167,10 @@ func isPublicAPIPath(path string) bool {
 	}
 	// Market data is intentionally public (no tenant state).
 	if strings.HasPrefix(path, "/api/v1/market/") {
+		return true
+	}
+	// Protocol description only (the WebSocket itself still requires auth when configured).
+	if path == "/api/v1/realtime" || path == "/api/v1/realtime/" {
 		return true
 	}
 	return false
