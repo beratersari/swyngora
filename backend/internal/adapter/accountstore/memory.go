@@ -12,11 +12,12 @@ import (
 type Memory struct {
 	mu   sync.Mutex
 	byID map[string]*domain.Account
+	keys map[string]*domain.APIKey
 }
 
 // NewMemory constructs an empty store.
 func NewMemory() *Memory {
-	return &Memory{byID: map[string]*domain.Account{}}
+	return &Memory{byID: map[string]*domain.Account{}, keys: map[string]*domain.APIKey{}}
 }
 
 func cloneAcc(a *domain.Account) *domain.Account {

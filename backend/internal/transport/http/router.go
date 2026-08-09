@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
@@ -27,6 +28,8 @@ type RouterOptions struct {
 	CORSAllowOrigins []string
 	// APIAuthToken when set requires Bearer / X-API-Key on non-public routes (see middleware.APIAuth).
 	APIAuthToken string
+	// APIKeys enables per-user named keys (read|trade) and authenticates them.
+	APIKeys *apikey.Service
 	// MCPHandler mounts streamable MCP (typically at /mcp) in the same process.
 	MCPHandler http.Handler
 	// AI client for POST /api/v1/ai/chat (optional).
@@ -108,6 +111,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		ph := handler.NewPortfolioHandler(opts.Portfolio)
 		mux.HandleFunc("POST /api/v1/portfolio", ph.Create)
 		mux.HandleFunc("GET /api/v1/portfolio", ph.Get)
+		mux.HandleFunc("GET /api/v1/portfolios", ph.List)
+		mux.HandleFunc("PATCH /api/v1/portfolios/{id}", ph.Rename)
+		mux.HandleFunc("DELETE /api/v1/portfolios/{id}", ph.DeleteBook)
 		mux.HandleFunc("GET /api/v1/portfolio/performance", ph.GetPerformance)
 		mux.HandleFunc("POST /api/v1/portfolio/deposits", ph.Deposit)
 		mux.HandleFunc("POST /api/v1/portfolio/withdrawals", ph.Withdraw)
@@ -204,6 +210,13 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/account/reopen", ah.Reopen)
 	}
 
+	if opts.APIKeys != nil {
+		kh := handler.NewAPIKeyHandler(opts.APIKeys)
+		mux.HandleFunc("POST /api/v1/account/api-keys", kh.Create)
+		mux.HandleFunc("GET /api/v1/account/api-keys", kh.List)
+		mux.HandleFunc("DELETE /api/v1/account/api-keys/{id}", kh.Revoke)
+	}
+
 	// MCP streamable HTTP — same process as REST API (no second server).
 	if opts.MCPHandler != nil {
 		mux.Handle("/mcp", opts.MCPHandler)
@@ -218,8 +231,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	var h http.Handler = mux
 	h = middleware.AccountGate(opts.Accounts)(h)
+	h = middleware.APIKeyScope(h)
 	// Auth wraps the mux so /mcp and tenant APIs are protected when a token is configured.
-	h = middleware.APIAuth(opts.APIAuthToken)(h)
+	h = middleware.APIAuthWith(opts.APIAuthToken, opts.APIKeys)(h)
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
 	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h

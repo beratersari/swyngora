@@ -8,8 +8,11 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/portfolio` | Create portfolio (`startingBalance`, optional `currency`) |
-| `GET` | `/api/v1/portfolio` | Snapshot: cash, reserved/available cash, positions, P&L |
+| `POST` | `/api/v1/portfolio` | Create a named book (`startingBalance`, optional `name`, `currency`) |
+| `GET` | `/api/v1/portfolios` | List books for the client |
+| `PATCH` | `/api/v1/portfolios/{id}` | Rename a book |
+| `DELETE` | `/api/v1/portfolios/{id}` | Delete a book and all of its data |
+| `GET` | `/api/v1/portfolio` | Snapshot of the selected book (`portfolioId` / `X-Portfolio-Id`) |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash (`amount`, optional `note`) |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available cash (`amount`, optional `note`) |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history (newest first; includes opening) |
@@ -46,7 +49,9 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Set/clear stop-loss / take-profit |
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 
-Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists (one portfolio per client).
+Tenancy uses the same `clientId` / `X-Client-Id` model as watchlists. Each client may own **up to 20 named paper books**. The first book keeps id = `clientId` and default name `Main` (legacy). Additional books get a UUID id. All action routes (`/orders`, `/deposits`, `/performance`, …) accept optional `portfolioId` query, `X-Portfolio-Id` header, or body field. Omit it when there is exactly one book; if several exist, the API returns 400 until you select one.
+
+MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`.
 
 ### Deposits and withdrawals
 

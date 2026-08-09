@@ -76,6 +76,19 @@ CREATE TABLE IF NOT EXISTS accounts (
 	updated_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_purge ON accounts(status, purge_at);
+CREATE TABLE IF NOT EXISTS api_keys (
+	id          TEXT PRIMARY KEY NOT NULL,
+	client_id   TEXT NOT NULL,
+	name        TEXT NOT NULL,
+	prefix      TEXT NOT NULL,
+	hash        TEXT NOT NULL UNIQUE,
+	permission  TEXT NOT NULL,
+	created_at  TEXT NOT NULL,
+	last_used_at TEXT,
+	revoked_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_api_keys_client ON api_keys(client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(hash);
 `)
 	return err
 }

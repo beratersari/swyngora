@@ -25,6 +25,7 @@ export const baseApi = createApi({
     'Indicator',
     'Pump',
     'Portfolio',
+    'AccountAPIKey',
   ],
   endpoints: () => ({}),
 });

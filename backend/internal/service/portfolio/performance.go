@@ -9,19 +9,17 @@ import (
 )
 
 // GetPerformance returns equity history + period P&L (amount and percent) for a lookback window.
-func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string) (*domain.PortfolioPerformance, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string, portfolioID ...string) (*domain.PortfolioPerformance, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
+	bookID := p.BookID()
 	period, dur, err := domain.ParsePerformancePeriod(periodRaw)
 	if err != nil {
 		return nil, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -32,12 +30,12 @@ func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string
 	// Young books start at startingBalance; a 15m bucket can sit slightly before CreatedAt.
 	var carry *domain.EquitySnapshot
 	if !view.CreatedAt.After(requestedStart) {
-		carry, err = s.store.LatestEquitySnapshotBefore(ctx, clientID, requestedStart)
+		carry, err = s.store.LatestEquitySnapshotBefore(ctx, bookID, requestedStart)
 		if err != nil {
 			return nil, err
 		}
 	}
-	snaps, err := s.store.ListEquitySnapshots(ctx, clientID, requestedStart, now)
+	snaps, err := s.store.ListEquitySnapshots(ctx, bookID, requestedStart, now)
 	if err != nil {
 		return nil, err
 	}
@@ -64,14 +62,21 @@ func (s *Service) SnapshotAll(ctx context.Context, now time.Time) (int, error) {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	ids, err := s.store.ListPortfolioClientIDs(ctx)
+	ids, err := s.store.ListPortfolioIDs(ctx)
 	if err != nil {
 		return 0, err
 	}
 	n := 0
 	var firstErr error
 	for _, id := range ids {
-		view, err := s.View(ctx, id)
+		book, err := s.store.GetPortfolio(ctx, id)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		view, err := s.View(ctx, book.ClientID, book.ID)
 		if err != nil {
 			if firstErr == nil {
 				firstErr = err
@@ -101,8 +106,12 @@ func (s *Service) recordViewSnapshot(ctx context.Context, view *domain.Portfolio
 	if view == nil {
 		return nil
 	}
+	snapID := view.ID
+	if snapID == "" {
+		snapID = view.ClientID
+	}
 	return s.store.UpsertEquitySnapshot(ctx, domain.EquitySnapshot{
-		ClientID:       view.ClientID,
+		ClientID:       snapID,
 		BucketAt:       domain.SnapshotBucket(now, domain.DefaultSnapshotInterval),
 		TakenAt:        now,
 		Equity:         view.Equity,
@@ -123,7 +132,7 @@ func (s *Service) recordCreateSnapshot(ctx context.Context, p *domain.Portfolio)
 		at = time.Now().UTC()
 	}
 	_ = s.store.UpsertEquitySnapshot(ctx, domain.EquitySnapshot{
-		ClientID:    p.ClientID,
+		ClientID:    p.BookID(),
 		BucketAt:    domain.SnapshotBucket(at, domain.DefaultSnapshotInterval),
 		TakenAt:     at,
 		Equity:      p.StartingBalance,

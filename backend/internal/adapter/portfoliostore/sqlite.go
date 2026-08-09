@@ -38,7 +38,8 @@ func Open(path string) (*SQLite, error) {
 	if err != nil {
 		return nil, err
 	}
-	dsn := "file:" + filepath.ToSlash(abs) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+	// foreign_keys off: child rows key by book id while owner lives on portfolios.client_id.
+	dsn := "file:" + filepath.ToSlash(abs) + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(0)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
@@ -46,10 +47,6 @@ func Open(path string) (*SQLite, error) {
 	db.SetMaxOpenConns(4)
 	db.SetMaxIdleConns(2)
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-	if _, err := db.Exec(`PRAGMA foreign_keys=ON`); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -64,7 +61,9 @@ func Open(path string) (*SQLite, error) {
 func (s *SQLite) migrate() error {
 	const schema = `
 CREATE TABLE IF NOT EXISTS portfolios (
-	client_id         TEXT PRIMARY KEY NOT NULL,
+	id                TEXT PRIMARY KEY NOT NULL,
+	client_id         TEXT NOT NULL,
+	name              TEXT NOT NULL DEFAULT 'Main',
 	currency          TEXT NOT NULL,
 	starting_balance  REAL NOT NULL,
 	cash_balance      REAL NOT NULL,
@@ -74,6 +73,8 @@ CREATE TABLE IF NOT EXISTS portfolios (
 	created_at        TEXT NOT NULL,
 	updated_at        TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_portfolios_client ON portfolios(client_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_portfolios_client_name ON portfolios(client_id, name);
 CREATE TABLE IF NOT EXISTS positions (
 	client_id  TEXT NOT NULL,
 	exchange   TEXT NOT NULL,
@@ -314,6 +315,9 @@ CREATE INDEX IF NOT EXISTS idx_cash_movements_client ON cash_movements(client_id
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
+	if err := s.migrateMultiBook(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
@@ -398,15 +402,10 @@ func (s *SQLite) Close() error {
 	return s.db.Close()
 }
 
-// GetPortfolio returns portfolio or ErrNotFound.
-func (s *SQLite) GetPortfolio(ctx context.Context, clientID string) (*domain.Portfolio, error) {
+func scanPortfolio(sc interface{ Scan(dest ...any) error }) (*domain.Portfolio, error) {
 	var p domain.Portfolio
 	var cAt, uAt, mode string
-	err := s.db.QueryRowContext(ctx, `
-		SELECT client_id, currency, starting_balance, cash_balance, realized_pnl_total,
-			COALESCE(net_deposits, 0), COALESCE(margin_mode, 'isolated'), created_at, updated_at
-		FROM portfolios WHERE client_id = ?
-	`, clientID).Scan(&p.ClientID, &p.Currency, &p.StartingBalance, &p.CashBalance, &p.RealizedPnLTotal,
+	err := sc.Scan(&p.ID, &p.ClientID, &p.Name, &p.Currency, &p.StartingBalance, &p.CashBalance, &p.RealizedPnLTotal,
 		&p.NetDeposits, &mode, &cAt, &uAt)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrNotFound
@@ -418,15 +417,58 @@ func (s *SQLite) GetPortfolio(ctx context.Context, clientID string) (*domain.Por
 	if p.MarginMode == "" {
 		p.MarginMode = domain.MarginModeIsolated
 	}
+	if p.Name == "" {
+		p.Name = domain.DefaultPortfolioName
+	}
 	p.CreatedAt = parseTime(cAt)
 	p.UpdatedAt = parseTime(uAt)
 	return &p, nil
 }
 
-// CreatePortfolio inserts a new portfolio.
+const portfolioCols = `id, client_id, name, currency, starting_balance, cash_balance, realized_pnl_total,
+			COALESCE(net_deposits, 0), COALESCE(margin_mode, 'isolated'), created_at, updated_at`
+
+// GetPortfolio returns a book by id.
+func (s *SQLite) GetPortfolio(ctx context.Context, id string) (*domain.Portfolio, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT `+portfolioCols+` FROM portfolios WHERE id = ?`, id)
+	return scanPortfolio(row)
+}
+
+// ListPortfolios lists books for an owner.
+func (s *SQLite) ListPortfolios(ctx context.Context, clientID string) ([]domain.Portfolio, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+portfolioCols+` FROM portfolios WHERE client_id = ? ORDER BY created_at ASC`, clientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.Portfolio
+	for rows.Next() {
+		p, err := scanPortfolio(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// CountPortfolios counts books for an owner.
+func (s *SQLite) CountPortfolios(ctx context.Context, clientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM portfolios WHERE client_id = ?`, clientID).Scan(&n)
+	return n, err
+}
+
+// CreatePortfolio inserts a new book.
 func (s *SQLite) CreatePortfolio(ctx context.Context, p domain.Portfolio) (*domain.Portfolio, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if p.ID == "" {
+		p.ID = p.ClientID
+	}
+	if p.Name == "" {
+		p.Name = domain.DefaultPortfolioName
+	}
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = time.Now().UTC()
 	}
@@ -437,15 +479,81 @@ func (s *SQLite) CreatePortfolio(ctx context.Context, p domain.Portfolio) (*doma
 		p.MarginMode = domain.MarginModeIsolated
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO portfolios (client_id, currency, starting_balance, cash_balance, realized_pnl_total, net_deposits, margin_mode, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, p.ClientID, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal, p.NetDeposits, string(p.MarginMode),
+		INSERT INTO portfolios (id, client_id, name, currency, starting_balance, cash_balance, realized_pnl_total, net_deposits, margin_mode, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, p.ID, p.ClientID, p.Name, p.Currency, p.StartingBalance, p.CashBalance, p.RealizedPnLTotal, p.NetDeposits, string(p.MarginMode),
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
+			return nil, fmt.Errorf("%w: a portfolio named %q already exists", domain.ErrInvalidArgument, p.Name)
+		}
 		return nil, fmt.Errorf("portfolio create: %w", err)
 	}
 	cp := p
 	return &cp, nil
+}
+
+// UpdatePortfolioName renames a book owned by clientID.
+func (s *SQLite) UpdatePortfolioName(ctx context.Context, clientID, id, name string, at time.Time) (*domain.Portfolio, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE portfolios SET name = ?, updated_at = ? WHERE id = ? AND client_id = ?
+	`, name, at.UTC().Format(time.RFC3339Nano), id, clientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.GetPortfolio(ctx, id)
+}
+
+// DeletePortfolio removes a book and child rows keyed by book id.
+func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var owner string
+	err := s.db.QueryRowContext(ctx, `SELECT client_id FROM portfolios WHERE id = ?`, id).Scan(&owner)
+	if err == sql.ErrNoRows {
+		return domain.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if owner != clientID {
+		return domain.ErrNotFound
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, q := range []string{
+		`DELETE FROM cash_movements WHERE client_id = ?`,
+		`DELETE FROM portfolio_equity_snapshots WHERE client_id = ?`,
+		`DELETE FROM risk_limits WHERE client_id = ?`,
+		`DELETE FROM allocation_targets WHERE basket_id IN (SELECT id FROM allocation_baskets WHERE client_id = ?)`,
+		`DELETE FROM allocation_baskets WHERE client_id = ?`,
+		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
+		`DELETE FROM recurring_buy_plans WHERE client_id = ?`,
+		`DELETE FROM pending_orders WHERE client_id = ?`,
+		`DELETE FROM trades WHERE client_id = ?`,
+		`DELETE FROM positions WHERE client_id = ?`,
+		`DELETE FROM margin_trades WHERE client_id = ?`,
+		`DELETE FROM margin_orders WHERE client_id = ?`,
+		`DELETE FROM margin_positions WHERE client_id = ?`,
+		`DELETE FROM portfolios WHERE id = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // UpdateCashAndRealized updates balances.
@@ -457,7 +565,7 @@ func (s *SQLite) UpdateCashAndRealized(ctx context.Context, clientID string, cas
 	}
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
-		WHERE client_id = ?
+		WHERE id = ?
 	`, cash, realizedTotal, at.UTC().Format(time.RFC3339Nano), clientID)
 	if err != nil {
 		return err
@@ -614,8 +722,8 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
-		WHERE client_id = ?
-	`, p.CashBalance, p.RealizedPnLTotal, at.UTC().Format(time.RFC3339Nano), p.ClientID); err != nil {
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, at.UTC().Format(time.RFC3339Nano), p.BookID()); err != nil {
 		return err
 	}
 
@@ -1247,8 +1355,8 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
-		WHERE client_id = ?
-	`, p.CashBalance, p.RealizedPnLTotal, atStr, p.ClientID); err != nil {
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, atStr, p.BookID()); err != nil {
 		return err
 	}
 
@@ -1344,8 +1452,8 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
-		WHERE client_id = ?
-	`, p.CashBalance, p.RealizedPnLTotal, atStr, p.ClientID); err != nil {
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, atStr, p.BookID()); err != nil {
 		return err
 	}
 	if pos != nil {

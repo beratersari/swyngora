@@ -20,7 +20,8 @@ info:
     - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`,
       plus optional quiet hours (IANA timeZone + local start/end). Delivery is deferred until
       quiet hours end; pending notifications survive restarts.
-    - Paper trading: virtual portfolio with starting cash, market buy/sell at last price,
+    - Paper trading: one or more named virtual portfolios per client (own cash, positions,
+      orders, and performance), market buy/sell at last price,
       pending limit buy/sell and stop-loss orders with balance/position reservations and
       partial fills (auto-fill on price), open positions, realized/unrealized P&amp;L,
       trade history, recurring buy (DCA) plans, and isolated margin long/short (1x–10x)
@@ -1274,8 +1275,8 @@ paths:
     post:
       summary: Create a paper-trading portfolio
       description: |
-        Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
-        Paper trading only - not real money. Not financial advice.
+        Creates a named simulated portfolio with starting cash. A clientId may own up to 20 books
+        (e.g. Main vs Risky). Duplicate names are rejected. Paper trading only - not real money.
       operationId: createPortfolio
       tags: [Portfolio]
       requestBody:
@@ -1287,6 +1288,7 @@ paths:
               required: [startingBalance]
               properties:
                 clientId: { type: string }
+                name: { type: string, maxLength: 64, example: Main, description: Display name; default Main }
                 startingBalance: { type: number, exclusiveMinimum: 0, example: 10000 }
                 currency: { type: string, default: USDT }
       responses:
@@ -1300,7 +1302,9 @@ paths:
           $ref: '#/components/responses/Error'
     get:
       summary: Get paper portfolio snapshot
-      description: Cash, open positions (mark-to-market), realized and unrealized P&L.
+      description: |
+        Cash, open positions (mark-to-market), realized and unrealized P&L.
+        When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
       operationId: getPortfolio
       tags: [Portfolio]
       parameters:
@@ -1308,6 +1312,13 @@ paths:
           in: query
           schema: { type: string }
         - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          description: Book id or name. Required when more than one paper portfolio exists.
+          schema: { type: string }
+        - name: X-Portfolio-Id
           in: header
           schema: { type: string }
       responses:
@@ -1320,6 +1331,86 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolios:
+    get:
+      summary: List paper portfolios for the client
+      operationId: listPortfolios
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paper books
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  count: { type: integer }
+                  portfolios:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PortfolioSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolios/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: clientId
+        in: query
+        schema: { type: string }
+      - name: X-Client-Id
+        in: header
+        schema: { type: string }
+    patch:
+      summary: Rename a paper portfolio
+      operationId: renamePortfolio
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: Updated summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioSummary'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a paper portfolio and all of its data
+      operationId: deletePortfolio
+      tags: [Portfolio]
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+                  id: { type: string }
+        '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/deposits:
     post:
@@ -1435,6 +1526,12 @@ paths:
           in: query
           schema: { type: string }
         - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: X-Portfolio-Id
           in: header
           schema: { type: string }
         - name: period
@@ -3175,6 +3272,104 @@ paths:
                 $ref: '#/components/schemas/Account'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/account/api-keys:
+    get:
+      summary: List API keys for this account
+      description: |
+        Named keys for bots/apps. Secrets are never listed. Manage keys with the
+        main account (`X-Client-Id` plus optional process `API_AUTH_TOKEN`).
+        User-issued keys cannot list or create other keys.
+      operationId: listAccountAPIKeys
+      tags: [Account]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Key metadata (no secrets)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  keys:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccountAPIKey'
+                  count: { type: integer }
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Create a named API key
+      description: |
+        permission=read → GET only. permission=trade → can place/cancel paper trades
+        and other mutations except account close and key management.
+        The full secret is returned once.
+      operationId: createAccountAPIKey
+      tags: [Account]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                clientId: { type: string }
+                name: { type: string, example: Trading bot }
+                permission: { type: string, enum: [read, trade], default: read }
+      responses:
+        '201':
+          description: Created key including one-time secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAPIKeyCreated'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /api/v1/account/api-keys/{id}:
+    delete:
+      summary: Revoke an API key
+      description: Immediate; the secret stops working. Idempotent if already revoked.
+      operationId: revokeAccountAPIKey
+      tags: [Account]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Revoked key metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountAPIKey'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
 
   /api/v1/import/preview:
     post:
@@ -3582,10 +3777,23 @@ components:
             end: { type: string }
         configured: { type: boolean }
         updatedAt: { type: string, format: date-time }
+    PortfolioSummary:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        name: { type: string }
+        currency: { type: string }
+        startingBalance: { type: number }
+        cashBalance: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     PortfolioView:
       type: object
       properties:
+        id: { type: string }
         clientId: { type: string }
+        name: { type: string }
         currency: { type: string }
         startingBalance: { type: number }
         cashBalance: { type: number }
@@ -4069,6 +4277,26 @@ components:
         graceDays: { type: integer, example: 7 }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    AccountAPIKey:
+      type: object
+      description: Named user API key metadata (secret is never listed)
+      properties:
+        id: { type: string }
+        name: { type: string }
+        prefix: { type: string, description: Public prefix of the secret (e.g. swy_ab12cd34) }
+        permission: { type: string, enum: [read, trade] }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        revokedAt: { type: string, format: date-time, nullable: true }
+        revoked: { type: boolean }
+    AccountAPIKeyCreated:
+      allOf:
+        - $ref: '#/components/schemas/AccountAPIKey'
+        - type: object
+          properties:
+            secret:
+              type: string
+              description: Full token; shown only at creation. Send as Authorization Bearer or X-API-Key.
     ImportJob:
       type: object
       properties:

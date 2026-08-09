@@ -20,8 +20,9 @@ type pendingTrade struct {
 	ID         string
 	ChatID     int64
 	UserID     int64
-	ClientID   string
-	Side       domain.TradeSide
+	ClientID    string
+	PortfolioID string
+	Side        domain.TradeSide
 	Exchange   string
 	Symbol     string
 	Quantity   float64

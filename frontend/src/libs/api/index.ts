@@ -73,14 +73,25 @@ export {
 } from './endpoints/alertsApi';
 export type { PriceAlert, CreatePriceAlertArg } from './endpoints/alertsApi';
 export {
+  useListPortfoliosQuery,
   useGetPortfolioQuery,
+  useCreatePortfolioMutation,
+  useRenamePortfolioMutation,
+  useDeletePortfolioMutation,
   useGetPortfolioPerformanceQuery,
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
 } from './endpoints/portfolioApi';
+export {
+  useListAccountAPIKeysQuery,
+  useCreateAccountAPIKeyMutation,
+  useRevokeAccountAPIKeyMutation,
+} from './endpoints/accountApi';
+export type { AccountAPIKey, AccountAPIKeyCreated } from './endpoints/accountApi';
 export type {
   PortfolioView,
+  PortfolioSummary,
   PortfolioPerformance,
   PortfolioEquityPoint,
   PortfolioPerformancePeriod,

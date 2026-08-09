@@ -21,7 +21,7 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 |---------|---------|
 | `/price`, `/spot`, `/lowmcap`, `/mcap`, `/rsi`, `/exchanges` | Market data |
 | `/watch` … | Watchlist |
-| `/portfolio` · `/portfolio create [balance]` | Paper portfolio snapshot (client `tg-<user_id>`) |
+| `/portfolio` · `/portfolio list` · `/portfolio create [balance] [name]` · `/portfolio use NAME` | Paper books (client `tg-<user_id>`); select one then `/buy` `/sell` apply to it |
 | `/deposit` · `/withdraw` `<amount> [note]` | Add or remove virtual cash |
 | `/cash` `[n]` | Deposit/withdraw history |
 | `/buy` · `/sell` `<symbol> <qty> [exchange]` | Paper market trade — preview, then **Confirm** / **Cancel** buttons |

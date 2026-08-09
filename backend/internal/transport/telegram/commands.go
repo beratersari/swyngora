@@ -41,9 +41,10 @@ type Router struct {
 	ai        *aiagent.Client
 	opts      Options
 	now       func() time.Time
-	mu        sync.Mutex
-	lastAt    map[int64]time.Time
-	pending   *pendingStore
+	mu         sync.Mutex
+	lastAt     map[int64]time.Time
+	pending    *pendingStore
+	selectedPF map[int64]string // userID → selected paper book id
 }
 
 // NewRouter constructs a command router (thin transport → services).
@@ -61,14 +62,15 @@ func NewRouter(marketSvc *market.Service, watchSvc *watchlist.Service, opts Opti
 		opts.AITimeout = 120 * time.Second
 	}
 	return &Router{
-		market:    marketSvc,
-		watch:     watchSvc,
-		portfolio: opts.Portfolio,
-		ai:        opts.AI,
-		opts:      opts,
-		now:       time.Now,
-		lastAt:    map[int64]time.Time{},
-		pending:   newPendingStore(),
+		market:     marketSvc,
+		watch:      watchSvc,
+		portfolio:  opts.Portfolio,
+		ai:         opts.AI,
+		opts:       opts,
+		now:        time.Now,
+		lastAt:     map[int64]time.Time{},
+		pending:    newPendingStore(),
+		selectedPF: map[int64]string{},
 	}
 }
 

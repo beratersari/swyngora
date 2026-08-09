@@ -10,6 +10,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
 
 // WatchlistHandler is the transport adapter for watchlists.
@@ -23,6 +24,9 @@ func NewWatchlistHandler(svc *watchlist.Service) *WatchlistHandler {
 }
 
 func clientIDFrom(r *http.Request) string {
+	if id := middleware.IdentityFrom(r.Context()); id != nil && id.ClientID != "" {
+		return id.ClientID
+	}
 	if v := strings.TrimSpace(r.Header.Get("X-Client-Id")); v != "" {
 		return v
 	}
@@ -31,6 +35,23 @@ func clientIDFrom(r *http.Request) string {
 
 func ownerClientIDFrom(r *http.Request) string {
 	return strings.TrimSpace(r.URL.Query().Get("ownerClientId"))
+}
+
+func portfolioIDFrom(r *http.Request) string {
+	if v := strings.TrimSpace(r.URL.Query().Get("portfolioId")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Portfolio-Id")); v != "" {
+		return v
+	}
+	return ""
+}
+
+func coalescePortfolioID(r *http.Request, bodyID string) string {
+	if v := strings.TrimSpace(bodyID); v != "" {
+		return v
+	}
+	return portfolioIDFrom(r)
 }
 
 type watchlistItemDTO struct {

@@ -16,54 +16,197 @@ func telegramClientID(userID int64) string {
 	return fmt.Sprintf("tg-%d", userID)
 }
 
+func (r *Router) selectedBookID(userID int64) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.selectedPF == nil {
+		return ""
+	}
+	return r.selectedPF[userID]
+}
+
+func (r *Router) setSelectedBook(userID int64, id string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.selectedPF == nil {
+		r.selectedPF = map[int64]string{}
+	}
+	if id == "" {
+		delete(r.selectedPF, userID)
+		return
+	}
+	r.selectedPF[userID] = id
+}
+
+func (r *Router) resolveBook(ctx context.Context, userID int64) (clientID, bookID string, err error) {
+	clientID = telegramClientID(userID)
+	list, err := r.portfolio.List(ctx, clientID)
+	if err != nil {
+		return clientID, "", err
+	}
+	if len(list) == 0 {
+		return clientID, "", domain.ErrNotFound
+	}
+	sel := r.selectedBookID(userID)
+	if sel != "" {
+		for _, p := range list {
+			if p.ID == sel {
+				return clientID, p.ID, nil
+			}
+		}
+	}
+	if len(list) == 1 {
+		r.setSelectedBook(userID, list[0].ID)
+		return clientID, list[0].ID, nil
+	}
+	r.setSelectedBook(userID, list[0].ID)
+	return clientID, list[0].ID, nil
+}
+
 func (r *Router) cmdPortfolio(ctx context.Context, userID int64, args []string) Reply {
 	if r.portfolio == nil {
 		return textReply("Paper trading is not configured on this bot.")
 	}
 	clientID := telegramClientID(userID)
-	if len(args) > 0 && strings.EqualFold(args[0], "create") {
-		return r.cmdPortfolioCreate(ctx, clientID, args[1:])
+	if len(args) > 0 {
+		switch strings.ToLower(args[0]) {
+		case "create":
+			return r.cmdPortfolioCreate(ctx, userID, clientID, args[1:])
+		case "list":
+			return r.cmdPortfolioList(ctx, userID, clientID)
+		case "use", "select":
+			return r.cmdPortfolioUse(ctx, userID, clientID, args[1:])
+		case "rename":
+			return r.cmdPortfolioRename(ctx, userID, args[1:])
+		case "delete":
+			return r.cmdPortfolioDelete(ctx, userID, args[1:])
+		case "deposit":
+			return r.cmdCashMove(ctx, userID, domain.CashMovementDeposit, args[1:])
+		case "withdraw":
+			return r.cmdCashMove(ctx, userID, domain.CashMovementWithdrawal, args[1:])
+		case "cash", "history":
+			return r.cmdCashHistory(ctx, userID, args[1:])
+		}
 	}
-	if len(args) > 0 && strings.EqualFold(args[0], "deposit") {
-		return r.cmdCashMove(ctx, userID, domain.CashMovementDeposit, args[1:])
-	}
-	if len(args) > 0 && strings.EqualFold(args[0], "withdraw") {
-		return r.cmdCashMove(ctx, userID, domain.CashMovementWithdrawal, args[1:])
-	}
-	if len(args) > 0 && (strings.EqualFold(args[0], "cash") || strings.EqualFold(args[0], "history")) {
-		return r.cmdCashHistory(ctx, userID, args[1:])
-	}
-	view, err := r.portfolio.View(ctx, clientID)
+	_, bookID, err := r.resolveBook(ctx, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return textReply("No paper portfolio yet.\n\nCreate one:\n" + code("/portfolio create 10000") +
+				"\nor a named book:\n" + code("/portfolio create 5000 Risky") +
 				"\n\n" + italic("Simulated only — not real money."))
 		}
+		return textReply(friendlyErr(err))
+	}
+	view, err := r.portfolio.View(ctx, clientID, bookID)
+	if err != nil {
 		return textReply(friendlyErr(err))
 	}
 	return textReply(FormatPaperPortfolio(view))
 }
 
-func (r *Router) cmdPortfolioCreate(ctx context.Context, clientID string, args []string) Reply {
+func (r *Router) cmdPortfolioList(ctx context.Context, userID int64, clientID string) Reply {
+	list, err := r.portfolio.List(ctx, clientID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	if len(list) == 0 {
+		return textReply("No paper portfolios yet.\n" + code("/portfolio create 10000"))
+	}
+	sel := r.selectedBookID(userID)
+	var b strings.Builder
+	b.WriteString(bold("Paper portfolios") + "\n")
+	for _, p := range list {
+		mark := "•"
+		if p.ID == sel || (sel == "" && len(list) == 1) {
+			mark = "▸"
+		}
+		b.WriteString(fmt.Sprintf("%s %s  %s %s\n", mark, code(p.Name), code(Float(p.CashBalance, 2)), esc(p.Currency)))
+	}
+	b.WriteString("\n" + italic("Select: ") + code("/portfolio use NAME"))
+	return textReply(b.String())
+}
+
+func (r *Router) cmdPortfolioUse(ctx context.Context, userID int64, clientID string, args []string) Reply {
+	if len(args) < 1 {
+		return textReply("Usage: /portfolio use <name or id>")
+	}
+	ref := strings.Join(args, " ")
+	p, err := r.portfolio.Get(ctx, clientID, ref)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	r.setSelectedBook(userID, p.ID)
+	view, err := r.portfolio.View(ctx, clientID, p.ID)
+	if err != nil {
+		return textReply("✅ Selected " + code(p.Name) + ".")
+	}
+	return textReply("✅ Selected " + code(p.Name) + "\n\n" + FormatPaperPortfolio(view))
+}
+
+func (r *Router) cmdPortfolioRename(ctx context.Context, userID int64, args []string) Reply {
+	if len(args) < 1 {
+		return textReply("Usage: /portfolio rename <new name>")
+	}
+	clientID, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	p, err := r.portfolio.Rename(ctx, clientID, bookID, strings.Join(args, " "))
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	return textReply("✅ Renamed to " + code(p.Name) + ".")
+}
+
+func (r *Router) cmdPortfolioDelete(ctx context.Context, userID int64, args []string) Reply {
+	clientID := telegramClientID(userID)
+	ref := strings.Join(args, " ")
+	if ref == "" {
+		_, bookID, err := r.resolveBook(ctx, userID)
+		if err != nil {
+			return textReply(friendlyErr(err))
+		}
+		ref = bookID
+	}
+	p, err := r.portfolio.Get(ctx, clientID, ref)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	if err := r.portfolio.Delete(ctx, clientID, p.ID); err != nil {
+		return textReply(friendlyErr(err))
+	}
+	if r.selectedBookID(userID) == p.ID {
+		r.setSelectedBook(userID, "")
+	}
+	return textReply("✅ Deleted " + code(p.Name) + ".")
+}
+
+func (r *Router) cmdPortfolioCreate(ctx context.Context, userID int64, clientID string, args []string) Reply {
 	bal := 10000.0
+	name := ""
 	if len(args) >= 1 {
 		v, err := strconv.ParseFloat(strings.ReplaceAll(args[0], ",", ""), 64)
-		if err != nil || v <= 0 {
-			return textReply("Usage: /portfolio create [startingBalance]\nExample: " + code("/portfolio create 10000"))
+		if err == nil && v > 0 {
+			bal = v
+			if len(args) >= 2 {
+				name = strings.Join(args[1:], " ")
+			}
+		} else {
+			name = strings.Join(args, " ")
 		}
-		bal = v
 	}
 	p, err := r.portfolio.Create(ctx, portfolio.CreateInput{
-		ClientID: clientID, StartingBalance: bal, Currency: domain.DefaultPaperCurrency,
+		ClientID: clientID, Name: name, StartingBalance: bal, Currency: domain.DefaultPaperCurrency,
 	})
 	if err != nil {
 		return textReply(friendlyErr(err))
 	}
-	view, err := r.portfolio.View(ctx, p.ClientID)
+	r.setSelectedBook(userID, p.ID)
+	view, err := r.portfolio.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return textReply("✅ Paper portfolio created with " + code(Float(p.StartingBalance, 2)+" "+p.Currency) + ".")
 	}
-	return textReply("✅ " + bold("Paper portfolio created") + "\n\n" + FormatPaperPortfolio(view))
+	return textReply("✅ " + bold("Paper portfolio created") + " — " + code(p.Name) + "\n\n" + FormatPaperPortfolio(view))
 }
 
 func (r *Router) cmdCashMove(ctx context.Context, userID int64, kind domain.CashMovementKind, args []string) Reply {
@@ -82,7 +225,14 @@ func (r *Router) cmdCashMove(ctx context.Context, userID int64, kind domain.Cash
 		return textReply("Amount must be a positive number.")
 	}
 	note := strings.TrimSpace(strings.Join(args[1:], " "))
-	in := portfolio.CashMoveInput{ClientID: telegramClientID(userID), Amount: amt, Note: note}
+	_, bookID, err2 := r.resolveBook(ctx, userID)
+	if err2 != nil {
+		if errors.Is(err2, domain.ErrNotFound) {
+			return textReply("No paper portfolio yet. Create one:\n" + code("/portfolio create 10000"))
+		}
+		return textReply(friendlyErr(err2))
+	}
+	in := portfolio.CashMoveInput{ClientID: telegramClientID(userID), PortfolioID: bookID, Amount: amt, Note: note}
 	var (
 		m *domain.CashMovement
 		v *domain.PortfolioView
@@ -111,7 +261,14 @@ func (r *Router) cmdCashHistory(ctx context.Context, userID int64, args []string
 			}
 		}
 	}
-	list, total, err := r.portfolio.ListCashMovements(ctx, telegramClientID(userID), limit, 0)
+	_, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return textReply("No paper portfolio yet. Create one:\n" + code("/portfolio create 10000"))
+		}
+		return textReply(friendlyErr(err))
+	}
+	list, total, err := r.portfolio.ListCashMovements(ctx, telegramClientID(userID), limit, 0, bookID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return textReply("No paper portfolio yet. Create one:\n" + code("/portfolio create 10000"))
@@ -143,8 +300,14 @@ func (r *Router) cmdTradePreview(ctx context.Context, chatID, userID int64, side
 		exchange = strings.ToLower(args[2])
 	}
 
-	clientID := telegramClientID(userID)
-	view, err := r.portfolio.View(ctx, clientID)
+	clientID, bookID, err := r.resolveBook(ctx, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return textReply("No paper portfolio yet. Create one first:\n" + code("/portfolio create 10000"))
+		}
+		return textReply(friendlyErr(err))
+	}
+	view, err := r.portfolio.View(ctx, clientID, bookID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return textReply("No paper portfolio yet. Create one first:\n" + code("/portfolio create 10000"))
@@ -184,7 +347,7 @@ func (r *Router) cmdTradePreview(ctx context.Context, chatID, userID int64, side
 
 	id := newPendingID()
 	r.pending.put(&pendingTrade{
-		ID: id, ChatID: chatID, UserID: userID, ClientID: clientID,
+		ID: id, ChatID: chatID, UserID: userID, ClientID: clientID, PortfolioID: bookID,
 		Side: side, Exchange: exName, Symbol: tkr.Symbol,
 		Quantity: qty, QuotePrice: price, Notional: notional,
 		ExpiresAt: time.Now().Add(pendingTradeTTL),
@@ -226,7 +389,7 @@ func (r *Router) confirmPendingTrade(ctx context.Context, chatID, userID int64, 
 		return Reply{Text: "This confirmation belongs to another user.", Toast: "Not yours"}
 	}
 	tr, view, err := r.portfolio.PlaceOrder(ctx, portfolio.OrderInput{
-		ClientID: p.ClientID, Exchange: p.Exchange, Symbol: p.Symbol,
+		ClientID: p.ClientID, PortfolioID: p.PortfolioID, Exchange: p.Exchange, Symbol: p.Symbol,
 		Side: string(p.Side), Quantity: p.Quantity,
 	})
 	if err != nil {

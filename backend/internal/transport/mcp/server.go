@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -52,7 +53,14 @@ type DataPort interface {
 	SetAlertWebhookSettings(ctx context.Context, clientID, url, deliveryMode, timeZone string, quietEnabled bool, quietStart, quietEnd string) (json.RawMessage, error)
 	DeleteAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error)
+	CreateNamedPortfolio(ctx context.Context, clientID string, startingBalance float64, currency, name string) (json.RawMessage, error)
+	ListPortfolios(ctx context.Context, clientID string) (json.RawMessage, error)
+	RenamePortfolio(ctx context.Context, clientID, id, name string) (json.RawMessage, error)
+	DeletePortfolio(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
+	CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error)
+	ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error)
+	RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetPortfolioPerformance(ctx context.Context, clientID, period string) (json.RawMessage, error)
 	DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error)
 	WithdrawPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error)
@@ -150,9 +158,9 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc},
+		Data: &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc},
 		Name: "swyngora-mcp",
 	})
 }
@@ -686,11 +694,68 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("create_api_key",
+		mcp.WithDescription("Create a named API key for a clientId. permission=read (GET only) or trade. Secret is returned once. Use the main account, not another user key."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("name", mcp.Required(), mcp.Description("Label e.g. Trading bot")),
+		mcp.WithString("permission", mcp.Description("read (default) or trade")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		name, err := req.RequireString("name")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateAPIKey(ctx, clientID, name, req.GetString("permission", "read"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_api_keys",
+		mcp.WithDescription("List named API keys for a clientId (metadata only, no secrets)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListAPIKeys(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("revoke_api_key",
+		mcp.WithDescription("Revoke a named API key so it can no longer authenticate."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Key id from list_api_keys")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.RevokeAPIKey(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("create_portfolio",
-		mcp.WithDescription("Create a paper-trading portfolio with a starting cash balance (one per clientId). Simulated only."),
+		mcp.WithDescription("Create a named paper-trading portfolio with starting cash. A client may have multiple books (e.g. Main and Risky). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("startingBalance", mcp.Required(), mcp.Description("Starting cash e.g. 10000")),
 		mcp.WithString("currency", mcp.Description("Accounting currency default USDT")),
+		mcp.WithString("name", mcp.Description("Book name; default Main. Must be unique per client.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -700,7 +765,67 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.CreatePortfolio(ctx, clientID, bal, req.GetString("currency", "USDT"))
+		raw, err := api.CreateNamedPortfolio(ctx, clientID, bal, req.GetString("currency", "USDT"), req.GetString("name", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("list_portfolios",
+		mcp.WithDescription("List paper portfolios for a client (id, name, cash). Select one with portfolioId on other tools."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListPortfolios(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("rename_portfolio",
+		mcp.WithDescription("Rename a paper portfolio. Names are unique per client."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Required(), mcp.Description("Book id or current name")),
+		mcp.WithString("name", mcp.Required(), mcp.Description("New display name")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("portfolioId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		name, err := req.RequireString("name")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.RenamePortfolio(ctx, clientID, id, name)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("delete_portfolio",
+		mcp.WithDescription("Delete a paper portfolio and all of its positions, orders, and history. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Required(), mcp.Description("Book id or name")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("portfolioId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeletePortfolio(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -708,13 +833,15 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market)."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Pass portfolioId when the client has more than one book."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetPortfolio(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -725,6 +852,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	s.AddTool(mcp.NewTool("deposit_portfolio_cash",
 		mcp.WithDescription("Add virtual cash to a paper portfolio. Does not count as trading profit. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Positive cash to add")),
 		mcp.WithString("note", mcp.Description("Optional label (e.g. salary)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -736,6 +864,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.DepositPortfolioCash(ctx, clientID, amt, req.GetString("note", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -746,6 +875,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	s.AddTool(mcp.NewTool("withdraw_portfolio_cash",
 		mcp.WithDescription("Withdraw available virtual cash from a paper portfolio. Does not count as trading loss. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Positive cash to withdraw")),
 		mcp.WithString("note", mcp.Description("Optional label")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -757,6 +887,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.WithdrawPortfolioCash(ctx, clientID, amt, req.GetString("note", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -784,12 +915,14 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	s.AddTool(mcp.NewTool("get_portfolio_performance",
 		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window. Use for history/charts. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("period", mcp.Description("Lookback: 1d, 1w (default), 1m, or 3m")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetPortfolioPerformance(ctx, clientID, req.GetString("period", "1w"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -854,6 +987,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	s.AddTool(mcp.NewTool("place_portfolio_order",
 		mcp.WithDescription("Paper market buy/sell at last price. Simulated only — not real trading."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
@@ -863,6 +997,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

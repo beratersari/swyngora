@@ -137,8 +137,9 @@ func marginTradeToDTO(t *domain.MarginTrade) marginTradeDTO {
 }
 
 type placeMarginBody struct {
-	ClientID   string   `json:"clientId"`
-	Exchange   string   `json:"exchange"`
+	ClientID    string   `json:"clientId"`
+	PortfolioID string   `json:"portfolioId"`
+	Exchange    string   `json:"exchange"`
 	Symbol     string   `json:"symbol"`
 	Side       string   `json:"side"`
 	Type       string   `json:"type"`
@@ -161,7 +162,7 @@ func (h *PortfolioHandler) PlaceMarginOrder(w http.ResponseWriter, r *http.Reque
 		clientID = clientIDFrom(r)
 	}
 	pos, ord, err := h.svc.PlaceMarginOrder(r.Context(), portfolio.MarginOrderInput{
-		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol, Side: body.Side, Type: body.Type,
+		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol, Side: body.Side, Type: body.Type,
 		Quantity: body.Quantity, Leverage: body.Leverage, LimitPrice: body.LimitPrice,
 		StopLoss: body.StopLoss, TakeProfit: body.TakeProfit,
 	})
@@ -187,7 +188,7 @@ func (h *PortfolioHandler) ListMarginOrders(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, err := h.svc.ListMarginOrders(r.Context(), clientIDFrom(r), q.Get("status"), limit, offset)
+	list, err := h.svc.ListMarginOrders(r.Context(), clientIDFrom(r), q.Get("status"), limit, offset, portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -203,7 +204,7 @@ func (h *PortfolioHandler) ListMarginOrders(w http.ResponseWriter, r *http.Reque
 
 // CancelMarginOrder handles DELETE /api/v1/portfolio/margin/orders/{id}
 func (h *PortfolioHandler) CancelMarginOrder(w http.ResponseWriter, r *http.Request) {
-	o, err := h.svc.CancelMarginOrder(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	o, err := h.svc.CancelMarginOrder(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -213,7 +214,7 @@ func (h *PortfolioHandler) CancelMarginOrder(w http.ResponseWriter, r *http.Requ
 
 // ListMarginPositions handles GET /api/v1/portfolio/margin/positions
 func (h *PortfolioHandler) ListMarginPositions(w http.ResponseWriter, r *http.Request) {
-	list, err := h.svc.ListMarginPositions(r.Context(), clientIDFrom(r))
+	list, err := h.svc.ListMarginPositions(r.Context(), clientIDFrom(r), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -229,7 +230,7 @@ func (h *PortfolioHandler) ListMarginPositions(w http.ResponseWriter, r *http.Re
 
 // GetMarginPosition handles GET /api/v1/portfolio/margin/positions/{id}
 func (h *PortfolioHandler) GetMarginPosition(w http.ResponseWriter, r *http.Request) {
-	pos, err := h.svc.GetMarginPosition(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	pos, err := h.svc.GetMarginPosition(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -246,7 +247,7 @@ func (h *PortfolioHandler) CloseMarginPosition(w http.ResponseWriter, r *http.Re
 	var body closeMarginBody
 	_ = decodeJSON(r, &body, DefaultMaxJSONBody) // empty body = full close
 	pos, tr, err := h.svc.CloseMarginPosition(r.Context(), portfolio.MarginCloseInput{
-		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"), Quantity: body.Quantity,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PositionID: r.PathValue("id"), Quantity: body.Quantity,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -272,7 +273,7 @@ func (h *PortfolioHandler) SetMarginBrackets(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	pos, err := h.svc.SetMarginBrackets(r.Context(), portfolio.MarginBracketsInput{
-		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"),
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PositionID: r.PathValue("id"),
 		StopLoss: body.StopLoss, TakeProfit: body.TakeProfit,
 		ClearStopLoss: body.ClearStopLoss, ClearTakeProfit: body.ClearTakeProfit,
 	})
@@ -288,7 +289,7 @@ func (h *PortfolioHandler) ListMarginTrades(w http.ResponseWriter, r *http.Reque
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, err := h.svc.ListMarginTrades(r.Context(), clientIDFrom(r), limit, offset)
+	list, err := h.svc.ListMarginTrades(r.Context(), clientIDFrom(r), limit, offset, portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -303,8 +304,9 @@ func (h *PortfolioHandler) ListMarginTrades(w http.ResponseWriter, r *http.Reque
 }
 
 type setMarginModeBody struct {
-	ClientID string `json:"clientId"`
-	Mode     string `json:"mode"`
+	ClientID    string `json:"clientId"`
+	PortfolioID string `json:"portfolioId"`
+	Mode        string `json:"mode"`
 }
 
 // SetMarginMode handles PUT /api/v1/portfolio/margin/mode
@@ -318,7 +320,7 @@ func (h *PortfolioHandler) SetMarginMode(w http.ResponseWriter, r *http.Request)
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	p, err := h.svc.SetMarginMode(r.Context(), portfolio.SetMarginModeInput{ClientID: clientID, Mode: body.Mode})
+	p, err := h.svc.SetMarginMode(r.Context(), portfolio.SetMarginModeInput{ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Mode: body.Mode})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -341,7 +343,7 @@ func (h *PortfolioHandler) AdjustMargin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	pos, err := h.svc.AdjustMargin(r.Context(), portfolio.MarginAdjustInput{
-		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"), Delta: body.Delta,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PositionID: r.PathValue("id"), Delta: body.Delta,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -362,7 +364,7 @@ func (h *PortfolioHandler) RepayMarginDebt(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	pos, tr, err := h.svc.RepayMarginDebt(r.Context(), portfolio.MarginRepayInput{
-		ClientID: clientIDFrom(r), PositionID: r.PathValue("id"), Amount: body.Amount,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PositionID: r.PathValue("id"), Amount: body.Amount,
 	})
 	if err != nil {
 		writeError(w, err)

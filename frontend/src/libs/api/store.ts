@@ -7,6 +7,7 @@ import './endpoints/watchlistApi'
 import './endpoints/alertsApi';
 import './endpoints/aiApi';
 import './endpoints/portfolioApi';
+import './endpoints/accountApi';
 
 export const store = configureStore({
   reducer: {

@@ -29,7 +29,13 @@ func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			clientID := strings.TrimSpace(r.Header.Get("X-Client-Id"))
+			clientID := ""
+			if id := IdentityFrom(r.Context()); id != nil {
+				clientID = id.ClientID
+			}
+			if clientID == "" {
+				clientID = strings.TrimSpace(r.Header.Get("X-Client-Id"))
+			}
 			if clientID == "" {
 				clientID = strings.TrimSpace(r.URL.Query().Get("clientId"))
 			}

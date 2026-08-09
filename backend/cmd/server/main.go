@@ -26,6 +26,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
@@ -248,12 +249,14 @@ func main() {
 			logger.Error("account sqlite close", "err", err)
 		}
 	}()
+	apiKeySvc := apikey.New(accountStore)
 	accountSvc := account.New(accountStore, account.DataPurgeDeps{
 		Watchlist: watchStore,
 		Alerts:    alertStore,
 		Scanner:   scannerStore,
 		Exports:   exportStore,
 		Imports:   importStore,
+		APIKeys:   accountStore,
 	})
 	watchSvc.SetAccountChecker(accountSvc)
 	logger.Info("account store ready", "driver", "sqlite", "path", accountStore.Path(), "grace", domain.AccountCloseGrace.String())
@@ -353,7 +356,7 @@ func main() {
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler
 	if cfg.MCPEnabled {
-		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc)
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc)
 		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
 	}
 
@@ -362,6 +365,7 @@ func main() {
 		RateLimitBurst:   cfg.RateLimitBurst,
 		CORSAllowOrigins: cfg.CORSAllowOrigins,
 		APIAuthToken:     cfg.APIAuthToken,
+		APIKeys:          apiKeySvc,
 		MCPHandler:       mcpHTTP,
 		AI:               aiClient,
 		AITimeout:        cfg.AITimeout,

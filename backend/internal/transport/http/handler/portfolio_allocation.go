@@ -109,9 +109,10 @@ func parseTargetBodies(in []allocationTargetDTO) []domain.AllocationTarget {
 }
 
 type createBasketBody struct {
-	ClientID string                 `json:"clientId"`
-	Name     string                 `json:"name"`
-	Targets  []allocationTargetDTO  `json:"targets"`
+	ClientID    string                `json:"clientId"`
+	PortfolioID string                `json:"portfolioId"`
+	Name        string                `json:"name"`
+	Targets     []allocationTargetDTO `json:"targets"`
 }
 
 type updateBasketBody struct {
@@ -131,7 +132,7 @@ func (h *PortfolioHandler) CreateBasket(w http.ResponseWriter, r *http.Request) 
 		clientID = clientIDFrom(r)
 	}
 	b, err := h.svc.CreateAllocationBasket(r.Context(), portfolio.AllocationBasketCreateInput{
-		ClientID: clientID, Name: body.Name, Targets: parseTargetBodies(body.Targets),
+		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Name: body.Name, Targets: parseTargetBodies(body.Targets),
 	})
 	if err != nil {
 		writeError(w, err)
@@ -142,7 +143,7 @@ func (h *PortfolioHandler) CreateBasket(w http.ResponseWriter, r *http.Request) 
 
 // ListBaskets handles GET /api/v1/portfolio/baskets
 func (h *PortfolioHandler) ListBaskets(w http.ResponseWriter, r *http.Request) {
-	list, err := h.svc.ListAllocationBaskets(r.Context(), clientIDFrom(r))
+	list, err := h.svc.ListAllocationBaskets(r.Context(), clientIDFrom(r), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -158,7 +159,7 @@ func (h *PortfolioHandler) ListBaskets(w http.ResponseWriter, r *http.Request) {
 
 // GetBasket handles GET /api/v1/portfolio/baskets/{id} — includes live drift preview.
 func (h *PortfolioHandler) GetBasket(w http.ResponseWriter, r *http.Request) {
-	v, err := h.svc.PreviewAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	v, err := h.svc.PreviewAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -178,7 +179,7 @@ func (h *PortfolioHandler) UpdateBasket(w http.ResponseWriter, r *http.Request) 
 		targets = parseTargetBodies(*body.Targets)
 	}
 	in := portfolio.AllocationBasketUpdateInput{
-		ClientID: clientIDFrom(r), BasketID: r.PathValue("id"), Name: body.Name,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), BasketID: r.PathValue("id"), Name: body.Name,
 	}
 	if body.Targets != nil {
 		in.Targets = targets
@@ -194,7 +195,7 @@ func (h *PortfolioHandler) UpdateBasket(w http.ResponseWriter, r *http.Request) 
 // DeleteBasket handles DELETE /api/v1/portfolio/baskets/{id}
 func (h *PortfolioHandler) DeleteBasket(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := h.svc.DeleteAllocationBasket(r.Context(), clientIDFrom(r), id); err != nil {
+	if err := h.svc.DeleteAllocationBasket(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r)); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -203,7 +204,7 @@ func (h *PortfolioHandler) DeleteBasket(w http.ResponseWriter, r *http.Request) 
 
 // PreviewBasketRebalance handles GET /api/v1/portfolio/baskets/{id}/preview
 func (h *PortfolioHandler) PreviewBasketRebalance(w http.ResponseWriter, r *http.Request) {
-	v, err := h.svc.PreviewAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	v, err := h.svc.PreviewAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -213,7 +214,7 @@ func (h *PortfolioHandler) PreviewBasketRebalance(w http.ResponseWriter, r *http
 
 // RebalanceBasket handles POST /api/v1/portfolio/baskets/{id}/rebalance
 func (h *PortfolioHandler) RebalanceBasket(w http.ResponseWriter, r *http.Request) {
-	v, trades, err := h.svc.ExecuteAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	v, trades, err := h.svc.ExecuteAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

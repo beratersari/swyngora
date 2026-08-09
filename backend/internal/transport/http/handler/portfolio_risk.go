@@ -50,7 +50,7 @@ func riskLimitsViewDTO(v *portfolio.RiskLimitsView) map[string]any {
 
 // GetRiskLimits handles GET /api/v1/portfolio/risk-limits
 func (h *PortfolioHandler) GetRiskLimits(w http.ResponseWriter, r *http.Request) {
-	v, err := h.svc.GetRiskLimitsView(r.Context(), clientIDFrom(r))
+	v, err := h.svc.GetRiskLimitsView(r.Context(), clientIDFrom(r), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -66,7 +66,7 @@ func (h *PortfolioHandler) PutRiskLimits(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	v, err := h.svc.SetRiskLimits(r.Context(), portfolio.RiskLimitsInput{
-		ClientID: clientIDFrom(r), MaxDailyLossPct: body.MaxDailyLossPct, MaxAssetWeightPct: body.MaxAssetWeightPct,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), MaxDailyLossPct: body.MaxDailyLossPct, MaxAssetWeightPct: body.MaxAssetWeightPct,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -77,7 +77,7 @@ func (h *PortfolioHandler) PutRiskLimits(w http.ResponseWriter, r *http.Request)
 
 // DeleteRiskLimits handles DELETE /api/v1/portfolio/risk-limits
 func (h *PortfolioHandler) DeleteRiskLimits(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.ClearRiskLimits(r.Context(), clientIDFrom(r)); err != nil {
+	if err := h.svc.ClearRiskLimits(r.Context(), clientIDFrom(r), portfolioIDFrom(r)); err != nil {
 		writeError(w, err)
 		return
 	}

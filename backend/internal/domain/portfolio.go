@@ -6,11 +6,14 @@ import (
 	"math"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Paper trading limits and defaults (informational / simulation only).
 const (
-	MaxPortfoliosPerClient = 1
+	MaxPortfoliosPerClient = 20
+	DefaultPortfolioName   = "Main"
+	MaxPortfolioNameLen    = 64
 	DefaultPaperCurrency   = "USDT"
 	MinStartingBalance     = 1.0
 	MaxStartingBalance     = 10_000_000.0
@@ -32,9 +35,11 @@ const (
 	TradeSideSell TradeSide = "sell"
 )
 
-// Portfolio is a paper-trading account keyed by client id.
+// Portfolio is one named paper book owned by a clientId.
 type Portfolio struct {
-	ClientID         string
+	ID               string
+	ClientID         string // owner
+	Name             string
 	Currency         string
 	StartingBalance  float64
 	CashBalance      float64
@@ -45,6 +50,29 @@ type Portfolio struct {
 	MarginMode MarginMode
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// BookID is the id used on child rows (positions, orders, …).
+func (p *Portfolio) BookID() string {
+	if p == nil {
+		return ""
+	}
+	if strings.TrimSpace(p.ID) != "" {
+		return p.ID
+	}
+	return p.ClientID
+}
+
+// ValidatePortfolioName trims and checks length.
+func ValidatePortfolioName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = DefaultPortfolioName
+	}
+	if utf8.RuneCountInString(name) > MaxPortfolioNameLen {
+		return "", fmt.Errorf("%w: name must be at most %d characters", ErrInvalidArgument, MaxPortfolioNameLen)
+	}
+	return name, nil
 }
 
 // Position is an open (or zero) holding of a symbol on an exchange.
@@ -211,7 +239,9 @@ type PositionView struct {
 
 // PortfolioView is the full paper-trading snapshot for a client.
 type PortfolioView struct {
+	ID               string
 	ClientID         string
+	Name             string
 	Currency         string
 	StartingBalance  float64
 	CashBalance      float64
@@ -244,12 +274,17 @@ type PortfolioView struct {
 
 // PortfolioPort persists paper portfolios, positions, trades, and pending orders.
 type PortfolioPort interface {
-	// GetPortfolio returns the portfolio or ErrNotFound.
-	GetPortfolio(ctx context.Context, clientID string) (*Portfolio, error)
-	// CreatePortfolio creates a new portfolio; fails if one already exists for client.
+	// GetPortfolio returns a book by id (or legacy owner id).
+	GetPortfolio(ctx context.Context, id string) (*Portfolio, error)
+	// ListPortfolios lists books owned by clientID.
+	ListPortfolios(ctx context.Context, clientID string) ([]Portfolio, error)
+	CountPortfolios(ctx context.Context, clientID string) (int, error)
+	// CreatePortfolio inserts a book. ID must be set (or defaults to ClientID).
 	CreatePortfolio(ctx context.Context, p Portfolio) (*Portfolio, error)
+	UpdatePortfolioName(ctx context.Context, clientID, id, name string, at time.Time) (*Portfolio, error)
+	DeletePortfolio(ctx context.Context, clientID, id string) error
 	// UpdateCashAndRealized updates cash and realized total atomically with optional timestamp.
-	UpdateCashAndRealized(ctx context.Context, clientID string, cash, realizedTotal float64, at time.Time) error
+	UpdateCashAndRealized(ctx context.Context, bookID string, cash, realizedTotal float64, at time.Time) error
 
 	GetPosition(ctx context.Context, clientID string, exchange Exchange, symbol string) (*Position, error)
 	ListPositions(ctx context.Context, clientID string) ([]Position, error)
@@ -360,7 +395,7 @@ type PortfolioPort interface {
 	ListEquitySnapshots(ctx context.Context, clientID string, from, to time.Time) ([]EquitySnapshot, error)
 	LatestEquitySnapshotBefore(ctx context.Context, clientID string, before time.Time) (*EquitySnapshot, error)
 	DeleteEquitySnapshotsBefore(ctx context.Context, before time.Time) (int64, error)
-	ListPortfolioClientIDs(ctx context.Context) ([]string, error)
+	ListPortfolioIDs(ctx context.Context) ([]string, error)
 
 	// Margin (isolated leverage) — see MarginPort methods embedded below.
 	MarginPort

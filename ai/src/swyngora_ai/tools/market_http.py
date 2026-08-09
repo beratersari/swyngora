@@ -194,19 +194,44 @@ class AlertWebhookGetInput(BaseModel):
     client_id: str
 
 
+class APIKeyCreateInput(BaseModel):
+    client_id: str
+    name: str
+    permission: str = Field(default="read", description="read or trade")
+
+
+class APIKeyRevokeInput(BaseModel):
+    client_id: str
+    id: str
+
+
 class PortfolioCreateInput(BaseModel):
     client_id: str
     starting_balance: float = Field(gt=0, description="Starting cash")
     currency: str = "USDT"
+    name: str = Field(default="", description="Book name; default Main. Unique per client.")
 
 
 class PortfolioGetInput(BaseModel):
     client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class PortfolioRenameInput(BaseModel):
+    client_id: str
+    portfolio_id: str
+    name: str
+
+
+class PortfolioDeleteInput(BaseModel):
+    client_id: str
+    portfolio_id: str
 
 
 class PortfolioPerformanceInput(BaseModel):
     client_id: str
     period: str = Field(default="1w", description="Lookback window: 1d, 1w, 1m, or 3m")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioCashMoveInput(BaseModel):
@@ -678,16 +703,49 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def delete_alert_webhook(client_id: str) -> str:
         return http.delete("/api/v1/alerts/webhook", {"clientId": client_id})
 
-    def create_portfolio(
-        client_id: str, starting_balance: float, currency: str = "USDT"
-    ) -> str:
+    def create_api_key(client_id: str, name: str, permission: str = "read") -> str:
         return http.post(
-            "/api/v1/portfolio",
-            {
-                "clientId": client_id,
-                "startingBalance": starting_balance,
-                "currency": currency,
-            },
+            "/api/v1/account/api-keys",
+            {"clientId": client_id, "name": name, "permission": permission},
+        )
+
+    def list_api_keys(client_id: str) -> str:
+        return http.get("/api/v1/account/api-keys", {"clientId": client_id})
+
+    def revoke_api_key(client_id: str, id: str) -> str:
+        return http.delete(
+            f"/api/v1/account/api-keys/{id}",
+            {"clientId": client_id},
+        )
+
+    def create_portfolio(
+        client_id: str,
+        starting_balance: float,
+        currency: str = "USDT",
+        name: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "startingBalance": starting_balance,
+            "currency": currency,
+        }
+        if name:
+            body["name"] = name
+        return http.post("/api/v1/portfolio", body)
+
+    def list_portfolios(client_id: str) -> str:
+        return http.get("/api/v1/portfolios", {"clientId": client_id})
+
+    def rename_portfolio(client_id: str, portfolio_id: str, name: str) -> str:
+        return http.patch(
+            f"/api/v1/portfolios/{portfolio_id}?clientId={client_id}",
+            {"name": name},
+        )
+
+    def delete_portfolio(client_id: str, portfolio_id: str) -> str:
+        return http.delete(
+            f"/api/v1/portfolios/{portfolio_id}",
+            {"clientId": client_id},
         )
 
     def get_portfolio_risk_limits(client_id: str) -> str:
@@ -711,14 +769,19 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def clear_portfolio_risk_limits(client_id: str) -> str:
         return http.delete("/api/v1/portfolio/risk-limits", {"clientId": client_id})
 
-    def get_portfolio(client_id: str) -> str:
-        return http.get("/api/v1/portfolio", {"clientId": client_id})
+    def get_portfolio(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio", q)
 
-    def get_portfolio_performance(client_id: str, period: str = "1w") -> str:
-        return http.get(
-            "/api/v1/portfolio/performance",
-            {"clientId": client_id, "period": period},
-        )
+    def get_portfolio_performance(
+        client_id: str, period: str = "1w", portfolio_id: str = ""
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id, "period": period}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/performance", q)
 
     def deposit_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
         body: dict[str, Any] = {"clientId": client_id, "amount": amount}
@@ -1342,15 +1405,51 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             args_schema=AlertWebhookGetInput,
         ),
         StructuredTool.from_function(
+            create_api_key,
+            name="create_api_key",
+            description="Create a named API key (read or trade). Secret is returned once.",
+            args_schema=APIKeyCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_api_keys,
+            name="list_api_keys",
+            description="List named API keys for a client (no secrets).",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            revoke_api_key,
+            name="revoke_api_key",
+            description="Revoke a named API key so it stops working.",
+            args_schema=APIKeyRevokeInput,
+        ),
+        StructuredTool.from_function(
             create_portfolio,
             name="create_portfolio",
-            description="Create a paper-trading portfolio with starting cash (simulated only).",
+            description="Create a named paper-trading portfolio with starting cash. Multiple books per client (e.g. Main, Risky). Simulated only.",
             args_schema=PortfolioCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolios,
+            name="list_portfolios",
+            description="List paper portfolios (id, name, cash). Use portfolio_id on other tools to select a book.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            rename_portfolio,
+            name="rename_portfolio",
+            description="Rename a paper portfolio. Names must be unique per client.",
+            args_schema=PortfolioRenameInput,
+        ),
+        StructuredTool.from_function(
+            delete_portfolio,
+            name="delete_portfolio",
+            description="Delete a paper portfolio and all of its positions, orders, and history.",
+            args_schema=PortfolioDeleteInput,
         ),
         StructuredTool.from_function(
             get_portfolio,
             name="get_portfolio",
-            description="Get paper portfolio cash, positions, realized/unrealized P&L.",
+            description="Get paper portfolio cash, positions, realized/unrealized P&L. Pass portfolio_id when the client has more than one book.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

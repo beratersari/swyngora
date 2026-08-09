@@ -14,6 +14,7 @@ const riskNote = "Risk limits only block new spot buys and new margin opens. Exi
 // RiskLimitsInput replaces both optional rules. Nil field = that rule off.
 type RiskLimitsInput struct {
 	ClientID          string
+	PortfolioID       string
 	MaxDailyLossPct   *float64
 	MaxAssetWeightPct *float64
 }
@@ -26,17 +27,12 @@ type RiskLimitsView struct {
 }
 
 // GetRiskLimitsView loads rules (or empty) and live block status for the UI.
-func (s *Service) GetRiskLimitsView(ctx context.Context, clientID string) (*RiskLimitsView, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetRiskLimitsView(ctx context.Context, clientID string, portfolioID ...string) (*RiskLimitsView, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID = p.BookID()
 	lim, snap, err := s.loadRiskWithDaySnapshot(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -53,13 +49,11 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID := p.BookID()
 	if err := domain.ValidateOptionalRiskPct(in.MaxDailyLossPct, "maxDailyLossPct"); err != nil {
 		return nil, err
 	}
@@ -86,18 +80,12 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 }
 
 // ClearRiskLimits removes all rules (idempotent).
-func (s *Service) ClearRiskLimits(ctx context.Context, clientID string) error {
-	if s.store == nil {
-		return fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ClearRiskLimits(ctx context.Context, clientID string, portfolioID ...string) error {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return err
-	}
-	return s.store.DeleteRiskLimits(ctx, clientID)
+	return s.store.DeleteRiskLimits(ctx, p.BookID())
 }
 
 // guardNewRisk blocks new spot buys / new margin opens when a user limit is hit.

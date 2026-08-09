@@ -41,8 +41,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/alerts/{id}` | Get one alert |
 | `DELETE` | `/api/v1/alerts/{id}` | Delete an alert |
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
-| `POST` | `/api/v1/portfolio` | Create paper portfolio (starting balance) |
-| `GET` | `/api/v1/portfolio` | Cash, positions, realized/unrealized P&L |
+| `POST` | `/api/v1/portfolio` | Create named paper book (starting balance, optional name) |
+| `GET` | `/api/v1/portfolio` | Cash, positions, P&L for selected book (`portfolioId`) |
+| `GET` | `/api/v1/portfolios` | List paper books |
+| `PATCH`/`DELETE` | `/api/v1/portfolios/{id}` | Rename or delete a book |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available virtual cash |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit/withdraw history |
@@ -97,6 +99,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/account` | Account status (active/closed, purgeAt, canReopen) |
 | `POST` | `/api/v1/account/close` | Close account (7-day grace; data retained) |
 | `POST` | `/api/v1/account/reopen` | Reopen within grace period |
+| `GET`/`POST` | `/api/v1/account/api-keys` | List / create named API keys (`read` or `trade`) |
+| `DELETE` | `/api/v1/account/api-keys/{id}` | Revoke a key |
 | `POST` | `/api/v1/ai/chat` | Proxy to Python multi-agent assistant |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
@@ -126,7 +130,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`**; optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); **`MCP_ENABLED=false`** unmounts MCP.
 
-**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Full multi-user identity (JWT/session) is a separate follow-up.
+**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Users can mint named `swy_…` keys (`read` or `trade`) for bots so they do not share the master token (`docs/features/api-keys.md`). Full multi-user identity (JWT/session) is a separate follow-up.
 
 ## Run
 
@@ -172,7 +176,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `:8080` | Listen address |
-| `API_AUTH_TOKEN` | _(empty = open local mode)_ | When set, require `Authorization: Bearer` or `X-API-Key` for tenant routes + `/mcp` |
+| `API_AUTH_TOKEN` | _(empty = open local mode)_ | Master token for tenant routes + `/mcp` + key management; user `swy_…` keys also accepted |
 | `MCP_ENABLED` | `true` | Mount streamable MCP at `/mcp`; set `false` to disable |
 | `WEBHOOK_ALLOW_PRIVATE` | `false` | Allow loopback/private webhook targets (local tests only; SSRF risk if true) |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |

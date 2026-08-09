@@ -11,9 +11,10 @@ import (
 )
 
 type cashMoveBody struct {
-	ClientID string  `json:"clientId"`
-	Amount   float64 `json:"amount"`
-	Note     string  `json:"note"`
+	ClientID    string  `json:"clientId"`
+	PortfolioID string  `json:"portfolioId"`
+	Amount      float64 `json:"amount"`
+	Note        string  `json:"note"`
 }
 
 type cashMovementDTO struct {
@@ -54,7 +55,7 @@ func (h *PortfolioHandler) cashMove(w http.ResponseWriter, r *http.Request, kind
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	in := portfolio.CashMoveInput{ClientID: clientID, Amount: body.Amount, Note: body.Note}
+	in := portfolio.CashMoveInput{ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Amount: body.Amount, Note: body.Note}
 	var (
 		m   *domain.CashMovement
 		v   *domain.PortfolioView
@@ -80,7 +81,7 @@ func (h *PortfolioHandler) ListCashMovements(w http.ResponseWriter, r *http.Requ
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, total, err := h.svc.ListCashMovements(r.Context(), clientIDFrom(r), limit, offset)
+	list, total, err := h.svc.ListCashMovements(r.Context(), clientIDFrom(r), limit, offset, portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

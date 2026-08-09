@@ -15,6 +15,7 @@ import (
 // RecurringBuyCreateInput creates a paper recurring buy plan.
 type RecurringBuyCreateInput struct {
 	ClientID      string
+	PortfolioID   string
 	Exchange      string
 	Symbol        string
 	Name          string // optional label; default "<symbol> <frequency>"
@@ -31,6 +32,7 @@ type RecurringBuyCreateInput struct {
 // Nil / empty optional fields keep the current value. Frequency set to non-empty replaces schedule extras.
 type RecurringBuyUpdateInput struct {
 	ClientID      string
+	PortfolioID   string
 	PlanID        string
 	Name          *string
 	Amount        *float64
@@ -46,13 +48,11 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID := p.BookID()
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
@@ -99,10 +99,11 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	id := strings.TrimSpace(in.PlanID)
 	if id == "" {
 		return nil, fmt.Errorf("%w: plan id is required", domain.ErrInvalidArgument)
@@ -168,23 +169,17 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 }
 
 // ListRecurringBuyPlans lists plans for a client.
-func (s *Service) ListRecurringBuyPlans(ctx context.Context, clientID string) ([]domain.RecurringBuyPlan, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListRecurringBuyPlans(ctx context.Context, clientID string, portfolioID ...string) ([]domain.RecurringBuyPlan, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	return s.store.ListRecurringBuyPlans(ctx, clientID)
+	return s.store.ListRecurringBuyPlans(ctx, p.BookID())
 }
 
 // GetRecurringBuyPlan returns one plan.
-func (s *Service) GetRecurringBuyPlan(ctx context.Context, clientID, id string) (*domain.RecurringBuyPlan, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -192,27 +187,25 @@ func (s *Service) GetRecurringBuyPlan(ctx context.Context, clientID, id string) 
 	if id == "" {
 		return nil, fmt.Errorf("%w: plan id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.GetRecurringBuyPlan(ctx, clientID, id)
+	return s.store.GetRecurringBuyPlan(ctx, p.BookID(), id)
 }
 
 // PauseRecurringBuyPlan sets status paused.
-func (s *Service) PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (*domain.RecurringBuyPlan, error) {
-	return s.setRecurringStatus(ctx, clientID, id, domain.RecurringBuyPaused, false)
+func (s *Service) PauseRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
+	return s.setRecurringStatus(ctx, clientID, id, domain.RecurringBuyPaused, false, portfolioID...)
 }
 
 // ResumeRecurringBuyPlan sets status active; if next_run_at is in the past, sets it to now.
-func (s *Service) ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (*domain.RecurringBuyPlan, error) {
-	return s.setRecurringStatus(ctx, clientID, id, domain.RecurringBuyActive, true)
+func (s *Service) ResumeRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
+	return s.setRecurringStatus(ctx, clientID, id, domain.RecurringBuyActive, true, portfolioID...)
 }
 
-func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, status domain.RecurringBuyPlanStatus, bumpPastNext bool) (*domain.RecurringBuyPlan, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, status domain.RecurringBuyPlanStatus, bumpPastNext bool, portfolioID ...string) (*domain.RecurringBuyPlan, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
+	clientID = p.BookID()
 	plan, err := s.store.GetRecurringBuyPlan(ctx, clientID, id)
 	if err != nil {
 		return nil, err
@@ -226,14 +219,12 @@ func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, s
 }
 
 // DeleteRecurringBuyPlan removes a plan and its run history.
-func (s *Service) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) error {
-	if s.store == nil {
-		return fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string, portfolioID ...string) error {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return err
 	}
+	clientID = p.BookID()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return fmt.Errorf("%w: plan id is required", domain.ErrInvalidArgument)
@@ -242,14 +233,12 @@ func (s *Service) DeleteRecurringBuyPlan(ctx context.Context, clientID, id strin
 }
 
 // ListRecurringBuyRuns lists execution history for a plan.
-func (s *Service) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) ([]domain.RecurringBuyRun, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int, portfolioID ...string) ([]domain.RecurringBuyRun, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
+	clientID = p.BookID()
 	if limit <= 0 {
 		limit = 50
 	}

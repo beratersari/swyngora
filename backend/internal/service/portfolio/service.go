@@ -37,25 +37,67 @@ func New(store domain.PortfolioPort, market PriceFetcher) *Service {
 // CreateInput creates a paper portfolio.
 type CreateInput struct {
 	ClientID        string
+	Name            string
 	StartingBalance float64
 	Currency        string
 }
 
 // OrderInput is a market buy/sell.
 type OrderInput struct {
-	ClientID string
-	Exchange string
-	Symbol   string
-	Side     string // buy | sell
-	Quantity float64
+	ClientID    string
+	PortfolioID string
+	Exchange    string
+	Symbol      string
+	Side        string // buy | sell
+	Quantity    float64
 }
 
-// Create opens a new paper portfolio with starting cash.
+// requireBook loads the owner's book. Empty portfolioID uses the sole book;
+// multiple books without an id (or name) require an explicit selection.
+func (s *Service) requireBook(ctx context.Context, owner string, portfolioID ...string) (*domain.Portfolio, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	owner, err := normalizeClientID(owner)
+	if err != nil {
+		return nil, err
+	}
+	bookRef := ""
+	if len(portfolioID) > 0 {
+		bookRef = strings.TrimSpace(portfolioID[0])
+	}
+	list, err := s.store.ListPortfolios(ctx, owner)
+	if err != nil {
+		return nil, err
+	}
+	if bookRef != "" {
+		for i := range list {
+			if list[i].ID == bookRef || strings.EqualFold(list[i].Name, bookRef) {
+				return &list[i], nil
+			}
+		}
+		return nil, domain.ErrNotFound
+	}
+	switch len(list) {
+	case 0:
+		return nil, domain.ErrNotFound
+	case 1:
+		return &list[0], nil
+	default:
+		return nil, fmt.Errorf("%w: portfolioId is required when more than one paper portfolio exists", domain.ErrInvalidArgument)
+	}
+}
+
+// Create opens a new named paper portfolio with starting cash.
 func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
 	clientID, err := normalizeClientID(in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	name, err := domain.ValidatePortfolioName(in.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -67,14 +109,31 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 	if cur == "" {
 		cur = domain.DefaultPaperCurrency
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err == nil {
-		return nil, fmt.Errorf("%w: portfolio already exists for this clientId", domain.ErrInvalidArgument)
-	} else if err != nil && err != domain.ErrNotFound {
+	n, err := s.store.CountPortfolios(ctx, clientID)
+	if err != nil {
 		return nil, err
+	}
+	if n >= domain.MaxPortfoliosPerClient {
+		return nil, fmt.Errorf("%w: at most %d paper portfolios per account", domain.ErrInvalidArgument, domain.MaxPortfoliosPerClient)
+	}
+	existing, err := s.store.ListPortfolios(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range existing {
+		if strings.EqualFold(b.Name, name) {
+			return nil, fmt.Errorf("%w: a portfolio named %q already exists", domain.ErrInvalidArgument, name)
+		}
+	}
+	id := clientID
+	if n > 0 {
+		id = uuid.NewString()
 	}
 	now := time.Now().UTC()
 	p, err := s.store.CreatePortfolio(ctx, domain.Portfolio{
+		ID:               id,
 		ClientID:         clientID,
+		Name:             name,
 		Currency:         cur,
 		StartingBalance:  in.StartingBalance,
 		CashBalance:      in.StartingBalance,
@@ -91,8 +150,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 	return p, nil
 }
 
-// Get returns portfolio row or ErrNotFound.
-func (s *Service) Get(ctx context.Context, clientID string) (*domain.Portfolio, error) {
+// List returns every paper book for the owner (oldest first).
+func (s *Service) List(ctx context.Context, clientID string) ([]domain.Portfolio, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
@@ -100,24 +159,64 @@ func (s *Service) Get(ctx context.Context, clientID string) (*domain.Portfolio, 
 	if err != nil {
 		return nil, err
 	}
-	return s.store.GetPortfolio(ctx, clientID)
+	return s.store.ListPortfolios(ctx, clientID)
+}
+
+// Rename changes a book's display name (unique per owner).
+func (s *Service) Rename(ctx context.Context, clientID, portfolioID, name string) (*domain.Portfolio, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID)
+	if err != nil {
+		return nil, err
+	}
+	name, err = domain.ValidatePortfolioName(name)
+	if err != nil {
+		return nil, err
+	}
+	if strings.EqualFold(p.Name, name) && p.Name == name {
+		return p, nil
+	}
+	list, err := s.store.ListPortfolios(ctx, p.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	for _, b := range list {
+		if b.ID != p.ID && strings.EqualFold(b.Name, name) {
+			return nil, fmt.Errorf("%w: a portfolio named %q already exists", domain.ErrInvalidArgument, name)
+		}
+	}
+	return s.store.UpdatePortfolioName(ctx, p.ClientID, p.ID, name, time.Now().UTC())
+}
+
+// Delete removes a book and all of its positions, orders, and history.
+func (s *Service) Delete(ctx context.Context, clientID, portfolioID string) error {
+	p, err := s.requireBook(ctx, clientID, portfolioID)
+	if err != nil {
+		return err
+	}
+	return s.store.DeletePortfolio(ctx, p.ClientID, p.ID)
+}
+
+// Get returns portfolio row or ErrNotFound.
+func (s *Service) Get(ctx context.Context, clientID string, portfolioID ...string) (*domain.Portfolio, error) {
+	return s.requireBook(ctx, clientID, portfolioID...)
 }
 
 // View returns cash, reservations, positions marked to market, and P&L summary.
-func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioView, error) {
-	p, err := s.Get(ctx, clientID)
+func (s *Service) View(ctx context.Context, clientID string, portfolioID ...string) (*domain.PortfolioView, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	reservedCash, err := s.store.SumReservedCash(ctx, p.ClientID)
+	bookID := p.BookID()
+	reservedCash, err := s.store.SumReservedCash(ctx, bookID)
 	if err != nil {
 		return nil, err
 	}
-	reservedMargin, err := s.store.SumReservedMargin(ctx, p.ClientID)
+	reservedMargin, err := s.store.SumReservedMargin(ctx, bookID)
 	if err != nil {
 		return nil, err
 	}
-	positions, err := s.store.ListPositions(ctx, p.ClientID)
+	positions, err := s.store.ListPositions(ctx, bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +228,7 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 			// Skip mark on error — still show cost basis; mark=avg for display safety
 			mark = pos.AvgCost
 		}
-		resQty, rerr := s.store.SumReservedQuantity(ctx, p.ClientID, pos.Exchange, pos.Symbol)
+		resQty, rerr := s.store.SumReservedQuantity(ctx, bookID, pos.Exchange, pos.Symbol)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -150,7 +249,7 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		posValue += mv
 		spotUnreal += u
 	}
-	marginPositions, err := s.store.ListOpenMarginPositions(ctx, p.ClientID)
+	marginPositions, err := s.store.ListOpenMarginPositions(ctx, bookID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +271,9 @@ func (s *Service) View(ctx context.Context, clientID string) (*domain.PortfolioV
 		avail += marginUnreal
 	}
 	return &domain.PortfolioView{
+		ID:                  p.ID,
 		ClientID:            p.ClientID,
+		Name:                p.Name,
 		Currency:            p.Currency,
 		StartingBalance:     p.StartingBalance,
 		CashBalance:         p.CashBalance,
@@ -203,10 +304,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if s.store == nil || s.market == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio service not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return nil, nil, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -216,10 +318,6 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
-	if err != nil {
-		return nil, nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -311,7 +409,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err := s.store.ExecuteTrade(ctx, p, posOut, tr); err != nil {
 		return nil, nil, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return &tr, nil, err
 	}
@@ -319,14 +417,12 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 }
 
 // ListTrades returns trade history.
-func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset int) ([]domain.Trade, int, error) {
-	if s.store == nil {
-		return nil, 0, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset int, portfolioID ...string) ([]domain.Trade, int, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, 0, err
 	}
+	clientID = p.BookID()
 	if limit <= 0 {
 		limit = 50
 	}
@@ -335,10 +431,6 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 	}
 	if offset < 0 {
 		offset = 0
-	}
-	// Ensure portfolio exists
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, 0, err
 	}
 	total, err := s.store.CountTrades(ctx, clientID)
 	if err != nil {
@@ -351,6 +443,7 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 // PendingOrderInput creates a limit, stop, or trailing_stop resting order.
 type PendingOrderInput struct {
 	ClientID     string
+	PortfolioID  string
 	Exchange     string
 	Symbol       string
 	Type         string // limit_buy | limit_sell | stop_loss | trailing_stop
@@ -367,6 +460,7 @@ type PendingOrderInput struct {
 // OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
 type OCOOrderInput struct {
 	ClientID        string
+	PortfolioID     string
 	Exchange        string
 	Symbol          string
 	Quantity        float64
@@ -379,6 +473,7 @@ type OCOOrderInput struct {
 // Exits stay pending until entry fills; exit size tracks cumulative entry filled quantity.
 type BracketOrderInput struct {
 	ClientID        string
+	PortfolioID     string
 	Exchange        string
 	Symbol          string
 	Quantity        float64
@@ -394,10 +489,11 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	if s.store == nil {
 		return nil, nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	clientID := p.BookID()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -406,10 +502,6 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		return nil, nil, nil, err
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -486,10 +578,11 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	if s.store == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -501,11 +594,6 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	if err != nil {
 		return nil, nil, err
 	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return nil, nil, err
-	}
-	_ = p
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
@@ -568,10 +656,11 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
 	if !domain.IsValidPendingOrderType(string(typ)) {
 		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, stop_loss, or trailing_stop", domain.ErrInvalidArgument)
@@ -627,10 +716,6 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		if trigger <= 0 {
 			return nil, fmt.Errorf("%w: trail produces non-positive stop price at current market", domain.ErrInvalidArgument)
 		}
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return nil, err
 	}
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
 	if err != nil {
@@ -714,6 +799,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 // At least one of TriggerPrice or RemainingQuantity must be set.
 type AmendPendingOrderInput struct {
 	ClientID          string
+	PortfolioID       string
 	OrderID           string
 	TriggerPrice      *float64
 	RemainingQuantity *float64
@@ -731,11 +817,8 @@ type PendingOrderDetail struct {
 }
 
 // GetPendingOrder returns one pending order for the client.
-func (s *Service) GetPendingOrder(ctx context.Context, clientID, id string) (*domain.PendingOrder, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetPendingOrder(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.PendingOrder, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -743,15 +826,12 @@ func (s *Service) GetPendingOrder(ctx context.Context, clientID, id string) (*do
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
-	return s.store.GetPendingOrder(ctx, clientID, id)
+	return s.store.GetPendingOrder(ctx, p.BookID(), id)
 }
 
 // GetPendingOrderDetail returns the order plus last price and amend hints for the edit UI.
-func (s *Service) GetPendingOrderDetail(ctx context.Context, clientID, id string) (*PendingOrderDetail, error) {
-	o, err := s.GetPendingOrder(ctx, clientID, id)
+func (s *Service) GetPendingOrderDetail(ctx context.Context, clientID, id string, portfolioID ...string) (*PendingOrderDetail, error) {
+	o, err := s.GetPendingOrder(ctx, clientID, id, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -785,17 +865,14 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	if in.TriggerPrice == nil && in.RemainingQuantity == nil {
 		return nil, nil, fmt.Errorf("%w: triggerPrice or remainingQuantity is required", domain.ErrInvalidArgument)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	id := strings.TrimSpace(in.OrderID)
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return nil, nil, err
 	}
 	o, err := s.store.GetPendingOrder(ctx, clientID, id)
 	if err != nil {
@@ -820,7 +897,7 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	}
 	unchanged := math.Abs(newRemaining-o.RemainingQuantity) <= 1e-12 && math.Abs(newTrigger-o.TriggerPrice) <= 1e-12
 	if unchanged {
-		view, verr := s.View(ctx, clientID)
+		view, verr := s.View(ctx, p.ClientID, p.ID)
 		if verr != nil {
 			return o, nil, verr
 		}
@@ -874,7 +951,7 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 			updated = filled
 		}
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return updated, nil, err
 	}
@@ -883,7 +960,8 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 
 // amendCapacity returns cash/qty available to back this order, including its current reservation.
 func (s *Service) amendCapacity(ctx context.Context, p *domain.Portfolio, o domain.PendingOrder) (cashFor, qtyFor float64, err error) {
-	availCash, err := s.availableCashForTrading(ctx, p.ClientID, p.CashBalance)
+	bookID := p.BookID()
+	availCash, err := s.availableCashForTrading(ctx, bookID, p.CashBalance)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -892,13 +970,13 @@ func (s *Service) amendCapacity(ctx context.Context, p *domain.Portfolio, o doma
 		cashFor += o.ReservedCash
 	}
 	var held float64
-	pos, perr := s.store.GetPosition(ctx, p.ClientID, o.Exchange, o.Symbol)
+	pos, perr := s.store.GetPosition(ctx, bookID, o.Exchange, o.Symbol)
 	if perr == nil && pos != nil {
 		held = pos.Quantity
 	} else if perr != nil && perr != domain.ErrNotFound {
 		return 0, 0, perr
 	}
-	resQty, rerr := s.store.SumReservedQuantity(ctx, p.ClientID, o.Exchange, o.Symbol)
+	resQty, rerr := s.store.SumReservedQuantity(ctx, bookID, o.Exchange, o.Symbol)
 	if rerr != nil {
 		return 0, 0, rerr
 	}
@@ -910,17 +988,12 @@ func (s *Service) amendCapacity(ctx context.Context, p *domain.Portfolio, o doma
 }
 
 // ListPendingOrders returns pending orders for a client (default: open only).
-func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status string, limit, offset int) ([]domain.PendingOrder, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status string, limit, offset int, portfolioID ...string) ([]domain.PendingOrder, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID = p.BookID()
 	if limit <= 0 {
 		limit = 50
 	}
@@ -949,24 +1022,20 @@ func (s *Service) ListPendingOrders(ctx context.Context, clientID string, status
 
 // CancelOpenOrdersInput cancels every open/pending paper order, or one market.
 type CancelOpenOrdersInput struct {
-	ClientID string
-	Exchange string // optional; default binance when Symbol is set
-	Symbol   string // empty = all markets (or all pairs on Exchange if only exchange is set)
+	ClientID    string
+	PortfolioID string
+	Exchange    string // optional; default binance when Symbol is set
+	Symbol      string // empty = all markets (or all pairs on Exchange if only exchange is set)
 }
 
 // CancelOpenPendingOrders cancels open GTC/IOC/FOK/OCO/bracket/trailing orders in one action.
 // Empty Symbol (and empty Exchange) = all markets. Symbol set = that pair. Exchange only = that venue.
 func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrdersInput) ([]domain.PendingOrder, *domain.PortfolioView, error) {
-	if s.store == nil {
-		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, nil, err
-	}
+	clientID := p.BookID()
 	var ex domain.Exchange
 	var sym string
 	if strings.TrimSpace(in.Symbol) != "" {
@@ -985,7 +1054,7 @@ func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrde
 	if err != nil {
 		return nil, nil, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return list, nil, err
 	}
@@ -993,11 +1062,8 @@ func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrde
 }
 
 // CancelPendingOrder cancels an open order; filled/canceled/rejected cannot be canceled.
-func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (*domain.PendingOrder, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.PendingOrder, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -1005,11 +1071,7 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string) (
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
 	}
-	// Ensure portfolio exists for clearer 404 vs order 404
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
-	return s.store.CancelPendingOrder(ctx, clientID, id, time.Now().UTC(), domain.CancelReasonUser)
+	return s.store.CancelPendingOrder(ctx, p.BookID(), id, time.Now().UTC(), domain.CancelReasonUser)
 }
 
 // ListAllOpenPendingOrders is used by the background order filler.

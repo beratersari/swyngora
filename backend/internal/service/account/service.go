@@ -20,6 +20,7 @@ type DataPurgeDeps struct {
 	Scanner   domain.ScannerPort
 	Exports   domain.ExportPort
 	Imports   domain.ImportPort
+	APIKeys   domain.APIKeyPort
 }
 
 // Service manages account close, reopen, and grace purges.
@@ -229,6 +230,11 @@ func (s *Service) purgeOne(ctx context.Context, clientID string) error {
 	}
 	if s.data.Scanner != nil {
 		if err := s.data.Scanner.PurgeClient(ctx, clientID); err != nil {
+			return err
+		}
+	}
+	if s.data.APIKeys != nil {
+		if err := s.data.APIKeys.DeleteAPIKeysByClient(ctx, clientID); err != nil {
 			return err
 		}
 	}

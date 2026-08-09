@@ -178,7 +178,11 @@ func FormatPaperPortfolio(v *domain.PortfolioView) string {
 		cur = "USDT"
 	}
 	var b strings.Builder
-	b.WriteString(header("📊", "Paper portfolio"))
+	title := "Paper portfolio"
+	if strings.TrimSpace(v.Name) != "" {
+		title = "Paper · " + v.Name
+	}
+	b.WriteString(header("📊", title))
 	b.WriteString(italic("Simulated · "+cur) + "\n")
 	b.WriteString(divider())
 	b.WriteString(row("Cash", code(Float(v.CashBalance, 4)+" "+cur)))
@@ -590,7 +594,9 @@ func HelpText() string {
 
 	b.WriteString(bold("Paper portfolio") + "\n")
 	b.WriteString(cmdLine("/portfolio", "", "cash, positions, P&L"))
-	b.WriteString(cmdLine("/portfolio create", "[balance]", "new simulated account"))
+	b.WriteString(cmdLine("/portfolio list", "", "all paper books"))
+	b.WriteString(cmdLine("/portfolio create", "[balance] [name]", "new simulated book"))
+	b.WriteString(cmdLine("/portfolio use", "NAME", "select a paper book"))
 	b.WriteString(cmdLine("/buy", "<symbol> <qty> [ex]", "preview then confirm"))
 	b.WriteString(cmdLine("/sell", "<symbol> <qty> [ex]", "preview then confirm"))
 	b.WriteString(cmdLine("/deposit", "<amount> [note]", "add virtual cash"))
@@ -606,6 +612,8 @@ func HelpText() string {
 	b.WriteString("  " + code("/rsi ETHUSDT 1h") + "\n")
 	b.WriteString("  " + code("/ask What is BTC RSI and recent news?") + "\n")
 	b.WriteString("  " + code("/portfolio create 10000") + "\n")
+	b.WriteString("  " + code("/portfolio create 5000 Risky") + "\n")
+	b.WriteString("  " + code("/portfolio use Risky") + "\n")
 	b.WriteString("  " + code("/buy BTCUSDT 0.01") + "\n")
 	b.WriteString("\n")
 	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit"))

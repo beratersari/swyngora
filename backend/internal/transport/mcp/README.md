@@ -31,8 +31,14 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_alert_webhook` | Get client webhook URL for alert notifications |
 | `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |
 | `delete_alert_webhook` | Clear client webhook URL |
-| `create_portfolio` | Create paper portfolio with starting balance |
-| `get_portfolio` | Cash, positions, P&L snapshot |
+| `create_api_key` | Create named `read`/`trade` API key (secret once) |
+| `list_api_keys` | List key metadata (no secrets) |
+| `revoke_api_key` | Revoke a named API key |
+| `create_portfolio` | Create a named paper book (starting balance + optional name) |
+| `list_portfolios` | List paper books for a client |
+| `rename_portfolio` | Rename a paper book |
+| `delete_portfolio` | Delete a paper book and its data |
+| `get_portfolio` | Cash, positions, P&L snapshot (optional `portfolioId`) |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `withdraw_portfolio_cash` | Withdraw available virtual cash |
 | `list_portfolio_cash_movements` | Deposit/withdraw history |
@@ -109,7 +115,7 @@ cd backend && go run ./cmd/server
 
 | Control | Env | Notes |
 |---------|-----|--------|
-| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires `Authorization: Bearer <token>` or `X-API-Key` (same as tenant REST) |
+| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires master token or a user `trade` key (`Authorization: Bearer` / `X-API-Key`) |
 | Disable MCP | `MCP_ENABLED=false` | Do not mount `/mcp` at all |
 | Webhooks | (service) | `set_alert_webhook` rejects private/local targets unless `WEBHOOK_ALLOW_PRIVATE=true` |
 

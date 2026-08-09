@@ -14,9 +14,10 @@ import (
 
 // CashMoveInput is a user deposit or withdrawal.
 type CashMoveInput struct {
-	ClientID string
-	Amount   float64
-	Note     string
+	ClientID    string
+	PortfolioID string
+	Amount      float64
+	Note        string
 }
 
 func normalizeCashNote(note string) (string, error) {
@@ -56,18 +57,15 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 	if s.store == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	if err := domain.ValidateCashMovementAmount(in.Amount); err != nil {
 		return nil, nil, err
 	}
 	note, err := normalizeCashNote(in.Note)
-	if err != nil {
-		return nil, nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +110,7 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 	if err != nil {
 		return nil, nil, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return m, nil, err
 	}
@@ -121,14 +119,12 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 }
 
 // ListCashMovements returns deposit/withdraw history (newest first).
-func (s *Service) ListCashMovements(ctx context.Context, clientID string, limit, offset int) ([]domain.CashMovement, int, error) {
-	if s.store == nil {
-		return nil, 0, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListCashMovements(ctx context.Context, clientID string, limit, offset int, portfolioID ...string) ([]domain.CashMovement, int, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, 0, err
 	}
+	clientID = p.BookID()
 	if limit <= 0 {
 		limit = 50
 	}
@@ -137,9 +133,6 @@ func (s *Service) ListCashMovements(ctx context.Context, clientID string, limit,
 	}
 	if offset < 0 {
 		offset = 0
-	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, 0, err
 	}
 	total, err := s.store.CountCashMovements(ctx, clientID)
 	if err != nil {

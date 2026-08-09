@@ -114,13 +114,13 @@ func (s *SQLite) DeleteEquitySnapshotsBefore(ctx context.Context, before time.Ti
 	return n, nil
 }
 
-// ListPortfolioClientIDs lists all paper accounts (snapshot worker).
-func (s *SQLite) ListPortfolioClientIDs(ctx context.Context) ([]string, error) {
+// ListPortfolioIDs lists every paper book id (snapshot worker).
+func (s *SQLite) ListPortfolioIDs(ctx context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.QueryContext(ctx, `SELECT client_id FROM portfolios ORDER BY client_id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM portfolios ORDER BY id`)
 	if err != nil {
-		return nil, fmt.Errorf("list portfolio clients: %w", err)
+		return nil, fmt.Errorf("list portfolio ids: %w", err)
 	}
 	defer rows.Close()
 	var out []string

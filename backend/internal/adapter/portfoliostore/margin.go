@@ -642,8 +642,8 @@ func (s *SQLite) ApplyMarginOpenFromOrder(ctx context.Context, p *domain.Portfol
 func (s *SQLite) txUpdatePortfolioCash(ctx context.Context, tx *sql.Tx, p *domain.Portfolio) error {
 	res, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
-		WHERE client_id = ?
-	`, p.CashBalance, p.RealizedPnLTotal, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID)
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.BookID())
 	if err != nil {
 		return err
 	}
@@ -719,7 +719,7 @@ func (s *SQLite) UpdatePortfolioMarginMode(ctx context.Context, clientID string,
 		at = time.Now().UTC()
 	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE portfolios SET margin_mode = ?, updated_at = ? WHERE client_id = ?
+		UPDATE portfolios SET margin_mode = ?, updated_at = ? WHERE id = ?
 	`, string(mode), at.UTC().Format(time.RFC3339Nano), clientID)
 	if err != nil {
 		return err

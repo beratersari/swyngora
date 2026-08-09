@@ -26,10 +26,11 @@ func (s *SQLite) ApplyCashMovement(ctx context.Context, p *domain.Portfolio, m d
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	bookID := p.BookID()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, net_deposits = ?, updated_at = ?
-		WHERE client_id = ?
-	`, p.CashBalance, p.NetDeposits, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID)
+		WHERE id = ?
+	`, p.CashBalance, p.NetDeposits, p.UpdatedAt.UTC().Format(time.RFC3339Nano), bookID)
 	if err != nil {
 		return nil, fmt.Errorf("cash movement update: %w", err)
 	}
@@ -40,7 +41,7 @@ func (s *SQLite) ApplyCashMovement(ctx context.Context, p *domain.Portfolio, m d
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO cash_movements (id, client_id, kind, amount, cash_after, net_deposits_after, note, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, m.ID, p.ClientID, string(m.Kind), m.Amount, m.CashAfter, m.NetDepositsAfter, m.Note,
+	`, m.ID, bookID, string(m.Kind), m.Amount, m.CashAfter, m.NetDepositsAfter, m.Note,
 		m.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("cash movement insert: %w", err)
@@ -49,7 +50,7 @@ func (s *SQLite) ApplyCashMovement(ctx context.Context, p *domain.Portfolio, m d
 		return nil, err
 	}
 	cp := m
-	cp.ClientID = p.ClientID
+	cp.ClientID = bookID
 	return &cp, nil
 }
 

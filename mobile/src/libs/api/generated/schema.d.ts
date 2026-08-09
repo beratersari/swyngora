@@ -464,19 +464,61 @@ export interface paths {
         /**
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
+         *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
         put?: never;
         /**
          * Create a paper-trading portfolio
-         * @description Creates a simulated portfolio with starting cash for a clientId (one portfolio per client).
-         *     Paper trading only - not real money. Not financial advice.
+         * @description Creates a named simulated portfolio with starting cash. A clientId may own up to 20 books
+         *     (e.g. Main vs Risky). Duplicate names are rejected. Paper trading only - not real money.
          */
         post: operations["createPortfolio"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List paper portfolios for the client */
+        get: operations["listPortfolios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolios/{id}": {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a paper portfolio and all of its data */
+        delete: operations["deletePortfolio"];
+        options?: never;
+        head?: never;
+        /** Rename a paper portfolio */
+        patch: operations["renamePortfolio"];
         trace?: never;
     };
     "/api/v1/portfolio/deposits": {
@@ -1451,6 +1493,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List API keys for this account
+         * @description Named keys for bots/apps. Secrets are never listed. Manage keys with the
+         *     main account (`X-Client-Id` plus optional process `API_AUTH_TOKEN`).
+         *     User-issued keys cannot list or create other keys.
+         */
+        get: operations["listAccountAPIKeys"];
+        put?: never;
+        /**
+         * Create a named API key
+         * @description permission=read → GET only. permission=trade → can place/cancel paper trades
+         *     and other mutations except account close and key management.
+         *     The full secret is returned once.
+         */
+        post: operations["createAccountAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/api-keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an API key
+         * @description Immediate; the secret stops working. Idempotent if already revoked.
+         */
+        delete: operations["revokeAccountAPIKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/import/preview": {
         parameters: {
             query?: never;
@@ -1700,8 +1790,22 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
-        PortfolioView: {
+        PortfolioSummary: {
+            id?: string;
             clientId?: string;
+            name?: string;
+            currency?: string;
+            startingBalance?: number;
+            cashBalance?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PortfolioView: {
+            id?: string;
+            clientId?: string;
+            name?: string;
             currency?: string;
             startingBalance?: number;
             cashBalance?: number;
@@ -2172,6 +2276,26 @@ export interface components {
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /** @description Named user API key metadata (secret is never listed) */
+        AccountAPIKey: {
+            id?: string;
+            name?: string;
+            /** @description Public prefix of the secret (e.g. swy_ab12cd34) */
+            prefix?: string;
+            /** @enum {string} */
+            permission?: "read" | "trade";
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            lastUsedAt?: string | null;
+            /** Format: date-time */
+            revokedAt?: string | null;
+            revoked?: boolean;
+        };
+        AccountAPIKeyCreated: components["schemas"]["AccountAPIKey"] & {
+            /** @description Full token; shown only at creation. Send as Authorization Bearer or X-API-Key. */
+            secret?: string;
         };
         ImportJob: {
             id?: string;
@@ -3412,9 +3536,12 @@ export interface operations {
         parameters: {
             query?: {
                 clientId?: string;
+                /** @description Book id or name. Required when more than one paper portfolio exists. */
+                portfolioId?: string;
             };
             header?: {
                 "X-Client-Id"?: string;
+                "X-Portfolio-Id"?: string;
             };
             path?: never;
             cookie?: never;
@@ -3445,6 +3572,11 @@ export interface operations {
             content: {
                 "application/json": {
                     clientId?: string;
+                    /**
+                     * @description Display name; default Main
+                     * @example Main
+                     */
+                    name?: string;
                     /** @example 10000 */
                     startingBalance: number;
                     /** @default USDT */
@@ -3463,6 +3595,99 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    listPortfolios: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paper books */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        count?: number;
+                        portfolios?: components["schemas"]["PortfolioSummary"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    deletePortfolio: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        deleted?: boolean;
+                        id?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    renamePortfolio: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioSummary"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     depositPortfolioCash: {
@@ -3565,11 +3790,13 @@ export interface operations {
         parameters: {
             query?: {
                 clientId?: string;
+                portfolioId?: string;
                 /** @description Lookback window. Default 1w. */
                 period?: "1d" | "1w" | "1m" | "3m";
             };
             header?: {
                 "X-Client-Id"?: string;
+                "X-Portfolio-Id"?: string;
             };
             path?: never;
             cookie?: never;
@@ -5411,6 +5638,102 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    listAccountAPIKeys: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key metadata (no secrets) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        keys?: components["schemas"]["AccountAPIKey"][];
+                        count?: number;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    createAccountAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /** @example Trading bot */
+                    name: string;
+                    /**
+                     * @default read
+                     * @enum {string}
+                     */
+                    permission?: "read" | "trade";
+                };
+            };
+        };
+        responses: {
+            /** @description Created key including one-time secret */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountAPIKeyCreated"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    revokeAccountAPIKey: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked key metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountAPIKey"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     previewImport: {

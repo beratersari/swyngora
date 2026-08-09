@@ -71,6 +71,7 @@ func recurringRunDTO(r *domain.RecurringBuyRun) recurringBuyRunDTO {
 
 type createRecurringBody struct {
 	ClientID      string  `json:"clientId"`
+	PortfolioID   string  `json:"portfolioId"`
 	Exchange      string  `json:"exchange"`
 	Symbol        string  `json:"symbol"`
 	Name          string  `json:"name"`
@@ -117,7 +118,7 @@ func (h *PortfolioHandler) CreateRecurringBuy(w http.ResponseWriter, r *http.Req
 		start = &u
 	}
 	plan, err := h.svc.CreateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyCreateInput{
-		ClientID: clientID, Exchange: body.Exchange, Symbol: body.Symbol, Name: body.Name,
+		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol, Name: body.Name,
 		Amount: body.Amount, Frequency: body.Frequency, Weekday: body.Weekday,
 		DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
 	})
@@ -130,7 +131,7 @@ func (h *PortfolioHandler) CreateRecurringBuy(w http.ResponseWriter, r *http.Req
 
 // ListRecurringBuys handles GET /api/v1/portfolio/recurring-buys
 func (h *PortfolioHandler) ListRecurringBuys(w http.ResponseWriter, r *http.Request) {
-	list, err := h.svc.ListRecurringBuyPlans(r.Context(), clientIDFrom(r))
+	list, err := h.svc.ListRecurringBuyPlans(r.Context(), clientIDFrom(r), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -165,7 +166,7 @@ func (h *PortfolioHandler) UpdateRecurringBuy(w http.ResponseWriter, r *http.Req
 		start = &u
 	}
 	plan, err := h.svc.UpdateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyUpdateInput{
-		ClientID: clientIDFrom(r), PlanID: r.PathValue("id"),
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PlanID: r.PathValue("id"),
 		Name: body.Name, Amount: body.Amount, Frequency: body.Frequency,
 		Weekday: body.Weekday, DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
 	})
@@ -178,7 +179,7 @@ func (h *PortfolioHandler) UpdateRecurringBuy(w http.ResponseWriter, r *http.Req
 
 // GetRecurringBuy handles GET /api/v1/portfolio/recurring-buys/{id}
 func (h *PortfolioHandler) GetRecurringBuy(w http.ResponseWriter, r *http.Request) {
-	plan, err := h.svc.GetRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	plan, err := h.svc.GetRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -188,7 +189,7 @@ func (h *PortfolioHandler) GetRecurringBuy(w http.ResponseWriter, r *http.Reques
 
 // PauseRecurringBuy handles POST /api/v1/portfolio/recurring-buys/{id}/pause
 func (h *PortfolioHandler) PauseRecurringBuy(w http.ResponseWriter, r *http.Request) {
-	plan, err := h.svc.PauseRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	plan, err := h.svc.PauseRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -198,7 +199,7 @@ func (h *PortfolioHandler) PauseRecurringBuy(w http.ResponseWriter, r *http.Requ
 
 // ResumeRecurringBuy handles POST /api/v1/portfolio/recurring-buys/{id}/resume
 func (h *PortfolioHandler) ResumeRecurringBuy(w http.ResponseWriter, r *http.Request) {
-	plan, err := h.svc.ResumeRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	plan, err := h.svc.ResumeRecurringBuyPlan(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -209,7 +210,7 @@ func (h *PortfolioHandler) ResumeRecurringBuy(w http.ResponseWriter, r *http.Req
 // DeleteRecurringBuy handles DELETE /api/v1/portfolio/recurring-buys/{id}
 func (h *PortfolioHandler) DeleteRecurringBuy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if err := h.svc.DeleteRecurringBuyPlan(r.Context(), clientIDFrom(r), id); err != nil {
+	if err := h.svc.DeleteRecurringBuyPlan(r.Context(), clientIDFrom(r), id, portfolioIDFrom(r)); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -221,7 +222,7 @@ func (h *PortfolioHandler) ListRecurringBuyRuns(w http.ResponseWriter, r *http.R
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, err := h.svc.ListRecurringBuyRuns(r.Context(), clientIDFrom(r), r.PathValue("id"), limit, offset)
+	list, err := h.svc.ListRecurringBuyRuns(r.Context(), clientIDFrom(r), r.PathValue("id"), limit, offset, portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

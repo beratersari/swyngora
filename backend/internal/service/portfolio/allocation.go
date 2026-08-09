@@ -13,17 +13,19 @@ import (
 
 // AllocationBasketCreateInput creates a named target mix.
 type AllocationBasketCreateInput struct {
-	ClientID string
-	Name     string
-	Targets  []domain.AllocationTarget
+	ClientID    string
+	PortfolioID string
+	Name        string
+	Targets     []domain.AllocationTarget
 }
 
 // AllocationBasketUpdateInput replaces name and/or targets.
 type AllocationBasketUpdateInput struct {
-	ClientID string
-	BasketID string
-	Name     *string
-	Targets  []domain.AllocationTarget
+	ClientID    string
+	PortfolioID string
+	BasketID    string
+	Name        *string
+	Targets     []domain.AllocationTarget
 }
 
 // AllocationBasketView is a basket plus live drift (no trades until rebalance).
@@ -38,14 +40,11 @@ func (s *Service) CreateAllocationBasket(ctx context.Context, in AllocationBaske
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return nil, err
-	}
+	clientID := p.BookID()
 	name, err := domain.NormalizeAllocationName(in.Name)
 	if err != nil {
 		return nil, err
@@ -74,19 +73,16 @@ func (s *Service) UpdateAllocationBasket(ctx context.Context, in AllocationBaske
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	id := strings.TrimSpace(in.BasketID)
 	if id == "" {
 		return nil, fmt.Errorf("%w: basket id is required", domain.ErrInvalidArgument)
 	}
 	cur, err := s.store.GetAllocationBasket(ctx, clientID, id)
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -112,26 +108,17 @@ func (s *Service) UpdateAllocationBasket(ctx context.Context, in AllocationBaske
 }
 
 // ListAllocationBaskets lists saved baskets (no live marks).
-func (s *Service) ListAllocationBaskets(ctx context.Context, clientID string) ([]domain.AllocationBasket, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListAllocationBaskets(ctx context.Context, clientID string, portfolioID ...string) ([]domain.AllocationBasket, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
-	return s.store.ListAllocationBaskets(ctx, clientID)
+	return s.store.ListAllocationBaskets(ctx, p.BookID())
 }
 
 // GetAllocationBasket returns one basket.
-func (s *Service) GetAllocationBasket(ctx context.Context, clientID, id string) (*domain.AllocationBasket, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetAllocationBasket(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.AllocationBasket, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -139,21 +126,16 @@ func (s *Service) GetAllocationBasket(ctx context.Context, clientID, id string) 
 	if id == "" {
 		return nil, fmt.Errorf("%w: basket id is required", domain.ErrInvalidArgument)
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
-	return s.store.GetAllocationBasket(ctx, clientID, id)
+	return s.store.GetAllocationBasket(ctx, p.BookID(), id)
 }
 
 // DeleteAllocationBasket removes a saved mix. Does not trade.
-func (s *Service) DeleteAllocationBasket(ctx context.Context, clientID, id string) error {
-	if s.store == nil {
-		return fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) DeleteAllocationBasket(ctx context.Context, clientID, id string, portfolioID ...string) error {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return err
 	}
+	clientID = p.BookID()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return fmt.Errorf("%w: basket id is required", domain.ErrInvalidArgument)
@@ -162,8 +144,8 @@ func (s *Service) DeleteAllocationBasket(ctx context.Context, clientID, id strin
 }
 
 // PreviewAllocationRebalance shows drift and proposed market legs. No trades.
-func (s *Service) PreviewAllocationRebalance(ctx context.Context, clientID, basketID string) (*AllocationBasketView, error) {
-	plan, basket, err := s.buildAllocationPlan(ctx, clientID, basketID)
+func (s *Service) PreviewAllocationRebalance(ctx context.Context, clientID, basketID string, portfolioID ...string) (*AllocationBasketView, error) {
+	plan, basket, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
@@ -175,16 +157,20 @@ func (s *Service) PreviewAllocationRebalance(ctx context.Context, clientID, bask
 
 // ExecuteAllocationRebalance places market sells then buys to move toward targets.
 // Manual only: nothing auto-rebalances in the background.
-func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, basketID string) (*AllocationBasketView, []domain.Trade, error) {
-	plan, basket, err := s.buildAllocationPlan(ctx, clientID, basketID)
+func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, basketID string, portfolioID ...string) (*AllocationBasketView, []domain.Trade, error) {
+	plan, basket, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
 	if err != nil {
 		return nil, nil, err
+	}
+	pfID := ""
+	if len(portfolioID) > 0 {
+		pfID = portfolioID[0]
 	}
 	var trades []domain.Trade
 	var failed []string
 	for _, leg := range plan.Legs {
 		tr, _, err := s.PlaceOrder(ctx, OrderInput{
-			ClientID: clientID, Exchange: string(leg.Exchange), Symbol: leg.Symbol,
+			ClientID: clientID, PortfolioID: pfID, Exchange: string(leg.Exchange), Symbol: leg.Symbol,
 			Side: string(leg.Side), Quantity: leg.Quantity,
 		})
 		if err != nil {
@@ -195,7 +181,7 @@ func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, bask
 			trades = append(trades, *tr)
 		}
 	}
-	view, err := s.PreviewAllocationRebalance(ctx, clientID, basketID)
+	view, err := s.PreviewAllocationRebalance(ctx, clientID, basketID, portfolioID...)
 	if err != nil {
 		return nil, trades, err
 	}
@@ -210,24 +196,21 @@ func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, bask
 	return view, trades, nil
 }
 
-func (s *Service) buildAllocationPlan(ctx context.Context, clientID, basketID string) (domain.RebalancePlan, *domain.AllocationBasket, error) {
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) buildAllocationPlan(ctx context.Context, clientID, basketID string, portfolioID ...string) (domain.RebalancePlan, *domain.AllocationBasket, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return domain.RebalancePlan{}, nil, err
 	}
+	clientID = p.BookID()
 	basketID = strings.TrimSpace(basketID)
 	if basketID == "" {
 		return domain.RebalancePlan{}, nil, fmt.Errorf("%w: basket id is required", domain.ErrInvalidArgument)
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return domain.RebalancePlan{}, nil, err
 	}
 	b, err := s.store.GetAllocationBasket(ctx, clientID, basketID)
 	if err != nil {
 		return domain.RebalancePlan{}, nil, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return domain.RebalancePlan{}, nil, err
 	}

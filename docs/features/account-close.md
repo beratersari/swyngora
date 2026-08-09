@@ -29,6 +29,7 @@ Middleware blocks closed `X-Client-Id` / `clientId` on other user-scoped routes.
 - Scanner rules, results, backtests (+ signals)  
 - Export jobs + files  
 - Import jobs + source/payload files  
+- User API keys  
 - Account row removed  
 
 ## Where the code lives

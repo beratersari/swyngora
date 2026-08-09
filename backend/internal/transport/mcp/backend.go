@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -28,6 +29,7 @@ type Backend struct {
 	Export    *exportsvc.Service
 	Import    *dataimport.Service
 	PriceDiff *pricediff.Service
+	APIKeys   *apikey.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -591,23 +593,127 @@ func (b *Backend) DeleteAlertWebhook(ctx context.Context, clientID string) (json
 	return mustJSON(map[string]any{"clientId": clientID, "deleted": true, "configured": false})
 }
 
+func (b *Backend) CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error) {
+	if b.APIKeys == nil {
+		return nil, fmt.Errorf("%w: api keys not configured", domain.ErrUpstream)
+	}
+	created, err := b.APIKeys.Create(ctx, apikey.CreateInput{ClientID: clientID, Name: name, Permission: permission})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(apiKeyMap(created.Key, created.Secret))
+}
+
+func (b *Backend) ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.APIKeys == nil {
+		return nil, fmt.Errorf("%w: api keys not configured", domain.ErrUpstream)
+	}
+	list, err := b.APIKeys.List(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, apiKeyMap(&list[i], ""))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "keys": items, "count": len(items)})
+}
+
+func (b *Backend) RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.APIKeys == nil {
+		return nil, fmt.Errorf("%w: api keys not configured", domain.ErrUpstream)
+	}
+	k, err := b.APIKeys.Revoke(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(apiKeyMap(k, ""))
+}
+
+func apiKeyMap(k *domain.APIKey, secret string) map[string]any {
+	m := map[string]any{
+		"id": k.ID, "name": k.Name, "prefix": k.Prefix, "permission": string(k.Permission),
+		"revoked": k.IsRevoked(), "createdAt": k.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if k.LastUsedAt != nil {
+		m["lastUsedAt"] = k.LastUsedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if k.RevokedAt != nil {
+		m["revokedAt"] = k.RevokedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if secret != "" {
+		m["secret"] = secret
+	}
+	return m
+}
+
 func (b *Backend) CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error) {
+	return b.CreateNamedPortfolio(ctx, clientID, startingBalance, currency, "")
+}
+
+func (b *Backend) CreateNamedPortfolio(ctx context.Context, clientID string, startingBalance float64, currency, name string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	if _, err := b.Portfolio.Create(ctx, portfolio.CreateInput{
-		ClientID: clientID, StartingBalance: startingBalance, Currency: currency,
-	}); err != nil {
+	p, err := b.Portfolio.Create(ctx, portfolio.CreateInput{
+		ClientID: clientID, Name: name, StartingBalance: startingBalance, Currency: currency,
+	})
+	if err != nil {
 		return nil, err
 	}
-	return b.GetPortfolio(ctx, clientID)
+	return b.GetPortfolio(WithPortfolioID(ctx, p.ID), clientID)
+}
+
+func (b *Backend) ListPortfolios(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.List(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, p := range list {
+		items = append(items, map[string]any{
+			"id": p.ID, "clientId": p.ClientID, "name": p.Name, "currency": p.Currency,
+			"startingBalance": p.StartingBalance, "cashBalance": p.CashBalance,
+			"createdAt": p.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "portfolios": items, "count": len(items)})
+}
+
+func (b *Backend) RenamePortfolio(ctx context.Context, clientID, id, name string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	p, err := b.Portfolio.Rename(ctx, clientID, id, name)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"id": p.ID, "clientId": p.ClientID, "name": p.Name, "currency": p.Currency,
+		"startingBalance": p.StartingBalance, "cashBalance": p.CashBalance,
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+}
+
+func (b *Backend) DeletePortfolio(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if err := b.Portfolio.Delete(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id, "clientId": clientID})
 }
 
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	v, err := b.Portfolio.GetRiskLimitsView(ctx, clientID)
+	v, err := b.Portfolio.GetRiskLimitsView(ctx, clientID, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -619,6 +725,7 @@ func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, m
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	v, err := b.Portfolio.SetRiskLimits(ctx, portfolio.RiskLimitsInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct,
 	})
 	if err != nil {
@@ -631,7 +738,7 @@ func (b *Backend) DeletePortfolioRiskLimits(ctx context.Context, clientID string
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	if err := b.Portfolio.ClearRiskLimits(ctx, clientID); err != nil {
+	if err := b.Portfolio.ClearRiskLimits(ctx, clientID, PortfolioIDFrom(ctx)); err != nil {
 		return nil, err
 	}
 	return mustJSON(map[string]any{"deleted": true, "clientId": clientID})
@@ -666,7 +773,7 @@ func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMe
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	v, err := b.Portfolio.View(ctx, clientID)
+	v, err := b.Portfolio.View(ctx, clientID, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -677,7 +784,7 @@ func (b *Backend) DepositPortfolioCash(ctx context.Context, clientID string, amo
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	m, v, err := b.Portfolio.Deposit(ctx, portfolio.CashMoveInput{ClientID: clientID, Amount: amount, Note: note})
+	m, v, err := b.Portfolio.Deposit(ctx, portfolio.CashMoveInput{ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Amount: amount, Note: note})
 	if err != nil {
 		return nil, err
 	}
@@ -688,7 +795,7 @@ func (b *Backend) WithdrawPortfolioCash(ctx context.Context, clientID string, am
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	m, v, err := b.Portfolio.Withdraw(ctx, portfolio.CashMoveInput{ClientID: clientID, Amount: amount, Note: note})
+	m, v, err := b.Portfolio.Withdraw(ctx, portfolio.CashMoveInput{ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Amount: amount, Note: note})
 	if err != nil {
 		return nil, err
 	}
@@ -699,7 +806,7 @@ func (b *Backend) ListPortfolioCashMovements(ctx context.Context, clientID strin
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, total, err := b.Portfolio.ListCashMovements(ctx, clientID, limit, offset)
+	list, total, err := b.Portfolio.ListCashMovements(ctx, clientID, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -740,7 +847,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	p, err := b.Portfolio.GetPerformance(ctx, clientID, period)
+	p, err := b.Portfolio.GetPerformance(ctx, clientID, period, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +875,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity,
+		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity,
 	})
 	if err != nil {
 		return nil, err
@@ -794,7 +901,7 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, total, err := b.Portfolio.ListTrades(ctx, clientID, limit, offset)
+	list, total, err := b.Portfolio.ListTrades(ctx, clientID, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -827,6 +934,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 		exp = &tu
 	}
 	o, err := b.Portfolio.PlacePendingOrder(ctx, portfolio.PendingOrderInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
 		TrailType: trailType, TrailValue: trailValue,
@@ -858,6 +966,7 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 		exp = &tu
 	}
 	entry, tp, sl, err := b.Portfolio.PlaceBracketOrder(ctx, portfolio.BracketOrderInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
 	})
@@ -888,6 +997,7 @@ func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange
 		exp = &tu
 	}
 	tp, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
 	})
@@ -907,7 +1017,7 @@ func (b *Backend) ListPortfolioOrders(ctx context.Context, clientID, status stri
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListPendingOrders(ctx, clientID, status, limit, offset)
+	list, err := b.Portfolio.ListPendingOrders(ctx, clientID, status, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -926,7 +1036,7 @@ func (b *Backend) GetPortfolioOrder(ctx context.Context, clientID, id string) (j
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	d, err := b.Portfolio.GetPendingOrderDetail(ctx, clientID, id)
+	d, err := b.Portfolio.GetPendingOrderDetail(ctx, clientID, id, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -949,6 +1059,7 @@ func (b *Backend) AmendPortfolioOrder(ctx context.Context, clientID, id string, 
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	o, view, err := b.Portfolio.AmendPendingOrder(ctx, portfolio.AmendPendingOrderInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, OrderID: id, TriggerPrice: triggerPrice, RemainingQuantity: remainingQuantity,
 	})
 	if err != nil {
@@ -972,6 +1083,7 @@ func (b *Backend) CancelAllPortfolioOrders(ctx context.Context, clientID, exchan
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	list, view, err := b.Portfolio.CancelOpenPendingOrders(ctx, portfolio.CancelOpenOrdersInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol,
 	})
 	if err != nil {
@@ -1004,7 +1116,7 @@ func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string)
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	o, err := b.Portfolio.CancelPendingOrder(ctx, clientID, id)
+	o, err := b.Portfolio.CancelPendingOrder(ctx, clientID, id, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1028,6 +1140,7 @@ func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange
 		start = &tu
 	}
 	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, portfolio.RecurringBuyCreateInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Name: name,
 		Amount: amount, Frequency: frequency, Weekday: weekday,
 		DayOfMonth: dayOfMonth, IntervalHours: intervalHours, StartAt: start,
@@ -1083,7 +1196,7 @@ func (b *Backend) ListRecurringBuyPlans(ctx context.Context, clientID string) (j
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListRecurringBuyPlans(ctx, clientID)
+	list, err := b.Portfolio.ListRecurringBuyPlans(ctx, clientID, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1098,7 +1211,7 @@ func (b *Backend) GetRecurringBuyPlan(ctx context.Context, clientID, id string) 
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	plan, err := b.Portfolio.GetRecurringBuyPlan(ctx, clientID, id)
+	plan, err := b.Portfolio.GetRecurringBuyPlan(ctx, clientID, id, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1211,6 +1324,7 @@ func (b *Backend) CreatePortfolioBasket(ctx context.Context, clientID, name, tar
 		return nil, err
 	}
 	basket, err := b.Portfolio.CreateAllocationBasket(ctx, portfolio.AllocationBasketCreateInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Name: name, Targets: tg,
 	})
 	if err != nil {
@@ -1223,7 +1337,7 @@ func (b *Backend) ListPortfolioBaskets(ctx context.Context, clientID string) (js
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListAllocationBaskets(ctx, clientID)
+	list, err := b.Portfolio.ListAllocationBaskets(ctx, clientID, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1313,7 +1427,7 @@ func (b *Backend) ListRecurringBuyRuns(ctx context.Context, clientID, planID str
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListRecurringBuyRuns(ctx, clientID, planID, limit, offset)
+	list, err := b.Portfolio.ListRecurringBuyRuns(ctx, clientID, planID, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1328,7 +1442,7 @@ func (b *Backend) SetMarginMode(ctx context.Context, clientID, mode string) (jso
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	p, err := b.Portfolio.SetMarginMode(ctx, portfolio.SetMarginModeInput{ClientID: clientID, Mode: mode})
+	p, err := b.Portfolio.SetMarginMode(ctx, portfolio.SetMarginModeInput{ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Mode: mode})
 	if err != nil {
 		return nil, err
 	}
@@ -1343,6 +1457,7 @@ func (b *Backend) AdjustMargin(ctx context.Context, clientID, positionID string,
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	pos, err := b.Portfolio.AdjustMargin(ctx, portfolio.MarginAdjustInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, PositionID: positionID, Delta: delta,
 	})
 	if err != nil {
@@ -1356,6 +1471,7 @@ func (b *Backend) RepayMarginDebt(ctx context.Context, clientID, positionID stri
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	pos, tr, err := b.Portfolio.RepayMarginDebt(ctx, portfolio.MarginRepayInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, PositionID: positionID, Amount: amount,
 	})
 	if err != nil {
@@ -1369,6 +1485,7 @@ func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symb
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	pos, ord, err := b.Portfolio.PlaceMarginOrder(ctx, portfolio.MarginOrderInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Type: orderType,
 		Quantity: quantity, Leverage: leverage, LimitPrice: limitPrice, StopLoss: stopLoss, TakeProfit: takeProfit,
 	})
@@ -1385,7 +1502,7 @@ func (b *Backend) ListMarginPositions(ctx context.Context, clientID string) (jso
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListMarginPositions(ctx, clientID)
+	list, err := b.Portfolio.ListMarginPositions(ctx, clientID, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1400,7 +1517,7 @@ func (b *Backend) GetMarginPosition(ctx context.Context, clientID, id string) (j
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	pos, err := b.Portfolio.GetMarginPosition(ctx, clientID, id)
+	pos, err := b.Portfolio.GetMarginPosition(ctx, clientID, id, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1412,6 +1529,7 @@ func (b *Backend) CloseMarginPosition(ctx context.Context, clientID, id string, 
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	pos, tr, err := b.Portfolio.CloseMarginPosition(ctx, portfolio.MarginCloseInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, PositionID: id, Quantity: quantity,
 	})
 	if err != nil {
@@ -1425,6 +1543,7 @@ func (b *Backend) SetMarginBrackets(ctx context.Context, clientID, id string, st
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	pos, err := b.Portfolio.SetMarginBrackets(ctx, portfolio.MarginBracketsInput{
+		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, PositionID: id, StopLoss: stopLoss, TakeProfit: takeProfit,
 		ClearStopLoss: clearSL, ClearTakeProfit: clearTP,
 	})
@@ -1438,7 +1557,7 @@ func (b *Backend) ListMarginOrders(ctx context.Context, clientID, status string,
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListMarginOrders(ctx, clientID, status, limit, offset)
+	list, err := b.Portfolio.ListMarginOrders(ctx, clientID, status, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1453,7 +1572,7 @@ func (b *Backend) CancelMarginOrder(ctx context.Context, clientID, id string) (j
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	o, err := b.Portfolio.CancelMarginOrder(ctx, clientID, id)
+	o, err := b.Portfolio.CancelMarginOrder(ctx, clientID, id, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1464,7 +1583,7 @@ func (b *Backend) ListMarginTrades(ctx context.Context, clientID string, limit, 
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	list, err := b.Portfolio.ListMarginTrades(ctx, clientID, limit, offset)
+	list, err := b.Portfolio.ListMarginTrades(ctx, clientID, limit, offset, PortfolioIDFrom(ctx))
 	if err != nil {
 		return nil, err
 	}
@@ -1601,7 +1720,7 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 		})
 	}
 	return mustJSON(map[string]any{
-		"clientId": v.ClientID, "currency": v.Currency, "startingBalance": v.StartingBalance,
+		"id": v.ID, "clientId": v.ClientID, "name": v.Name, "currency": v.Currency, "startingBalance": v.StartingBalance,
 		"cashBalance": v.CashBalance, "netDeposits": v.NetDeposits, "contributedCapital": v.ContributedCapital,
 		"reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
 		"positionsValue": v.PositionsValue, "equity": v.Equity,

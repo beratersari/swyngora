@@ -16,6 +16,7 @@ import (
 // MarginOrderInput opens a leveraged long/short via market or limit.
 type MarginOrderInput struct {
 	ClientID   string
+	PortfolioID string
 	Exchange   string
 	Symbol     string
 	Side       string // long | short
@@ -30,20 +31,23 @@ type MarginOrderInput struct {
 // MarginAdjustInput adds (positive) or removes (negative) margin from an isolated position.
 type MarginAdjustInput struct {
 	ClientID   string
+	PortfolioID string
 	PositionID string
 	Delta      float64 // >0 add from cash; <0 return to cash
 }
 
 // SetMarginModeInput changes account-wide margin mode.
 type SetMarginModeInput struct {
-	ClientID string
-	Mode     string // isolated | cross
+	ClientID    string
+	PortfolioID string
+	Mode        string // isolated | cross
 }
 
 // MarginRepayInput pays debt without closing (interest first, then principal).
 // Amount is in debt units: quote cash for long, base coins for short.
 type MarginRepayInput struct {
 	ClientID   string
+	PortfolioID string
 	PositionID string
 	Amount     float64
 }
@@ -51,6 +55,7 @@ type MarginRepayInput struct {
 // MarginCloseInput closes all or part of a margin position at market.
 type MarginCloseInput struct {
 	ClientID   string
+	PortfolioID string
 	PositionID string
 	Quantity   float64 // 0 = full close
 }
@@ -59,6 +64,7 @@ type MarginCloseInput struct {
 // Omit pointer (nil) to leave unchanged; use ClearStopLoss / ClearTakeProfit to remove.
 type MarginBracketsInput struct {
 	ClientID        string
+	PortfolioID     string
 	PositionID      string
 	StopLoss        *float64
 	TakeProfit      *float64
@@ -115,15 +121,12 @@ func (s *Service) SetMarginMode(ctx context.Context, in SetMarginModeInput) (*do
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	mode, err := domain.NormalizeMarginMode(in.Mode)
-	if err != nil {
-		return nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, err
 	}
@@ -153,16 +156,13 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	if in.Delta == 0 || math.IsNaN(in.Delta) || math.IsInf(in.Delta, 0) {
 		return nil, fmt.Errorf("%w: delta must be a non-zero number", domain.ErrInvalidArgument)
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
-	if err != nil {
-		return nil, err
 	}
 	if p.MarginMode != domain.MarginModeIsolated {
 		return nil, fmt.Errorf("%w: add/remove margin is only allowed in isolated mode", domain.ErrInvalidArgument)
@@ -231,10 +231,11 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 	if s.store == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	book, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := book.BookID()
 	if in.Amount <= 0 || math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
 		return nil, nil, fmt.Errorf("%w: amount must be positive", domain.ErrInvalidArgument)
 	}
@@ -340,7 +341,7 @@ func (s *Service) totalDebtNotionalQuote(ctx context.Context, clientID string) (
 }
 
 func (s *Service) checkBorrowLimit(ctx context.Context, p *domain.Portfolio, addNotional float64) error {
-	used, err := s.totalDebtNotionalQuote(ctx, p.ClientID)
+	used, err := s.totalDebtNotionalQuote(ctx, p.BookID())
 	if err != nil {
 		return err
 	}
@@ -531,10 +532,11 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if s.store == nil || s.market == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio service not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	side, err := domain.NormalizeMarginSide(in.Side)
 	if err != nil {
 		return nil, nil, err
@@ -552,10 +554,6 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 			domain.MinMarginLeverage, domain.MaxMarginLeverage)
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
-	if err != nil {
-		return nil, nil, err
-	}
-	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -674,17 +672,12 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 }
 
 // ListMarginPositions lists open margin positions with marks.
-func (s *Service) ListMarginPositions(ctx context.Context, clientID string) ([]domain.MarginPosition, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListMarginPositions(ctx context.Context, clientID string, portfolioID ...string) ([]domain.MarginPosition, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID = p.BookID()
 	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -706,14 +699,12 @@ func (s *Service) ListMarginPositions(ctx context.Context, clientID string) ([]d
 }
 
 // GetMarginPosition returns one open or closed position with mark if open.
-func (s *Service) GetMarginPosition(ctx context.Context, clientID, id string) (*domain.MarginPosition, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) GetMarginPosition(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.MarginPosition, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
+	clientID = p.BookID()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: position id is required", domain.ErrInvalidArgument)
@@ -751,10 +742,11 @@ func (s *Service) CloseMarginPosition(ctx context.Context, in MarginCloseInput) 
 	if s.store == nil || s.market == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio service not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, nil, err
 	}
+	clientID := p.BookID()
 	id := strings.TrimSpace(in.PositionID)
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: position id is required", domain.ErrInvalidArgument)
@@ -793,10 +785,11 @@ func (s *Service) SetMarginBrackets(ctx context.Context, in MarginBracketsInput)
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	clientID, err := normalizeClientID(in.ClientID)
+	p, err := s.requireBook(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return nil, err
 	}
+	clientID := p.BookID()
 	pos, err := s.store.GetMarginPosition(ctx, clientID, strings.TrimSpace(in.PositionID))
 	if err != nil {
 		return nil, err
@@ -827,17 +820,12 @@ func (s *Service) SetMarginBrackets(ctx context.Context, in MarginBracketsInput)
 }
 
 // ListMarginOrders lists margin open orders.
-func (s *Service) ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int) ([]domain.MarginOrder, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListMarginOrders(ctx context.Context, clientID, status string, limit, offset int, portfolioID ...string) ([]domain.MarginOrder, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID = p.BookID()
 	var st domain.MarginOrderStatus
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "", "open":
@@ -863,14 +851,12 @@ func (s *Service) ListMarginOrders(ctx context.Context, clientID, status string,
 }
 
 // CancelMarginOrder cancels an open limit margin order.
-func (s *Service) CancelMarginOrder(ctx context.Context, clientID, id string) (*domain.MarginOrder, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) CancelMarginOrder(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.MarginOrder, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
+	clientID = p.BookID()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
@@ -879,17 +865,12 @@ func (s *Service) CancelMarginOrder(ctx context.Context, clientID, id string) (*
 }
 
 // ListMarginTrades returns margin trade history.
-func (s *Service) ListMarginTrades(ctx context.Context, clientID string, limit, offset int) ([]domain.MarginTrade, error) {
-	if s.store == nil {
-		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
-	}
-	clientID, err := normalizeClientID(clientID)
+func (s *Service) ListMarginTrades(ctx context.Context, clientID string, limit, offset int, portfolioID ...string) ([]domain.MarginTrade, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
-		return nil, err
-	}
+	clientID = p.BookID()
 	if limit <= 0 {
 		limit = 50
 	}

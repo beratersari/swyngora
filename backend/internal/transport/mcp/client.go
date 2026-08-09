@@ -40,6 +40,17 @@ func NewAPIClient(baseURL string, timeout time.Duration) *APIClient {
 	}
 }
 
+func applyPortfolioID(ctx context.Context, req *http.Request) {
+	id := PortfolioIDFrom(ctx)
+	if id == "" || req == nil {
+		return
+	}
+	req.Header.Set("X-Portfolio-Id", id)
+	q := req.URL.Query()
+	q.Set("portfolioId", id)
+	req.URL.RawQuery = q.Encode()
+}
+
 func (c *APIClient) get(ctx context.Context, path string, query url.Values) (json.RawMessage, error) {
 	u := c.baseURL + path
 	if len(query) > 0 {
@@ -50,6 +61,7 @@ func (c *APIClient) get(ctx context.Context, path string, query url.Values) (jso
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	applyPortfolioID(ctx, req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -82,6 +94,7 @@ func (c *APIClient) sendJSON(ctx context.Context, method, path string, payload a
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	applyPortfolioID(ctx, req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
@@ -429,11 +442,56 @@ func (c *APIClient) DeleteAlertWebhook(ctx context.Context, clientID string) (js
 	return json.RawMessage(body), nil
 }
 
+// CreateAPIKey creates a named user API key.
+func (c *APIClient) CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/account/api-keys", map[string]any{
+		"clientId": clientID, "name": name, "permission": permission,
+	})
+}
+
+// ListAPIKeys lists named keys (no secrets).
+func (c *APIClient) ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/account/api-keys", q)
+}
+
+// RevokeAPIKey revokes a named key.
+func (c *APIClient) RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/account/api-keys/"+url.PathEscape(id)+"?"+q.Encode(), nil)
+}
+
 // CreatePortfolio creates a paper portfolio.
 func (c *APIClient) CreatePortfolio(ctx context.Context, clientID string, startingBalance float64, currency string) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio", map[string]any{
-		"clientId": clientID, "startingBalance": startingBalance, "currency": currency,
-	})
+	return c.CreateNamedPortfolio(ctx, clientID, startingBalance, currency, "")
+}
+
+func (c *APIClient) CreateNamedPortfolio(ctx context.Context, clientID string, startingBalance float64, currency, name string) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID, "startingBalance": startingBalance, "currency": currency}
+	if strings.TrimSpace(name) != "" {
+		body["name"] = name
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio", body)
+}
+
+func (c *APIClient) ListPortfolios(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolios", q)
+}
+
+func (c *APIClient) RenamePortfolio(ctx context.Context, clientID, id, name string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/portfolios/"+url.PathEscape(id)+"?"+q.Encode(), map[string]any{"name": name})
+}
+
+func (c *APIClient) DeletePortfolio(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolios/"+url.PathEscape(id)+"?"+q.Encode(), nil)
 }
 
 // DepositPortfolioCash adds virtual cash.

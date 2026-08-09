@@ -55,8 +55,23 @@ func TestPortfolio_CreateAndView(t *testing.T) {
 	}
 	bypassRate(r)
 	out = r.Handle(ctx, 1, 77, "/pf")
-	if !strings.Contains(out, "Paper portfolio") || !(strings.Contains(out, "5000") || strings.Contains(out, "5,000")) {
+	if !(strings.Contains(out, "Paper") && (strings.Contains(out, "5000") || strings.Contains(out, "5,000"))) {
 		t.Fatalf("%s", out)
+	}
+	bypassRate(r)
+	out = r.Handle(ctx, 1, 77, "/portfolio create 2000 Risky")
+	if !strings.Contains(out, "Risky") {
+		t.Fatalf("named create: %s", out)
+	}
+	bypassRate(r)
+	out = r.Handle(ctx, 1, 77, "/portfolio list")
+	if !strings.Contains(out, "Main") || !strings.Contains(out, "Risky") {
+		t.Fatalf("list: %s", out)
+	}
+	bypassRate(r)
+	out = r.Handle(ctx, 1, 77, "/portfolio use Main")
+	if !strings.Contains(out, "Main") {
+		t.Fatalf("use: %s", out)
 	}
 }
 

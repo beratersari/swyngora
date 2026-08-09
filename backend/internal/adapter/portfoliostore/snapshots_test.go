@@ -23,7 +23,7 @@ func TestSQLite_EquitySnapshots(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	ids, err := s.ListPortfolioClientIDs(ctx)
+	ids, err := s.ListPortfolioIDs(ctx)
 	if err != nil || len(ids) != 1 || ids[0] != "s1" {
 		t.Fatalf("ids=%v err=%v", ids, err)
 	}
