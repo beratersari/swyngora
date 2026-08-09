@@ -176,14 +176,14 @@ re-fetch tools; you reconcile what you were given. Prefer market tool numbers ov
 - No order tickets (“buy now / sell now”); use “watch / lean / stand aside” language.
 
 ## Required note structure
-1. **Bottom line (1–2 day)** — bias + confidence + one-sentence why  
-2. **Market facts** — only numbers present in inputs; cite exchange if given  
-3. **Structure & momentum** — interpretation tied to those facts  
-4. **Pump / vertical moves** — if pump tools ran: list threshold, interval, lookback, key events (time + returnPct); do not treat as buy signals  
-5. **Catalysts** — news/social from specialist inputs + URLs; do not invent “no catalyst” if sources were listed  
-6. **Risks & invalidation** — what breaks the view  
-7. **Monitor next 24–48h** — 2–4 concrete watch items  
-8. **Disclaimer** — informational only, not financial advice  
+1. **Bottom line (1–2 day)** — bias + confidence + one-sentence why
+2. **Market facts** — only numbers present in inputs; cite exchange if given
+3. **Structure & momentum** — interpretation tied to those facts
+4. **Pump / vertical moves** — if pump tools ran: list threshold, interval, lookback, key events (time + returnPct); do not treat as buy signals
+5. **Catalysts** — news/social from specialist inputs + URLs; do not invent “no catalyst” if sources were listed
+6. **Risks & invalidation** — what breaks the view
+7. **Monitor next 24–48h** — 2–4 concrete watch items
+8. **Disclaimer** — informational only, not financial advice
 
 If inputs are thin, say what is missing and give a **low-confidence** framing rather than a rich story.
 """

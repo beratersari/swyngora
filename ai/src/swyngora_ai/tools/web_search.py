@@ -29,7 +29,9 @@ class WebSearchInput(BaseModel):
 
 
 class WebResearchInput(BaseModel):
-    topic: str = Field(description="Coin, ticker, or project to research (e.g. BTC, Solana, JUVUSDT)")
+    topic: str = Field(
+        description="Coin, ticker, or project to research (e.g. BTC, Solana, JUVUSDT)"
+    )
     max_results: int = Field(default=8, ge=3, le=12)
 
 
@@ -103,10 +105,7 @@ def _search(query: str, max_results: int = 5) -> str:
 def _hn_news(query: str, max_results: int = 5) -> str:
     """Hacker News Algolia — free, no key."""
     q = urllib.parse.quote(query)
-    url = (
-        "https://hn.algolia.com/api/v1/search"
-        f"?query={q}&tags=story&hitsPerPage={max_results}"
-    )
+    url = f"https://hn.algolia.com/api/v1/search?query={q}&tags=story&hitsPerPage={max_results}"
     data = _http_json(url, timeout=12)
     lines: list[str] = []
     for i, hit in enumerate(data.get("hits") or [], 1):
@@ -148,7 +147,10 @@ def _wikipedia(topic: str) -> str:
     title = data.get("title") or topic
     extract = (data.get("extract") or "")[:280]
     desktop = (data.get("content_urls") or {}).get("desktop") or {}
-    url = desktop.get("page") or f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+    url = (
+        desktop.get("page")
+        or f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}"
+    )
     if data.get("type") == "disambiguation":
         return f"1. [Wikipedia] {title} (disambiguation)\n   URL: {url}\n   {extract}"
     return f"1. [Wikipedia] {title}\n   URL: {url}\n   {extract}"
@@ -202,7 +204,7 @@ def _coingecko(topic: str) -> str:
         slug = re.sub(r"[^a-z0-9-]", "", (coins[0].get("name") or top).lower().replace(" ", "-"))
         if slug:
             lines.append(
-                f"{len(lines)+1}. [CoinMarketCap] {coins[0].get('name')}\n"
+                f"{len(lines) + 1}. [CoinMarketCap] {coins[0].get('name')}\n"
                 f"   URL: https://coinmarketcap.com/currencies/{slug}/"
             )
     return "\n".join(lines)

@@ -45,7 +45,10 @@ def classify_source(url: str, hint: str = "") -> str:
     if "news.ycombinator.com" in h or "hacker news" in blob or blob.strip().startswith("hn"):
         return "hn"
     if any(x in blob for x in ("web_news", "news")) and "hacker" not in blob:
-        if any(n in h for n in ("coindesk", "reuters", "bloomberg", "wsj", "ft.com", "theblock", "decrypt")):
+        if any(
+            n in h
+            for n in ("coindesk", "reuters", "bloomberg", "wsj", "ft.com", "theblock", "decrypt")
+        ):
             return "news"
     if hint == "news" or "web_news" in blob:
         return "news"
@@ -77,7 +80,9 @@ def extract_references(*blobs: str, limit: int = 12) -> list[Reference]:
             return
         seen.add(url)
         title = (title or "").strip() or _host(url) or url
-        out.append(Reference(title=title[:160], url=url, source=source, snippet=(snippet or "")[:240]))
+        out.append(
+            Reference(title=title[:160], url=url, source=source, snippet=(snippet or "")[:240])
+        )
 
     for blob in blobs:
         if not blob or blob.startswith("ERROR"):

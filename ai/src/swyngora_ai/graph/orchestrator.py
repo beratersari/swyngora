@@ -159,7 +159,7 @@ class Orchestrator:
         thinking_acc: list[str] = []
 
         def _cb(ev: dict) -> None:
-            t = (ev.get("type") or "")
+            t = ev.get("type") or ""
             text = (ev.get("text") or "").strip()
             if t in ("tool", "tool_result", "tool_error") and text:
                 tools_acc.append(text)
@@ -217,7 +217,11 @@ class Orchestrator:
                     reply = f"{reply}\n\n{self.settings.disclaimer}"
 
             refs = extract_references(
-                *[_content_text(getattr(m, "content", "")) for m in turn_msgs if isinstance(m, ToolMessage)],
+                *[
+                    _content_text(getattr(m, "content", ""))
+                    for m in turn_msgs
+                    if isinstance(m, ToolMessage)
+                ],
                 reply,
             )
             emit("final", reply[:200])

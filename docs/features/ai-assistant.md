@@ -50,6 +50,7 @@ swyngora-ai "BTC RSI on binance 1h and recent news"
 ```bash
 cd backend && go test ./internal/transport/mcp/...
 cd ai && pytest -q
+cd ai && ruff check . && ruff format --check .
 ```
 
 ## Market / watchlist tools

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -111,7 +112,9 @@ def _run_react(
         emit("tool", f"{specialist}: {t}")
     emit("status", f"{specialist} finished")
     # Keep URLs on the specialist return so the orchestrator can list Sources.
-    blobs = [_content_text_local(getattr(m, "content", "")) for m in msgs if isinstance(m, ToolMessage)]
+    blobs = [
+        _content_text_local(getattr(m, "content", "")) for m in msgs if isinstance(m, ToolMessage)
+    ]
     refs = extract_references(*blobs, reply)
     if refs:
         lines = "\n".join(f"- [{r.title}]({r.url})" for r in refs[:12])

@@ -167,10 +167,7 @@ def _fetch_stocktwits(symbol: str, limit: int) -> list[str]:
 
 def _fetch_hn(query: str, limit: int) -> list[str]:
     q = urllib.parse.quote(query)
-    url = (
-        "https://hn.algolia.com/api/v1/search_by_date"
-        f"?query={q}&tags=story&hitsPerPage={limit}"
-    )
+    url = f"https://hn.algolia.com/api/v1/search_by_date?query={q}&tags=story&hitsPerPage={limit}"
     try:
         data = _http_json(url)
     except Exception as e:  # noqa: BLE001
@@ -181,9 +178,7 @@ def _fetch_hn(query: str, limit: int) -> list[str]:
         title = hit.get("title") or hit.get("story_title") or ""
         if not title:
             continue
-        url_h = hit.get("url") or (
-            f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
-        )
+        url_h = hit.get("url") or f"https://news.ycombinator.com/item?id={hit.get('objectID')}"
         pts = hit.get("points")
         lines.append(f"HN: {title} (pts={pts}) {url_h}")
     return lines

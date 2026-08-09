@@ -35,7 +35,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "SwyngoraAI/0.1"
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+        sys.stderr.write(f"{self.address_string()} - {fmt % args}\n")
 
     def _read_json(self) -> dict[str, Any] | None:
         length = int(self.headers.get("Content-Length") or "0")

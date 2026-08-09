@@ -18,6 +18,10 @@ Python multi-agent assistant (LangGraph orchestrator + specialists). LLM provide
 ## Commands
 
 ```bash
-cd ai && pip install -e ".[dev]" && pytest -q
+cd ai && pip install -e ".[dev]"
+pytest -q
+ruff check . && ruff format --check .
 swyngora-ai "your question"
 ```
+
+Ruff config lives in `pyproject.toml` (`E`, `W`, `F`, `I`, `UP`; line length 100). Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.

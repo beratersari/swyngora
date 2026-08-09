@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import patch
 
 from swyngora_ai.tools import web_search as ws
@@ -53,10 +52,26 @@ def test_coingecko_search_links():
 
 def test_research_skips_ddg_when_rss_and_wiki_work():
     with (
-        patch.object(ws, "_wikipedia", return_value="1. [Wikipedia] Bitcoin\n   URL: https://en.wikipedia.org/wiki/Bitcoin"),
-        patch.object(ws, "_coingecko", return_value="1. [CoinGecko] Bitcoin\n   URL: https://www.coingecko.com/en/coins/bitcoin"),
-        patch.object(ws, "_google_news_rss", return_value="1. [CoinDesk] Hello\n   URL: https://www.coindesk.com/x"),
-        patch.object(ws, "_hn_news", return_value="1. [Hacker News] Thread\n   URL: https://news.ycombinator.com/item?id=1"),
+        patch.object(
+            ws,
+            "_wikipedia",
+            return_value="1. [Wikipedia] Bitcoin\n   URL: https://en.wikipedia.org/wiki/Bitcoin",
+        ),
+        patch.object(
+            ws,
+            "_coingecko",
+            return_value="1. [CoinGecko] Bitcoin\n   URL: https://www.coingecko.com/en/coins/bitcoin",
+        ),
+        patch.object(
+            ws,
+            "_google_news_rss",
+            return_value="1. [CoinDesk] Hello\n   URL: https://www.coindesk.com/x",
+        ),
+        patch.object(
+            ws,
+            "_hn_news",
+            return_value="1. [Hacker News] Thread\n   URL: https://news.ycombinator.com/item?id=1",
+        ),
         patch.object(ws, "_search", return_value="ERROR web_search: timeout") as ddg,
     ):
         out = ws._research("BTC", 6)

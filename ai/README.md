@@ -77,6 +77,19 @@ pytest -q
 
 Unit tests use scripted/fake models and mocked HTTP — no live LLM or network required.
 
+## Lint and format
+
+[Ruff](https://docs.astral.sh/ruff/) is the linter and formatter (config in `pyproject.toml`). Run from `ai/` after `pip install -e ".[dev]"`:
+
+```bash
+cd ai
+ruff check .              # lint (E, W, F, I, UP)
+ruff format --check .     # formatter dry-run
+ruff check --fix . && ruff format .   # apply auto-fixes + format
+```
+
+Target Python 3.11+, line length 100. Prompt/URL strings may exceed 100 (`E501` ignored).
+
 ## MCP
 
 MCP is **integrated into the backend process** (`go run ./cmd/server`):

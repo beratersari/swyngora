@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0"]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0", "ruff>=0.16.0"]
 
 [project.scripts]
 swyngora-ai = "swyngora_ai.cli:main"
@@ -35,3 +35,36 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = [".venv", "src/*.egg-info"]
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle errors
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes
+  "I",  # isort
+  "UP", # pyupgrade (3.11+)
+]
+ignore = [
+  "E501",  # line length owned by the formatter; prompt/URL strings may exceed 100
+  # Formatter-incompatible whitespace/indent rules
+  # https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
+  "E111",
+  "E114",
+  "E117",
+  "W191",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["swyngora_ai"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = false

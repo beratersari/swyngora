@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from langchain_core.tools import StructuredTool
@@ -211,8 +211,12 @@ class PortfolioPerformanceInput(BaseModel):
 
 class RiskLimitsSetInput(BaseModel):
     client_id: str
-    max_daily_loss_pct: float = Field(default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables")
-    max_asset_weight_pct: float = Field(default=0, description="e.g. 30 = max one coin % of equity; 0 disables")
+    max_daily_loss_pct: float = Field(
+        default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables"
+    )
+    max_asset_weight_pct: float = Field(
+        default=0, description="e.g. 30 = max one coin % of equity; 0 disables"
+    )
 
 
 class PortfolioOrderInput(BaseModel):
@@ -666,9 +670,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def delete_alert_webhook(client_id: str) -> str:
         return http.delete("/api/v1/alerts/webhook", {"clientId": client_id})
 
-    def create_portfolio(
-        client_id: str, starting_balance: float, currency: str = "USDT"
-    ) -> str:
+    def create_portfolio(client_id: str, starting_balance: float, currency: str = "USDT") -> str:
         return http.post(
             "/api/v1/portfolio",
             {
@@ -941,9 +943,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def list_margin_positions(client_id: str) -> str:
         return http.get("/api/v1/portfolio/margin/positions", {"clientId": client_id})
 
-    def close_margin_position(
-        client_id: str, position_id: str, quantity: float = 0
-    ) -> str:
+    def close_margin_position(client_id: str, position_id: str, quantity: float = 0) -> str:
         body: dict[str, Any] = {}
         if quantity > 0:
             body["quantity"] = quantity
