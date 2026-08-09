@@ -706,6 +706,7 @@ golangci-lint run   # when configured
 uv sync && source .venv/bin/activate       # .venv + lock + editable + dev tools
 pytest -q
 ruff check . && ruff format --check .
+ty check
 # swyngora-ai "What is BTC RSI on binance?"   # needs Ollama or XAI_API_KEY + API up
 
 # Backend (implemented) — from backend/
@@ -888,5 +889,5 @@ Push:           git pushboth <ref>  # both remotes (§3.8)
 
 This project is early. When stack choices solidify (module paths, package managers, CI jobs, deploy targets), update **§2**, **§7**, nested package `AGENTS.md`, and related `README.md` files in the same change set (see §8.2). Stale agent docs are worse than short ones.
 
-**Last updated:** 2026-08-09 (`ai/`: uv package manager; Ruff E/W/F/I/UP)  
+**Last updated:** 2026-08-09 (`ai/`: uv + Ruff + ty)  
 **Initial product version target:** `0.1.0` (pre-release development)

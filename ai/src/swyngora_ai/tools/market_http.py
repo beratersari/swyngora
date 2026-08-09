@@ -517,7 +517,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         )
 
     def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
-        params: dict = {"clientId": client_id}
+        params: dict[str, Any] = {"clientId": client_id}
         if owner_client_id:
             params["ownerClientId"] = owner_client_id
         return http.get("/api/v1/watchlist", params)
@@ -529,7 +529,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         note: str = "",
         owner_client_id: str = "",
     ) -> str:
-        body: dict = {
+        body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "exchange": exchange,
@@ -545,7 +545,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         exchange: str = "binance",
         owner_client_id: str = "",
     ) -> str:
-        params: dict = {
+        params: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "exchange": exchange,
@@ -597,7 +597,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         format: str = "json",
         sections: str = "",
     ) -> str:
-        body: dict = {"clientId": client_id, "format": format or "json"}
+        body: dict[str, Any] = {"clientId": client_id, "format": format or "json"}
         if sections:
             body["sections"] = [s.strip() for s in sections.split(",") if s.strip()]
         return http.post("/api/v1/export", body)

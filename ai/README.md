@@ -77,6 +77,7 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 cd ai
 source .venv/bin/activate   # after uv sync
 pytest -q
+ty check
 ```
 
 Unit tests use scripted/fake models and mocked HTTP — no live LLM or network required.
@@ -91,6 +92,7 @@ source .venv/bin/activate
 ruff check .              # lint (E, W, F, I, UP)
 ruff format --check .     # formatter dry-run
 ruff check --fix . && ruff format .   # apply auto-fixes + format
+ty check                  # type checker (Astral ty; default error rules)
 ```
 
 Target Python 3.11+, line length 100. Prompt/URL strings may exceed 100 (`E501` ignored).
@@ -110,7 +112,7 @@ Python market tools call the REST API (same contracts as MCP tool names). Option
 
 ```text
 ai/
-├── pyproject.toml    # package + uv_build + ruff + pytest
+├── pyproject.toml    # package + uv_build + ruff + ty + pytest
 ├── uv.lock           # committed lockfile (uv sync --frozen)
 ├── .python-version   # 3.11
 ├── src/swyngora_ai/

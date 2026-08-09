@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from swyngora_ai.agents.prompts import ORCHESTRATOR_SYSTEM
 from swyngora_ai.agents.specialists import build_specialist_tools
@@ -65,7 +67,7 @@ def _content_text(content: Any) -> str:
     return str(content)
 
 
-def extract_trace(messages: list[BaseMessage]) -> tuple[str, list[str], list[str]]:
+def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list[str]]:
     """Return (final_reply, tools_used, thinking_steps) from agent messages."""
     tools: list[str] = []
     thinking: list[str] = []
@@ -158,7 +160,7 @@ class Orchestrator:
         tools_acc: list[str] = []
         thinking_acc: list[str] = []
 
-        def _cb(ev: dict) -> None:
+        def _cb(ev: dict[str, Any]) -> None:
             t = ev.get("type") or ""
             text = (ev.get("text") or "").strip()
             if t in ("tool", "tool_result", "tool_error") and text:
@@ -173,7 +175,9 @@ class Orchestrator:
             emit("status", "Planning…")
             history = self.memory.get(session_id)
             messages: list[BaseMessage] = list(history) + [HumanMessage(content=user_message)]
-            config = {"recursion_limit": max(24, self.settings.max_agent_iterations * 4)}
+            config: RunnableConfig = {
+                "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
+            }
 
             # invoke is the reliable path for a final answer; progress emits from
             # specialist tools + a lightweight stream-of-updates for live UI only.

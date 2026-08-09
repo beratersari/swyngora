@@ -59,7 +59,7 @@ def _http_json(url: str, timeout: float = 12.0) -> Any:
         return json.loads(resp.read().decode("utf-8", errors="replace"))
 
 
-def _ddgs_text_once(query: str, max_results: int, backend: str) -> list[dict]:
+def _ddgs_text_once(query: str, max_results: int, backend: str) -> list[dict[str, Any]]:
     DDGS = _ddgs()
     if DDGS is None:
         raise RuntimeError("duckduckgo-search not installed")

@@ -23,9 +23,10 @@ uv sync                          # .venv + editable install + lock + dev tools
 source .venv/bin/activate
 pytest -q
 ruff check . && ruff format --check .
+ty check
 swyngora-ai "your question"
 ```
 
-Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.
+Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, `ty`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.
 
-Ruff config lives in `pyproject.toml` (`E`, `W`, `F`, `I`, `UP`; line length 100). Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
+Ruff config lives in `pyproject.toml` (`E`, `W`, `F`, `I`, `UP`; line length 100). ty uses defaults (`[tool.ty]` in `pyproject.toml`; Python 3.11; `src` + `tests`). Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
