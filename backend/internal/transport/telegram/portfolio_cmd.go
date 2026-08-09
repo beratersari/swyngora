@@ -406,8 +406,12 @@ func (r *Router) cmdTradePreview(ctx context.Context, chatID, userID int64, side
 		if side == domain.TradeSideSell {
 			verb = "sell"
 		}
-		return textReply(fmt.Sprintf("Usage: /%s <symbol> <quantity> [exchange]\nExample: %s",
-			verb, code(fmt.Sprintf("/%s BTCUSDT 0.01", verb))))
+		extra := ""
+		if side == domain.TradeSideSell {
+			extra = " [fifo|lifo]"
+		}
+		return textReply(fmt.Sprintf("Usage: /%s <symbol> <quantity> [exchange]%s\nExample: %s",
+			verb, extra, code(fmt.Sprintf("/%s BTCUSDT 0.01", verb))))
 	}
 	symbol := strings.ToUpper(args[0])
 	qty, err := strconv.ParseFloat(strings.ReplaceAll(args[1], ",", ""), 64)
@@ -415,8 +419,20 @@ func (r *Router) cmdTradePreview(ctx context.Context, chatID, userID int64, side
 		return textReply("Quantity must be a positive number.\nExample: " + code("/buy BTCUSDT 0.01"))
 	}
 	exchange := r.defaultExchange()
+	lotMethod := ""
 	if len(args) >= 3 {
-		exchange = strings.ToLower(args[2])
+		a2 := strings.ToLower(args[2])
+		if a2 == "fifo" || a2 == "lifo" {
+			lotMethod = a2
+		} else {
+			exchange = a2
+		}
+	}
+	if len(args) >= 4 {
+		a3 := strings.ToLower(args[3])
+		if a3 == "fifo" || a3 == "lifo" {
+			lotMethod = a3
+		}
 	}
 
 	clientID, bookID, err := r.resolveBook(ctx, userID)
@@ -468,10 +484,17 @@ func (r *Router) cmdTradePreview(ctx context.Context, chatID, userID int64, side
 	r.pending.put(&pendingTrade{
 		ID: id, ChatID: chatID, UserID: userID, ClientID: clientID, PortfolioID: bookID,
 		Side: side, Exchange: exName, Symbol: tkr.Symbol,
-		Quantity: qty, QuotePrice: price, Notional: notional,
+		Quantity: qty, QuotePrice: price, Notional: notional, LotMethod: lotMethod,
 		ExpiresAt: time.Now().Add(pendingTradeTTL),
 	})
 	body := FormatTradePreview(side, exName, tkr.Symbol, qty, price, notional, view.Currency)
+	if side == domain.TradeSideSell {
+		m := lotMethod
+		if m == "" {
+			m = "fifo"
+		}
+		body += "\nLot matching: " + code(m)
+	}
 	return Reply{Text: body, Keyboard: confirmCancelKeyboard(id)}
 }
 
@@ -509,7 +532,7 @@ func (r *Router) confirmPendingTrade(ctx context.Context, chatID, userID int64, 
 	}
 	tr, view, err := r.portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: p.ClientID, PortfolioID: p.PortfolioID, Exchange: p.Exchange, Symbol: p.Symbol,
-		Side: string(p.Side), Quantity: p.Quantity,
+		Side: string(p.Side), Quantity: p.Quantity, LotMethod: p.LotMethod,
 	})
 	if err != nil {
 		r.pending.restore(p)

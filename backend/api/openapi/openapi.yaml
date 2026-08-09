@@ -1899,6 +1899,7 @@ paths:
         triggers once when last <= stop (including price gaps through the level).
         type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
         entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
+        lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
         Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
@@ -1956,6 +1957,11 @@ paths:
                   type: string
                   format: date-time
                   description: Optional RFC3339 expiry (GTC only); cancels and releases reservation when reached
+                lotMethod:
+                  type: string
+                  enum: [fifo, lifo]
+                  default: fifo
+                  description: Sell lot matching (market, limit_sell, stop, trailing, OCO, bracket exits). Ignored on buys.
       responses:
         '200':
           description: Market fill and updated portfolio
@@ -2172,6 +2178,48 @@ paths:
       responses:
         '200':
           description: Trade list
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/lots:
+    get:
+      summary: List paper tax lots
+      description: |
+        Each buy opens a lot (quantity, unit price, time). Sells consume lots FIFO or LIFO
+        and shrink remaining quantity on the same lot. status=open (default), closed, or all.
+        Paper trading only — not real money.
+      operationId: listPortfolioLots
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: exchange
+          in: query
+          schema: { type: string }
+        - name: symbol
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, closed, all], default: open }
+      responses:
+        '200':
+          description: Tax lots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lots:
+                    type: array
+                    items: { $ref: '#/components/schemas/TaxLot' }
+                  count: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/baskets:
@@ -4126,6 +4174,27 @@ components:
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    TaxLot:
+      type: object
+      description: One remaining (or closed) buy lot used for FIFO/LIFO realized PnL
+      properties:
+        id: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        quantity: { type: number, description: Remaining quantity }
+        originalQuantity: { type: number }
+        price: { type: number, description: Unit cost }
+        openedAt: { type: string, format: date-time }
+        sourceTradeId: { type: string }
+        closedAt: { type: string, format: date-time, nullable: true }
+    TaxLotFill:
+      type: object
+      properties:
+        lotId: { type: string }
+        quantity: { type: number }
+        costPrice: { type: number }
+        sellPrice: { type: number }
+        realizedPnL: { type: number }
     PortfolioCashMovement:
       type: object
       properties:
@@ -4263,6 +4332,7 @@ components:
         cancelReason:
           type: string
           description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled
+        lotMethod: { type: string, enum: [fifo, lifo], description: Lot matching used when this sell fills }
     AmendPendingOrderRequest:
       type: object
       description: At least one of triggerPrice or remainingQuantity is required.

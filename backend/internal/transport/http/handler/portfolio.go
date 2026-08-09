@@ -53,29 +53,52 @@ type portfolioDTO struct {
 }
 
 type positionDTO struct {
-	Exchange          string  `json:"exchange"`
-	Symbol            string  `json:"symbol"`
-	Quantity          float64 `json:"quantity"`
-	ReservedQuantity  float64 `json:"reservedQuantity"`
-	AvailableQuantity float64 `json:"availableQuantity"`
-	AvgCost           float64 `json:"avgCost"`
-	MarkPrice         float64 `json:"markPrice"`
-	MarketValue       float64 `json:"marketValue"`
-	UnrealizedPnL     float64 `json:"unrealizedPnL"`
-	CostBasis         float64 `json:"costBasis"`
+	Exchange          string      `json:"exchange"`
+	Symbol            string      `json:"symbol"`
+	Quantity          float64     `json:"quantity"`
+	ReservedQuantity  float64     `json:"reservedQuantity"`
+	AvailableQuantity float64     `json:"availableQuantity"`
+	AvgCost           float64     `json:"avgCost"`
+	MarkPrice         float64     `json:"markPrice"`
+	MarketValue       float64     `json:"marketValue"`
+	UnrealizedPnL     float64     `json:"unrealizedPnL"`
+	CostBasis         float64     `json:"costBasis"`
+	Lots              []taxLotDTO `json:"lots,omitempty"`
+}
+
+type taxLotDTO struct {
+	ID               string  `json:"id"`
+	Exchange         string  `json:"exchange"`
+	Symbol           string  `json:"symbol"`
+	Quantity         float64 `json:"quantity"`
+	OriginalQuantity float64 `json:"originalQuantity"`
+	Price            float64 `json:"price"`
+	OpenedAt         string  `json:"openedAt"`
+	SourceTradeID    string  `json:"sourceTradeId,omitempty"`
+	ClosedAt         *string `json:"closedAt,omitempty"`
+}
+
+type taxLotFillDTO struct {
+	LotID       string  `json:"lotId"`
+	Quantity    float64 `json:"quantity"`
+	CostPrice   float64 `json:"costPrice"`
+	SellPrice   float64 `json:"sellPrice"`
+	RealizedPnL float64 `json:"realizedPnL"`
 }
 
 type tradeDTO struct {
-	ID             string  `json:"id"`
-	Exchange       string  `json:"exchange"`
-	Symbol         string  `json:"symbol"`
-	Side           string  `json:"side"`
-	Quantity       float64 `json:"quantity"`
-	Price          float64 `json:"price"`
-	Notional       float64 `json:"notional"`
-	RealizedPnL    float64 `json:"realizedPnL"`
-	PendingOrderID string  `json:"pendingOrderId,omitempty"`
-	CreatedAt      string  `json:"createdAt"`
+	ID             string          `json:"id"`
+	Exchange       string          `json:"exchange"`
+	Symbol         string          `json:"symbol"`
+	Side           string          `json:"side"`
+	Quantity       float64         `json:"quantity"`
+	Price          float64         `json:"price"`
+	Notional       float64         `json:"notional"`
+	RealizedPnL    float64         `json:"realizedPnL"`
+	PendingOrderID string          `json:"pendingOrderId,omitempty"`
+	LotMethod      string          `json:"lotMethod,omitempty"`
+	LotFills       []taxLotFillDTO `json:"lotFills,omitempty"`
+	CreatedAt      string          `json:"createdAt"`
 }
 
 func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
@@ -86,6 +109,7 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 			ReservedQuantity: p.ReservedQuantity, AvailableQuantity: p.AvailableQuantity,
 			AvgCost: p.AvgCost, MarkPrice: p.MarkPrice, MarketValue: p.MarketValue,
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
+			Lots: taxLotsDTO(p.Lots),
 		})
 	}
 	mpos := make([]marginPositionDTO, 0, len(v.MarginPositions))
@@ -107,12 +131,43 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 }
 
 func tradeToDTO(t *domain.Trade) tradeDTO {
-	return tradeDTO{
+	fills := make([]taxLotFillDTO, 0, len(t.LotFills))
+	for _, f := range t.LotFills {
+		fills = append(fills, taxLotFillDTO{
+			LotID: f.LotID, Quantity: f.Quantity, CostPrice: f.CostPrice,
+			SellPrice: f.SellPrice, RealizedPnL: f.RealizedPnL,
+		})
+	}
+	d := tradeDTO{
 		ID: t.ID, Exchange: string(t.Exchange), Symbol: t.Symbol, Side: string(t.Side),
 		Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
-		PendingOrderID: t.PendingOrderID,
-		CreatedAt:      t.CreatedAt.UTC().Format(time.RFC3339Nano),
+		PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod),
+		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if len(fills) > 0 {
+		d.LotFills = fills
+	}
+	return d
+}
+
+func taxLotsDTO(lots []domain.TaxLot) []taxLotDTO {
+	if len(lots) == 0 {
+		return nil
+	}
+	out := make([]taxLotDTO, 0, len(lots))
+	for _, l := range lots {
+		d := taxLotDTO{
+			ID: l.ID, Exchange: string(l.Exchange), Symbol: l.Symbol,
+			Quantity: l.Quantity, OriginalQuantity: l.OriginalQuantity, Price: l.Price,
+			OpenedAt: l.OpenedAt.UTC().Format(time.RFC3339Nano), SourceTradeID: l.SourceTradeID,
+		}
+		if l.ClosedAt != nil {
+			s := l.ClosedAt.UTC().Format(time.RFC3339Nano)
+			d.ClosedAt = &s
+		}
+		out = append(out, d)
+	}
+	return out
 }
 
 type createPortfolioBody struct {
@@ -212,6 +267,21 @@ func (h *PortfolioHandler) DeleteBook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": r.PathValue("id")})
 }
 
+// ListLots handles GET /api/v1/portfolio/lots
+func (h *PortfolioHandler) ListLots(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lots, err := h.svc.ListLots(r.Context(), clientIDFrom(r), q.Get("exchange"), q.Get("symbol"), q.Get("status"),
+		portfolioIDFrom(r), ownerClientIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"lots":  taxLotsDTO(lots),
+		"count": len(lots),
+	})
+}
+
 // Get handles GET /api/v1/portfolio
 func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 	view, err := h.svc.View(r.Context(), clientIDFrom(r), portfolioIDFrom(r), ownerClientIDFrom(r))
@@ -238,6 +308,7 @@ type orderBody struct {
 	TrailValue      float64 `json:"trailValue"`       // trailing_stop distance
 	TimeInForce     string  `json:"timeInForce"`      // gtc | ioc | fok
 	ExpiresAt       string  `json:"expiresAt"`        // RFC3339; GTC only
+	LotMethod       string  `json:"lotMethod"`        // fifo | lifo (sells)
 }
 
 type pendingOrderDTO struct {
@@ -271,6 +342,7 @@ type pendingOrderDTO struct {
 	FillPrice         float64 `json:"fillPrice,omitempty"`
 	RejectReason      string  `json:"rejectReason,omitempty"`
 	CancelReason      string  `json:"cancelReason,omitempty"`
+	LotMethod         string  `json:"lotMethod,omitempty"`
 }
 
 func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
@@ -291,6 +363,7 @@ func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 		CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
+		LotMethod: string(o.LotMethod),
 	}
 	if o.ExpiresAt != nil {
 		s := o.ExpiresAt.UTC().Format(time.RFC3339Nano)
@@ -332,7 +405,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	case "market":
 		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
-			Side: body.Side, Quantity: body.Quantity,
+			Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -362,7 +435,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Type: typ, Quantity: body.Quantity, TriggerPrice: body.TriggerPrice,
 			TrailType: body.TrailType, TrailValue: body.TrailValue,
-			TimeInForce: body.TimeInForce, ExpiresAt: exp,
+			TimeInForce: body.TimeInForce, ExpiresAt: exp, LotMethod: body.LotMethod,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -394,7 +467,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		tp, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
-			ExpiresAt: exp,
+			ExpiresAt: exp, LotMethod: body.LotMethod,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -425,7 +498,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, EntryPrice: body.TriggerPrice,
 			TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
-			ExpiresAt: exp,
+			ExpiresAt: exp, LotMethod: body.LotMethod,
 		})
 		if err != nil {
 			writeError(w, err)

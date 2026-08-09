@@ -981,12 +981,12 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
-		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity,
+		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
 	})
 	if err != nil {
 		return nil, err
@@ -1001,7 +1001,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		"trade": map[string]any{
 			"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
 			"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
-			"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"lotMethod": string(tr.LotMethod), "createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
 		},
 		"portfolio": pmap,
 		"note":      v.Note,
@@ -1028,7 +1028,30 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
 }
 
-func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error) {
+func (b *Backend) ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	lots, err := b.Portfolio.ListLots(ctx, clientID, exchange, symbol, status, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(lots))
+	for _, l := range lots {
+		m := map[string]any{
+			"id": l.ID, "exchange": string(l.Exchange), "symbol": l.Symbol,
+			"quantity": l.Quantity, "originalQuantity": l.OriginalQuantity, "price": l.Price,
+			"openedAt": l.OpenedAt.UTC().Format(time.RFC3339Nano), "sourceTradeId": l.SourceTradeID,
+		}
+		if l.ClosedAt != nil {
+			m["closedAt"] = l.ClosedAt.UTC().Format(time.RFC3339Nano)
+		}
+		items = append(items, m)
+	}
+	return mustJSON(map[string]any{"lots": items, "count": len(items)})
+}
+
+func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -1048,7 +1071,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
-		TrailType: trailType, TrailValue: trailValue,
+		TrailType: trailType, TrailValue: trailValue, LotMethod: lotMethod,
 	})
 	if err != nil {
 		return nil, err

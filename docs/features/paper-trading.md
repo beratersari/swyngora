@@ -28,6 +28,7 @@ Live order/position/cash updates for a selected book (and price ticks for select
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open orders, or one market (`symbol` + optional `exchange`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
 | `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
+| `GET` | `/api/v1/portfolio/lots` | Tax lots (`status=open\|closed\|all`, optional `exchange`/`symbol`) |
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create named recurring buy (DCA) plan |
 | `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}` | Get plan |
@@ -75,6 +76,14 @@ The owner can share **one book** with another `clientId`:
 Grantees select the book with `portfolioId` (UUID) or `ownerClientId` + name. Cannot share with yourself. Max 50 shares per book.
 
 MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`, `share_portfolio`, `update_portfolio_share`, `revoke_portfolio_share`, `list_portfolio_shares`, `list_shared_portfolios`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`, `/portfolio share CLIENT trader`, `/portfolio shared`.
+
+### Tax lots (FIFO / LIFO)
+
+Every **buy** (market, pending fill, recurring DCA) opens a lot: remaining quantity, unit price, and open time. A **sell** consumes lots in `lotMethod` order (`fifo` default, or `lifo`). Realized PnL is `(sellPrice − lotPrice) × qty` for each consumed piece. Partial sells leave leftover quantity on the same lot (original quantity is kept). Existing books get one synthetic lot per open position on migrate so old inventory still sells.
+
+Pass `lotMethod` on `POST /orders` (market sells and sell pending/OCO/bracket exits). `GET /lots` lists remaining (or closed) lots. Trade history and cash/qty balances are unchanged; only realized PnL (and remaining avg cost after mixed-price buys) follow lots.
+
+MCP: `list_portfolio_lots`; `place_portfolio_order` / pending sell tools accept `lotMethod`. Telegram: `/sell SYMBOL QTY [ex] [fifo|lifo]`.
 
 ### Deposits and withdrawals
 

@@ -85,7 +85,7 @@ func TestSQLite_PendingOrderLifecycle(t *testing.T) {
 	}, domain.Trade{
 		ID: "t-partial", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
 		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, PendingOrderID: "po2", CreatedAt: now,
-	}, now); err != nil {
+	}, now, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s2.GetPendingOrder(ctx, "c", "po2")
@@ -108,7 +108,7 @@ func TestSQLite_PendingOrderLifecycle(t *testing.T) {
 	}, domain.Trade{
 		ID: "t-full", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
 		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, PendingOrderID: "po2", CreatedAt: now,
-	}, now); err != nil {
+	}, now, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err = s2.GetPendingOrder(ctx, "c", "po2")
@@ -123,7 +123,7 @@ func TestSQLite_PendingOrderLifecycle(t *testing.T) {
 	}, domain.Trade{
 		ID: "t-dup", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
 		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, PendingOrderID: "po2", CreatedAt: now,
-	}, now); err != domain.ErrNotFound {
+	}, now, nil); err != domain.ErrNotFound {
 		t.Fatalf("want not found on double fill: %v", err)
 	}
 	tr, err := s2.ListTrades(ctx, "c", 10, 0)
@@ -275,7 +275,7 @@ func TestSQLite_PortfolioRoundTrip(t *testing.T) {
 	}, domain.Trade{
 		ID: "t1", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
 		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, CreatedAt: now,
-	}); err != nil {
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	_ = s.Close()

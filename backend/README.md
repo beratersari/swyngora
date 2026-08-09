@@ -63,6 +63,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open paper orders, or one market (`symbol`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
+| `GET` | `/api/v1/portfolio/lots` | Tax lots (FIFO/LIFO remaining buys) |
 | `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name-schedule / delete plan |
 | `POST`/`GET` | `/api/v1/portfolio/baskets` | Create / list named allocation baskets (target % mix) |

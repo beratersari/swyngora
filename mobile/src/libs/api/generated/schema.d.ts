@@ -776,6 +776,7 @@ export interface paths {
          *     triggers once when last <= stop (including price gaps through the level).
          *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
          *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
+         *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
          *     Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
@@ -853,6 +854,28 @@ export interface paths {
         };
         /** List paper trade history */
         get: operations["listPortfolioTrades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/lots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List paper tax lots
+         * @description Each buy opens a lot (quantity, unit price, time). Sells consume lots FIFO or LIFO
+         *     and shrink remaining quantity on the same lot. status=open (default), closed, or all.
+         *     Paper trading only — not real money.
+         */
+        get: operations["listPortfolioLots"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1995,6 +2018,29 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
+        TaxLot: {
+            id?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @description Remaining quantity */
+            quantity?: number;
+            originalQuantity?: number;
+            /** @description Unit cost */
+            price?: number;
+            /** Format: date-time */
+            openedAt?: string;
+            sourceTradeId?: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+        };
+        TaxLotFill: {
+            lotId?: string;
+            quantity?: number;
+            costPrice?: number;
+            sellPrice?: number;
+            realizedPnL?: number;
+        };
         PortfolioCashMovement: {
             id?: string;
             /** @enum {string} */
@@ -2147,6 +2193,11 @@ export interface components {
             rejectReason?: string;
             /** @description user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled */
             cancelReason?: string;
+            /**
+             * @description Lot matching used when this sell fills
+             * @enum {string}
+             */
+            lotMethod?: "fifo" | "lifo";
         };
         /** @description At least one of triggerPrice or remainingQuantity is required. */
         AmendPendingOrderRequest: {
@@ -4393,6 +4444,12 @@ export interface operations {
                      * @description Optional RFC3339 expiry (GTC only); cancels and releases reservation when reached
                      */
                     expiresAt?: string;
+                    /**
+                     * @description Sell lot matching (market, limit_sell, stop, trailing, OCO, bracket exits). Ignored on buys.
+                     * @default fifo
+                     * @enum {string}
+                     */
+                    lotMethod?: "fifo" | "lifo";
                 };
             };
         };
@@ -4585,6 +4642,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioLots: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+                exchange?: string;
+                symbol?: string;
+                status?: "open" | "closed" | "all";
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tax lots */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        lots?: components["schemas"]["TaxLot"][];
+                        count?: number;
+                    };
+                };
             };
             404: components["responses"]["Error"];
         };

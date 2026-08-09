@@ -27,6 +27,7 @@ User → Orchestrator (LangGraph create_react_agent)
 ## Behavior
 
 - Market numbers must come from tools (ticker, candles, supply, indicators, spot).
+- Paper sell realized PnL uses tax lots (`list_portfolio_lots`, `lotMethod` fifo|lifo).
 - Live UI updates use the backend WebSocket (`realtime_stream_info` / `GET /api/v1/realtime`); tools remain request/response.
 - Social/X results are labeled weak and incomplete.
 - Answers include “not financial advice” framing for market questions.

@@ -28,6 +28,7 @@ type pendingTrade struct {
 	Quantity   float64
 	QuotePrice float64
 	Notional   float64
+	LotMethod  string
 	ExpiresAt  time.Time
 }
 

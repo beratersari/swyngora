@@ -74,8 +74,9 @@ type DataPort interface {
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
-	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error)
-	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error)
+	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
+	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
+	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
@@ -1129,6 +1130,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo — sell lot matching")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -1147,7 +1149,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty)
+		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -1171,6 +1173,26 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("list_portfolio_lots",
+		mcp.WithDescription("List paper tax lots (open remaining buys). Sells use FIFO or LIFO against these lots."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name")),
+		mcp.WithString("exchange", mcp.Description("Filter venue")),
+		mcp.WithString("symbol", mcp.Description("Filter pair")),
+		mcp.WithString("status", mcp.Description("open (default) | closed | all")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.ListPortfolioLots(ctx, clientID, req.GetString("exchange", ""), req.GetString("symbol", ""), req.GetString("status", "open"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("place_portfolio_pending_order",
 		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. For trailing_stop use trailType+trailValue (triggerPrice optional/ignored). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
@@ -1180,6 +1202,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithNumber("triggerPrice", mcp.Description("Limit or stop price (not used for trailing_stop)")),
 		mcp.WithString("trailType", mcp.Description("trailing_stop: percent | offset")),
 		mcp.WithNumber("trailValue", mcp.Description("trailing_stop: fraction e.g. 0.05 or fixed offset")),
+		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo for sell types")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("timeInForce", mcp.Description("gtc (default) | ioc | fok")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC only")),
@@ -1210,7 +1233,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		}
 		raw, err := api.PlacePortfolioPendingOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, typ, qty, trig,
 			req.GetString("timeInForce", "gtc"), req.GetString("expiresAt", ""),
-			req.GetString("trailType", ""), req.GetFloat("trailValue", 0))
+			req.GetString("trailType", ""), req.GetFloat("trailValue", 0), req.GetString("lotMethod", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

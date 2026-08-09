@@ -108,6 +108,7 @@ type OrderInput struct {
 	Symbol        string
 	Side          string // buy | sell
 	Quantity      float64
+	LotMethod     string // fifo | lifo (sells; ignored on buys)
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -253,6 +254,12 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 	if err != nil {
 		return nil, err
 	}
+	openLots, _ := s.store.ListTaxLots(ctx, bookID, "", "", true)
+	lotsByPair := map[string][]domain.TaxLot{}
+	for _, l := range openLots {
+		k := string(l.Exchange) + ":" + l.Symbol
+		lotsByPair[k] = append(lotsByPair[k], l)
+	}
 	views := make([]domain.PositionView, 0, len(positions))
 	var posValue, spotUnreal float64
 	for _, pos := range positions {
@@ -278,6 +285,7 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 			MarketValue:       mv,
 			UnrealizedPnL:     u,
 			CostBasis:         pos.Quantity * pos.AvgCost,
+			Lots:              lotsByPair[string(pos.Exchange)+":"+pos.Symbol],
 		})
 		posValue += mv
 		spotUnreal += u
@@ -384,27 +392,44 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	availPos := domain.AvailablePosition(posQty, reservedQty)
 
 	now := time.Now().UTC()
+	lotMethod, err := domain.NormalizeLotMethod(in.LotMethod)
+	if err != nil {
+		return nil, nil, err
+	}
+	existingLots, err := s.loadOpenLots(ctx, clientID, ex, sym)
+	if err != nil {
+		return nil, nil, err
+	}
 	var (
 		newCash, newQty, newAvg, realized float64
+		lotOps                            *domain.LotOps
 	)
+	tradeID := uuid.NewString()
 	switch side {
 	case domain.TradeSideBuy:
 		// Spend only unreserved cash; update absolute cash from full balance.
 		_, newQty, newAvg, err = domain.ApplyBuy(availCash, in.Quantity, price, posQty, avg)
 		if err == nil {
 			newCash = p.CashBalance - in.Quantity*price
+			lotOps = prepareBuyLots(clientID, ex, sym, existingLots, posQty, avg, in.Quantity, price, tradeID, now)
+			merged := append(append([]domain.TaxLot(nil), existingLots...), lotOps.Created...)
+			if a := domain.AvgCostFromLots(merged); a > 0 {
+				newAvg = a
+			}
 		}
 		realized = 0
 	case domain.TradeSideSell:
-		// Sell only unreserved quantity.
-		_, _, realized, err = domain.ApplySell(0, in.Quantity, price, availPos, avg)
+		if in.Quantity > availPos+domain.PositionEpsilon {
+			return nil, nil, fmt.Errorf("%w: insufficient position quantity", domain.ErrInvalidArgument)
+		}
+		lotOps, realized, newAvg, err = prepareSellLots(existingLots, clientID, ex, sym, posQty, avg, in.Quantity, price, lotMethod, tradeID, now)
 		if err == nil {
 			newCash = p.CashBalance + in.Quantity*price
 			newQty = posQty - in.Quantity
 			if newQty < domain.PositionEpsilon {
 				newQty = 0
+				newAvg = 0
 			}
-			newAvg = avg
 		}
 	}
 	if err != nil {
@@ -429,7 +454,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	}
 
 	tr := domain.Trade{
-		ID:          uuid.NewString(),
+		ID:          tradeID,
 		ClientID:    clientID,
 		Exchange:    ex,
 		Symbol:      sym,
@@ -438,9 +463,13 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		Price:       price,
 		Notional:    in.Quantity * price,
 		RealizedPnL: realized,
+		LotMethod:   lotMethod,
 		CreatedAt:   now,
 	}
-	if err := s.store.ExecuteTrade(ctx, p, posOut, tr); err != nil {
+	if lotOps != nil {
+		tr.LotFills = lotOps.Fills
+	}
+	if err := s.store.ExecuteTrade(ctx, p, posOut, tr, lotOps); err != nil {
 		return nil, nil, err
 	}
 	view, err := s.View(ctx, in.ClientID, p.ID)
@@ -472,7 +501,24 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 		return nil, 0, err
 	}
 	list, err := s.store.ListTrades(ctx, clientID, limit, offset)
-	return list, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	ids := make([]string, 0, len(list))
+	for i := range list {
+		ids = append(ids, list[i].ID)
+	}
+	fills, ferr := s.store.ListTaxLotFillsForTrades(ctx, ids)
+	if ferr == nil && len(fills) > 0 {
+		byTrade := map[string][]domain.TaxLotFill{}
+		for _, f := range fills {
+			byTrade[f.TradeID] = append(byTrade[f.TradeID], f)
+		}
+		for i := range list {
+			list[i].LotFills = byTrade[list[i].ID]
+		}
+	}
+	return list, total, nil
 }
 
 // PendingOrderInput creates a limit, stop, or trailing_stop resting order.
@@ -491,6 +537,7 @@ type PendingOrderInput struct {
 	TrailValue float64
 	TimeInForce string     // gtc (default) | ioc | fok
 	ExpiresAt   *time.Time // optional; GTC only
+	LotMethod   string     // fifo | lifo for sell types
 }
 
 // OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
@@ -504,6 +551,7 @@ type OCOOrderInput struct {
 	TakeProfitPrice float64 // limit_sell trigger
 	StopLossPrice   float64 // stop_loss trigger
 	ExpiresAt       *time.Time
+	LotMethod       string
 }
 
 // BracketOrderInput places a limit-buy entry with inactive take-profit + stop-loss exits.
@@ -519,6 +567,7 @@ type BracketOrderInput struct {
 	TakeProfitPrice float64
 	StopLossPrice   float64
 	ExpiresAt       *time.Time
+	LotMethod       string
 }
 
 // PlaceBracketOrder creates entry (open limit_buy) + TP/SL (pending) linked by bracket id.
@@ -529,6 +578,9 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	}
 	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if _, err := domain.NormalizeLotMethod(in.LotMethod); err != nil {
 		return nil, nil, nil, err
 	}
 	clientID := p.BookID()
@@ -595,6 +647,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		Status: domain.PendingStatusPending,
 		OCOGroupID: ocoID, OCOPeerID: slID,
 		BracketID: bracketID, BracketRole: domain.BracketRoleTakeProfit,
+		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
 	slOrd := domain.PendingOrder{
@@ -605,6 +658,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		Status: domain.PendingStatusPending,
 		OCOGroupID: ocoID, OCOPeerID: tpID,
 		BracketID: bracketID, BracketRole: domain.BracketRoleStopLoss,
+		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
 	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
@@ -623,6 +677,9 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	}
 	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
+		return nil, nil, err
+	}
+	if _, err := domain.NormalizeLotMethod(in.LotMethod); err != nil {
 		return nil, nil, err
 	}
 	clientID := p.BookID()
@@ -680,6 +737,7 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		TriggerPrice: in.TakeProfitPrice, ReservedQuantity: in.Quantity,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
 		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: slID,
+		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
 	slOrd := domain.PendingOrder{
@@ -689,6 +747,7 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		TriggerPrice: in.StopLossPrice, ReservedQuantity: in.Quantity,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
 		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: tpID,
+		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
 	tp, sl, err = s.store.CreateOCOPair(ctx, tpOrd, slOrd)
@@ -706,6 +765,9 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	}
 	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := domain.NormalizeLotMethod(in.LotMethod); err != nil {
 		return nil, err
 	}
 	clientID := p.BookID()
@@ -837,6 +899,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		TrailType:         trailType,
 		TrailValue:        trailValue,
 		TrailPeak:         trailPeak,
+		LotMethod:         pendingLotMethod(in.LotMethod),
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
@@ -1419,14 +1482,35 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		return nil, false, nil
 	}
 
+	existingLots, lerr := s.loadOpenLots(ctx, o.ClientID, o.Exchange, o.Symbol)
+	if lerr != nil {
+		return nil, false, lerr
+	}
+	lotMethod, _ := domain.NormalizeLotMethod(string(o.LotMethod))
+	tradeID := uuid.NewString()
 	var newCash, newQty, newAvg, realized float64
+	var lotOps *domain.LotOps
 	switch o.Side {
 	case domain.TradeSideBuy:
 		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, fillQty, lastPrice, posQty, avg)
 		realized = 0
+		if err == nil {
+			lotOps = prepareBuyLots(o.ClientID, o.Exchange, o.Symbol, existingLots, posQty, avg, fillQty, lastPrice, tradeID, now)
+			merged := append(append([]domain.TaxLot(nil), existingLots...), lotOps.Created...)
+			if a := domain.AvgCostFromLots(merged); a > 0 {
+				newAvg = a
+			}
+		}
 	case domain.TradeSideSell:
-		newCash, newQty, realized, err = domain.ApplySell(p.CashBalance, fillQty, lastPrice, posQty, avg)
-		newAvg = avg
+		lotOps, realized, newAvg, err = prepareSellLots(existingLots, o.ClientID, o.Exchange, o.Symbol, posQty, avg, fillQty, lastPrice, lotMethod, tradeID, now)
+		if err == nil {
+			newCash = p.CashBalance + fillQty*lastPrice
+			newQty = posQty - fillQty
+			if newQty < domain.PositionEpsilon {
+				newQty = 0
+				newAvg = 0
+			}
+		}
 	}
 	if err != nil {
 		// Reservation should prevent this; fail closed and release remainder.
@@ -1484,9 +1568,12 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		posOut.AvgCost = 0
 	}
 	tr := domain.Trade{
-		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
+		ID: tradeID, ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
 		Side: o.Side, Quantity: fillQty, Price: lastPrice, Notional: fillQty * lastPrice,
-		RealizedPnL: realized, PendingOrderID: o.ID, CreatedAt: now,
+		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod, CreatedAt: now,
+	}
+	if lotOps != nil {
+		tr.LotFills = lotOps.Fills
 	}
 	updated.FillTradeID = tr.ID
 
@@ -1498,14 +1585,14 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		if perr == domain.ErrNotFound {
 			peer = nil
 		}
-		if err := s.store.ExecuteOCOFill(ctx, &updated, peer, p, posOut, tr, now); err != nil {
+		if err := s.store.ExecuteOCOFill(ctx, &updated, peer, p, posOut, tr, now, lotOps); err != nil {
 			if err == domain.ErrNotFound {
 				return nil, false, nil
 			}
 			return nil, false, err
 		}
 	} else {
-		if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now); err != nil {
+		if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now, lotOps); err != nil {
 			if err == domain.ErrNotFound {
 				return nil, false, nil
 			}

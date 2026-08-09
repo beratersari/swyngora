@@ -616,17 +616,39 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 }
 
 // PlacePortfolioOrder places a paper market order.
-func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", map[string]any{
+func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
+	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
-	})
+	}
+	if lotMethod != "" {
+		body["lotMethod"] = lotMethod
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
+}
+
+func (c *APIClient) ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if status != "" {
+		q.Set("status", status)
+	}
+	return c.get(ctx, "/api/v1/portfolio/lots", q)
 }
 
 // PlacePortfolioPendingOrder places a limit/stop/trailing paper order.
-func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": orderType,
 		"quantity": quantity, "triggerPrice": triggerPrice,
+	}
+	if lotMethod != "" {
+		body["lotMethod"] = lotMethod
 	}
 	if timeInForce != "" {
 		body["timeInForce"] = timeInForce

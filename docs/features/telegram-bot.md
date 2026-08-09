@@ -25,7 +25,7 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 | `/deposit` · `/withdraw` `<amount> [note]` | Add or remove virtual cash |
 | `/transfer` `<amount> NAME` | Move cash to another of your books (owner only) |
 | `/cash` `[n]` | Deposit / withdraw / transfer history |
-| `/buy` · `/sell` `<symbol> <qty> [exchange]` | Paper market trade — preview, then **Confirm** / **Cancel** buttons |
+| `/buy` · `/sell` `<symbol> <qty> [exchange] [fifo\|lifo]` | Paper market trade — preview, then **Confirm** / **Cancel**; sells default FIFO lots |
 | **`/ask <question>`** | Multi-agent AI (market tools + web + X) |
 | **`/ai <question>`** | Alias of `/ask` |
 

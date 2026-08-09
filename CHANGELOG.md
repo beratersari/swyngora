@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Paper tax lots:** each buy opens a lot (qty, price, time); sells choose FIFO or LIFO (`lotMethod`); partial lots keep remaining qty; market, pending, and recurring fills share the same ledger (`GET /api/v1/portfolio/lots`) (`docs/features/paper-trading.md`)
 - **Realtime WebSocket:** `GET /api/v1/ws` subscribe/unsubscribe selected coin prices and one paper portfolio’s order/position/cash events; reconnect resubscribes with snapshots; access checked per book; frontend uses the stream instead of polling when connected (`docs/features/realtime.md`)
 - **Paper cash transfer:** owner-only move of available cash between your own books (`POST /api/v1/portfolio/transfers`); both histories get `transfer_out`/`transfer_in` with counterpart book name (not a deposit/withdrawal); MCP `transfer_portfolio_cash`; Telegram `/transfer` (`docs/features/paper-trading.md`)
 - **Paper portfolio sharing:** owner grants `viewer` (read snapshot/trades/performance) or `trader` (also place/cancel orders) to another clientId; deposit/withdraw/delete/share stay owner-only; `POST/GET/PATCH/DELETE /api/v1/portfolio/shares` and `GET /api/v1/portfolios/shared` (`docs/features/paper-trading.md`)

@@ -96,8 +96,10 @@ type Trade struct {
 	Quantity       float64
 	Price          float64
 	Notional       float64
-	RealizedPnL    float64 // non-zero on sells
+	RealizedPnL    float64 // non-zero on sells (from tax lots when present)
 	PendingOrderID string  // set when fill belongs to a pending order
+	LotMethod      LotMethod
+	LotFills       []TaxLotFill // sell allocations; not required on list
 	CreatedAt      time.Time
 }
 
@@ -206,6 +208,8 @@ type PendingOrder struct {
 	FillPrice   float64 // latest fill price
 	RejectReason string
 	CancelReason string
+	// LotMethod is fifo|lifo for sell fills (ignored on buys). Empty = fifo.
+	LotMethod LotMethod
 }
 
 // IsOCO reports whether this order is one leg of an OCO pair.
@@ -236,6 +240,7 @@ type PositionView struct {
 	MarketValue       float64
 	UnrealizedPnL     float64
 	CostBasis         float64
+	Lots              []TaxLot
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.
@@ -363,8 +368,13 @@ type PortfolioPort interface {
 	ListTrades(ctx context.Context, clientID string, limit, offset int) ([]Trade, error)
 	CountTrades(ctx context.Context, clientID string) (int, error)
 
+	ListOpenTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string) ([]TaxLot, error)
+	ListTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string, openOnly bool) ([]TaxLot, error)
+	ListTaxLotFillsForTrades(ctx context.Context, tradeIDs []string) ([]TaxLotFill, error)
+	InsertTaxLot(ctx context.Context, lot TaxLot) error
+
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.
-	ExecuteTrade(ctx context.Context, p *Portfolio, pos *Position, t Trade) error
+	ExecuteTrade(ctx context.Context, p *Portfolio, pos *Position, t Trade, lots *LotOps) error
 
 	// CreatePendingOrder inserts a new open resting order with reservations.
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
@@ -409,11 +419,11 @@ type PortfolioPort interface {
 	// ExecutePendingFill applies a (possibly partial) fill for an open order.
 	// Updates remaining/reserved, inserts trade, marks filled only when remaining is zero.
 	// Returns ErrNotFound if not open.
-	ExecutePendingFill(ctx context.Context, order *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time) error
+	ExecutePendingFill(ctx context.Context, order *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time, lots *LotOps) error
 	// ExecuteOCOFill fills one OCO leg and, in the same transaction, either reduces the peer's
 	// remaining size to match or cancels the peer when this leg is fully filled.
 	// Guarantees a single cash/position update for the fill (no double apply).
-	ExecuteOCOFill(ctx context.Context, filled *PendingOrder, peer *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time) error
+	ExecuteOCOFill(ctx context.Context, filled *PendingOrder, peer *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time, lots *LotOps) error
 	// CancelOCOGroup cancels both open legs of an OCO (or the remaining open leg) and releases reservation.
 	CancelOCOGroup(ctx context.Context, clientID, groupID string, at time.Time, reason string) error
 	// RejectPendingOrder marks an open order rejected and releases remaining reservation.

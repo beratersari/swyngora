@@ -332,6 +332,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	if err := s.migrateMultiBook(); err != nil {
 		return err
 	}
+	if err := s.migrateTaxLots(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
@@ -364,6 +367,8 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE recurring_buy_plans ADD COLUMN day_of_month INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN interval_hours INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE portfolios ADD COLUMN net_deposits REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN lot_method TEXT NOT NULL DEFAULT 'fifo'`,
+		`ALTER TABLE trades ADD COLUMN lot_method TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE IF NOT EXISTS cash_movements (
 	id                  TEXT PRIMARY KEY NOT NULL,
 	client_id           TEXT NOT NULL,
@@ -562,6 +567,8 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_plans WHERE client_id = ?`,
 		`DELETE FROM pending_orders WHERE client_id = ?`,
+		`DELETE FROM tax_lot_fills WHERE lot_id IN (SELECT id FROM tax_lots WHERE client_id = ?)`,
+		`DELETE FROM tax_lots WHERE client_id = ?`,
 		`DELETE FROM trades WHERE client_id = ?`,
 		`DELETE FROM positions WHERE client_id = ?`,
 		`DELETE FROM margin_trades WHERE client_id = ?`,
@@ -695,7 +702,8 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at
+		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id,
+		       COALESCE(lot_method, ''), created_at
 		FROM trades WHERE client_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -707,10 +715,11 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	out := make([]domain.Trade, 0)
 	for rows.Next() {
 		var t domain.Trade
-		var ex, side, cAt string
-		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &cAt); err != nil {
+		var ex, side, cAt, lotMethod string
+		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &lotMethod, &cAt); err != nil {
 			return nil, err
 		}
+		t.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
 		t.Exchange = domain.Exchange(ex)
 		t.Side = domain.TradeSide(side)
 		t.CreatedAt = parseTime(cAt)
@@ -727,7 +736,7 @@ func (s *SQLite) CountTrades(ctx context.Context, clientID string) (int, error) 
 }
 
 // ExecuteTrade applies portfolio + position + trade insert under one transaction.
-func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *domain.Position, t domain.Trade) error {
+func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *domain.Position, t domain.Trade, lots *domain.LotOps) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	at := t.CreatedAt
@@ -771,10 +780,13 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
-		at.UTC().Format(time.RFC3339Nano)); err != nil {
+		string(t.LotMethod), at.UTC().Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -804,13 +816,13 @@ func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) 
 			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Type), string(o.Side), o.Quantity, o.FilledQuantity, o.RemainingQuantity,
 		o.TriggerPrice, o.ReservedCash, o.ReservedQuantity, string(o.TimeInForce), nullTime(o.ExpiresAt), string(o.Status),
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
-		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole)
+		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod))
 	if err != nil {
 		return nil, fmt.Errorf("pending order create: %w", err)
 	}
@@ -862,8 +874,8 @@ const pendingOrderInsertSQL = `
 			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.PendingOrder) error {
 	_, err := tx.ExecContext(ctx, pendingOrderInsertSQL,
@@ -871,9 +883,16 @@ func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.
 		o.TriggerPrice, o.ReservedCash, o.ReservedQuantity, string(o.TimeInForce), nullTime(o.ExpiresAt), string(o.Status),
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
-		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole,
+		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod),
 	)
 	return err
+}
+
+func lotMethodOrDefault(m domain.LotMethod) string {
+	if m == "" {
+		return string(domain.DefaultLotMethod)
+	}
+	return string(m)
 }
 
 // CreateBracket inserts entry (open) and TP/SL exits (pending/inactive) in one transaction.
@@ -1339,7 +1358,7 @@ func (s *SQLite) CancelOCOGroup(ctx context.Context, clientID, groupID string, a
 
 // ExecutePendingFill applies a partial or full fill for an open order.
 // order must contain updated filled/remaining/reserved/status fields after the fill.
-func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOrder, p *domain.Portfolio, pos *domain.Position, t domain.Trade, at time.Time) error {
+func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOrder, p *domain.Portfolio, pos *domain.Position, t domain.Trade, at time.Time, lots *domain.LotOps) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if order == nil {
@@ -1406,9 +1425,12 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 		t.PendingOrderID = order.ID
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, atStr); err != nil {
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), atStr); err != nil {
+		return err
+	}
+	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
 		return err
 	}
 
@@ -1436,7 +1458,7 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 }
 
 // ExecuteOCOFill fills one OCO leg and syncs or cancels the peer in the same transaction.
-func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder, peer *domain.PendingOrder, p *domain.Portfolio, pos *domain.Position, t domain.Trade, at time.Time) error {
+func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder, peer *domain.PendingOrder, p *domain.Portfolio, pos *domain.Position, t domain.Trade, at time.Time, lots *domain.LotOps) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if filled == nil {
@@ -1501,9 +1523,12 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 		t.PendingOrderID = filled.ID
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, atStr); err != nil {
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), atStr); err != nil {
+		return err
+	}
+	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
 		return err
 	}
 
@@ -1591,7 +1616,7 @@ const pendingOrderSelect = `
 		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
 		COALESCE(oco_group_id, ''), COALESCE(oco_peer_id, ''),
 		COALESCE(trail_type, ''), COALESCE(trail_value, 0), COALESCE(trail_peak, 0),
-		COALESCE(bracket_id, ''), COALESCE(bracket_role, '')
+		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(lot_method, 'fifo')
 	FROM pending_orders`
 
 type scannable interface {
@@ -1600,17 +1625,18 @@ type scannable interface {
 
 func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 	var o domain.PendingOrder
-	var ex, typ, side, tif, st, cAt, uAt string
+	var ex, typ, side, tif, st, cAt, uAt, lotMethod string
 	var filledAt, canceledAt, expiresAt sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
 		&o.TriggerPrice, &o.ReservedCash, &o.ReservedQuantity, &tif, &expiresAt, &st,
 		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 		&o.OCOGroupID, &o.OCOPeerID, &o.TrailType, &o.TrailValue, &o.TrailPeak,
-		&o.BracketID, &o.BracketRole,
+		&o.BracketID, &o.BracketRole, &lotMethod,
 	); err != nil {
 		return nil, err
 	}
+	o.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
 	o.Exchange = domain.Exchange(ex)
 	o.Type = domain.PendingOrderType(typ)
 	o.Side = domain.TradeSide(side)

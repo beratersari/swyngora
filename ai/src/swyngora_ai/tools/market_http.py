@@ -279,6 +279,7 @@ class PortfolioOrderInput(BaseModel):
     side: str = Field(description="buy | sell")
     quantity: float = Field(gt=0)
     exchange: str = "binance"
+    lot_method: str = Field(default="", description="fifo (default) or lifo for sells")
 
 
 class PortfolioPendingOrderInput(BaseModel):
@@ -290,6 +291,14 @@ class PortfolioPendingOrderInput(BaseModel):
     exchange: str = "binance"
     time_in_force: str = Field(default="gtc", description="gtc | ioc | fok")
     expires_at: str = Field(default="", description="RFC3339 expiry for GTC only")
+    lot_method: str = Field(default="", description="fifo or lifo for sell types")
+
+
+class PortfolioLotsInput(BaseModel):
+    client_id: str
+    exchange: str = ""
+    symbol: str = ""
+    status: str = Field(default="open", description="open | closed | all")
 
 
 class PortfolioListOrdersInput(BaseModel):
@@ -895,17 +904,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         side: str,
         quantity: float,
         exchange: str = "binance",
+        lot_method: str = "",
     ) -> str:
-        return http.post(
-            "/api/v1/portfolio/orders",
-            {
-                "clientId": client_id,
-                "symbol": symbol,
-                "side": side,
-                "quantity": quantity,
-                "exchange": exchange,
-            },
-        )
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "exchange": exchange,
+        }
+        if lot_method:
+            body["lotMethod"] = lot_method
+        return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_pending_order(
         client_id: str,
@@ -916,6 +926,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         exchange: str = "binance",
         time_in_force: str = "gtc",
         expires_at: str = "",
+        lot_method: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -928,7 +939,19 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         }
         if expires_at:
             body["expiresAt"] = expires_at
+        if lot_method:
+            body["lotMethod"] = lot_method
         return http.post("/api/v1/portfolio/orders", body)
+
+    def list_portfolio_lots(
+        client_id: str, exchange: str = "", symbol: str = "", status: str = "open"
+    ) -> str:
+        params: dict[str, Any] = {"clientId": client_id, "status": status}
+        if exchange:
+            params["exchange"] = exchange
+        if symbol:
+            params["symbol"] = symbol
+        return http.get("/api/v1/portfolio/lots", params)
 
     def list_portfolio_orders(client_id: str, status: str = "open") -> str:
         return http.get(
@@ -1653,6 +1676,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="list_portfolio_trades",
             description="List paper trade history for a clientId.",
             args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            list_portfolio_lots,
+            name="list_portfolio_lots",
+            description="List paper tax lots (remaining buys). Sells match FIFO or LIFO.",
+            args_schema=PortfolioLotsInput,
         ),
         StructuredTool.from_function(
             create_recurring_buy,

@@ -83,6 +83,7 @@ export {
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
   useTransferPortfolioCashMutation,
+  useListPortfolioLotsQuery,
   useListPortfolioSharesQuery,
   useListSharedPortfoliosQuery,
   useSharePortfolioMutation,
@@ -104,6 +105,7 @@ export type {
   PortfolioCashMovement,
   PortfolioCashMoveResponse,
   PortfolioTransferResponse,
+  TaxLot,
   PortfolioShare,
   SharedPortfolioSummary,
 } from './endpoints/portfolioApi';
