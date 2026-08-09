@@ -442,10 +442,10 @@ func (s *SQLite) InsertMarginTrade(ctx context.Context, t domain.MarginTrade) (*
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO margin_trades (
 			id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, fee, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, t.PositionID, string(t.Exchange), t.Symbol, string(t.Side), t.Action,
-		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage,
+		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage, t.Fee,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -461,7 +461,8 @@ func (s *SQLite) ListMarginTrades(ctx context.Context, clientID string, limit, o
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, COALESCE(principal_paid, 0), COALESCE(interest_paid, 0), leverage, created_at
+			notional, realized_pnl, margin_delta, COALESCE(principal_paid, 0), COALESCE(interest_paid, 0), leverage,
+			COALESCE(fee, 0), created_at
 		FROM margin_trades WHERE client_id = ?
 		ORDER BY created_at DESC LIMIT ? OFFSET ?
 	`, clientID, limit, offset)
@@ -475,7 +476,7 @@ func (s *SQLite) ListMarginTrades(ctx context.Context, clientID string, limit, o
 		var ex, side, cAt string
 		if err := rows.Scan(
 			&t.ID, &t.ClientID, &t.PositionID, &ex, &t.Symbol, &side, &t.Action, &t.Quantity, &t.Price,
-			&t.Notional, &t.RealizedPnL, &t.MarginDelta, &t.PrincipalPaid, &t.InterestPaid, &t.Leverage, &cAt,
+			&t.Notional, &t.RealizedPnL, &t.MarginDelta, &t.PrincipalPaid, &t.InterestPaid, &t.Leverage, &t.Fee, &cAt,
 		); err != nil {
 			return nil, err
 		}
@@ -736,10 +737,10 @@ func (s *SQLite) txInsertMarginTrade(ctx context.Context, tx *sql.Tx, t domain.M
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_trades (
 			id, client_id, position_id, exchange, symbol, side, action, quantity, price,
-			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			notional, realized_pnl, margin_delta, principal_paid, interest_paid, leverage, fee, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, t.PositionID, string(t.Exchange), t.Symbol, string(t.Side), t.Action,
-		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage,
+		t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.MarginDelta, t.PrincipalPaid, t.InterestPaid, t.Leverage, t.Fee,
 		t.CreatedAt.UTC().Format(time.RFC3339Nano))
 	return err
 }

@@ -35,7 +35,7 @@ func newPaperRouter(t *testing.T) *Router {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	ps := portfolio.New(st, ms)
+	ps := portfolio.New(st, ms).WithPaperCosts(domain.ZeroTradingCosts)
 	return NewRouter(ms, ws, Options{
 		DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true, Portfolio: ps,
 	})

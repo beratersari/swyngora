@@ -323,7 +323,13 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 	if err != nil || price <= 0 {
 		return nil, "market price unavailable"
 	}
-	qty := plan.Amount / price
+	cost := s.paperCost(plan.Exchange)
+	fill := domain.ApplySlippage(price, domain.TradeSideBuy, cost.SlippageRate)
+	unit := domain.BuyUnitCost(fill, cost.FeeRate)
+	if unit <= 0 {
+		return nil, "market price unavailable"
+	}
+	qty := plan.Amount / unit
 	if qty < domain.MinTradeQuantity {
 		return nil, "buy quantity too small for amount"
 	}

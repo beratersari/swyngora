@@ -137,8 +137,8 @@ func AvgCostFromLots(lots []TaxLot) float64 {
 }
 
 // ConsumeLots reduces open lots FIFO or LIFO. Partial lots keep remaining qty.
-// sellPrice is the fill price used for realized PnL.
-func ConsumeLots(open []TaxLot, qty, sellPrice float64, method LotMethod, now time.Time) (fills []TaxLotFill, updated []TaxLot, realized float64, err error) {
+// sellPrice is the slipped fill; feeRate reduces net proceeds so realized PnL is after fee.
+func ConsumeLots(open []TaxLot, qty, sellPrice float64, method LotMethod, now time.Time, feeRate float64) (fills []TaxLotFill, updated []TaxLot, realized float64, err error) {
 	if qty <= 0 || sellPrice <= 0 || math.IsNaN(qty) || math.IsNaN(sellPrice) ||
 		math.IsInf(qty, 0) || math.IsInf(sellPrice, 0) {
 		return nil, nil, 0, fmt.Errorf("%w: quantity and price must be positive", ErrInvalidArgument)
@@ -169,7 +169,8 @@ func ConsumeLots(open []TaxLot, qty, sellPrice float64, method LotMethod, now ti
 		if take > need {
 			take = need
 		}
-		pnl := (sellPrice - ordered[i].Price) * take
+		net := NetSellPrice(sellPrice, feeRate)
+		pnl := (net - ordered[i].Price) * take
 		realized += pnl
 		ordered[i].Quantity -= take
 		if ordered[i].Quantity < PositionEpsilon {

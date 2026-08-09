@@ -230,7 +230,7 @@ func TestTimeInForceAndExpiry(t *testing.T) {
 }
 
 func TestAvailableAndReservations(t *testing.T) {
-	if math.Abs(BuyReserveCash(2, 100)-200) > 1e-9 {
+	if math.Abs(BuyReserveCash(2, 100, TradingCost{})-200) > 1e-9 {
 		t.Fatal("reserve")
 	}
 	if math.Abs(AvailableCash(1000, 250)-750) > 1e-9 {
@@ -240,12 +240,12 @@ func TestAvailableAndReservations(t *testing.T) {
 		t.Fatal("avail pos")
 	}
 	// Cheaper fill than limit: reserved cash can cover full remaining
-	if math.Abs(MaxBuyFillQty(2, 200, 90)-2) > 1e-9 {
+	if math.Abs(MaxBuyFillQty(2, 200, 90, 0)-2) > 1e-9 {
 		t.Fatal("max buy full")
 	}
 	// Cap by cash at higher fill price within reservation
-	if math.Abs(MaxBuyFillQty(3, 100, 50)-2) > 1e-9 {
-		t.Fatalf("max buy partial got %v", MaxBuyFillQty(3, 100, 50))
+	if math.Abs(MaxBuyFillQty(3, 100, 50, 0)-2) > 1e-9 {
+		t.Fatalf("max buy partial got %v", MaxBuyFillQty(3, 100, 50, 0))
 	}
 	if math.Abs(ClampFillQty(10, 0, 3)-3) > 1e-9 {
 		t.Fatal("clamp max")
@@ -253,7 +253,7 @@ func TestAvailableAndReservations(t *testing.T) {
 	if math.Abs(ClampFillQty(10, 4, 0)-4) > 1e-9 {
 		t.Fatal("clamp requested")
 	}
-	if math.Abs(AfterBuyFillReservation(1, 100)-100) > 1e-9 {
+	if math.Abs(AfterBuyFillReservation(1, 100, TradingCost{})-100) > 1e-9 {
 		t.Fatal("after buy res")
 	}
 	if AfterSellFillReservation(0) != 0 {

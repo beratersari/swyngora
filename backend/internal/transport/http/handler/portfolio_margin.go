@@ -77,6 +77,7 @@ type marginTradeDTO struct {
 	PrincipalPaid float64 `json:"principalPaid,omitempty"`
 	InterestPaid  float64 `json:"interestPaid,omitempty"`
 	Leverage      int     `json:"leverage"`
+	Fee           float64 `json:"fee"`
 	CreatedAt     string  `json:"createdAt"`
 }
 
@@ -132,6 +133,7 @@ func marginTradeToDTO(t *domain.MarginTrade) marginTradeDTO {
 		Side: string(t.Side), Action: t.Action, Quantity: t.Quantity, Price: t.Price, Notional: t.Notional,
 		RealizedPnL: t.RealizedPnL, MarginDelta: t.MarginDelta,
 		PrincipalPaid: t.PrincipalPaid, InterestPaid: t.InterestPaid, Leverage: t.Leverage,
+		Fee: t.Fee,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

@@ -100,6 +100,8 @@ type Trade struct {
 	PendingOrderID string  // set when fill belongs to a pending order
 	LotMethod      LotMethod
 	LotFills       []TaxLotFill // sell allocations; not required on list
+	Fee            float64 // quote-currency taker fee
+	LastPrice      float64 // last/mark before slippage (0 = not stored)
 	CreatedAt      time.Time
 }
 
@@ -744,12 +746,13 @@ func PendingOrderTriggered(orderType PendingOrderType, trigger, last float64) bo
 	}
 }
 
-// BuyReserveCash is quantity * triggerPrice (max cash locked for a limit buy).
-func BuyReserveCash(quantity, triggerPrice float64) float64 {
+// BuyReserveCash locks worst-case cash for a limit buy: remaining * slipped trigger * (1+fee).
+func BuyReserveCash(quantity, triggerPrice float64, cost TradingCost) float64 {
 	if quantity <= 0 || triggerPrice <= 0 {
 		return 0
 	}
-	return quantity * triggerPrice
+	px := ApplySlippage(triggerPrice, TradeSideBuy, cost.SlippageRate)
+	return quantity * px * (1 + cost.FeeRate)
 }
 
 // AvailableCash is total cash minus reserved cash for open buy orders.
@@ -770,12 +773,20 @@ func AvailablePosition(held, reservedQty float64) float64 {
 	return a
 }
 
-// MaxBuyFillQty returns how much base qty can be filled from remaining reserved cash at fillPrice.
-func MaxBuyFillQty(remainingQty, reservedCash, fillPrice float64) float64 {
+// MaxBuyFillQty returns how much base qty can be filled from remaining reserved cash
+// at fillPrice including the taker fee (unit cost = fillPrice * (1+feeRate)).
+func MaxBuyFillQty(remainingQty, reservedCash, fillPrice, feeRate float64) float64 {
 	if remainingQty <= PositionEpsilon || reservedCash <= 0 || fillPrice <= 0 {
 		return 0
 	}
-	byCash := reservedCash / fillPrice
+	if feeRate < 0 {
+		feeRate = 0
+	}
+	unit := fillPrice * (1 + feeRate)
+	if unit <= 0 {
+		return 0
+	}
+	byCash := reservedCash / unit
 	if byCash < remainingQty {
 		return byCash
 	}
@@ -801,13 +812,9 @@ func ClampFillQty(remaining, requested, maxFill float64) float64 {
 	return q
 }
 
-// AfterBuyFillReservation updates reserved cash after a buy fill of fillQty at fillPrice.
-// Reservation for remaining size is remainingAfter * triggerPrice.
-func AfterBuyFillReservation(remainingAfter, triggerPrice float64) float64 {
-	if remainingAfter <= PositionEpsilon {
-		return 0
-	}
-	return remainingAfter * triggerPrice
+// AfterBuyFillReservation is remaining reserved cash after a partial buy fill.
+func AfterBuyFillReservation(remainingAfter, triggerPrice float64, cost TradingCost) float64 {
+	return BuyReserveCash(remainingAfter, triggerPrice, cost)
 }
 
 // AfterSellFillReservation updates reserved quantity after a sell fill.

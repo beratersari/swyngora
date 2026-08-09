@@ -1434,3 +1434,62 @@ func TestMargin_ApplyMarginCloseRestartNoDoubleCash(t *testing.T) {
 		t.Fatalf("extra close trade on replay: %d", closes)
 	}
 }
+
+func TestPaperCosts_MarginOpenCloseFeeAndSlippage(t *testing.T) {
+	svc := newSvcWithCosts(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "mfee", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	cost := domain.TradingCostFor(domain.ExchangeBinance)
+	fill := domain.ApplySlippage(100, domain.TradeSideBuy, cost.SlippageRate)
+	openFee := domain.FeeAmount(1, fill, cost.FeeRate)
+	entry := domain.EffectiveMarginEntry(domain.MarginLong, fill, cost.FeeRate)
+	margin, err := domain.InitialMargin(1, fill, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pos, ord, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "mfee", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil || ord != nil || pos == nil {
+		t.Fatalf("pos=%+v ord=%+v err=%v", pos, ord, err)
+	}
+	if math.Abs(pos.EntryPrice-entry) > 1e-9 {
+		t.Fatalf("entry=%v want %v", pos.EntryPrice, entry)
+	}
+	if math.Abs(pos.Margin-margin) > 1e-9 {
+		t.Fatalf("margin=%v want %v", pos.Margin, margin)
+	}
+	view, _ := svc.View(ctx, "mfee")
+	if math.Abs(view.CashBalance-(10000-margin-openFee)) > 1e-6 {
+		t.Fatalf("cash=%v want %v", view.CashBalance, 10000-margin-openFee)
+	}
+	opens, err := svc.ListMarginTrades(ctx, "mfee", 10, 0)
+	if err != nil || len(opens) == 0 || math.Abs(opens[0].Fee-openFee) > 1e-9 {
+		t.Fatalf("open trades %+v err=%v", opens, err)
+	}
+
+	svc.market = &fakePx{prices: map[string]string{"binance|BTCUSDT": "110"}}
+	closeFill := domain.ApplySlippage(110, domain.TradeSideSell, cost.SlippageRate)
+	closeFee := domain.FeeAmount(1, closeFill, cost.FeeRate)
+	exit := domain.EffectiveMarginExit(domain.MarginLong, closeFill, cost.FeeRate)
+	wantRealized := domain.MarginRealizedPnL(domain.MarginLong, 1, entry, exit)
+	closed, tr, err := svc.CloseMarginPosition(ctx, MarginCloseInput{ClientID: "mfee", PositionID: pos.ID})
+	if err != nil || tr == nil {
+		t.Fatal(err)
+	}
+	if closed.Status != domain.MarginPositionClosed {
+		t.Fatalf("%+v", closed)
+	}
+	if math.Abs(tr.Price-closeFill) > 1e-9 || math.Abs(tr.Fee-closeFee) > 1e-9 {
+		t.Fatalf("close trade %+v want fill=%v fee=%v", tr, closeFill, closeFee)
+	}
+	if math.Abs(tr.RealizedPnL-wantRealized) > 1e-9 {
+		t.Fatalf("realized=%v want %v", tr.RealizedPnL, wantRealized)
+	}
+	if tr.RealizedPnL >= 10 {
+		t.Fatalf("realized should be after fees/slip: %v", tr.RealizedPnL)
+	}
+}

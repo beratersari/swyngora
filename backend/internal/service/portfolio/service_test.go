@@ -34,7 +34,7 @@ func newSvc(t *testing.T, px *fakePx) *Service {
 	if px == nil {
 		px = &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	}
-	return New(st, px)
+	return New(st, px).WithPaperCosts(domain.ZeroTradingCosts)
 }
 
 func TestPortfolio_BracketPartialEntrySizesExitsAndOCO(t *testing.T) {
@@ -803,7 +803,7 @@ func TestPortfolio_PendingPersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
-	svc1 := New(st1, px)
+	svc1 := New(st1, px).WithPaperCosts(domain.ZeroTradingCosts)
 	_, _ = svc1.Create(ctx, CreateInput{ClientID: "po-persist", StartingBalance: 1000})
 	o, err := svc1.PlacePendingOrder(ctx, PendingOrderInput{
 		ClientID: "po-persist", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 2, TriggerPrice: 100,
@@ -822,7 +822,7 @@ func TestPortfolio_PendingPersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st2.Close()
-	svc2 := New(st2, px)
+	svc2 := New(st2, px).WithPaperCosts(domain.ZeroTradingCosts)
 	open, err := svc2.ListPendingOrders(ctx, "po-persist", "open", 10, 0)
 	if err != nil || len(open) != 1 || open[0].ID != id {
 		t.Fatalf("%+v err=%v", open, err)
@@ -845,7 +845,7 @@ func TestPortfolio_PersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "50"}}
-	svc1 := New(st1, px)
+	svc1 := New(st1, px).WithPaperCosts(domain.ZeroTradingCosts)
 	_, err = svc1.Create(ctx, CreateInput{ClientID: "persist", StartingBalance: 5000})
 	if err != nil {
 		t.Fatal(err)
@@ -861,7 +861,7 @@ func TestPortfolio_PersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st2.Close()
-	svc2 := New(st2, px)
+	svc2 := New(st2, px).WithPaperCosts(domain.ZeroTradingCosts)
 	view, err := svc2.View(ctx, "persist")
 	if err != nil {
 		t.Fatal(err)
@@ -1123,5 +1123,158 @@ func TestPortfolio_CancelAllOpenOrdersOneMarketAndAll(t *testing.T) {
 	again, _, err := svc.CancelOpenPendingOrders(ctx, CancelOpenOrdersInput{ClientID: "cxl-all"})
 	if err != nil || len(again) != 0 {
 		t.Fatalf("idempotent %+v err=%v", again, err)
+	}
+}
+
+func newSvcWithCosts(t *testing.T, px *fakePx) *Service {
+	t.Helper()
+	st, err := portfoliostore.Open(filepath.Join(t.TempDir(), "pf-cost.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	if px == nil {
+		px = &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	}
+	return New(st, px)
+}
+
+func TestPaperCosts_MarketBuySellLotsAndReserve(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvcWithCosts(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "fee1", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	cost := domain.TradingCostFor(domain.ExchangeBinance)
+	last := 100.0
+	fillBuy := domain.ApplySlippage(last, domain.TradeSideBuy, cost.SlippageRate)
+	debit := domain.BuyCashDebit(1, fillBuy, cost.FeeRate)
+	unit := domain.BuyUnitCost(fillBuy, cost.FeeRate)
+	feeBuy := domain.FeeAmount(1, fillBuy, cost.FeeRate)
+
+	tr, view, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "fee1", Symbol: "BTCUSDT", Side: "buy", Quantity: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(tr.Price-fillBuy) > 1e-9 || math.Abs(tr.LastPrice-last) > 1e-9 || math.Abs(tr.Fee-feeBuy) > 1e-9 {
+		t.Fatalf("buy trade %+v want fill=%v last=%v fee=%v", tr, fillBuy, last, feeBuy)
+	}
+	if math.Abs(view.CashBalance-(10000-debit)) > 1e-9 {
+		t.Fatalf("cash after buy=%v want %v", view.CashBalance, 10000-debit)
+	}
+	if len(view.Positions) != 1 || math.Abs(view.Positions[0].AvgCost-unit) > 1e-9 {
+		t.Fatalf("avg cost %+v want %v", view.Positions, unit)
+	}
+	lots, err := svc.ListLots(ctx, "fee1", "binance", "BTCUSDT", "open")
+	if err != nil || len(lots) != 1 || math.Abs(lots[0].Price-unit) > 1e-9 {
+		t.Fatalf("lot %+v err=%v", lots, err)
+	}
+
+	fillSell := domain.ApplySlippage(last, domain.TradeSideSell, cost.SlippageRate)
+	credit := domain.SellCashCredit(1, fillSell, cost.FeeRate)
+	feeSell := domain.FeeAmount(1, fillSell, cost.FeeRate)
+	wantRealized := (domain.NetSellPrice(fillSell, cost.FeeRate) - unit) * 1
+	tr, view, err = svc.PlaceOrder(ctx, OrderInput{ClientID: "fee1", Symbol: "BTCUSDT", Side: "sell", Quantity: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(tr.Price-fillSell) > 1e-9 || math.Abs(tr.Fee-feeSell) > 1e-9 {
+		t.Fatalf("sell trade %+v", tr)
+	}
+	if math.Abs(tr.RealizedPnL-wantRealized) > 1e-9 {
+		t.Fatalf("realized=%v want %v", tr.RealizedPnL, wantRealized)
+	}
+	if math.Abs(view.CashBalance-(10000-debit+credit)) > 1e-9 {
+		t.Fatalf("cash after sell=%v", view.CashBalance)
+	}
+	if view.RealizedPnLTotal < 0 && math.Abs(view.RealizedPnLTotal-wantRealized) > 1e-9 {
+		t.Fatalf("book realized=%v", view.RealizedPnLTotal)
+	}
+}
+
+func TestPaperCosts_PendingBuyReserveCoversFee(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvcWithCosts(t, px)
+	ctx := context.Background()
+	cost := domain.TradingCostFor(domain.ExchangeBinance)
+	need := domain.BuyReserveCash(1, 100, cost)
+	if need <= 100 {
+		t.Fatalf("reserve should exceed trigger: %v", need)
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "fee-res", StartingBalance: 100.0}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "fee-res", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 100,
+	})
+	if err == nil {
+		t.Fatal("expected insufficient cash when starting balance equals trigger only")
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "fee-ok", StartingBalance: need + 0.01}); err != nil {
+		t.Fatal(err)
+	}
+	o, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "fee-ok", Symbol: "BTCUSDT", Type: "limit_buy", Quantity: 1, TriggerPrice: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(o.ReservedCash-need) > 1e-9 {
+		t.Fatalf("reserved=%v want %v", o.ReservedCash, need)
+	}
+	filled, ok, err := svc.TryFillPendingOrder(ctx, *o, 100, 0)
+	if err != nil || !ok || filled == nil || filled.Status != domain.PendingStatusFilled {
+		t.Fatalf("fill ok=%v err=%v %+v", ok, err, filled)
+	}
+	view, _ := svc.View(ctx, "fee-ok")
+	fill := domain.ApplySlippage(100, domain.TradeSideBuy, cost.SlippageRate)
+	debit := domain.BuyCashDebit(1, fill, cost.FeeRate)
+	if math.Abs(view.CashBalance-(need+0.01-debit)) > 1e-6 {
+		t.Fatalf("cash=%v start=%v debit=%v", view.CashBalance, need+0.01, debit)
+	}
+	if view.ReservedCash > 1e-9 {
+		t.Fatalf("reserved after fill=%v", view.ReservedCash)
+	}
+}
+
+func TestPaperCosts_RecurringBuyIncludesFee(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|ETHUSDT": "100"}}
+	svc := newSvcWithCosts(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "fee-dca", StartingBalance: 1000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "fee-dca", Symbol: "ETHUSDT", Amount: 100, Frequency: "daily", StartAt: &past,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	view, err := svc.View(ctx, "fee-dca")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cost := domain.TradingCostFor(domain.ExchangeBinance)
+	fill := domain.ApplySlippage(100, domain.TradeSideBuy, cost.SlippageRate)
+	unit := domain.BuyUnitCost(fill, cost.FeeRate)
+	qty := 100 / unit
+	if len(view.Positions) != 1 || math.Abs(view.Positions[0].Quantity-qty) > 1e-6 {
+		t.Fatalf("qty=%v want %v pos=%+v", view.Positions, qty, view.Positions)
+	}
+	if math.Abs(view.CashBalance-(1000-100)) > 0.02 {
+		t.Fatalf("cash=%v (should spend ~amount including fee)", view.CashBalance)
+	}
+	runs, err := svc.ListRecurringBuyRuns(ctx, "fee-dca", plan.ID, 10, 0)
+	if err != nil || len(runs) == 0 || runs[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("runs %+v err=%v", runs, err)
+	}
+	if math.Abs(runs[0].Price-fill) > 1e-9 {
+		t.Fatalf("run price=%v want slipped %v", runs[0].Price, fill)
 	}
 }

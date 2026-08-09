@@ -27,7 +27,7 @@ func newPortfolioHandler(t *testing.T) *PortfolioHandler {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	return NewPortfolioHandler(portfolio.New(st, pfPx{}))
+	return NewPortfolioHandler(portfolio.New(st, pfPx{}).WithPaperCosts(domain.ZeroTradingCosts))
 }
 
 func TestPortfolioHTTP_CashMovements(t *testing.T) {
@@ -548,5 +548,66 @@ func TestPortfolioHTTP_RiskLimits(t *testing.T) {
 	h.DeleteRiskLimits(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("del %d", rr.Code)
+	}
+}
+
+func TestPortfolioHTTP_TradingCostsAndFeeOnTrade(t *testing.T) {
+	h := newPortfolioHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/trading-costs", nil)
+	rr := httptest.NewRecorder()
+	h.GetTradingCosts(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("costs %d %s", rr.Code, rr.Body.String())
+	}
+	var all map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &all)
+	items, _ := all["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("items %v", all)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/trading-costs?exchange=coinbase", nil)
+	rr = httptest.NewRecorder()
+	h.GetTradingCosts(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("one %d", rr.Code)
+	}
+	var one map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &one)
+	if one["exchange"] != "coinbase" || one["feeRate"].(float64) <= 0 {
+		t.Fatalf("%v", one)
+	}
+
+	st, err := portfoliostore.Open(filepath.Join(t.TempDir(), "pf-fee.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	live := NewPortfolioHandler(portfolio.New(st, pfPx{}))
+	body, _ := json.Marshal(map[string]any{"clientId": "http-fee", "startingBalance": 10000})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	live.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-fee", "symbol": "BTCUSDT", "side": "buy", "quantity": 1,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	live.PlaceOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("order %d %s", rr.Code, rr.Body.String())
+	}
+	var got map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &got)
+	tr := got["trade"].(map[string]any)
+	if tr["fee"].(float64) <= 0 || tr["price"].(float64) <= 100 {
+		t.Fatalf("expected slipped fill and fee: %v", tr)
+	}
+	if tr["lastPrice"].(float64) != 100 {
+		t.Fatalf("lastPrice %v", tr["lastPrice"])
 	}
 }

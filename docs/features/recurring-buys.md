@@ -16,7 +16,7 @@ Users want scheduled paper buys of a coin without placing each market order by h
    | `interval` | `intervalHours` `1–168` | 1500 USDT ETH every 12 hours |
 3. **Name** (max 80 chars): e.g. `"Salary Day Buy"`, `"Buy Coins With 30% of My Money"`. Empty → `"BTCUSDT monthly"`. Names are labels only — amount is still a fixed cash notional, not a live % of balance.
 4. **Pause / resume / delete** at any time. **PATCH** updates name, amount, and/or schedule.
-5. When due, the worker buys at **last market price** with `quantity = amount / price`.
+5. When due, the worker buys at **last price plus buy slippage** with `quantity = amount / (slippedFill × (1 + fee))` so the cash spend includes the taker fee.
 6. **Insufficient cash** (or market unavailable): that run is stored as **failed**; the plan stays **active** and advances to the next period.
 7. **Idempotency:** `UNIQUE(plan_id, period_key)` on run rows — only one claim per period.
 8. **Catch-up:** if the server was down across multiple periods, only the **latest** due slot runs once (intermediate slots are skipped).

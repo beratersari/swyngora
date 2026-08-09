@@ -98,6 +98,8 @@ type tradeDTO struct {
 	PendingOrderID string          `json:"pendingOrderId,omitempty"`
 	LotMethod      string          `json:"lotMethod,omitempty"`
 	LotFills       []taxLotFillDTO `json:"lotFills,omitempty"`
+	Fee            float64         `json:"fee"`
+	LastPrice      float64         `json:"lastPrice,omitempty"`
 	CreatedAt      string          `json:"createdAt"`
 }
 
@@ -142,6 +144,7 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 		ID: t.ID, Exchange: string(t.Exchange), Symbol: t.Symbol, Side: string(t.Side),
 		Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
 		PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod),
+		Fee: t.Fee, LastPrice: t.LastPrice,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if len(fills) > 0 {
@@ -707,5 +710,37 @@ func (h *PortfolioHandler) ListTrades(w http.ResponseWriter, r *http.Request) {
 		"total":    total,
 		"limit":    limit,
 		"offset":   offset,
+	})
+}
+
+// GetTradingCosts handles GET /api/v1/portfolio/trading-costs
+func (h *PortfolioHandler) GetTradingCosts(w http.ResponseWriter, r *http.Request) {
+	ex := strings.TrimSpace(r.URL.Query().Get("exchange"))
+	if ex != "" {
+		v := domain.PaperTradingCostViewFor(domain.ParseExchange(ex))
+		writeJSON(w, http.StatusOK, map[string]any{
+			"exchange":     string(v.Exchange),
+			"feeRate":      v.FeeRate,
+			"slippageRate": v.SlippageRate,
+			"feePct":       v.FeePct,
+			"slippagePct":  v.SlippagePct,
+			"note":         domain.PaperTradingCostsNote,
+		})
+		return
+	}
+	all := domain.AllPaperTradingCosts()
+	items := make([]map[string]any, 0, len(all))
+	for _, v := range all {
+		items = append(items, map[string]any{
+			"exchange":     string(v.Exchange),
+			"feeRate":      v.FeeRate,
+			"slippageRate": v.SlippageRate,
+			"feePct":       v.FeePct,
+			"slippagePct":  v.SlippagePct,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"note":  domain.PaperTradingCostsNote,
 	})
 }

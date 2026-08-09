@@ -64,7 +64,7 @@ func prepareBuyLots(bookID string, ex domain.Exchange, symbol string, existing [
 	return ops
 }
 
-func prepareSellLots(existing []domain.TaxLot, bookID string, ex domain.Exchange, symbol string, posQty, avgCost, sellQty, sellPrice float64, method domain.LotMethod, tradeID string, now time.Time) (*domain.LotOps, float64, float64, error) {
+func prepareSellLots(existing []domain.TaxLot, bookID string, ex domain.Exchange, symbol string, posQty, avgCost, sellQty, sellPrice float64, method domain.LotMethod, tradeID string, now time.Time, feeRate float64) (*domain.LotOps, float64, float64, error) {
 	open := append([]domain.TaxLot(nil), existing...)
 	ops := &domain.LotOps{}
 	if domain.OpenLotQuantity(open) <= domain.PositionEpsilon && posQty > domain.PositionEpsilon {
@@ -72,7 +72,7 @@ func prepareSellLots(existing []domain.TaxLot, bookID string, ex domain.Exchange
 		ops.Created = append(ops.Created, syn)
 		open = append(open, syn)
 	}
-	fills, updated, realized, err := domain.ConsumeLots(open, sellQty, sellPrice, method, now)
+	fills, updated, realized, err := domain.ConsumeLots(open, sellQty, sellPrice, method, now, feeRate)
 	if err != nil {
 		return nil, 0, 0, err
 	}

@@ -53,7 +53,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_portfolio_risk_limits` | Optional risk limits + live status |
 | `set_portfolio_risk_limits` | Set daily-loss % and/or max coin weight % |
 | `clear_portfolio_risk_limits` | Remove all risk limits |
-| `place_portfolio_order` | Paper market buy/sell |
+| `get_paper_trading_costs` | Per-exchange paper fee and slippage rates |
+| `place_portfolio_order` | Paper market buy/sell (slipped fill + taker fee) |
 | `place_portfolio_pending_order` | Paper limit_buy / limit_sell / stop_loss / trailing_stop |
 | `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked) |
 | `place_portfolio_bracket_order` | Paper bracket: entry limit buy + pending TP/SL |

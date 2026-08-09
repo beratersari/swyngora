@@ -217,6 +217,13 @@ class PortfolioGetInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class PaperTradingCostsInput(BaseModel):
+    exchange: str = Field(
+        default="",
+        description="Optional venue binance|coinbase|bybit; omit to list all",
+    )
+
+
 class PortfolioRenameInput(BaseModel):
     client_id: str
     portfolio_id: str
@@ -827,6 +834,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
 
     def get_portfolio_risk_limits(client_id: str) -> str:
         return http.get("/api/v1/portfolio/risk-limits", {"clientId": client_id})
+
+    def get_paper_trading_costs(exchange: str = "") -> str:
+        q: dict[str, Any] = {}
+        if exchange:
+            q["exchange"] = exchange
+        return http.get("/api/v1/portfolio/trading-costs", q)
 
     def set_portfolio_risk_limits(
         client_id: str,
@@ -1645,9 +1658,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
+            get_paper_trading_costs,
+            name="get_paper_trading_costs",
+            description=(
+                "Paper taker fee and slippage rates per exchange. Fills use slipped last price; "
+                "buy cash/lot cost include the fee; sell PnL is after the fee."
+            ),
+            args_schema=PaperTradingCostsInput,
+        ),
+        StructuredTool.from_function(
             place_portfolio_order,
             name="place_portfolio_order",
-            description="Paper market buy/sell at last price. Not real money.",
+            description=(
+                "Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. "
+                "Buy lot cost includes the fee; sell realized PnL is after the fee. Not real money."
+            ),
             args_schema=PortfolioOrderInput,
         ),
         StructuredTool.from_function(

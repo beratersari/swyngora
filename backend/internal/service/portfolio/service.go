@@ -15,7 +15,7 @@ import (
 
 const (
 	maxClientIDLen = 128
-	paperNote      = "Paper trading only — simulated fills at last market price. Not financial advice. No real money."
+	paperNote      = "Paper trading only — simulated fills at last price plus venue slippage and taker fee. Not financial advice. No real money."
 )
 
 // PriceFetcher loads last prices for paper fills and marks.
@@ -28,11 +28,27 @@ type Service struct {
 	store  domain.PortfolioPort
 	market PriceFetcher
 	sink   domain.PortfolioChangeSink
+	costFor func(domain.Exchange) domain.TradingCost
 }
 
 // New constructs a portfolio service.
 func New(store domain.PortfolioPort, market PriceFetcher) *Service {
-	return &Service{store: store, market: market}
+	return &Service{store: store, market: market, costFor: domain.TradingCostFor}
+}
+
+// WithPaperCosts overrides per-exchange fee/slippage (tests use domain.ZeroTradingCosts).
+func (s *Service) WithPaperCosts(fn func(domain.Exchange) domain.TradingCost) *Service {
+	if s != nil && fn != nil {
+		s.costFor = fn
+	}
+	return s
+}
+
+func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
+	if s != nil && s.costFor != nil {
+		return s.costFor(ex)
+	}
+	return domain.TradingCostFor(ex)
 }
 
 // SetChangeSink receives order/position/cash mutations for realtime subscribers.
@@ -363,10 +379,16 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
-	price, err := s.lastPrice(ctx, string(ex), sym)
+	last, err := s.lastPrice(ctx, string(ex), sym)
 	if err != nil {
 		return nil, nil, err
 	}
+	cost := s.paperCost(ex)
+	price := domain.ApplySlippage(last, side, cost.SlippageRate)
+	if price <= 0 {
+		return nil, nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
+	}
+	fee := domain.FeeAmount(in.Quantity, price, cost.FeeRate)
 	if side == domain.TradeSideBuy {
 		base, _ := domain.SplitBaseQuote(ex, sym)
 		if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*price); err != nil {
@@ -407,11 +429,15 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	tradeID := uuid.NewString()
 	switch side {
 	case domain.TradeSideBuy:
-		// Spend only unreserved cash; update absolute cash from full balance.
-		_, newQty, newAvg, err = domain.ApplyBuy(availCash, in.Quantity, price, posQty, avg)
+		debit := domain.BuyCashDebit(in.Quantity, price, cost.FeeRate)
+		if availCash+1e-9 < debit {
+			return nil, nil, fmt.Errorf("%w: insufficient cash balance", domain.ErrInvalidArgument)
+		}
+		unit := domain.BuyUnitCost(price, cost.FeeRate)
+		_, newQty, newAvg, err = domain.ApplyBuy(availCash, in.Quantity, unit, posQty, avg)
 		if err == nil {
-			newCash = p.CashBalance - in.Quantity*price
-			lotOps = prepareBuyLots(clientID, ex, sym, existingLots, posQty, avg, in.Quantity, price, tradeID, now)
+			newCash = p.CashBalance - debit
+			lotOps = prepareBuyLots(clientID, ex, sym, existingLots, posQty, avg, in.Quantity, unit, tradeID, now)
 			merged := append(append([]domain.TaxLot(nil), existingLots...), lotOps.Created...)
 			if a := domain.AvgCostFromLots(merged); a > 0 {
 				newAvg = a
@@ -422,9 +448,9 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		if in.Quantity > availPos+domain.PositionEpsilon {
 			return nil, nil, fmt.Errorf("%w: insufficient position quantity", domain.ErrInvalidArgument)
 		}
-		lotOps, realized, newAvg, err = prepareSellLots(existingLots, clientID, ex, sym, posQty, avg, in.Quantity, price, lotMethod, tradeID, now)
+		lotOps, realized, newAvg, err = prepareSellLots(existingLots, clientID, ex, sym, posQty, avg, in.Quantity, price, lotMethod, tradeID, now, cost.FeeRate)
 		if err == nil {
-			newCash = p.CashBalance + in.Quantity*price
+			newCash = p.CashBalance + domain.SellCashCredit(in.Quantity, price, cost.FeeRate)
 			newQty = posQty - in.Quantity
 			if newQty < domain.PositionEpsilon {
 				newQty = 0
@@ -464,6 +490,8 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		Notional:    in.Quantity * price,
 		RealizedPnL: realized,
 		LotMethod:   lotMethod,
+		Fee:         fee,
+		LastPrice:   last,
 		CreatedAt:   now,
 	}
 	if lotOps != nil {
@@ -607,7 +635,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	if n+1 > domain.MaxOpenPendingOrders {
 		return nil, nil, nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
 	}
-	need := domain.BuyReserveCash(in.Quantity, in.EntryPrice)
+	need := domain.BuyReserveCash(in.Quantity, in.EntryPrice, s.paperCost(ex))
 	avail, rerr := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 	if rerr != nil {
 		return nil, nil, nil, rerr
@@ -852,7 +880,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	var reservedCash, reservedQty float64
 	switch side {
 	case domain.TradeSideBuy:
-		need := domain.BuyReserveCash(in.Quantity, trigger)
+		need := domain.BuyReserveCash(in.Quantity, trigger, s.paperCost(ex))
 		avail, rerr := s.availableCashForTrading(ctx, clientID, p.CashBalance)
 		if rerr != nil {
 			return nil, rerr
@@ -1028,7 +1056,7 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	var reservedCash, reservedQty float64
 	switch o.Side {
 	case domain.TradeSideBuy:
-		need := domain.BuyReserveCash(newRemaining, newTrigger)
+		need := domain.BuyReserveCash(newRemaining, newTrigger, s.paperCost(o.Exchange))
 		if cashFor+1e-9 < need {
 			return nil, nil, fmt.Errorf("%w: insufficient available cash to reserve (need %g, available %g)", domain.ErrInvalidArgument, need, cashFor)
 		}
@@ -1357,7 +1385,9 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 func (s *Service) maxFillableQty(o domain.PendingOrder, remaining, lastPrice float64) float64 {
 	switch o.Side {
 	case domain.TradeSideBuy:
-		return domain.MaxBuyFillQty(remaining, o.ReservedCash, lastPrice)
+		cost := s.paperCost(o.Exchange)
+		fill := domain.ApplySlippage(lastPrice, domain.TradeSideBuy, cost.SlippageRate)
+		return domain.MaxBuyFillQty(remaining, o.ReservedCash, fill, cost.FeeRate)
 	case domain.TradeSideSell:
 		maxByRes := o.ReservedQuantity
 		if maxByRes <= 0 {
@@ -1440,6 +1470,11 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 		return nil, false, nil
 	}
 	now := time.Now().UTC()
+	cost := s.paperCost(o.Exchange)
+	fillPrice := domain.ApplySlippage(lastPrice, o.Side, cost.SlippageRate)
+	if fillPrice <= 0 {
+		return nil, false, nil
+	}
 	p, err := s.store.GetPortfolio(ctx, o.ClientID)
 	if err != nil {
 		return nil, false, err
@@ -1456,8 +1491,8 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	fillQty := domain.ClampFillQty(remaining, 0, maxFillQty)
 	switch o.Side {
 	case domain.TradeSideBuy:
-		// Bound by remaining reserved cash at fill price.
-		maxByRes := domain.MaxBuyFillQty(remaining, o.ReservedCash, lastPrice)
+		// Bound by remaining reserved cash at slipped fill + fee.
+		maxByRes := domain.MaxBuyFillQty(remaining, o.ReservedCash, fillPrice, cost.FeeRate)
 		if maxFillQty > 0 && maxFillQty < maxByRes {
 			fillQty = maxFillQty
 		} else {
@@ -1490,21 +1525,25 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	tradeID := uuid.NewString()
 	var newCash, newQty, newAvg, realized float64
 	var lotOps *domain.LotOps
+	fee := domain.FeeAmount(fillQty, fillPrice, cost.FeeRate)
 	switch o.Side {
 	case domain.TradeSideBuy:
-		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, fillQty, lastPrice, posQty, avg)
+		debit := domain.BuyCashDebit(fillQty, fillPrice, cost.FeeRate)
+		unit := domain.BuyUnitCost(fillPrice, cost.FeeRate)
+		newCash, newQty, newAvg, err = domain.ApplyBuy(p.CashBalance, fillQty, unit, posQty, avg)
 		realized = 0
 		if err == nil {
-			lotOps = prepareBuyLots(o.ClientID, o.Exchange, o.Symbol, existingLots, posQty, avg, fillQty, lastPrice, tradeID, now)
+			newCash = p.CashBalance - debit
+			lotOps = prepareBuyLots(o.ClientID, o.Exchange, o.Symbol, existingLots, posQty, avg, fillQty, unit, tradeID, now)
 			merged := append(append([]domain.TaxLot(nil), existingLots...), lotOps.Created...)
 			if a := domain.AvgCostFromLots(merged); a > 0 {
 				newAvg = a
 			}
 		}
 	case domain.TradeSideSell:
-		lotOps, realized, newAvg, err = prepareSellLots(existingLots, o.ClientID, o.Exchange, o.Symbol, posQty, avg, fillQty, lastPrice, lotMethod, tradeID, now)
+		lotOps, realized, newAvg, err = prepareSellLots(existingLots, o.ClientID, o.Exchange, o.Symbol, posQty, avg, fillQty, fillPrice, lotMethod, tradeID, now, cost.FeeRate)
 		if err == nil {
-			newCash = p.CashBalance + fillQty*lastPrice
+			newCash = p.CashBalance + domain.SellCashCredit(fillQty, fillPrice, cost.FeeRate)
 			newQty = posQty - fillQty
 			if newQty < domain.PositionEpsilon {
 				newQty = 0
@@ -1537,7 +1576,7 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	updated.FilledQuantity = filledAfter
 	updated.RemainingQuantity = remainingAfter
 	updated.FillTradeID = "" // set after trade id known
-	updated.FillPrice = lastPrice
+	updated.FillPrice = fillPrice
 	updated.UpdatedAt = now
 	if remainingAfter <= domain.PositionEpsilon {
 		updated.Status = domain.PendingStatusFilled
@@ -1548,7 +1587,7 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	} else {
 		updated.Status = domain.PendingStatusOpen
 		if o.Side == domain.TradeSideBuy {
-			updated.ReservedCash = domain.AfterBuyFillReservation(remainingAfter, o.TriggerPrice)
+			updated.ReservedCash = domain.AfterBuyFillReservation(remainingAfter, o.TriggerPrice, cost)
 			updated.ReservedQuantity = 0
 		} else {
 			updated.ReservedCash = 0
@@ -1569,8 +1608,9 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	}
 	tr := domain.Trade{
 		ID: tradeID, ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
-		Side: o.Side, Quantity: fillQty, Price: lastPrice, Notional: fillQty * lastPrice,
-		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod, CreatedAt: now,
+		Side: o.Side, Quantity: fillQty, Price: fillPrice, Notional: fillQty * fillPrice,
+		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod,
+		Fee: fee, LastPrice: lastPrice, CreatedAt: now,
 	}
 	if lotOps != nil {
 		tr.LotFills = lotOps.Fills

@@ -61,6 +61,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/ht
 
 ## Limitations
 
-- Paper market orders only; no limit rebalance, no fees.
+- Paper market orders only; no limit rebalance. Rebalance legs use the same fee and slippage as other paper market fills.
 - Only pairs quoted in the portfolio currency count toward the mix.
 - Reserved open-order size cannot be sold until released.

@@ -347,7 +347,7 @@ func FormatTradePreview(side domain.TradeSide, exchange, symbol string, qty, pri
 	b.WriteString(row("Amount", code(Float(qty, 8))))
 	b.WriteString(row("Price", code(Float(price, 8))))
 	b.WriteString(row("Total", code(Float(notional, 4)+" "+currency)))
-	b.WriteString("\n" + italic("Fills at last market price when you confirm (may differ slightly).") + "\n")
+	b.WriteString("\n" + italic("Fills at last price plus venue slippage; a taker fee is charged on the fill.") + "\n")
 	b.WriteString(paperDisclaimer)
 	return b.String()
 }
@@ -371,6 +371,12 @@ func FormatTradeFilled(tr *domain.Trade, previewPrice float64, currency string, 
 		b.WriteString(row("Preview was", code(Float(previewPrice, 8))))
 	}
 	b.WriteString(row("Total", code(Float(tr.Notional, 4)+" "+currency)))
+	if tr.Fee > 0 {
+		b.WriteString(row("Fee", code(Float(tr.Fee, 4)+" "+currency)))
+	}
+	if tr.LastPrice > 0 && absFloat(tr.Price-tr.LastPrice) > 1e-9 {
+		b.WriteString(row("Last (pre-slip)", code(Float(tr.LastPrice, 8))))
+	}
 	if view != nil {
 		b.WriteString(row("Cash now", code(Float(view.CashBalance, 4)+" "+view.Currency)))
 		b.WriteString(row("Equity", code(Float(view.Equity, 4))))

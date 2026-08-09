@@ -74,6 +74,7 @@ type DataPort interface {
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
@@ -1122,8 +1123,19 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	s.AddTool(mcp.NewTool("get_paper_trading_costs",
+		mcp.WithDescription("Paper taker fee and slippage rates per exchange (binance, coinbase, bybit). Fills use slipped last price; buy cash/lot cost include the fee; sell PnL is after the fee. Pending buy reservations cover slip + fee."),
+		mcp.WithString("exchange", mcp.Description("Optional venue; omit to list all")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetPaperTradingCosts(ctx, req.GetString("exchange", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	s.AddTool(mcp.NewTool("place_portfolio_order",
-		mcp.WithDescription("Paper market buy/sell at last price. Simulated only — not real trading."),
+		mcp.WithDescription("Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. Buy lot cost includes the fee; sell realized PnL is after the fee. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -1157,7 +1169,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("list_portfolio_trades",
-		mcp.WithDescription("List paper trade history for a clientId."),
+		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, and taker fee."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
 		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
@@ -1194,7 +1206,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("place_portfolio_pending_order",
-		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. For trailing_stop use trailType+trailValue (triggerPrice optional/ignored). Simulated only."),
+		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. Buy reservations include slippage and the taker fee. Fills use slipped last price. For trailing_stop use trailType+trailValue. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("limit_buy | limit_sell | stop_loss | trailing_stop")),

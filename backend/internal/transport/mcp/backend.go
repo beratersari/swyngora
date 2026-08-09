@@ -784,6 +784,27 @@ func portfolioShareMap(sh *domain.PortfolioShare) map[string]any {
 	}
 }
 
+func (b *Backend) GetPaperTradingCosts(_ context.Context, exchange string) (json.RawMessage, error) {
+	note := domain.PaperTradingCostsNote
+	ex := strings.TrimSpace(exchange)
+	if ex != "" {
+		v := domain.PaperTradingCostViewFor(domain.ParseExchange(ex))
+		return mustJSON(map[string]any{
+			"exchange": string(v.Exchange), "feeRate": v.FeeRate, "slippageRate": v.SlippageRate,
+			"feePct": v.FeePct, "slippagePct": v.SlippagePct, "note": note,
+		})
+	}
+	all := domain.AllPaperTradingCosts()
+	items := make([]map[string]any, 0, len(all))
+	for _, v := range all {
+		items = append(items, map[string]any{
+			"exchange": string(v.Exchange), "feeRate": v.FeeRate, "slippageRate": v.SlippageRate,
+			"feePct": v.FeePct, "slippagePct": v.SlippagePct,
+		})
+	}
+	return mustJSON(map[string]any{"items": items, "note": note})
+}
+
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -1001,7 +1022,8 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		"trade": map[string]any{
 			"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
 			"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
-			"lotMethod": string(tr.LotMethod), "createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
+			"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
 		},
 		"portfolio": pmap,
 		"note":      v.Note,
@@ -1021,7 +1043,7 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 		items = append(items, map[string]any{
 			"id": t.ID, "exchange": string(t.Exchange), "symbol": t.Symbol, "side": string(t.Side),
 			"quantity": t.Quantity, "price": t.Price, "notional": t.Notional, "realizedPnL": t.RealizedPnL,
-			"pendingOrderId": t.PendingOrderID,
+			"pendingOrderId": t.PendingOrderID, "fee": t.Fee, "lastPrice": t.LastPrice,
 			"createdAt":      t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
@@ -1783,6 +1805,7 @@ func marginTradeMap(t *domain.MarginTrade) map[string]any {
 		"side": string(t.Side), "action": t.Action, "quantity": t.Quantity, "price": t.Price,
 		"notional": t.Notional, "realizedPnL": t.RealizedPnL, "marginDelta": t.MarginDelta,
 		"principalPaid": t.PrincipalPaid, "interestPaid": t.InterestPaid, "leverage": t.Leverage,
+		"fee": t.Fee,
 		"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }

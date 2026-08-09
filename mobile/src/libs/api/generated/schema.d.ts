@@ -751,6 +751,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/trading-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paper trading fee and slippage rates
+         * @description Per-exchange paper taker fee and adverse slippage applied on every fill
+         *     (market, pending, recurring, margin). Rates are fractions (0.001 = 0.10%).
+         *     Optional exchange query returns one venue; omit to list all.
+         *     Paper trading only — not real money.
+         */
+        get: operations["getPaperTradingCosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/orders": {
         parameters: {
             query?: never;
@@ -766,8 +789,11 @@ export interface paths {
         put?: never;
         /**
          * Place a paper order (market or pending)
-         * @description type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
-         *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
+         * @description type=market (default): immediate buy/sell at last price plus adverse slippage (side required);
+         *     a taker fee is charged. Buy cash debit and tax-lot unit cost include the fee; sell credit and
+         *     realized PnL are after the fee. Uses available cash/qty only.
+         *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy, including
+         *     worst-case slip + fee) or position (sell);
          *     may fill partially and stay open until remaining size is zero; each fill is a trade history row.
          *     type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
          *     shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
@@ -777,6 +803,7 @@ export interface paths {
          *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
          *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
          *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
+         *     See GET /api/v1/portfolio/trading-costs for per-exchange rates.
          *     Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
@@ -1992,7 +2019,7 @@ export interface components {
             netDeposits?: number;
             /** @description startingBalance + netDeposits */
             contributedCapital?: number;
-            /** @description Cash locked by open spot buy pending orders */
+            /** @description Cash locked by open spot buy pending orders (includes worst-case slip + fee) */
             reservedCash?: number;
             /** @description Margin reserved by open margin limit orders */
             reservedMargin?: number;
@@ -2026,7 +2053,7 @@ export interface components {
             /** @description Remaining quantity */
             quantity?: number;
             originalQuantity?: number;
-            /** @description Unit cost */
+            /** @description Fee-inclusive unit cost */
             price?: number;
             /** Format: date-time */
             openedAt?: string;
@@ -2040,6 +2067,52 @@ export interface components {
             costPrice?: number;
             sellPrice?: number;
             realizedPnL?: number;
+        };
+        /** @description Filled paper order leg (market or pending). price is the slipped fill. */
+        PaperTrade: {
+            id?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            quantity?: number;
+            /** @description Fill price after adverse slippage */
+            price?: number;
+            /** @description quantity × slipped fill (fee not included) */
+            notional?: number;
+            /** @description Sell realized after fee vs lot cost (fee-inclusive on buys) */
+            realizedPnL?: number;
+            pendingOrderId?: string;
+            /** @enum {string} */
+            lotMethod?: "fifo" | "lifo";
+            lotFills?: components["schemas"]["TaxLotFill"][];
+            /** @description Quote-currency taker fee */
+            fee?: number;
+            /** @description Last/mark before slippage (0 if not stored) */
+            lastPrice?: number;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        PaperTradingCost: {
+            /** @enum {string} */
+            exchange?: "binance" | "coinbase" | "bybit";
+            /** @description Taker fee as a fraction (0.001 = 0.10%) */
+            feeRate?: number;
+            /** @description Adverse slippage as a fraction */
+            slippageRate?: number;
+            /** @description Fee in percent */
+            feePct?: number;
+            /** @description Slippage in percent */
+            slippagePct?: number;
+        };
+        PaperTradingCostsResponse: {
+            exchange?: string;
+            feeRate?: number;
+            slippageRate?: number;
+            feePct?: number;
+            slippagePct?: number;
+            items?: components["schemas"]["PaperTradingCost"][];
+            note?: string;
         };
         PortfolioCashMovement: {
             id?: string;
@@ -2151,7 +2224,7 @@ export interface components {
             remainingQuantity?: number;
             /** @description Limit/stop level; for trailing_stop the current ratcheted stop */
             triggerPrice?: number;
-            /** @description Cash reserved for remaining buy size (remaining * triggerPrice) */
+            /** @description Cash reserved for remaining buy size (remaining × slipped trigger × (1+fee)) */
             reservedCash?: number;
             /** @description Position quantity reserved for remaining sell size */
             reservedQuantity?: number;
@@ -4361,6 +4434,29 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    getPaperTradingCosts: {
+        parameters: {
+            query?: {
+                /** @description Optional venue; omit to list all */
+                exchange?: "binance" | "coinbase" | "bybit";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paper fee and slippage rates */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaperTradingCostsResponse"];
+                };
+            };
+        };
+    };
     listPortfolioOrders: {
         parameters: {
             query?: {
@@ -4459,7 +4555,15 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        /** @example market */
+                        type?: string;
+                        trade?: components["schemas"]["PaperTrade"];
+                        portfolio?: components["schemas"]["PortfolioView"];
+                        note?: string;
+                    };
+                };
             };
             /** @description Pending order or OCO pair created */
             201: {
@@ -4641,7 +4745,16 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        trades?: components["schemas"]["PaperTrade"][];
+                        count?: number;
+                        total?: number;
+                        limit?: number;
+                        offset?: number;
+                    };
+                };
             };
             404: components["responses"]["Error"];
         };
@@ -5462,7 +5575,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Margin trades */
+            /** @description Margin trades (price is slipped fill; fee is quote-currency taker fee) */
             200: {
                 headers: {
                     [name: string]: unknown;

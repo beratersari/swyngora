@@ -369,6 +369,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE portfolios ADD COLUMN net_deposits REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN lot_method TEXT NOT NULL DEFAULT 'fifo'`,
 		`ALTER TABLE trades ADD COLUMN lot_method TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE trades ADD COLUMN last_price REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE margin_trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS cash_movements (
 	id                  TEXT PRIMARY KEY NOT NULL,
 	client_id           TEXT NOT NULL,
@@ -703,7 +706,7 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id,
-		       COALESCE(lot_method, ''), created_at
+		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), created_at
 		FROM trades WHERE client_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -716,7 +719,7 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	for rows.Next() {
 		var t domain.Trade
 		var ex, side, cAt, lotMethod string
-		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &lotMethod, &cAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &lotMethod, &t.Fee, &t.LastPrice, &cAt); err != nil {
 			return nil, err
 		}
 		t.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
@@ -780,10 +783,10 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 	}
 
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
-		string(t.LotMethod), at.UTC().Format(time.RFC3339Nano)); err != nil {
+		string(t.LotMethod), t.Fee, t.LastPrice, at.UTC().Format(time.RFC3339Nano)); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
@@ -1425,9 +1428,9 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 		t.PendingOrderID = order.ID
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), atStr); err != nil {
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), t.Fee, t.LastPrice, atStr); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
@@ -1523,9 +1526,9 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 		t.PendingOrderID = filled.ID
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), atStr); err != nil {
+		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), t.Fee, t.LastPrice, atStr); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {

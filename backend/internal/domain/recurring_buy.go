@@ -43,7 +43,7 @@ const (
 )
 
 // RecurringBuyPlan is a paper DCA-style buy schedule for a client.
-// Amount is cash (portfolio currency) spent each run at last market price.
+// Amount is cash (portfolio currency) spent each run at slipped last price including the taker fee.
 type RecurringBuyPlan struct {
 	ID            string
 	ClientID      string

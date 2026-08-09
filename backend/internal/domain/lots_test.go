@@ -18,7 +18,7 @@ func TestConsumeLots_FIFOPartialAndRemaining(t *testing.T) {
 		testLot("a", 1, 100, t0),
 		testLot("b", 1, 200, t1),
 	}
-	fills, updated, realized, err := ConsumeLots(open, 1.5, 180, LotMethodFIFO, t1.Add(time.Hour))
+	fills, updated, realized, err := ConsumeLots(open, 1.5, 180, LotMethodFIFO, t1.Add(time.Hour), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestConsumeLots_LIFODifferentPnL(t *testing.T) {
 		testLot("a", 1, 100, t0),
 		testLot("b", 1, 200, t0.Add(time.Hour)),
 	}
-	_, updated, realized, err := ConsumeLots(open, 1, 180, LotMethodLIFO, t0.Add(2*time.Hour))
+	_, updated, realized, err := ConsumeLots(open, 1, 180, LotMethodLIFO, t0.Add(2*time.Hour), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +76,22 @@ func TestConsumeLots_LIFODifferentPnL(t *testing.T) {
 
 func TestConsumeLots_Insufficient(t *testing.T) {
 	t0 := time.Now().UTC()
-	_, _, _, err := ConsumeLots([]TaxLot{testLot("a", 0.5, 10, t0)}, 1, 12, LotMethodFIFO, t0)
+	_, _, _, err := ConsumeLots([]TaxLot{testLot("a", 0.5, 10, t0)}, 1, 12, LotMethodFIFO, t0, 0)
 	if !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestConsumeLots_RealizedAfterFee(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	open := []TaxLot{testLot("a", 1, 100, t0)}
+	_, _, realized, err := ConsumeLots(open, 1, 110, LotMethodFIFO, t0, 0.01) // 1% fee
+	if err != nil {
+		t.Fatal(err)
+	}
+	// net 110*0.99=108.9 → pnl 8.9
+	if math.Abs(realized-8.9) > 1e-9 {
+		t.Fatalf("realized=%v", realized)
 	}
 }
 

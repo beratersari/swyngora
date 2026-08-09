@@ -108,6 +108,17 @@ func (s *Service) availableCashForTradingMode(ctx context.Context, clientID stri
 	return avail, nil
 }
 
+// marginReserveNeed is initial margin plus worst-case open fee (slipped limit * fee).
+func (s *Service) marginReserveNeed(ex domain.Exchange, side domain.MarginSide, qty, limitPrice float64, lev int) (float64, error) {
+	cost := s.paperCost(ex)
+	worst := domain.ApplySlippage(limitPrice, domain.MarginOpenTradeSide(side), cost.SlippageRate)
+	im, err := domain.InitialMargin(qty, worst, lev)
+	if err != nil {
+		return 0, err
+	}
+	return im + domain.FeeAmount(qty, worst, cost.FeeRate), nil
+}
+
 func (s *Service) sumOpenMarginUnrealized(ctx context.Context, clientID string) (float64, error) {
 	list, err := s.store.ListOpenMarginPositions(ctx, clientID)
 	if err != nil {
@@ -596,7 +607,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 		if nOrd >= domain.MaxOpenMarginOrders {
 			return nil, nil, fmt.Errorf("%w: max open margin orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenMarginOrders)
 		}
-		need, err := domain.InitialMargin(in.Quantity, in.LimitPrice, in.Leverage)
+		need, err := s.marginReserveNeed(ex, side, in.Quantity, in.LimitPrice, in.Leverage)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -619,10 +630,17 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	}
 
 	// Market open
-	price, err := s.lastPrice(ctx, string(ex), sym)
+	last, err := s.lastPrice(ctx, string(ex), sym)
 	if err != nil {
 		return nil, nil, err
 	}
+	cost := s.paperCost(ex)
+	price := domain.ApplySlippage(last, domain.MarginOpenTradeSide(side), cost.SlippageRate)
+	if price <= 0 {
+		return nil, nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
+	}
+	openFee := domain.FeeAmount(in.Quantity, price, cost.FeeRate)
+	entry := domain.EffectiveMarginEntry(side, price, cost.FeeRate)
 	base, _ := domain.SplitBaseQuote(ex, sym)
 	if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*price); err != nil {
 		return nil, nil, err
@@ -634,12 +652,13 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
+	needCash := margin + openFee
 	avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, mode)
 	if err != nil {
 		return nil, nil, err
 	}
-	if avail+1e-9 < margin {
-		return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, margin, avail)
+	if avail+1e-9 < needCash {
+		return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, needCash, avail)
 	}
 	borrowP, debtAsset, err := domain.BorrowedPrincipalOnOpen(side, in.Quantity, price, in.Leverage)
 	if err != nil {
@@ -656,7 +675,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	lastInt := now.Truncate(time.Hour)
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Side: side, Mode: mode,
-		Quantity: in.Quantity, EntryPrice: price, Leverage: in.Leverage, Margin: margin,
+		Quantity: in.Quantity, EntryPrice: entry, Leverage: in.Leverage, Margin: margin,
 		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
@@ -664,9 +683,9 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: ex, Symbol: sym,
 		Side: side, Action: "open", Quantity: in.Quantity, Price: price, Notional: in.Quantity * price,
-		MarginDelta: -margin, Leverage: in.Leverage, CreatedAt: now,
+		MarginDelta: -needCash, Leverage: in.Leverage, Fee: openFee, CreatedAt: now,
 	}
-	p.CashBalance -= margin
+	p.CashBalance -= needCash
 	p.UpdatedAt = now
 	if err := s.store.ApplyMarginOpen(ctx, p, pos, tr); err != nil {
 		return nil, nil, err
@@ -1133,13 +1152,18 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	if !domain.MarginLimitTriggered(o.Side, o.LimitPrice, last) {
 		return false
 	}
-	// Fill at limit price (maker-style)
-	price := o.LimitPrice
+	cost := s.paperCost(o.Exchange)
+	price := domain.ApplySlippage(last, domain.MarginOpenTradeSide(o.Side), cost.SlippageRate)
+	if price <= 0 {
+		return false
+	}
+	openFee := domain.FeeAmount(o.Quantity, price, cost.FeeRate)
+	entry := domain.EffectiveMarginEntry(o.Side, price, cost.FeeRate)
 	p, err := s.store.GetPortfolio(ctx, o.ClientID)
 	if err != nil {
 		return false
 	}
-	// Available cash must cover margin; reserved margin already set aside conceptually —
+	// Available cash must cover margin + fee; reserved margin already set aside conceptually —
 	// reservation is not deducted from cashBalance, only from available — so we debit now
 	// and clear reservation in the same tx.
 	margin, err := domain.InitialMargin(o.Quantity, price, o.Leverage)
@@ -1147,6 +1171,7 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		_ = s.store.RejectMarginOrder(ctx, o.ID, "invalid margin", now)
 		return false
 	}
+	needCash := margin + openFee
 	// Cash check: full balance minus other spot reserves and OTHER margin reserves (exclude this order)
 	reservedSpot, _ := s.store.SumReservedCash(ctx, o.ClientID)
 	allMarginRes, _ := s.store.SumReservedMargin(ctx, o.ClientID)
@@ -1155,7 +1180,7 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		otherMarginRes = 0
 	}
 	avail := domain.AvailableCash(p.CashBalance, reservedSpot+otherMarginRes)
-	if avail+1e-9 < margin {
+	if avail+1e-9 < needCash {
 		_ = s.store.RejectMarginOrder(ctx, o.ID, "insufficient cash at fill", now)
 		return false
 	}
@@ -1183,7 +1208,7 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	lastInt := now.Truncate(time.Hour)
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol, Side: o.Side, Mode: mode,
-		Quantity: o.Quantity, EntryPrice: price, Leverage: o.Leverage, Margin: margin,
+		Quantity: o.Quantity, EntryPrice: entry, Leverage: o.Leverage, Margin: margin,
 		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
 		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
@@ -1191,9 +1216,9 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: o.ClientID, PositionID: pos.ID, Exchange: o.Exchange, Symbol: o.Symbol,
 		Side: o.Side, Action: "open", Quantity: o.Quantity, Price: price, Notional: o.Quantity * price,
-		MarginDelta: -margin, Leverage: o.Leverage, CreatedAt: now,
+		MarginDelta: -needCash, Leverage: o.Leverage, Fee: openFee, CreatedAt: now,
 	}
-	p.CashBalance -= margin
+	p.CashBalance -= needCash
 	p.UpdatedAt = now
 	// Reserved margin is released in ApplyMarginOpenFromOrder (reserved_margin=0 on fill).
 	if err := s.store.ApplyMarginOpenFromOrder(ctx, p, o.ID, pos, tr, now); err != nil {
@@ -1249,8 +1274,19 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		remainP := cur.DebtPrincipal - pp
 		remainI := cur.DebtInterest - ip
 
-		realized := domain.MarginRealizedPnL(cur.Side, cq, cur.EntryPrice, price)
-		cashDelta := marginRelease + realized
+		cost := s.paperCost(cur.Exchange)
+		fill := domain.ApplySlippage(price, domain.MarginCloseTradeSide(cur.Side), cost.SlippageRate)
+		if fill <= 0 {
+			fill = price
+		}
+		closeFee := domain.FeeAmount(cq, fill, cost.FeeRate)
+		exit := domain.EffectiveMarginExit(cur.Side, fill, cost.FeeRate)
+		realized := domain.MarginRealizedPnL(cur.Side, cq, cur.EntryPrice, exit)
+		// Cash uses raw slipped prices minus the close fee so the open fee
+		// (already deducted at fill and baked into entry) is not charged twice.
+		rawEntry := domain.RawFillFromEffectiveEntry(cur.Side, cur.EntryPrice, cost.FeeRate)
+		rawPnL := domain.MarginRealizedPnL(cur.Side, cq, rawEntry, fill)
+		cashDelta := marginRelease + rawPnL - closeFee
 		switch cur.DebtAsset {
 		case domain.DebtAssetBase:
 			cashDelta -= ip * price
@@ -1289,9 +1325,9 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 
 		tr := domain.MarginTrade{
 			ID: tradeID, ClientID: cur.ClientID, PositionID: cur.ID, Exchange: cur.Exchange, Symbol: cur.Symbol,
-			Side: cur.Side, Action: action, Quantity: cq, Price: price, Notional: cq * price,
+			Side: cur.Side, Action: action, Quantity: cq, Price: fill, Notional: cq * fill,
 			RealizedPnL: realized, MarginDelta: cashDelta, PrincipalPaid: pp, InterestPaid: ip,
-			Leverage: cur.Leverage, CreatedAt: now,
+			Leverage: cur.Leverage, Fee: closeFee, CreatedAt: now,
 		}
 
 		updated := *cur

@@ -584,6 +584,14 @@ func (c *APIClient) GetPortfolio(ctx context.Context, clientID string) (json.Raw
 	return c.get(ctx, "/api/v1/portfolio", q)
 }
 
+func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error) {
+	q := url.Values{}
+	if strings.TrimSpace(exchange) != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/portfolio/trading-costs", q)
+}
+
 func (c *APIClient) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("clientId", clientID)

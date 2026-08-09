@@ -1885,12 +1885,37 @@ paths:
           description: Limits removed
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/trading-costs:
+    get:
+      summary: Paper trading fee and slippage rates
+      description: |
+        Per-exchange paper taker fee and adverse slippage applied on every fill
+        (market, pending, recurring, margin). Rates are fractions (0.001 = 0.10%).
+        Optional exchange query returns one venue; omit to list all.
+        Paper trading only — not real money.
+      operationId: getPaperTradingCosts
+      tags: [Portfolio]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit] }
+          description: Optional venue; omit to list all
+      responses:
+        '200':
+          description: Paper fee and slippage rates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaperTradingCostsResponse'
   /api/v1/portfolio/orders:
     post:
       summary: Place a paper order (market or pending)
       description: |
-        type=market (default): immediate buy/sell at last price (side required); uses available cash/qty only.
-        type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy) or position (sell);
+        type=market (default): immediate buy/sell at last price plus adverse slippage (side required);
+        a taker fee is charged. Buy cash debit and tax-lot unit cost include the fee; sell credit and
+        realized PnL are after the fee. Uses available cash/qty only.
+        type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy, including
+        worst-case slip + fee) or position (sell);
         may fill partially and stay open until remaining size is zero; each fill is a trade history row.
         type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
         shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
@@ -1900,6 +1925,7 @@ paths:
         type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
         entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
         lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
+        See GET /api/v1/portfolio/trading-costs for per-exchange rates.
         Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
@@ -1965,6 +1991,15 @@ paths:
       responses:
         '200':
           description: Market fill and updated portfolio
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type: { type: string, example: market }
+                  trade: { $ref: '#/components/schemas/PaperTrade' }
+                  portfolio: { $ref: '#/components/schemas/PortfolioView' }
+                  note: { type: string }
         '201':
           description: Pending order or OCO pair created
           content:
@@ -2178,6 +2213,19 @@ paths:
       responses:
         '200':
           description: Trade list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  trades:
+                    type: array
+                    items: { $ref: '#/components/schemas/PaperTrade' }
+                  count: { type: integer }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/lots:
@@ -2973,7 +3021,7 @@ paths:
           schema: { type: integer, default: 0 }
       responses:
         '200':
-          description: Margin trades
+          description: Margin trades (price is slipped fill; fee is quote-currency taker fee)
   /api/v1/price-diff/watches:
     post:
       summary: Create a cross-exchange price difference watch
@@ -4146,7 +4194,7 @@ components:
           description: startingBalance + netDeposits
         reservedCash:
           type: number
-          description: Cash locked by open spot buy pending orders
+          description: Cash locked by open spot buy pending orders (includes worst-case slip + fee)
         reservedMargin:
           type: number
           description: Margin reserved by open margin limit orders
@@ -4183,7 +4231,7 @@ components:
         symbol: { type: string }
         quantity: { type: number, description: Remaining quantity }
         originalQuantity: { type: number }
-        price: { type: number, description: Unit cost }
+        price: { type: number, description: Fee-inclusive unit cost }
         openedAt: { type: string, format: date-time }
         sourceTradeId: { type: string }
         closedAt: { type: string, format: date-time, nullable: true }
@@ -4195,6 +4243,46 @@ components:
         costPrice: { type: number }
         sellPrice: { type: number }
         realizedPnL: { type: number }
+    PaperTrade:
+      type: object
+      description: Filled paper order leg (market or pending). price is the slipped fill.
+      properties:
+        id: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        quantity: { type: number }
+        price: { type: number, description: Fill price after adverse slippage }
+        notional: { type: number, description: quantity × slipped fill (fee not included) }
+        realizedPnL: { type: number, description: Sell realized after fee vs lot cost (fee-inclusive on buys) }
+        pendingOrderId: { type: string }
+        lotMethod: { type: string, enum: [fifo, lifo] }
+        lotFills:
+          type: array
+          items: { $ref: '#/components/schemas/TaxLotFill' }
+        fee: { type: number, description: Quote-currency taker fee }
+        lastPrice: { type: number, description: Last/mark before slippage (0 if not stored) }
+        createdAt: { type: string, format: date-time }
+    PaperTradingCost:
+      type: object
+      properties:
+        exchange: { type: string, enum: [binance, coinbase, bybit] }
+        feeRate: { type: number, description: Taker fee as a fraction (0.001 = 0.10%) }
+        slippageRate: { type: number, description: Adverse slippage as a fraction }
+        feePct: { type: number, description: Fee in percent }
+        slippagePct: { type: number, description: Slippage in percent }
+    PaperTradingCostsResponse:
+      type: object
+      properties:
+        exchange: { type: string }
+        feeRate: { type: number }
+        slippageRate: { type: number }
+        feePct: { type: number }
+        slippagePct: { type: number }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PaperTradingCost' }
+        note: { type: string }
     PortfolioCashMovement:
       type: object
       properties:
@@ -4308,7 +4396,7 @@ components:
         triggerPrice: { type: number, description: Limit/stop level; for trailing_stop the current ratcheted stop }
         reservedCash:
           type: number
-          description: Cash reserved for remaining buy size (remaining * triggerPrice)
+          description: Cash reserved for remaining buy size (remaining × slipped trigger × (1+fee))
         reservedQuantity:
           type: number
           description: Position quantity reserved for remaining sell size

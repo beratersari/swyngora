@@ -163,6 +163,7 @@ type MarginTrade struct {
 	PrincipalPaid float64
 	InterestPaid  float64
 	Leverage      int
+	Fee           float64
 	CreatedAt     time.Time
 }
 

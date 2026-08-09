@@ -27,7 +27,8 @@ Live order/position/cash updates for a selected book (and price ticks for select
 | `PATCH` | `/api/v1/portfolio/orders/{id}` | Amend open GTC limit/stop in place (`triggerPrice`, `remainingQuantity`) |
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open orders, or one market (`symbol` + optional `exchange`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
-| `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId` |
+| `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId`; `price` is slipped fill, `fee` is quote taker fee, `lastPrice` is pre-slip last |
+| `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage (`?exchange=` optional) |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (`status=open\|closed\|all`, optional `exchange`/`symbol`) |
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create named recurring buy (DCA) plan |
 | `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
@@ -77,11 +78,27 @@ Grantees select the book with `portfolioId` (UUID) or `ownerClientId` + name. Ca
 
 MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`, `share_portfolio`, `update_portfolio_share`, `revoke_portfolio_share`, `list_portfolio_shares`, `list_shared_portfolios`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`, `/portfolio share CLIENT trader`, `/portfolio shared`.
 
+### Fees and slippage
+
+Every fill (market, pending, recurring DCA, margin open/close) uses a **slipped** price and a **taker fee** for that exchange:
+
+| Venue | Fee | Slippage |
+|-------|-----|----------|
+| Binance / Bybit | 0.10% | 0.05% |
+| Coinbase | 0.60% | 0.08% |
+
+- **Buy fill:** `last × (1 + slip)`. Cash debit is `qty × fill × (1 + fee)`. Tax-lot unit cost is `fill × (1 + fee)`.
+- **Sell fill:** `last × (1 − slip)`. Cash credit is `qty × fill × (1 − fee)`. Realized PnL uses net sell `fill × (1 − fee)` minus lot cost.
+- **Pending buy reservation:** `remaining × slipped trigger × (1 + fee)` so the reserved cash covers the fee (and worst-case slip) when the order fills.
+- Trades expose `price` (slipped fill), `fee` (quote), and `lastPrice` (pre-slip last).
+
+`GET /api/v1/portfolio/trading-costs` lists the rates. MCP: `get_paper_trading_costs`.
+
 ### Tax lots (FIFO / LIFO)
 
-Every **buy** (market, pending fill, recurring DCA) opens a lot: remaining quantity, unit price, and open time. A **sell** consumes lots in `lotMethod` order (`fifo` default, or `lifo`). Realized PnL is `(sellPrice − lotPrice) × qty` for each consumed piece. Partial sells leave leftover quantity on the same lot (original quantity is kept). Existing books get one synthetic lot per open position on migrate so old inventory still sells.
+Every **buy** (market, pending fill, recurring DCA) opens a lot: remaining quantity, **fee-inclusive** unit cost, and open time. A **sell** consumes lots in `lotMethod` order (`fifo` default, or `lifo`). Realized PnL is `(netSellPrice − lotPrice) × qty` for each consumed piece (net sell is after the sell fee). Partial sells leave leftover quantity on the same lot (original quantity is kept). Existing books get one synthetic lot per open position on migrate so old inventory still sells.
 
-Pass `lotMethod` on `POST /orders` (market sells and sell pending/OCO/bracket exits). `GET /lots` lists remaining (or closed) lots. Trade history and cash/qty balances are unchanged; only realized PnL (and remaining avg cost after mixed-price buys) follow lots.
+Pass `lotMethod` on `POST /orders` (market sells and sell pending/OCO/bracket exits). `GET /lots` lists remaining (or closed) lots. Trade history and cash/qty balances stay consistent with fee-inclusive fills.
 
 MCP: `list_portfolio_lots`; `place_portfolio_order` / pending sell tools accept `lotMethod`. Telegram: `/sell SYMBOL QTY [ex] [fifo|lifo]`.
 
@@ -122,7 +139,7 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 |-------|-------------|
 | `name` | Optional label (`Salary Day Buy`); default `"SYMBOL frequency"` |
 | `symbol` + `exchange` | Coin pair to buy |
-| `amount` | Cash notional spent each run at last market price (`qty = amount / price`) |
+| `amount` | Cash notional spent each run (`qty = amount / (slippedFill × (1 + fee))`) |
 | `frequency` | `daily` \| `weekly` \| `monthly` \| `interval` |
 | `weekday` | Weekly: `monday`…`sunday` (UTC) |
 | `dayOfMonth` | Monthly: 1–31 (salary day; clamped on short months) |
@@ -140,8 +157,8 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 
 | `type` | Required fields | Fill condition (last price) | Side | Reservation |
 |--------|-----------------|------------------------------|------|-------------|
-| `market` (default) | `side`, `quantity` | Immediate at last price | buy / sell | Uses **available** cash/qty only |
-| `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `quantity * triggerPrice` cash |
+| `market` (default) | `side`, `quantity` | Immediate at last price plus adverse slippage | buy / sell | Uses **available** cash/qty only (buy cash must cover fill + fee) |
+| `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `qty × slipped trigger × (1+fee)` cash |
 | `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
 | `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |
 | `trailing_stop` | `quantity`, `trailType`, `trailValue` | last ≤ ratcheted stop | sell | Reserves `quantity` of position |
@@ -204,7 +221,7 @@ Change **price** and/or **remaining size** without canceling. Same order id; par
 | `status=open`, `timeInForce=gtc` | IOC / FOK, filled / canceled / rejected |
 | Standalone orders | OCO legs, bracket legs, margin limits |
 
-**Body:** at least one of `triggerPrice`, `remainingQuantity` (remaining must stay `> 0` — use DELETE to cancel). Original `quantity` becomes `filledQuantity + remainingQuantity`. Reservations are recalculated atomically (`remaining * trigger` cash on buys; remaining qty on sells). Extra cash/qty is checked against available **plus this order’s current reservation**.
+**Body:** at least one of `triggerPrice`, `remainingQuantity` (remaining must stay `> 0` — use DELETE to cancel). Original `quantity` becomes `filledQuantity + remainingQuantity`. Reservations are recalculated atomically (`remaining × slipped trigger × (1+fee)` cash on buys; remaining qty on sells). Extra cash/qty is checked against available **plus this order’s current reservation**.
 
 **Edit-screen GET** returns `lastPrice`, `editable`, and `amend` hints (`availableCashForOrder`, `availableQuantityForOrder`, `maxRemainingQuantity`, `minRemainingQuantity`) so the form can validate without guessing.
 

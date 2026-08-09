@@ -17,8 +17,9 @@ Users want leveraged long/short paper trading without real money: market and lim
 
 ### Open
 - **Side:** `long` or `short`; **leverage:** 1–10; **type:** `market` or `limit`
-- **Initial margin:** `qty * price / leverage` debited from available cash
-- **Limit:** reserves required margin until fill, cancel, or reject (released on cancel)
+- **Initial margin:** `qty * slippedFill / leverage` plus the open taker fee, debited from available cash
+- **Fill price:** last plus adverse slippage (long pays more / short receives less); entry stores the fee-inclusive effective price
+- **Limit:** reserves required margin **and** worst-case open fee until fill, cancel, or reject (released on cancel)
 
 ### Liquidation (maintenance 0.5% of notional)
 - **Isolated:** `liq` from assigned margin: long `entry − (margin − maint)/qty`
@@ -96,6 +97,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ -run Margin -count=1
 
 ## Limitations
 
-- No funding rates or trading fees
+- No funding rates (taker fee + slippage do apply; same rates as spot)
 - Cross liquidation of under-maint account closes open positions (paper simplification)
 - Informational simulation — not real money / not financial advice
