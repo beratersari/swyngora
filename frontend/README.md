@@ -86,8 +86,7 @@ cd backend && go run ./cmd/server                 # :8080
 cd frontend && npm install && npm run dev         # :5174
 
 # terminal 3 — AI (needed for /ai chat; optional for markets)
-cd ai && python3 -m venv .venv && source .venv/bin/activate
-pip install -e .
+cd ai && uv sync && source .venv/bin/activate
 # needs Ollama (local) or XAI_API_KEY + AI_LLM_PROVIDER=grok
 export SWYNGORA_API_URL=http://127.0.0.1:8080
 python -m swyngora_ai.serve --host 127.0.0.1 --port 8090

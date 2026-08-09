@@ -39,7 +39,7 @@ User → Orchestrator (LangGraph create_react_agent)
 cd backend && go run ./cmd/server
 
 # AI CLI (separate process — needs LLM)
-cd ai && pip install -e ".[dev]"
+cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
 export SWYNGORA_API_URL=http://localhost:8080
 swyngora-ai "BTC RSI on binance 1h and recent news"
@@ -49,8 +49,8 @@ swyngora-ai "BTC RSI on binance 1h and recent news"
 
 ```bash
 cd backend && go test ./internal/transport/mcp/...
-cd ai && pytest -q
-cd ai && ruff check . && ruff format --check .
+cd ai && source .venv/bin/activate && pytest -q
+cd ai && source .venv/bin/activate && ruff check . && ruff format --check .
 ```
 
 ## Market / watchlist tools

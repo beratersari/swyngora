@@ -73,8 +73,7 @@ cd backend && go run ./cmd/server
 
 # terminal 2 — multi-agent CLI (Ollama default)
 cd ai
-python3 -m venv .venv && source .venv/bin/activate   # or reuse existing .venv
-pip install -e ".[dev]"
+uv sync && source .venv/bin/activate    # requires uv ≥ 0.12
 export AI_LLM_PROVIDER=ollama
 export SWYNGORA_API_URL=http://localhost:8080
 swyngora-ai "What is BTC price and RSI on binance?"

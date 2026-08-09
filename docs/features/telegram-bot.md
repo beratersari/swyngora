@@ -27,8 +27,8 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 ## AI setup
 
 ```bash
-# 1) Install AI package once
-cd ai && python3 -m venv .venv && source .venv/bin/activate && pip install -e .
+# 1) Install AI package once (uv; not pip)
+cd ai && uv sync
 
 # 2) backend/.env
 TELEGRAM_BOT_TOKEN=...

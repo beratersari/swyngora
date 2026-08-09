@@ -33,12 +33,15 @@ User
 
 ## Setup
 
+Requires [uv](https://docs.astral.sh/uv/) ≥ 0.12 (one-time: `curl -LsSf https://astral.sh/uv/install.sh | sh`).
+
 ```bash
 cd ai
-python3 -m venv .venv
+uv sync                      # creates .venv, editable install, runtime + dev from uv.lock
 source .venv/bin/activate
-pip install -e ".[dev]"
 ```
+
+Python 3.11+ (pinned in `.python-version`). Recreate an old pip venv with `rm -rf .venv && uv sync`.
 
 ## Run
 
@@ -72,6 +75,7 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 
 ```bash
 cd ai
+source .venv/bin/activate   # after uv sync
 pytest -q
 ```
 
@@ -79,10 +83,11 @@ Unit tests use scripted/fake models and mocked HTTP — no live LLM or network r
 
 ## Lint and format
 
-[Ruff](https://docs.astral.sh/ruff/) is the linter and formatter (config in `pyproject.toml`). Run from `ai/` after `pip install -e ".[dev]"`:
+[Ruff](https://docs.astral.sh/ruff/) is the linter and formatter (config in `pyproject.toml`). After `uv sync` and activating `.venv`:
 
 ```bash
 cd ai
+source .venv/bin/activate
 ruff check .              # lint (E, W, F, I, UP)
 ruff format --check .     # formatter dry-run
 ruff check --fix . && ruff format .   # apply auto-fixes + format
@@ -105,6 +110,9 @@ Python market tools call the REST API (same contracts as MCP tool names). Option
 
 ```text
 ai/
+├── pyproject.toml    # package + uv_build + ruff + pytest
+├── uv.lock           # committed lockfile (uv sync --frozen)
+├── .python-version   # 3.11
 ├── src/swyngora_ai/
 │   ├── agents/       # prompts + specialist builders
 │   ├── graph/        # orchestrator
