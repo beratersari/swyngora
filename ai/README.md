@@ -53,6 +53,8 @@ swyngora-ai
 
 # One-shot
 swyngora-ai "What is BTC RSI on binance 1h?"
+
+# Flags: --session, --provider ollama|grok; swyngora-ai --help
 ```
 
 ## Environment
