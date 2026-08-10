@@ -112,6 +112,7 @@ func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, r
 	}
 	return mustJSON(map[string]any{
 		"symbol": got.Symbol, "rangePct": got.RangePct, "midPrice": got.MidPrice,
+		"usedLow": got.UsedLow, "usedHigh": got.UsedHigh, "requestedReached": got.RequestedReached,
 		"bidNotional": got.BidNotional, "askNotional": got.AskNotional,
 		"bidQuantity": got.BidQuantity, "askQuantity": got.AskQuantity,
 		"imbalance": got.Imbalance, "pressure": got.Pressure,

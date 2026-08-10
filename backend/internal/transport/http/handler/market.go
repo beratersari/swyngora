@@ -263,24 +263,27 @@ type combinedVenueDTO struct {
 }
 
 type combinedOrderBookResponse struct {
-	Symbol        string             `json:"symbol"`
-	RangePct      float64            `json:"rangePct"`
-	MidPrice      string             `json:"midPrice"`
-	BidNotional   string             `json:"bidNotional"`
-	AskNotional   string             `json:"askNotional"`
-	BidQuantity   string             `json:"bidQuantity"`
-	AskQuantity   string             `json:"askQuantity"`
-	Imbalance     float64            `json:"imbalance"`
-	Pressure      string             `json:"pressure"`
-	BidLevels     int                `json:"bidLevels"`
-	AskLevels     int                `json:"askLevels"`
-	CoveredBidPct string             `json:"coveredBidPct"`
-	CoveredAskPct string             `json:"coveredAskPct"`
-	Walls         []combinedWallDTO  `json:"walls"`
-	Bands         []orderBookBandDTO `json:"bands"`
-	Venues        []combinedVenueDTO `json:"venues"`
-	VenueCount    int                `json:"venueCount"`
-	Note          string             `json:"note"`
+	Symbol           string             `json:"symbol"`
+	RangePct         float64            `json:"rangePct"`
+	MidPrice         string             `json:"midPrice"`
+	UsedLow          string             `json:"usedLow"`
+	UsedHigh         string             `json:"usedHigh"`
+	RequestedReached bool               `json:"requestedReached"`
+	BidNotional      string             `json:"bidNotional"`
+	AskNotional      string             `json:"askNotional"`
+	BidQuantity      string             `json:"bidQuantity"`
+	AskQuantity      string             `json:"askQuantity"`
+	Imbalance        float64            `json:"imbalance"`
+	Pressure         string             `json:"pressure"`
+	BidLevels        int                `json:"bidLevels"`
+	AskLevels        int                `json:"askLevels"`
+	CoveredBidPct    string             `json:"coveredBidPct"`
+	CoveredAskPct    string             `json:"coveredAskPct"`
+	Walls            []combinedWallDTO  `json:"walls"`
+	Bands            []orderBookBandDTO `json:"bands"`
+	Venues           []combinedVenueDTO `json:"venues"`
+	VenueCount       int                `json:"venueCount"`
+	Note             string             `json:"note"`
 }
 
 func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookResponse {
@@ -314,13 +317,14 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 	}
 	return combinedOrderBookResponse{
 		Symbol: a.Symbol, RangePct: a.RangePct, MidPrice: a.MidPrice,
+		UsedLow: a.UsedLow, UsedHigh: a.UsedHigh, RequestedReached: a.RequestedReached,
 		BidNotional: a.BidNotional, AskNotional: a.AskNotional,
 		BidQuantity: a.BidQuantity, AskQuantity: a.AskQuantity,
 		Imbalance: a.Imbalance, Pressure: a.Pressure,
 		BidLevels: a.BidLevels, AskLevels: a.AskLevels,
 		CoveredBidPct: a.CoveredBidPct, CoveredAskPct: a.CoveredAskPct,
 		Walls: walls, Bands: bands, Venues: venues, VenueCount: a.VenueCount,
-		Note: "Market-wide spot depth: Binance + Coinbase + Bybit bid/ask notional in the same ±rangePct band around a shared mid. USD and USDT treated as 1:1. Informational only.",
+		Note: "Market-wide spot depth: only the price band every contributing venue can reach is summed. If all venues cover ±rangePct of the shared mid, that requested band is used. USD and USDT treated as 1:1. Informational only.",
 	}
 }
 

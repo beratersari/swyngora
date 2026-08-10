@@ -157,6 +157,10 @@ type bandStats struct {
 
 func summarizeBand(raw RawOrderBook, mid, rangePct float64) bandStats {
 	lo, hi := bandBounds(mid, rangePct)
+	return summarizeRange(raw, mid, lo, hi)
+}
+
+func summarizeRange(raw RawOrderBook, mid, lo, hi float64) bandStats {
 	var s bandStats
 	var minBid, maxAsk float64
 	for _, lv := range raw.Bids {
@@ -200,11 +204,15 @@ func summarizeBand(raw RawOrderBook, mid, rangePct float64) bandStats {
 }
 
 func detectBandWalls(raw RawOrderBook, mid, rangePct float64) []OrderBookWall {
+	lo, hi := bandBounds(mid, rangePct)
+	return detectWallsInRange(raw, mid, lo, hi)
+}
+
+func detectWallsInRange(raw RawOrderBook, mid, lo, hi float64) []OrderBookWall {
 	step := DefaultGroupSize(SuggestedGroupSizes(mid))
 	if step <= 0 {
 		step = mid / 1000
 	}
-	lo, hi := bandBounds(mid, rangePct)
 	bids := groupBand(raw.Bids, step, true, lo, hi)
 	asks := groupBand(raw.Asks, step, false, lo, hi)
 	markAnalysisWalls(bids)

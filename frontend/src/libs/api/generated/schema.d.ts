@@ -243,10 +243,11 @@ export interface paths {
         /**
          * Market-wide spot order book analysis
          * @description Combines live local books from Binance, Coinbase, and Bybit for one coin.
-         *     Bid and ask notional are taken from the **same ±rangePct band** around a
-         *     shared mid (median of venue mids). Totals drive market-wide pressure and
-         *     imbalance. USD and USDT are treated as 1:1. Partial results if a venue
-         *     is down. Informational — not financial advice.
+         *     Totals use only the **price band every contributing venue can reach**.
+         *     If all venues cover the requested ±`rangePct` of the shared mid, that
+         *     requested band is used; otherwise the intersection of their actual depth
+         *     is used (`requestedReached`, `usedLow`, `usedHigh`). USD and USDT are
+         *     treated as 1:1. Partial results if a venue is down. Informational only.
          */
         get: operations["getCombinedSpotOrderBook"];
         put?: never;
@@ -2096,9 +2097,16 @@ export interface components {
         /** @description Market-wide pressure from summed venue depth in one price band */
         CombinedOrderBook: {
             symbol?: string;
+            /** @description Requested ±% of mid */
             rangePct?: number;
             /** @description Shared mid (median of venue mids) */
             midPrice?: string;
+            /** @description Low price of the band actually summed */
+            usedLow?: string;
+            /** @description High price of the band actually summed */
+            usedHigh?: string;
+            /** @description True when every venue covers ±rangePct */
+            requestedReached?: boolean;
             bidNotional?: string;
             askNotional?: string;
             bidQuantity?: string;

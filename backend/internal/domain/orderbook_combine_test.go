@@ -36,7 +36,7 @@ func TestCombineOrderBooks_SumsSameBand(t *testing.T) {
 	if askQ < 4.9 || askQ > 5.1 {
 		t.Fatalf("ask qty %s (far 120 must be excluded)", got.AskQuantity)
 	}
-	if got.Pressure == "" || len(got.Bands) != 4 {
+	if got.Pressure == "" {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -77,5 +77,58 @@ func TestCombineOrderBooks_SkipsFailedVenue(t *testing.T) {
 func TestSharedBookMid_Empty(t *testing.T) {
 	if SharedBookMid(nil) != 0 {
 		t.Fatal("empty")
+	}
+}
+
+func TestCombineOrderBooks_UsesOverlapWhenRequestedTooWide(t *testing.T) {
+	// Mid ~100. Venue A reaches 2%+; venue B only has depth to ~0.5% on each side
+	// plus a huge fake ask far away that must not pull the common range out.
+	a := VenueRawBook{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT",
+		Book: RawOrderBook{
+			Bids: []PriceLevel{{Price: 100, Quantity: 1}, {Price: 98, Quantity: 50}},
+			Asks: []PriceLevel{{Price: 100.2, Quantity: 1}, {Price: 102, Quantity: 50}},
+		},
+	}
+	b := VenueRawBook{
+		Exchange: ExchangeBybit, Symbol: "BTCUSDT",
+		Book: RawOrderBook{
+			Bids: []PriceLevel{{Price: 100, Quantity: 1}, {Price: 99.5, Quantity: 1}},
+			Asks: []PriceLevel{{Price: 100.2, Quantity: 1}, {Price: 100.5, Quantity: 1}},
+		},
+	}
+	mid := SharedBookMid([]VenueRawBook{a, b})
+	got := CombineOrderBooks("BTCUSDT", mid, 2, []VenueRawBook{a, b})
+	if got.RequestedReached {
+		t.Fatalf("B cannot cover 2%%: %+v", got)
+	}
+	bidQ, _ := strconv.ParseFloat(got.BidQuantity, 64)
+	askQ, _ := strconv.ParseFloat(got.AskQuantity, 64)
+	// Common bids: 100+100+99.5 (not the 50@98). Common asks: 100.2+100.2+100.5 (not 50@102).
+	if bidQ < 2.9 || bidQ > 3.1 {
+		t.Fatalf("overlap bid qty %s (must exclude 98 wall)", got.BidQuantity)
+	}
+	if askQ < 2.9 || askQ > 3.1 {
+		t.Fatalf("overlap ask qty %s (must exclude 102 wall)", got.AskQuantity)
+	}
+}
+
+func TestCombineOrderBooks_UsesRequestedWhenAllReach(t *testing.T) {
+	mk := func(ex Exchange) VenueRawBook {
+		return VenueRawBook{Exchange: ex, Symbol: "ETHUSDT", Book: RawOrderBook{
+			Bids: []PriceLevel{{Price: 100, Quantity: 1}, {Price: 98.5, Quantity: 2}, {Price: 97.5, Quantity: 1}},
+			Asks: []PriceLevel{{Price: 100.2, Quantity: 1}, {Price: 101.5, Quantity: 2}, {Price: 102.5, Quantity: 1}},
+		}}
+	}
+	books := []VenueRawBook{mk(ExchangeBinance), mk(ExchangeCoinbase), mk(ExchangeBybit)}
+	mid := SharedBookMid(books)
+	got := CombineOrderBooks("ETHUSDT", mid, 2, books)
+	if !got.RequestedReached {
+		t.Fatalf("all cover 2%%: low=%s high=%s", got.UsedLow, got.UsedHigh)
+	}
+	bidQ, _ := strconv.ParseFloat(got.BidQuantity, 64)
+	// 3 venues * (1@100 + 2@98.5); 97.5 is outside ±2%.
+	if bidQ < 8.9 || bidQ > 9.1 {
+		t.Fatalf("requested-band bid qty %s", got.BidQuantity)
 	}
 }

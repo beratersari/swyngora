@@ -22,8 +22,9 @@ Futures / other markets are out of scope for now version.
     live level within ±`rangePct` of mid (not only the first few orders). Nested `bands`
     (0.5 / 1 / 2 / 5%) show near vs farther depth. Same logic on Binance, Coinbase, and Bybit.
 - `GET /api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2`
-  - Sums live bid/ask **notional** from Binance + Coinbase + Bybit in the **same** ±`rangePct`
-    band around a shared mid (median of venue mids). USD≈USDT.
+  - Sums live bid/ask **notional** from Binance + Coinbase + Bybit only in the price
+    band **every venue can reach**. If all cover ±`rangePct` of the shared mid, that
+    requested band is used; otherwise the overlap is used (`requestedReached`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
 - All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.

@@ -41,25 +41,28 @@ type CombinedVenueSlice struct {
 	Error       string
 }
 
-// CombinedOrderBookAnalysis is buy/sell pressure from all venues in the same ±% band.
+// CombinedOrderBookAnalysis is buy/sell pressure from all venues in one shared band.
 type CombinedOrderBookAnalysis struct {
-	Symbol        string
-	RangePct      float64
-	MidPrice      string
-	BidNotional   string
-	AskNotional   string
-	BidQuantity   string
-	AskQuantity   string
-	Imbalance     float64
-	Pressure      string
-	BidLevels     int
-	AskLevels     int
-	CoveredBidPct string
-	CoveredAskPct string
-	Walls         []CombinedWall
-	Bands         []OrderBookBand
-	Venues        []CombinedVenueSlice
-	VenueCount    int
+	Symbol           string
+	RangePct         float64 // requested ±%
+	MidPrice         string
+	UsedLow          string
+	UsedHigh         string
+	RequestedReached bool // true when every venue covers the requested ±rangePct
+	BidNotional      string
+	AskNotional      string
+	BidQuantity      string
+	AskQuantity      string
+	Imbalance        float64
+	Pressure         string
+	BidLevels        int
+	AskLevels        int
+	CoveredBidPct    string
+	CoveredAskPct    string
+	Walls            []CombinedWall
+	Bands            []OrderBookBand
+	Venues           []CombinedVenueSlice
+	VenueCount       int
 }
 
 // SharedBookMid is the median mid of venues that have both sides (robust to one stale book).
@@ -77,7 +80,63 @@ func SharedBookMid(books []VenueRawBook) float64 {
 	return medianFloat(mids)
 }
 
-// CombineOrderBooks sums bid/ask notional from every venue inside ±rangePct of mid.
+// bookExtent is the deepest bid and ask this snapshot actually reaches.
+func bookExtent(raw RawOrderBook) (minBid, maxAsk float64, ok bool) {
+	for _, lv := range raw.Bids {
+		if !validLevel(lv) {
+			continue
+		}
+		if minBid == 0 || lv.Price < minBid {
+			minBid = lv.Price
+		}
+	}
+	for _, lv := range raw.Asks {
+		if !validLevel(lv) {
+			continue
+		}
+		if lv.Price > maxAsk {
+			maxAsk = lv.Price
+		}
+	}
+	return minBid, maxAsk, minBid > 0 && maxAsk > 0
+}
+
+// resolveCombinedRange is the price window every contributing venue can reach.
+// If that window covers the requested ±rangePct of mid, the requested band is used.
+func resolveCombinedRange(mid, rangePct float64, books []VenueRawBook) (lo, hi float64, reached bool) {
+	reqLo, reqHi := bandBounds(mid, rangePct)
+	var commonLo, commonHi float64
+	n := 0
+	for _, b := range books {
+		if b.Err != "" {
+			continue
+		}
+		minBid, maxAsk, ok := bookExtent(b.Book)
+		if !ok {
+			continue
+		}
+		if n == 0 {
+			commonLo, commonHi = minBid, maxAsk
+		} else {
+			if minBid > commonLo {
+				commonLo = minBid
+			}
+			if maxAsk < commonHi {
+				commonHi = maxAsk
+			}
+		}
+		n++
+	}
+	if n == 0 || commonLo <= 0 || commonHi <= 0 || commonLo >= commonHi {
+		return reqLo, reqHi, false
+	}
+	if commonLo <= reqLo+1e-12 && commonHi+1e-12 >= reqHi {
+		return reqLo, reqHi, true
+	}
+	return commonLo, commonHi, false
+}
+
+// CombineOrderBooks sums bid/ask notional only inside the common reachable band.
 func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBook) CombinedOrderBookAnalysis {
 	rangePct = ClampRangePct(rangePct)
 	out := CombinedOrderBookAnalysis{
@@ -92,17 +151,26 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 		return out
 	}
 	out.MidPrice = formatFixed(mid, decimalsForStep(mid/10000)+1)
+	lo, hi, reached := resolveCombinedRange(mid, rangePct, books)
+	out.RequestedReached = reached
+	out.UsedLow = formatFixed(lo, decimalsForStep(mid/10000)+1)
+	out.UsedHigh = formatFixed(hi, decimalsForStep(mid/10000)+1)
+	if lo <= 0 || hi <= lo {
+		return out
+	}
 
 	var totBidN, totAskN, totBidQ, totAskQ float64
 	var totBidL, totAskL int
-	var coverBid, coverAsk float64
 	type bandAcc struct {
 		bidN, askN, bidQ, askQ float64
 		bidL, askL             int
 	}
 	acc := map[float64]*bandAcc{}
 	for _, pct := range analysisBandPcts {
-		acc[pct] = &bandAcc{}
+		bLo, bHi := bandBounds(mid, pct)
+		if lo <= bLo+1e-12 && hi+1e-12 >= bHi {
+			acc[pct] = &bandAcc{}
+		}
 	}
 	var walls []CombinedWall
 
@@ -112,39 +180,31 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 			out.Venues = append(out.Venues, slice)
 			continue
 		}
-		an := AnalyzeOrderBookAt(vb.Book, mid, rangePct)
+		st := summarizeRange(vb.Book, mid, lo, hi)
 		slice.Live = vb.Book.Live
 		slice.Source = vb.Book.Source
 		if slice.Source == "" {
 			slice.Source = OrderBookSourceREST
 		}
-		slice.BidNotional = an.BidNotional
-		slice.AskNotional = an.AskNotional
-		slice.BidQuantity = an.BidQuantity
-		slice.AskQuantity = an.AskQuantity
-		slice.Imbalance = an.Imbalance
-		slice.Pressure = an.Pressure
-		slice.BidLevels = an.BidLevels
-		slice.AskLevels = an.AskLevels
+		slice.BidNotional = formatQty(st.bidNotional)
+		slice.AskNotional = formatQty(st.askNotional)
+		slice.BidQuantity = formatQty(st.bidQty)
+		slice.AskQuantity = formatQty(st.askQty)
+		slice.Imbalance = st.imbalance
+		slice.Pressure = pressureFromImbalance(st.imbalance)
+		slice.BidLevels = st.bidLevels
+		slice.AskLevels = st.askLevels
 		out.Venues = append(out.Venues, slice)
 		out.VenueCount++
 
-		st := summarizeBand(vb.Book, mid, rangePct)
 		totBidN += st.bidNotional
 		totAskN += st.askNotional
 		totBidQ += st.bidQty
 		totAskQ += st.askQty
 		totBidL += st.bidLevels
 		totAskL += st.askLevels
-		if st.coveredBid > coverBid {
-			coverBid = st.coveredBid
-		}
-		if st.coveredAsk > coverAsk {
-			coverAsk = st.coveredAsk
-		}
-		for _, pct := range analysisBandPcts {
+		for pct, a := range acc {
 			b := summarizeBand(vb.Book, mid, pct)
-			a := acc[pct]
 			a.bidN += b.bidNotional
 			a.askN += b.askNotional
 			a.bidQ += b.bidQty
@@ -152,7 +212,7 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 			a.bidL += b.bidLevels
 			a.askL += b.askLevels
 		}
-		for _, w := range detectBandWalls(vb.Book, mid, rangePct) {
+		for _, w := range detectWallsInRange(vb.Book, mid, lo, hi) {
 			walls = append(walls, CombinedWall{
 				Exchange:    string(vb.Exchange),
 				Side:        w.Side,
@@ -170,8 +230,12 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 	out.AskQuantity = formatQty(totAskQ)
 	out.BidLevels = totBidL
 	out.AskLevels = totAskL
-	out.CoveredBidPct = formatFixed(coverBid, 3)
-	out.CoveredAskPct = formatFixed(coverAsk, 3)
+	if mid > lo {
+		out.CoveredBidPct = formatFixed(round4((mid-lo)/mid*100), 3)
+	}
+	if hi > mid {
+		out.CoveredAskPct = formatFixed(round4((hi-mid)/mid*100), 3)
+	}
 	if tot := totBidN + totAskN; tot > 0 {
 		out.Imbalance = round4((totBidN - totAskN) / tot)
 	}
@@ -198,7 +262,10 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 	}
 
 	for _, pct := range analysisBandPcts {
-		a := acc[pct]
+		a, ok := acc[pct]
+		if !ok {
+			continue
+		}
 		imb := 0.0
 		if tot := a.bidN + a.askN; tot > 0 {
 			imb = round4((a.bidN - a.askN) / tot)

@@ -239,7 +239,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("analyze_market_orderbook",
-		mcp.WithDescription("Market-wide buy/sell pressure for one coin. Sums live Binance + Coinbase + Bybit bid/ask notional in the same ±rangePct band around a shared mid. Prefer this when the question is overall market pressure, not one venue."),
+		mcp.WithDescription("Market-wide buy/sell pressure for one coin. Sums live Binance + Coinbase + Bybit bid/ask notional only in the price band every venue can reach (requested ±rangePct when all cover it). Prefer this for overall market pressure."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithNumber("rangePct", mcp.Description("±% of shared mid (0.25–10, default 2)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
