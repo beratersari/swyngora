@@ -41,7 +41,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/watchlist/shared` | Lists shared with the caller |
 | `GET` | `/api/v1/watchlist/audit` | Change history (who/when) |
 | `GET` | `/api/v1/alerts` | List price alerts (`clientId` / `X-Client-Id`) |
-| `POST` | `/api/v1/alerts` | Create one-shot above/below price alert |
+| `POST` | `/api/v1/alerts` | Create price, imbalance, or wall alert |
 | `GET` | `/api/v1/alerts/{id}` | Get one alert |
 | `DELETE` | `/api/v1/alerts/{id}` | Delete an alert |
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |

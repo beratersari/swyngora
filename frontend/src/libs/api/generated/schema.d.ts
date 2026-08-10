@@ -413,11 +413,14 @@ export interface paths {
         get: operations["listPriceAlerts"];
         put?: never;
         /**
-         * Create a price alert (one-time or repeating)
-         * @description Creates an active alert for when last price goes above or below targetPrice.
-         *     mode=one_time (default): fires once then status becomes triggered.
-         *     mode=repeating: fires on each edge into the condition zone; does not re-fire while price
-         *     stays on that side; re-arms when price returns to the safe side. Informational only.
+         * Create a price or order-book alert
+         * @description Creates an active alert.
+         *     kind=price (default): last price above/below targetPrice. mode defaults to one_time.
+         *     kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
+         *     kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
+         *     Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
+         *     mode=repeating (default for book): fires on each new appearance; does not re-fire while the
+         *     condition stays true; re-arms when it clears. Informational only.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -2070,8 +2073,12 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            condition?: "above" | "below";
+            kind?: "price" | "imbalance" | "wall";
+            /** @description price/imbalance above|below; wall bid|ask|any */
+            condition?: string;
             targetPrice?: number;
+            /** @description Analysis band for imbalance/wall alerts */
+            rangePct?: number;
             /** @enum {string} */
             mode?: "one_time" | "repeating";
             /** @description Repeating only - ready to fire on next cross into the condition zone */
@@ -3673,12 +3680,19 @@ export interface operations {
                      */
                     exchange?: "binance" | "coinbase" | "bybit";
                     symbol: string;
-                    /** @enum {string} */
-                    condition: "above" | "below";
-                    targetPrice: number;
                     /**
-                     * @description one_time fires once; repeating fires on each re-cross of the target
-                     * @default one_time
+                     * @default price
+                     * @enum {string}
+                     */
+                    kind?: "price" | "imbalance" | "wall";
+                    /** @description price/imbalance above|below; wall bid|ask|any */
+                    condition: string;
+                    /** @description Price target, |imbalance| threshold, or wall min share (0 = any detected wall) */
+                    targetPrice?: number;
+                    /** @description ±% of mid for live book analysis (0.25–10, default 2; book kinds only) */
+                    rangePct?: number;
+                    /**
+                     * @description one_time fires once; repeating fires on each re-cross (default one_time for price, repeating for book)
                      * @enum {string}
                      */
                     mode?: "one_time" | "repeating";

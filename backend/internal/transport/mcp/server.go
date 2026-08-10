@@ -48,6 +48,7 @@ type DataPort interface {
 	ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error)
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
+	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -652,6 +653,40 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target, req.GetString("mode", "one_time"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("create_orderbook_alert",
+		mcp.WithDescription("Create a live order-book alert. kind=imbalance (condition above=buy pressure, below=sell) with threshold 0.05–0.95, or kind=wall (condition bid|ask|any). Checked in the background from the local book. Repeating by default: fires when the condition appears, stays quiet while it remains true, re-arms after it clears."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("kind", mcp.Required(), mcp.Description("imbalance | wall")),
+		mcp.WithString("condition", mcp.Required(), mcp.Description("imbalance: above|below; wall: bid|ask|any")),
+		mcp.WithNumber("threshold", mcp.Description("Imbalance |value| 0.05–0.95, or wall min share 0–1 (0 = any detected wall)")),
+		mcp.WithNumber("rangePct", mcp.Description("±% of mid to analyze (default 2)")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		kind, err := req.RequireString("kind")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		condition, err := req.RequireString("condition")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateOrderBookAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, kind, condition, req.GetFloat("threshold", 0), req.GetFloat("rangePct", 0), req.GetString("mode", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -404,6 +404,20 @@ func (c *APIClient) CreatePriceAlert(ctx context.Context, clientID, exchange, sy
 	})
 }
 
+// CreateOrderBookAlert creates an imbalance or wall alert on the live local book.
+func (c *APIClient) CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"symbol":      symbol,
+		"kind":        kind,
+		"condition":   condition,
+		"targetPrice": threshold,
+		"rangePct":    rangePct,
+		"mode":        mode,
+	})
+}
+
 // DeletePriceAlert deletes an alert by id.
 func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

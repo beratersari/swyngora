@@ -604,6 +604,26 @@ func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symb
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Kind:        kind,
+		Condition:   condition,
+		TargetPrice: threshold,
+		RangePct:    rangePct,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
@@ -1992,16 +2012,21 @@ func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 	if mode == "" {
 		mode = string(domain.AlertModeOneTime)
 	}
+	kind := string(domain.EffectiveAlertKind(*a))
 	m := map[string]any{
 		"id":          a.ID,
 		"clientId":    a.ClientID,
 		"exchange":    string(a.Exchange),
 		"symbol":      a.Symbol,
+		"kind":        kind,
 		"condition":   string(a.Condition),
 		"mode":        mode,
 		"targetPrice": a.TargetPrice,
 		"status":      string(a.Status),
 		"createdAt":   a.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if domain.IsBookAlert(a.Kind) && a.RangePct > 0 {
+		m["rangePct"] = a.RangePct
 	}
 	if a.Mode == domain.AlertModeRepeating {
 		m["armed"] = a.Armed

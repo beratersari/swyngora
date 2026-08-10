@@ -40,24 +40,51 @@ const (
 	AlertModeRepeating AlertMode = "repeating"
 )
 
-// PriceAlert is a price threshold for a symbol on an exchange.
+// AlertKind selects what an alert watches.
+type AlertKind string
+
+const (
+	// AlertKindPrice is last-price above/below (default).
+	AlertKindPrice AlertKind = "price"
+	// AlertKindImbalance fires when live book imbalance reaches a threshold.
+	AlertKindImbalance AlertKind = "imbalance"
+	// AlertKindWall fires when a large bid/ask wall appears in the live book.
+	AlertKindWall AlertKind = "wall"
+)
+
+const (
+	// AlertWallBid / AlertWallAsk / AlertWallAny are conditions for kind=wall.
+	AlertWallBid AlertCondition = "bid"
+	AlertWallAsk AlertCondition = "ask"
+	AlertWallAny AlertCondition = "any"
+)
+
+const (
+	MinImbalanceAlertThreshold = 0.05
+	MaxImbalanceAlertThreshold = 0.95
+)
+
+// PriceAlert is a threshold for a symbol on an exchange.
+// Kind=price uses last price; kind=imbalance/wall uses live order-book analysis.
 // One-time alerts become status=triggered after the first fire.
 // Repeating alerts stay status=active and use Armed for edge detection.
 type PriceAlert struct {
-	ID             string
-	ClientID       string
-	Exchange       Exchange
-	Symbol         string
-	Condition      AlertCondition
-	TargetPrice    float64
-	Mode           AlertMode
+	ID          string
+	ClientID    string
+	Exchange    Exchange
+	Symbol      string
+	Kind        AlertKind // price (default) | imbalance | wall
+	Condition   AlertCondition
+	TargetPrice float64 // price target, |imbalance| threshold, or wall min share
+	RangePct    float64 // analysis band for book kinds; 0 = default 2%
+	Mode        AlertMode
 	// Armed is used for repeating alerts: true means ready to fire on the next
 	// transition into the condition-met zone. Ignored for one_time.
 	Armed          bool
 	Status         AlertStatus
 	CreatedAt      time.Time
 	TriggeredAt    *time.Time // last fire time (one_time or repeating)
-	TriggeredPrice float64    // last price at most recent fire; 0 if never fired
+	TriggeredPrice float64    // last metric at most recent fire; 0 if never fired
 }
 
 // AlertEvalResult is the outcome of evaluating a price tick against an alert.
@@ -144,7 +171,7 @@ const (
 	// DigestOpen collects items until the hour window ends.
 	DigestOpen DigestStatus = "open"
 	// DigestPending is sealed and waiting for (re)delivery.
-	DigestPending DigestStatus = "pending"
+	DigestPending   DigestStatus = "pending"
 	DigestDelivered DigestStatus = "delivered"
 	DigestFailed    DigestStatus = "failed"
 )
@@ -380,7 +407,7 @@ func QuietHoursEndAfter(now time.Time, loc *time.Location, startHHMM, endHHMM st
 	endToday := time.Date(lt.Year(), lt.Month(), lt.Day(), eh, em, 0, 0, loc)
 	if !endToday.After(lt) {
 		// Already past today's end clock while still in quiet → end is tomorrow
-		// (only possible for cross-midnight ranges when now is after midnight end? 
+		// (only possible for cross-midnight ranges when now is after midnight end?
 		// Actually for 22-08: at 23:00 endToday is 08:00 today which is Before lt → add day.
 		// For 22-08 at 02:00: endToday is 08:00 today which is After lt → use endToday.
 		endToday = endToday.Add(24 * time.Hour)
@@ -422,6 +449,12 @@ func ValidateQuietHoursClock(enabled bool, start, end string) error {
 // Repeating: fires only on the edge into the condition zone while Armed;
 // re-arms when price is on the safe side; does not fire while staying on the trigger side.
 func EvaluateAlert(a PriceAlert, lastPrice float64) AlertEvalResult {
+	return EvaluateAlertState(a, AlertConditionMet(a.Condition, lastPrice, a.TargetPrice))
+}
+
+// EvaluateAlertState is the shared one_time / repeating edge machine.
+// met is whether the watched condition is currently true (price, imbalance, or wall).
+func EvaluateAlertState(a PriceAlert, met bool) AlertEvalResult {
 	if a.Status != AlertStatusActive {
 		return AlertEvalResult{}
 	}
@@ -429,23 +462,17 @@ func EvaluateAlert(a PriceAlert, lastPrice float64) AlertEvalResult {
 	if mode == "" {
 		mode = AlertModeOneTime
 	}
-	met := AlertConditionMet(a.Condition, lastPrice, a.TargetPrice)
-
 	if mode == AlertModeOneTime {
 		if met {
 			return AlertEvalResult{Fire: true, OneTimeDone: true}
 		}
 		return AlertEvalResult{}
 	}
-
-	// Repeating edge detection.
 	if met {
 		if a.Armed {
 			return AlertEvalResult{Fire: true, NewArmed: false, UpdateArmed: true}
 		}
-		// Already on trigger side and disarmed — stay quiet.
 		return AlertEvalResult{NewArmed: false, UpdateArmed: true}
 	}
-	// Safe side — re-arm for the next cross.
 	return AlertEvalResult{NewArmed: true, UpdateArmed: true}
 }

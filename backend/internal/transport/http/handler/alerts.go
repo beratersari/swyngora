@@ -26,8 +26,10 @@ type alertDTO struct {
 	ClientID       string  `json:"clientId"`
 	Exchange       string  `json:"exchange"`
 	Symbol         string  `json:"symbol"`
+	Kind           string  `json:"kind"`
 	Condition      string  `json:"condition"`
 	TargetPrice    float64 `json:"targetPrice"`
+	RangePct       float64 `json:"rangePct,omitempty"`
 	Mode           string  `json:"mode"`
 	Armed          bool    `json:"armed,omitempty"`
 	Status         string  `json:"status"`
@@ -41,16 +43,21 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 	if mode == "" {
 		mode = string(domain.AlertModeOneTime)
 	}
+	kind := string(domain.EffectiveAlertKind(*a))
 	dto := alertDTO{
 		ID:          a.ID,
 		ClientID:    a.ClientID,
 		Exchange:    string(a.Exchange),
 		Symbol:      a.Symbol,
+		Kind:        kind,
 		Condition:   string(a.Condition),
 		TargetPrice: a.TargetPrice,
 		Mode:        mode,
 		Status:      string(a.Status),
 		CreatedAt:   a.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if domain.IsBookAlert(a.Kind) && a.RangePct > 0 {
+		dto.RangePct = a.RangePct
 	}
 	if a.Mode == domain.AlertModeRepeating {
 		dto.Armed = a.Armed
@@ -98,8 +105,10 @@ type createAlertBody struct {
 	ClientID    string  `json:"clientId"`
 	Exchange    string  `json:"exchange"`
 	Symbol      string  `json:"symbol"`
+	Kind        string  `json:"kind"` // price | imbalance | wall
 	Condition   string  `json:"condition"`
 	TargetPrice float64 `json:"targetPrice"`
+	RangePct    float64 `json:"rangePct"`
 	Mode        string  `json:"mode"` // one_time | repeating
 }
 
@@ -114,7 +123,8 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if clientID == "" {
 		clientID = clientIDFrom(r)
 	}
-	if body.TargetPrice == 0 {
+	kind := strings.ToLower(strings.TrimSpace(body.Kind))
+	if body.TargetPrice == 0 && kind != "wall" {
 		// Try query fallback only if body zero and query set (optional convenience).
 		if raw := r.URL.Query().Get("targetPrice"); raw != "" {
 			if f, err := strconv.ParseFloat(raw, 64); err == nil {
@@ -126,8 +136,10 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ClientID:    clientID,
 		Exchange:    body.Exchange,
 		Symbol:      body.Symbol,
+		Kind:        body.Kind,
 		Condition:   body.Condition,
 		TargetPrice: body.TargetPrice,
+		RangePct:    body.RangePct,
 		Mode:        body.Mode,
 	})
 	if err != nil {

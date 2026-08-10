@@ -209,6 +209,20 @@ class AlertCreateInput(BaseModel):
     )
 
 
+class OrderBookAlertInput(BaseModel):
+    client_id: str
+    symbol: str
+    kind: str = Field(description="imbalance | wall")
+    condition: str = Field(description="imbalance: above|below; wall: bid|ask|any")
+    threshold: float = Field(
+        default=0.0,
+        description="Imbalance |value| 0.05–0.95, or wall min share 0–1 (0 = any wall)",
+    )
+    exchange: str = "binance"
+    range_pct: float = Field(default=2.0, ge=0.25, le=10)
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
 class AlertDeleteInput(BaseModel):
     client_id: str
     id: str = Field(description="Alert id")
@@ -790,6 +804,30 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "symbol": symbol,
                 "condition": condition,
                 "targetPrice": target_price,
+                "exchange": exchange,
+                "mode": mode,
+            },
+        )
+
+    def create_orderbook_alert(
+        client_id: str,
+        symbol: str,
+        kind: str,
+        condition: str,
+        threshold: float = 0.0,
+        exchange: str = "binance",
+        range_pct: float = 2.0,
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "kind": kind,
+                "condition": condition,
+                "targetPrice": threshold,
+                "rangePct": range_pct,
                 "exchange": exchange,
                 "mode": mode,
             },
@@ -1619,6 +1657,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "after price returns to the safe side."
             ),
             args_schema=AlertCreateInput,
+        ),
+        StructuredTool.from_function(
+            create_orderbook_alert,
+            name="create_orderbook_alert",
+            description=(
+                "Create a live order-book alert. kind=imbalance (above=buy pressure, below=sell) "
+                "or kind=wall (bid|ask|any). Checked in the background; repeating by default so "
+                "it does not re-fire while the same condition stays true."
+            ),
+            args_schema=OrderBookAlertInput,
         ),
         StructuredTool.from_function(
             delete_price_alert,

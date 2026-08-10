@@ -297,3 +297,125 @@ func TestCreate_InvalidMode(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestCreate_OrderBookImbalanceAndWall(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	imb, err := svc.Create(ctx, CreateInput{
+		ClientID: "ob", Symbol: "BTCUSDT", Kind: "imbalance", Condition: "above", TargetPrice: 0.2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imb.Kind != domain.AlertKindImbalance || imb.Mode != domain.AlertModeRepeating || !imb.Armed || imb.RangePct != 2 {
+		t.Fatalf("%+v", imb)
+	}
+	wall, err := svc.Create(ctx, CreateInput{
+		ClientID: "ob", Symbol: "ETHUSDT", Kind: "wall", Condition: "bid", TargetPrice: 0.15, RangePct: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wall.Kind != domain.AlertKindWall || wall.RangePct != 5 || !wall.Armed {
+		t.Fatalf("%+v", wall)
+	}
+	if _, err := svc.Create(ctx, CreateInput{
+		ClientID: "ob", Symbol: "BTCUSDT", Kind: "imbalance", Condition: "above", TargetPrice: 0.01,
+	}); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("tiny threshold: %v", err)
+	}
+}
+
+type fakeBook struct {
+	mu    sync.Mutex
+	books map[string]*domain.OrderBook
+	calls int
+}
+
+func (f *fakeBook) GetSpotOrderBook(_ context.Context, exchange, symbol, _ string, _ int, rangePct float64) (*domain.OrderBook, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	key := exchange + "|" + symbol
+	b, ok := f.books[key]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	cp := *b
+	cp.Analysis.RangePct = rangePct
+	return &cp, nil
+}
+
+func TestChecker_OrderBookImbalanceNoRetrigger(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "bk", Symbol: "BTCUSDT", Kind: "imbalance", Condition: "above", TargetPrice: 0.2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	books := &fakeBook{books: map[string]*domain.OrderBook{
+		"binance|BTCUSDT": {Analysis: domain.OrderBookAnalysis{Imbalance: 0.3, Pressure: "buy"}},
+	}}
+	c := &Checker{Alerts: svc, Books: books}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "bk", a.ID)
+	if got.TriggeredPrice != 0.3 || got.Armed || got.Status != domain.AlertStatusActive {
+		t.Fatalf("first fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	got2, _ := svc.Get(ctx, "bk", a.ID)
+	if got2.TriggeredPrice != 0.3 {
+		t.Fatalf("re-fired while still imbalanced: %+v", got2)
+	}
+	books.mu.Lock()
+	books.books["binance|BTCUSDT"] = &domain.OrderBook{Analysis: domain.OrderBookAnalysis{Imbalance: 0.01}}
+	books.mu.Unlock()
+	c.RunOnce(ctx)
+	got3, _ := svc.Get(ctx, "bk", a.ID)
+	if !got3.Armed {
+		t.Fatalf("re-arm after clear: %+v", got3)
+	}
+	books.mu.Lock()
+	books.books["binance|BTCUSDT"] = &domain.OrderBook{Analysis: domain.OrderBookAnalysis{Imbalance: 0.25}}
+	books.mu.Unlock()
+	c.RunOnce(ctx)
+	got4, _ := svc.Get(ctx, "bk", a.ID)
+	if got4.TriggeredPrice != 0.25 {
+		t.Fatalf("second appearance: %+v", got4)
+	}
+}
+
+func TestChecker_OrderBookWallAppearAndClear(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "w", Symbol: "ETHUSDT", Kind: "wall", Condition: "ask", TargetPrice: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	books := &fakeBook{books: map[string]*domain.OrderBook{
+		"binance|ETHUSDT": {Analysis: domain.OrderBookAnalysis{Walls: []domain.OrderBookWall{{Side: "ask", Share: 0.4}}}},
+	}}
+	c := &Checker{Alerts: svc, Books: books}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "w", a.ID)
+	if got.TriggeredPrice != 0.4 || got.Armed {
+		t.Fatalf("wall fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "w", a.ID)
+	if still.TriggeredPrice != 0.4 {
+		t.Fatalf("still present re-fire %+v", still)
+	}
+	books.mu.Lock()
+	books.books["binance|ETHUSDT"] = &domain.OrderBook{Analysis: domain.OrderBookAnalysis{}}
+	books.mu.Unlock()
+	c.RunOnce(ctx)
+	cleared, _ := svc.Get(ctx, "w", a.ID)
+	if !cleared.Armed {
+		t.Fatalf("re-arm after wall gone %+v", cleared)
+	}
+}

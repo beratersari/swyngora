@@ -15,6 +15,8 @@ info:
       `version` for multi-device sync: send `baseVersion` on writes; concurrent adds of different
       symbols auto-merge; delete-vs-update on the same symbol returns 409 with both sides.
     - Price alerts support `one_time` (default) or `repeating` modes for above/below targets.
+      Order-book alerts (`kind=imbalance` or `kind=wall`) use the live local book and default
+      to repeating with edge re-arm so the same wall/imbalance does not re-fire until it clears.
       One-time alerts become `triggered` after the first fire; repeating alerts stay `active`
       and re-fire only after the price returns to the safe side and crosses again.
     - Clients may register a webhook URL with deliveryMode `immediate` or `hourly_digest`,
@@ -1005,12 +1007,15 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
     post:
-      summary: Create a price alert (one-time or repeating)
+      summary: Create a price or order-book alert
       description: |
-        Creates an active alert for when last price goes above or below targetPrice.
-        mode=one_time (default): fires once then status becomes triggered.
-        mode=repeating: fires on each edge into the condition zone; does not re-fire while price
-        stays on that side; re-arms when price returns to the safe side. Informational only.
+        Creates an active alert.
+        kind=price (default): last price above/below targetPrice. mode defaults to one_time.
+        kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
+        kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
+        Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
+        mode=repeating (default for book): fires on each new appearance; does not re-fire while the
+        condition stays true; re-arms when it clears. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]
       requestBody:
@@ -1019,18 +1024,25 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol, condition, targetPrice]
+              required: [symbol, condition]
               properties:
                 clientId: { type: string }
                 exchange: { type: string, enum: [binance, coinbase, bybit], default: binance }
                 symbol: { type: string }
-                condition: { type: string, enum: [above, below] }
-                targetPrice: { type: number, exclusiveMinimum: 0 }
+                kind: { type: string, enum: [price, imbalance, wall], default: price }
+                condition:
+                  type: string
+                  description: price/imbalance above|below; wall bid|ask|any
+                targetPrice:
+                  type: number
+                  description: Price target, |imbalance| threshold, or wall min share (0 = any detected wall)
+                rangePct:
+                  type: number
+                  description: ±% of mid for live book analysis (0.25–10, default 2; book kinds only)
                 mode:
                   type: string
                   enum: [one_time, repeating]
-                  default: one_time
-                  description: one_time fires once; repeating fires on each re-cross of the target
+                  description: one_time fires once; repeating fires on each re-cross (default one_time for price, repeating for book)
       responses:
         '201':
           description: Created alert
@@ -4309,8 +4321,10 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        condition: { type: string, enum: [above, below] }
+        kind: { type: string, enum: [price, imbalance, wall] }
+        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any }
         targetPrice: { type: number }
+        rangePct: { type: number, description: Analysis band for imbalance/wall alerts }
         mode: { type: string, enum: [one_time, repeating] }
         armed:
           type: boolean

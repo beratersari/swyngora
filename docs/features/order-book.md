@@ -35,7 +35,7 @@ Futures / other markets are out of scope for now version.
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook` |
 | HTTP | `GET /api/v1/market/orderbook` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` |
 
 ## How to verify

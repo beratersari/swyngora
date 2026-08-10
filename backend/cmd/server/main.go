@@ -442,6 +442,7 @@ func main() {
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,
 		Market:   marketSvc,
+		Books:    marketSvc,
 		Interval: cfg.AlertCheckInterval,
 		Logger:   logger,
 	}

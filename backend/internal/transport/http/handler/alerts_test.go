@@ -100,6 +100,33 @@ func TestAlertHTTP_Validation(t *testing.T) {
 		t.Fatalf("status=%d", rr.Code)
 	}
 }
+
+func TestAlertHTTP_CreateOrderBook(t *testing.T) {
+	h := newAlertHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId":    "ob-user",
+		"exchange":    "bybit",
+		"symbol":      "BTCUSDT",
+		"kind":        "imbalance",
+		"condition":   "below",
+		"targetPrice": 0.25,
+		"rangePct":    2,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/alerts", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var created alertDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.Kind != "imbalance" || created.Mode != "repeating" || created.RangePct != 2 || !created.Armed {
+		t.Fatalf("%+v", created)
+	}
+}
 func TestAlertHTTP_WebhookCRUD(t *testing.T) {
 	h := newAlertHandler(t)
 	body, _ := json.Marshal(map[string]any{

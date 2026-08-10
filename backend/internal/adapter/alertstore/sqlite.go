@@ -75,7 +75,9 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 	status          TEXT NOT NULL,
 	created_at      TEXT NOT NULL,
 	triggered_at    TEXT,
-	triggered_price REAL NOT NULL DEFAULT 0
+	triggered_price REAL NOT NULL DEFAULT 0,
+	kind            TEXT NOT NULL DEFAULT 'price',
+	range_pct       REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_price_alerts_client ON price_alerts(client_id);
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(status) WHERE status = 'active';
@@ -153,6 +155,8 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 		`ALTER TABLE client_webhooks ADD COLUMN quiet_enabled INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE client_webhooks ADD COLUMN quiet_start TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE client_webhooks ADD COLUMN quiet_end TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE price_alerts ADD COLUMN kind TEXT NOT NULL DEFAULT 'price'`,
+		`ALTER TABLE price_alerts ADD COLUMN range_pct REAL NOT NULL DEFAULT 0`,
 	} {
 		_, _ = s.db.Exec(stmt) // ignore "duplicate column" errors
 	}
@@ -232,7 +236,8 @@ func (s *SQLite) Close() error {
 
 const alertSelectCols = `
 	id, client_id, exchange, symbol, condition, target_price,
-	mode, armed, status, created_at, triggered_at, triggered_price
+	mode, armed, status, created_at, triggered_at, triggered_price,
+	kind, range_pct
 `
 
 // Create inserts a new alert. Caller supplies a unique ID and Active status.
@@ -248,6 +253,9 @@ func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.P
 	if alert.Mode == "" {
 		alert.Mode = domain.AlertModeOneTime
 	}
+	if alert.Kind == "" {
+		alert.Kind = domain.AlertKindPrice
+	}
 	armed := 0
 	if alert.Armed {
 		armed = 1
@@ -255,14 +263,16 @@ func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.P
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_alerts (
 			id, client_id, exchange, symbol, condition, target_price,
-			mode, armed, status, created_at, triggered_at, triggered_price
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			mode, armed, status, created_at, triggered_at, triggered_price,
+			kind, range_pct
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		alert.ID, alert.ClientID, string(alert.Exchange), alert.Symbol,
 		string(alert.Condition), alert.TargetPrice,
 		string(alert.Mode), armed, string(alert.Status),
 		alert.CreatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(alert.TriggeredAt), alert.TriggeredPrice,
+		string(alert.Kind), alert.RangePct,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite insert: %w", err)
@@ -701,9 +711,9 @@ func (s *SQLite) getNotificationByAlertIDUnlocked(ctx context.Context, alertID s
 
 func (s *SQLite) scanNotification(ctx context.Context, q rowScanner, query string, args ...any) (*domain.AlertNotification, error) {
 	var (
-		n                        domain.AlertNotification
-		st, nextRaw, createdRaw  string
-		deliveredRaw             sql.NullString
+		n                       domain.AlertNotification
+		st, nextRaw, createdRaw string
+		deliveredRaw            sql.NullString
 	)
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&n.ID, &n.AlertID, &n.ClientID, &n.WebhookURL, &n.PayloadJSON, &st,
@@ -769,14 +779,16 @@ type rowScanner interface {
 
 func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args ...any) (*domain.PriceAlert, error) {
 	var (
-		a                            domain.PriceAlert
+		a                              domain.PriceAlert
 		ex, cond, mode, st, createdRaw string
-		armed                        int
-		trigRaw                      sql.NullString
+		armed                          int
+		trigRaw                        sql.NullString
 	)
+	var kind string
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 		&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
+		&kind, &a.RangePct,
 	)
 	if err != nil {
 		return nil, err
@@ -786,6 +798,10 @@ func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args .
 	a.Mode = domain.AlertMode(mode)
 	if a.Mode == "" {
 		a.Mode = domain.AlertModeOneTime
+	}
+	a.Kind = domain.AlertKind(kind)
+	if a.Kind == "" {
+		a.Kind = domain.AlertKindPrice
 	}
 	a.Armed = armed != 0
 	a.Status = domain.AlertStatus(st)
@@ -806,9 +822,11 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 			armed                          int
 			trigRaw                        sql.NullString
 		)
+		var kind string
 		if err := rows.Scan(
 			&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 			&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
+			&kind, &a.RangePct,
 		); err != nil {
 			return nil, fmt.Errorf("alerts sqlite scan: %w", err)
 		}
@@ -817,6 +835,10 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 		a.Mode = domain.AlertMode(mode)
 		if a.Mode == "" {
 			a.Mode = domain.AlertModeOneTime
+		}
+		a.Kind = domain.AlertKind(kind)
+		if a.Kind == "" {
+			a.Kind = domain.AlertKindPrice
 		}
 		a.Armed = armed != 0
 		a.Status = domain.AlertStatus(st)

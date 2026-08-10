@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"math"
 	"strings"
 	"time"
 
@@ -16,15 +15,19 @@ import (
 
 const maxClientIDLen = 128
 
-// CreateInput is the application input for creating a price alert.
+// CreateInput is the application input for creating a price or order-book alert.
 type CreateInput struct {
 	ClientID    string
 	Exchange    string
 	Symbol      string
-	Condition   string // above | below
+	Condition   string // price/imbalance: above|below; wall: bid|ask|any
 	TargetPrice float64
-	// Mode is one_time (default) or repeating.
+	// Mode is one_time (default for price) or repeating (default for book).
 	Mode string
+	// Kind is price (default), imbalance, or wall.
+	Kind string
+	// RangePct is the live-book analysis band (book kinds only; 0 = default 2%).
+	RangePct float64
 }
 
 // Service orchestrates price-alert use cases.
@@ -53,16 +56,24 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if err != nil {
 		return nil, err
 	}
-	cond := domain.AlertCondition(strings.ToLower(strings.TrimSpace(in.Condition)))
-	if !domain.IsValidAlertCondition(string(cond)) {
-		return nil, fmt.Errorf("%w: condition must be above or below", domain.ErrInvalidArgument)
+	kind, ok := domain.NormalizeAlertKind(in.Kind)
+	if !ok {
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, or wall", domain.ErrInvalidArgument)
 	}
-	if in.TargetPrice <= 0 || math.IsNaN(in.TargetPrice) || math.IsInf(in.TargetPrice, 0) {
-		return nil, fmt.Errorf("%w: targetPrice must be a positive number", domain.ErrInvalidArgument)
+	cond := strings.ToLower(strings.TrimSpace(in.Condition))
+	if err := domain.ValidateAlertSpec(kind, cond, in.TargetPrice, in.RangePct); err != nil {
+		return nil, err
 	}
 	mode, ok := domain.NormalizeAlertMode(in.Mode)
 	if !ok {
 		return nil, fmt.Errorf("%w: mode must be one_time or repeating", domain.ErrInvalidArgument)
+	}
+	if in.Mode == "" && domain.IsBookAlert(kind) {
+		mode = domain.AlertModeRepeating
+	}
+	rangePct := 0.0
+	if domain.IsBookAlert(kind) {
+		rangePct = domain.ClampRangePct(in.RangePct)
 	}
 	n, err := s.store.CountByClient(ctx, clientID)
 	if err != nil {
@@ -71,16 +82,23 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if n >= domain.MaxPriceAlertsPerClient {
 		return nil, fmt.Errorf("%w: max %d alerts per client", domain.ErrInvalidArgument, domain.MaxPriceAlertsPerClient)
 	}
-	// Repeating starts disarmed so we only fire on a true cross (not while already on the trigger side).
+	// Price repeating starts disarmed (avoid firing if already on the target side).
+	// Book repeating starts armed so the first appearance of a wall/imbalance can fire.
+	armed := false
+	if mode == domain.AlertModeRepeating && domain.IsBookAlert(kind) {
+		armed = true
+	}
 	alert := domain.PriceAlert{
 		ID:          uuid.NewString(),
 		ClientID:    clientID,
 		Exchange:    ex,
 		Symbol:      sym,
-		Condition:   cond,
+		Kind:        kind,
+		Condition:   domain.AlertCondition(cond),
 		TargetPrice: in.TargetPrice,
+		RangePct:    rangePct,
 		Mode:        mode,
-		Armed:       false,
+		Armed:       armed,
 		Status:      domain.AlertStatusActive,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -161,13 +179,23 @@ func (s *Service) MarkTriggered(ctx context.Context, id string, price float64, a
 // ProcessPrice evaluates a price tick for one alert (one_time or repeating).
 // Returns the updated alert, whether a fire event occurred, and any error.
 func (s *Service) ProcessPrice(ctx context.Context, a domain.PriceAlert, price float64, at time.Time) (*domain.PriceAlert, bool, error) {
+	return s.ProcessObservation(ctx, a, domain.EvaluateAlert(a, price), price, at)
+}
+
+// ProcessBook evaluates a live order-book snapshot for an imbalance/wall alert.
+func (s *Service) ProcessBook(ctx context.Context, a domain.PriceAlert, an domain.OrderBookAnalysis, at time.Time) (*domain.PriceAlert, bool, error) {
+	ev, metric := domain.EvaluateBookAlert(a, an)
+	return s.ProcessObservation(ctx, a, ev, metric, at)
+}
+
+// ProcessObservation persists fire / re-arm from a pure eval result.
+func (s *Service) ProcessObservation(ctx context.Context, a domain.PriceAlert, ev domain.AlertEvalResult, metric float64, at time.Time) (*domain.PriceAlert, bool, error) {
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
 	}
 	if at.IsZero() {
 		at = time.Now().UTC()
 	}
-	ev := domain.EvaluateAlert(a, price)
 	if !ev.Fire && !ev.UpdateArmed && !ev.OneTimeDone {
 		return &a, false, nil
 	}
@@ -178,7 +206,7 @@ func (s *Service) ProcessPrice(ctx context.Context, a domain.PriceAlert, price f
 	)
 	switch {
 	case ev.OneTimeDone && ev.Fire:
-		out, err = s.store.MarkTriggered(ctx, a.ID, price, at)
+		out, err = s.store.MarkTriggered(ctx, a.ID, metric, at)
 		if err != nil {
 			return nil, false, err
 		}
@@ -187,7 +215,7 @@ func (s *Service) ProcessPrice(ctx context.Context, a domain.PriceAlert, price f
 		}
 		return out, true, nil
 	case ev.Fire && a.Mode == domain.AlertModeRepeating:
-		out, err = s.store.RecordRepeatingTrigger(ctx, a.ID, price, at)
+		out, err = s.store.RecordRepeatingTrigger(ctx, a.ID, metric, at)
 		if err != nil {
 			return nil, false, err
 		}
@@ -408,12 +436,18 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 	if mode == "" {
 		mode = string(domain.AlertModeOneTime)
 	}
+	kind := string(domain.EffectiveAlertKind(*a))
+	typ := "price_alert.triggered"
+	if domain.IsBookAlert(a.Kind) {
+		typ = "orderbook_alert.triggered"
+	}
 	body := map[string]any{
-		"type":        "price_alert.triggered",
+		"type":        typ,
 		"alertId":     a.ID,
 		"clientId":    a.ClientID,
 		"exchange":    string(a.Exchange),
 		"symbol":      a.Symbol,
+		"kind":        kind,
 		"condition":   string(a.Condition),
 		"mode":        mode,
 		"targetPrice": a.TargetPrice,
@@ -421,6 +455,10 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 		"triggeredAt": trigAt,
 		"status":      string(a.Status),
 		"note":        "Informational only — not financial advice.",
+	}
+	if domain.IsBookAlert(a.Kind) {
+		body["rangePct"] = a.RangePct
+		body["metric"] = a.TriggeredPrice
 	}
 	b, err := json.Marshal(body)
 	if err != nil {

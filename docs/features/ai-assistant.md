@@ -55,7 +55,7 @@ cd ai && pytest -q
 
 ## Market / watchlist tools
 
-Market specialist tools mirror Go MCP (ticker, **spot order book** / **order-book analysis**, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**, **API keys**).  
+Market specialist tools mirror Go MCP (ticker, **spot order book** / **order-book analysis**, **order-book alerts**, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**, **API keys**).  
 Sharing tools: `share_watchlist`, `update_watchlist_share`, `revoke_watchlist_share`, `list_watchlist_shares`, `list_shared_watchlists`, `list_watchlist_audit`. See `docs/features/watchlist-sharing.md`.  
 Export tools: `start_export`, `get_export`, `list_exports`, `cancel_export` (includes paper `portfolios`). See `docs/features/user-data-export.md`.  
 Import tools: `preview_import`, `confirm_import`, `get_import`, `list_imports`, `cancel_import` (merge or replace portfolios). See `docs/features/user-data-import.md`.  

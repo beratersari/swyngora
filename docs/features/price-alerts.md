@@ -43,6 +43,42 @@ PUT /api/v1/alerts/webhook
 | `one_time` | Fire once → `triggered` |
 | `repeating` | Edge-cross re-fire with re-arm |
 
+## Kinds
+
+| `kind` | What it watches | `condition` | `targetPrice` | Default mode |
+|--------|-----------------|-------------|---------------|--------------|
+| `price` (default) | Last trade/ticker price | `above` / `below` | Price | `one_time` |
+| `imbalance` | Live book notional imbalance in ±`rangePct` of mid | `above` (buy) / `below` (sell) | 0.05–0.95 | `repeating` |
+| `wall` | Large clustered rest size in that band | `bid` / `ask` / `any` | Min share 0–1 (`0` = any detected wall) | `repeating` |
+
+Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "imbalance",
+  "exchange": "binance",
+  "symbol": "BTCUSDT",
+  "condition": "above",
+  "targetPrice": 0.2,
+  "rangePct": 2
+}
+```
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "wall",
+  "exchange": "coinbase",
+  "symbol": "BTC-USD",
+  "condition": "bid",
+  "targetPrice": 0.15,
+  "rangePct": 2
+}
+```
+
+MCP: `create_orderbook_alert`. Informational only.
+
 ## Webhook security (SSRF)
 
 - Only absolute `http`/`https` URLs without userinfo.

@@ -49,17 +49,19 @@ type wirePayload struct {
 		ID             string  `json:"id"`
 		Exchange       string  `json:"exchange"`
 		Symbol         string  `json:"symbol"`
+		Kind           string  `json:"kind"`
 		Condition      string  `json:"condition"`
 		TargetPrice    float64 `json:"targetPrice"`
+		RangePct       float64 `json:"rangePct"`
 		Mode           string  `json:"mode"`
 		Status         string  `json:"status"`
 		CreatedAt      string  `json:"createdAt"`
 		TriggeredAt    *string `json:"triggeredAt"`
 		TriggeredPrice float64 `json:"triggeredPrice"`
 	} `json:"alerts"`
-	ClientID   string `json:"clientId"`
+	ClientID   string              `json:"clientId"`
 	Portfolios []wirePortfolioBook `json:"portfolios"`
-	Backtests []struct {
+	Backtests  []struct {
 		ID           string `json:"id"`
 		RuleID       string `json:"ruleId"`
 		Exchange     string `json:"exchange"`
@@ -165,7 +167,7 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 	// Alerts
 	seenAl := map[string]struct{}{}
 	for _, a := range w.Alerts {
-		al, err := normalizeAlert(importer, a.ID, a.Exchange, a.Symbol, a.Condition, a.TargetPrice, a.Mode, a.Status, a.CreatedAt, a.TriggeredAt, a.TriggeredPrice)
+		al, err := normalizeAlert(importer, a.ID, a.Exchange, a.Symbol, a.Kind, a.Condition, a.TargetPrice, a.RangePct, a.Mode, a.Status, a.CreatedAt, a.TriggeredAt, a.TriggeredPrice)
 		if err != nil {
 			res.Invalid[domain.ExportSectionAlerts]++
 			continue
@@ -328,8 +330,9 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 			if t := strings.TrimSpace(row["triggeredAt"]); t != "" {
 				trigAt = &t
 			}
-			al, err := normalizeAlert(importer, row["id"], row["exchange"], row["symbol"], row["condition"],
-				tp, row["mode"], row["status"], row["createdAt"], trigAt, trigP)
+			rng, _ := strconv.ParseFloat(row["rangePct"], 64)
+			al, err := normalizeAlert(importer, row["id"], row["exchange"], row["symbol"], row["kind"], row["condition"],
+				tp, rng, row["mode"], row["status"], row["createdAt"], trigAt, trigP)
 			if err != nil {
 				res.Invalid[domain.ExportSectionAlerts]++
 				continue
@@ -582,7 +585,7 @@ func normalizeShare(owner, grantee, role, createdAt, updatedAt string) (domain.W
 	}, nil
 }
 
-func normalizeAlert(clientID, id, exchange, symbol, condition string, target float64, mode, status, createdAt string, triggeredAt *string, triggeredPrice float64) (domain.PriceAlert, error) {
+func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, target, rangePct float64, mode, status, createdAt string, triggeredAt *string, triggeredPrice float64) (domain.PriceAlert, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return domain.PriceAlert{}, fmt.Errorf("id required")
@@ -601,12 +604,12 @@ func normalizeAlert(clientID, id, exchange, symbol, condition string, target flo
 	if sym == "" {
 		return domain.PriceAlert{}, fmt.Errorf("symbol required")
 	}
-	cond := domain.AlertCondition(strings.ToLower(strings.TrimSpace(condition)))
-	if !domain.IsValidAlertCondition(string(cond)) {
-		return domain.PriceAlert{}, fmt.Errorf("bad condition")
+	k, ok := domain.NormalizeAlertKind(kind)
+	if !ok {
+		return domain.PriceAlert{}, fmt.Errorf("bad kind")
 	}
-	if target <= 0 {
-		return domain.PriceAlert{}, fmt.Errorf("bad target")
+	if err := domain.ValidateAlertSpec(k, condition, target, rangePct); err != nil {
+		return domain.PriceAlert{}, err
 	}
 	m, ok := domain.NormalizeAlertMode(mode)
 	if !ok {
@@ -626,9 +629,16 @@ func normalizeAlert(clientID, id, exchange, symbol, condition string, target flo
 			tAt = &t
 		}
 	}
+	if domain.IsBookAlert(k) && rangePct <= 0 {
+		rangePct = domain.DefaultOrderBookRangePct
+	}
+	if !domain.IsBookAlert(k) {
+		rangePct = 0
+	}
 	return domain.PriceAlert{
-		ID: id, ClientID: clientID, Exchange: ex, Symbol: sym, Condition: cond,
-		TargetPrice: target, Mode: m, Status: st, CreatedAt: cAt,
+		ID: id, ClientID: clientID, Exchange: ex, Symbol: sym, Kind: k,
+		Condition:   domain.AlertCondition(strings.ToLower(strings.TrimSpace(condition))),
+		TargetPrice: target, RangePct: rangePct, Mode: m, Status: st, CreatedAt: cAt,
 		TriggeredAt: tAt, TriggeredPrice: triggeredPrice,
 	}, nil
 }

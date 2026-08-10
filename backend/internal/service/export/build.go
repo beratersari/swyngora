@@ -16,19 +16,19 @@ import (
 
 // payload is the JSON export shape.
 type payload struct {
-	ExportedAt string            `json:"exportedAt"`
-	ClientID   string            `json:"clientId"`
-	Sections   []string          `json:"sections"`
-	Watchlist  *watchlistPayload `json:"watchlist,omitempty"`
-	Shares     []sharePayload    `json:"shares,omitempty"`
+	ExportedAt string                 `json:"exportedAt"`
+	ClientID   string                 `json:"clientId"`
+	Sections   []string               `json:"sections"`
+	Watchlist  *watchlistPayload      `json:"watchlist,omitempty"`
+	Shares     []sharePayload         `json:"shares,omitempty"`
 	Alerts     []alertPayload         `json:"alerts,omitempty"`
 	Backtests  []backtestPayload      `json:"backtests,omitempty"`
 	Portfolios []portfolioBookPayload `json:"portfolios,omitempty"`
 }
 
 type watchlistPayload struct {
-	ClientID  string               `json:"clientId"`
-	UpdatedAt string               `json:"updatedAt"`
+	ClientID  string                 `json:"clientId"`
+	UpdatedAt string                 `json:"updatedAt"`
 	Items     []watchlistItemPayload `json:"items"`
 }
 
@@ -48,31 +48,33 @@ type sharePayload struct {
 }
 
 type alertPayload struct {
-	ID             string   `json:"id"`
-	Exchange       string   `json:"exchange"`
-	Symbol         string   `json:"symbol"`
-	Condition      string   `json:"condition"`
-	TargetPrice    float64  `json:"targetPrice"`
-	Mode           string   `json:"mode"`
-	Status         string   `json:"status"`
-	CreatedAt      string   `json:"createdAt"`
-	TriggeredAt    *string  `json:"triggeredAt,omitempty"`
-	TriggeredPrice float64  `json:"triggeredPrice,omitempty"`
+	ID             string  `json:"id"`
+	Exchange       string  `json:"exchange"`
+	Symbol         string  `json:"symbol"`
+	Kind           string  `json:"kind,omitempty"`
+	Condition      string  `json:"condition"`
+	TargetPrice    float64 `json:"targetPrice"`
+	RangePct       float64 `json:"rangePct,omitempty"`
+	Mode           string  `json:"mode"`
+	Status         string  `json:"status"`
+	CreatedAt      string  `json:"createdAt"`
+	TriggeredAt    *string `json:"triggeredAt,omitempty"`
+	TriggeredPrice float64 `json:"triggeredPrice,omitempty"`
 }
 
 type backtestPayload struct {
-	ID            string                  `json:"id"`
-	RuleID        string                  `json:"ruleId"`
-	Exchange      string                  `json:"exchange"`
-	Symbol        string                  `json:"symbol"`
-	Interval      string                  `json:"interval"`
-	RangeStart    string                  `json:"rangeStart"`
-	RangeEnd      string                  `json:"rangeEnd"`
-	Status        string                  `json:"status"`
-	SignalCount   int                     `json:"signalCount"`
-	CreatedAt     string                  `json:"createdAt"`
-	ErrorMessage  string                  `json:"errorMessage,omitempty"`
-	Signals       []backtestSignalPayload `json:"signals"`
+	ID           string                  `json:"id"`
+	RuleID       string                  `json:"ruleId"`
+	Exchange     string                  `json:"exchange"`
+	Symbol       string                  `json:"symbol"`
+	Interval     string                  `json:"interval"`
+	RangeStart   string                  `json:"rangeStart"`
+	RangeEnd     string                  `json:"rangeEnd"`
+	Status       string                  `json:"status"`
+	SignalCount  int                     `json:"signalCount"`
+	CreatedAt    string                  `json:"createdAt"`
+	ErrorMessage string                  `json:"errorMessage,omitempty"`
+	Signals      []backtestSignalPayload `json:"signals"`
 }
 
 type backtestSignalPayload struct {
@@ -146,7 +148,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 			for _, sh := range shares {
 				pl.Shares = append(pl.Shares, sharePayload{
 					OwnerClientID: sh.OwnerClientID, GranteeClientID: sh.GranteeClientID,
-					Role: string(sh.Role),
+					Role:      string(sh.Role),
 					CreatedAt: sh.CreatedAt.UTC().Format(time.RFC3339Nano),
 					UpdatedAt: sh.UpdatedAt.UTC().Format(time.RFC3339Nano),
 				})
@@ -162,9 +164,11 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 			for _, a := range alerts {
 				ap := alertPayload{
 					ID: a.ID, Exchange: string(a.Exchange), Symbol: a.Symbol,
+					Kind:      string(domain.EffectiveAlertKind(a)),
 					Condition: string(a.Condition), TargetPrice: a.TargetPrice,
-					Mode: string(a.Mode), Status: string(a.Status),
-					CreatedAt: a.CreatedAt.UTC().Format(time.RFC3339Nano),
+					RangePct: a.RangePct,
+					Mode:     string(a.Mode), Status: string(a.Status),
+					CreatedAt:      a.CreatedAt.UTC().Format(time.RFC3339Nano),
 					TriggeredPrice: a.TriggeredPrice,
 				}
 				if a.TriggeredAt != nil {
@@ -194,11 +198,11 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 				for _, bt := range list {
 					bp := backtestPayload{
 						ID: bt.ID, RuleID: bt.RuleID, Exchange: string(bt.Exchange), Symbol: bt.Symbol,
-						Interval: bt.Interval,
+						Interval:   bt.Interval,
 						RangeStart: bt.RangeStart.UTC().Format(time.RFC3339Nano),
-						RangeEnd: bt.RangeEnd.UTC().Format(time.RFC3339Nano),
-						Status: string(bt.Status), SignalCount: bt.SignalCount,
-						CreatedAt: bt.CreatedAt.UTC().Format(time.RFC3339Nano),
+						RangeEnd:   bt.RangeEnd.UTC().Format(time.RFC3339Nano),
+						Status:     string(bt.Status), SignalCount: bt.SignalCount,
+						CreatedAt:    bt.CreatedAt.UTC().Format(time.RFC3339Nano),
 						ErrorMessage: bt.ErrorMessage,
 					}
 					// All signals for this backtest
@@ -356,14 +360,15 @@ func buildCSV(pl *payload) ([]byte, error) {
 				trig = *a.TriggeredAt
 			}
 			rows = append(rows, []string{
-				a.ID, a.Exchange, a.Symbol, a.Condition,
+				a.ID, a.Exchange, a.Symbol, a.Kind, a.Condition,
 				strconv.FormatFloat(a.TargetPrice, 'f', -1, 64),
+				strconv.FormatFloat(a.RangePct, 'f', -1, 64),
 				a.Mode, a.Status, a.CreatedAt, trig,
 				strconv.FormatFloat(a.TriggeredPrice, 'f', -1, 64),
 			})
 		}
 		if err := writeSection("alerts", []string{
-			"id", "exchange", "symbol", "condition", "targetPrice", "mode", "status", "createdAt", "triggeredAt", "triggeredPrice",
+			"id", "exchange", "symbol", "kind", "condition", "targetPrice", "rangePct", "mode", "status", "createdAt", "triggeredAt", "triggeredPrice",
 		}, rows); err != nil {
 			return nil, err
 		}
