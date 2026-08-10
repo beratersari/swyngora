@@ -30,8 +30,9 @@ func TestCombineOrderBooks_SumsSameBand(t *testing.T) {
 	}
 	bidQ, _ := strconv.ParseFloat(got.BidQuantity, 64)
 	askQ, _ := strconv.ParseFloat(got.AskQuantity, 64)
-	if bidQ < 4.9 || bidQ > 5.1 {
-		t.Fatalf("bid qty %s (far 80 must be excluded)", got.BidQuantity)
+	// Ask reach is the short side, so 99.8 is outside the symmetric ±%. 80/120 stay out.
+	if bidQ < 1.9 || bidQ > 2.1 {
+		t.Fatalf("bid qty %s (far 80 and 99.8 outside ±usedPct)", got.BidQuantity)
 	}
 	if askQ < 4.9 || askQ > 5.1 {
 		t.Fatalf("ask qty %s (far 120 must be excluded)", got.AskQuantity)
@@ -104,12 +105,43 @@ func TestCombineOrderBooks_UsesOverlapWhenRequestedTooWide(t *testing.T) {
 	}
 	bidQ, _ := strconv.ParseFloat(got.BidQuantity, 64)
 	askQ, _ := strconv.ParseFloat(got.AskQuantity, 64)
-	// Common bids: 100+100+99.5 (not the 50@98). Common asks: 100.2+100.2+100.5 (not 50@102).
-	if bidQ < 2.9 || bidQ > 3.1 {
-		t.Fatalf("overlap bid qty %s (must exclude 98 wall)", got.BidQuantity)
+	// Overlap is ask-limited (~0.4%); 99.5 bid is outside that symmetric ±%.
+	if bidQ < 1.9 || bidQ > 2.1 {
+		t.Fatalf("overlap bid qty %s (must exclude 98 wall and 99.5 outside ±usedPct)", got.BidQuantity)
 	}
 	if askQ < 2.9 || askQ > 3.1 {
 		t.Fatalf("overlap ask qty %s (must exclude 102 wall)", got.AskQuantity)
+	}
+}
+
+func TestCombineOrderBooks_SymmetricPctClipsLongerSide(t *testing.T) {
+	// Common bids only reach ~1% below mid; asks reach ~2% above. Use 1% both ways.
+	a := VenueRawBook{
+		Exchange: ExchangeBinance, Symbol: "ETHUSDT",
+		Book: RawOrderBook{
+			Bids: []PriceLevel{{Price: 100, Quantity: 1}, {Price: 99, Quantity: 1}},
+			Asks: []PriceLevel{{Price: 100.2, Quantity: 1}, {Price: 101.5, Quantity: 40}, {Price: 102, Quantity: 1}},
+		},
+	}
+	b := VenueRawBook{
+		Exchange: ExchangeBybit, Symbol: "ETHUSDT",
+		Book: RawOrderBook{
+			Bids: []PriceLevel{{Price: 100, Quantity: 1}, {Price: 99, Quantity: 1}},
+			Asks: []PriceLevel{{Price: 100.2, Quantity: 1}, {Price: 101.5, Quantity: 40}, {Price: 102, Quantity: 1}},
+		},
+	}
+	mid := SharedBookMid([]VenueRawBook{a, b})
+	got := CombineOrderBooks("ETHUSDT", mid, 2, []VenueRawBook{a, b})
+	if got.RequestedReached {
+		t.Fatalf("cannot cover 2%% both ways: %+v", got)
+	}
+	askQ, _ := strconv.ParseFloat(got.AskQuantity, 64)
+	// 101.5 is ~1.4% above mid — outside the 1% common pct — must not count 80 qty.
+	if askQ > 5 {
+		t.Fatalf("longer ask side leaked into totals qty=%s used=%s-%s", got.AskQuantity, got.UsedLow, got.UsedHigh)
+	}
+	if got.UsedRangePct <= 0 || got.UsedRangePct > 1.2 {
+		t.Fatalf("usedRangePct=%v", got.UsedRangePct)
 	}
 }
 

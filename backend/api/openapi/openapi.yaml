@@ -503,11 +503,12 @@ paths:
       summary: Market-wide spot order book analysis
       description: |
         Combines live local books from Binance, Coinbase, and Bybit for one coin.
-        Totals use only the **price band every contributing venue can reach**.
-        If all venues cover the requested ±`rangePct` of the shared mid, that
-        requested band is used; otherwise the intersection of their actual depth
-        is used (`requestedReached`, `usedLow`, `usedHigh`). USD and USDT are
-        treated as 1:1. Partial results if a venue is down. Informational only.
+        Totals use only a **symmetric ±% band** every contributing venue can
+        reach on **both** sides (the smaller of common bid reach and common ask
+        reach). If all venues cover the requested ±`rangePct` both ways, that
+        band is used (`requestedReached`, `usedRangePct`, `usedLow`, `usedHigh`).
+        USD and USDT are treated as 1:1. Partial results if a venue is down.
+        Informational only.
       operationId: getCombinedSpotOrderBook
       tags: [Market]
       parameters:
@@ -4327,9 +4328,10 @@ components:
         symbol: { type: string }
         rangePct: { type: number, description: Requested ±% of mid }
         midPrice: { type: string, description: Shared mid (median of venue mids) }
-        usedLow: { type: string, description: Low price of the band actually summed }
-        usedHigh: { type: string, description: High price of the band actually summed }
-        requestedReached: { type: boolean, description: True when every venue covers ±rangePct }
+        usedLow: { type: string, description: Low price of the symmetric band actually summed }
+        usedHigh: { type: string, description: High price of the symmetric band actually summed }
+        usedRangePct: { type: number, description: Symmetric ±% actually used (min of the two sides) }
+        requestedReached: { type: boolean, description: True when every venue covers ±rangePct on both sides }
         bidNotional: { type: string }
         askNotional: { type: string }
         bidQuantity: { type: string }

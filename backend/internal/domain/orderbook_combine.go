@@ -48,7 +48,8 @@ type CombinedOrderBookAnalysis struct {
 	MidPrice         string
 	UsedLow          string
 	UsedHigh         string
-	RequestedReached bool // true when every venue covers the requested ±rangePct
+	UsedRangePct     float64 // symmetric ±% actually summed (min of the two sides)
+	RequestedReached bool    // true when every venue covers the requested ±rangePct
 	BidNotional      string
 	AskNotional      string
 	BidQuantity      string
@@ -130,10 +131,27 @@ func resolveCombinedRange(mid, rangePct float64, books []VenueRawBook) (lo, hi f
 	if n == 0 || commonLo <= 0 || commonHi <= 0 || commonLo >= commonHi {
 		return reqLo, reqHi, false
 	}
-	if commonLo <= reqLo+1e-12 && commonHi+1e-12 >= reqHi {
+	bidPct := (mid - commonLo) / mid * 100
+	askPct := (commonHi - mid) / mid * 100
+	if bidPct < 0 {
+		bidPct = 0
+	}
+	if askPct < 0 {
+		askPct = 0
+	}
+	usedPct := bidPct
+	if askPct < usedPct {
+		usedPct = askPct
+	}
+	// Same ±% on both sides so one side cannot include more distance than the other.
+	if usedPct+1e-12 >= rangePct {
 		return reqLo, reqHi, true
 	}
-	return commonLo, commonHi, false
+	if usedPct <= 0 {
+		return mid, mid, false
+	}
+	lo, hi = bandBounds(mid, usedPct)
+	return lo, hi, false
 }
 
 // CombineOrderBooks sums bid/ask notional only inside the common reachable band.
@@ -155,6 +173,9 @@ func CombineOrderBooks(symbol string, mid, rangePct float64, books []VenueRawBoo
 	out.RequestedReached = reached
 	out.UsedLow = formatFixed(lo, decimalsForStep(mid/10000)+1)
 	out.UsedHigh = formatFixed(hi, decimalsForStep(mid/10000)+1)
+	if mid > 0 && lo > 0 && hi > lo {
+		out.UsedRangePct = round4((hi - lo) / 2 / mid * 100)
+	}
 	if lo <= 0 || hi <= lo {
 		return out
 	}

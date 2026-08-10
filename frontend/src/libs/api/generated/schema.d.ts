@@ -243,11 +243,12 @@ export interface paths {
         /**
          * Market-wide spot order book analysis
          * @description Combines live local books from Binance, Coinbase, and Bybit for one coin.
-         *     Totals use only the **price band every contributing venue can reach**.
-         *     If all venues cover the requested ±`rangePct` of the shared mid, that
-         *     requested band is used; otherwise the intersection of their actual depth
-         *     is used (`requestedReached`, `usedLow`, `usedHigh`). USD and USDT are
-         *     treated as 1:1. Partial results if a venue is down. Informational only.
+         *     Totals use only a **symmetric ±% band** every contributing venue can
+         *     reach on **both** sides (the smaller of common bid reach and common ask
+         *     reach). If all venues cover the requested ±`rangePct` both ways, that
+         *     band is used (`requestedReached`, `usedRangePct`, `usedLow`, `usedHigh`).
+         *     USD and USDT are treated as 1:1. Partial results if a venue is down.
+         *     Informational only.
          */
         get: operations["getCombinedSpotOrderBook"];
         put?: never;
@@ -2101,11 +2102,13 @@ export interface components {
             rangePct?: number;
             /** @description Shared mid (median of venue mids) */
             midPrice?: string;
-            /** @description Low price of the band actually summed */
+            /** @description Low price of the symmetric band actually summed */
             usedLow?: string;
-            /** @description High price of the band actually summed */
+            /** @description High price of the symmetric band actually summed */
             usedHigh?: string;
-            /** @description True when every venue covers ±rangePct */
+            /** @description Symmetric ±% actually used (min of the two sides) */
+            usedRangePct?: number;
+            /** @description True when every venue covers ±rangePct on both sides */
             requestedReached?: boolean;
             bidNotional?: string;
             askNotional?: string;

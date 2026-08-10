@@ -35,7 +35,7 @@ Expose first market-data APIs so clients can:
 - `limit` is grouped rows per side. Backend marks `isWall` on unusually large buckets.
 - Live local books on Binance, Coinbase, and Bybit (websocket; gap/drop resyncs).
 - `analysis` uses depth within ±`rangePct` of mid (default 2%) for pressure, imbalance, and walls.
-- `GET /api/v1/market/orderbook/combined` sums all three venues only in the overlapping reachable band.
+- `GET /api/v1/market/orderbook/combined` sums all three venues in a symmetric ±% both sides can reach.
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

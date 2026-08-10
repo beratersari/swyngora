@@ -268,6 +268,7 @@ type combinedOrderBookResponse struct {
 	MidPrice         string             `json:"midPrice"`
 	UsedLow          string             `json:"usedLow"`
 	UsedHigh         string             `json:"usedHigh"`
+	UsedRangePct     float64            `json:"usedRangePct"`
 	RequestedReached bool               `json:"requestedReached"`
 	BidNotional      string             `json:"bidNotional"`
 	AskNotional      string             `json:"askNotional"`
@@ -317,14 +318,14 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 	}
 	return combinedOrderBookResponse{
 		Symbol: a.Symbol, RangePct: a.RangePct, MidPrice: a.MidPrice,
-		UsedLow: a.UsedLow, UsedHigh: a.UsedHigh, RequestedReached: a.RequestedReached,
+		UsedLow: a.UsedLow, UsedHigh: a.UsedHigh, UsedRangePct: a.UsedRangePct, RequestedReached: a.RequestedReached,
 		BidNotional: a.BidNotional, AskNotional: a.AskNotional,
 		BidQuantity: a.BidQuantity, AskQuantity: a.AskQuantity,
 		Imbalance: a.Imbalance, Pressure: a.Pressure,
 		BidLevels: a.BidLevels, AskLevels: a.AskLevels,
 		CoveredBidPct: a.CoveredBidPct, CoveredAskPct: a.CoveredAskPct,
 		Walls: walls, Bands: bands, Venues: venues, VenueCount: a.VenueCount,
-		Note: "Market-wide spot depth: only the price band every contributing venue can reach is summed. If all venues cover ±rangePct of the shared mid, that requested band is used. USD and USDT treated as 1:1. Informational only.",
+		Note: "Market-wide spot depth: only the symmetric ±usedRangePct band every venue can reach on both sides is summed. If all venues cover ±rangePct both ways, that requested band is used. USD and USDT treated as 1:1. Informational only.",
 	}
 }
 

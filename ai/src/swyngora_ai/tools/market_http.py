@@ -1551,8 +1551,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="analyze_market_orderbook",
             description=(
                 "Market-wide buy/sell pressure for one coin: sums Binance + Coinbase + "
-                "Bybit bid/ask notional only in the price band every venue can reach "
-                "(requested ±range_pct when all cover it). Use for overall pressure."
+                "Bybit bid/ask notional only in a symmetric ±% both sides can reach "
+                "(requested ±range_pct when all cover it both ways). Use for overall pressure."
             ),
             args_schema=MarketOrderBookInput,
         ),
