@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -328,6 +329,59 @@ func TestExport_CleanupExpired(t *testing.T) {
 	}
 	if _, err := os.Stat(got.FilePath); !os.IsNotExist(err) {
 		t.Fatalf("file should be gone: %v", err)
+	}
+}
+
+func TestExport_PortfoliosSectionJSON(t *testing.T) {
+	dir := t.TempDir()
+	pf, err := portfoliostore.Open(filepath.Join(dir, "pf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pf.Close() })
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := pf.CreatePortfolio(ctx, domain.Portfolio{
+		ID: "user1", ClientID: "user1", Name: "Main", Currency: "USDT",
+		StartingBalance: 5000, CashBalance: 4500, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := pf.UpsertPosition(ctx, domain.Position{
+		ClientID: "user1", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Quantity: 0.5, AvgCost: 100, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := New(exportstore.NewMemory(), DataSources{Portfolio: pf}, Options{FileDir: filepath.Join(dir, "out"), FileTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := svc.Start(ctx, StartInput{ClientID: "user1", Format: "json", Sections: []string{"portfolios"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	got, err := svc.Get(ctx, "user1", job.ID)
+	if err != nil || got.Status != domain.ExportCompleted {
+		t.Fatalf("%+v %v", got, err)
+	}
+	raw, err := os.ReadFile(got.FilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pl map[string]any
+	if err := json.Unmarshal(raw, &pl); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := pl["portfolios"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("portfolios=%v", pl["portfolios"])
+	}
+	book := list[0].(map[string]any)
+	if book["id"] != "user1" || book["cashBalance"].(float64) != 4500 {
+		t.Fatalf("%v", book)
 	}
 }
 

@@ -3,7 +3,6 @@ package dataimport
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -34,6 +33,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		{domain.ExportSectionShares, s.applyShares},
 		{domain.ExportSectionAlerts, s.applyAlerts},
 		{domain.ExportSectionBacktests, s.applyBacktests},
+		{domain.ExportSectionPortfolios, s.applyPortfolios},
 	}
 	for i, step := range steps {
 		if canceled() {
@@ -55,7 +55,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 
 func (s *Service) applyWatchlist(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
 	if s.data.Watchlist == nil {
-		return 0, fmt.Errorf("watchlist store not configured")
+		return 0, nil
 	}
 	if len(pl.WatchlistItems) == 0 && mode != domain.ImportModeReplace {
 		return 0, nil
@@ -95,7 +95,7 @@ func (s *Service) applyWatchlist(ctx context.Context, clientID string, mode doma
 
 func (s *Service) applyShares(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
 	if s.data.Watchlist == nil {
-		return 0, fmt.Errorf("watchlist store not configured")
+		return 0, nil
 	}
 	if mode == domain.ImportModeReplace {
 		existing, err := s.data.Watchlist.ListSharesByOwner(ctx, clientID)
@@ -137,7 +137,7 @@ func (s *Service) applyShares(ctx context.Context, clientID string, mode domain.
 
 func (s *Service) applyAlerts(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
 	if s.data.Alerts == nil {
-		return 0, fmt.Errorf("alerts store not configured")
+		return 0, nil
 	}
 	if mode == domain.ImportModeReplace {
 		list, err := s.data.Alerts.ListByClient(ctx, clientID)
@@ -180,7 +180,7 @@ func (s *Service) applyAlerts(ctx context.Context, clientID string, mode domain.
 
 func (s *Service) applyBacktests(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
 	if s.data.Scanner == nil {
-		return 0, fmt.Errorf("scanner store not configured")
+		return 0, nil
 	}
 	if mode == domain.ImportModeReplace {
 		// page all backtests and delete

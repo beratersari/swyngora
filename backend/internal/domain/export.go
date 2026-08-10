@@ -46,6 +46,7 @@ const (
 	ExportSectionShares     ExportSection = "shares"
 	ExportSectionAlerts     ExportSection = "alerts"
 	ExportSectionBacktests  ExportSection = "backtests"
+	ExportSectionPortfolios ExportSection = "portfolios"
 )
 
 // AllExportSections is the default set when the client omits sections.
@@ -54,6 +55,7 @@ var AllExportSections = []ExportSection{
 	ExportSectionShares,
 	ExportSectionAlerts,
 	ExportSectionBacktests,
+	ExportSectionPortfolios,
 }
 
 // ExportJob is a background (or fast) user data export.
@@ -112,7 +114,7 @@ func NormalizeExportFormat(s string) (ExportFormat, error) {
 // IsValidExportSection reports a known section name.
 func IsValidExportSection(s string) bool {
 	switch ExportSection(strings.ToLower(strings.TrimSpace(s))) {
-	case ExportSectionWatchlist, ExportSectionShares, ExportSectionAlerts, ExportSectionBacktests:
+	case ExportSectionWatchlist, ExportSectionShares, ExportSectionAlerts, ExportSectionBacktests, ExportSectionPortfolios:
 		return true
 	default:
 		return false
@@ -131,7 +133,7 @@ func NormalizeExportSections(raw []string) ([]ExportSection, error) {
 	for _, s := range raw {
 		s = strings.ToLower(strings.TrimSpace(s))
 		if !IsValidExportSection(s) {
-			return nil, fmt.Errorf("%w: unknown export section %q (watchlist|shares|alerts|backtests)", ErrInvalidArgument, s)
+			return nil, fmt.Errorf("%w: unknown export section %q (watchlist|shares|alerts|backtests|portfolios)", ErrInvalidArgument, s)
 		}
 		sec := ExportSection(s)
 		if _, ok := seen[sec]; ok {

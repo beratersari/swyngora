@@ -22,6 +22,7 @@ type DataSources struct {
 	Watchlist domain.WatchlistPort
 	Alerts    domain.PriceAlertPort
 	Scanner   domain.ScannerPort
+	Portfolio domain.PortfolioPort
 }
 
 // Service orchestrates import preview and apply.
@@ -263,6 +264,41 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 			}
 		}
 		counts[domain.ExportSectionBacktests] = c
+	}
+	// Portfolios (count books)
+	{
+		c := domain.ImportSectionCount{
+			Valid:      len(parsed.Payload.Portfolios),
+			Invalid:    parsed.Invalid[domain.ExportSectionPortfolios],
+			Duplicates: parsed.FileDuplicates[domain.ExportSectionPortfolios],
+		}
+		if mode == domain.ImportModeReplace {
+			c.WillAdd = c.Valid
+		} else {
+			existingID := map[string]struct{}{}
+			existingName := map[string]struct{}{}
+			if s.data.Portfolio != nil {
+				list, err := s.data.Portfolio.ListPortfolios(ctx, clientID)
+				if err == nil {
+					for _, p := range list {
+						existingID[p.ID] = struct{}{}
+						existingName[strings.ToLower(p.Name)] = struct{}{}
+					}
+				}
+			}
+			for _, snap := range parsed.Payload.Portfolios {
+				if _, ok := existingID[snap.Book.ID]; ok {
+					c.Duplicates++
+					continue
+				}
+				if _, ok := existingName[strings.ToLower(snap.Book.Name)]; ok {
+					c.Duplicates++
+					continue
+				}
+				c.WillAdd++
+			}
+		}
+		counts[domain.ExportSectionPortfolios] = c
 	}
 	var totals domain.ImportPreviewTotals
 	for _, c := range counts {

@@ -15,10 +15,12 @@ import (
 
 // Normalized payload ready to apply (IDs remapped to importer where needed).
 type payload struct {
-	WatchlistItems []domain.WatchlistItem  `json:"watchlistItems"`
-	Shares         []domain.WatchlistShare `json:"shares"`
-	Alerts         []domain.PriceAlert     `json:"alerts"`
-	Backtests      []backtestBundle        `json:"backtests"`
+	WatchlistItems []domain.WatchlistItem     `json:"watchlistItems"`
+	Shares         []domain.WatchlistShare    `json:"shares"`
+	Alerts         []domain.PriceAlert        `json:"alerts"`
+	Backtests      []backtestBundle           `json:"backtests"`
+	Portfolios     []domain.PortfolioSnapshot `json:"portfolios"`
+	FileOwnerID    string                     `json:"fileOwnerId,omitempty"`
 }
 
 type backtestBundle struct {
@@ -55,6 +57,8 @@ type wirePayload struct {
 		TriggeredAt    *string `json:"triggeredAt"`
 		TriggeredPrice float64 `json:"triggeredPrice"`
 	} `json:"alerts"`
+	ClientID   string `json:"clientId"`
+	Portfolios []wirePortfolioBook `json:"portfolios"`
 	Backtests []struct {
 		ID           string `json:"id"`
 		RuleID       string `json:"ruleId"`
@@ -196,6 +200,28 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 		seenBT[bundle.Job.ID] = struct{}{}
 		res.Payload.Backtests = append(res.Payload.Backtests, bundle)
 	}
+	fileOwner := strings.TrimSpace(w.ClientID)
+	res.Payload.FileOwnerID = fileOwner
+	seenPF := map[string]struct{}{}
+	for _, pb := range w.Portfolios {
+		snap, err := normalizePortfolioBook(pb, fileOwner, importer)
+		if err != nil {
+			res.Invalid[domain.ExportSectionPortfolios]++
+			continue
+		}
+		key := snap.Book.ID + "|" + strings.ToLower(snap.Book.Name)
+		if _, ok := seenPF[snap.Book.ID]; ok {
+			res.FileDuplicates[domain.ExportSectionPortfolios]++
+			continue
+		}
+		if _, ok := seenPF[key]; ok {
+			res.FileDuplicates[domain.ExportSectionPortfolios]++
+			continue
+		}
+		seenPF[snap.Book.ID] = struct{}{}
+		seenPF[key] = struct{}{}
+		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
+	}
 	return res, nil
 }
 
@@ -227,6 +253,8 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 	// signals attached after all backtests by id
 	signalsByBT := map[string][]domain.ScannerBacktestSignal{}
 	backtestsByID := map[string]*backtestBundle{}
+	csvBooks := map[string]*wirePortfolioBook{}
+	fileOwner := ""
 
 	for {
 		rec, err := r.Read()
@@ -241,6 +269,11 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 		}
 		// meta line
 		if len(rec) > 0 && strings.HasPrefix(rec[0], "# meta") {
+			for i, cell := range rec {
+				if cell == "clientId" && i+1 < len(rec) {
+					fileOwner = strings.TrimSpace(rec[i+1])
+				}
+			}
 			continue
 		}
 		// section marker
@@ -340,11 +373,138 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 				Return1d: parseOptFloat(row["return1d"]), Return5d: parseOptFloat(row["return5d"]), Return20d: parseOptFloat(row["return20d"]),
 			}
 			signalsByBT[btID] = append(signalsByBT[btID], sig)
+		case "portfolios":
+			id := strings.TrimSpace(row["id"])
+			if id == "" {
+				res.Invalid[domain.ExportSectionPortfolios]++
+				continue
+			}
+			b := &wirePortfolioBook{
+				ID: id, Name: row["name"], Currency: row["currency"],
+				StartingBalance: csvF64(row, "startingBalance"), CashBalance: csvF64(row, "cashBalance"),
+				RealizedPnLTotal: csvF64(row, "realizedPnLTotal"), NetDeposits: csvF64(row, "netDeposits"),
+				MarginMode: row["marginMode"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+			}
+			csvBooks[id] = b
+		case "portfolio_positions":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.Positions = append(b.Positions, wirePFPos{
+					Exchange: row["exchange"], Symbol: row["symbol"], Quantity: csvF64(row, "quantity"),
+					AvgCost: csvF64(row, "avgCost"), UpdatedAt: row["updatedAt"],
+				})
+			}
+		case "portfolio_trades":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.Trades = append(b.Trades, wirePFTrade{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Side: row["side"],
+					Quantity: csvF64(row, "quantity"), Price: csvF64(row, "price"), Notional: csvF64(row, "notional"),
+					RealizedPnL: csvF64(row, "realizedPnL"), PendingOrderID: row["pendingOrderId"], LotMethod: row["lotMethod"],
+					Fee: csvF64(row, "fee"), LastPrice: csvF64(row, "lastPrice"), CreatedAt: row["createdAt"],
+				})
+			}
+		case "portfolio_orders":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.OpenOrders = append(b.OpenOrders, wirePFOrder{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Type: row["type"], Side: row["side"],
+					Quantity: csvF64(row, "quantity"), FilledQuantity: csvF64(row, "filledQuantity"),
+					RemainingQuantity: csvF64(row, "remainingQuantity"), TriggerPrice: csvF64(row, "triggerPrice"),
+					ReservedCash: csvF64(row, "reservedCash"), ReservedQuantity: csvF64(row, "reservedQuantity"),
+					TimeInForce: row["timeInForce"], ExpiresAt: csvOptStr(row, "expiresAt"), Status: row["status"],
+					OCOGroupID: row["ocoGroupId"], OCOPeerID: row["ocoPeerId"], TrailType: row["trailType"],
+					TrailValue: csvF64(row, "trailValue"), TrailPeak: csvF64(row, "trailPeak"),
+					BracketID: row["bracketId"], BracketRole: row["bracketRole"], LotMethod: row["lotMethod"],
+					CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+				})
+			}
+		case "portfolio_lots":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.Lots = append(b.Lots, wirePFLot{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Quantity: csvF64(row, "quantity"),
+					OriginalQuantity: csvF64(row, "originalQuantity"), Price: csvF64(row, "price"),
+					OpenedAt: row["openedAt"], SourceTradeID: row["sourceTradeId"], ClosedAt: csvOptStr(row, "closedAt"),
+				})
+			}
+		case "portfolio_lot_fills":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.LotFills = append(b.LotFills, wirePFLotFill{
+					ID: row["id"], TradeID: row["tradeId"], LotID: row["lotId"], Quantity: csvF64(row, "quantity"),
+					CostPrice: csvF64(row, "costPrice"), SellPrice: csvF64(row, "sellPrice"), RealizedPnL: csvF64(row, "realizedPnL"),
+				})
+			}
+		case "portfolio_recurring_buys":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.RecurringBuys = append(b.RecurringBuys, wirePFRecurring{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Name: row["name"],
+					Amount: csvF64(row, "amount"), Frequency: row["frequency"], Weekday: row["weekday"],
+					DayOfMonth: csvI(row, "dayOfMonth"), IntervalHours: csvI(row, "intervalHours"), Status: row["status"],
+					NextRunAt: row["nextRunAt"], LastRunAt: csvOptStr(row, "lastRunAt"), LastPeriodKey: row["lastPeriodKey"],
+					CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+				})
+			}
+		case "portfolio_recurring_runs":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.RecurringRuns = append(b.RecurringRuns, wirePFRecurringRun{
+					ID: row["id"], PlanID: row["planId"], PeriodKey: row["periodKey"], Status: row["status"],
+					Amount: csvF64(row, "amount"), Quantity: csvF64(row, "quantity"), Price: csvF64(row, "price"),
+					TradeID: row["tradeId"], FailReason: row["failReason"], ScheduledFor: row["scheduledFor"], ExecutedAt: row["executedAt"],
+				})
+			}
+		case "portfolio_margin_positions":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.MarginPositions = append(b.MarginPositions, wirePFMarginPos{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Side: row["side"], Mode: row["mode"],
+					Quantity: csvF64(row, "quantity"), EntryPrice: csvF64(row, "entryPrice"), Leverage: csvI(row, "leverage"),
+					Margin: csvF64(row, "margin"), DebtPrincipal: csvF64(row, "debtPrincipal"), DebtInterest: csvF64(row, "debtInterest"),
+					DebtAsset: row["debtAsset"], LastInterestAt: row["lastInterestAt"], LiquidationPrice: csvF64(row, "liquidationPrice"),
+					StopLoss: csvOptF64(row, "stopLoss"), TakeProfit: csvOptF64(row, "takeProfit"), Status: row["status"],
+					RealizedPnL: csvF64(row, "realizedPnL"), CloseReason: row["closeReason"],
+					OpenedAt: row["openedAt"], UpdatedAt: row["updatedAt"], ClosedAt: csvOptStr(row, "closedAt"),
+				})
+			}
+		case "portfolio_margin_orders":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.MarginOrders = append(b.MarginOrders, wirePFMarginOrd{
+					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Side: row["side"], Type: row["type"],
+					Quantity: csvF64(row, "quantity"), Leverage: csvI(row, "leverage"), LimitPrice: csvF64(row, "limitPrice"),
+					ReservedMargin: csvF64(row, "reservedMargin"), StopLoss: csvOptF64(row, "stopLoss"), TakeProfit: csvOptF64(row, "takeProfit"),
+					Status: row["status"], PositionID: row["positionId"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+				})
+			}
+		case "portfolio_margin_trades":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.MarginTrades = append(b.MarginTrades, wirePFMarginTr{
+					ID: row["id"], PositionID: row["positionId"], Exchange: row["exchange"], Symbol: row["symbol"],
+					Side: row["side"], Action: row["action"], Quantity: csvF64(row, "quantity"), Price: csvF64(row, "price"),
+					Notional: csvF64(row, "notional"), RealizedPnL: csvF64(row, "realizedPnL"), MarginDelta: csvF64(row, "marginDelta"),
+					PrincipalPaid: csvF64(row, "principalPaid"), InterestPaid: csvF64(row, "interestPaid"),
+					Leverage: csvI(row, "leverage"), Fee: csvF64(row, "fee"), CreatedAt: row["createdAt"],
+				})
+			}
+		case "portfolio_shares":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.Shares = append(b.Shares, wirePFShare{
+					GranteeClientID: row["granteeClientId"], Role: row["role"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+				})
+			}
 		}
 	}
 	for id, b := range backtestsByID {
 		b.Signals = signalsByBT[id]
 		res.Payload.Backtests = append(res.Payload.Backtests, *b)
+	}
+	seenPF := map[string]struct{}{}
+	for _, pb := range csvBooks {
+		snap, err := normalizePortfolioBook(*pb, fileOwner, importer)
+		if err != nil {
+			res.Invalid[domain.ExportSectionPortfolios]++
+			continue
+		}
+		if _, ok := seenPF[snap.Book.ID]; ok {
+			res.FileDuplicates[domain.ExportSectionPortfolios]++
+			continue
+		}
+		seenPF[snap.Book.ID] = struct{}{}
+		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
 	}
 	return res, nil
 }

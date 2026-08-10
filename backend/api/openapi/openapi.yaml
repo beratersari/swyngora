@@ -3396,7 +3396,7 @@ paths:
       summary: Start a user data export
       description: |
         Queues an export of the caller's own data as JSON or CSV.
-        Sections default to all of: watchlist, shares, alerts, backtests.
+        Sections default to all of: watchlist, shares, alerts, backtests, portfolios.
         Only one pending/running export is allowed per clientId (409 conflict otherwise).
         Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
       operationId: startExport
@@ -3412,7 +3412,7 @@ paths:
                 format: { type: string, enum: [json, csv], default: json }
                 sections:
                   type: array
-                  items: { type: string, enum: [watchlist, shares, alerts, backtests] }
+                  items: { type: string, enum: [watchlist, shares, alerts, backtests, portfolios] }
                   description: Omit for all sections
       responses:
         '202':
@@ -3716,7 +3716,7 @@ paths:
       summary: Upload an export file and get a restore preview
       description: |
         Accepts multipart form field `file` (or raw JSON/CSV body).
-        Parses watchlist, shares, alerts, and backtests; returns counts of valid, invalid,
+        Parses watchlist, shares, alerts, backtests, and paper portfolios; returns counts of valid, invalid,
         willAdd (under merge), and duplicates. Does not apply data until confirm.
         Ownership is always the uploading clientId (file clientId is ignored).
       operationId: previewImport
@@ -4708,7 +4708,7 @@ components:
         format: { type: string, enum: [json, csv] }
         sections:
           type: array
-          items: { type: string, enum: [watchlist, shares, alerts, backtests] }
+          items: { type: string, enum: [watchlist, shares, alerts, backtests, portfolios] }
         status: { type: string, enum: [pending, running, completed, canceled, failed] }
         progressPct: { type: number, description: 0–100 }
         stage: { type: string }

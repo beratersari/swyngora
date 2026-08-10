@@ -21,6 +21,7 @@ type DataSources struct {
 	Watchlist domain.WatchlistPort
 	Alerts    domain.PriceAlertPort
 	Scanner   domain.ScannerPort
+	Portfolio domain.PortfolioPort
 }
 
 // Service orchestrates user data exports.

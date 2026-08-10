@@ -21,8 +21,9 @@ type payload struct {
 	Sections   []string          `json:"sections"`
 	Watchlist  *watchlistPayload `json:"watchlist,omitempty"`
 	Shares     []sharePayload    `json:"shares,omitempty"`
-	Alerts     []alertPayload    `json:"alerts,omitempty"`
-	Backtests  []backtestPayload `json:"backtests,omitempty"`
+	Alerts     []alertPayload         `json:"alerts,omitempty"`
+	Backtests  []backtestPayload      `json:"backtests,omitempty"`
+	Portfolios []portfolioBookPayload `json:"portfolios,omitempty"`
 }
 
 type watchlistPayload struct {
@@ -230,6 +231,17 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 				}
 				offset += page
 			}
+		case domain.ExportSectionPortfolios:
+			if s.data.Portfolio == nil {
+				break
+			}
+			snaps, err := s.data.Portfolio.ExportOwnedPortfolios(ctx, job.ClientID)
+			if err != nil {
+				return err
+			}
+			for _, snap := range snaps {
+				pl.Portfolios = append(pl.Portfolios, snapshotToPayload(snap))
+			}
 		}
 	}
 
@@ -381,6 +393,118 @@ func buildCSV(pl *payload) ([]byte, error) {
 		}, sigRows); err != nil {
 			return nil, err
 		}
+	}
+	if len(pl.Portfolios) > 0 {
+		bookRows := make([][]string, 0, len(pl.Portfolios))
+		posRows, tradeRows, orderRows, lotRows, fillRows := [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}
+		recRows, runRows, mposRows, mordRows, mtrRows, shRows := [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}
+		for _, b := range pl.Portfolios {
+			bookRows = append(bookRows, []string{
+				b.ID, b.Name, b.Currency, f64(b.StartingBalance), f64(b.CashBalance),
+				f64(b.RealizedPnLTotal), f64(b.NetDeposits), b.MarginMode, b.CreatedAt, b.UpdatedAt,
+			})
+			for _, p := range b.Positions {
+				posRows = append(posRows, []string{b.ID, p.Exchange, p.Symbol, f64(p.Quantity), f64(p.AvgCost), p.UpdatedAt})
+			}
+			for _, t := range b.Trades {
+				tradeRows = append(tradeRows, []string{
+					b.ID, t.ID, t.Exchange, t.Symbol, t.Side, f64(t.Quantity), f64(t.Price), f64(t.Notional),
+					f64(t.RealizedPnL), t.PendingOrderID, t.LotMethod, f64(t.Fee), f64(t.LastPrice), t.CreatedAt,
+				})
+			}
+			for _, o := range b.OpenOrders {
+				orderRows = append(orderRows, []string{
+					b.ID, o.ID, o.Exchange, o.Symbol, o.Type, o.Side, f64(o.Quantity), f64(o.FilledQuantity),
+					f64(o.RemainingQuantity), f64(o.TriggerPrice), f64(o.ReservedCash), f64(o.ReservedQuantity),
+					o.TimeInForce, derefStr(o.ExpiresAt), o.Status, o.OCOGroupID, o.OCOPeerID, o.TrailType,
+					f64(o.TrailValue), f64(o.TrailPeak), o.BracketID, o.BracketRole, o.LotMethod, o.CreatedAt, o.UpdatedAt,
+				})
+			}
+			for _, l := range b.Lots {
+				lotRows = append(lotRows, []string{
+					b.ID, l.ID, l.Exchange, l.Symbol, f64(l.Quantity), f64(l.OriginalQuantity), f64(l.Price),
+					l.OpenedAt, l.SourceTradeID, derefStr(l.ClosedAt),
+				})
+			}
+			for _, f := range b.LotFills {
+				fillRows = append(fillRows, []string{b.ID, f.ID, f.TradeID, f.LotID, f64(f.Quantity), f64(f.CostPrice), f64(f.SellPrice), f64(f.RealizedPnL)})
+			}
+			for _, r := range b.RecurringBuys {
+				recRows = append(recRows, []string{
+					b.ID, r.ID, r.Exchange, r.Symbol, r.Name, f64(r.Amount), r.Frequency, r.Weekday, i64(r.DayOfMonth),
+					i64(r.IntervalHours), r.Status, r.NextRunAt, derefStr(r.LastRunAt), r.LastPeriodKey, r.CreatedAt, r.UpdatedAt,
+				})
+			}
+			for _, r := range b.RecurringRuns {
+				runRows = append(runRows, []string{
+					b.ID, r.ID, r.PlanID, r.PeriodKey, r.Status, f64(r.Amount), f64(r.Quantity), f64(r.Price),
+					r.TradeID, r.FailReason, r.ScheduledFor, r.ExecutedAt,
+				})
+			}
+			for _, m := range b.MarginPositions {
+				mposRows = append(mposRows, []string{
+					b.ID, m.ID, m.Exchange, m.Symbol, m.Side, m.Mode, f64(m.Quantity), f64(m.EntryPrice), i64(m.Leverage),
+					f64(m.Margin), f64(m.DebtPrincipal), f64(m.DebtInterest), m.DebtAsset, m.LastInterestAt,
+					f64(m.LiquidationPrice), derefF64(m.StopLoss), derefF64(m.TakeProfit), m.Status, f64(m.RealizedPnL),
+					m.CloseReason, m.OpenedAt, m.UpdatedAt, derefStr(m.ClosedAt),
+				})
+			}
+			for _, o := range b.MarginOrders {
+				mordRows = append(mordRows, []string{
+					b.ID, o.ID, o.Exchange, o.Symbol, o.Side, o.Type, f64(o.Quantity), i64(o.Leverage), f64(o.LimitPrice),
+					f64(o.ReservedMargin), derefF64(o.StopLoss), derefF64(o.TakeProfit), o.Status, o.PositionID, o.CreatedAt, o.UpdatedAt,
+				})
+			}
+			for _, tr := range b.MarginTrades {
+				mtrRows = append(mtrRows, []string{
+					b.ID, tr.ID, tr.PositionID, tr.Exchange, tr.Symbol, tr.Side, tr.Action, f64(tr.Quantity), f64(tr.Price),
+					f64(tr.Notional), f64(tr.RealizedPnL), f64(tr.MarginDelta), f64(tr.PrincipalPaid), f64(tr.InterestPaid),
+					i64(tr.Leverage), f64(tr.Fee), tr.CreatedAt,
+				})
+			}
+			for _, sh := range b.Shares {
+				shRows = append(shRows, []string{b.ID, sh.GranteeClientID, sh.Role, sh.CreatedAt, sh.UpdatedAt})
+			}
+		}
+		if err := writeSection("portfolios", []string{
+			"id", "name", "currency", "startingBalance", "cashBalance", "realizedPnLTotal", "netDeposits", "marginMode", "createdAt", "updatedAt",
+		}, bookRows); err != nil {
+			return nil, err
+		}
+		_ = writeSection("portfolio_positions", []string{"portfolioId", "exchange", "symbol", "quantity", "avgCost", "updatedAt"}, posRows)
+		_ = writeSection("portfolio_trades", []string{
+			"portfolioId", "id", "exchange", "symbol", "side", "quantity", "price", "notional", "realizedPnL", "pendingOrderId", "lotMethod", "fee", "lastPrice", "createdAt",
+		}, tradeRows)
+		_ = writeSection("portfolio_orders", []string{
+			"portfolioId", "id", "exchange", "symbol", "type", "side", "quantity", "filledQuantity", "remainingQuantity",
+			"triggerPrice", "reservedCash", "reservedQuantity", "timeInForce", "expiresAt", "status", "ocoGroupId", "ocoPeerId",
+			"trailType", "trailValue", "trailPeak", "bracketId", "bracketRole", "lotMethod", "createdAt", "updatedAt",
+		}, orderRows)
+		_ = writeSection("portfolio_lots", []string{
+			"portfolioId", "id", "exchange", "symbol", "quantity", "originalQuantity", "price", "openedAt", "sourceTradeId", "closedAt",
+		}, lotRows)
+		_ = writeSection("portfolio_lot_fills", []string{"portfolioId", "id", "tradeId", "lotId", "quantity", "costPrice", "sellPrice", "realizedPnL"}, fillRows)
+		_ = writeSection("portfolio_recurring_buys", []string{
+			"portfolioId", "id", "exchange", "symbol", "name", "amount", "frequency", "weekday", "dayOfMonth", "intervalHours",
+			"status", "nextRunAt", "lastRunAt", "lastPeriodKey", "createdAt", "updatedAt",
+		}, recRows)
+		_ = writeSection("portfolio_recurring_runs", []string{
+			"portfolioId", "id", "planId", "periodKey", "status", "amount", "quantity", "price", "tradeId", "failReason", "scheduledFor", "executedAt",
+		}, runRows)
+		_ = writeSection("portfolio_margin_positions", []string{
+			"portfolioId", "id", "exchange", "symbol", "side", "mode", "quantity", "entryPrice", "leverage", "margin",
+			"debtPrincipal", "debtInterest", "debtAsset", "lastInterestAt", "liquidationPrice", "stopLoss", "takeProfit",
+			"status", "realizedPnL", "closeReason", "openedAt", "updatedAt", "closedAt",
+		}, mposRows)
+		_ = writeSection("portfolio_margin_orders", []string{
+			"portfolioId", "id", "exchange", "symbol", "side", "type", "quantity", "leverage", "limitPrice", "reservedMargin",
+			"stopLoss", "takeProfit", "status", "positionId", "createdAt", "updatedAt",
+		}, mordRows)
+		_ = writeSection("portfolio_margin_trades", []string{
+			"portfolioId", "id", "positionId", "exchange", "symbol", "side", "action", "quantity", "price", "notional",
+			"realizedPnL", "marginDelta", "principalPaid", "interestPaid", "leverage", "fee", "createdAt",
+		}, mtrRows)
+		_ = writeSection("portfolio_shares", []string{"portfolioId", "granteeClientId", "role", "createdAt", "updatedAt"}, shRows)
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {

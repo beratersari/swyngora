@@ -481,6 +481,12 @@ type PortfolioPort interface {
 
 	// Margin (isolated leverage) — see MarginPort methods embedded below.
 	MarginPort
+
+	// ExportOwnedPortfolios dumps every book owned by ownerClientID (full backup snapshot).
+	ExportOwnedPortfolios(ctx context.Context, ownerClientID string) ([]PortfolioSnapshot, error)
+	// ImportOwnedPortfolios restores snapshots. replace deletes all owned books first.
+	// Returns how many books were inserted. Caller remaps ownership/ids before calling.
+	ImportOwnedPortfolios(ctx context.Context, ownerClientID string, snaps []PortfolioSnapshot, replace bool) (int, error)
 }
 
 // ApplyBuy updates cash and position for a market buy. Pure helper.

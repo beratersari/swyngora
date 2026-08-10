@@ -213,6 +213,7 @@ func main() {
 		Watchlist: watchStore,
 		Alerts:    alertStore,
 		Scanner:   scannerStore,
+		Portfolio: portfolioStore,
 	}, exportsvc.Options{
 		FileDir: cfg.ExportFileDir,
 		FileTTL: cfg.ExportFileTTL,
@@ -237,6 +238,7 @@ func main() {
 		Watchlist: watchStore,
 		Alerts:    alertStore,
 		Scanner:   scannerStore,
+		Portfolio: portfolioStore,
 	}, dataimport.Options{
 		FileDir: cfg.ImportFileDir,
 		FileTTL: cfg.ImportFileTTL,

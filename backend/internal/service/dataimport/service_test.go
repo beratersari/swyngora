@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -404,5 +405,94 @@ func TestImport_ConfirmConflictActive(t *testing.T) {
 	_, err = svc.Confirm(ctx, "user1", j2.ID, "merge")
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestImport_PortfoliosMergeAndReplace(t *testing.T) {
+	dir := t.TempDir()
+	pf, err := portfoliostore.Open(filepath.Join(dir, "pf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pf.Close() })
+	svc, err := New(importstore.NewMemory(), DataSources{Portfolio: pf}, Options{
+		FileDir: filepath.Join(dir, "imp"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "alice",
+		"portfolios": []map[string]any{
+			{
+				"id": "alice", "name": "Main", "currency": "USDT",
+				"startingBalance": 10000, "cashBalance": 8700, "realizedPnLTotal": 5, "netDeposits": 0,
+				"marginMode": "isolated", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+				"positions": []map[string]any{
+					{"exchange": "binance", "symbol": "BTCUSDT", "quantity": 1, "avgCost": 100, "updatedAt": now.Format(time.RFC3339Nano)},
+				},
+				"trades": []map[string]any{
+					{"id": "t1", "exchange": "binance", "symbol": "BTCUSDT", "side": "buy", "quantity": 1, "price": 100,
+						"notional": 100, "fee": 0.1, "lastPrice": 100, "createdAt": now.Format(time.RFC3339Nano)},
+				},
+				"openOrders": []map[string]any{
+					{"id": "o1", "exchange": "binance", "symbol": "ETHUSDT", "type": "limit_buy", "side": "buy",
+						"quantity": 2, "remainingQuantity": 2, "triggerPrice": 90, "reservedCash": 180, "status": "open",
+						"timeInForce": "gtc", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano)},
+				},
+				"lots": []map[string]any{
+					{"id": "l1", "exchange": "binance", "symbol": "BTCUSDT", "quantity": 1, "originalQuantity": 1, "price": 100.1,
+						"openedAt": now.Format(time.RFC3339Nano), "sourceTradeId": "t1"},
+				},
+				"shares": []map[string]any{
+					{"granteeClientId": "viewer1", "role": "viewer", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano)},
+				},
+			},
+		},
+	})
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "carol", FileBytes: body, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := job.SectionCounts[domain.ExportSectionPortfolios]
+	if sec.Valid != 1 || sec.WillAdd != 1 {
+		t.Fatalf("preview %+v", sec)
+	}
+	if _, err := svc.Confirm(ctx, "carol", job.ID, "replace"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	done, err := svc.Get(ctx, "carol", job.ID)
+	if err != nil || done.Status != domain.ImportCompleted {
+		t.Fatalf("job %+v %v", done, err)
+	}
+	got, err := pf.GetPortfolio(ctx, "carol")
+	if err != nil || got.CashBalance != 8700 || got.Name != "Main" {
+		t.Fatalf("book %+v %v", got, err)
+	}
+	pos, err := pf.GetPosition(ctx, "carol", domain.ExchangeBinance, "BTCUSDT")
+	if err != nil || pos.Quantity != 1 {
+		t.Fatalf("pos %+v %v", pos, err)
+	}
+	orders, err := pf.ListPendingOrders(ctx, "carol", domain.PendingStatusOpen, 10, 0)
+	if err != nil || len(orders) != 1 {
+		t.Fatalf("orders %+v %v", orders, err)
+	}
+	shares, err := pf.ListPortfolioSharesByBook(ctx, "carol")
+	if err != nil || len(shares) != 1 || shares[0].GranteeClientID != "viewer1" {
+		t.Fatalf("shares %+v %v", shares, err)
+	}
+
+	// Merge should skip existing remapped main book
+	job2, err := svc.Preview(ctx, PreviewInput{ClientID: "carol", FileBytes: body, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job2.SectionCounts[domain.ExportSectionPortfolios].WillAdd != 0 {
+		t.Fatalf("merge should skip: %+v", job2.SectionCounts[domain.ExportSectionPortfolios])
 	}
 }

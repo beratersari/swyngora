@@ -6,6 +6,8 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 Live order/position/cash updates for a selected book (and price ticks for selected coins) go over **`GET /api/v1/ws`** — see [`realtime.md`](realtime.md).
 
+Backup and restore owned books with the user data export/import jobs (`sections=portfolios`, merge or replace) — see [`user-data-export.md`](user-data-export.md) and [`user-data-import.md`](user-data-import.md).
+
 ## API
 
 | Method | Path | Description |
