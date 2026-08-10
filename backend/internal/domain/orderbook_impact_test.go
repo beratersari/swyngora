@@ -23,8 +23,38 @@ func TestSimulateMarketImpact_BuyQuantity(t *testing.T) {
 	if got.EndPrice != "101" || got.LevelsUsed != 2 {
 		t.Fatalf("%+v", got)
 	}
-	if got.SlippagePct <= 0 || got.ImpactPct <= 0 {
-		t.Fatalf("slip=%v impact=%v", got.SlippagePct, got.ImpactPct)
+	if got.SlippagePct <= 0 {
+		t.Fatalf("slip=%v", got.SlippagePct)
+	}
+	// first ask fully eaten; new best is 101 → (101-100)/100 = 1%
+	if got.NewBestPrice != "101" || got.ImpactPct < 0.99 || got.ImpactPct > 1.01 {
+		t.Fatalf("newBest=%s impact=%v", got.NewBestPrice, got.ImpactPct)
+	}
+}
+
+func TestSimulateMarketImpact_PartialBestIsZero(t *testing.T) {
+	levels := []ImpactSourceLevel{
+		{Exchange: "binance", Price: 100, Quantity: 2},
+		{Exchange: "binance", Price: 101, Quantity: 5},
+	}
+	got := SimulateMarketImpact("BTCUSDT", "binance", ImpactSideBuy, 99.5, levels, 1, 0)
+	if got.ImpactPct != 0 || got.NewBestPrice != "100" {
+		t.Fatalf("partial best should not move price: %+v", got)
+	}
+	if got.AveragePrice == "" || got.EndPrice != "100" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestSimulateMarketImpact_SamePriceOtherVenueKeepsTouch(t *testing.T) {
+	levels := []ImpactSourceLevel{
+		{Exchange: "bybit", Price: 100, Quantity: 1},
+		{Exchange: "binance", Price: 100, Quantity: 2},
+		{Exchange: "binance", Price: 102, Quantity: 4},
+	}
+	got := SimulateMarketImpact("BTCUSDT", "combined", ImpactSideBuy, 100, levels, 1, 0)
+	if got.ImpactPct != 0 || got.NewBestPrice != "100" {
+		t.Fatalf("same-price leftover must keep impact 0: %+v", got)
 	}
 }
 
@@ -56,6 +86,10 @@ func TestSimulateMarketImpact_Sell(t *testing.T) {
 	}
 	if got.SlippagePct <= 0 {
 		t.Fatalf("sell slip %v", got.SlippagePct)
+	}
+	// best bid 100 fully eaten; new best bid 99 → 1%
+	if got.NewBestPrice != "99" || got.ImpactPct < 0.99 || got.ImpactPct > 1.01 {
+		t.Fatalf("newBest=%s impact=%v", got.NewBestPrice, got.ImpactPct)
 	}
 }
 

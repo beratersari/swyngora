@@ -281,6 +281,7 @@ type orderBookImpactResponse struct {
 	BestPrice         string          `json:"bestPrice"`
 	AveragePrice      string          `json:"averagePrice"`
 	EndPrice          string          `json:"endPrice"`
+	NewBestPrice      string          `json:"newBestPrice,omitempty"`
 	RequestedQuantity string          `json:"requestedQuantity,omitempty"`
 	RequestedNotional string          `json:"requestedNotional,omitempty"`
 	FilledQuantity    string          `json:"filledQuantity"`
@@ -314,6 +315,7 @@ func impactToDTO(a *domain.OrderBookImpact) orderBookImpactResponse {
 	return orderBookImpactResponse{
 		Symbol: a.Symbol, Scope: a.Scope, Side: a.Side,
 		MidPrice: a.MidPrice, BestPrice: a.BestPrice, AveragePrice: a.AveragePrice, EndPrice: a.EndPrice,
+		NewBestPrice:      a.NewBestPrice,
 		RequestedQuantity: a.RequestedQuantity, RequestedNotional: a.RequestedNotional,
 		FilledQuantity: a.FilledQuantity, SpentNotional: a.SpentNotional,
 		UnfilledQuantity: a.UnfilledQuantity, UnfilledNotional: a.UnfilledNotional,

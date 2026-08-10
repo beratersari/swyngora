@@ -33,9 +33,11 @@ Futures / other markets are out of scope for now version.
   - Provide **quantity** (base, e.g. 5 BTC) **or** **notional** (quote, e.g. `1000000000`).
   - `exchange=all` (default) merges Binance + Coinbase + Bybit and takes the best prices first;
     pass `binance` / `coinbase` / `bybit` for one venue.
-  - Returns `averagePrice`, `slippagePct` (vs mid), `slippageVsBestPct`, `endPrice` /
-    `impactPct` (how far the last fill moved the book), `exhausted` if the visible book
-    ran out, plus a short `fills` walk (first 30 levels).
+  - Returns `averagePrice`, `slippagePct` (vs mid), `slippageVsBestPct`, `endPrice`,
+    `newBestPrice`, and `impactPct` (how far the **touch** moved). If the best ask
+    (buy) or best bid (sell) still has leftover size, `impactPct` is **0**. If that
+    price is fully consumed, impact is the new best versus the old best. `exhausted`
+    is true if the visible book ran out. First 30 fill rows are included.
   - Simulation only — not a quote, fill, or financial advice. Visible depth is often
     much thinner than a real $1B print; `exhausted=true` is the honest answer then.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
@@ -67,7 +69,7 @@ curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&quanti
 curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notional=1000000000&exchange=all"
 ```
 
-`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `slippagePct`, `impactPct`, and `exhausted`.
+`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `newBestPrice`, `impactPct` (0 unless the touch level was fully eaten), and `exhausted`.
 
 ## Limits / follow-ups
 

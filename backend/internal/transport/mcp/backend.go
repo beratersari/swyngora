@@ -103,6 +103,7 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	return mustJSON(map[string]any{
 		"symbol": got.Symbol, "scope": got.Scope, "side": got.Side,
 		"midPrice": got.MidPrice, "bestPrice": got.BestPrice, "averagePrice": got.AveragePrice, "endPrice": got.EndPrice,
+		"newBestPrice":      got.NewBestPrice,
 		"requestedQuantity": got.RequestedQuantity, "requestedNotional": got.RequestedNotional,
 		"filledQuantity": got.FilledQuantity, "spentNotional": got.SpentNotional,
 		"unfilledQuantity": got.UnfilledQuantity, "unfilledNotional": got.UnfilledNotional,

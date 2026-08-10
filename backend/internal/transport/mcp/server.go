@@ -256,7 +256,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("estimate_market_impact",
-		mcp.WithDescription("Simulate a market buy or sell against live order-book depth. Walks asks (buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, last price (how far the book moved), and whether visible liquidity ran out. Simulation only."),
+		mcp.WithDescription("Simulate a market buy or sell against live order-book depth. Walks asks (buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, and price impact as the move of the best ask/bid after leftover size (0 if the touch level still has quantity). Simulation only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("side", mcp.Description("buy (default) | sell")),
 		mcp.WithNumber("quantity", mcp.Description("Base size to fill (e.g. 5). Do not set together with notional.")),

@@ -457,9 +457,19 @@ func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	avg, _ := strconv.ParseFloat(got.AveragePrice, 64)
-	// sample asks: 1@100.06 + 0.5@100.20
+	// sample asks: 1@100.06 + 0.5@100.20 — first ask gone, new best 100.20
 	if avg < 100.1 || avg > 100.15 {
 		t.Fatalf("avg %s", got.AveragePrice)
+	}
+	if got.NewBestPrice != "100.2" || got.ImpactPct <= 0 {
+		t.Fatalf("touch move %+v", got)
+	}
+	tiny, err := svc.EstimateOrderBookImpact(context.Background(), "binance", "BTCUSDT", "buy", 0.25, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tiny.ImpactPct != 0 {
+		t.Fatalf("partial best must be 0 impact, got %v", tiny.ImpactPct)
 	}
 	big, err := svc.EstimateOrderBookImpact(context.Background(), "all", "BTCUSDT", "buy", 0, 1e9)
 	if err != nil {

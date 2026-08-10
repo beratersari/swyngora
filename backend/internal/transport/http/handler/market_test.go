@@ -168,6 +168,9 @@ func TestGetOrderBookImpact_OK(t *testing.T) {
 	if body.AveragePrice == "" || body.Side != "buy" || body.Exhausted {
 		t.Fatalf("%+v", body)
 	}
+	if body.ImpactPct != 0 {
+		t.Fatalf("partial best ask must be 0 impact: %+v", body)
+	}
 }
 
 func TestGetOrderBookImpact_BadSize(t *testing.T) {

@@ -1599,8 +1599,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "(buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) "
                 "or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) "
                 "merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, "
-                "last price (how far the book moved), and whether visible liquidity ran out. "
-                "Simulation only — not a quote."
+                "and price impact as the new best ask/bid after leftover size (0 if the touch "
+                "level still has quantity). Simulation only — not a quote."
             ),
             args_schema=MarketImpactInput,
         ),

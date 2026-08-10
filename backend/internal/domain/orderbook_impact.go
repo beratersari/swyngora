@@ -39,9 +39,10 @@ type OrderBookImpact struct {
 	Scope             string // venue id or "combined"
 	Side              string
 	MidPrice          string
-	BestPrice         string // best ask (buy) or best bid (sell)
+	BestPrice         string // best ask (buy) or best bid (sell) before the order
 	AveragePrice      string
-	EndPrice          string // last fill price (how far the book was walked)
+	EndPrice          string // last fill price
+	NewBestPrice      string // best ask/bid still resting after the order; empty if that side is wiped
 	RequestedQuantity string
 	RequestedNotional string
 	FilledQuantity    string
@@ -52,7 +53,7 @@ type OrderBookImpact struct {
 	VisibleNotional   string
 	SlippagePct       float64 // adverse vs mid
 	SlippageVsBestPct float64 // adverse vs best bid/ask
-	ImpactPct         float64 // adverse: last fill vs mid
+	ImpactPct         float64 // adverse move of the touch: new best vs old best (0 if best level still has size)
 	Exhausted         bool
 	LevelsUsed        int
 	VenueCount        int
@@ -204,9 +205,13 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 	remainQty := quantity
 	remainQuote := notional
 	useQuote := notional > 0 && quantity <= 0
+	leftover := make([]float64, len(levels))
+	for i, lv := range levels {
+		leftover[i] = lv.Quantity
+	}
 	var filled, spent float64
 	var lastPx float64
-	for _, lv := range levels {
+	for i, lv := range levels {
 		if useQuote {
 			if remainQuote <= 0 {
 				break
@@ -214,7 +219,7 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 		} else if remainQty <= 0 {
 			break
 		}
-		take := lv.Quantity
+		take := leftover[i]
 		if useQuote {
 			maxQty := remainQuote / lv.Price
 			if maxQty < take {
@@ -230,6 +235,10 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 		filled += take
 		spent += cost
 		lastPx = lv.Price
+		leftover[i] -= take
+		if leftover[i] < 0 {
+			leftover[i] = 0
+		}
 		if useQuote {
 			remainQuote -= cost
 			if remainQuote < 0 {
@@ -255,26 +264,29 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 	if lastPx > 0 {
 		out.EndPrice = formatFixed(lastPx, decimalsForStep(lastPx/10000)+1)
 	}
+	oldBest := levels[0].Price
+	newBest, hasNew := remainingBestPrice(levels, leftover)
+	if hasNew {
+		out.NewBestPrice = formatFixed(newBest, decimalsForStep(newBest/10000)+1)
+	}
 	if filled > 0 {
 		avg := spent / filled
 		out.AveragePrice = formatFixed(avg, decimalsForStep(avg/10000)+1)
 		if mid > 0 {
 			if side == ImpactSideSell {
 				out.SlippagePct = adversePct(mid, avg)
-				out.ImpactPct = adversePct(mid, lastPx)
 			} else {
 				out.SlippagePct = adversePct(avg, mid)
-				out.ImpactPct = adversePct(lastPx, mid)
 			}
 		}
-		best := levels[0].Price
-		if best > 0 {
+		if oldBest > 0 {
 			if side == ImpactSideSell {
-				out.SlippageVsBestPct = adversePct(best, avg)
+				out.SlippageVsBestPct = adversePct(oldBest, avg)
 			} else {
-				out.SlippageVsBestPct = adversePct(avg, best)
+				out.SlippageVsBestPct = adversePct(avg, oldBest)
 			}
 		}
+		out.ImpactPct = touchImpactPct(side, oldBest, newBest, hasNew, lastPx)
 	}
 	if useQuote {
 		if remainQuote > 1e-8 {
@@ -286,6 +298,62 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 		out.UnfilledQuantity = formatQty(remainQty)
 	}
 	return out
+}
+
+const leftoverEps = 1e-12
+
+// remainingBestPrice is the first price that still has resting size after the walk.
+// Same price on several venues is one touch: leftover on any of them keeps that price.
+func remainingBestPrice(levels []ImpactSourceLevel, leftover []float64) (float64, bool) {
+	for i := range leftover {
+		if leftover[i] > leftoverEps {
+			return levels[i].Price, true
+		}
+	}
+	return 0, false
+}
+
+// touchImpactPct is how far the best ask (buy) or best bid (sell) moved.
+// If the touch price still has size, impact is 0. If it was fully eaten, impact
+// is the move to the new best. If the side is wiped, last fill vs old best.
+func touchImpactPct(side string, oldBest, newBest float64, hasNew bool, lastPx float64) float64 {
+	if oldBest <= 0 {
+		return 0
+	}
+	if hasNew && sameTouchPrice(newBest, oldBest) {
+		return 0
+	}
+	movedTo := newBest
+	if !hasNew {
+		movedTo = lastPx
+	}
+	if movedTo <= 0 || sameTouchPrice(movedTo, oldBest) {
+		return 0
+	}
+	var v float64
+	if side == ImpactSideSell {
+		v = (oldBest - movedTo) / oldBest * 100
+	} else {
+		v = (movedTo - oldBest) / oldBest * 100
+	}
+	if v < 0 {
+		return 0
+	}
+	return round4(v)
+}
+
+func sameTouchPrice(a, b float64) bool {
+	if a == b {
+		return true
+	}
+	ref := math.Abs(a)
+	if ref < math.Abs(b) {
+		ref = math.Abs(b)
+	}
+	if ref == 0 {
+		return true
+	}
+	return math.Abs(a-b) <= ref*1e-12
 }
 
 // adversePct is max(0, (worse-better)/ref*100) so a fill better than the

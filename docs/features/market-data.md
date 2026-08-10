@@ -36,7 +36,7 @@ Expose first market-data APIs so clients can:
 - Live local books on Binance, Coinbase, and Bybit (websocket; gap/drop resyncs).
 - `analysis` uses depth within ±`rangePct` of mid (default 2%) for pressure, imbalance, and walls.
 - `GET /api/v1/market/orderbook/combined` sums all three venues in a symmetric ±% both sides can reach.
-- `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and whether the visible book was exhausted.
+- `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact (0 unless the best level is fully consumed).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

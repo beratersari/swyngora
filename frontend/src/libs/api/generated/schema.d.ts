@@ -272,8 +272,10 @@ export interface paths {
          *     sell consumes bids (highest first). `exchange=all` (default) merges Binance,
          *     Coinbase, and Bybit and takes the best prices first. Provide **quantity**
          *     (base, e.g. 5 BTC) **or** **notional** (quote, e.g. 1000000000 USDT).
-         *     Returns average fill, slippage vs mid/best, last fill price (price impact),
-         *     and whether the visible book was exhausted. Simulation only — not a quote.
+         *     Returns average fill, slippage vs mid/best, and price impact as the move
+         *     of the best ask (buy) or best bid (sell) after leftover size. If the touch
+         *     level still has quantity, impact is 0. If it is fully consumed, impact is
+         *     the new best versus the old best. Simulation only — not a quote.
          */
         get: operations["estimateSpotOrderBookImpact"];
         put?: never;
@@ -2170,8 +2172,10 @@ export interface components {
             midPrice?: string;
             bestPrice?: string;
             averagePrice?: string;
-            /** @description Last fill price (how far the book was walked) */
+            /** @description Last fill price */
             endPrice?: string;
+            /** @description Best ask (buy) or bid (sell) still resting after the order */
+            newBestPrice?: string;
             requestedQuantity?: string;
             requestedNotional?: string;
             filledQuantity?: string;
@@ -2184,7 +2188,7 @@ export interface components {
             slippagePct?: number;
             /** @description Adverse percent vs best bid/ask */
             slippageVsBestPct?: number;
-            /** @description Adverse percent of last fill vs mid */
+            /** @description Adverse percent the best ask/bid moved after leftover size (0 if the touch level still has quantity) */
             impactPct?: number;
             exhausted?: boolean;
             levelsUsed?: number;
