@@ -259,6 +259,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/impact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Simulate market-order impact and slippage
+         * @description Walks live resting depth like a market order. Buy consumes asks (lowest first);
+         *     sell consumes bids (highest first). `exchange=all` (default) merges Binance,
+         *     Coinbase, and Bybit and takes the best prices first. Provide **quantity**
+         *     (base, e.g. 5 BTC) **or** **notional** (quote, e.g. 1000000000 USDT).
+         *     Returns average fill, slippage vs mid/best, last fill price (price impact),
+         *     and whether the visible book was exhausted. Simulation only — not a quote.
+         */
+        get: operations["estimateSpotOrderBookImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -2127,6 +2152,47 @@ export interface components {
             venueCount?: number;
             note?: string;
         };
+        OrderBookImpactFill: {
+            exchange?: string;
+            price?: string;
+            quantity?: string;
+            notional?: string;
+            cumulativeQuantity?: string;
+            cumulativeNotional?: string;
+        };
+        /** @description Simulated market-order walk of live resting depth */
+        OrderBookImpact: {
+            symbol?: string;
+            /** @description Venue id or combined */
+            scope?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            midPrice?: string;
+            bestPrice?: string;
+            averagePrice?: string;
+            /** @description Last fill price (how far the book was walked) */
+            endPrice?: string;
+            requestedQuantity?: string;
+            requestedNotional?: string;
+            filledQuantity?: string;
+            spentNotional?: string;
+            unfilledQuantity?: string;
+            unfilledNotional?: string;
+            visibleQuantity?: string;
+            visibleNotional?: string;
+            /** @description Adverse percent vs mid */
+            slippagePct?: number;
+            /** @description Adverse percent vs best bid/ask */
+            slippageVsBestPct?: number;
+            /** @description Adverse percent of last fill vs mid */
+            impactPct?: number;
+            exhausted?: boolean;
+            levelsUsed?: number;
+            venueCount?: number;
+            live?: boolean;
+            fills?: components["schemas"]["OrderBookImpactFill"][];
+            note?: string;
+        };
         Supply: {
             asset?: string;
             name?: string;
@@ -3328,6 +3394,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CombinedOrderBook"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    estimateSpotOrderBookImpact: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | coinbase | bybit | all (default all = combined walk) */
+                exchange?: string;
+                side?: "buy" | "sell";
+                /** @description Base size to fill (e.g. 5 for 5 BTC). Mutually exclusive with notional. */
+                quantity?: number;
+                /** @description Quote size to spend/receive (e.g. 1000000000). Mutually exclusive with quantity. */
+                notional?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Simulated fill */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderBookImpact"];
                 };
             };
             400: components["responses"]["Error"];

@@ -153,6 +153,33 @@ func TestGetOrderBook_BadRange(t *testing.T) {
 	}
 }
 
+func TestGetOrderBookImpact_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=1&exchange=binance", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBookImpact(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body orderBookImpactResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.AveragePrice == "" || body.Side != "buy" || body.Exhausted {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetOrderBookImpact_BadSize(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/impact?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBookImpact(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetCombinedOrderBook_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2", nil)

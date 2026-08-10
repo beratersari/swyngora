@@ -107,6 +107,23 @@ class MarketOrderBookInput(BaseModel):
     )
 
 
+class MarketImpactInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    side: str = Field(default="buy", description="buy (default) or sell")
+    quantity: float = Field(
+        default=0,
+        description="Base size to fill (e.g. 5 for 5 BTC). Do not set together with notional.",
+    )
+    notional: float = Field(
+        default=0,
+        description="Quote size to spend/receive (e.g. 1000000000). Do not set together with quantity.",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all = cheapest-first merge)",
+    )
+
+
 class CandlesInput(BaseModel):
     symbol: str
     exchange: str = "binance"
@@ -597,6 +614,24 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "/api/v1/market/orderbook/combined",
             {"symbol": symbol, "rangePct": range_pct},
         )
+
+    def estimate_market_impact(
+        symbol: str,
+        side: str = "buy",
+        quantity: float = 0,
+        notional: float = 0,
+        exchange: str = "all",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "side": side,
+            "exchange": exchange,
+        }
+        if quantity and quantity > 0:
+            params["quantity"] = quantity
+        if notional and notional > 0:
+            params["notional"] = notional
+        return http.get("/api/v1/market/orderbook/impact", params)
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -1555,6 +1590,19 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "(requested ±range_pct when all cover it both ways). Use for overall pressure."
             ),
             args_schema=MarketOrderBookInput,
+        ),
+        StructuredTool.from_function(
+            estimate_market_impact,
+            name="estimate_market_impact",
+            description=(
+                "Simulate a market buy or sell against live order-book depth. Walks asks "
+                "(buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) "
+                "or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) "
+                "merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, "
+                "last price (how far the book moved), and whether visible liquidity ran out. "
+                "Simulation only — not a quote."
+            ),
+            args_schema=MarketImpactInput,
         ),
         StructuredTool.from_function(
             get_candles,

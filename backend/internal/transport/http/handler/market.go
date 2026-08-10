@@ -236,6 +236,95 @@ func (h *MarketHandler) GetCombinedOrderBook(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, combinedBookToDTO(got))
 }
 
+// GetOrderBookImpact handles GET /api/v1/market/orderbook/impact.
+func (h *MarketHandler) GetOrderBookImpact(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var qty, notional float64
+	if raw := strings.TrimSpace(q.Get("quantity")); raw != "" {
+		n, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: quantity must be a number", domain.ErrInvalidArgument))
+			return
+		}
+		qty = n
+	}
+	if raw := strings.TrimSpace(q.Get("notional")); raw != "" {
+		n, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: notional must be a number", domain.ErrInvalidArgument))
+			return
+		}
+		notional = n
+	}
+	got, err := h.svc.EstimateOrderBookImpact(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("side"), qty, notional)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, impactToDTO(got))
+}
+
+type impactFillDTO struct {
+	Exchange           string `json:"exchange"`
+	Price              string `json:"price"`
+	Quantity           string `json:"quantity"`
+	Notional           string `json:"notional"`
+	CumulativeQuantity string `json:"cumulativeQuantity"`
+	CumulativeNotional string `json:"cumulativeNotional"`
+}
+
+type orderBookImpactResponse struct {
+	Symbol            string          `json:"symbol"`
+	Scope             string          `json:"scope"`
+	Side              string          `json:"side"`
+	MidPrice          string          `json:"midPrice"`
+	BestPrice         string          `json:"bestPrice"`
+	AveragePrice      string          `json:"averagePrice"`
+	EndPrice          string          `json:"endPrice"`
+	RequestedQuantity string          `json:"requestedQuantity,omitempty"`
+	RequestedNotional string          `json:"requestedNotional,omitempty"`
+	FilledQuantity    string          `json:"filledQuantity"`
+	SpentNotional     string          `json:"spentNotional"`
+	UnfilledQuantity  string          `json:"unfilledQuantity,omitempty"`
+	UnfilledNotional  string          `json:"unfilledNotional,omitempty"`
+	VisibleQuantity   string          `json:"visibleQuantity"`
+	VisibleNotional   string          `json:"visibleNotional"`
+	SlippagePct       float64         `json:"slippagePct"`
+	SlippageVsBestPct float64         `json:"slippageVsBestPct"`
+	ImpactPct         float64         `json:"impactPct"`
+	Exhausted         bool            `json:"exhausted"`
+	LevelsUsed        int             `json:"levelsUsed"`
+	VenueCount        int             `json:"venueCount"`
+	Live              bool            `json:"live"`
+	Fills             []impactFillDTO `json:"fills"`
+	Note              string          `json:"note"`
+}
+
+func impactToDTO(a *domain.OrderBookImpact) orderBookImpactResponse {
+	if a == nil {
+		return orderBookImpactResponse{}
+	}
+	fills := make([]impactFillDTO, 0, len(a.Fills))
+	for _, f := range a.Fills {
+		fills = append(fills, impactFillDTO{
+			Exchange: f.Exchange, Price: f.Price, Quantity: f.Quantity, Notional: f.Notional,
+			CumulativeQuantity: f.CumulativeQuantity, CumulativeNotional: f.CumulativeNotional,
+		})
+	}
+	return orderBookImpactResponse{
+		Symbol: a.Symbol, Scope: a.Scope, Side: a.Side,
+		MidPrice: a.MidPrice, BestPrice: a.BestPrice, AveragePrice: a.AveragePrice, EndPrice: a.EndPrice,
+		RequestedQuantity: a.RequestedQuantity, RequestedNotional: a.RequestedNotional,
+		FilledQuantity: a.FilledQuantity, SpentNotional: a.SpentNotional,
+		UnfilledQuantity: a.UnfilledQuantity, UnfilledNotional: a.UnfilledNotional,
+		VisibleQuantity: a.VisibleQuantity, VisibleNotional: a.VisibleNotional,
+		SlippagePct: a.SlippagePct, SlippageVsBestPct: a.SlippageVsBestPct, ImpactPct: a.ImpactPct,
+		Exhausted: a.Exhausted, LevelsUsed: a.LevelsUsed, VenueCount: a.VenueCount, Live: a.Live,
+		Fills: fills,
+		Note:  "Simulated market order walking live resting depth. Not a quote, fill, or financial advice. Visible book may be thinner than the real market.",
+	}
+}
+
 type combinedWallDTO struct {
 	Exchange    string  `json:"exchange"`
 	Side        string  `json:"side"`

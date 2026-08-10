@@ -205,11 +205,30 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
 	rangePct = domain.ClampRangePct(rangePct)
-	exchanges := s.ListExchanges()
+	books, err := s.fetchVenueBooks(ctx, symbol, nil)
+	if err != nil {
+		return nil, err
+	}
+	mid := domain.SharedBookMid(books)
+	if mid <= 0 {
+		return nil, fmt.Errorf("%w: could not determine shared mid for %s", domain.ErrUpstream, symbol)
+	}
+	display := domain.CrossVenueSymbol(domain.ExchangeBinance, symbol)
+	if display == "" {
+		display = strings.ToUpper(symbol)
+	}
+	combined := domain.CombineOrderBooks(display, mid, rangePct, books)
+	return &combined, nil
+}
+
+func (s *Service) fetchVenueBooks(ctx context.Context, symbol string, only []domain.Exchange) ([]domain.VenueRawBook, error) {
+	exchanges := only
+	if len(exchanges) == 0 {
+		exchanges = s.ListExchanges()
+	}
 	if len(exchanges) == 0 {
 		return nil, fmt.Errorf("%w: no exchanges configured", domain.ErrUpstream)
 	}
-
 	type result struct {
 		vb domain.VenueRawBook
 	}
@@ -256,16 +275,57 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 	if ok == 0 {
 		return nil, fmt.Errorf("%w: no live order books for %s", domain.ErrUpstream, symbol)
 	}
-	mid := domain.SharedBookMid(books)
-	if mid <= 0 {
-		return nil, fmt.Errorf("%w: could not determine shared mid for %s", domain.ErrUpstream, symbol)
+	return books, nil
+}
+
+// EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.
+// exchange empty or "all" walks Binance+Coinbase+Bybit cheapest-first.
+func (s *Service) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (*domain.OrderBookImpact, error) {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
+	side, err := domain.ParseImpactSide(side)
+	if err != nil {
+		return nil, err
+	}
+	if err := domain.ValidateImpactSize(quantity, notional); err != nil {
+		return nil, err
+	}
+	var only []domain.Exchange
+	scope := domain.ImpactScopeCombined
+	rawEx := strings.ToLower(strings.TrimSpace(exchange))
+	if rawEx != "" && rawEx != "all" && rawEx != "combined" {
+		ex, err := s.ResolveExchange(exchange)
+		if err != nil {
+			return nil, err
+		}
+		only = []domain.Exchange{ex}
+		scope = string(ex)
+	}
+	books, err := s.fetchVenueBooks(ctx, symbol, only)
+	if err != nil {
+		return nil, err
+	}
+	mid := domain.ImpactBookMid(books)
+	levels := domain.CollectImpactLevels(side, books)
 	display := domain.CrossVenueSymbol(domain.ExchangeBinance, symbol)
 	if display == "" {
 		display = strings.ToUpper(symbol)
 	}
-	combined := domain.CombineOrderBooks(display, mid, rangePct, books)
-	return &combined, nil
+	imp := domain.SimulateMarketImpact(display, scope, side, mid, levels, quantity, notional)
+	imp.VenueCount = 0
+	live := false
+	for _, b := range books {
+		if b.Err == "" {
+			imp.VenueCount++
+			if b.Book.Live {
+				live = true
+			}
+		}
+	}
+	imp.Live = live
+	return &imp, nil
 }
 
 // GetTicker24h returns rolling 24h volume and price stats for a symbol.

@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -439,6 +440,45 @@ func TestGetCombinedOrderBookAnalysis(t *testing.T) {
 	}
 	if len(got.Venues) != 3 {
 		t.Fatalf("venues %+v", got.Venues)
+	}
+}
+
+func TestEstimateOrderBookImpact_Buy(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{},
+		domain.ExchangeCoinbase: &fakeMarket{},
+		domain.ExchangeBybit:    &fakeMarket{},
+	}, &fakeSupply{})
+	got, err := svc.EstimateOrderBookImpact(context.Background(), "binance", "BTCUSDT", "buy", 1.5, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Exhausted || got.Scope != "binance" || got.FilledQuantity == "" {
+		t.Fatalf("%+v", got)
+	}
+	avg, _ := strconv.ParseFloat(got.AveragePrice, 64)
+	// sample asks: 1@100.06 + 0.5@100.20
+	if avg < 100.1 || avg > 100.15 {
+		t.Fatalf("avg %s", got.AveragePrice)
+	}
+	big, err := svc.EstimateOrderBookImpact(context.Background(), "all", "BTCUSDT", "buy", 0, 1e9)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if big.Scope != domain.ImpactScopeCombined || big.VenueCount != 3 {
+		t.Fatalf("combined %+v", big)
+	}
+}
+
+func TestEstimateOrderBookImpact_RejectsBothSizes(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.EstimateOrderBookImpact(context.Background(), "binance", "BTCUSDT", "buy", 1, 100)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+	_, err = svc.EstimateOrderBookImpact(context.Background(), "binance", "BTCUSDT", "buy", 0, 0)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
 	}
 }
 

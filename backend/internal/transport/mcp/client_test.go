@@ -37,6 +37,35 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_EstimateOrderBookImpact(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/orderbook/impact" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		if q.Get("symbol") != "BTCUSDT" || q.Get("quantity") != "5" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "side": "buy", "averagePrice": "100.5", "exhausted": false,
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.EstimateOrderBookImpact(context.Background(), "all", "BTCUSDT", "buy", 5, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["averagePrice"] != "100.5" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetPortfolioPerformance(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/portfolio/performance" {

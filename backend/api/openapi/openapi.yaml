@@ -532,6 +532,49 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/impact:
+    get:
+      summary: Simulate market-order impact and slippage
+      description: |
+        Walks live resting depth like a market order. Buy consumes asks (lowest first);
+        sell consumes bids (highest first). `exchange=all` (default) merges Binance,
+        Coinbase, and Bybit and takes the best prices first. Provide **quantity**
+        (base, e.g. 5 BTC) **or** **notional** (quote, e.g. 1000000000 USDT).
+        Returns average fill, slippage vs mid/best, last fill price (price impact),
+        and whether the visible book was exhausted. Simulation only — not a quote.
+      operationId: estimateSpotOrderBookImpact
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all = combined walk)
+          schema: { type: string, default: all, example: all }
+        - name: side
+          in: query
+          schema: { type: string, enum: [buy, sell], default: buy }
+        - name: quantity
+          in: query
+          description: Base size to fill (e.g. 5 for 5 BTC). Mutually exclusive with notional.
+          schema: { type: number, example: 5 }
+        - name: notional
+          in: query
+          description: Quote size to spend/receive (e.g. 1000000000). Mutually exclusive with quantity.
+          schema: { type: number, example: 1000000 }
+      responses:
+        '200':
+          description: Simulated fill
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderBookImpact'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -4352,6 +4395,45 @@ components:
           type: array
           items: { $ref: '#/components/schemas/CombinedOrderBookVenue' }
         venueCount: { type: integer }
+        note: { type: string }
+    OrderBookImpactFill:
+      type: object
+      properties:
+        exchange: { type: string }
+        price: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
+        cumulativeQuantity: { type: string }
+        cumulativeNotional: { type: string }
+    OrderBookImpact:
+      type: object
+      description: Simulated market-order walk of live resting depth
+      properties:
+        symbol: { type: string }
+        scope: { type: string, description: Venue id or combined }
+        side: { type: string, enum: [buy, sell] }
+        midPrice: { type: string }
+        bestPrice: { type: string }
+        averagePrice: { type: string }
+        endPrice: { type: string, description: Last fill price (how far the book was walked) }
+        requestedQuantity: { type: string }
+        requestedNotional: { type: string }
+        filledQuantity: { type: string }
+        spentNotional: { type: string }
+        unfilledQuantity: { type: string }
+        unfilledNotional: { type: string }
+        visibleQuantity: { type: string }
+        visibleNotional: { type: string }
+        slippagePct: { type: number, description: Adverse percent vs mid }
+        slippageVsBestPct: { type: number, description: Adverse percent vs best bid/ask }
+        impactPct: { type: number, description: Adverse percent of last fill vs mid }
+        exhausted: { type: boolean }
+        levelsUsed: { type: integer }
+        venueCount: { type: integer }
+        live: { type: boolean }
+        fills:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookImpactFill' }
         note: { type: string }
     Supply:
       type: object

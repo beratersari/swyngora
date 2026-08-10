@@ -16,6 +16,18 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
+        if request.url.path.endswith("/orderbook/impact"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "side": request.url.params.get("side") or "buy",
+                    "averagePrice": "100.25",
+                    "slippagePct": 0.25,
+                    "exhausted": False,
+                    "filledQuantity": request.url.params.get("quantity") or "1",
+                },
+            )
         if request.url.path.endswith("/orderbook"):
             return httpx.Response(
                 200,
@@ -66,6 +78,15 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert analysis["symbol"] == "BTCUSDT"
     assert "bids" not in analysis
+
+    assert "estimate_market_impact" in by_name
+    impact = json.loads(
+        by_name["estimate_market_impact"].invoke(
+            {"symbol": "BTCUSDT", "quantity": 5, "side": "buy"}
+        )
+    )
+    assert impact["symbol"] == "BTCUSDT"
+    assert impact["averagePrice"] == "100.25"
 
     health = by_name["health"].invoke({})
     assert "ok" in health

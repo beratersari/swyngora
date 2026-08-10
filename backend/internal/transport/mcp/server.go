@@ -27,6 +27,7 @@ type DataPort interface {
 	GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int, rangePct float64) (json.RawMessage, error)
 	AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
+	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -248,6 +249,25 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AnalyzeCombinedOrderBook(ctx, symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("estimate_market_impact",
+		mcp.WithDescription("Simulate a market buy or sell against live order-book depth. Walks asks (buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, last price (how far the book moved), and whether visible liquidity ran out. Simulation only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("side", mcp.Description("buy (default) | sell")),
+		mcp.WithNumber("quantity", mcp.Description("Base size to fill (e.g. 5). Do not set together with notional.")),
+		mcp.WithNumber("notional", mcp.Description("Quote size to spend/receive (e.g. 1000000000). Do not set together with quantity.")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.EstimateOrderBookImpact(ctx, req.GetString("exchange", "all"), symbol, req.GetString("side", "buy"), req.GetFloat("quantity", 0), req.GetFloat("notional", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

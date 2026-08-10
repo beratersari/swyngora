@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Market impact / slippage:** simulate a market buy or sell by walking live order-book levels; returns average fill, slippage vs mid/best, last fill (price impact), and whether visible liquidity ran out (`GET /api/v1/market/orderbook/impact`, MCP `estimate_market_impact`) (`docs/features/order-book.md`)
 - **Market-wide order book:** combined Binance + Coinbase + Bybit live depth; totals use a symmetric ±% both sides can reach (requested band only when all venues cover it both ways) (`GET /api/v1/market/orderbook/combined`, MCP `analyze_market_orderbook`) (`docs/features/order-book.md`)
 - **Order-book alerts:** create imbalance or wall alerts on the existing alert API; the background checker uses the live local book and does not re-fire while the same condition stays true (`POST /api/v1/alerts` `kind=imbalance|wall`, MCP `create_orderbook_alert`) (`docs/features/price-alerts.md`)
 - **Spot order-book analysis:** buy/sell pressure, notional imbalance, and large walls from live depth within ±`rangePct` of mid (default 2%, not only the top rows) on Binance, Coinbase, and Bybit (`GET /api/v1/market/orderbook`, MCP `analyze_spot_orderbook`) (`docs/features/order-book.md`)

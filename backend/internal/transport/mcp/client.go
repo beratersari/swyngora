@@ -139,6 +139,25 @@ func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group st
 	return c.get(ctx, "/api/v1/market/orderbook", q)
 }
 
+// EstimateOrderBookImpact walks live depth for a simulated market order.
+func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if side != "" {
+		q.Set("side", side)
+	}
+	if quantity > 0 {
+		q.Set("quantity", strconv.FormatFloat(quantity, 'f', -1, 64))
+	}
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/impact", q)
+}
+
 // AnalyzeCombinedOrderBook sums live books from all venues in one price band.
 func (c *APIClient) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
 	q := url.Values{}

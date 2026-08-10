@@ -27,6 +27,17 @@ Futures / other markets are out of scope for now version.
     bid reach and common ask reach). If all cover ±`rangePct` both ways, that
     requested band is used (`requestedReached`, `usedRangePct`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
+- `GET /api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=5&side=buy`
+  - Walks live resting depth like a market order. Buy consumes **asks** (lowest first);
+    sell consumes **bids** (highest first).
+  - Provide **quantity** (base, e.g. 5 BTC) **or** **notional** (quote, e.g. `1000000000`).
+  - `exchange=all` (default) merges Binance + Coinbase + Bybit and takes the best prices first;
+    pass `binance` / `coinbase` / `bybit` for one venue.
+  - Returns `averagePrice`, `slippagePct` (vs mid), `slippageVsBestPct`, `endPrice` /
+    `impactPct` (how far the last fill moved the book), `exhausted` if the visible book
+    ran out, plus a short `fills` walk (first 30 levels).
+  - Simulation only — not a quote, fill, or financial advice. Visible depth is often
+    much thinner than a real $1B print; `exhausted=true` is the honest answer then.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
 - All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.
   - **Binance:** `@depth@100ms` + REST snapshot; `U`/`u` vs `lastUpdateId`.
@@ -37,11 +48,11 @@ Futures / other markets are out of scope for now version.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `depthbook.go` |
+| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
-| Service | `backend/internal/service/market` `GetSpotOrderBook` |
-| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `create_orderbook_alert` |
+| Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact` |
+| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` |
 
 ## How to verify
@@ -52,9 +63,11 @@ curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1&ran
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=coinbase&symbol=BTC-USD&rangePct=2"
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=bybit&symbol=BTCUSDT&rangePct=5"
 curl "http://localhost:8080/api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2"
+curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=5"
+curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notional=1000000000&exchange=all"
 ```
 
-`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`.
+`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `slippagePct`, `impactPct`, and `exhausted`.
 
 ## Limits / follow-ups
 

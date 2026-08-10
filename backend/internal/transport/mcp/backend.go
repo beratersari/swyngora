@@ -85,6 +85,35 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 	})
 }
 
+func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.EstimateOrderBookImpact(ctx, exchange, symbol, side, quantity, notional)
+	if err != nil {
+		return nil, err
+	}
+	fills := make([]map[string]any, 0, len(got.Fills))
+	for _, f := range got.Fills {
+		fills = append(fills, map[string]any{
+			"exchange": f.Exchange, "price": f.Price, "quantity": f.Quantity, "notional": f.Notional,
+			"cumulativeQuantity": f.CumulativeQuantity, "cumulativeNotional": f.CumulativeNotional,
+		})
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "scope": got.Scope, "side": got.Side,
+		"midPrice": got.MidPrice, "bestPrice": got.BestPrice, "averagePrice": got.AveragePrice, "endPrice": got.EndPrice,
+		"requestedQuantity": got.RequestedQuantity, "requestedNotional": got.RequestedNotional,
+		"filledQuantity": got.FilledQuantity, "spentNotional": got.SpentNotional,
+		"unfilledQuantity": got.UnfilledQuantity, "unfilledNotional": got.UnfilledNotional,
+		"visibleQuantity": got.VisibleQuantity, "visibleNotional": got.VisibleNotional,
+		"slippagePct": got.SlippagePct, "slippageVsBestPct": got.SlippageVsBestPct, "impactPct": got.ImpactPct,
+		"exhausted": got.Exhausted, "levelsUsed": got.LevelsUsed, "venueCount": got.VenueCount, "live": got.Live,
+		"fills": fills,
+		"note":  "Simulated market order walking live resting depth. Not a quote, fill, or financial advice. Visible book may be thinner than the real market.",
+	})
+}
+
 func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
