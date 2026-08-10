@@ -35,6 +35,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Supply stats | `GET` | `/api/v1/market/supply` | DET-A §7 |
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
+| Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |
 | Batch (not detail) | `POST` | `/api/v1/market/indicators/batch` | DET-B §6 |
 
 ---

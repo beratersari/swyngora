@@ -73,6 +73,13 @@ class TickerInput(BaseModel):
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
 
 
+class OrderBookInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    group: str = Field(default="", description="Price bucket e.g. 0.1 or 0.01; empty = suggested default")
+    limit: int = Field(default=20, ge=5, le=100, description="Grouped rows per side")
+
+
 class CandlesInput(BaseModel):
     symbol: str
     exchange: str = "binance"
@@ -526,6 +533,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "/api/v1/market/ticker/24h",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_spot_orderbook(
+        symbol: str,
+        exchange: str = "binance",
+        group: str = "",
+        limit: int = 20,
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "exchange": exchange,
+            "limit": limit,
+        }
+        if group:
+            params["group"] = group
+        return http.get("/api/v1/market/orderbook", params)
 
     def get_candles(
         symbol: str,
@@ -1393,6 +1415,15 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_ticker",
             description="24h ticker (price, volume, change) for a pair.",
             args_schema=TickerInput,
+        ),
+        StructuredTool.from_function(
+            get_spot_orderbook,
+            name="get_spot_orderbook",
+            description=(
+                "Grouped spot order book: bids/asks at price steps (0.01, 0.1, 1…). "
+                "isWall marks large buy/sell walls. Use for liquidity and wall analysis."
+            ),
+            args_schema=OrderBookInput,
         ),
         StructuredTool.from_function(
             get_candles,

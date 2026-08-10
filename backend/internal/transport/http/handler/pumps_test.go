@@ -24,6 +24,9 @@ func (pumpStubPort) GetCandles(_ context.Context, q domain.CandleQuery) ([]domai
 func (pumpStubPort) GetTicker24h(context.Context, string) (*domain.Ticker24h, error) {
 	return nil, domain.ErrNotFound
 }
+func (pumpStubPort) GetOrderBook(context.Context, domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{}, nil
+}
 func (pumpStubPort) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
 	return []domain.SpotMarket{{Symbol: "BTCUSDT", QuoteVolume: "1"}}, nil
 }
@@ -82,6 +85,9 @@ func (scanStubPort) GetCandles(_ context.Context, q domain.CandleQuery) ([]domai
 }
 func (scanStubPort) GetTicker24h(context.Context, string) (*domain.Ticker24h, error) {
 	return nil, domain.ErrNotFound
+}
+func (scanStubPort) GetOrderBook(context.Context, domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{}, nil
 }
 func (scanStubPort) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
 	return []domain.SpotMarket{

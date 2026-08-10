@@ -29,6 +29,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `DetailStats` | CoinDetailPage |
 | `DetailChartToolbar` | CoinDetailPage |
 | `IndicatorPanel` | CoinDetailPage |
+| `OrderBookPanel` | CoinDetailPage |
 
 Import example:
 

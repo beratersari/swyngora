@@ -29,6 +29,12 @@ Expose first market-data APIs so clients can:
 - **24h trade count** is only available from Binance public APIs; Coinbase/Bybit return 0 / UI shows "—"
 - **Coinbase high/low:** Advanced Trade public `products` leaves `high_24h`/`low_24h` empty; detail ticker fills them from Exchange `GET /products/{id}/stats`
 
+### Spot order book — `GET /api/v1/market/orderbook`
+
+- Grouped bid/ask depth (spot only). `group` is the price step (e.g. `0.1`); omit for a suggested default.
+- `limit` is grouped rows per side. Backend marks `isWall` on unusually large buckets.
+- See [`order-book.md`](order-book.md).
+
 ### Spot markets — `GET /api/v1/market/spot`
 
 - **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded). Product catalog is **required** for the filter: without a warm or stale catalog snapshot, the spot list returns `502` rather than listing non-crypto products.

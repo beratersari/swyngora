@@ -16,6 +16,10 @@ func (stubMarketData) GetTicker24h(context.Context, string) (*Ticker24h, error) 
 	return nil, nil
 }
 
+func (stubMarketData) GetOrderBook(context.Context, OrderBookQuery) (*RawOrderBook, error) {
+	return &RawOrderBook{}, nil
+}
+
 func (stubMarketData) ListSpotMarkets(context.Context) ([]SpotMarket, error) {
 	return nil, nil
 }

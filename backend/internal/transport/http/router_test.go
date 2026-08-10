@@ -40,6 +40,14 @@ func (routerMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tick
 	}, nil
 }
 
+func (routerMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol: q.Symbol,
+		Bids:   []domain.PriceLevel{{Price: 1, Quantity: 1}},
+		Asks:   []domain.PriceLevel{{Price: 1.1, Quantity: 1}},
+	}, nil
+}
+
 type routerSupply struct{}
 
 func (routerSupply) Refresh(context.Context) (int, error) { return 0, nil }
@@ -75,6 +83,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		}},
 		{"/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=1", http.StatusOK, nil},
 		{"/api/v1/market/ticker/24h?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/tags", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any

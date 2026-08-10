@@ -14,6 +14,11 @@ import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
+  OrderBookPanel,
+  ORDER_BOOK_LEVELS,
+  ORDER_BOOK_POLL_MS,
+} from '@/components/organisms/OrderBookPanel';
+import {
   rtkErrorMessage,
   useAddWatchlistItemMutation,
   useGetCandlesQuery,
@@ -21,6 +26,7 @@ import {
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetTicker24hQuery,
+  useGetSpotOrderBookQuery,
   useListDelistScheduleQuery,
   useGetWatchlistQuery,
   useLazyGetCandlesQuery,
@@ -62,11 +68,12 @@ import {
   DETAIL_CANDLE_PAGE_SIZE,
   DETAIL_INDICATOR_LIMIT,
 } from '@/config/constants';
-import { ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
+import { ChartAndBook, ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
 import { mergePumpEvents, pumpEventsToChartMarkers } from './CoinDetailPage.helpers';
 
 /**
- * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis.
+ * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis,
+ * and a backend-grouped spot order book (price steps + walls).
  * Live candles poll a short window; pan-left pages older bars via endTime.
  * Pump/dump markers: live window is polled; each history page fetches pumps for
  * the same endTime range so markers exist on older candles, not only the right edge.
@@ -94,6 +101,8 @@ export function CoinDetailPage() {
     DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
   );
   const [showPumpMarkers, setShowPumpMarkers] = useState(true);
+  /** Backend group size; empty until the first book returns a default. */
+  const [orderBookGroup, setOrderBookGroup] = useState('');
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -123,6 +132,10 @@ export function CoinDetailPage() {
     setHistoryExhausted(false);
     setHistoryLoading(false);
   }, [exchange, symbol, interval]);
+
+  useEffect(() => {
+    setOrderBookGroup('');
+  }, [exchange, symbol]);
 
   // Threshold / marker toggle: drop history pumps (API minReturnPct or skip changed).
   // Candles stay; live pumps refetch via RTK args; re-pan reloads history markers.
@@ -167,6 +180,20 @@ export function CoinDetailPage() {
   const { connected: livePrices } = usePriceSubscription(
     symbol && exchangeArg ? [{ exchange: exchangeArg, symbol }] : [],
     Boolean(visible && !skip),
+  );
+
+  const orderBookQuery = useGetSpotOrderBookQuery(
+    {
+      exchange: exchangeArg,
+      symbol,
+      group: orderBookGroup || undefined,
+      limit: ORDER_BOOK_LEVELS,
+    },
+    {
+      skip,
+      pollingInterval: visible ? ORDER_BOOK_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
   );
 
   const tickerQuery = useGetTicker24hQuery(
@@ -381,6 +408,7 @@ export function CoinDetailPage() {
   const refreshAll = () => {
     void intervalsQuery.refetch();
     void tickerQuery.refetch();
+    void orderBookQuery.refetch();
     void supplyQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
@@ -481,6 +509,7 @@ export function CoinDetailPage() {
         }
       />
 
+      <ChartAndBook>
       <ChartCard>
         <ChartTitleRow>
           <Text variant="h4" color="primary">
@@ -564,6 +593,22 @@ export function CoinDetailPage() {
           </>
         )}
       </ChartCard>
+
+      <OrderBookPanel
+        book={orderBookQuery.data}
+        group={orderBookGroup || orderBookQuery.data?.groupSize || ''}
+        onGroupChange={setOrderBookGroup}
+        isLoading={orderBookQuery.isLoading && !orderBookQuery.data}
+        isFetching={orderBookQuery.isFetching}
+        errorMessage={
+          orderBookQuery.isError
+            ? rtkErrorMessage(orderBookQuery.error, {
+                resource: t('detail:resource.orderBook'),
+              })
+            : null
+        }
+      />
+      </ChartAndBook>
 
       <IndicatorPanel
         data={indicatorsQuery.data}

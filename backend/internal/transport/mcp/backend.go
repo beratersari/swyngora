@@ -55,6 +55,33 @@ func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.
 	})
 }
 
+func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error) {
+	book, err := b.Market.GetSpotOrderBook(ctx, exchange, symbol, group, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"exchange":            string(book.Exchange),
+		"symbol":              book.Symbol,
+		"lastPrice":           book.LastPrice,
+		"bestBid":             book.BestBid,
+		"bestAsk":             book.BestAsk,
+		"spread":              book.Spread,
+		"spreadPct":           book.SpreadPct,
+		"groupSize":           book.GroupSize,
+		"suggestedGroupSizes": book.SuggestedGroupSizes,
+		"levels":              book.Levels,
+		"bids":                book.Bids,
+		"asks":                book.Asks,
+		"bidVolume":           book.BidVolume,
+		"askVolume":           book.AskVolume,
+		"imbalance":           book.Imbalance,
+		"bidWalls":            book.BidWalls,
+		"askWalls":            book.AskWalls,
+		"updatedAt":           book.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	})
+}
+
 func (b *Backend) GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error) {
 	candles, err := b.Market.GetCandles(ctx, exchange, symbol, interval, limit, nil, nil)
 	if err != nil {
@@ -215,7 +242,6 @@ func (b *Backend) ListExchanges(ctx context.Context) (json.RawMessage, error) {
 		"default":   string(domain.DefaultExchange),
 	})
 }
-
 
 func (b *Backend) ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error) {
 	_ = ctx
@@ -778,7 +804,7 @@ func (b *Backend) ListSharedPortfolios(ctx context.Context, clientID string) (js
 func portfolioShareMap(sh *domain.PortfolioShare) map[string]any {
 	return map[string]any{
 		"portfolioId": sh.PortfolioID, "ownerClientId": sh.OwnerClientID, "granteeClientId": sh.GranteeClientID,
-		"role": string(sh.Role),
+		"role":      string(sh.Role),
 		"createdAt": sh.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": sh.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -822,7 +848,7 @@ func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, m
 	}
 	v, err := b.Portfolio.SetRiskLimits(ctx, portfolio.RiskLimitsInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct,
+		ClientID:    clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct,
 	})
 	if err != nil {
 		return nil, err
@@ -986,15 +1012,15 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	pts := make([]map[string]any, 0, len(p.Points))
 	for _, pt := range p.Points {
 		pts = append(pts, map[string]any{
-			"t": pt.Time.UTC().Format(time.RFC3339Nano),
+			"t":      pt.Time.UTC().Format(time.RFC3339Nano),
 			"equity": pt.Equity, "cashBalance": pt.CashBalance,
 			"positionsValue": pt.PositionsValue, "marginEquity": pt.MarginEquity,
 		})
 	}
 	m := map[string]any{
 		"clientId": p.ClientID, "currency": p.Currency, "period": string(p.Period),
-		"startAt": p.StartAt.UTC().Format(time.RFC3339Nano),
-		"endAt":   p.EndAt.UTC().Format(time.RFC3339Nano),
+		"startAt":     p.StartAt.UTC().Format(time.RFC3339Nano),
+		"endAt":       p.EndAt.UTC().Format(time.RFC3339Nano),
 		"startEquity": p.StartEquity, "endEquity": p.EndEquity,
 		"changeAmount": p.ChangeAmount, "changePct": p.ChangePct,
 		"partial": p.Partial, "pointCount": p.PointCount, "points": pts, "note": p.Note,
@@ -1045,7 +1071,7 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 			"id": t.ID, "exchange": string(t.Exchange), "symbol": t.Symbol, "side": string(t.Side),
 			"quantity": t.Quantity, "price": t.Price, "notional": t.Notional, "realizedPnL": t.RealizedPnL,
 			"pendingOrderId": t.PendingOrderID, "fee": t.Fee, "lastPrice": t.LastPrice,
-			"createdAt":      t.CreatedAt.UTC().Format(time.RFC3339Nano),
+			"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
 		})
 	}
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
@@ -1092,7 +1118,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	}
 	o, err := b.Portfolio.PlacePendingOrder(ctx, portfolio.PendingOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
 		TrailType: trailType, TrailValue: trailValue, LotMethod: lotMethod,
 		IdempotencyKey: IdempotencyKeyFrom(ctx),
@@ -1125,7 +1151,7 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 	}
 	entry, tp, sl, err := b.Portfolio.PlaceBracketOrder(ctx, portfolio.BracketOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
 	})
 	if err != nil {
@@ -1156,7 +1182,7 @@ func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange
 	}
 	tp, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
 	})
 	if err != nil {
@@ -1218,7 +1244,7 @@ func (b *Backend) AmendPortfolioOrder(ctx context.Context, clientID, id string, 
 	}
 	o, view, err := b.Portfolio.AmendPendingOrder(ctx, portfolio.AmendPendingOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, OrderID: id, TriggerPrice: triggerPrice, RemainingQuantity: remainingQuantity,
+		ClientID:    clientID, OrderID: id, TriggerPrice: triggerPrice, RemainingQuantity: remainingQuantity,
 	})
 	if err != nil {
 		return nil, err
@@ -1242,7 +1268,7 @@ func (b *Backend) CancelAllPortfolioOrders(ctx context.Context, clientID, exchan
 	}
 	list, view, err := b.Portfolio.CancelOpenPendingOrders(ctx, portfolio.CancelOpenOrdersInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol,
 	})
 	if err != nil {
 		return nil, err
@@ -1299,7 +1325,7 @@ func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange
 	}
 	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, portfolio.RecurringBuyCreateInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Name: name,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Name: name,
 		Amount: amount, Frequency: frequency, Weekday: weekday,
 		DayOfMonth: dayOfMonth, IntervalHours: intervalHours, StartAt: start,
 	})
@@ -1483,7 +1509,7 @@ func (b *Backend) CreatePortfolioBasket(ctx context.Context, clientID, name, tar
 	}
 	basket, err := b.Portfolio.CreateAllocationBasket(ctx, portfolio.AllocationBasketCreateInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Name: name, Targets: tg,
+		ClientID:    clientID, Name: name, Targets: tg,
 	})
 	if err != nil {
 		return nil, err
@@ -1616,7 +1642,7 @@ func (b *Backend) AdjustMargin(ctx context.Context, clientID, positionID string,
 	}
 	pos, err := b.Portfolio.AdjustMargin(ctx, portfolio.MarginAdjustInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, PositionID: positionID, Delta: delta,
+		ClientID:    clientID, PositionID: positionID, Delta: delta,
 	})
 	if err != nil {
 		return nil, err
@@ -1630,7 +1656,7 @@ func (b *Backend) RepayMarginDebt(ctx context.Context, clientID, positionID stri
 	}
 	pos, tr, err := b.Portfolio.RepayMarginDebt(ctx, portfolio.MarginRepayInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, PositionID: positionID, Amount: amount,
+		ClientID:    clientID, PositionID: positionID, Amount: amount,
 	})
 	if err != nil {
 		return nil, err
@@ -1644,7 +1670,7 @@ func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symb
 	}
 	pos, ord, err := b.Portfolio.PlaceMarginOrder(ctx, portfolio.MarginOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Type: orderType,
+		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Side: side, Type: orderType,
 		Quantity: quantity, Leverage: leverage, LimitPrice: limitPrice, StopLoss: stopLoss, TakeProfit: takeProfit,
 		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
@@ -1689,7 +1715,7 @@ func (b *Backend) CloseMarginPosition(ctx context.Context, clientID, id string, 
 	}
 	pos, tr, err := b.Portfolio.CloseMarginPosition(ctx, portfolio.MarginCloseInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, PositionID: id, Quantity: quantity,
+		ClientID:    clientID, PositionID: id, Quantity: quantity,
 		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
@@ -1704,7 +1730,7 @@ func (b *Backend) SetMarginBrackets(ctx context.Context, clientID, id string, st
 	}
 	pos, err := b.Portfolio.SetMarginBrackets(ctx, portfolio.MarginBracketsInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID: clientID, PositionID: id, StopLoss: stopLoss, TakeProfit: takeProfit,
+		ClientID:    clientID, PositionID: id, StopLoss: stopLoss, TakeProfit: takeProfit,
 		ClearStopLoss: clearSL, ClearTakeProfit: clearTP,
 	})
 	if err != nil {
@@ -1767,8 +1793,8 @@ func marginPosMap(p *domain.MarginPosition) map[string]any {
 		"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
 		"markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL, "realizedPnL": p.RealizedPnL,
 		"closeReason": p.CloseReason,
-		"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
-		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"openedAt":    p.OpenedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt":   p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if !p.LastInterestAt.IsZero() {
 		m["lastInterestAt"] = p.LastInterestAt.UTC().Format(time.RFC3339Nano)
@@ -1809,7 +1835,7 @@ func marginTradeMap(t *domain.MarginTrade) map[string]any {
 		"side": string(t.Side), "action": t.Action, "quantity": t.Quantity, "price": t.Price,
 		"notional": t.Notional, "realizedPnL": t.RealizedPnL, "marginDelta": t.MarginDelta,
 		"principalPaid": t.PrincipalPaid, "interestPaid": t.InterestPaid, "leverage": t.Leverage,
-		"fee": t.Fee,
+		"fee":       t.Fee,
 		"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
@@ -1833,7 +1859,7 @@ func recurringRunMap(r *domain.RecurringBuyRun) map[string]any {
 	return map[string]any{
 		"id": r.ID, "planId": r.PlanID, "periodKey": r.PeriodKey, "status": string(r.Status),
 		"amount": r.Amount, "quantity": r.Quantity, "price": r.Price, "tradeId": r.TradeID,
-		"failReason": r.FailReason,
+		"failReason":   r.FailReason,
 		"scheduledFor": r.ScheduledFor.UTC().Format(time.RFC3339Nano),
 		"executedAt":   r.ExecutedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -2083,12 +2109,12 @@ func (b *Backend) CreateScannerRule(ctx context.Context, args map[string]any) (j
 	interval, _ := args["interval"].(string)
 	in := scanner.CreateInput{
 		ClientID: clientID, Type: typ, Interval: interval,
-		RSIPeriod: intFromAny(args["rsiPeriod"], 14),
-		RSICondition: strFromAny(args["rsiCondition"], "below"),
-		RSIThreshold: floatFromAny(args["rsiThreshold"], 30),
-		MAFastPeriod: intFromAny(args["maFastPeriod"], 12),
-		MASlowPeriod: intFromAny(args["maSlowPeriod"], 26),
-		MADirection: strFromAny(args["maDirection"], "golden_cross"),
+		RSIPeriod:      intFromAny(args["rsiPeriod"], 14),
+		RSICondition:   strFromAny(args["rsiCondition"], "below"),
+		RSIThreshold:   floatFromAny(args["rsiThreshold"], 30),
+		MAFastPeriod:   intFromAny(args["maFastPeriod"], 12),
+		MASlowPeriod:   intFromAny(args["maSlowPeriod"], 26),
+		MADirection:    strFromAny(args["maDirection"], "golden_cross"),
 		VolumeLookback: intFromAny(args["volumeLookback"], 20),
 		VolumeMinRatio: floatFromAny(args["volumeMinRatio"], 2),
 	}
@@ -2409,7 +2435,7 @@ func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
 		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
 		"minNetDiffPct": w.MinNetDiffPct,
 		"feeBinancePct": w.FeeBinancePct, "feeCoinbasePct": w.FeeCoinbasePct, "feeBybitPct": w.FeeBybitPct,
-		"status": string(w.Status),
+		"status":    string(w.Status),
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -2421,7 +2447,7 @@ func priceDiffOppMap(o *domain.PriceDiffOpportunity) map[string]any {
 		"buyExchange": string(o.BuyExchange), "sellExchange": string(o.SellExchange),
 		"buyPrice": o.BuyPrice, "sellPrice": o.SellPrice,
 		"grossDiffPct": o.GrossDiffPct, "netDiffPct": o.NetDiffPct, "minNetDiffPct": o.MinNetDiffPct,
-		"status": string(o.Status),
+		"status":     string(o.Status),
 		"openedAt":   o.OpenedAt.UTC().Format(time.RFC3339Nano),
 		"lastSeenAt": o.LastSeenAt.UTC().Format(time.RFC3339Nano),
 	}

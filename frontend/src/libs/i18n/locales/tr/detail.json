@@ -67,6 +67,22 @@
     "supply": "arz",
     "candles": "mumlar",
     "indicators": "göstergeler",
-    "intervals": "aralıklar"
+    "intervals": "aralıklar",
+    "orderBook": "emir defteri"
+  },
+  "orderBook": {
+    "title": "Emir defteri",
+    "subtitle": "Spot alış/satış; fiyat grupları sunucuda. Duvarlar büyük bekleyen emirler.",
+    "group": "Fiyat grubu",
+    "price": "Fiyat",
+    "size": "Miktar",
+    "sum": "Toplam",
+    "spread": "Fark",
+    "mid": "Orta",
+    "wall": "Duvar",
+    "empty": "Bu çift için derinlik yok.",
+    "bidHeavy": "Alış ağır",
+    "askHeavy": "Satış ağır",
+    "balanced": "Dengeli"
   }
 }

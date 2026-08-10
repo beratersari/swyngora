@@ -13,9 +13,9 @@ import (
 
 // Service orchestrates market-data use cases. Handlers call this layer only.
 type Service struct {
-	markets map[domain.Exchange]domain.MarketDataPort
-	supply  domain.SupplyPort
-	delist  domain.SpotDelistStore
+	markets       map[domain.Exchange]domain.MarketDataPort
+	supply        domain.SupplyPort
+	delist        domain.SpotDelistStore
 	delistEnabled bool
 }
 
@@ -158,6 +158,44 @@ func (s *Service) GetCandles(ctx context.Context, exchange, symbol, interval str
 		return nil, err
 	}
 	return p.GetCandles(ctx, q)
+}
+
+// GetSpotOrderBook returns a grouped spot order book (walls + suggested steps).
+func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group string, levels int) (*domain.OrderBook, error) {
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	symbol = normalizeSymbolForExchange(ex, symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	groupSize, err := domain.ParseGroupSize(group)
+	if err != nil {
+		return nil, err
+	}
+	levels = domain.ClampOrderBookLevels(levels)
+	p, err := s.port(ex)
+	if err != nil {
+		return nil, err
+	}
+	rawLimit := domain.DefaultOrderBookRawLimit
+	if levels > 40 {
+		rawLimit = 500
+	}
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: rawLimit})
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
+		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
+	}
+	book := domain.GroupOrderBook(*raw, groupSize, levels)
+	book.Exchange = ex
+	if book.Symbol == "" {
+		book.Symbol = symbol
+	}
+	return &book, nil
 }
 
 // GetTicker24h returns rolling 24h volume and price stats for a symbol.
@@ -825,7 +863,6 @@ func cmpMcapMax(a, b domain.SpotMarket, desc bool) int {
 		return 0
 	}
 }
-
 
 func (s *Service) enrichDelistTimes(ex domain.Exchange, items []domain.SpotMarket) {
 	if s.delist == nil || len(items) == 0 {

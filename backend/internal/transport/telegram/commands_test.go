@@ -25,6 +25,13 @@ func (f *fakeMarket) GetCandles(context.Context, domain.CandleQuery) ([]domain.C
 func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
 	return &domain.Ticker24h{Symbol: symbol, LastPrice: "100", PriceChangePercent: "1.5", HighPrice: "110", LowPrice: "90"}, nil
 }
+func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol: q.Symbol,
+		Bids:   []domain.PriceLevel{{Price: 100, Quantity: 1}},
+		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 1}},
+	}, nil
+}
 func (f *fakeMarket) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
 	if f.spot != nil {
 		return append([]domain.SpotMarket(nil), f.spot...), nil

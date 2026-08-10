@@ -88,7 +88,8 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 
 ## Tool discipline
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
-- Prefer: `get_ticker` → live quote; `get_candles` → structure; `get_indicators` → RSI/EMA;
+- Prefer: `get_ticker` → live quote; `get_spot_orderbook` → liquidity / buy-sell walls (set `group` e.g. 0.1);
+  `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_supply` → supply; `list_spot_markets` → rankings/filters; watchlist tools only if asked.
 - **Pumps / vertical moves (1–2 day relevant):**
   - `detect_pump_events` — one symbol: set `min_return_pct` (e.g. 5, 8, 15), `lookback_hours`

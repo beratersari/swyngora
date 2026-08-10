@@ -10,6 +10,7 @@ const mockTicker = vi.fn();
 const mockSupply = vi.fn();
 const mockCandles = vi.fn();
 const mockIndicators = vi.fn();
+const mockOrderBook = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -20,6 +21,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetSupplyQuery: () => mockSupply(),
     useGetCandlesQuery: () => mockCandles(),
     useGetIndicatorsQuery: () => mockIndicators(),
+    useGetSpotOrderBookQuery: () => mockOrderBook(),
   };
 });
 
@@ -91,12 +93,27 @@ describe('CoinDetailPage', () => {
       isFetching: false,
       refetch: vi.fn(),
     });
+    mockOrderBook.mockReturnValue({
+      data: {
+        lastPrice: '100',
+        groupSize: '0.1',
+        suggestedGroupSizes: ['0.01', '0.1'],
+        bids: [{ price: '99.9', quantity: '1', isWall: false }],
+        asks: [{ price: '100.1', quantity: '1', isWall: false }],
+        spread: '0.2',
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
   });
 
   it('renders symbol header and chart host', async () => {
     renderDetail('/markets/binance/BTCUSDT');
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('order-book')).toBeInTheDocument();
   });
 
   it('rejects unknown exchange path segments', async () => {

@@ -34,6 +34,9 @@ func (indFakeMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]doma
 func (indFakeMarket) GetTicker24h(context.Context, string) (*domain.Ticker24h, error) {
 	return nil, domain.ErrNotFound
 }
+func (indFakeMarket) GetOrderBook(context.Context, domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{}, nil
+}
 func (indFakeMarket) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) { return nil, nil }
 func (indFakeMarket) ListProductTags(context.Context) ([]string, error)            { return nil, nil }
 func (indFakeMarket) TagsByBase(context.Context) (map[string][]string, error) {

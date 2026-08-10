@@ -23,6 +23,7 @@ type Config struct {
 	CandleCacheTTL        time.Duration
 	CandleCacheMaxEntries int
 	TickerCacheTTL        time.Duration
+	OrderBookCacheTTL     time.Duration
 	SupplyCacheTTL        time.Duration
 	CacheCleanupEvery     time.Duration
 	SpotMarketCacheTTL    time.Duration
@@ -153,6 +154,7 @@ func Load() Config {
 		CandleCacheTTL:        positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
 		CandleCacheMaxEntries: positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
 		TickerCacheTTL:        positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
+		OrderBookCacheTTL:     positiveDurationEnv("ORDERBOOK_CACHE_TTL", 2*time.Second),
 		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
 		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
 		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),

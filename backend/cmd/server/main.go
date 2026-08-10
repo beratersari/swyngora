@@ -58,12 +58,15 @@ func main() {
 	// Shared short TTL caches are per-adapter (keys would collide across venues).
 	binanceCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
 	binanceTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	binanceBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	binanceSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 	coinbaseCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
 	coinbaseTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	coinbaseBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	coinbaseSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 	bybitCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
 	bybitTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
+	bybitBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	bybitSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 
 	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
@@ -78,12 +81,15 @@ func main() {
 			case <-t.C:
 				binanceCandles.Cleanup()
 				binanceTickers.Cleanup()
+				binanceBooks.Cleanup()
 				binanceSpot.Cleanup()
 				coinbaseCandles.Cleanup()
 				coinbaseTickers.Cleanup()
+				coinbaseBooks.Cleanup()
 				coinbaseSpot.Cleanup()
 				bybitCandles.Cleanup()
 				bybitTickers.Cleanup()
+				bybitBooks.Cleanup()
 				bybitSpot.Cleanup()
 				supplyCache.Cleanup()
 			case <-stopCleanup:
@@ -99,6 +105,7 @@ func main() {
 		HTTPClient:      httpClient,
 		CandleCache:     binanceCandles,
 		TickerCache:     binanceTickers,
+		OrderBookCache:  binanceBooks,
 		SpotMarketCache: binanceSpot,
 		SupplyCache:     supplyCache,
 	})
@@ -108,6 +115,7 @@ func main() {
 		HTTPClient:      httpClient,
 		CandleCache:     coinbaseCandles,
 		TickerCache:     coinbaseTickers,
+		OrderBookCache:  coinbaseBooks,
 		SpotMarketCache: coinbaseSpot,
 	})
 	bybitClient := bybit.NewClient(bybit.Options{
@@ -115,6 +123,7 @@ func main() {
 		HTTPClient:      httpClient,
 		CandleCache:     bybitCandles,
 		TickerCache:     bybitTickers,
+		OrderBookCache:  bybitBooks,
 		SpotMarketCache: bybitSpot,
 	})
 

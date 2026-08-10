@@ -24,3 +24,14 @@ export const ChartTitleRow = styled.div`
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing[2]}px;
 `;
+
+export const ChartAndBook = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: ${({ theme }) => theme.spacing[4]}px;
+  align-items: start;
+
+  @media (min-width: 1100px) {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  }
+`;

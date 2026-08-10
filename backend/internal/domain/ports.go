@@ -7,6 +7,8 @@ import "context"
 type MarketDataPort interface {
 	GetCandles(ctx context.Context, q CandleQuery) ([]Candle, error)
 	GetTicker24h(ctx context.Context, symbol string) (*Ticker24h, error)
+	// GetOrderBook returns a raw spot bid/ask snapshot (ungrouped).
+	GetOrderBook(ctx context.Context, q OrderBookQuery) (*RawOrderBook, error)
 	// ListSpotMarkets returns all spot-tradable pairs joined with 24h metrics.
 	ListSpotMarkets(ctx context.Context) ([]SpotMarket, error)
 	// ListProductTags returns unique product-catalog tags for crypto spot bases

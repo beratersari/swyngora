@@ -16,6 +16,16 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
+        if request.url.path.endswith("/orderbook"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "groupSize": request.url.params.get("group") or "0.1",
+                    "bids": [{"price": "100", "quantity": "1", "isWall": False}],
+                    "asks": [{"price": "100.1", "quantity": "1", "isWall": True}],
+                },
+            )
         if request.url.path.endswith("/exchanges"):
             return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
         return httpx.Response(404, json={"error": "not found"})
@@ -38,6 +48,15 @@ def test_market_tools_hit_api(monkeypatch):
     data = json.loads(out)
     assert data["symbol"] == "BTCUSDT"
     assert data["lastPrice"] == "100"
+
+    assert "get_spot_orderbook" in by_name
+    book = json.loads(
+        by_name["get_spot_orderbook"].invoke(
+            {"symbol": "BTCUSDT", "exchange": "binance", "group": "0.1"}
+        )
+    )
+    assert book["symbol"] == "BTCUSDT"
+    assert book["asks"][0]["isWall"] is True
 
     health = by_name["health"].invoke({})
     assert "ok" in health

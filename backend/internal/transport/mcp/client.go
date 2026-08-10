@@ -120,6 +120,22 @@ func (c *APIClient) GetTicker(ctx context.Context, exchange, symbol string) (jso
 	return c.get(ctx, "/api/v1/market/ticker/24h", q)
 }
 
+// GetOrderBook returns a grouped spot order book.
+func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if group != "" {
+		q.Set("group", group)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook", q)
+}
+
 // GetCandles returns OHLCV candles.
 func (c *APIClient) GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

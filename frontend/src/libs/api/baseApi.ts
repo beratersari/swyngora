@@ -20,6 +20,7 @@ export const baseApi = createApi({
     'Health',
     'Candle',
     'Ticker',
+    'OrderBook',
     'Supply',
     'Interval',
     'Indicator',

@@ -19,6 +19,24 @@ type fakeMarket struct {
 	lastSym string
 }
 
+func sampleRawBook(symbol string) *domain.RawOrderBook {
+	return &domain.RawOrderBook{
+		Symbol: symbol,
+		Bids: []domain.PriceLevel{
+			{Price: 100.04, Quantity: 1},
+			{Price: 100.02, Quantity: 1},
+			{Price: 99.50, Quantity: 40},
+			{Price: 99.10, Quantity: 2},
+		},
+		Asks: []domain.PriceLevel{
+			{Price: 100.06, Quantity: 1},
+			{Price: 100.20, Quantity: 1},
+			{Price: 100.80, Quantity: 50},
+			{Price: 101.00, Quantity: 2},
+		},
+	}
+}
+
 func (f *fakeMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
 	f.lastQ = q
 	if f.err != nil {
@@ -33,6 +51,13 @@ func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tic
 		return nil, f.err
 	}
 	return f.ticker, nil
+}
+
+func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return sampleRawBook(q.Symbol), nil
 }
 
 func (f *fakeMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
@@ -71,9 +96,9 @@ func (f *fakeMarket) TagsByBase(_ context.Context) (map[string][]string, error) 
 }
 
 type fakeSupply struct {
-	sup    *domain.AssetSupply
+	sup     *domain.AssetSupply
 	byAsset map[string]*domain.AssetSupply
-	err    error
+	err     error
 }
 
 func (f *fakeSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSupply, error) {
@@ -369,6 +394,23 @@ func (t *tagsEmptyMarket) ListProductTags(context.Context) ([]string, error) {
 
 func (t *tagsEmptyMarket) TagsByBase(context.Context) (map[string][]string, error) {
 	return map[string][]string{}, nil
+}
+
+func TestGetSpotOrderBook_Groups(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	book, err := svc.GetSpotOrderBook(context.Background(), "binance", "btcusdt", "0.1", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Exchange != domain.ExchangeBinance || book.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", book)
+	}
+	if book.GroupSize != "0.1" || len(book.Bids) == 0 || len(book.Asks) == 0 {
+		t.Fatalf("%+v", book)
+	}
+	if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "nope", 10); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("bad group: %v", err)
+	}
 }
 
 func TestListProductTags(t *testing.T) {

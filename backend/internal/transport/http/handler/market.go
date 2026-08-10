@@ -123,6 +123,85 @@ type tickerResponse struct {
 	TradeCount         int64  `json:"tradeCount"`
 }
 
+type orderBookLevelDTO struct {
+	Price              string `json:"price"`
+	Quantity           string `json:"quantity"`
+	Notional           string `json:"notional"`
+	Cumulative         string `json:"cumulative"`
+	CumulativeNotional string `json:"cumulativeNotional"`
+	RawCount           int    `json:"rawCount"`
+	IsWall             bool   `json:"isWall"`
+}
+
+type orderBookResponse struct {
+	Exchange            string              `json:"exchange"`
+	Symbol              string              `json:"symbol"`
+	LastPrice           string              `json:"lastPrice"`
+	BestBid             string              `json:"bestBid"`
+	BestAsk             string              `json:"bestAsk"`
+	Spread              string              `json:"spread"`
+	SpreadPct           string              `json:"spreadPct"`
+	GroupSize           string              `json:"groupSize"`
+	SuggestedGroupSizes []string            `json:"suggestedGroupSizes"`
+	Levels              int                 `json:"levels"`
+	Bids                []orderBookLevelDTO `json:"bids"`
+	Asks                []orderBookLevelDTO `json:"asks"`
+	BidVolume           string              `json:"bidVolume"`
+	AskVolume           string              `json:"askVolume"`
+	Imbalance           float64             `json:"imbalance"`
+	BidWalls            int                 `json:"bidWalls"`
+	AskWalls            int                 `json:"askWalls"`
+	UpdatedAt           string              `json:"updatedAt"`
+	Note                string              `json:"note"`
+}
+
+// GetOrderBook handles GET /api/v1/market/orderbook — grouped spot depth.
+func (h *MarketHandler) GetOrderBook(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	levels := 0
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		levels = n
+	}
+	book, err := h.svc.GetSpotOrderBook(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("group"), levels)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, orderBookToDTO(book))
+}
+
+func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
+	if book == nil {
+		return orderBookResponse{}
+	}
+	mapLevels := func(in []domain.OrderBookLevel) []orderBookLevelDTO {
+		out := make([]orderBookLevelDTO, 0, len(in))
+		for _, lv := range in {
+			out = append(out, orderBookLevelDTO{
+				Price: lv.Price, Quantity: lv.Quantity, Notional: lv.Notional,
+				Cumulative: lv.Cumulative, CumulativeNotional: lv.CumulativeNotional,
+				RawCount: lv.RawCount, IsWall: lv.IsWall,
+			})
+		}
+		return out
+	}
+	return orderBookResponse{
+		Exchange: string(book.Exchange), Symbol: book.Symbol, LastPrice: book.LastPrice,
+		BestBid: book.BestBid, BestAsk: book.BestAsk, Spread: book.Spread, SpreadPct: book.SpreadPct,
+		GroupSize: book.GroupSize, SuggestedGroupSizes: book.SuggestedGroupSizes, Levels: book.Levels,
+		Bids: mapLevels(book.Bids), Asks: mapLevels(book.Asks),
+		BidVolume: book.BidVolume, AskVolume: book.AskVolume, Imbalance: book.Imbalance,
+		BidWalls: book.BidWalls, AskWalls: book.AskWalls,
+		UpdatedAt: book.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		Note:      "Spot order book with backend grouping. isWall marks unusually large rest size. Informational only.",
+	}
+}
+
 // GetTicker24h handles GET /api/v1/market/ticker/24h
 func (h *MarketHandler) GetTicker24h(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -228,27 +307,25 @@ func parseTimeParam(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%w: time must be RFC3339 or unix milliseconds", domain.ErrInvalidArgument)
 }
 
-
-
 type spotMarketDTO struct {
-	Symbol               string    `json:"symbol"`
-	LastPrice            string    `json:"lastPrice"`
-	PriceChange          string    `json:"priceChange"`
-	PriceChangePercent   string    `json:"priceChangePercent"`
-	HighPrice            string    `json:"highPrice"`
-	LowPrice             string    `json:"lowPrice"`
-	Volume               string    `json:"volume"`
-	QuoteVolume          string    `json:"quoteVolume"`
-	TradeCount           int64     `json:"tradeCount"`
-	Tags                 []string  `json:"tags"`
-	CirculatingSupply    *float64  `json:"circulatingSupply"`
-	TotalSupply          *float64  `json:"totalSupply"`
-	MaxSupply            *float64  `json:"maxSupply"`
-	MarketCapCirculating *float64  `json:"marketCapCirculating"`
-	MarketCapTotal       *float64  `json:"marketCapTotal"`
+	Symbol               string   `json:"symbol"`
+	LastPrice            string   `json:"lastPrice"`
+	PriceChange          string   `json:"priceChange"`
+	PriceChangePercent   string   `json:"priceChangePercent"`
+	HighPrice            string   `json:"highPrice"`
+	LowPrice             string   `json:"lowPrice"`
+	Volume               string   `json:"volume"`
+	QuoteVolume          string   `json:"quoteVolume"`
+	TradeCount           int64    `json:"tradeCount"`
+	Tags                 []string `json:"tags"`
+	CirculatingSupply    *float64 `json:"circulatingSupply"`
+	TotalSupply          *float64 `json:"totalSupply"`
+	MaxSupply            *float64 `json:"maxSupply"`
+	MarketCapCirculating *float64 `json:"marketCapCirculating"`
+	MarketCapTotal       *float64 `json:"marketCapTotal"`
 	// MarketCapMax is a number, the string "∞" when max supply is undefined, or null.
-	MarketCapMax any `json:"marketCapMax"`
-	DelistTime *string `json:"delistTime,omitempty"`
+	MarketCapMax any     `json:"marketCapMax"`
+	DelistTime   *string `json:"delistTime,omitempty"`
 }
 
 type spotListResponse struct {
@@ -389,7 +466,6 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, out)
 }
 
-
 func encodeMarketCapMax(m domain.SpotMarket) any {
 	if m.MarketCapMaxInfinite {
 		return "∞"
@@ -399,7 +475,6 @@ func encodeMarketCapMax(m domain.SpotMarket) any {
 	}
 	return nil
 }
-
 
 type delistScheduleResponse struct {
 	Exchange string           `json:"exchange"`

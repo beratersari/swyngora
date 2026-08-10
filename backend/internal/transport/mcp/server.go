@@ -24,6 +24,7 @@ import (
 // DataPort is the data surface MCP tools need (in-process backend or HTTP client).
 type DataPort interface {
 	GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -192,6 +193,24 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetTicker(ctx, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_spot_orderbook",
+		mcp.WithDescription("Grouped spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and imbalance. Use for liquidity / buy-sell wall analysis. Spot only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
+		mcp.WithNumber("limit", mcp.Description("Grouped rows per side 5–100 (default 20)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetOrderBook(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("group", ""), req.GetInt("limit", 20))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -379,7 +398,6 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		}
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
-
 
 	s.AddTool(mcp.NewTool("list_delist_schedule",
 		mcp.WithDescription("List scheduled Binance spot delistings (symbol + UTC delist time). Empty if schedule not configured."),
@@ -2040,7 +2058,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			"rsiPeriod": req.GetFloat("rsiPeriod", 14), "rsiCondition": req.GetString("rsiCondition", "below"),
 			"rsiThreshold": req.GetFloat("rsiThreshold", 30),
 			"maFastPeriod": req.GetFloat("maFastPeriod", 12), "maSlowPeriod": req.GetFloat("maSlowPeriod", 26),
-			"maDirection": req.GetString("maDirection", "golden_cross"),
+			"maDirection":    req.GetString("maDirection", "golden_cross"),
 			"volumeLookback": req.GetFloat("volumeLookback", 20), "volumeMinRatio": req.GetFloat("volumeMinRatio", 2),
 		}
 		raw, err := api.CreateScannerRule(ctx, args)
@@ -2436,7 +2454,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			"serverTypes": []string{"hello", "ack", "price", "portfolio", "error", "pong"},
 			"access":      "Portfolio events only if the client can view that book (owner, trader, or viewer).",
 			"exampleSubscribePrices": map[string]any{
-				"type": "subscribe_prices",
+				"type":    "subscribe_prices",
 				"symbols": []map[string]string{{"exchange": "binance", "symbol": "BTCUSDT"}},
 			},
 			"exampleSubscribePortfolio": map[string]any{

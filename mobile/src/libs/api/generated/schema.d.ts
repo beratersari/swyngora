@@ -204,6 +204,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Grouped spot order book */
+        get: operations["getSpotOrderBook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -1909,6 +1926,48 @@ export interface components {
             /** Format: int64 */
             tradeCount?: number;
         };
+        OrderBookLevel: {
+            price?: string;
+            /** @description Base size at this grouped price */
+            quantity?: string;
+            /** @description Quote notional (price * quantity) */
+            notional?: string;
+            /** @description Running base size from the spread */
+            cumulative?: string;
+            cumulativeNotional?: string;
+            /** @description Raw venue levels merged into this bucket */
+            rawCount?: number;
+            /** @description Unusually large rest size on this side */
+            isWall?: boolean;
+        };
+        SpotOrderBook: {
+            exchange?: string;
+            symbol?: string;
+            /** @description Mid of best bid/ask */
+            lastPrice?: string;
+            bestBid?: string;
+            bestAsk?: string;
+            spread?: string;
+            spreadPct?: string;
+            /** @description Applied price bucket (e.g. 0.1) */
+            groupSize?: string;
+            /** @description Ready-made grouping steps for the UI */
+            suggestedGroupSizes?: string[];
+            levels?: number;
+            /** @description Best bid first (highest price) */
+            bids?: components["schemas"]["OrderBookLevel"][];
+            /** @description Best ask first (lowest price) */
+            asks?: components["schemas"]["OrderBookLevel"][];
+            bidVolume?: string;
+            askVolume?: string;
+            /** @description (bidVol-askVol)/(bidVol+askVol); positive = more resting bids */
+            imbalance?: number;
+            bidWalls?: number;
+            askWalls?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+            note?: string;
+        };
         Supply: {
             asset?: string;
             name?: string;
@@ -3044,6 +3103,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ticker24h"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getSpotOrderBook: {
+        parameters: {
+            query: {
+                exchange?: "binance" | "coinbase" | "bybit";
+                symbol: string;
+                /** @description Price bucket size (e.g. 0.1). Omit to use a suggested default. */
+                group?: string;
+                /** @description Grouped rows per side (5–100, default 20) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Grouped book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotOrderBook"];
                 };
             };
             400: components["responses"]["Error"];

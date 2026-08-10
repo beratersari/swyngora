@@ -19,13 +19,13 @@ func (stubMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.
 		return nil, domain.ErrNotFound
 	}
 	return []domain.Candle{{
-		OpenTime:  time.Unix(0, 0).UTC(),
-		Open:      "1",
-		High:      "2",
-		Low:       "0.5",
-		Close:     "1.5",
-		Volume:    "10",
-		CloseTime: time.Unix(60, 0).UTC(),
+		OpenTime:    time.Unix(0, 0).UTC(),
+		Open:        "1",
+		High:        "2",
+		Low:         "0.5",
+		Close:       "1.5",
+		Volume:      "10",
+		CloseTime:   time.Unix(60, 0).UTC(),
 		QuoteVolume: "15",
 		TradeCount:  3,
 	}}, nil
@@ -54,6 +54,14 @@ func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker
 		QuoteVolume: "5000",
 		OpenTime:    time.Unix(0, 0).UTC(),
 		CloseTime:   time.Unix(1, 0).UTC(),
+	}, nil
+}
+
+func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol: q.Symbol,
+		Bids:   []domain.PriceLevel{{Price: 100, Quantity: 2}, {Price: 99.5, Quantity: 4}},
+		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 1.5}, {Price: 100.5, Quantity: 3}},
 	}, nil
 }
 
@@ -98,6 +106,36 @@ func TestGetCandles_MissingSymbol(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/candles", nil)
 	rr := httptest.NewRecorder()
 	h.GetCandles(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetOrderBook_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1&limit=10", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body orderBookResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.GroupSize != "0.1" || len(body.Bids) == 0 || len(body.Asks) == 0 {
+		t.Fatalf("body=%+v", body)
+	}
+	if len(body.SuggestedGroupSizes) == 0 {
+		t.Fatal("expected suggested groups")
+	}
+}
+
+func TestGetOrderBook_BadGroup(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook?symbol=BTCUSDT&group=-1", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBook(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
 	}
@@ -251,7 +289,6 @@ func TestEncodeMarketCapMax(t *testing.T) {
 		t.Fatal("want null")
 	}
 }
-
 
 func TestListSpotMarkets_BadSort(t *testing.T) {
 	h := newTestHandler()

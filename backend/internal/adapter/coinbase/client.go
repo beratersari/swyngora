@@ -33,10 +33,12 @@ type Client struct {
 	httpClient  *http.Client
 	candles     *cache.TTL[[]domain.Candle]
 	tickers     *cache.TTL[*domain.Ticker24h]
+	orderBooks  *cache.TTL[*domain.RawOrderBook]
 	spotMarkets *cache.TTL[[]domain.SpotMarket]
 	spotSF      singleflight.Group
 	candleSF    singleflight.Group
 	tickerSF    singleflight.Group
+	orderBookSF singleflight.Group
 }
 
 // Options configures the Coinbase client.
@@ -46,6 +48,7 @@ type Options struct {
 	HTTPClient      *http.Client
 	CandleCache     *cache.TTL[[]domain.Candle]
 	TickerCache     *cache.TTL[*domain.Ticker24h]
+	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
 }
 
@@ -69,6 +72,7 @@ func NewClient(opts Options) *Client {
 		httpClient:  hc,
 		candles:     opts.CandleCache,
 		tickers:     opts.TickerCache,
+		orderBooks:  opts.OrderBookCache,
 		spotMarkets: opts.SpotMarketCache,
 	}
 }

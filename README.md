@@ -101,6 +101,7 @@ After editing tokens in `.env`, **restart the server**. See [`docs/features/tele
 | Candlesticks | Binance public Spot REST | No API key for market data |
 | Spot market list / search / sort | Binance public Spot REST | exchangeInfo + 24h tickers |
 | 24h volume / ticker | Binance public Spot REST | Base + quote volume |
+| Spot order book | Binance / Coinbase / Bybit public depth | Backend-grouped steps + walls |
 | Circulating / total / max supply | Binance marketing symbol list | Daily snapshot @ 03:00 UTC (cache-only requests); max null when undefined |
 
 See [docs/features/market-data.md](docs/features/market-data.md) and [docs/adr/0001-binance-and-coingecko-market-sources.md](docs/adr/0001-binance-and-coingecko-market-sources.md).

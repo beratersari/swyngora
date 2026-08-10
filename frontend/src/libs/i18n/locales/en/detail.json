@@ -67,6 +67,22 @@
     "supply": "supply",
     "candles": "candles",
     "indicators": "indicators",
-    "intervals": "intervals"
+    "intervals": "intervals",
+    "orderBook": "order book"
+  },
+  "orderBook": {
+    "title": "Order book",
+    "subtitle": "Spot bids and asks, grouped on the server. Walls are large resting size.",
+    "group": "Price group",
+    "price": "Price",
+    "size": "Size",
+    "sum": "Sum",
+    "spread": "Spread",
+    "mid": "Mid",
+    "wall": "Wall",
+    "empty": "No depth for this pair.",
+    "bidHeavy": "More bids",
+    "askHeavy": "More asks",
+    "balanced": "Balanced"
   }
 }

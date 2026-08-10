@@ -30,6 +30,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
+| `GET` | `/api/v1/market/orderbook` | Grouped spot order book (bids/asks, walls, group steps) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -207,6 +208,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL (latest-N queries only; ranges not cached) |
 | `CANDLE_CACHE_MAX_ENTRIES` | `512` | Max candle cache keys (memory bound) |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
+| `ORDERBOOK_CACHE_TTL` | `2s` | Raw spot order-book snapshot TTL |
 | `REALTIME_PRICE_INTERVAL` | `5s` | How often subscribed WebSocket prices are pushed |
 | `SUPPLY_CACHE_TTL` | `48h` | Safety TTL for supply snapshot (`0` = never expire until successful replace) |
 | `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |

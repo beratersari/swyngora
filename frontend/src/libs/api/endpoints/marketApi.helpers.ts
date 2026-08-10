@@ -91,6 +91,15 @@ export function tickerTagId(arg: { exchange?: string; symbol: string }): string 
   return `${arg.exchange ?? 'binance'}:${arg.symbol}`;
 }
 
+export function orderBookTagId(arg: {
+  exchange?: string;
+  symbol: string;
+  group?: string;
+  limit?: number;
+}): string {
+  return `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.group ?? ''}:${arg.limit ?? 20}`;
+}
+
 export function supplyTagId(arg: { asset?: string; symbol?: string } | void): string {
   return (arg && (arg.asset || arg.symbol)) || 'unknown';
 }

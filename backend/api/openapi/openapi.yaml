@@ -445,6 +445,48 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook:
+    get:
+      summary: Grouped spot order book
+      description: |
+        Live spot bid/ask depth with **backend price grouping** (e.g. 0.01, 0.1, 1).
+        Each row is a merged price bucket with quantity, quote notional, running totals,
+        and `isWall` when that bucket is unusually large versus the rest of the visible
+        side (buy/sell walls). `suggestedGroupSizes` are ready-made steps for the UI.
+        Spot only. Informational — not financial advice.
+      operationId: getSpotOrderBook
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: group
+          in: query
+          description: Price bucket size (e.g. 0.1). Omit to use a suggested default.
+          schema: { type: string, example: "0.1" }
+        - name: limit
+          in: query
+          description: Grouped rows per side (5–100, default 20)
+          schema: { type: integer, default: 20, minimum: 5, maximum: 100 }
+      responses:
+        '200':
+          description: Grouped book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotOrderBook'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -4105,6 +4147,49 @@ components:
         tradeCount:
           type: integer
           format: int64
+    OrderBookLevel:
+      type: object
+      properties:
+        price: { type: string }
+        quantity: { type: string, description: Base size at this grouped price }
+        notional: { type: string, description: Quote notional (price * quantity) }
+        cumulative: { type: string, description: Running base size from the spread }
+        cumulativeNotional: { type: string }
+        rawCount: { type: integer, description: Raw venue levels merged into this bucket }
+        isWall: { type: boolean, description: Unusually large rest size on this side }
+    SpotOrderBook:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        lastPrice: { type: string, description: Mid of best bid/ask }
+        bestBid: { type: string }
+        bestAsk: { type: string }
+        spread: { type: string }
+        spreadPct: { type: string }
+        groupSize: { type: string, description: Applied price bucket (e.g. 0.1) }
+        suggestedGroupSizes:
+          type: array
+          items: { type: string }
+          description: Ready-made grouping steps for the UI
+        levels: { type: integer }
+        bids:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookLevel' }
+          description: Best bid first (highest price)
+        asks:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookLevel' }
+          description: Best ask first (lowest price)
+        bidVolume: { type: string }
+        askVolume: { type: string }
+        imbalance:
+          type: number
+          description: (bidVol-askVol)/(bidVol+askVol); positive = more resting bids
+        bidWalls: { type: integer }
+        askWalls: { type: integer }
+        updatedAt: { type: string, format: date-time }
+        note: { type: string }
     Supply:
       type: object
       properties:
