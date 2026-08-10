@@ -37,6 +37,16 @@ func ownerClientIDFrom(r *http.Request) string {
 	return strings.TrimSpace(r.URL.Query().Get("ownerClientId"))
 }
 
+func idempotencyKeyFrom(r *http.Request, bodyKey string) string {
+	if v := strings.TrimSpace(r.Header.Get("Idempotency-Key")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Idempotency-Key")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(bodyKey)
+}
+
 func portfolioIDFrom(r *http.Request) string {
 	if v := strings.TrimSpace(r.URL.Query().Get("portfolioId")); v != "" {
 		return v

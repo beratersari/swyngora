@@ -335,6 +335,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	if err := s.migrateTaxLots(); err != nil {
 		return err
 	}
+	if err := s.migrateIdempotency(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
@@ -562,6 +565,7 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, q := range []string{
+		`DELETE FROM idempotency_keys WHERE client_id = ?`,
 		`DELETE FROM cash_movements WHERE client_id = ?`,
 		`DELETE FROM portfolio_equity_snapshots WHERE client_id = ?`,
 		`DELETE FROM risk_limits WHERE client_id = ?`,
@@ -752,6 +756,9 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return err
+	}
 
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
@@ -814,20 +821,22 @@ func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) 
 	if o.TimeInForce == "" {
 		o.TimeInForce = domain.TimeInForceGTC
 	}
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO pending_orders (
-			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
-			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
-			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Type), string(o.Side), o.Quantity, o.FilledQuantity, o.RemainingQuantity,
-		o.TriggerPrice, o.ReservedCash, o.ReservedQuantity, string(o.TimeInForce), nullTime(o.ExpiresAt), string(o.Status),
-		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
-		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod))
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, err
+	}
+	if err := s.txInsertPendingOrder(ctx, tx, o); err != nil {
+		if isUniqueViolation(err) {
+			return nil, fmt.Errorf("%w", domain.ErrIdempotencyHit)
+		}
 		return nil, fmt.Errorf("pending order create: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	cp := o
 	return &cp, nil
@@ -860,6 +869,9 @@ func (s *SQLite) CreateOCOPair(ctx context.Context, takeProfit, stopLoss domain.
 		return nil, nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, nil, err
+	}
 	for _, o := range []domain.PendingOrder{takeProfit, stopLoss} {
 		if err := s.txInsertPendingOrder(ctx, tx, o); err != nil {
 			return nil, nil, fmt.Errorf("oco pair create: %w", err)
@@ -919,6 +931,9 @@ func (s *SQLite) CreateBracket(ctx context.Context, entry, takeProfit, stopLoss 
 		return nil, nil, nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, nil, nil, err
+	}
 	for _, o := range []domain.PendingOrder{entry, takeProfit, stopLoss} {
 		if err := s.txInsertPendingOrder(ctx, tx, o); err != nil {
 			return nil, nil, nil, fmt.Errorf("bracket create: %w", err)

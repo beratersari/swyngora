@@ -17,6 +17,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 
 ### Open
 - **Side:** `long` or `short`; **leverage:** 1–10; **type:** `market` or `limit`
+- **Idempotency:** same `Idempotency-Key` / `idempotencyKey` as spot — retries of open or close do not create a second position or close trade
 - **Initial margin:** `qty * slippedFill / leverage` plus the open taker fee, debited from available cash
 - **Fill price:** last plus adverse slippage (long pays more / short receives less); entry stores the fee-inclusive effective price
 - **Limit:** reserves required margin **and** worst-case open fee until fill, cancel, or reject (released on cancel)

@@ -149,7 +149,8 @@ type placeMarginBody struct {
 	Leverage   int      `json:"leverage"`
 	LimitPrice float64  `json:"limitPrice"`
 	StopLoss   *float64 `json:"stopLoss"`
-	TakeProfit *float64 `json:"takeProfit"`
+	TakeProfit     *float64 `json:"takeProfit"`
+	IdempotencyKey string   `json:"idempotencyKey"`
 }
 
 // PlaceMarginOrder handles POST /api/v1/portfolio/margin/orders
@@ -167,6 +168,7 @@ func (h *PortfolioHandler) PlaceMarginOrder(w http.ResponseWriter, r *http.Reque
 		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol, Side: body.Side, Type: body.Type,
 		Quantity: body.Quantity, Leverage: body.Leverage, LimitPrice: body.LimitPrice,
 		StopLoss: body.StopLoss, TakeProfit: body.TakeProfit,
+		IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 	})
 	if err != nil {
 		writeError(w, err)
@@ -241,7 +243,8 @@ func (h *PortfolioHandler) GetMarginPosition(w http.ResponseWriter, r *http.Requ
 }
 
 type closeMarginBody struct {
-	Quantity float64 `json:"quantity"`
+	Quantity       float64 `json:"quantity"`
+	IdempotencyKey string  `json:"idempotencyKey"`
 }
 
 // CloseMarginPosition handles POST /api/v1/portfolio/margin/positions/{id}/close
@@ -250,6 +253,7 @@ func (h *PortfolioHandler) CloseMarginPosition(w http.ResponseWriter, r *http.Re
 	_ = decodeJSON(r, &body, DefaultMaxJSONBody) // empty body = full close
 	pos, tr, err := h.svc.CloseMarginPosition(r.Context(), portfolio.MarginCloseInput{
 		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PositionID: r.PathValue("id"), Quantity: body.Quantity,
+		IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 	})
 	if err != nil {
 		writeError(w, err)

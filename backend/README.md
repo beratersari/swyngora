@@ -57,7 +57,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage |
-| `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`) |
+| `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`); optional `Idempotency-Key` |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One pending order + last price + amend hints |
 | `PATCH` | `/api/v1/portfolio/orders/{id}` | Amend open GTC limit/stop price and/or remaining size |
@@ -73,11 +73,11 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Recurring buy execution history |
-| `POST`/`GET` | `/api/v1/portfolio/margin/orders` | Paper margin open (market/limit long/short 1x–10x) / list |
+| `POST`/`GET` | `/api/v1/portfolio/margin/orders` | Paper margin open (market/limit long/short 1x–10x; optional `Idempotency-Key`) / list |
 | `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel margin limit order |
 | `GET` | `/api/v1/portfolio/margin/positions` | Open margin positions |
 | `GET` | `/api/v1/portfolio/margin/positions/{id}` | Get margin position |
-| `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full or partial margin close |
+| `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full or partial margin close (optional `Idempotency-Key`) |
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Stop-loss / take-profit |
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 | `POST`/`GET` | `/api/v1/price-diff/watches` | Create / list cross-exchange price difference watches |

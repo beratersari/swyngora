@@ -266,15 +266,25 @@ func scanMarginOrder(row scannable) (*domain.MarginOrder, error) {
 func (s *SQLite) CreateMarginOrder(ctx context.Context, o domain.MarginOrder) (*domain.MarginOrder, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_orders (`+marginOrderCols+`)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Side), string(o.Type), o.Quantity, o.Leverage,
 		o.LimitPrice, o.ReservedMargin, nullFloat(o.StopLoss), nullFloat(o.TakeProfit), string(o.Status),
 		o.PositionID, o.RejectReason, o.CancelReason,
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		nullTime(o.FilledAt), nullTime(o.CanceledAt))
-	if err != nil {
+		nullTime(o.FilledAt), nullTime(o.CanceledAt)); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return s.getMarginOrderByID(ctx, o.ID)
@@ -435,6 +445,31 @@ func scanMarginOrders(rows *sql.Rows) ([]domain.MarginOrder, error) {
 	return out, rows.Err()
 }
 
+// GetMarginTrade returns one margin trade by id.
+func (s *SQLite) GetMarginTrade(ctx context.Context, clientID, id string) (*domain.MarginTrade, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, client_id, position_id, exchange, symbol, side, action, quantity, price,
+			notional, realized_pnl, margin_delta, COALESCE(principal_paid, 0), COALESCE(interest_paid, 0), leverage,
+			COALESCE(fee, 0), created_at
+		FROM margin_trades WHERE client_id = ? AND id = ?
+	`, clientID, id)
+	var t domain.MarginTrade
+	var ex, side, cAt string
+	if err := row.Scan(
+		&t.ID, &t.ClientID, &t.PositionID, &ex, &t.Symbol, &side, &t.Action, &t.Quantity, &t.Price,
+		&t.Notional, &t.RealizedPnL, &t.MarginDelta, &t.PrincipalPaid, &t.InterestPaid, &t.Leverage, &t.Fee, &cAt,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	t.Exchange = domain.Exchange(ex)
+	t.Side = domain.MarginSide(side)
+	t.CreatedAt = parseTime(cAt)
+	return &t, nil
+}
+
 // InsertMarginTrade inserts a margin trade row.
 func (s *SQLite) InsertMarginTrade(ctx context.Context, t domain.MarginTrade) (*domain.MarginTrade, error) {
 	s.mu.Lock()
@@ -497,6 +532,9 @@ func (s *SQLite) ApplyMarginOpen(ctx context.Context, p *domain.Portfolio, pos d
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return err
+	}
 	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
 		return err
 	}
@@ -538,6 +576,9 @@ func (s *SQLite) ApplyMarginClose(ctx context.Context, p *domain.Portfolio, pos 
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return err
+	}
 	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
 		return err
 	}

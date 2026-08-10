@@ -15,6 +15,21 @@ func newWatchHandler() *WatchlistHandler {
 	return NewWatchlistHandler(watchlist.New(watchliststore.NewMemory()))
 }
 
+func TestIdempotencyKeyFrom(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/", nil)
+	if got := idempotencyKeyFrom(req, "body"); got != "body" {
+		t.Fatalf("body fallback: %q", got)
+	}
+	req.Header.Set("X-Idempotency-Key", "x-key")
+	if got := idempotencyKeyFrom(req, "body"); got != "x-key" {
+		t.Fatalf("x header: %q", got)
+	}
+	req.Header.Set("Idempotency-Key", "std-key")
+	if got := idempotencyKeyFrom(req, "body"); got != "std-key" {
+		t.Fatalf("std header wins: %q", got)
+	}
+}
+
 func TestWatchlistHTTP_AddGetRemove(t *testing.T) {
 	h := newWatchHandler()
 

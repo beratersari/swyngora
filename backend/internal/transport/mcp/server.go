@@ -1143,12 +1143,14 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo — sell lot matching")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original fill")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1218,11 +1220,13 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("timeInForce", mcp.Description("gtc (default) | ioc | fok")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC only")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original order")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1261,7 +1265,9 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop-loss trigger (must be below take-profit)")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC legs")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original pair")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1299,7 +1305,9 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop below entry")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original bracket")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1841,11 +1849,13 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithNumber("limitPrice", mcp.Description("Required for limit")),
 		mcp.WithNumber("stopLoss", mcp.Description("Optional stop-loss price")),
 		mcp.WithNumber("takeProfit", mcp.Description("Optional take-profit price")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original open")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1897,11 +1907,13 @@ func registerTools(s *server.MCPServer, api DataPort) {
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
 		mcp.WithNumber("quantity", mcp.Description("Partial size; omit/0 for full")),
+		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original close")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		id, err := req.RequireString("positionId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

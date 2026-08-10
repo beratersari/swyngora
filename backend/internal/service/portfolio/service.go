@@ -124,7 +124,8 @@ type OrderInput struct {
 	Symbol        string
 	Side          string // buy | sell
 	Quantity      float64
-	LotMethod     string // fifo | lifo (sells; ignored on buys)
+	LotMethod       string // fifo | lifo (sells; ignored on buys)
+	IdempotencyKey  string // optional; same key + same request returns the original fill
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -367,6 +368,10 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, nil, err
+	}
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return nil, nil, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -378,6 +383,16 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, nil, err
+	}
+	lotMethod, err := domain.NormalizeLotMethod(in.LotMethod)
+	if err != nil {
+		return nil, nil, err
+	}
+	idempHash := hashParts("market", string(ex), sym, string(side), in.Quantity, string(lotMethod))
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, nil, err
+	} else if rec != nil {
+		return s.replayTrade(ctx, rec, in.ClientID, p.ID)
 	}
 	last, err := s.lastPrice(ctx, string(ex), sym)
 	if err != nil {
@@ -414,10 +429,6 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	availPos := domain.AvailablePosition(posQty, reservedQty)
 
 	now := time.Now().UTC()
-	lotMethod, err := domain.NormalizeLotMethod(in.LotMethod)
-	if err != nil {
-		return nil, nil, err
-	}
 	existingLots, err := s.loadOpenLots(ctx, clientID, ex, sym)
 	if err != nil {
 		return nil, nil, err
@@ -497,7 +508,13 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if lotOps != nil {
 		tr.LotFills = lotOps.Fills
 	}
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindTrade, idempIDs{TradeID: tradeID})
 	if err := s.store.ExecuteTrade(ctx, p, posOut, tr, lotOps); err != nil {
+		if isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayTrade(ctx, rec, in.ClientID, p.ID)
+			}
+		}
 		return nil, nil, err
 	}
 	view, err := s.View(ctx, in.ClientID, p.ID)
@@ -564,8 +581,9 @@ type PendingOrderInput struct {
 	// TrailValue: fraction e.g. 0.05 or fixed price offset (trailing_stop only).
 	TrailValue float64
 	TimeInForce string     // gtc (default) | ioc | fok
-	ExpiresAt   *time.Time // optional; GTC only
-	LotMethod   string     // fifo | lifo for sell types
+	ExpiresAt      *time.Time // optional; GTC only
+	LotMethod      string     // fifo | lifo for sell types
+	IdempotencyKey string
 }
 
 // OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
@@ -580,6 +598,7 @@ type OCOOrderInput struct {
 	StopLossPrice   float64 // stop_loss trigger
 	ExpiresAt       *time.Time
 	LotMethod       string
+	IdempotencyKey  string
 }
 
 // BracketOrderInput places a limit-buy entry with inactive take-profit + stop-loss exits.
@@ -596,6 +615,7 @@ type BracketOrderInput struct {
 	StopLossPrice   float64
 	ExpiresAt       *time.Time
 	LotMethod       string
+	IdempotencyKey  string
 }
 
 // PlaceBracketOrder creates entry (open limit_buy) + TP/SL (pending) linked by bracket id.
@@ -622,6 +642,16 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	idempHash := hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, nil, nil, err
+	} else if rec != nil {
+		return s.replayBracket(ctx, rec)
 	}
 	base, _ := domain.SplitBaseQuote(ex, sym)
 	if err := s.guardNewRisk(ctx, clientID, base, in.Quantity*in.EntryPrice); err != nil {
@@ -689,8 +719,14 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindBracket, idempIDs{EntryID: entryID, TakeProfitID: tpID, StopLossID: slID})
 	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
 	if err != nil {
+		if isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayBracket(ctx, rec)
+			}
+		}
 		return nil, nil, nil, err
 	}
 	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, entry, nil, nil)
@@ -721,6 +757,16 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, nil, err
+	}
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	idempHash := hashParts("oco", string(ex), sym, in.Quantity, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, nil, err
+	} else if rec != nil {
+		return s.replayOCO(ctx, rec)
 	}
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
 	if err != nil {
@@ -778,8 +824,14 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindOCO, idempIDs{TakeProfitID: tpID, StopLossID: slID})
 	tp, sl, err = s.store.CreateOCOPair(ctx, tpOrd, slOrd)
 	if err != nil {
+		if isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayOCO(ctx, rec)
+			}
+		}
 		return nil, nil, err
 	}
 	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, tp, nil, nil)
@@ -792,6 +844,10 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
 	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
+	if err != nil {
+		return nil, err
+	}
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -837,6 +893,16 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
+	}
+	expKey := ""
+	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
+		expKey = in.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	idempHash := hashParts("pending", string(typ), string(ex), sym, in.Quantity, in.TriggerPrice, trailType, in.TrailValue, string(tif), in.LotMethod, expKey)
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, err
+	} else if rec != nil {
+		return s.replayPending(ctx, rec)
 	}
 	if typ == domain.PendingLimitBuy {
 		base, _ := domain.SplitBaseQuote(ex, sym)
@@ -931,8 +997,14 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindPending, idempIDs{OrderID: o.ID})
 	created, err := s.store.CreatePendingOrder(ctx, o)
 	if err != nil {
+		if isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayPending(ctx, rec)
+			}
+		}
 		return nil, err
 	}
 	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, created, nil, nil)

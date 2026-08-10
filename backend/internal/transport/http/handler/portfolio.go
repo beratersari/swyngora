@@ -312,6 +312,7 @@ type orderBody struct {
 	TimeInForce     string  `json:"timeInForce"`      // gtc | ioc | fok
 	ExpiresAt       string  `json:"expiresAt"`        // RFC3339; GTC only
 	LotMethod       string  `json:"lotMethod"`        // fifo | lifo (sells)
+	IdempotencyKey  string  `json:"idempotencyKey"`
 }
 
 type pendingOrderDTO struct {
@@ -409,6 +410,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
+			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
 		if err != nil {
 			writeError(w, err)
@@ -439,6 +441,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			Type: typ, Quantity: body.Quantity, TriggerPrice: body.TriggerPrice,
 			TrailType: body.TrailType, TrailValue: body.TrailValue,
 			TimeInForce: body.TimeInForce, ExpiresAt: exp, LotMethod: body.LotMethod,
+			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
 		if err != nil {
 			writeError(w, err)
@@ -471,6 +474,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 			ExpiresAt: exp, LotMethod: body.LotMethod,
+			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
 		if err != nil {
 			writeError(w, err)
@@ -502,6 +506,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			Quantity: body.Quantity, EntryPrice: body.TriggerPrice,
 			TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 			ExpiresAt: exp, LotMethod: body.LotMethod,
+			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
 		if err != nil {
 			writeError(w, err)

@@ -631,6 +631,9 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 	if lotMethod != "" {
 		body["lotMethod"] = lotMethod
 	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
@@ -670,6 +673,9 @@ func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, ex
 	if trailValue > 0 {
 		body["trailValue"] = trailValue
 	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
@@ -683,6 +689,9 @@ func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, ex
 	if expiresAt != "" {
 		body["expiresAt"] = expiresAt
 	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
@@ -694,6 +703,9 @@ func (c *APIClient) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchan
 	}
 	if expiresAt != "" {
 		body["expiresAt"] = expiresAt
+	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
 	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
@@ -1027,6 +1039,9 @@ func (c *APIClient) PlaceMarginOrder(ctx context.Context, clientID, exchange, sy
 	if takeProfit != nil {
 		body["takeProfit"] = *takeProfit
 	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/margin/orders", body)
 }
 
@@ -1057,6 +1072,9 @@ func (c *APIClient) CloseMarginPosition(ctx context.Context, clientID, id string
 	body := map[string]any{}
 	if quantity > 0 {
 		body["quantity"] = quantity
+	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
 	}
 	return c.sendJSON(ctx, http.MethodPost, path, body)
 }

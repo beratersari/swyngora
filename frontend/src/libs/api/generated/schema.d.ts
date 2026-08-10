@@ -4486,7 +4486,12 @@ export interface operations {
     placePortfolioOrder: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Optional retry key; same key + same request replays the original result (body idempotencyKey also accepted) */
+                "Idempotency-Key"?: string;
+                /** @description Alias of Idempotency-Key */
+                "X-Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4546,6 +4551,10 @@ export interface operations {
                      * @enum {string}
                      */
                     lotMethod?: "fifo" | "lifo";
+                    /**
+                     * @description Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted)
+                     */
+                    idempotencyKey?: string;
                 };
             };
         };
@@ -5311,7 +5320,10 @@ export interface operations {
     placeMarginOrder: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+                "X-Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -5338,6 +5350,8 @@ export interface operations {
                     limitPrice?: number;
                     stopLoss?: number;
                     takeProfit?: number;
+                    /** @description Optional client key; same key + same request returns the original open */
+                    idempotencyKey?: string;
                 };
             };
         };
@@ -5434,6 +5448,8 @@ export interface operations {
             };
             header?: {
                 "X-Client-Id"?: string;
+                "Idempotency-Key"?: string;
+                "X-Idempotency-Key"?: string;
             };
             path: {
                 id: string;
@@ -5445,6 +5461,8 @@ export interface operations {
                 "application/json": {
                     /** @description Omit or 0 for full close */
                     quantity?: number;
+                    /** @description Optional client key; same key + same request returns the original close */
+                    idempotencyKey?: string;
                 };
             };
         };

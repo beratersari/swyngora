@@ -287,6 +287,10 @@ class PortfolioOrderInput(BaseModel):
     quantity: float = Field(gt=0)
     exchange: str = "binance"
     lot_method: str = Field(default="", description="fifo (default) or lifo for sells")
+    idempotency_key: str = Field(
+        default="",
+        description="Optional retry key; same key + same request returns the original fill",
+    )
 
 
 class PortfolioPendingOrderInput(BaseModel):
@@ -299,6 +303,7 @@ class PortfolioPendingOrderInput(BaseModel):
     time_in_force: str = Field(default="gtc", description="gtc | ioc | fok")
     expires_at: str = Field(default="", description="RFC3339 expiry for GTC only")
     lot_method: str = Field(default="", description="fifo or lifo for sell types")
+    idempotency_key: str = Field(default="", description="Optional retry key")
 
 
 class PortfolioLotsInput(BaseModel):
@@ -386,6 +391,7 @@ class MarginOrderInput(BaseModel):
     limit_price: float = Field(default=0, description="Required for limit")
     stop_loss: float = Field(default=0, description="Optional; 0 = omit")
     take_profit: float = Field(default=0, description="Optional; 0 = omit")
+    idempotency_key: str = Field(default="", description="Optional retry key")
 
 
 class MarginPositionIdInput(BaseModel):
@@ -397,6 +403,7 @@ class MarginCloseInput(BaseModel):
     client_id: str
     position_id: str
     quantity: float = Field(default=0, description="0 = full close")
+    idempotency_key: str = Field(default="", description="Optional retry key")
 
 
 class MarginBracketsInput(BaseModel):
@@ -918,6 +925,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         quantity: float,
         exchange: str = "binance",
         lot_method: str = "",
+        idempotency_key: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -928,6 +936,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         }
         if lot_method:
             body["lotMethod"] = lot_method
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
         return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_pending_order(
@@ -940,6 +950,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         time_in_force: str = "gtc",
         expires_at: str = "",
         lot_method: str = "",
+        idempotency_key: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -954,6 +965,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             body["expiresAt"] = expires_at
         if lot_method:
             body["lotMethod"] = lot_method
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
         return http.post("/api/v1/portfolio/orders", body)
 
     def list_portfolio_lots(
@@ -1137,6 +1150,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         limit_price: float = 0,
         stop_loss: float = 0,
         take_profit: float = 0,
+        idempotency_key: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -1153,17 +1167,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             body["stopLoss"] = stop_loss
         if take_profit > 0:
             body["takeProfit"] = take_profit
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
         return http.post("/api/v1/portfolio/margin/orders", body)
 
     def list_margin_positions(client_id: str) -> str:
         return http.get("/api/v1/portfolio/margin/positions", {"clientId": client_id})
 
     def close_margin_position(
-        client_id: str, position_id: str, quantity: float = 0
+        client_id: str, position_id: str, quantity: float = 0, idempotency_key: str = ""
     ) -> str:
         body: dict[str, Any] = {}
         if quantity > 0:
             body["quantity"] = quantity
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
         return http.post(
             f"/api/v1/portfolio/margin/positions/{position_id}/close?clientId={client_id}",
             body,
@@ -1671,7 +1689,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="place_portfolio_order",
             description=(
                 "Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. "
-                "Buy lot cost includes the fee; sell realized PnL is after the fee. Not real money."
+                "Buy lot cost includes the fee; sell realized PnL is after the fee. "
+                "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),
             args_schema=PortfolioOrderInput,
         ),
@@ -1680,7 +1699,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="place_portfolio_pending_order",
             description=(
                 "Paper pending order: limit_buy, limit_sell, or stop_loss. "
-                "time_in_force gtc|ioc|fok; optional expires_at for GTC. Simulated only."
+                "time_in_force gtc|ioc|fok; optional expires_at for GTC. "
+                "Pass idempotency_key on retries. Simulated only."
             ),
             args_schema=PortfolioPendingOrderInput,
         ),
@@ -1807,7 +1827,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="place_margin_order",
             description=(
                 "Paper isolated margin open: long|short, leverage 1-10, market or limit. "
-                "Optional stop_loss/take_profit. Simulated only."
+                "Optional stop_loss/take_profit. Pass idempotency_key on retries. Simulated only."
             ),
             args_schema=MarginOrderInput,
         ),
@@ -1820,7 +1840,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         StructuredTool.from_function(
             close_margin_position,
             name="close_margin_position",
-            description="Close all or part of a paper margin position at market.",
+            description="Close all or part of a paper margin position at market. Pass idempotency_key on retries.",
             args_schema=MarginCloseInput,
         ),
         StructuredTool.from_function(

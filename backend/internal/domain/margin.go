@@ -736,6 +736,7 @@ type MarginPort interface {
 	RejectMarginOrder(ctx context.Context, id, reason string, at time.Time) error
 
 	InsertMarginTrade(ctx context.Context, t MarginTrade) (*MarginTrade, error)
+	GetMarginTrade(ctx context.Context, clientID, id string) (*MarginTrade, error)
 	ListMarginTrades(ctx context.Context, clientID string, limit, offset int) ([]MarginTrade, error)
 
 	// ApplyMarginOpen debits cash for margin, inserts position + trade atomically.

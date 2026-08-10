@@ -54,10 +54,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `set_portfolio_risk_limits` | Set daily-loss % and/or max coin weight % |
 | `clear_portfolio_risk_limits` | Remove all risk limits |
 | `get_paper_trading_costs` | Per-exchange paper fee and slippage rates |
-| `place_portfolio_order` | Paper market buy/sell (slipped fill + taker fee) |
-| `place_portfolio_pending_order` | Paper limit_buy / limit_sell / stop_loss / trailing_stop |
-| `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked) |
-| `place_portfolio_bracket_order` | Paper bracket: entry limit buy + pending TP/SL |
+| `place_portfolio_order` | Paper market buy/sell (slipped fill + taker fee; optional idempotencyKey) |
+| `place_portfolio_pending_order` | Paper limit_buy / limit_sell / stop_loss / trailing_stop (optional idempotencyKey) |
+| `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked; optional idempotencyKey) |
+| `place_portfolio_bracket_order` | Paper bracket: entry limit buy + pending TP/SL (optional idempotencyKey) |
 | `list_portfolio_orders` | List pending paper orders |
 | `get_portfolio_order` | Get one pending order + last price + amend hints |
 | `amend_portfolio_order` | Amend open GTC limit/stop price and/or remaining size |
@@ -81,9 +81,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `preview_portfolio_rebalance` | Proposed sells/buys (no trades) |
 | `rebalance_portfolio_basket` | User-triggered rebalance |
 | `set_margin_mode` | Set isolated or cross (locked if open pos/orders) |
-| `place_margin_order` | Paper margin long/short open (market/limit, 1x–10x) |
+| `place_margin_order` | Paper margin long/short open (market/limit, 1x–10x; optional idempotencyKey) |
 | `list_margin_positions` | Open margin positions |
-| `close_margin_position` | Full/partial margin close |
+| `close_margin_position` | Full/partial margin close (optional idempotencyKey) |
 | `adjust_margin` | Add/remove isolated position margin |
 | `repay_margin_debt` | Pay interest then principal without closing |
 | `set_margin_brackets` | Stop-loss / take-profit |

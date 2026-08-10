@@ -25,8 +25,9 @@ type MarginOrderInput struct {
 	Quantity   float64
 	Leverage   int
 	LimitPrice float64  // required for limit
-	StopLoss   *float64 // optional
-	TakeProfit *float64 // optional
+	StopLoss       *float64 // optional
+	TakeProfit     *float64 // optional
+	IdempotencyKey string
 }
 
 // MarginAdjustInput adds (positive) or removes (negative) margin from an isolated position.
@@ -60,8 +61,9 @@ type MarginCloseInput struct {
 	ClientID      string
 	PortfolioID   string
 	OwnerClientID string
-	PositionID    string
-	Quantity   float64 // 0 = full close
+	PositionID     string
+	Quantity       float64 // 0 = full close
+	IdempotencyKey string
 }
 
 // MarginBracketsInput sets or clears stop-loss / take-profit on an open position.
@@ -553,6 +555,10 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, nil, err
+	}
 	side, err := domain.NormalizeMarginSide(in.Side)
 	if err != nil {
 		return nil, nil, err
@@ -572,6 +578,12 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, nil, err
+	}
+	idempHash := hashParts("margin_open", string(typ), string(ex), sym, string(side), in.Quantity, in.Leverage, in.LimitPrice, in.StopLoss, in.TakeProfit)
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, nil, err
+	} else if rec != nil {
+		return s.replayMarginOpen(ctx, rec)
 	}
 	nPos, err := s.store.CountOpenMarginPositions(ctx, clientID)
 	if err != nil {
@@ -625,7 +637,13 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 			LimitPrice: in.LimitPrice, ReservedMargin: need, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
 			Status: domain.MarginOrderOpen, CreatedAt: now, UpdatedAt: now,
 		}
+		ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindMarginOpen, idempIDs{OrderID: o.ID})
 		out, err := s.store.CreateMarginOrder(ctx, o)
+		if err != nil && isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayMarginOpen(ctx, rec)
+			}
+		}
 		return nil, out, err
 	}
 
@@ -687,7 +705,13 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	}
 	p.CashBalance -= needCash
 	p.UpdatedAt = now
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindMarginOpen, idempIDs{PositionID: pos.ID, TradeID: tr.ID})
 	if err := s.store.ApplyMarginOpen(ctx, p, pos, tr); err != nil {
+		if isIdempotencyHit(err) {
+			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
+				return s.replayMarginOpen(ctx, rec)
+			}
+		}
 		return nil, nil, err
 	}
 	_ = s.recomputeCrossLiquidations(ctx, clientID, now)
@@ -771,9 +795,19 @@ func (s *Service) CloseMarginPosition(ctx context.Context, in MarginCloseInput) 
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, nil, err
+	}
 	id := strings.TrimSpace(in.PositionID)
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: position id is required", domain.ErrInvalidArgument)
+	}
+	idempHash := hashParts("margin_close", id, in.Quantity)
+	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
+		return nil, nil, err
+	} else if rec != nil {
+		return s.replayMarginClose(ctx, rec)
 	}
 	pos, err := s.store.GetMarginPosition(ctx, clientID, id)
 	if err != nil {
@@ -801,6 +835,7 @@ func (s *Service) CloseMarginPosition(ctx context.Context, in MarginCloseInput) 
 	if closeQty+domain.PositionEpsilon < pos.Quantity {
 		reason = domain.MarginClosePartialUser
 	}
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindMarginClose, idempIDs{PositionID: id})
 	return s.closeMarginAt(ctx, pos, closeQty, price, reason)
 }
 
@@ -1365,7 +1400,15 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 				closeReason = domain.MarginClosePartialUser
 			}
 		}
+		fillIdempCloseIDs(ctx, cur.ID, tr.ID)
 		err = s.store.ApplyMarginClose(ctx, p, updated, tr, full, expected)
+		if isIdempotencyHit(err) {
+			if rec := domain.IdempotencyFromContext(ctx); rec != nil {
+				if hit, rerr := s.replayAfterHit(ctx, rec.ClientID, rec.Key, rec.RequestHash); rerr == nil && hit != nil {
+					return s.replayMarginClose(ctx, hit)
+				}
+			}
+		}
 		if err == nil {
 			_ = s.recomputeCrossLiquidations(ctx, cur.ClientID, now)
 			out, gerr := s.store.GetMarginPosition(ctx, cur.ClientID, cur.ID)

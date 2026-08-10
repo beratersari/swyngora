@@ -74,7 +74,7 @@ func mapError(err error) (status int, code, message string) {
 		return http.StatusNotFound, "not_found", "resource not found"
 	case errors.Is(err, domain.ErrForbidden):
 		return http.StatusForbidden, "forbidden", publicForbidden(err)
-	case errors.Is(err, domain.ErrConflict):
+	case errors.Is(err, domain.ErrConflict), errors.Is(err, domain.ErrIdempotencyHit):
 		return http.StatusConflict, "conflict", publicConflict(err)
 	case errors.Is(err, domain.ErrRateLimited):
 		return http.StatusTooManyRequests, "rate_limited", "rate limited; try again later"
@@ -114,6 +114,9 @@ func publicForbidden(err error) string {
 }
 
 func publicConflict(err error) string {
+	if errors.Is(err, domain.ErrIdempotencyHit) {
+		return "idempotency key already used"
+	}
 	msg := err.Error()
 	const prefix = "conflict: "
 	if len(msg) > len(prefix) && msg[:len(prefix)] == prefix {

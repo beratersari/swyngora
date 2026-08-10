@@ -8,6 +8,10 @@ Live order/position/cash updates for a selected book (and price ticks for select
 
 Backup and restore owned books with the user data export/import jobs (`sections=portfolios`, merge or replace) — see [`user-data-export.md`](user-data-export.md) and [`user-data-import.md`](user-data-import.md).
 
+### Idempotency keys
+
+`POST /orders` (market, pending, OCO, bracket), `POST /margin/orders`, and `POST /margin/positions/{id}/close` accept `Idempotency-Key` (or `X-Idempotency-Key`) header or `idempotencyKey` in the JSON body. A retry with the **same key and same request** returns the original trade/order instead of creating a second one. The same key with a **different** request returns **409**. Keys are scoped to the paper book, last **24 hours**, and may use letters, digits, `-`, `_`, `.`, `:` (max 128). MCP tools take `idempotencyKey` the same way.
+
 ## API
 
 | Method | Path | Description |
@@ -23,7 +27,7 @@ Backup and restore owned books with the user data export/import jobs (`sections=
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history (newest first; includes opening) |
 | `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
-| `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below) |
+| `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below); optional `Idempotency-Key` |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One order + last price + amend hints for the edit screen |
 | `PATCH` | `/api/v1/portfolio/orders/{id}` | Amend open GTC limit/stop in place (`triggerPrice`, `remainingQuantity`) |

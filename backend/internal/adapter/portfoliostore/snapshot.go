@@ -236,6 +236,7 @@ func (s *SQLite) txListBookIDs(ctx context.Context, tx *sql.Tx, owner string) ([
 
 func (s *SQLite) txDeleteBook(ctx context.Context, tx *sql.Tx, id string) error {
 	for _, q := range []string{
+		`DELETE FROM idempotency_keys WHERE client_id = ?`,
 		`DELETE FROM cash_movements WHERE client_id = ?`,
 		`DELETE FROM portfolio_equity_snapshots WHERE client_id = ?`,
 		`DELETE FROM risk_limits WHERE client_id = ?`,

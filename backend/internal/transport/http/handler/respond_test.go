@@ -28,6 +28,8 @@ func TestWriteError_Mapping(t *testing.T) {
 		{errors.New("boom internal stack"), http.StatusInternalServerError, "internal_error", "internal error"},
 		{context.Canceled, http.StatusBadRequest, "canceled", "canceled"},
 		{context.DeadlineExceeded, http.StatusGatewayTimeout, "timeout", "timed out"},
+		{fmt.Errorf("%w: idempotency key reused with a different request", domain.ErrConflict), http.StatusConflict, "conflict", "idempotency key reused"},
+		{fmt.Errorf("%w", domain.ErrIdempotencyHit), http.StatusConflict, "conflict", "idempotency key already used"},
 	}
 	for _, tc := range cases {
 		rr := httptest.NewRecorder()

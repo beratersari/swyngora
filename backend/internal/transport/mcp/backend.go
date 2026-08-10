@@ -1008,6 +1008,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
+		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -1094,6 +1095,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
 		TrailType: trailType, TrailValue: trailValue, LotMethod: lotMethod,
+		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -1644,6 +1646,7 @@ func (b *Backend) PlaceMarginOrder(ctx context.Context, clientID, exchange, symb
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, Exchange: exchange, Symbol: symbol, Side: side, Type: orderType,
 		Quantity: quantity, Leverage: leverage, LimitPrice: limitPrice, StopLoss: stopLoss, TakeProfit: takeProfit,
+		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -1687,6 +1690,7 @@ func (b *Backend) CloseMarginPosition(ctx context.Context, clientID, id string, 
 	pos, tr, err := b.Portfolio.CloseMarginPosition(ctx, portfolio.MarginCloseInput{
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID: clientID, PositionID: id, Quantity: quantity,
+		IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
 		return nil, err

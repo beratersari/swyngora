@@ -367,8 +367,10 @@ type PortfolioPort interface {
 	UpsertPosition(ctx context.Context, pos Position) error
 
 	InsertTrade(ctx context.Context, t Trade) (*Trade, error)
+	GetTrade(ctx context.Context, clientID, id string) (*Trade, error)
 	ListTrades(ctx context.Context, clientID string, limit, offset int) ([]Trade, error)
 	CountTrades(ctx context.Context, clientID string) (int, error)
+	GetIdempotency(ctx context.Context, clientID, key string) (*IdempotencyRecord, error)
 
 	ListOpenTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string) ([]TaxLot, error)
 	ListTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string, openOnly bool) ([]TaxLot, error)

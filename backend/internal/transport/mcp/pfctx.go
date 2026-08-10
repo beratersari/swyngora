@@ -21,3 +21,20 @@ func PortfolioIDFrom(ctx context.Context) string {
 	v, _ := ctx.Value(portfolioIDKey{}).(string)
 	return strings.TrimSpace(v)
 }
+
+type idempotencyKeyCtx struct{}
+
+// WithIdempotencyKey stores a client retry key on ctx for place/close tools.
+func WithIdempotencyKey(ctx context.Context, key string) context.Context {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, idempotencyKeyCtx{}, key)
+}
+
+// IdempotencyKeyFrom returns the optional retry key.
+func IdempotencyKeyFrom(ctx context.Context) string {
+	v, _ := ctx.Value(idempotencyKeyCtx{}).(string)
+	return strings.TrimSpace(v)
+}
