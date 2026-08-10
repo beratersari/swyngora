@@ -88,8 +88,8 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 
 ## Tool discipline
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
-- Prefer: `get_ticker` → live quote; `analyze_spot_orderbook` → buy/sell pressure, imbalance, walls within ±range_pct of mid (default 2%, not only the first rows);
-  `get_spot_orderbook` → grouped ladder + the same analysis (set `group` e.g. 0.1);
+- Prefer: `get_ticker` → live quote; `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
+  `analyze_spot_orderbook` → one-venue pressure/walls; `get_spot_orderbook` → grouped ladder + analysis;
   `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_supply` → supply; `list_spot_markets` → rankings/filters; watchlist tools only if asked.
 - **Pumps / vertical moves (1–2 day relevant):**

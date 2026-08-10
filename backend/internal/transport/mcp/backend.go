@@ -85,6 +85,42 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 	})
 }
 
+func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetCombinedOrderBookAnalysis(ctx, symbol, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, map[string]any{
+			"exchange": string(v.Exchange), "symbol": v.Symbol, "live": v.Live, "source": v.Source,
+			"bidNotional": v.BidNotional, "askNotional": v.AskNotional,
+			"bidQuantity": v.BidQuantity, "askQuantity": v.AskQuantity,
+			"imbalance": v.Imbalance, "pressure": v.Pressure,
+			"bidLevels": v.BidLevels, "askLevels": v.AskLevels, "error": v.Error,
+		})
+	}
+	walls := make([]map[string]any, 0, len(got.Walls))
+	for _, w := range got.Walls {
+		walls = append(walls, map[string]any{
+			"exchange": w.Exchange, "side": w.Side, "price": w.Price, "quantity": w.Quantity,
+			"notional": w.Notional, "distancePct": w.DistancePct, "share": w.Share,
+		})
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "rangePct": got.RangePct, "midPrice": got.MidPrice,
+		"bidNotional": got.BidNotional, "askNotional": got.AskNotional,
+		"bidQuantity": got.BidQuantity, "askQuantity": got.AskQuantity,
+		"imbalance": got.Imbalance, "pressure": got.Pressure,
+		"bidLevels": got.BidLevels, "askLevels": got.AskLevels,
+		"coveredBidPct": got.CoveredBidPct, "coveredAskPct": got.CoveredAskPct,
+		"walls": walls, "bands": got.Bands, "venues": venues, "venueCount": got.VenueCount,
+	})
+}
+
 func (b *Backend) AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
 	book, err := b.Market.GetSpotOrderBook(ctx, exchange, symbol, "", 5, rangePct)
 	if err != nil {

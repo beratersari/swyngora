@@ -97,6 +97,16 @@ class OrderBookAnalysisInput(BaseModel):
     )
 
 
+class MarketOrderBookInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    range_pct: float = Field(
+        default=2.0,
+        ge=0.25,
+        le=10,
+        description="±% of shared mid (default 2)",
+    )
+
+
 class CandlesInput(BaseModel):
     symbol: str
     exchange: str = "binance"
@@ -581,6 +591,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         if group:
             params["group"] = group
         return http.get("/api/v1/market/orderbook", params)
+
+    def analyze_market_orderbook(symbol: str, range_pct: float = 2.0) -> str:
+        return http.get(
+            "/api/v1/market/orderbook/combined",
+            {"symbol": symbol, "rangePct": range_pct},
+        )
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -1529,6 +1545,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "pressure or walls rather than the full ladder."
             ),
             args_schema=OrderBookAnalysisInput,
+        ),
+        StructuredTool.from_function(
+            analyze_market_orderbook,
+            name="analyze_market_orderbook",
+            description=(
+                "Market-wide buy/sell pressure for one coin: sums Binance + Coinbase + "
+                "Bybit bid/ask notional in the same ±range_pct band. Use when asked "
+                "which side is stronger overall, not on one exchange."
+            ),
+            args_schema=MarketOrderBookInput,
         ),
         StructuredTool.from_function(
             get_candles,

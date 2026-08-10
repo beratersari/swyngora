@@ -233,6 +233,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/combined": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market-wide spot order book analysis
+         * @description Combines live local books from Binance, Coinbase, and Bybit for one coin.
+         *     Bid and ask notional are taken from the **same ±rangePct band** around a
+         *     shared mid (median of venue mids). Totals drive market-wide pressure and
+         *     imbalance. USD and USDT are treated as 1:1. Partial results if a venue
+         *     is down. Informational — not financial advice.
+         */
+        get: operations["getCombinedSpotOrderBook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -2042,6 +2066,56 @@ export interface components {
             /** @description Nested 0.5 / 1 / 2 / 5 percent bands for near vs farther depth */
             bands?: components["schemas"]["OrderBookBand"][];
         };
+        CombinedOrderBookWall: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            price?: string;
+            quantity?: string;
+            notional?: string;
+            distancePct?: string;
+            /** @description Fraction of combined side notional */
+            share?: number;
+        };
+        CombinedOrderBookVenue: {
+            exchange?: string;
+            symbol?: string;
+            live?: boolean;
+            source?: string;
+            bidNotional?: string;
+            askNotional?: string;
+            bidQuantity?: string;
+            askQuantity?: string;
+            imbalance?: number;
+            /** @enum {string} */
+            pressure?: "buy" | "sell" | "balanced";
+            bidLevels?: number;
+            askLevels?: number;
+            error?: string;
+        };
+        /** @description Market-wide pressure from summed venue depth in one price band */
+        CombinedOrderBook: {
+            symbol?: string;
+            rangePct?: number;
+            /** @description Shared mid (median of venue mids) */
+            midPrice?: string;
+            bidNotional?: string;
+            askNotional?: string;
+            bidQuantity?: string;
+            askQuantity?: string;
+            imbalance?: number;
+            /** @enum {string} */
+            pressure?: "buy" | "sell" | "balanced";
+            bidLevels?: number;
+            askLevels?: number;
+            coveredBidPct?: string;
+            coveredAskPct?: string;
+            walls?: components["schemas"]["CombinedOrderBookWall"][];
+            bands?: components["schemas"]["OrderBookBand"][];
+            venues?: components["schemas"]["CombinedOrderBookVenue"][];
+            venueCount?: number;
+            note?: string;
+        };
         Supply: {
             asset?: string;
             name?: string;
@@ -3219,6 +3293,33 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getCombinedSpotOrderBook: {
+        parameters: {
+            query: {
+                /** @description Pair on any venue (BTCUSDT or BTC-USD) */
+                symbol: string;
+                /** @description ± percent of shared mid (0.25–10, default 2) */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined analysis */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CombinedOrderBook"];
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

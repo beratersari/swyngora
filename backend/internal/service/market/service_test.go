@@ -421,6 +421,27 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 	}
 }
 
+func TestGetCombinedOrderBookAnalysis(t *testing.T) {
+	bin := &fakeMarket{}
+	cb := &fakeMarket{}
+	bb := &fakeMarket{}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  bin,
+		domain.ExchangeCoinbase: cb,
+		domain.ExchangeBybit:    bb,
+	}, &fakeSupply{})
+	got, err := svc.GetCombinedOrderBookAnalysis(context.Background(), "btcusdt", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VenueCount != 3 || got.Pressure == "" || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Venues) != 3 {
+		t.Fatalf("venues %+v", got.Venues)
+	}
+}
+
 func TestListProductTags(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	tags, err := svc.ListProductTags(context.Background(), "binance")

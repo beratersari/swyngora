@@ -153,6 +153,23 @@ func TestGetOrderBook_BadRange(t *testing.T) {
 	}
 }
 
+func TestGetCombinedOrderBook_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2", nil)
+	rr := httptest.NewRecorder()
+	h.GetCombinedOrderBook(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body combinedOrderBookResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.VenueCount < 1 || body.Pressure == "" || body.Symbol == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetOrderBook_BadGroup(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook?symbol=BTCUSDT&group=-1", nil)

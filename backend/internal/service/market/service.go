@@ -197,6 +197,77 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 	return &book, nil
 }
 
+// GetCombinedOrderBookAnalysis sums live depth from every configured venue
+// inside the same ±rangePct band around a shared mid.
+func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol string, rangePct float64) (*domain.CombinedOrderBookAnalysis, error) {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	rangePct = domain.ClampRangePct(rangePct)
+	exchanges := s.ListExchanges()
+	if len(exchanges) == 0 {
+		return nil, fmt.Errorf("%w: no exchanges configured", domain.ErrUpstream)
+	}
+
+	type result struct {
+		vb domain.VenueRawBook
+	}
+	outCh := make(chan result, len(exchanges))
+	for _, ex := range exchanges {
+		ex := ex
+		go func() {
+			pair := domain.CrossVenueSymbol(ex, symbol)
+			vb := domain.VenueRawBook{Exchange: ex, Symbol: pair}
+			if pair == "" {
+				vb.Err = "symbol not mapped"
+				outCh <- result{vb: vb}
+				return
+			}
+			p, err := s.port(ex)
+			if err != nil {
+				vb.Err = err.Error()
+				outCh <- result{vb: vb}
+				return
+			}
+			raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: pair, Limit: domain.MaxOrderBookRawLimit})
+			if err != nil || raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
+				if err != nil {
+					vb.Err = err.Error()
+				} else {
+					vb.Err = "empty order book"
+				}
+				outCh <- result{vb: vb}
+				return
+			}
+			vb.Book = *raw
+			outCh <- result{vb: vb}
+		}()
+	}
+	books := make([]domain.VenueRawBook, 0, len(exchanges))
+	ok := 0
+	for i := 0; i < len(exchanges); i++ {
+		r := <-outCh
+		books = append(books, r.vb)
+		if r.vb.Err == "" {
+			ok++
+		}
+	}
+	if ok == 0 {
+		return nil, fmt.Errorf("%w: no live order books for %s", domain.ErrUpstream, symbol)
+	}
+	mid := domain.SharedBookMid(books)
+	if mid <= 0 {
+		return nil, fmt.Errorf("%w: could not determine shared mid for %s", domain.ErrUpstream, symbol)
+	}
+	display := domain.CrossVenueSymbol(domain.ExchangeBinance, symbol)
+	if display == "" {
+		display = strings.ToUpper(symbol)
+	}
+	combined := domain.CombineOrderBooks(display, mid, rangePct, books)
+	return &combined, nil
+}
+
 // GetTicker24h returns rolling 24h volume and price stats for a symbol.
 func (s *Service) GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error) {
 	ex, err := s.ResolveExchange(exchange)

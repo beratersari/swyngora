@@ -2,6 +2,23 @@ package domain
 
 import "strings"
 
+// CrossVenueSymbol maps a user pair onto another venue (BTCUSDT ↔ BTC-USD).
+// Coinbase USDT-style pairs use USD; Binance/Bybit USD pairs use USDT.
+func CrossVenueSymbol(ex Exchange, input string) string {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return ""
+	}
+	bin := NormalizeSymbol(ExchangeBinance, input)
+	if ex != ExchangeCoinbase {
+		if strings.HasSuffix(bin, "USD") && !strings.HasSuffix(bin, "USDT") && !strings.HasSuffix(bin, "USDC") {
+			bin = strings.TrimSuffix(bin, "USD") + "USDT"
+		}
+		return NormalizeSymbol(ex, bin)
+	}
+	return PriceDiffSymbolForExchange(ex, bin)
+}
+
 // NormalizeSymbol formats a trading pair for the given exchange.
 // Coinbase product ids are hyphenated (BTC-USD); bare BTCUSD is expanded when
 // a known quote suffix is present. Binance/Bybit use concatenated upper symbols.

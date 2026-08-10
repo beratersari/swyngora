@@ -21,6 +21,10 @@ Futures / other markets are out of scope for now version.
   - `analysis` — buy/sell **pressure**, notional **imbalance**, and large **walls** from every
     live level within ±`rangePct` of mid (not only the first few orders). Nested `bands`
     (0.5 / 1 / 2 / 5%) show near vs farther depth. Same logic on Binance, Coinbase, and Bybit.
+- `GET /api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2`
+  - Sums live bid/ask **notional** from Binance + Coinbase + Bybit in the **same** ±`rangePct`
+    band around a shared mid (median of venue mids). USD≈USDT.
+  - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
 - All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.
   - **Binance:** `@depth@100ms` + REST snapshot; `U`/`u` vs `lastUpdateId`.
@@ -34,8 +38,8 @@ Futures / other markets are out of scope for now version.
 | Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook` |
-| HTTP | `GET /api/v1/market/orderbook` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `create_orderbook_alert` |
+| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` |
 
 ## How to verify
@@ -45,6 +49,7 @@ cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/a
 curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1&rangePct=2"
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=coinbase&symbol=BTC-USD&rangePct=2"
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=bybit&symbol=BTCUSDT&rangePct=5"
+curl "http://localhost:8080/api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2"
 ```
 
 `live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`.

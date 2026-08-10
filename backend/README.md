@@ -31,6 +31,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
+| `GET` | `/api/v1/market/orderbook/combined` | Market-wide pressure from all three venues in one price band |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

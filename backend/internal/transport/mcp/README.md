@@ -12,6 +12,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_ticker` | 24h ticker |
 | `get_spot_orderbook` | Live grouped spot bids/asks + walls; `analysis` from ±rangePct of mid |
 | `analyze_spot_orderbook` | Buy/sell pressure, imbalance, and large walls in ±rangePct of mid |
+| `analyze_market_orderbook` | Combined Binance+Coinbase+Bybit pressure in one shared price band |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
 | `list_spot_markets` | Search/sort spot list |

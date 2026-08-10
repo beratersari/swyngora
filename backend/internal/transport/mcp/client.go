@@ -139,6 +139,16 @@ func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group st
 	return c.get(ctx, "/api/v1/market/orderbook", q)
 }
 
+// AnalyzeCombinedOrderBook sums live books from all venues in one price band.
+func (c *APIClient) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/combined", q)
+}
+
 // AnalyzeOrderBook returns pressure/imbalance/walls from live depth in ±rangePct of mid.
 func (c *APIClient) AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
 	raw, err := c.GetOrderBook(ctx, exchange, symbol, "", 5, rangePct)

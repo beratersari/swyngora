@@ -498,6 +498,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/combined:
+    get:
+      summary: Market-wide spot order book analysis
+      description: |
+        Combines live local books from Binance, Coinbase, and Bybit for one coin.
+        Bid and ask notional are taken from the **same ±rangePct band** around a
+        shared mid (median of venue mids). Totals drive market-wide pressure and
+        imbalance. USD and USDT are treated as 1:1. Partial results if a venue
+        is down. Informational — not financial advice.
+      operationId: getCombinedSpotOrderBook
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+          description: Pair on any venue (BTCUSDT or BTC-USD)
+        - name: rangePct
+          in: query
+          description: ± percent of shared mid (0.25–10, default 2)
+          schema: { type: number, default: 2, minimum: 0.25, maximum: 10, example: 2 }
+      responses:
+        '200':
+          description: Combined analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CombinedOrderBook'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -4261,6 +4293,60 @@ components:
           type: array
           items: { $ref: '#/components/schemas/OrderBookBand' }
           description: Nested 0.5 / 1 / 2 / 5 percent bands for near vs farther depth
+    CombinedOrderBookWall:
+      type: object
+      properties:
+        exchange: { type: string }
+        side: { type: string, enum: [bid, ask] }
+        price: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
+        distancePct: { type: string }
+        share: { type: number, description: Fraction of combined side notional }
+    CombinedOrderBookVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        live: { type: boolean }
+        source: { type: string }
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        bidQuantity: { type: string }
+        askQuantity: { type: string }
+        imbalance: { type: number }
+        pressure: { type: string, enum: [buy, sell, balanced] }
+        bidLevels: { type: integer }
+        askLevels: { type: integer }
+        error: { type: string }
+    CombinedOrderBook:
+      type: object
+      description: Market-wide pressure from summed venue depth in one price band
+      properties:
+        symbol: { type: string }
+        rangePct: { type: number }
+        midPrice: { type: string, description: Shared mid (median of venue mids) }
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        bidQuantity: { type: string }
+        askQuantity: { type: string }
+        imbalance: { type: number }
+        pressure: { type: string, enum: [buy, sell, balanced] }
+        bidLevels: { type: integer }
+        askLevels: { type: integer }
+        coveredBidPct: { type: string }
+        coveredAskPct: { type: string }
+        walls:
+          type: array
+          items: { $ref: '#/components/schemas/CombinedOrderBookWall' }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookBand' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/CombinedOrderBookVenue' }
+        venueCount: { type: integer }
+        note: { type: string }
     Supply:
       type: object
       properties:

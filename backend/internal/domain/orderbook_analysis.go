@@ -99,10 +99,14 @@ func ClampRangePct(v float64) float64 {
 }
 
 // AnalyzeOrderBook scores buy/sell pressure and walls using every raw level
-// whose price is within ±rangePct of mid. Farther size is ignored.
+// whose price is within ±rangePct of this book's own mid.
 func AnalyzeOrderBook(raw RawOrderBook, rangePct float64) OrderBookAnalysis {
+	return AnalyzeOrderBookAt(raw, midPrice(raw), rangePct)
+}
+
+// AnalyzeOrderBookAt is AnalyzeOrderBook using an explicit mid (shared market mid).
+func AnalyzeOrderBookAt(raw RawOrderBook, mid, rangePct float64) OrderBookAnalysis {
 	rangePct = ClampRangePct(rangePct)
-	mid := midPrice(raw)
 	out := OrderBookAnalysis{
 		RangePct: rangePct,
 		Pressure: OrderBookPressureBalanced,

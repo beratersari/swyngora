@@ -111,3 +111,15 @@ func TestNormalizeSymbol_Coinbase(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestCrossVenueSymbol(t *testing.T) {
+	if got := CrossVenueSymbol(ExchangeCoinbase, "BTCUSDT"); got != "BTC-USD" {
+		t.Fatalf("cb %q", got)
+	}
+	if got := CrossVenueSymbol(ExchangeBinance, "BTC-USD"); got != "BTCUSDT" {
+		t.Fatalf("bn %q", got)
+	}
+	if got := CrossVenueSymbol(ExchangeBybit, "btc-usd"); got != "BTCUSDT" {
+		t.Fatalf("bb %q", got)
+	}
+}

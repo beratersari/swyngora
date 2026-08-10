@@ -220,6 +220,110 @@ func (h *MarketHandler) GetOrderBook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, orderBookToDTO(book))
 }
 
+// GetCombinedOrderBook handles GET /api/v1/market/orderbook/combined.
+func (h *MarketHandler) GetCombinedOrderBook(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	rangePct, err := domain.ParseRangePct(q.Get("rangePct"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.GetCombinedOrderBookAnalysis(r.Context(), q.Get("symbol"), rangePct)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, combinedBookToDTO(got))
+}
+
+type combinedWallDTO struct {
+	Exchange    string  `json:"exchange"`
+	Side        string  `json:"side"`
+	Price       string  `json:"price"`
+	Quantity    string  `json:"quantity"`
+	Notional    string  `json:"notional"`
+	DistancePct string  `json:"distancePct"`
+	Share       float64 `json:"share"`
+}
+
+type combinedVenueDTO struct {
+	Exchange    string  `json:"exchange"`
+	Symbol      string  `json:"symbol"`
+	Live        bool    `json:"live"`
+	Source      string  `json:"source,omitempty"`
+	BidNotional string  `json:"bidNotional,omitempty"`
+	AskNotional string  `json:"askNotional,omitempty"`
+	BidQuantity string  `json:"bidQuantity,omitempty"`
+	AskQuantity string  `json:"askQuantity,omitempty"`
+	Imbalance   float64 `json:"imbalance"`
+	Pressure    string  `json:"pressure,omitempty"`
+	BidLevels   int     `json:"bidLevels"`
+	AskLevels   int     `json:"askLevels"`
+	Error       string  `json:"error,omitempty"`
+}
+
+type combinedOrderBookResponse struct {
+	Symbol        string             `json:"symbol"`
+	RangePct      float64            `json:"rangePct"`
+	MidPrice      string             `json:"midPrice"`
+	BidNotional   string             `json:"bidNotional"`
+	AskNotional   string             `json:"askNotional"`
+	BidQuantity   string             `json:"bidQuantity"`
+	AskQuantity   string             `json:"askQuantity"`
+	Imbalance     float64            `json:"imbalance"`
+	Pressure      string             `json:"pressure"`
+	BidLevels     int                `json:"bidLevels"`
+	AskLevels     int                `json:"askLevels"`
+	CoveredBidPct string             `json:"coveredBidPct"`
+	CoveredAskPct string             `json:"coveredAskPct"`
+	Walls         []combinedWallDTO  `json:"walls"`
+	Bands         []orderBookBandDTO `json:"bands"`
+	Venues        []combinedVenueDTO `json:"venues"`
+	VenueCount    int                `json:"venueCount"`
+	Note          string             `json:"note"`
+}
+
+func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookResponse {
+	if a == nil {
+		return combinedOrderBookResponse{}
+	}
+	walls := make([]combinedWallDTO, 0, len(a.Walls))
+	for _, w := range a.Walls {
+		walls = append(walls, combinedWallDTO{
+			Exchange: w.Exchange, Side: w.Side, Price: w.Price, Quantity: w.Quantity,
+			Notional: w.Notional, DistancePct: w.DistancePct, Share: w.Share,
+		})
+	}
+	bands := make([]orderBookBandDTO, 0, len(a.Bands))
+	for _, b := range a.Bands {
+		bands = append(bands, orderBookBandDTO{
+			RangePct: b.RangePct, BidNotional: b.BidNotional, AskNotional: b.AskNotional,
+			BidQuantity: b.BidQuantity, AskQuantity: b.AskQuantity, Imbalance: b.Imbalance,
+			BidLevels: b.BidLevels, AskLevels: b.AskLevels,
+		})
+	}
+	venues := make([]combinedVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		venues = append(venues, combinedVenueDTO{
+			Exchange: string(v.Exchange), Symbol: v.Symbol, Live: v.Live, Source: v.Source,
+			BidNotional: v.BidNotional, AskNotional: v.AskNotional,
+			BidQuantity: v.BidQuantity, AskQuantity: v.AskQuantity,
+			Imbalance: v.Imbalance, Pressure: v.Pressure,
+			BidLevels: v.BidLevels, AskLevels: v.AskLevels, Error: v.Error,
+		})
+	}
+	return combinedOrderBookResponse{
+		Symbol: a.Symbol, RangePct: a.RangePct, MidPrice: a.MidPrice,
+		BidNotional: a.BidNotional, AskNotional: a.AskNotional,
+		BidQuantity: a.BidQuantity, AskQuantity: a.AskQuantity,
+		Imbalance: a.Imbalance, Pressure: a.Pressure,
+		BidLevels: a.BidLevels, AskLevels: a.AskLevels,
+		CoveredBidPct: a.CoveredBidPct, CoveredAskPct: a.CoveredAskPct,
+		Walls: walls, Bands: bands, Venues: venues, VenueCount: a.VenueCount,
+		Note: "Market-wide spot depth: Binance + Coinbase + Bybit bid/ask notional in the same ±rangePct band around a shared mid. USD and USDT treated as 1:1. Informational only.",
+	}
+}
+
 func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
 	if book == nil {
 		return orderBookResponse{}

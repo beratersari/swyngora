@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -78,6 +78,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/candles", mh.GetCandles)
 	mux.HandleFunc("GET /api/v1/market/ticker/24h", mh.GetTicker24h)
 	mux.HandleFunc("GET /api/v1/market/orderbook", mh.GetOrderBook)
+	mux.HandleFunc("GET /api/v1/market/orderbook/combined", mh.GetCombinedOrderBook)
 	mux.HandleFunc("GET /api/v1/market/supply", mh.GetSupply)
 	mux.HandleFunc("GET /api/v1/market/exchanges", mh.ListExchanges)
 	mux.HandleFunc("GET /api/v1/market/intervals", mh.GetIntervals)

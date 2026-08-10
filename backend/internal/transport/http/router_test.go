@@ -61,9 +61,9 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
 
 	paths := []struct {
-		path   string
-		want   int
-		check  func(t *testing.T, body []byte)
+		path  string
+		want  int
+		check func(t *testing.T, body []byte)
 	}{
 		{"/health", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any
@@ -84,6 +84,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=1", http.StatusOK, nil},
 		{"/api/v1/market/ticker/24h?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1", http.StatusOK, nil},
+		{"/api/v1/market/orderbook/combined?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/tags", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any
