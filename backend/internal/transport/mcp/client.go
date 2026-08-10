@@ -120,8 +120,8 @@ func (c *APIClient) GetTicker(ctx context.Context, exchange, symbol string) (jso
 	return c.get(ctx, "/api/v1/market/ticker/24h", q)
 }
 
-// GetOrderBook returns a grouped spot order book.
-func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error) {
+// GetOrderBook returns a grouped spot order book plus ±rangePct analysis.
+func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int, rangePct float64) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
@@ -133,7 +133,33 @@ func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group st
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))
 	}
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
 	return c.get(ctx, "/api/v1/market/orderbook", q)
+}
+
+// AnalyzeOrderBook returns pressure/imbalance/walls from live depth in ±rangePct of mid.
+func (c *APIClient) AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	raw, err := c.GetOrderBook(ctx, exchange, symbol, "", 5, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	var full map[string]any
+	if err := json.Unmarshal(raw, &full); err != nil {
+		return raw, nil
+	}
+	keep := map[string]any{}
+	for _, k := range []string{"exchange", "symbol", "lastPrice", "bestBid", "bestAsk", "spread", "spreadPct", "live", "source", "updatedAt", "analysis"} {
+		if v, ok := full[k]; ok {
+			keep[k] = v
+		}
+	}
+	out, err := json.Marshal(keep)
+	if err != nil {
+		return raw, nil
+	}
+	return out, nil
 }
 
 // GetCandles returns OHLCV candles.

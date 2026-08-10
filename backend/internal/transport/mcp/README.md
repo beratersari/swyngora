@@ -10,7 +10,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `realtime_stream_info` | WebSocket subscribe/unsubscribe protocol for live prices + paper portfolio |
 | `list_exchanges` | Configured venues |
 | `get_ticker` | 24h ticker |
-| `get_spot_orderbook` | Live grouped spot bids/asks + walls (group=0.1); venues resync on gap/drop |
+| `get_spot_orderbook` | Live grouped spot bids/asks + walls; `analysis` from ±rangePct of mid |
+| `analyze_spot_orderbook` | Buy/sell pressure, imbalance, and large walls in ±rangePct of mid |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
 | `list_spot_markets` | Search/sort spot list |

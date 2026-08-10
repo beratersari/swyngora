@@ -455,7 +455,10 @@ paths:
         side (buy/sell walls). `suggestedGroupSizes` are ready-made steps for the UI.
         Spot only. Binance, Coinbase, and Bybit each keep a **live local book** on their
         public depth websocket. A dropped stream or missed update invalidates the copy and
-        resyncs; stale depth is not returned. Informational — not financial advice.
+        resyncs; stale depth is not returned.
+        `analysis` scores buy/sell pressure, notional imbalance, and large walls using
+        every resting level within ±`rangePct` of mid (default 2%) — not only the first
+        few ladder rows. Informational — not financial advice.
       operationId: getSpotOrderBook
       tags: [Market]
       parameters:
@@ -474,6 +477,10 @@ paths:
           in: query
           description: Grouped rows per side (5–100, default 20)
           schema: { type: integer, default: 20, minimum: 5, maximum: 100 }
+        - name: rangePct
+          in: query
+          description: Analyze resting depth within this ± percent of mid (0.25–10, default 2)
+          schema: { type: number, default: 2, minimum: 0.25, maximum: 10, example: 2 }
       responses:
         '200':
           description: Grouped book
@@ -4190,10 +4197,58 @@ components:
           description: (bidVol-askVol)/(bidVol+askVol); positive = more resting bids
         bidWalls: { type: integer }
         askWalls: { type: integer }
+        analysis: { $ref: '#/components/schemas/OrderBookAnalysis' }
         updatedAt: { type: string, format: date-time }
         live: { type: boolean, description: True when the book is a live local websocket copy }
         source: { type: string, enum: [websocket, rest], description: websocket when served from a live local book }
         note: { type: string }
+    OrderBookWall:
+      type: object
+      properties:
+        side: { type: string, enum: [bid, ask] }
+        price: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
+        distancePct: { type: string, description: Distance from mid as a percent }
+        share: { type: number, description: Fraction of that side's band notional }
+    OrderBookBand:
+      type: object
+      properties:
+        rangePct: { type: number }
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        bidQuantity: { type: string }
+        askQuantity: { type: string }
+        imbalance: { type: number }
+        bidLevels: { type: integer }
+        askLevels: { type: integer }
+    OrderBookAnalysis:
+      type: object
+      description: |
+        Buy/sell pressure from live depth within ±rangePct of mid. Uses all resting
+        levels in that band (Binance/Coinbase/Bybit local books), not only the first rows.
+      properties:
+        rangePct: { type: number, description: Primary ±% band used for pressure and walls }
+        midPrice: { type: string }
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        bidQuantity: { type: string }
+        askQuantity: { type: string }
+        imbalance:
+          type: number
+          description: (bidNotional-askNotional)/(sum); positive = more resting bids
+        pressure: { type: string, enum: [buy, sell, balanced] }
+        bidLevels: { type: integer }
+        askLevels: { type: integer }
+        coveredBidPct: { type: string, description: How far the deepest included bid is from mid }
+        coveredAskPct: { type: string }
+        walls:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookWall' }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookBand' }
+          description: Nested 0.5 / 1 / 2 / 5 percent bands for near vs farther depth
     Supply:
       type: object
       properties:

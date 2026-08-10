@@ -34,6 +34,7 @@ Expose first market-data APIs so clients can:
 - Grouped bid/ask depth (spot only). `group` is the price step (e.g. `0.1`); omit for a suggested default.
 - `limit` is grouped rows per side. Backend marks `isWall` on unusually large buckets.
 - Live local books on Binance, Coinbase, and Bybit (websocket; gap/drop resyncs).
+- `analysis` uses depth within ±`rangePct` of mid (default 2%) for pressure, imbalance, and walls.
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

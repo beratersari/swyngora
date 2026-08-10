@@ -30,7 +30,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
-| `GET` | `/api/v1/market/orderbook` | Grouped spot order book (bids/asks, walls, group steps) |
+| `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

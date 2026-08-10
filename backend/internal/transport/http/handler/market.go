@@ -134,27 +134,65 @@ type orderBookLevelDTO struct {
 }
 
 type orderBookResponse struct {
-	Exchange            string              `json:"exchange"`
-	Symbol              string              `json:"symbol"`
-	LastPrice           string              `json:"lastPrice"`
-	BestBid             string              `json:"bestBid"`
-	BestAsk             string              `json:"bestAsk"`
-	Spread              string              `json:"spread"`
-	SpreadPct           string              `json:"spreadPct"`
-	GroupSize           string              `json:"groupSize"`
-	SuggestedGroupSizes []string            `json:"suggestedGroupSizes"`
-	Levels              int                 `json:"levels"`
-	Bids                []orderBookLevelDTO `json:"bids"`
-	Asks                []orderBookLevelDTO `json:"asks"`
-	BidVolume           string              `json:"bidVolume"`
-	AskVolume           string              `json:"askVolume"`
-	Imbalance           float64             `json:"imbalance"`
-	BidWalls            int                 `json:"bidWalls"`
-	AskWalls            int                 `json:"askWalls"`
-	UpdatedAt           string              `json:"updatedAt"`
-	Live                bool                `json:"live"`
-	Source              string              `json:"source"`
-	Note                string              `json:"note"`
+	Exchange            string               `json:"exchange"`
+	Symbol              string               `json:"symbol"`
+	LastPrice           string               `json:"lastPrice"`
+	BestBid             string               `json:"bestBid"`
+	BestAsk             string               `json:"bestAsk"`
+	Spread              string               `json:"spread"`
+	SpreadPct           string               `json:"spreadPct"`
+	GroupSize           string               `json:"groupSize"`
+	SuggestedGroupSizes []string             `json:"suggestedGroupSizes"`
+	Levels              int                  `json:"levels"`
+	Bids                []orderBookLevelDTO  `json:"bids"`
+	Asks                []orderBookLevelDTO  `json:"asks"`
+	BidVolume           string               `json:"bidVolume"`
+	AskVolume           string               `json:"askVolume"`
+	Imbalance           float64              `json:"imbalance"`
+	BidWalls            int                  `json:"bidWalls"`
+	AskWalls            int                  `json:"askWalls"`
+	Analysis            orderBookAnalysisDTO `json:"analysis"`
+	UpdatedAt           string               `json:"updatedAt"`
+	Live                bool                 `json:"live"`
+	Source              string               `json:"source"`
+	Note                string               `json:"note"`
+}
+
+type orderBookWallDTO struct {
+	Side        string  `json:"side"`
+	Price       string  `json:"price"`
+	Quantity    string  `json:"quantity"`
+	Notional    string  `json:"notional"`
+	DistancePct string  `json:"distancePct"`
+	Share       float64 `json:"share"`
+}
+
+type orderBookBandDTO struct {
+	RangePct    float64 `json:"rangePct"`
+	BidNotional string  `json:"bidNotional"`
+	AskNotional string  `json:"askNotional"`
+	BidQuantity string  `json:"bidQuantity"`
+	AskQuantity string  `json:"askQuantity"`
+	Imbalance   float64 `json:"imbalance"`
+	BidLevels   int     `json:"bidLevels"`
+	AskLevels   int     `json:"askLevels"`
+}
+
+type orderBookAnalysisDTO struct {
+	RangePct      float64            `json:"rangePct"`
+	MidPrice      string             `json:"midPrice"`
+	BidNotional   string             `json:"bidNotional"`
+	AskNotional   string             `json:"askNotional"`
+	BidQuantity   string             `json:"bidQuantity"`
+	AskQuantity   string             `json:"askQuantity"`
+	Imbalance     float64            `json:"imbalance"`
+	Pressure      string             `json:"pressure"`
+	BidLevels     int                `json:"bidLevels"`
+	AskLevels     int                `json:"askLevels"`
+	CoveredBidPct string             `json:"coveredBidPct"`
+	CoveredAskPct string             `json:"coveredAskPct"`
+	Walls         []orderBookWallDTO `json:"walls"`
+	Bands         []orderBookBandDTO `json:"bands"`
 }
 
 // GetOrderBook handles GET /api/v1/market/orderbook — grouped spot depth.
@@ -169,7 +207,12 @@ func (h *MarketHandler) GetOrderBook(w http.ResponseWriter, r *http.Request) {
 		}
 		levels = n
 	}
-	book, err := h.svc.GetSpotOrderBook(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("group"), levels)
+	rangePct, err := domain.ParseRangePct(q.Get("rangePct"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	book, err := h.svc.GetSpotOrderBook(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("group"), levels, rangePct)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -199,10 +242,38 @@ func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
 		Bids: mapLevels(book.Bids), Asks: mapLevels(book.Asks),
 		BidVolume: book.BidVolume, AskVolume: book.AskVolume, Imbalance: book.Imbalance,
 		BidWalls: book.BidWalls, AskWalls: book.AskWalls,
+		Analysis:  analysisToDTO(book.Analysis),
 		UpdatedAt: book.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		Live:      book.Live,
 		Source:    book.Source,
-		Note:      "Spot order book with backend grouping. isWall marks unusually large rest size. Binance, Coinbase, and Bybit use a live local book; a gap or drop resyncs instead of serving stale depth. Informational only.",
+		Note:      "Spot order book with backend grouping plus ±rangePct pressure/wall analysis over live depth (not only the first rows). Informational only.",
+	}
+}
+
+func analysisToDTO(a domain.OrderBookAnalysis) orderBookAnalysisDTO {
+	walls := make([]orderBookWallDTO, 0, len(a.Walls))
+	for _, w := range a.Walls {
+		walls = append(walls, orderBookWallDTO{
+			Side: w.Side, Price: w.Price, Quantity: w.Quantity, Notional: w.Notional,
+			DistancePct: w.DistancePct, Share: w.Share,
+		})
+	}
+	bands := make([]orderBookBandDTO, 0, len(a.Bands))
+	for _, b := range a.Bands {
+		bands = append(bands, orderBookBandDTO{
+			RangePct: b.RangePct, BidNotional: b.BidNotional, AskNotional: b.AskNotional,
+			BidQuantity: b.BidQuantity, AskQuantity: b.AskQuantity, Imbalance: b.Imbalance,
+			BidLevels: b.BidLevels, AskLevels: b.AskLevels,
+		})
+	}
+	return orderBookAnalysisDTO{
+		RangePct: a.RangePct, MidPrice: a.MidPrice,
+		BidNotional: a.BidNotional, AskNotional: a.AskNotional,
+		BidQuantity: a.BidQuantity, AskQuantity: a.AskQuantity,
+		Imbalance: a.Imbalance, Pressure: a.Pressure,
+		BidLevels: a.BidLevels, AskLevels: a.AskLevels,
+		CoveredBidPct: a.CoveredBidPct, CoveredAskPct: a.CoveredAskPct,
+		Walls: walls, Bands: bands,
 	}
 }
 

@@ -60,8 +60,14 @@ func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker
 func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	return &domain.RawOrderBook{
 		Symbol: q.Symbol,
-		Bids:   []domain.PriceLevel{{Price: 100, Quantity: 2}, {Price: 99.5, Quantity: 4}},
-		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 1.5}, {Price: 100.5, Quantity: 3}},
+		Bids: []domain.PriceLevel{
+			{Price: 100, Quantity: 2}, {Price: 99.5, Quantity: 4}, {Price: 99.0, Quantity: 2},
+			{Price: 80, Quantity: 5_000},
+		},
+		Asks: []domain.PriceLevel{
+			{Price: 100.1, Quantity: 1.5}, {Price: 100.5, Quantity: 3}, {Price: 101, Quantity: 1},
+			{Price: 120, Quantity: 5_000},
+		},
 	}, nil
 }
 
@@ -128,6 +134,22 @@ func TestGetOrderBook_OK(t *testing.T) {
 	}
 	if len(body.SuggestedGroupSizes) == 0 {
 		t.Fatal("expected suggested groups")
+	}
+	if body.Analysis.RangePct != 2 || body.Analysis.Pressure == "" || body.Analysis.BidLevels < 1 {
+		t.Fatalf("analysis %+v", body.Analysis)
+	}
+	if body.Analysis.BidLevels > 3 {
+		t.Fatalf("far depth leaked into 2%% band: %+v", body.Analysis)
+	}
+}
+
+func TestGetOrderBook_BadRange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook?symbol=BTCUSDT&rangePct=-1", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBook(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
 	}
 }
 

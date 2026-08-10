@@ -78,6 +78,23 @@ class OrderBookInput(BaseModel):
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
     group: str = Field(default="", description="Price bucket e.g. 0.1 or 0.01; empty = suggested default")
     limit: int = Field(default=20, ge=5, le=100, description="Grouped rows per side")
+    range_pct: float = Field(
+        default=2.0,
+        ge=0.25,
+        le=10,
+        description="±% of mid for pressure/wall analysis (default 2)",
+    )
+
+
+class OrderBookAnalysisInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    range_pct: float = Field(
+        default=2.0,
+        ge=0.25,
+        le=10,
+        description="±% of mid to include (default 2)",
+    )
 
 
 class CandlesInput(BaseModel):
@@ -539,15 +556,54 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         exchange: str = "binance",
         group: str = "",
         limit: int = 20,
+        range_pct: float = 2.0,
     ) -> str:
         params: dict[str, Any] = {
             "symbol": symbol,
             "exchange": exchange,
             "limit": limit,
+            "rangePct": range_pct,
         }
         if group:
             params["group"] = group
         return http.get("/api/v1/market/orderbook", params)
+
+    def analyze_spot_orderbook(
+        symbol: str,
+        exchange: str = "binance",
+        range_pct: float = 2.0,
+    ) -> str:
+        raw = http.get(
+            "/api/v1/market/orderbook",
+            {
+                "symbol": symbol,
+                "exchange": exchange,
+                "limit": 5,
+                "rangePct": range_pct,
+            },
+        )
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return raw
+        keep = {
+            k: data[k]
+            for k in (
+                "exchange",
+                "symbol",
+                "lastPrice",
+                "bestBid",
+                "bestAsk",
+                "spread",
+                "spreadPct",
+                "live",
+                "source",
+                "updatedAt",
+                "analysis",
+            )
+            if k in data
+        }
+        return json.dumps(keep)
 
     def get_candles(
         symbol: str,
@@ -1420,10 +1476,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             get_spot_orderbook,
             name="get_spot_orderbook",
             description=(
-                "Grouped spot order book: bids/asks at price steps (0.01, 0.1, 1…). "
-                "isWall marks large buy/sell walls. Use for liquidity and wall analysis."
+                "Grouped live spot order book plus analysis: pressure, imbalance, and "
+                "walls from depth within ±range_pct of mid (default 2%), not only the "
+                "first rows. Works on binance, coinbase, and bybit."
             ),
             args_schema=OrderBookInput,
+        ),
+        StructuredTool.from_function(
+            analyze_spot_orderbook,
+            name="analyze_spot_orderbook",
+            description=(
+                "Buy/sell pressure, notional imbalance, and large walls from live spot "
+                "depth within ±range_pct of mid. Prefer this when the question is "
+                "pressure or walls rather than the full ladder."
+            ),
+            args_schema=OrderBookAnalysisInput,
         ),
         StructuredTool.from_function(
             get_candles,

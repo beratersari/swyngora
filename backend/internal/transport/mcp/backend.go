@@ -55,8 +55,8 @@ func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.
 	})
 }
 
-func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error) {
-	book, err := b.Market.GetSpotOrderBook(ctx, exchange, symbol, group, limit)
+func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int, rangePct float64) (json.RawMessage, error) {
+	book, err := b.Market.GetSpotOrderBook(ctx, exchange, symbol, group, limit, rangePct)
 	if err != nil {
 		return nil, err
 	}
@@ -78,10 +78,50 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 		"imbalance":           book.Imbalance,
 		"bidWalls":            book.BidWalls,
 		"askWalls":            book.AskWalls,
+		"analysis":            orderBookAnalysisMap(book.Analysis),
 		"updatedAt":           book.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"live":                book.Live,
 		"source":              book.Source,
 	})
+}
+
+func (b *Backend) AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	book, err := b.Market.GetSpotOrderBook(ctx, exchange, symbol, "", 5, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"exchange":  string(book.Exchange),
+		"symbol":    book.Symbol,
+		"lastPrice": book.LastPrice,
+		"bestBid":   book.BestBid,
+		"bestAsk":   book.BestAsk,
+		"spread":    book.Spread,
+		"spreadPct": book.SpreadPct,
+		"live":      book.Live,
+		"source":    book.Source,
+		"updatedAt": book.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"analysis":  orderBookAnalysisMap(book.Analysis),
+	})
+}
+
+func orderBookAnalysisMap(a domain.OrderBookAnalysis) map[string]any {
+	return map[string]any{
+		"rangePct":      a.RangePct,
+		"midPrice":      a.MidPrice,
+		"bidNotional":   a.BidNotional,
+		"askNotional":   a.AskNotional,
+		"bidQuantity":   a.BidQuantity,
+		"askQuantity":   a.AskQuantity,
+		"imbalance":     a.Imbalance,
+		"pressure":      a.Pressure,
+		"bidLevels":     a.BidLevels,
+		"askLevels":     a.AskLevels,
+		"coveredBidPct": a.CoveredBidPct,
+		"coveredAskPct": a.CoveredAskPct,
+		"walls":         a.Walls,
+		"bands":         a.Bands,
+	}
 }
 
 func (b *Backend) GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error) {

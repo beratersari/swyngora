@@ -11,7 +11,7 @@ import (
 
 const (
 	DefaultOrderBookRawLimit = 100
-	MaxOrderBookRawLimit     = 500
+	MaxOrderBookRawLimit     = 1000
 	MinOrderBookRawLimit     = 5
 	DefaultOrderBookLevels   = 20
 	MaxOrderBookLevels       = 100
@@ -77,6 +77,7 @@ type OrderBook struct {
 	Imbalance           float64
 	BidWalls            int
 	AskWalls            int
+	Analysis            OrderBookAnalysis
 	UpdatedAt           time.Time
 	Live                bool
 	Source              string // websocket | rest

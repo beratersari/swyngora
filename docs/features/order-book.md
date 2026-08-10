@@ -8,15 +8,19 @@ Futures / other markets are out of scope for now version.
 
 ## Behavior
 
-- `GET /api/v1/market/orderbook?exchange=binance&symbol=BTCUSDT&group=0.1&limit=20`
+- `GET /api/v1/market/orderbook?exchange=binance&symbol=BTCUSDT&group=0.1&limit=20&rangePct=2`
   - `group` optional — omit for a suggested default from last/mid price
   - `limit` is **grouped rows per side** (5–100, default 20)
+  - `rangePct` is the ±% of mid used for pressure/wall analysis (0.25–10, default **2**)
 - Response includes:
   - `bids` (best first, highest price) and `asks` (best first, lowest price)
   - `quantity`, `notional`, running `cumulative` / `cumulativeNotional`
   - `isWall` when a bucket is unusually large vs the median on that side
   - `suggestedGroupSizes` for the step control
-  - `spread`, `spreadPct`, `imbalance` (positive = more resting bids)
+  - `spread`, `spreadPct`, `imbalance` (positive = more resting bids on the **visible ladder**)
+  - `analysis` — buy/sell **pressure**, notional **imbalance**, and large **walls** from every
+    live level within ±`rangePct` of mid (not only the first few orders). Nested `bands`
+    (0.5 / 1 / 2 / 5%) show near vs farther depth. Same logic on Binance, Coinbase, and Bybit.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
 - All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.
   - **Binance:** `@depth@100ms` + REST snapshot; `U`/`u` vs `lastUpdateId`.
@@ -27,21 +31,23 @@ Futures / other markets are out of scope for now version.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/orderbook.go`, `depthbook.go` |
+| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook` |
 | HTTP | `GET /api/v1/market/orderbook` |
-| MCP / AI | `get_spot_orderbook` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook` |
 | UI | `frontend` coin detail `OrderBookPanel` |
 
 ## How to verify
 
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/adapter/binance/ ./internal/adapter/coinbase/ ./internal/adapter/bybit/ ./internal/transport/http/handler/
-curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1"
+curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1&rangePct=2"
+curl "http://localhost:8080/api/v1/market/orderbook?exchange=coinbase&symbol=BTC-USD&rangePct=2"
+curl "http://localhost:8080/api/v1/market/orderbook?exchange=bybit&symbol=BTCUSDT&rangePct=5"
 ```
 
-`live=true` and `source=websocket` when the local book is synced.
+`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`.
 
 ## Limits / follow-ups
 

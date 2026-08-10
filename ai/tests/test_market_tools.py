@@ -58,5 +58,14 @@ def test_market_tools_hit_api(monkeypatch):
     assert book["symbol"] == "BTCUSDT"
     assert book["asks"][0]["isWall"] is True
 
+    assert "analyze_spot_orderbook" in by_name
+    analysis = json.loads(
+        by_name["analyze_spot_orderbook"].invoke(
+            {"symbol": "BTCUSDT", "exchange": "binance", "range_pct": 2}
+        )
+    )
+    assert analysis["symbol"] == "BTCUSDT"
+    assert "bids" not in analysis
+
     health = by_name["health"].invoke({})
     assert "ok" in health

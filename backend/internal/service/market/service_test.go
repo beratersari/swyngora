@@ -27,12 +27,14 @@ func sampleRawBook(symbol string) *domain.RawOrderBook {
 			{Price: 100.02, Quantity: 1},
 			{Price: 99.50, Quantity: 40},
 			{Price: 99.10, Quantity: 2},
+			{Price: 80, Quantity: 9_000}, // far — analysis at 2% must ignore
 		},
 		Asks: []domain.PriceLevel{
 			{Price: 100.06, Quantity: 1},
 			{Price: 100.20, Quantity: 1},
 			{Price: 100.80, Quantity: 50},
 			{Price: 101.00, Quantity: 2},
+			{Price: 120, Quantity: 9_000},
 		},
 	}
 }
@@ -398,7 +400,7 @@ func (t *tagsEmptyMarket) TagsByBase(context.Context) (map[string][]string, erro
 
 func TestGetSpotOrderBook_Groups(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	book, err := svc.GetSpotOrderBook(context.Background(), "binance", "btcusdt", "0.1", 10)
+	book, err := svc.GetSpotOrderBook(context.Background(), "binance", "btcusdt", "0.1", 10, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +410,13 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 	if book.GroupSize != "0.1" || len(book.Bids) == 0 || len(book.Asks) == 0 {
 		t.Fatalf("%+v", book)
 	}
-	if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "nope", 10); !errors.Is(err, domain.ErrInvalidArgument) {
+	if book.Analysis.RangePct != 2 || book.Analysis.Pressure == "" {
+		t.Fatalf("analysis %+v", book.Analysis)
+	}
+	if book.Analysis.BidLevels != 4 || book.Analysis.AskLevels != 4 {
+		t.Fatalf("far depth must be excluded: %+v", book.Analysis)
+	}
+	if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "nope", 10, 2); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("bad group: %v", err)
 	}
 }

@@ -211,7 +211,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Grouped spot order book */
+        /**
+         * Grouped spot order book
+         * @description Live spot bid/ask depth with **backend price grouping** (e.g. 0.01, 0.1, 1).
+         *     Each row is a merged price bucket with quantity, quote notional, running totals,
+         *     and `isWall` when that bucket is unusually large versus the rest of the visible
+         *     side (buy/sell walls). `suggestedGroupSizes` are ready-made steps for the UI.
+         *     Spot only. Binance, Coinbase, and Bybit each keep a **live local book** on their
+         *     public depth websocket. A dropped stream or missed update invalidates the copy and
+         *     resyncs; stale depth is not returned.
+         *     `analysis` scores buy/sell pressure, notional imbalance, and large walls using
+         *     every resting level within ±`rangePct` of mid (default 2%) — not only the first
+         *     few ladder rows. Informational — not financial advice.
+         */
         get: operations["getSpotOrderBook"];
         put?: never;
         post?: never;
@@ -821,6 +833,9 @@ export interface paths {
          *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
          *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
          *     See GET /api/v1/portfolio/trading-costs for per-exchange rates.
+         *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
+         *     returns the original order/trade instead of creating a second one. A different request with the same
+         *     key returns 409. Keys last 24 hours and are scoped to the paper book.
          *     Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
@@ -1162,7 +1177,8 @@ export interface paths {
          * @description Uses account marginMode (isolated or cross). Leverage 1–10x. Market opens immediately;
          *     limit rests until last crosses limitPrice and reserves required margin until fill/cancel.
          *     Initial margin = qty * price / leverage from available cash.
-         *     Optional stopLoss / takeProfit. Simulated only — not real money.
+         *     Optional stopLoss / takeProfit. Optional Idempotency-Key / idempotencyKey replays the original open.
+         *     Simulated only — not real money.
          */
         post: operations["placeMarginOrder"];
         delete?: never;
@@ -1234,6 +1250,7 @@ export interface paths {
         /**
          * Close all or part of a paper margin position at market
          * @description Partial close releases proportional margin and recalculates liquidation.
+         *     Optional Idempotency-Key / idempotencyKey replays the original close.
          */
         post: operations["closeMarginPosition"];
         delete?: never;
@@ -1964,16 +1981,63 @@ export interface components {
             imbalance?: number;
             bidWalls?: number;
             askWalls?: number;
+            analysis?: components["schemas"]["OrderBookAnalysis"];
             /** Format: date-time */
             updatedAt?: string;
             /** @description True when the book is a live local websocket copy */
             live?: boolean;
             /**
-             * @description websocket for Binance local book; rest for Coinbase/Bybit snapshots
+             * @description websocket when served from a live local book
              * @enum {string}
              */
             source?: "websocket" | "rest";
             note?: string;
+        };
+        OrderBookWall: {
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            price?: string;
+            quantity?: string;
+            notional?: string;
+            /** @description Distance from mid as a percent */
+            distancePct?: string;
+            /** @description Fraction of that side's band notional */
+            share?: number;
+        };
+        OrderBookBand: {
+            rangePct?: number;
+            bidNotional?: string;
+            askNotional?: string;
+            bidQuantity?: string;
+            askQuantity?: string;
+            imbalance?: number;
+            bidLevels?: number;
+            askLevels?: number;
+        };
+        /**
+         * @description Buy/sell pressure from live depth within ±rangePct of mid. Uses all resting
+         *     levels in that band (Binance/Coinbase/Bybit local books), not only the first rows.
+         */
+        OrderBookAnalysis: {
+            /** @description Primary ±% band used for pressure and walls */
+            rangePct?: number;
+            midPrice?: string;
+            bidNotional?: string;
+            askNotional?: string;
+            bidQuantity?: string;
+            askQuantity?: string;
+            /** @description (bidNotional-askNotional)/(sum); positive = more resting bids */
+            imbalance?: number;
+            /** @enum {string} */
+            pressure?: "buy" | "sell" | "balanced";
+            bidLevels?: number;
+            askLevels?: number;
+            /** @description How far the deepest included bid is from mid */
+            coveredBidPct?: string;
+            coveredAskPct?: string;
+            walls?: components["schemas"]["OrderBookWall"][];
+            /** @description Nested 0.5 / 1 / 2 / 5 percent bands for near vs farther depth */
+            bands?: components["schemas"]["OrderBookBand"][];
         };
         Supply: {
             asset?: string;
@@ -3127,6 +3191,8 @@ export interface operations {
                 group?: string;
                 /** @description Grouped rows per side (5–100, default 20) */
                 limit?: number;
+                /** @description Analyze resting depth within this ± percent of mid (0.25–10, default 2) */
+                rangePct?: number;
             };
             header?: never;
             path?: never;
@@ -4648,9 +4714,7 @@ export interface operations {
                      * @enum {string}
                      */
                     lotMethod?: "fifo" | "lifo";
-                    /**
-                     * @description Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted)
-                     */
+                    /** @description Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted) */
                     idempotencyKey?: string;
                 };
             };
@@ -4691,6 +4755,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     cancelAllPortfolioOrders: {
@@ -5462,6 +5527,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     cancelMarginOrder: {
@@ -5573,6 +5639,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     adjustMargin: {

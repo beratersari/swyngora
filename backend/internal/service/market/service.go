@@ -160,8 +160,8 @@ func (s *Service) GetCandles(ctx context.Context, exchange, symbol, interval str
 	return p.GetCandles(ctx, q)
 }
 
-// GetSpotOrderBook returns a grouped spot order book (walls + suggested steps).
-func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group string, levels int) (*domain.OrderBook, error) {
+// GetSpotOrderBook returns a grouped spot order book plus ±rangePct analysis.
+func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group string, levels int, rangePct float64) (*domain.OrderBook, error) {
 	ex, err := s.ResolveExchange(exchange)
 	if err != nil {
 		return nil, err
@@ -175,15 +175,13 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		return nil, err
 	}
 	levels = domain.ClampOrderBookLevels(levels)
+	rangePct = domain.ClampRangePct(rangePct)
 	p, err := s.port(ex)
 	if err != nil {
 		return nil, err
 	}
-	rawLimit := domain.DefaultOrderBookRawLimit
-	if levels > 40 {
-		rawLimit = 500
-	}
-	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: rawLimit})
+	// Pull a deep snapshot so analysis can use ±% of price, not only the ladder rows.
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +189,7 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
 	}
 	book := domain.GroupOrderBook(*raw, groupSize, levels)
+	book.Analysis = domain.AnalyzeOrderBook(*raw, rangePct)
 	book.Exchange = ex
 	if book.Symbol == "" {
 		book.Symbol = symbol

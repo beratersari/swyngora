@@ -24,7 +24,8 @@ import (
 // DataPort is the data surface MCP tools need (in-process backend or HTTP client).
 type DataPort interface {
 	GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
-	GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int) (json.RawMessage, error)
+	GetOrderBook(ctx context.Context, exchange, symbol, group string, limit int, rangePct float64) (json.RawMessage, error)
+	AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -200,17 +201,35 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_spot_orderbook",
-		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and imbalance. Binance/Coinbase/Bybit serve a local websocket book and resync on gap or drop. Spot only."),
+		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and analysis.pressure / analysis.walls from depth within ±rangePct of mid (default 2%), not only the first rows. Binance/Coinbase/Bybit. Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
 		mcp.WithNumber("limit", mcp.Description("Grouped rows per side 5–100 (default 20)")),
+		mcp.WithNumber("rangePct", mcp.Description("Analyze resting depth within this ±% of mid (0.25–10, default 2)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetOrderBook(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("group", ""), req.GetInt("limit", 20))
+		raw, err := api.GetOrderBook(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("group", ""), req.GetInt("limit", 20), req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("analyze_spot_orderbook",
+		mcp.WithDescription("Buy/sell pressure, notional imbalance, and large walls from live spot depth within ±rangePct of mid (default 2%). Uses the full local book in that band, not only the top few orders. Works on binance, coinbase, and bybit. Prefer this over the ladder when the question is pressure or walls."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithNumber("rangePct", mcp.Description("±% of mid to include (0.25–10, default 2)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.AnalyzeOrderBook(ctx, req.GetString("exchange", "binance"), symbol, req.GetFloat("rangePct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
