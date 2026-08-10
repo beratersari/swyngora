@@ -26,16 +26,16 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/aistart"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/platform/config"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -108,7 +108,11 @@ func main() {
 		OrderBookCache:  binanceBooks,
 		SpotMarketCache: binanceSpot,
 		SupplyCache:     supplyCache,
+		WSURL:           cfg.BinanceWSURL,
+		DepthIdle:       cfg.OrderBookIdleTTL,
+		DepthWait:       cfg.OrderBookSyncTimeout,
 	})
+	defer binanceClient.Close()
 	coinbaseClient := coinbase.NewClient(coinbase.Options{
 		BaseURL:         cfg.CoinbaseBaseURL,
 		ExchangeURL:     cfg.CoinbaseExchangeURL,
@@ -117,7 +121,11 @@ func main() {
 		TickerCache:     coinbaseTickers,
 		OrderBookCache:  coinbaseBooks,
 		SpotMarketCache: coinbaseSpot,
+		WSURL:           cfg.CoinbaseWSURL,
+		DepthIdle:       cfg.OrderBookIdleTTL,
+		DepthWait:       cfg.OrderBookSyncTimeout,
 	})
+	defer coinbaseClient.Close()
 	bybitClient := bybit.NewClient(bybit.Options{
 		BaseURL:         cfg.BybitBaseURL,
 		HTTPClient:      httpClient,
@@ -125,7 +133,11 @@ func main() {
 		TickerCache:     bybitTickers,
 		OrderBookCache:  bybitBooks,
 		SpotMarketCache: bybitSpot,
+		WSURL:           cfg.BybitWSURL,
+		DepthIdle:       cfg.OrderBookIdleTTL,
+		DepthWait:       cfg.OrderBookSyncTimeout,
 	})
+	defer bybitClient.Close()
 
 	delistStore := deliststore.NewMemory()
 	delistEnabled := cfg.BinanceAPIKey != ""

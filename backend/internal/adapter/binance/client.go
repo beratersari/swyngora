@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -44,12 +45,18 @@ type Client struct {
 	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
 	productMeta *cache.TTL[*productMetaSnapshot]
 	supply      *cache.TTL[*domain.AssetSupply]
-	spotSF         singleflight.Group
-	supplySF       singleflight.Group
-	metaSF         singleflight.Group
-	candleSF       singleflight.Group
-	tickerSF       singleflight.Group
-	orderBookSF    singleflight.Group
+	spotSF      singleflight.Group
+	supplySF    singleflight.Group
+	metaSF      singleflight.Group
+	candleSF    singleflight.Group
+	tickerSF    singleflight.Group
+	orderBookSF singleflight.Group
+	depth       *DepthHub
+	depthOnce   sync.Once
+	depthWait   time.Duration
+	wsURL       string
+	wsDial      wsDialer
+	depthIdle   time.Duration
 }
 
 // Options configures the Binance client.
@@ -63,6 +70,10 @@ type Options struct {
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
 	SupplyCache     *cache.TTL[*domain.AssetSupply]
+	WSURL           string
+	WSDial          wsDialer
+	DepthIdle       time.Duration
+	DepthWait       time.Duration
 }
 
 // NewClient constructs a Binance market-data + supply client.
@@ -79,7 +90,11 @@ func NewClient(opts Options) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
-	return &Client{
+	wait := opts.DepthWait
+	if wait <= 0 {
+		wait = 8 * time.Second
+	}
+	c := &Client{
 		baseURL:        base,
 		productBaseURL: productBase,
 		apiKey:         strings.TrimSpace(opts.APIKey),
@@ -88,10 +103,29 @@ func NewClient(opts Options) *Client {
 		tickers:        opts.TickerCache,
 		orderBooks:     opts.OrderBookCache,
 		spotMarkets:    opts.SpotMarketCache,
-		exchangeSpot: cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
-		productMeta:  cache.New[*productMetaSnapshot](nonCryptoBasesTTL),
-		supply:       opts.SupplyCache,
+		exchangeSpot:   cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
+		productMeta:    cache.New[*productMetaSnapshot](nonCryptoBasesTTL),
+		supply:         opts.SupplyCache,
+		depthWait:      wait,
+		wsURL:          opts.WSURL,
+		wsDial:         opts.WSDial,
+		depthIdle:      opts.DepthIdle,
 	}
+	return c
+}
+
+func (c *Client) ensureDepth() {
+	c.depthOnce.Do(func() {
+		c.depth = newDepthHub(c.fetchDepthSnapshot, c.wsURL, c.wsDial, c.depthIdle)
+	})
+}
+
+// Close stops live order-book streams.
+func (c *Client) Close() {
+	if c == nil || c.depth == nil {
+		return
+	}
+	c.depth.Close()
 }
 
 // productMetaSnapshot is derived from the Binance product catalog (long-lived).

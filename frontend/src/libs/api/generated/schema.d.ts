@@ -1966,6 +1966,13 @@ export interface components {
             askWalls?: number;
             /** Format: date-time */
             updatedAt?: string;
+            /** @description True when the book is a live local websocket copy */
+            live?: boolean;
+            /**
+             * @description websocket for Binance local book; rest for Coinbase/Bybit snapshots
+             * @enum {string}
+             */
+            source?: "websocket" | "rest";
             note?: string;
         };
         Supply: {

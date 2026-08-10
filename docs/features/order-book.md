@@ -18,14 +18,17 @@ Futures / other markets are out of scope for now version.
   - `suggestedGroupSizes` for the step control
   - `spread`, `spreadPct`, `imbalance` (positive = more resting bids)
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
-- Short TTL cache (~2s, `ORDERBOOK_CACHE_TTL`) + singleflight per venue.
+- All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.
+  - **Binance:** `@depth@100ms` + REST snapshot; `U`/`u` vs `lastUpdateId`.
+  - **Coinbase:** public Exchange `level2_batch` snapshot + `l2update`, plus `heartbeat` timeout and periodic REST best-bid/ask price checksum.
+  - **Bybit:** `orderbook.200.{symbol}` snapshot then `delta`; `u` must be contiguous (`u=1` overwrites as a venue restart snapshot).
 
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/orderbook.go` |
-| Adapters | `backend/internal/adapter/{binance,coinbase,bybit}/orderbook.go` |
+| Domain | `backend/internal/domain/orderbook.go`, `depthbook.go` |
+| Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook` |
 | HTTP | `GET /api/v1/market/orderbook` |
 | MCP / AI | `get_spot_orderbook` |
@@ -38,10 +41,10 @@ cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/a
 curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1"
 ```
 
-Open `/markets/binance/BTCUSDT` and change the group steps next to the chart.
+`live=true` and `source=websocket` when the local book is synced.
 
 ## Limits / follow-ups
 
-- Spot only. No futures or live WebSocket depth stream yet (HTTP poll).
+- Spot only.
+- Idle streams are dropped after `ORDERBOOK_IDLE_TTL` (default 90s) and started again on the next request.
 - Walls are a heuristic (size vs median / share of visible book), not exchange-labeled iceberg orders.
-- Coinbase level-2 is already price-aggregated by the venue (top ~50); we still group on top.

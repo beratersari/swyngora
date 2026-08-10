@@ -79,6 +79,8 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 		"bidWalls":            book.BidWalls,
 		"askWalls":            book.AskWalls,
 		"updatedAt":           book.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		"live":                book.Live,
+		"source":              book.Source,
 	})
 }
 

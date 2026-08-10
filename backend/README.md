@@ -208,7 +208,12 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `CANDLE_CACHE_TTL` | `30s` | Candle response TTL (latest-N queries only; ranges not cached) |
 | `CANDLE_CACHE_MAX_ENTRIES` | `512` | Max candle cache keys (memory bound) |
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
-| `ORDERBOOK_CACHE_TTL` | `2s` | Raw spot order-book snapshot TTL |
+| `ORDERBOOK_CACHE_TTL` | `2s` | Reserved TTL for any leftover REST book cache (live books are not cached) |
+| `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Binance spot stream host for the live local book |
+| `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |
+| `BYBIT_WS_URL` | `wss://stream.bybit.com/v5/public/spot` | Bybit spot stream for the live local book |
+| `ORDERBOOK_IDLE_TTL` | `90s` | Drop unused live depth streams |
+| `ORDERBOOK_SYNC_TIMEOUT` | `8s` | Max wait for a synced local book |
 | `REALTIME_PRICE_INTERVAL` | `5s` | How often subscribed WebSocket prices are pushed |
 | `SUPPLY_CACHE_TTL` | `48h` | Safety TTL for supply snapshot (`0` = never expire until successful replace) |
 | `SPOT_MARKET_CACHE_TTL` | `5s` | Joined spot prices TTL (exchangeInfo / product tags cached longer in-adapter) |

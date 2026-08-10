@@ -453,7 +453,9 @@ paths:
         Each row is a merged price bucket with quantity, quote notional, running totals,
         and `isWall` when that bucket is unusually large versus the rest of the visible
         side (buy/sell walls). `suggestedGroupSizes` are ready-made steps for the UI.
-        Spot only. Informational — not financial advice.
+        Spot only. Binance, Coinbase, and Bybit each keep a **live local book** on their
+        public depth websocket. A dropped stream or missed update invalidates the copy and
+        resyncs; stale depth is not returned. Informational — not financial advice.
       operationId: getSpotOrderBook
       tags: [Market]
       parameters:
@@ -4189,6 +4191,8 @@ components:
         bidWalls: { type: integer }
         askWalls: { type: integer }
         updatedAt: { type: string, format: date-time }
+        live: { type: boolean, description: True when the book is a live local websocket copy }
+        source: { type: string, enum: [websocket, rest], description: websocket when served from a live local book }
         note: { type: string }
     Supply:
       type: object

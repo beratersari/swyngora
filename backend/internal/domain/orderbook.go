@@ -43,6 +43,8 @@ type RawOrderBook struct {
 	Asks      []PriceLevel
 	UpdateID  int64
 	FetchedAt time.Time
+	Live      bool
+	Source    string // websocket | rest
 }
 
 // OrderBookLevel is one grouped price bucket ready for UI / AI.
@@ -76,6 +78,8 @@ type OrderBook struct {
 	BidWalls            int
 	AskWalls            int
 	UpdatedAt           time.Time
+	Live                bool
+	Source              string // websocket | rest
 }
 
 // ParseGroupSize validates a client group step (e.g. 0.1, 0.01). Empty is ok (auto).
@@ -234,6 +238,10 @@ func GroupOrderBook(raw RawOrderBook, groupSize float64, levels int) OrderBook {
 	markWalls(bids)
 	markWalls(asks)
 
+	src := raw.Source
+	if src == "" {
+		src = OrderBookSourceREST
+	}
 	out := OrderBook{
 		Symbol:              raw.Symbol,
 		GroupSize:           FormatGroupSize(groupSize),
@@ -242,6 +250,8 @@ func GroupOrderBook(raw RawOrderBook, groupSize float64, levels int) OrderBook {
 		Bids:                toLevels(bids, groupSize),
 		Asks:                toLevels(asks, groupSize),
 		UpdatedAt:           raw.FetchedAt,
+		Live:                raw.Live,
+		Source:              src,
 	}
 	if out.UpdatedAt.IsZero() {
 		out.UpdatedAt = time.Now().UTC()

@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -39,6 +40,12 @@ type Client struct {
 	candleSF    singleflight.Group
 	tickerSF    singleflight.Group
 	orderBookSF singleflight.Group
+	depth       *DepthHub
+	depthOnce   sync.Once
+	depthWait   time.Duration
+	wsURL       string
+	wsDial      wsDialer
+	depthIdle   time.Duration
 }
 
 // Options configures the Coinbase client.
@@ -50,6 +57,10 @@ type Options struct {
 	TickerCache     *cache.TTL[*domain.Ticker24h]
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
+	WSURL           string
+	WSDial          wsDialer
+	DepthIdle       time.Duration
+	DepthWait       time.Duration
 }
 
 // NewClient constructs a Coinbase market-data client.
@@ -66,7 +77,7 @@ func NewClient(opts Options) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
-	return &Client{
+	c := &Client{
 		baseURL:     base,
 		exchangeURL: ex,
 		httpClient:  hc,
@@ -74,7 +85,29 @@ func NewClient(opts Options) *Client {
 		tickers:     opts.TickerCache,
 		orderBooks:  opts.OrderBookCache,
 		spotMarkets: opts.SpotMarketCache,
+		depthWait:   opts.DepthWait,
+		wsURL:       opts.WSURL,
+		wsDial:      opts.WSDial,
+		depthIdle:   opts.DepthIdle,
 	}
+	if c.depthWait <= 0 {
+		c.depthWait = 8 * time.Second
+	}
+	return c
+}
+
+func (c *Client) ensureDepth() {
+	c.depthOnce.Do(func() {
+		c.depth = newDepthHub(c.wsURL, c.wsDial, c.depthIdle, c.checksumTop)
+	})
+}
+
+// Close stops live order-book streams.
+func (c *Client) Close() {
+	if c == nil || c.depth == nil {
+		return
+	}
+	c.depth.Close()
 }
 
 // ListProductTags is not available from Coinbase public product catalog.

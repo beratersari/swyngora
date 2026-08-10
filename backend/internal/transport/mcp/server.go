@@ -200,7 +200,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_spot_orderbook",
-		mcp.WithDescription("Grouped spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and imbalance. Use for liquidity / buy-sell wall analysis. Spot only."),
+		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and imbalance. Binance/Coinbase/Bybit serve a local websocket book and resync on gap or drop. Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),

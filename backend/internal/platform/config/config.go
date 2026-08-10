@@ -10,23 +10,28 @@ import (
 
 // Config holds process configuration from the environment.
 type Config struct {
-	HTTPAddr              string
-	BinanceBaseURL        string
-	BinanceProductBaseURL string
-	BinanceAPIKey         string
-	DelistRefreshEvery    time.Duration
+	HTTPAddr               string
+	BinanceBaseURL         string
+	BinanceProductBaseURL  string
+	BinanceAPIKey          string
+	BinanceWSURL           string
+	OrderBookIdleTTL       time.Duration
+	OrderBookSyncTimeout   time.Duration
+	DelistRefreshEvery     time.Duration
 	DelistRefreshOnStartup bool
-	CoinbaseBaseURL       string
-	CoinbaseExchangeURL   string
-	BybitBaseURL          string
-	HTTPClientTimeout     time.Duration
-	CandleCacheTTL        time.Duration
-	CandleCacheMaxEntries int
-	TickerCacheTTL        time.Duration
-	OrderBookCacheTTL     time.Duration
-	SupplyCacheTTL        time.Duration
-	CacheCleanupEvery     time.Duration
-	SpotMarketCacheTTL    time.Duration
+	CoinbaseBaseURL        string
+	CoinbaseExchangeURL    string
+	CoinbaseWSURL          string
+	BybitBaseURL           string
+	BybitWSURL             string
+	HTTPClientTimeout      time.Duration
+	CandleCacheTTL         time.Duration
+	CandleCacheMaxEntries  int
+	TickerCacheTTL         time.Duration
+	OrderBookCacheTTL      time.Duration
+	SupplyCacheTTL         time.Duration
+	CacheCleanupEvery      time.Duration
+	SpotMarketCacheTTL     time.Duration
 
 	// Daily supply snapshot refresh (Binance product catalog). User requests read cache only.
 	SupplyRefreshHour      int
@@ -43,8 +48,8 @@ type Config struct {
 	CORSAllowOrigins []string
 
 	// Telegram bot (optional). Empty token disables the bot.
-	TelegramBotToken        string
-	TelegramAllowedChats    map[int64]struct{}
+	TelegramBotToken     string
+	TelegramAllowedChats map[int64]struct{}
 	// TelegramAllowAll permits any chat when the allowlist is empty.
 	// Default false: token without allowlist refuses to start the bot (fail closed).
 	TelegramAllowAll        bool
@@ -53,13 +58,13 @@ type Config struct {
 	TelegramLowMcapLimit    int
 
 	// AI multi-agent service (Python). Telegram /ask and POST /api/v1/ai/chat.
-	AIServiceURL   string
-	AITimeout      time.Duration
-	AIAutoStart    bool
-	AIPython       string // interpreter for auto-start, e.g. ai/.venv/bin/python
-	AIWorkDir      string // cwd for auto-start (repo ai/ package)
-	AIListenHost   string
-	AIListenPort   int
+	AIServiceURL string
+	AITimeout    time.Duration
+	AIAutoStart  bool
+	AIPython     string // interpreter for auto-start, e.g. ai/.venv/bin/python
+	AIWorkDir    string // cwd for auto-start (repo ai/ package)
+	AIListenHost string
+	AIListenPort int
 
 	// WatchlistDBPath is the SQLite file for durable watchlists (survives restarts).
 	// Relative paths are resolved from the process working directory.
@@ -141,20 +146,25 @@ type Config struct {
 func Load() Config {
 	loc := loadLocation(getenv("SUPPLY_REFRESH_TZ", "UTC"))
 	return Config{
-		HTTPAddr:              getenv("HTTP_ADDR", ":8080"),
-		BinanceBaseURL:        getenv("BINANCE_BASE_URL", "https://api.binance.com"),
-		BinanceProductBaseURL: getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
-		BinanceAPIKey:         strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
-		DelistRefreshEvery:    positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
+		HTTPAddr:               getenv("HTTP_ADDR", ":8080"),
+		BinanceBaseURL:         getenv("BINANCE_BASE_URL", "https://api.binance.com"),
+		BinanceProductBaseURL:  getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
+		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
+		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
+		OrderBookIdleTTL:       positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
+		OrderBookSyncTimeout:   positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
+		DelistRefreshEvery:     positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
 		DelistRefreshOnStartup: boolEnv("DELIST_REFRESH_ON_STARTUP", true),
-		CoinbaseBaseURL:       getenv("COINBASE_BASE_URL", "https://api.coinbase.com"),
-		CoinbaseExchangeURL:   getenv("COINBASE_EXCHANGE_URL", "https://api.exchange.coinbase.com"),
-		BybitBaseURL:          getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
-		HTTPClientTimeout:     positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
-		CandleCacheTTL:        positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
-		CandleCacheMaxEntries: positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
-		TickerCacheTTL:        positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
-		OrderBookCacheTTL:     positiveDurationEnv("ORDERBOOK_CACHE_TTL", 2*time.Second),
+		CoinbaseBaseURL:        getenv("COINBASE_BASE_URL", "https://api.coinbase.com"),
+		CoinbaseExchangeURL:    getenv("COINBASE_EXCHANGE_URL", "https://api.exchange.coinbase.com"),
+		CoinbaseWSURL:          getenv("COINBASE_WS_URL", "wss://ws-feed.exchange.coinbase.com"),
+		BybitBaseURL:           getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
+		BybitWSURL:             getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot"),
+		HTTPClientTimeout:      positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
+		CandleCacheTTL:         positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
+		CandleCacheMaxEntries:  positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
+		TickerCacheTTL:         positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
+		OrderBookCacheTTL:      positiveDurationEnv("ORDERBOOK_CACHE_TTL", 2*time.Second),
 		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
 		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
 		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
@@ -199,14 +209,14 @@ func Load() Config {
 		WebhookHTTPTimeout:      positiveDurationEnv("WEBHOOK_HTTP_TIMEOUT", 10*time.Second),
 		WebhookMaxAttempts:      positiveIntEnv("WEBHOOK_MAX_ATTEMPTS", 8),
 
-		RealtimePriceInterval:       positiveDurationEnv("REALTIME_PRICE_INTERVAL", 5*time.Second),
+		RealtimePriceInterval: positiveDurationEnv("REALTIME_PRICE_INTERVAL", 5*time.Second),
 
 		PortfolioDBPath:             getenv("PORTFOLIO_DB_PATH", "data/portfolio.db"),
-		PortfolioOrderCheckInterval:  positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
-		RecurringBuyInterval:         positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
-		PortfolioSnapshotInterval:    positiveDurationEnv("PORTFOLIO_SNAPSHOT_INTERVAL", 15*time.Minute),
-		PortfolioSnapshotRetention:   positiveDurationEnv("PORTFOLIO_SNAPSHOT_RETENTION", 100*24*time.Hour),
-		MarginInterestInterval:       positiveDurationEnv("MARGIN_INTEREST_INTERVAL", time.Minute),
+		PortfolioOrderCheckInterval: positiveDurationEnv("PORTFOLIO_ORDER_CHECK_INTERVAL", 15*time.Second),
+		RecurringBuyInterval:        positiveDurationEnv("RECURRING_BUY_INTERVAL", 30*time.Second),
+		PortfolioSnapshotInterval:   positiveDurationEnv("PORTFOLIO_SNAPSHOT_INTERVAL", 15*time.Minute),
+		PortfolioSnapshotRetention:  positiveDurationEnv("PORTFOLIO_SNAPSHOT_RETENTION", 100*24*time.Hour),
+		MarginInterestInterval:      positiveDurationEnv("MARGIN_INTEREST_INTERVAL", time.Minute),
 
 		ScannerDBPath:        getenv("SCANNER_DB_PATH", "data/scanner.db"),
 		ScannerCheckInterval: positiveDurationEnv("SCANNER_CHECK_INTERVAL", 60*time.Second),

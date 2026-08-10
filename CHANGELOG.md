@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
+
 ### Added
 - **Spot order book:** grouped bid/ask depth with buy/sell wall flags and suggested price steps (`GET /api/v1/market/orderbook`, MCP `get_spot_orderbook`); grouping is done on the backend; coin detail shows the ladder next to the chart (`docs/features/order-book.md`)
 - **Paper trade idempotency keys:** `Idempotency-Key` header or `idempotencyKey` on market/pending/margin place and margin close; same key + same request returns the original fill; different request with that key is 409 (`docs/features/paper-trading.md`)

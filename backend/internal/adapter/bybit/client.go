@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -34,6 +35,12 @@ type Client struct {
 	candleSF    singleflight.Group
 	tickerSF    singleflight.Group
 	orderBookSF singleflight.Group
+	depth       *DepthHub
+	depthOnce   sync.Once
+	depthWait   time.Duration
+	wsURL       string
+	wsDial      wsDialer
+	depthIdle   time.Duration
 }
 
 // Options configures the Bybit client.
@@ -44,6 +51,10 @@ type Options struct {
 	TickerCache     *cache.TTL[*domain.Ticker24h]
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
+	WSURL           string
+	WSDial          wsDialer
+	DepthIdle       time.Duration
+	DepthWait       time.Duration
 }
 
 // NewClient constructs a Bybit spot market-data client.
@@ -56,14 +67,36 @@ func NewClient(opts Options) *Client {
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
-	return &Client{
+	c := &Client{
 		baseURL:     base,
 		httpClient:  hc,
 		candles:     opts.CandleCache,
 		tickers:     opts.TickerCache,
 		orderBooks:  opts.OrderBookCache,
 		spotMarkets: opts.SpotMarketCache,
+		depthWait:   opts.DepthWait,
+		wsURL:       opts.WSURL,
+		wsDial:      opts.WSDial,
+		depthIdle:   opts.DepthIdle,
 	}
+	if c.depthWait <= 0 {
+		c.depthWait = 8 * time.Second
+	}
+	return c
+}
+
+func (c *Client) ensureDepth() {
+	c.depthOnce.Do(func() {
+		c.depth = newDepthHub(c.wsURL, c.wsDial, c.depthIdle)
+	})
+}
+
+// Close stops live order-book streams.
+func (c *Client) Close() {
+	if c == nil || c.depth == nil {
+		return
+	}
+	c.depth.Close()
 }
 
 // ListProductTags — Bybit does not expose Binance-style product tags.
@@ -520,13 +553,13 @@ type tickersResponse struct {
 }
 
 type tickerRow struct {
-	Symbol        string `json:"symbol"`
-	LastPrice     string `json:"lastPrice"`
-	HighPrice24h  string `json:"highPrice24h"`
-	LowPrice24h   string `json:"lowPrice24h"`
-	Volume24h     string `json:"volume24h"`
-	Turnover24h   string `json:"turnover24h"`
-	Price24hPcnt  string `json:"price24hPcnt"`
+	Symbol       string `json:"symbol"`
+	LastPrice    string `json:"lastPrice"`
+	HighPrice24h string `json:"highPrice24h"`
+	LowPrice24h  string `json:"lowPrice24h"`
+	Volume24h    string `json:"volume24h"`
+	Turnover24h  string `json:"turnover24h"`
+	Price24hPcnt string `json:"price24hPcnt"`
 }
 
 type klineResponse struct {

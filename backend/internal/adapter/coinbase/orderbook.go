@@ -10,62 +10,54 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// GetOrderBook fetches Exchange level-2 spot depth (already price-aggregated by Coinbase).
+// GetOrderBook returns the live local Coinbase book (level2 websocket).
 func (c *Client) GetOrderBook(ctx context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	symbol := normalizeProductID(q.Symbol)
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	cacheKey := symbol + "|l2"
-	if c.orderBooks != nil {
-		if hit, ok := c.orderBooks.Get(cacheKey); ok && hit != nil {
-			cp := *hit
-			return &cp, nil
-		}
+	limit := domain.ClampOrderBookRawLimit(q.Limit)
+	c.ensureDepth()
+	if c.depth == nil {
+		return nil, fmt.Errorf("%w: coinbase depth hub not configured", domain.ErrUpstream)
 	}
-	v, err, _ := c.orderBookSF.Do(cacheKey, func() (any, error) {
-		if c.orderBooks != nil {
-			if hit, ok := c.orderBooks.Get(cacheKey); ok && hit != nil {
-				return hit, nil
-			}
-		}
-		fetchCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		path := "/products/" + symbol + "/book"
-		params := url.Values{}
-		params.Set("level", "2")
-		body, err := c.get(fetchCtx, c.exchangeURL, path, params)
-		if err != nil {
-			return nil, err
-		}
-		var resp coinbaseBookResponse
-		if err := json.Unmarshal(body, &resp); err != nil {
-			return nil, fmt.Errorf("%w: decode coinbase book: %v", domain.ErrUpstream, err)
-		}
-		book := &domain.RawOrderBook{
-			Symbol:    symbol,
-			UpdateID:  resp.Sequence,
-			FetchedAt: time.Now().UTC(),
-			Bids:      parseCoinbaseSide(resp.Bids),
-			Asks:      parseCoinbaseSide(resp.Asks),
-		}
-		if len(book.Bids) == 0 && len(book.Asks) == 0 {
-			return nil, fmt.Errorf("%w: empty order book for %s", domain.ErrNotFound, symbol)
-		}
-		if c.orderBooks != nil {
-			c.orderBooks.Set(cacheKey, book)
-		}
-		return book, nil
-	})
+	wait, cancel := context.WithTimeout(ctx, c.depthWait)
+	defer cancel()
+	return c.depth.Get(wait, symbol, limit)
+}
+
+func (c *Client) checksumTop(ctx context.Context, symbol string) (bid, ask domain.PriceLevel, ok bool, err error) {
+	book, err := c.fetchRESTBook(ctx, symbol)
+	if err != nil || book == nil || len(book.Bids) == 0 || len(book.Asks) == 0 {
+		return domain.PriceLevel{}, domain.PriceLevel{}, false, err
+	}
+	return book.Bids[0], book.Asks[0], true, nil
+}
+
+func (c *Client) fetchRESTBook(ctx context.Context, symbol string) (*domain.RawOrderBook, error) {
+	path := "/products/" + symbol + "/book"
+	params := url.Values{}
+	params.Set("level", "2")
+	body, err := c.get(ctx, c.exchangeURL, path, params)
 	if err != nil {
 		return nil, err
 	}
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
+	var resp coinbaseBookResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("%w: decode coinbase book: %v", domain.ErrUpstream, err)
 	}
-	hit := v.(*domain.RawOrderBook)
-	cp := *hit
-	return &cp, nil
+	book := &domain.RawOrderBook{
+		Symbol:    symbol,
+		UpdateID:  resp.Sequence,
+		FetchedAt: time.Now().UTC(),
+		Bids:      parseCoinbaseSide(resp.Bids),
+		Asks:      parseCoinbaseSide(resp.Asks),
+		Source:    domain.OrderBookSourceREST,
+	}
+	if len(book.Bids) == 0 && len(book.Asks) == 0 {
+		return nil, fmt.Errorf("%w: empty order book for %s", domain.ErrNotFound, symbol)
+	}
+	return book, nil
 }
 
 type coinbaseBookResponse struct {

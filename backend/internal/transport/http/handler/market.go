@@ -152,6 +152,8 @@ type orderBookResponse struct {
 	BidWalls            int                 `json:"bidWalls"`
 	AskWalls            int                 `json:"askWalls"`
 	UpdatedAt           string              `json:"updatedAt"`
+	Live                bool                `json:"live"`
+	Source              string              `json:"source"`
 	Note                string              `json:"note"`
 }
 
@@ -198,7 +200,9 @@ func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
 		BidVolume: book.BidVolume, AskVolume: book.AskVolume, Imbalance: book.Imbalance,
 		BidWalls: book.BidWalls, AskWalls: book.AskWalls,
 		UpdatedAt: book.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		Note:      "Spot order book with backend grouping. isWall marks unusually large rest size. Informational only.",
+		Live:      book.Live,
+		Source:    book.Source,
+		Note:      "Spot order book with backend grouping. isWall marks unusually large rest size. Binance, Coinbase, and Bybit use a live local book; a gap or drop resyncs instead of serving stale depth. Informational only.",
 	}
 }
 
