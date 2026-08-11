@@ -60,11 +60,24 @@ func TestScoreNotionalUSD_Anchors(t *testing.T) {
 	if s := scoreNotionalUSD(1000); s < 19 || s > 21 {
 		t.Fatalf("$1k → %v", s)
 	}
-	if s := scoreNotionalUSD(1_000_000); s < 59 || s > 61 {
-		t.Fatalf("$1M → %v", s)
+	justOver := scoreNotionalUSD(1001)
+	atFloor := scoreNotionalUSD(1000)
+	if justOver <= atFloor {
+		t.Fatalf("$1001 (%v) must score above $1000 (%v)", justOver, atFloor)
 	}
-	if s := scoreNotionalUSD(100_000_000); s != 100 {
-		t.Fatalf("$100M → %v", s)
+	if s := scoreNotionalUSD(1_000_000); s < 79 || s > 81 {
+		t.Fatalf("$1M → %v (want 80: 20 + 20*log10(1000))", s)
+	}
+	if s := scoreNotionalUSD(10_000_000); s != 100 {
+		t.Fatalf("$10M → %v", s)
+	}
+	prev := 0.0
+	for _, usd := range []float64{1, 100, 999, 1000, 1001, 10_000, 100_000, 1_000_000} {
+		s := scoreNotionalUSD(usd)
+		if s < prev {
+			t.Fatalf("score dropped: $%g → %v after %v", usd, s, prev)
+		}
+		prev = s
 	}
 }
 

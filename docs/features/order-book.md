@@ -51,7 +51,8 @@ Futures / other markets are out of scope for now version.
   - Scores how easy the pair is to trade from resting bid/ask **notional** in
     **±0.1% / ±0.5% / ±1%** of mid. Nearer depth is weighted more. Lopsided
     books (one side thin) pull the score down.
-  - `score` is 0–100 with `grade` (`very_low` … `very_high`).
+  - `score` is 0–100 with `grade` (`very_low` … `very_high`). It rises with
+    notional: linear to 20 at $1k, then log from that same 20 ($10k≈40, $1M≈80).
   - `weakerSide` is `buy` (thin bids), `sell` (thin asks), or `balanced` from the ±1% band.
   - `venues[]` is Binance / Coinbase / Bybit separately; `market` is the summed book.
   - `exchange=binance` (etc.) for one venue only.

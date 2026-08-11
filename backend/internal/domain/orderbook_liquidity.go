@@ -22,8 +22,10 @@ const (
 	LiquidityWeakerSell     = "sell"
 	LiquidityWeakerBalanced = "balanced"
 
-	// scoreNotional: 20 * log10(usd/1000) → $1k=0, $10k=20, $100k=40, $1M=60, $10M=80, $100M=100
+	// scoreNotional: linear 0–20 up to $1k, then 20 + 20*log10(usd/1k)
+	// so $1k=20, $10k=40, $100k=60, $1M=80, $10M=100. Never drops as size grows.
 	liquidityScoreFloorUSD  = 1000.0
+	liquidityScoreAtFloor   = 20.0
 	liquidityBalancePenalty = 0.35
 )
 
@@ -196,10 +198,9 @@ func scoreNotionalUSD(usd float64) float64 {
 		return 0
 	}
 	if usd <= liquidityScoreFloorUSD {
-		// Ramp 0–20 below $1k so tiny books are not all zeros.
-		return round4(usd / liquidityScoreFloorUSD * 20)
+		return round4(usd / liquidityScoreFloorUSD * liquidityScoreAtFloor)
 	}
-	v := 20 * math.Log10(usd/liquidityScoreFloorUSD)
+	v := liquidityScoreAtFloor + 20*math.Log10(usd/liquidityScoreFloorUSD)
 	if v > 100 {
 		v = 100
 	}
