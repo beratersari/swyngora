@@ -583,7 +583,7 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 	return liquidationsResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
-		Note: "Binance USD-M and Bybit linear perpetual liquidations seen since this process started. complete=false until that window of uptime has elapsed. Binance publishes at most the largest hit per symbol per second. Notional is quote (USDT). Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete is per coin and venue from when that feed started watching the symbol, not server uptime. Binance USD-M covers every coin from stream connect; Bybit starts when that symbol is subscribed. Notional is quote (USDT). Informational only.",
 	}
 }
 

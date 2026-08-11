@@ -28,6 +28,7 @@ const (
 type LiquidationSink interface {
 	Record(domain.LiquidationEvent)
 	SetLive(domain.Exchange, bool)
+	MarkWatch(domain.Exchange, string)
 }
 
 // LiquidationHub listens to Bybit linear allLiquidation.{symbol}.
@@ -102,6 +103,9 @@ func (h *LiquidationHub) Watch(symbol string) {
 	}
 	h.want[sym] = struct{}{}
 	h.mu.Unlock()
+	if h.sink != nil {
+		h.sink.MarkWatch(domain.ExchangeBybit, sym)
+	}
 	select {
 	case h.subCh <- sym:
 	default:
@@ -117,7 +121,9 @@ func (h *LiquidationHub) Start(ctx context.Context) {
 	h.mu.Lock()
 	h.stop = cancel
 	h.mu.Unlock()
+	h.markWanted()
 	h.refreshTop(runCtx)
+	h.markWanted()
 	backoff := time.Second
 	for runCtx.Err() == nil {
 		err := h.listen(runCtx)
@@ -282,11 +288,35 @@ func (h *LiquidationHub) refreshTop(ctx context.Context) {
 	if len(rows) > liqTopSymbols {
 		rows = rows[:liqTopSymbols]
 	}
+	added := make([]string, 0, len(rows))
 	h.mu.Lock()
 	for _, r := range rows {
+		if _, ok := h.want[r.sym]; !ok {
+			added = append(added, r.sym)
+		}
 		h.want[r.sym] = struct{}{}
 	}
 	h.mu.Unlock()
+	for _, s := range added {
+		if h.sink != nil {
+			h.sink.MarkWatch(domain.ExchangeBybit, s)
+		}
+	}
+}
+
+func (h *LiquidationHub) markWanted() {
+	if h.sink == nil {
+		return
+	}
+	h.mu.Lock()
+	syms := make([]string, 0, len(h.want))
+	for s := range h.want {
+		syms = append(syms, s)
+	}
+	h.mu.Unlock()
+	for _, s := range syms {
+		h.sink.MarkWatch(domain.ExchangeBybit, s)
+	}
 }
 
 type bybitLiqMsg struct {

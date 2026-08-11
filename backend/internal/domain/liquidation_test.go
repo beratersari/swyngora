@@ -37,7 +37,6 @@ func TestLiquidationBook_WindowsAndBiggest(t *testing.T) {
 	b := NewLiquidationBook()
 	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
 	b.now = func() time.Time { return now }
-	b.started = now.Add(-2 * time.Hour)
 	b.Record(LiquidationEvent{
 		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong,
 		Price: 64000, Quantity: 2, Notional: 128000, Time: now.Add(-2 * time.Minute),
@@ -72,6 +71,51 @@ func TestLiquidationBook_WindowsAndBiggest(t *testing.T) {
 	onlyBn := b.Snapshot("binance", "BTCUSDT")
 	if onlyBn.Windows[0].Count != 1 {
 		t.Fatalf("binance-only %+v", onlyBn.Windows[0])
+	}
+}
+
+func TestLiquidationBook_CoverageIsPerCoinAndVenue(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	// Process / Binance stream has been up more than 24h.
+	b.SetLive(ExchangeBinance, true)
+	b.venueSince[ExchangeBinance] = now.Add(-25 * time.Hour)
+
+	// New Bybit coin just subscribed.
+	b.MarkWatch(ExchangeBybit, "DOGEUSDT")
+
+	byb := b.Snapshot("bybit", "DOGEUSDT")
+	var w24, w5 LiquidationWindowTotals
+	for _, w := range byb.Windows {
+		switch w.Window {
+		case LiquidationWindow24h:
+			w24 = w
+		case LiquidationWindow5m:
+			w5 = w
+		}
+	}
+	if w24.Complete || w5.Complete {
+		t.Fatalf("new bybit coin must not inherit server uptime: 24h=%+v 5m=%+v since=%v", w24, w5, byb.CollectingSince)
+	}
+	if byb.CollectingSince.Before(now.Add(-time.Minute)) {
+		t.Fatalf("collectingSince should be first watch, got %v", byb.CollectingSince)
+	}
+
+	// Combined uses the later start (Bybit), so 24h is still incomplete.
+	all := b.Snapshot("all", "DOGEUSDT")
+	for _, w := range all.Windows {
+		if w.Window == LiquidationWindow24h && w.Complete {
+			t.Fatalf("all/24h complete while bybit just started: %+v", w)
+		}
+	}
+
+	// Binance-only for that coin uses venue stream start → 24h complete.
+	bn := b.Snapshot("binance", "DOGEUSDT")
+	for _, w := range bn.Windows {
+		if w.Window == LiquidationWindow24h && !w.Complete {
+			t.Fatalf("binance all-market stream should complete 24h: %+v", w)
+		}
 	}
 }
 

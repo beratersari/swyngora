@@ -2278,7 +2278,7 @@ export interface components {
             biggest?: components["schemas"]["LiquidationHit"];
             /** @description How many seconds of data this window actually has */
             coverageSeconds?: number;
-            /** @description False until the process has been up for the full window */
+            /** @description False until this coin+venue has been tracked for the full window */
             complete?: boolean;
         };
         /** @description Rolling futures liquidation totals from live streams */
