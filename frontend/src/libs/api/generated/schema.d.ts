@@ -259,6 +259,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/liquidity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidity score from live order-book depth
+         * @description Scores how easy a pair is to trade from resting bid/ask notional in
+         *     ±0.1%, ±0.5%, and ±1% of mid. Near depth is weighted more. Returns
+         *     one 0–100 score plus grade, which side is thinner (`weakerSide`),
+         *     and the same breakdown per venue. `exchange=all` (default) includes
+         *     Binance, Coinbase, and Bybit and a market-wide sum. Informational only.
+         */
+        get: operations["getMarketLiquidity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/impact": {
         parameters: {
             query?: never;
@@ -2176,6 +2200,46 @@ export interface components {
             venueCount?: number;
             note?: string;
         };
+        LiquidityBand: {
+            rangePct?: number;
+            bidNotional?: string;
+            askNotional?: string;
+            bidQuantity?: string;
+            askQuantity?: string;
+            totalNotional?: string;
+            imbalance?: number;
+            /** @description 0–100 depth score for this band alone */
+            score?: number;
+        };
+        LiquidityScore: {
+            midPrice?: string;
+            /** @description 0–100 overall (near bands weighted more; lopsided books penalized) */
+            score?: number;
+            /** @enum {string} */
+            grade?: "very_low" | "low" | "medium" | "high" | "very_high";
+            /**
+             * @description Thinner side in the ±1% band
+             * @enum {string}
+             */
+            weakerSide?: "buy" | "sell" | "balanced";
+            /** @description 0–1 how lopsided the ±1% band is */
+            weakness?: number;
+            bands?: components["schemas"]["LiquidityBand"][];
+        };
+        VenueLiquidity: components["schemas"]["LiquidityScore"] & {
+            exchange?: string;
+            symbol?: string;
+            live?: boolean;
+            error?: string;
+        };
+        /** @description Per-venue and market-wide liquidity from live books */
+        MarketLiquidity: {
+            symbol?: string;
+            venueCount?: number;
+            market?: components["schemas"]["LiquidityScore"];
+            venues?: components["schemas"]["VenueLiquidity"][];
+            note?: string;
+        };
         OrderBookImpactFill: {
             exchange?: string;
             price?: string;
@@ -3424,6 +3488,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CombinedOrderBook"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidity: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liquidity scores */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidity"];
                 };
             };
             400: components["responses"]["Error"];

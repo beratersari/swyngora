@@ -532,6 +532,37 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/liquidity:
+    get:
+      summary: Liquidity score from live order-book depth
+      description: |
+        Scores how easy a pair is to trade from resting bid/ask notional in
+        ±0.1%, ±0.5%, and ±1% of mid. Near depth is weighted more. Returns
+        one 0–100 score plus grade, which side is thinner (`weakerSide`),
+        and the same breakdown per venue. `exchange=all` (default) includes
+        Binance, Coinbase, and Bybit and a market-wide sum. Informational only.
+      operationId: getMarketLiquidity
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Liquidity scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidity'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/impact:
     get:
       summary: Simulate market-order impact and slippage
@@ -4414,6 +4445,48 @@ components:
           type: array
           items: { $ref: '#/components/schemas/CombinedOrderBookVenue' }
         venueCount: { type: integer }
+        note: { type: string }
+    LiquidityBand:
+      type: object
+      properties:
+        rangePct: { type: number }
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        bidQuantity: { type: string }
+        askQuantity: { type: string }
+        totalNotional: { type: string }
+        imbalance: { type: number }
+        score: { type: number, description: 0–100 depth score for this band alone }
+    LiquidityScore:
+      type: object
+      properties:
+        midPrice: { type: string }
+        score: { type: number, description: 0–100 overall (near bands weighted more; lopsided books penalized) }
+        grade: { type: string, enum: [very_low, low, medium, high, very_high] }
+        weakerSide: { type: string, enum: [buy, sell, balanced], description: Thinner side in the ±1% band }
+        weakness: { type: number, description: 0–1 how lopsided the ±1% band is }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidityBand' }
+    VenueLiquidity:
+      allOf:
+        - $ref: '#/components/schemas/LiquidityScore'
+        - type: object
+          properties:
+            exchange: { type: string }
+            symbol: { type: string }
+            live: { type: boolean }
+            error: { type: string }
+    MarketLiquidity:
+      type: object
+      description: Per-venue and market-wide liquidity from live books
+      properties:
+        symbol: { type: string }
+        venueCount: { type: integer }
+        market: { $ref: '#/components/schemas/LiquidityScore' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/VenueLiquidity' }
         note: { type: string }
     OrderBookImpactFill:
       type: object

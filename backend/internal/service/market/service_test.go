@@ -460,6 +460,28 @@ func TestGetCombinedOrderBookAnalysis(t *testing.T) {
 	}
 }
 
+func TestGetMarketLiquidity_AllVenues(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{},
+		domain.ExchangeCoinbase: &fakeMarket{},
+		domain.ExchangeBybit:    &fakeMarket{},
+	}, &fakeSupply{})
+	got, err := svc.GetMarketLiquidity(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VenueCount != 3 || got.Market.Score <= 0 || len(got.Market.Bands) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	one, err := svc.GetMarketLiquidity(context.Background(), "binance", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if one.VenueCount != 1 || string(one.Venues[0].Exchange) != "binance" {
+		t.Fatalf("one venue %+v", one)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

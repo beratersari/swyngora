@@ -13,6 +13,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_spot_orderbook` | Live grouped spot bids/asks + walls; `analysis` from ±rangePct of mid; wall `behavior` |
 | `analyze_spot_orderbook` | Buy/sell pressure, imbalance, and large walls (short / persistent / suspicious) |
 | `analyze_market_orderbook` | Combined Binance+Coinbase+Bybit pressure in one shared price band |
+| `get_market_liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

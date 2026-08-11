@@ -37,6 +37,34 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetMarketLiquidity(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/orderbook/liquidity" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "venueCount": 3, "market": map[string]any{"score": 70, "grade": "high"},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetMarketLiquidity(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["venueCount"] != float64(3) {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_EstimateOrderBookImpact(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/impact" {

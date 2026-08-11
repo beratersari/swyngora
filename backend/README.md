@@ -33,6 +33,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
 | `GET` | `/api/v1/market/orderbook/combined` | Market-wide pressure from all three venues in one price band |
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
+| `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

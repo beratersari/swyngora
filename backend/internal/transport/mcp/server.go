@@ -28,6 +28,7 @@ type DataPort interface {
 	AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
+	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -249,6 +250,22 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AnalyzeCombinedOrderBook(ctx, symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_market_liquidity",
+		mcp.WithDescription("How liquid a coin is right now. Scores resting buy/sell notional in ±0.1 / ±0.5 / ±1% of mid (0–100 plus grade). weakerSide is the thinner side. exchange=all (default) returns Binance, Coinbase, and Bybit separately plus a market-wide score. Prefer this when asked how liquid a market is."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetMarketLiquidity(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -16,6 +16,15 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
+        if request.url.path.endswith("/orderbook/liquidity"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "venueCount": 3,
+                    "market": {"score": 72, "grade": "high", "weakerSide": "balanced"},
+                },
+            )
         if request.url.path.endswith("/orderbook/impact"):
             return httpx.Response(
                 200,
@@ -78,6 +87,12 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert analysis["symbol"] == "BTCUSDT"
     assert "bids" not in analysis
+
+    assert "get_market_liquidity" in by_name
+    liq = json.loads(
+        by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"})
+    )
+    assert liq["market"]["score"] == 72
 
     assert "estimate_market_impact" in by_name
     impact = json.loads(

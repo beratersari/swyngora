@@ -241,6 +241,17 @@ func (h *MarketHandler) GetCombinedOrderBook(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, combinedBookToDTO(got))
 }
 
+// GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
+func (h *MarketHandler) GetMarketLiquidity(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetMarketLiquidity(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, liquidityToDTO(got))
+}
+
 // GetOrderBookImpact handles GET /api/v1/market/orderbook/impact.
 func (h *MarketHandler) GetOrderBookImpact(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -432,6 +443,73 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 		CoveredBidPct: a.CoveredBidPct, CoveredAskPct: a.CoveredAskPct,
 		Walls: walls, Bands: bands, Venues: venues, VenueCount: a.VenueCount,
 		Note: "Market-wide spot depth: only the symmetric ±usedRangePct band every venue can reach on both sides is summed. If all venues cover ±rangePct both ways, that requested band is used. USD and USDT treated as 1:1. Informational only.",
+	}
+}
+
+type liquidityBandDTO struct {
+	RangePct      float64 `json:"rangePct"`
+	BidNotional   string  `json:"bidNotional"`
+	AskNotional   string  `json:"askNotional"`
+	BidQuantity   string  `json:"bidQuantity"`
+	AskQuantity   string  `json:"askQuantity"`
+	TotalNotional string  `json:"totalNotional"`
+	Imbalance     float64 `json:"imbalance"`
+	Score         float64 `json:"score"`
+}
+
+type liquidityScoreDTO struct {
+	MidPrice   string             `json:"midPrice"`
+	Score      float64            `json:"score"`
+	Grade      string             `json:"grade"`
+	WeakerSide string             `json:"weakerSide"`
+	Weakness   float64            `json:"weakness"`
+	Bands      []liquidityBandDTO `json:"bands"`
+}
+
+type venueLiquidityDTO struct {
+	Exchange string `json:"exchange"`
+	Symbol   string `json:"symbol"`
+	Live     bool   `json:"live"`
+	Error    string `json:"error,omitempty"`
+	liquidityScoreDTO
+}
+
+type marketLiquidityResponse struct {
+	Symbol     string              `json:"symbol"`
+	VenueCount int                 `json:"venueCount"`
+	Market     liquidityScoreDTO   `json:"market"`
+	Venues     []venueLiquidityDTO `json:"venues"`
+	Note       string              `json:"note"`
+}
+
+func liquidityToDTO(a *domain.MarketLiquidity) marketLiquidityResponse {
+	if a == nil {
+		return marketLiquidityResponse{}
+	}
+	mapScore := func(s domain.LiquidityScore) liquidityScoreDTO {
+		bands := make([]liquidityBandDTO, 0, len(s.Bands))
+		for _, b := range s.Bands {
+			bands = append(bands, liquidityBandDTO{
+				RangePct: b.RangePct, BidNotional: b.BidNotional, AskNotional: b.AskNotional,
+				BidQuantity: b.BidQuantity, AskQuantity: b.AskQuantity, TotalNotional: b.TotalNotional,
+				Imbalance: b.Imbalance, Score: b.Score,
+			})
+		}
+		return liquidityScoreDTO{
+			MidPrice: s.MidPrice, Score: s.Score, Grade: s.Grade,
+			WeakerSide: s.WeakerSide, Weakness: s.Weakness, Bands: bands,
+		}
+	}
+	venues := make([]venueLiquidityDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		venues = append(venues, venueLiquidityDTO{
+			Exchange: string(v.Exchange), Symbol: v.Symbol, Live: v.Live, Error: v.Error,
+			liquidityScoreDTO: mapScore(v.LiquidityScore),
+		})
+	}
+	return marketLiquidityResponse{
+		Symbol: a.Symbol, VenueCount: a.VenueCount, Market: mapScore(a.Market), Venues: venues,
+		Note: "Liquidity score 0–100 from resting bid/ask notional in ±0.1 / ±0.5 / ±1% of mid (near depth weighted more). weakerSide is the thinner side at ±1%. Informational only — not a quote.",
 	}
 }
 

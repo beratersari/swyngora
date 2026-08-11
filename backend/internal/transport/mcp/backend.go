@@ -116,6 +116,45 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetMarketLiquidity(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	mapScore := func(s domain.LiquidityScore) map[string]any {
+		bands := make([]map[string]any, 0, len(s.Bands))
+		for _, b := range s.Bands {
+			bands = append(bands, map[string]any{
+				"rangePct": b.RangePct, "bidNotional": b.BidNotional, "askNotional": b.AskNotional,
+				"bidQuantity": b.BidQuantity, "askQuantity": b.AskQuantity, "totalNotional": b.TotalNotional,
+				"imbalance": b.Imbalance, "score": b.Score,
+			})
+		}
+		return map[string]any{
+			"midPrice": s.MidPrice, "score": s.Score, "grade": s.Grade,
+			"weakerSide": s.WeakerSide, "weakness": s.Weakness, "bands": bands,
+		}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		row := mapScore(v.LiquidityScore)
+		row["exchange"] = string(v.Exchange)
+		row["symbol"] = v.Symbol
+		row["live"] = v.Live
+		if v.Error != "" {
+			row["error"] = v.Error
+		}
+		venues = append(venues, row)
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "venueCount": got.VenueCount,
+		"market": mapScore(got.Market), "venues": venues,
+	})
+}
+
 func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

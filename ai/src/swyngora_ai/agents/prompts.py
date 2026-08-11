@@ -88,7 +88,8 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 
 ## Tool discipline
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
-- Prefer: `get_ticker` → live quote; `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
+- Prefer: `get_ticker` → live quote; `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, ±0.1/0.5/1% bands, per venue + market-wide);
+  `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
   `analyze_spot_orderbook` → one-venue pressure/walls (read wall `behavior`: persistent ≈ resting support/resistance, suspicious ≈ flicker/pulled often, short ≈ just appeared);
   `get_spot_orderbook` → grouped ladder + analysis;
   `estimate_market_impact` → walk live depth for a market buy/sell: average fill, slippage vs mid/best,

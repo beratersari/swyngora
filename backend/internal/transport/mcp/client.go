@@ -158,6 +158,16 @@ func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbo
 	return c.get(ctx, "/api/v1/market/orderbook/impact", q)
 }
 
+// GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
+func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/liquidity", q)
+}
+
 // AnalyzeCombinedOrderBook sums live books from all venues in one price band.
 func (c *APIClient) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
 	q := url.Values{}

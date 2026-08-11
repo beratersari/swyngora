@@ -314,6 +314,52 @@ func (s *Service) fetchVenueBooks(ctx context.Context, symbol string, only []dom
 	return books, nil
 }
 
+// GetMarketLiquidity scores buy/sell depth in ±0.1 / ±0.5 / ±1% for each
+// venue and a market-wide sum. exchange empty or "all" includes every venue.
+func (s *Service) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (*domain.MarketLiquidity, error) {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	var only []domain.Exchange
+	rawEx := strings.ToLower(strings.TrimSpace(exchange))
+	if rawEx != "" && rawEx != "all" && rawEx != "combined" {
+		ex, err := s.ResolveExchange(exchange)
+		if err != nil {
+			return nil, err
+		}
+		only = []domain.Exchange{ex}
+	}
+	books, err := s.fetchVenueBooks(ctx, symbol, only)
+	if err != nil {
+		return nil, err
+	}
+	display := domain.CrossVenueSymbol(domain.ExchangeBinance, symbol)
+	if display == "" {
+		display = strings.ToUpper(symbol)
+	}
+	out := &domain.MarketLiquidity{
+		Symbol: display,
+		Venues: []domain.VenueLiquidity{},
+	}
+	var parts []domain.LiquidityScore
+	for _, vb := range books {
+		row := domain.VenueLiquidity{Exchange: vb.Exchange, Symbol: vb.Symbol, Error: vb.Err}
+		if vb.Err == "" {
+			row.Live = vb.Book.Live
+			row.LiquidityScore = domain.ScoreBookLiquidity(vb.Book, 0)
+			parts = append(parts, row.LiquidityScore)
+			out.VenueCount++
+		}
+		out.Venues = append(out.Venues, row)
+	}
+	sort.Slice(out.Venues, func(i, j int) bool {
+		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
+	})
+	out.Market = domain.MergeLiquidityScores(parts)
+	return out, nil
+}
+
 // EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.
 // exchange empty or "all" walks Binance+Coinbase+Bybit cheapest-first.
 func (s *Service) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (*domain.OrderBookImpact, error) {

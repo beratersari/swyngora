@@ -107,6 +107,14 @@ class MarketOrderBookInput(BaseModel):
     )
 
 
+class MarketLiquidityInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all = per-venue + market-wide)",
+    )
+
+
 class MarketImpactInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     side: str = Field(default="buy", description="buy (default) or sell")
@@ -613,6 +621,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/orderbook/combined",
             {"symbol": symbol, "rangePct": range_pct},
+        )
+
+    def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/orderbook/liquidity",
+            {"symbol": symbol, "exchange": exchange},
         )
 
     def estimate_market_impact(
@@ -1592,6 +1606,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "(requested ±range_pct when all cover it both ways). Use for overall pressure."
             ),
             args_schema=MarketOrderBookInput,
+        ),
+        StructuredTool.from_function(
+            get_market_liquidity,
+            name="get_market_liquidity",
+            description=(
+                "How liquid a coin is right now. Scores resting buy/sell notional "
+                "in ±0.1 / ±0.5 / ±1% of mid (0–100 plus grade). weakerSide is the "
+                "thinner side. exchange=all (default) returns Binance, Coinbase, and "
+                "Bybit separately plus a market-wide score."
+            ),
+            args_schema=MarketLiquidityInput,
         ),
         StructuredTool.from_function(
             estimate_market_impact,
