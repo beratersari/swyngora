@@ -17,6 +17,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
@@ -31,6 +32,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/futureshist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -150,15 +152,37 @@ func main() {
 	delistStore := deliststore.NewMemory()
 	delistEnabled := cfg.BinanceAPIKey != ""
 	liqBook := domain.NewLiquidationBook()
+
+	futuresStore, err := futuresstore.Open(cfg.FuturesHistoryDBPath)
+	if err != nil {
+		logger.Error("futures history sqlite open failed", "path", cfg.FuturesHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := futuresStore.Close(); err != nil {
+			logger.Error("futures history sqlite close", "err", err)
+		}
+	}()
+	histSeeds := append([]string{}, domain.DefaultFuturesHistorySymbols...)
+	histSeeds = append(histSeeds, cfg.FuturesHistorySymbols...)
+	futuresHist := &futureshist.Service{
+		Store:   futuresStore,
+		OI:      map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Funding: map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		LS:      map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Logger:  logger,
+		Seeds:   histSeeds,
+	}
+	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
 	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
 		WSURL: cfg.BinanceFuturesWSURL,
-		Sink:  liqBook,
+		Sink:  liqSink,
 	})
 	bybitLiq := bybit.NewLiquidationHub(bybit.LiquidationOptions{
 		WSURL:   cfg.BybitLinearWSURL,
 		BaseURL: cfg.BybitBaseURL,
 		HTTP:    httpClient,
-		Sink:    liqBook,
+		Sink:    liqSink,
 	})
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
@@ -177,6 +201,9 @@ func main() {
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 	})
+	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
+	marketSvc.SetFuturesHistory(futuresHist)
+	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -325,6 +352,18 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	nLiq := futureshist.RestoreBook(ctx, liqBook, futuresHist, time.Now().UTC())
+	if nLiq > 0 {
+		logger.Info("futures liquidations restored", "events", nLiq)
+	}
+	go liqSink.Start(ctx)
+	go (&futureshist.Worker{
+		Hist:     futuresHist,
+		Interval: cfg.FuturesHistoryInterval,
+		Retain:   cfg.FuturesHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
 
 	go realtimeHub.Start(ctx)
 

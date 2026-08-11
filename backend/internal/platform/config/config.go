@@ -135,6 +135,15 @@ type Config struct {
 	// AccountPurgeInterval is how often closed accounts past grace are purged.
 	AccountPurgeInterval time.Duration
 
+	// FuturesHistoryDBPath is the SQLite file for durable OI/funding/LS/liquidation history.
+	FuturesHistoryDBPath string
+	// FuturesHistoryInterval is how often snapshots are sampled.
+	FuturesHistoryInterval time.Duration
+	// FuturesHistoryRetention is how long samples and events are kept.
+	FuturesHistoryRetention time.Duration
+	// FuturesHistorySymbols extra pairs to always sample (CSV). Seeds are always included.
+	FuturesHistorySymbols []string
+
 	// APIAuthToken, when non-empty, requires Authorization: Bearer or X-API-Key on
 	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
 	// Empty = open local-dev mode (not multi-tenant safe).
@@ -244,6 +253,11 @@ func Load() Config {
 
 		AccountDBPath:        getenv("ACCOUNT_DB_PATH", "data/accounts.db"),
 		AccountPurgeInterval: positiveDurationEnv("ACCOUNT_PURGE_INTERVAL", 1*time.Hour),
+
+		FuturesHistoryDBPath:    getenv("FUTURES_HISTORY_DB_PATH", "data/futures.db"),
+		FuturesHistoryInterval:  positiveDurationEnv("FUTURES_HISTORY_INTERVAL", 5*time.Minute),
+		FuturesHistoryRetention: positiveDurationEnv("FUTURES_HISTORY_RETENTION", 30*24*time.Hour),
+		FuturesHistorySymbols:   parseCSVList(os.Getenv("FUTURES_HISTORY_SYMBOLS")),
 
 		APIAuthToken:        strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
 		MCPEnabled:          boolEnv("MCP_ENABLED", true),

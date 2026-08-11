@@ -204,6 +204,26 @@ func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol stri
 	return c.get(ctx, "/api/v1/market/long-short-ratio", q)
 }
 
+// GetFuturesHistory returns durable stored futures samples or liquidation events.
+func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("metric", metric)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/futures-history", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

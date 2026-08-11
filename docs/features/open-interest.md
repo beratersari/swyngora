@@ -32,6 +32,9 @@ Sources (public REST, no API key):
 Unlike liquidations, history comes from the exchange — 24h change is available
 immediately, not only after this process has been running 24h.
 
+Durable samples (5m, both venues) are also stored in SQLite. Query them with
+`GET /api/v1/market/futures-history?metric=open_interest`. See [`futures-history.md`](futures-history.md).
+
 ## Where the code lives
 
 | Layer | Path |

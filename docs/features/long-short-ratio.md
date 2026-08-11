@@ -16,6 +16,8 @@ can ask “are more traders long or short BTC?”
 - This is the **share of accounts** that are long vs short, **not** position size
 - `ratio` is long/short (1 = even). `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95
 - `change` on each venue is the signed ratio move vs the previous 5m print
+- Durable 5m samples are also stored in SQLite. Query them with
+  `GET /api/v1/market/futures-history?metric=long_short`. See [`futures-history.md`](futures-history.md).
 
 Sources (public REST, no API key):
 

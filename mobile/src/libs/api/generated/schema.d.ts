@@ -402,6 +402,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/futures-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Durable futures history
+         * @description Stored open interest, funding, long/short, or liquidation rows for
+         *     Binance USD-M and Bybit linear. Written on a background interval and
+         *     (for liquidations) as events arrive. Duplicates are ignored. One venue
+         *     failing does not drop the other. Survives process restarts.
+         */
+        get: operations["getMarketFuturesHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4032,6 +4055,45 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFuturesHistory: {
+        parameters: {
+            query: {
+                /** @description open_interest | funding | long_short | liquidations */
+                metric: "open_interest" | "funding" | "long_short" | "liquidations";
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                from?: string;
+                to?: string;
+                /** @description Max rows, default 200, max 1000 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored rows newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        metric?: string;
+                        exchange?: string;
+                        symbol?: string;
+                        count?: number;
+                        items?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

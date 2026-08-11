@@ -170,6 +170,15 @@ class OpenInterestInput(BaseModel):
     )
 
 
+class FuturesHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    metric: str = Field(description="open_interest | funding | long_short | liquidations")
+    exchange: str = Field(default="all", description="binance|bybit|all")
+    limit: int = Field(default=200, ge=1, le=1000)
+    start: str = Field(default="", description="RFC3339 or unix ms")
+    end: str = Field(default="", description="RFC3339 or unix ms")
+
+
 class LongShortInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -719,6 +728,26 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "/api/v1/market/open-interest",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_futures_history(
+        symbol: str,
+        metric: str,
+        exchange: str = "all",
+        limit: int = 200,
+        start: str = "",
+        end: str = "",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "metric": metric,
+            "exchange": exchange,
+            "limit": limit,
+        }
+        if start:
+            params["from"] = start
+        if end:
+            params["to"] = end
+        return http.get("/api/v1/market/futures-history", params)
 
     def get_long_short_ratio(symbol: str, exchange: str = "all", limit: int = 24) -> str:
         return http.get(
@@ -1770,6 +1799,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Binance USD-M + Bybit linear. exchange=all is per venue, not averaged."
             ),
             args_schema=LongShortInput,
+        ),
+        StructuredTool.from_function(
+            get_futures_history,
+            name="get_futures_history",
+            description=(
+                "Durable stored history of futures open interest, funding, "
+                "long/short ratio, or liquidations. Survives restarts. "
+                "metric=open_interest|funding|long_short|liquidations."
+            ),
+            args_schema=FuturesHistoryInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

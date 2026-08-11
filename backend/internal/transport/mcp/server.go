@@ -35,6 +35,7 @@ type DataPort interface {
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
+	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -350,6 +351,30 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLongShortRatio(ctx, req.GetString("exchange", "all"), symbol, int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_futures_history",
+		mcp.WithDescription("Durable stored history of futures open interest, funding, long/short ratio, or liquidations (Binance USD-M + Bybit linear). Survives restarts. metric=open_interest|funding|long_short|liquidations. Prefer this for past values, not the live snapshot tools."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("metric", mcp.Required(), mcp.Description("open_interest | funding | long_short | liquidations")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("from", mcp.Description("RFC3339 or unix ms start")),
+		mcp.WithString("to", mcp.Description("RFC3339 or unix ms end")),
+		mcp.WithNumber("limit", mcp.Description("Max rows, default 200")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		metric, err := req.RequireString("metric")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

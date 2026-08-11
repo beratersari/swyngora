@@ -18,6 +18,8 @@ so a user or the AI can ask “are longs paying to hold BTC?”
 - `rate` is decimal (`0.0001` = 0.01%); `ratePct` is percent
 - `payer` is who pays at settlement: `long` (positive rate) or `short` (negative)
 - `avgLast3` is the mean of the last three settlements (~24h at 8h)
+- Durable predicted + settled samples are also stored in SQLite. Query them with
+  `GET /api/v1/market/futures-history?metric=funding`. See [`futures-history.md`](futures-history.md).
 
 Sources (public REST, no API key):
 

@@ -40,6 +40,13 @@ type Service struct {
 	oi            map[domain.Exchange]domain.OpenInterestPort
 	funding       map[domain.Exchange]domain.FundingRatePort
 	longShort     map[domain.Exchange]domain.LongShortRatioPort
+	onFuturesSym  func(string)
+	futHist       FuturesHistoryReader
+}
+
+// FuturesHistoryReader is the durable futures archive (optional).
+type FuturesHistoryReader interface {
+	History(ctx context.Context, q domain.FuturesHistoryQuery) (any, error)
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.
@@ -99,6 +106,42 @@ func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortR
 	}
 	s.longShort = cp
 	return s
+}
+
+// SetOnFuturesSymbol records pairs the history worker should keep sampling.
+func (s *Service) SetOnFuturesSymbol(fn func(string)) {
+	if s != nil {
+		s.onFuturesSym = fn
+	}
+}
+
+func (s *Service) noteFutures(symbol string) {
+	if s != nil && s.onFuturesSym != nil {
+		s.onFuturesSym(symbol)
+	}
+}
+
+// SetFuturesHistory attaches the durable archive used by GetFuturesHistory.
+func (s *Service) SetFuturesHistory(r FuturesHistoryReader) {
+	if s != nil {
+		s.futHist = r
+	}
+}
+
+// GetFuturesHistory returns persisted OI, funding, long/short, or liquidation rows.
+func (s *Service) GetFuturesHistory(ctx context.Context, metric, exchange, symbol string, from, to *time.Time, limit int) (any, error) {
+	if s == nil || s.futHist == nil {
+		return nil, fmt.Errorf("%w: futures history not configured", domain.ErrUpstream)
+	}
+	q := domain.FuturesHistoryQuery{Metric: metric, Exchange: exchange, Symbol: symbol, Limit: limit}
+	if from != nil {
+		q.From = *from
+	}
+	if to != nil {
+		q.To = *to
+	}
+	s.noteFutures(symbol)
+	return s.futHist.History(ctx, q)
 }
 
 type wallWatch struct {
@@ -433,6 +476,7 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	if err != nil {
 		return nil, err
 	}
+	s.noteFutures(symbol)
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
@@ -456,6 +500,7 @@ func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 	if err != nil {
 		return nil, err
 	}
+	s.noteFutures(symbol)
 	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
 	if ex != "all" {
 		want = []domain.Exchange{domain.Exchange(ex)}
@@ -533,6 +578,7 @@ func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string
 		return nil, err
 	}
 	limit = domain.ClampLongShortHistoryLimit(limit)
+	s.noteFutures(symbol)
 	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
 	if ex != "all" {
 		want = []domain.Exchange{domain.Exchange(ex)}
@@ -601,6 +647,7 @@ func (s *Service) GetFundingRate(ctx context.Context, exchange, symbol string, l
 		return nil, err
 	}
 	limit = domain.ClampFundingHistoryLimit(limit)
+	s.noteFutures(symbol)
 	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
 	if ex != "all" {
 		want = []domain.Exchange{domain.Exchange(ex)}

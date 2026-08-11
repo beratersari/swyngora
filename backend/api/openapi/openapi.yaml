@@ -766,6 +766,48 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/futures-history:
+    get:
+      summary: Durable futures history
+      description: |
+        Stored open interest, funding, long/short, or liquidation rows for
+        Binance USD-M and Bybit linear. Written on a background interval and
+        (for liquidations) as events arrive. Duplicates are ignored. One venue
+        failing does not drop the other. Survives process restarts.
+      operationId: getMarketFuturesHistory
+      tags: [Market]
+      parameters:
+        - name: metric
+          in: query
+          required: true
+          schema: { type: string, enum: [open_interest, funding, long_short, liquidations] }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200, maximum: 1000 }
+      responses:
+        '200':
+          description: Stored rows newest first
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)

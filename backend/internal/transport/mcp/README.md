@@ -18,6 +18,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
+| `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Durable futures history:** SQLite archive of open interest, funding, long/short, and liquidations for Binance USD-M and Bybit linear; 5m sampler, restart-safe, no duplicate rows, per-venue fail-soft (`GET /api/v1/market/futures-history`, MCP `get_futures_history`) (`docs/features/futures-history.md`)
 - **Futures long/short ratio:** share of accounts that are long vs short plus recent 5m history for Binance USD-M and Bybit linear; also attached on the open-interest payload (`GET /api/v1/market/long-short-ratio`, MCP `get_long_short_ratio`, Telegram `/ls`) (`docs/features/long-short-ratio.md`)
 - **Futures funding rate:** predicted next perpetual funding plus recent settlements for Binance USD-M and Bybit linear; also attached on the open-interest payload (`GET /api/v1/market/funding-rate`, MCP `get_funding_rate`, Telegram `/funding`) (`docs/features/funding-rate.md`)
 - **Futures open interest:** current outstanding size plus 5m / 1h / 4h / 24h change (contracts and USDT notional) from Binance USD-M and Bybit linear perpetual; `exchange=all` sums both (`GET /api/v1/market/open-interest`, MCP `get_open_interest`, Telegram `/oi`) (`docs/features/open-interest.md`)

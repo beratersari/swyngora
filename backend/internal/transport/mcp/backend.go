@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -189,6 +190,111 @@ func (b *Backend) GetLongShortRatio(ctx context.Context, exchange, symbol string
 		return nil, err
 	}
 	return mustJSON(longShortSnapshotMap(got))
+}
+
+func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var fromPtr, toPtr *time.Time
+	if strings.TrimSpace(from) != "" {
+		t, err := parseMCPTime(from)
+		if err != nil {
+			return nil, err
+		}
+		fromPtr = &t
+	}
+	if strings.TrimSpace(to) != "" {
+		t, err := parseMCPTime(to)
+		if err != nil {
+			return nil, err
+		}
+		toPtr = &t
+	}
+	got, err := b.Market.GetFuturesHistory(ctx, metric, exchange, symbol, fromPtr, toPtr, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(futuresHistoryMap(metric, exchange, symbol, got))
+}
+
+func futuresHistoryMap(metric, exchange, symbol string, raw any) map[string]any {
+	metric, _ = domain.ParseFuturesMetric(metric)
+	exchange, _ = domain.ParseOpenInterestExchange(exchange)
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	out := map[string]any{
+		"metric": metric, "exchange": exchange, "symbol": symbol,
+		"note": "Durable SQLite history. Duplicates are ignored. One venue failing does not drop the other. Informational only.",
+	}
+	switch rows := raw.(type) {
+	case []domain.FuturesSnapshot:
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			item := map[string]any{
+				"exchange":  string(r.Exchange),
+				"sampledAt": r.SampledAt.UTC().Format(time.RFC3339Nano),
+			}
+			switch r.Metric {
+			case domain.FuturesMetricOpenInterest:
+				item["contracts"] = formatHistQty(r.Contracts)
+				item["value"] = formatHistQty(r.Value)
+			case domain.FuturesMetricFunding:
+				dec, pct := domain.FormatFundingRate(r.FundingRate)
+				item["rate"] = dec
+				item["ratePct"] = pct
+				item["predicted"] = r.Predicted
+				if r.IntervalHours > 0 {
+					item["intervalHours"] = r.IntervalHours
+				}
+			case domain.FuturesMetricLongShort:
+				item["longPct"] = formatHistQty(r.LongShare * 100)
+				item["shortPct"] = formatHistQty(r.ShortShare * 100)
+				item["ratio"] = formatHistQty(r.Ratio)
+				item["bias"] = domain.LongShortBias(r.Ratio)
+			}
+			items = append(items, item)
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	case []domain.LiquidationEvent:
+		items := make([]map[string]any, 0, len(rows))
+		for _, e := range rows {
+			items = append(items, map[string]any{
+				"exchange": string(e.Exchange), "side": e.Side,
+				"price": formatHistQty(e.Price), "quantity": formatHistQty(e.Quantity),
+				"notional": formatHistQty(e.Notional),
+				"time":     e.Time.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	default:
+		out["items"] = []any{}
+		out["count"] = 0
+	}
+	return out
+}
+
+func formatHistQty(v float64) string {
+	s := domain.FormatSignedQty(v)
+	return strings.TrimPrefix(s, "+")
+}
+
+func parseMCPTime(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if ms > 1e12 {
+			return time.UnixMilli(ms).UTC(), nil
+		}
+		return time.Unix(ms, 0).UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("%w: time must be RFC3339 or unix ms", domain.ErrInvalidArgument)
 }
 
 func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {

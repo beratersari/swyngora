@@ -38,6 +38,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -266,6 +267,10 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `IMPORT_WORKER_INTERVAL` | `2s` | How often pending imports are claimed |
 | `ACCOUNT_DB_PATH` | `data/accounts.db` | SQLite for account close/reopen state |
 | `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
+| `FUTURES_HISTORY_DB_PATH` | `data/futures.db` | SQLite archive for OI, funding, long/short, liquidations |
+| `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
+| `FUTURES_HISTORY_RETENTION` | `720h` | How long stored futures rows are kept |
+| `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

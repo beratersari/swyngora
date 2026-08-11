@@ -239,6 +239,49 @@ func TestGetFundingRate_OK(t *testing.T) {
 	}
 }
 
+func TestGetFuturesHistory_NotConfigured(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+type stubFutHist struct{}
+
+func (stubFutHist) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	return []domain.FuturesSnapshot{{
+		Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance,
+		Symbol: q.Symbol, SampledAt: time.Unix(1_700_000_000, 0).UTC(),
+		Contracts: 100, Value: 6_400_000,
+	}}, nil
+}
+
+func TestGetFuturesHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{})
+	svc.SetFuturesHistory(stubFutHist{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["metric"] != "open_interest" || body["symbol"] != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+	items, ok := body["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items=%v", body["items"])
+	}
+}
+
 func TestGetLongShortRatio_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/long-short-ratio?symbol=BTCUSDT", nil)

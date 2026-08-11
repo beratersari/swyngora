@@ -303,6 +303,43 @@ func (h *MarketHandler) GetLongShortRatio(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, longShortToDTO(got))
 }
 
+// GetFuturesHistory handles GET /api/v1/market/futures-history.
+func (h *MarketHandler) GetFuturesHistory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	var fromPtr, toPtr *time.Time
+	if raw := q.Get("from"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		fromPtr = &t
+	}
+	if raw := q.Get("to"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		toPtr = &t
+	}
+	got, err := h.svc.GetFuturesHistory(r.Context(), q.Get("metric"), q.Get("exchange"), q.Get("symbol"), fromPtr, toPtr, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, futuresHistoryToDTO(q.Get("metric"), q.Get("exchange"), q.Get("symbol"), got))
+}
+
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
 func (h *MarketHandler) GetMarketLiquidity(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -909,6 +946,67 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 		out.Current = &cur
 	}
 	return out
+}
+
+func futuresHistoryToDTO(metric, exchange, symbol string, raw any) map[string]any {
+	metric, _ = domain.ParseFuturesMetric(metric)
+	exchange, _ = domain.ParseOpenInterestExchange(exchange)
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	out := map[string]any{
+		"metric": metric, "exchange": exchange, "symbol": symbol,
+		"note": "Durable SQLite history. Duplicates are ignored. One venue failing does not drop the other. Informational only.",
+	}
+	switch rows := raw.(type) {
+	case []domain.FuturesSnapshot:
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			item := map[string]any{
+				"exchange": string(r.Exchange), "sampledAt": r.SampledAt.UTC().Format(time.RFC3339Nano),
+			}
+			switch r.Metric {
+			case domain.FuturesMetricOpenInterest:
+				item["contracts"] = formatHistQty(r.Contracts)
+				item["value"] = formatHistQty(r.Value)
+			case domain.FuturesMetricFunding:
+				dec, pct := domain.FormatFundingRate(r.FundingRate)
+				item["rate"] = dec
+				item["ratePct"] = pct
+				item["predicted"] = r.Predicted
+				if r.IntervalHours > 0 {
+					item["intervalHours"] = r.IntervalHours
+				}
+			case domain.FuturesMetricLongShort:
+				item["longPct"] = formatHistQty(r.LongShare * 100)
+				item["shortPct"] = formatHistQty(r.ShortShare * 100)
+				item["ratio"] = formatHistQty(r.Ratio)
+				item["bias"] = domain.LongShortBias(r.Ratio)
+			}
+			items = append(items, item)
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	case []domain.LiquidationEvent:
+		items := make([]map[string]any, 0, len(rows))
+		for _, e := range rows {
+			items = append(items, map[string]any{
+				"exchange": string(e.Exchange), "side": e.Side,
+				"price": formatHistQty(e.Price), "quantity": formatHistQty(e.Quantity),
+				"notional": formatHistQty(e.Notional),
+				"time":     e.Time.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	default:
+		out["items"] = []any{}
+		out["count"] = 0
+	}
+	return out
+}
+
+func formatHistQty(v float64) string {
+	s := domain.FormatSignedQty(v)
+	return strings.TrimPrefix(s, "+")
 }
 
 func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
