@@ -252,6 +252,17 @@ func (h *MarketHandler) GetLiquidations(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, liquidationsToDTO(got))
 }
 
+// GetOpenInterest handles GET /api/v1/market/open-interest.
+func (h *MarketHandler) GetOpenInterest(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetOpenInterest(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, openInterestToDTO(got))
+}
+
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
 func (h *MarketHandler) GetMarketLiquidity(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -584,6 +595,89 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
 		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. A dropped or never-connected stream does not grow coverage. Notional is quote (USDT). Informational only.",
+	}
+}
+
+type openInterestLevelDTO struct {
+	Contracts string `json:"contracts"`
+	Value     string `json:"value"`
+	Time      string `json:"time,omitempty"`
+}
+
+type openInterestWindowDTO struct {
+	Window            string `json:"window"`
+	OpenInterest      string `json:"openInterest"`
+	OpenInterestValue string `json:"openInterestValue"`
+	Change            string `json:"change"`
+	ChangePct         string `json:"changePct"`
+	ChangeValue       string `json:"changeValue"`
+	ChangeValuePct    string `json:"changeValuePct"`
+	Direction         string `json:"direction"`
+	Complete          bool   `json:"complete"`
+	SampleTime        string `json:"sampleTime,omitempty"`
+}
+
+type openInterestVenueDTO struct {
+	Exchange string                  `json:"exchange"`
+	Current  openInterestLevelDTO    `json:"current"`
+	Windows  []openInterestWindowDTO `json:"windows"`
+}
+
+type openInterestResponse struct {
+	Symbol     string                  `json:"symbol"`
+	Exchange   string                  `json:"exchange"`
+	Unit       string                  `json:"unit"`
+	Current    openInterestLevelDTO    `json:"current"`
+	Windows    []openInterestWindowDTO `json:"windows"`
+	Venues     []openInterestVenueDTO  `json:"venues"`
+	AsOf       string                  `json:"asOf,omitempty"`
+	VenueCount int                     `json:"venueCount"`
+	Note       string                  `json:"note"`
+}
+
+func oiLevelDTO(l domain.OpenInterestLevel) openInterestLevelDTO {
+	t := ""
+	if !l.Time.IsZero() {
+		t = l.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return openInterestLevelDTO{Contracts: l.Contracts, Value: l.Value, Time: t}
+}
+
+func oiWindowsDTO(in []domain.OpenInterestWindow) []openInterestWindowDTO {
+	out := make([]openInterestWindowDTO, 0, len(in))
+	for _, w := range in {
+		row := openInterestWindowDTO{
+			Window: w.Window, OpenInterest: w.OpenInterest, OpenInterestValue: w.OpenInterestValue,
+			Change: w.Change, ChangePct: w.ChangePct, ChangeValue: w.ChangeValue, ChangeValuePct: w.ChangeValuePct,
+			Direction: w.Direction, Complete: w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
+	if a == nil {
+		return openInterestResponse{}
+	}
+	venues := make([]openInterestVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		venues = append(venues, openInterestVenueDTO{
+			Exchange: v.Exchange, Current: oiLevelDTO(v.Current), Windows: oiWindowsDTO(v.Windows),
+		})
+	}
+	asOf := ""
+	if !a.AsOf.IsZero() {
+		asOf = a.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	return openInterestResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
+		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
+		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. complete is false when the historical sample is missing or too old. Combined all sums both venues. Informational only.",
 	}
 }
 

@@ -41,6 +41,8 @@ type Client struct {
 	wsURL       string
 	wsDial      wsDialer
 	depthIdle   time.Duration
+	oiCache     *cache.TTL[*domain.OpenInterestSeries]
+	oiSF        singleflight.Group
 }
 
 // Options configures the Bybit client.
@@ -51,10 +53,11 @@ type Options struct {
 	TickerCache     *cache.TTL[*domain.Ticker24h]
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
-	WSURL           string
-	WSDial          wsDialer
-	DepthIdle       time.Duration
-	DepthWait       time.Duration
+	WSURL             string
+	WSDial            wsDialer
+	DepthIdle         time.Duration
+	DepthWait         time.Duration
+	OpenInterestCache *cache.TTL[*domain.OpenInterestSeries]
 }
 
 // NewClient constructs a Bybit spot market-data client.
@@ -78,9 +81,13 @@ func NewClient(opts Options) *Client {
 		wsURL:       opts.WSURL,
 		wsDial:      opts.WSDial,
 		depthIdle:   opts.DepthIdle,
+		oiCache:     opts.OpenInterestCache,
 	}
 	if c.depthWait <= 0 {
 		c.depthWait = 8 * time.Second
+	}
+	if c.oiCache == nil {
+		c.oiCache = cache.New[*domain.OpenInterestSeries](30 * time.Second)
 	}
 	return c
 }

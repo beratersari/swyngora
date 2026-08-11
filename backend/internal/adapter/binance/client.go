@@ -57,6 +57,9 @@ type Client struct {
 	wsURL       string
 	wsDial      wsDialer
 	depthIdle   time.Duration
+	futuresBase string // USD-M REST (fapi.binance.com)
+	oiCache     *cache.TTL[*domain.OpenInterestSeries]
+	oiSF        singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -70,10 +73,12 @@ type Options struct {
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
 	SupplyCache     *cache.TTL[*domain.AssetSupply]
-	WSURL           string
-	WSDial          wsDialer
-	DepthIdle       time.Duration
-	DepthWait       time.Duration
+	WSURL               string
+	WSDial              wsDialer
+	DepthIdle           time.Duration
+	DepthWait           time.Duration
+	FuturesBaseURL      string // default https://fapi.binance.com
+	OpenInterestCache   *cache.TTL[*domain.OpenInterestSeries]
 }
 
 // NewClient constructs a Binance market-data + supply client.
@@ -110,6 +115,14 @@ func NewClient(opts Options) *Client {
 		wsURL:          opts.WSURL,
 		wsDial:         opts.WSDial,
 		depthIdle:      opts.DepthIdle,
+		futuresBase:    strings.TrimRight(opts.FuturesBaseURL, "/"),
+		oiCache:        opts.OpenInterestCache,
+	}
+	if c.futuresBase == "" {
+		c.futuresBase = "https://fapi.binance.com"
+	}
+	if c.oiCache == nil {
+		c.oiCache = cache.New[*domain.OpenInterestSeries](30 * time.Second)
 	}
 	return c
 }

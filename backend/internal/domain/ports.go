@@ -28,3 +28,9 @@ type SupplyPort interface {
 	// Refresh loads a bulk snapshot into cache. Returns number of assets stored.
 	Refresh(ctx context.Context) (int, error)
 }
+
+// OpenInterestPort loads current + historical futures open interest for one venue.
+// Implemented by Binance USD-M and Bybit linear adapters.
+type OpenInterestPort interface {
+	GetOpenInterestSeries(ctx context.Context, symbol string) (*OpenInterestSeries, error)
+}

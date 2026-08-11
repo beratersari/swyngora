@@ -340,6 +340,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/open-interest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures open interest and windowed change
+         * @description Current outstanding futures size plus how much it increased or decreased
+         *     over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
+         *     Sources: **Binance USD-M** and **Bybit linear perpetual**.
+         *     `contracts` is venue-published size in the base asset; `value` is USDT
+         *     notional. `exchange=all` (default) sums both venues.
+         */
+        get: operations["getMarketOpenInterest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -2380,6 +2404,55 @@ export interface components {
             windows?: components["schemas"]["LiquidationWindow"][];
             note?: string;
         };
+        OpenInterestLevel: {
+            /** @description Outstanding size in the base asset */
+            contracts?: string;
+            /** @description USDT notional */
+            value?: string;
+            /** Format: date-time */
+            time?: string;
+        };
+        OpenInterestWindow: {
+            /** @enum {string} */
+            window?: "5m" | "1h" | "4h" | "24h";
+            /** @description Contracts at the past sample */
+            openInterest?: string;
+            /** @description USDT notional at the past sample */
+            openInterestValue?: string;
+            /** @description Signed contract change vs now */
+            change?: string;
+            /** @description Signed percent change in contracts */
+            changePct?: string;
+            /** @description Signed USDT notional change */
+            changeValue?: string;
+            /** @description Signed percent change in USDT notional */
+            changeValuePct?: string;
+            /** @enum {string} */
+            direction?: "up" | "down" | "flat";
+            /** @description False when the historical sample is missing or too old */
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        OpenInterestVenue: {
+            exchange?: string;
+            current?: components["schemas"]["OpenInterestLevel"];
+            windows?: components["schemas"]["OpenInterestWindow"][];
+        };
+        /** @description Current futures open interest plus 5m/1h/4h/24h change */
+        MarketOpenInterest: {
+            symbol?: string;
+            exchange?: string;
+            /** @description Base asset, e.g. BTC */
+            unit?: string;
+            current?: components["schemas"]["OpenInterestLevel"];
+            windows?: components["schemas"]["OpenInterestWindow"][];
+            venues?: components["schemas"]["OpenInterestVenue"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
+            note?: string;
+        };
         OrderBookImpactFill: {
             exchange?: string;
             price?: string;
@@ -3762,6 +3835,34 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    getMarketOpenInterest: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current open interest and windowed change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOpenInterest"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     getSupply: {

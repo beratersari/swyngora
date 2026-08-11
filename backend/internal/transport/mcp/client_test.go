@@ -37,6 +37,34 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetOpenInterest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/open-interest" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "unit": "BTC", "current": map[string]any{"contracts": "100", "value": "10000"},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetOpenInterest(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetLiquidations(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/liquidations" {

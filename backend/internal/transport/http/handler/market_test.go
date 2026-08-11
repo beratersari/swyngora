@@ -205,6 +205,33 @@ func TestGetLiquidations_OK(t *testing.T) {
 	}
 }
 
+func TestGetOpenInterest_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/open-interest?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetOpenInterest(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body openInterestResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Unit != "BTC" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetOpenInterest_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/open-interest", nil)
+	rr := httptest.NewRecorder()
+	h.GetOpenInterest(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetMarketLiquidity_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", nil)

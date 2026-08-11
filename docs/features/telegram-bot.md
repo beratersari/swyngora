@@ -19,7 +19,7 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 
 | Command | Purpose |
 |---------|---------|
-| `/price`, `/spot`, `/lowmcap`, `/mcap`, `/rsi`, `/exchanges` | Market data |
+| `/price`, `/spot`, `/lowmcap`, `/mcap`, `/rsi`, `/oi`, `/exchanges` | Market data (`/oi` = futures open interest + 5m/1h/4h/24h change) |
 | `/watch` … | Watchlist (UUID tenant id, persisted in accounts DB) |
 | `/portfolio` · `/portfolio list` · `/portfolio create [balance] [name]` · `/portfolio use NAME` · `/portfolio share CLIENT role` · `/portfolio shared` | Paper books (opaque Telegram tenant id); select one then `/buy` `/sell` apply to it; share as viewer or trader |
 | `/deposit` · `/withdraw` `<amount> [note]` | Add or remove virtual cash |

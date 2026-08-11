@@ -162,6 +162,14 @@ class LiquidationsInput(BaseModel):
     )
 
 
+class OpenInterestInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues)",
+    )
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -685,6 +693,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_liquidations(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidations",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_open_interest(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/open-interest",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1692,6 +1706,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "coverage does not grow if the stream never connects or drops."
             ),
             args_schema=LiquidationsInput,
+        ),
+        StructuredTool.from_function(
+            get_open_interest,
+            name="get_open_interest",
+            description=(
+                "Futures open interest for a coin: current outstanding size plus "
+                "how much it increased or decreased in the last 5 minutes, 1 hour, "
+                "4 hours, and 24 hours. contracts is base-asset size; value is USDT "
+                "notional. Binance USD-M + Bybit linear. exchange=all sums both. "
+                "Use for 'is OI rising or falling'."
+            ),
+            args_schema=OpenInterestInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

@@ -35,6 +35,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -178,6 +179,7 @@ Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market**, **watchlist**,
 | `/lowmcap [exchange\|all] [n]` | Lowest circulating market cap |
 | `/mcap <asset\|pair>` | Supply snapshot |
 | `/rsi <symbol> [interval] [exchange]` | RSI + EMA |
+| `/oi <symbol> [binance\|bybit\|all]` | Futures open interest + 5m/1h/4h/24h change |
 | `/exchanges` | Venues |
 | `/watch` · `add` · `del` · `top` | Per-user watchlist (`tg-<user_id>`) |
 | `/portfolio` · `/portfolio create [balance]` | Paper portfolio (`tg-<user_id>`) |
@@ -217,7 +219,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
 | `ORDERBOOK_CACHE_TTL` | `2s` | Reserved TTL for any leftover REST book cache (live books are not cached) |
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Binance spot stream host for the live local book |
+| `BINANCE_FUTURES_BASE_URL` | `https://fapi.binance.com` | Binance USD-M REST (open interest) |
 | `BINANCE_FUTURES_WS_URL` | `wss://fstream.binance.com` | Binance USD-M stream for liquidations |
+| `OPEN_INTEREST_CACHE_TTL` | `30s` | Futures open-interest snapshot TTL |
 | `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |
 | `BYBIT_WS_URL` | `wss://stream.bybit.com/v5/public/spot` | Bybit spot stream for the live local book |
 | `BYBIT_LINEAR_WS_URL` | `wss://stream.bybit.com/v5/public/linear` | Bybit linear stream for liquidations |
@@ -294,9 +298,9 @@ Unit tests mock upstream HTTP; they do not call live Binance.
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go` |
 | Application | `internal/service/market` | `service_test.go` (fakes for ports) |
-| Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
+| Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go`, `openinterest_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
 | Infrastructure | `internal/adapter/alertstore` | `sqlite_test.go` (CRUD, one-shot trigger, reopen) |

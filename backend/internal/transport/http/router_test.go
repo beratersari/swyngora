@@ -88,6 +88,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=0.1", http.StatusOK, nil},
 		{"/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/open-interest?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/tags", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any

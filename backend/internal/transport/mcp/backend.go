@@ -118,6 +118,61 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOpenInterest(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
+			"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
+			"direction": w.Direction, "complete": w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		wins = append(wins, row)
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		vw := make([]map[string]any, 0, len(v.Windows))
+		for _, w := range v.Windows {
+			row := map[string]any{
+				"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
+				"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
+				"direction": w.Direction, "complete": w.Complete,
+			}
+			if !w.SampleTime.IsZero() {
+				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+			}
+			vw = append(vw, row)
+		}
+		cur := map[string]any{"contracts": v.Current.Contracts, "value": v.Current.Value}
+		if !v.Current.Time.IsZero() {
+			cur["time"] = v.Current.Time.UTC().Format(time.RFC3339Nano)
+		}
+		venues = append(venues, map[string]any{"exchange": v.Exchange, "current": cur, "windows": vw})
+	}
+	cur := map[string]any{"contracts": got.Current.Contracts, "value": got.Current.Value}
+	if !got.Current.Time.IsZero() {
+		cur["time"] = got.Current.Time.UTC().Format(time.RFC3339Nano)
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "unit": got.Unit,
+		"current": cur, "windows": wins, "venues": venues, "asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Binance USD-M and Bybit linear perpetual open interest. contracts is base-asset size (Bybit is single-sided). value is USDT notional. Change is current minus ~window ago. Informational only.",
+	})
+}
+
 func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

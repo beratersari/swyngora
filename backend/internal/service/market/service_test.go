@@ -506,6 +506,78 @@ func TestGetLiquidations_FromBook(t *testing.T) {
 	}
 }
 
+type fakeOI struct {
+	ser *domain.OpenInterestSeries
+	err error
+}
+
+func (f *fakeOI) GetOpenInterestSeries(_ context.Context, symbol string) (*domain.OpenInterestSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetOpenInterest_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 10000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 90, Value: 9000},
+			{Time: now.Add(-time.Hour), Contracts: 80, Value: 8000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 70, Value: 7000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 50, Value: 5000},
+		},
+	}}
+	byb := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBybit,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 50, Value: 5000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 40, Value: 4000},
+			{Time: now.Add(-time.Hour), Contracts: 40, Value: 4000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 30, Value: 3000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 20, Value: 2000},
+		},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "btc-usd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Symbol != "BTCUSDT" || got.Unit != "BTC" || got.VenueCount != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Current.Contracts != "150" {
+		t.Fatalf("current %s", got.Current.Contracts)
+	}
+	one, err := svc.GetOpenInterest(context.Background(), "binance", "BTCUSDT")
+	if err != nil || one.VenueCount != 1 || one.Current.Contracts != "100" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+func TestGetOpenInterest_BadExchange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetOpenInterest(context.Background(), "coinbase", "BTCUSDT")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetOpenInterest_EmptyPorts(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "BTCUSDT")
+	if err != nil || got.VenueCount != 0 || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

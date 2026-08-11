@@ -16,6 +16,8 @@ type Config struct {
 	BinanceAPIKey          string
 	BinanceWSURL           string
 	BinanceFuturesWSURL    string
+	BinanceFuturesBaseURL  string
+	OpenInterestCacheTTL   time.Duration
 	OrderBookIdleTTL       time.Duration
 	OrderBookSyncTimeout   time.Duration
 	DelistRefreshEvery     time.Duration
@@ -154,6 +156,8 @@ func Load() Config {
 		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
 		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
 		BinanceFuturesWSURL:    getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
+		BinanceFuturesBaseURL:  getenv("BINANCE_FUTURES_BASE_URL", "https://fapi.binance.com"),
+		OpenInterestCacheTTL:   positiveDurationEnv("OPEN_INTEREST_CACHE_TTL", 30*time.Second),
 		OrderBookIdleTTL:       positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
 		OrderBookSyncTimeout:   positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
 		DelistRefreshEvery:     positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),

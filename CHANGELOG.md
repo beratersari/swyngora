@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Bybit open interest double-count:** current and historical Bybit figures now use `singleOpenInterest` / `singleOpenInterestValue` (one side). The older `openInterest` field is still both sides and was ~2× the UI value; if the single field is missing we halve the bilateral figure (`docs/features/open-interest.md`)
+
 ### Changed
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Futures open interest:** current outstanding size plus 5m / 1h / 4h / 24h change (contracts and USDT notional) from Binance USD-M and Bybit linear perpetual; `exchange=all` sums both (`GET /api/v1/market/open-interest`, MCP `get_open_interest`, Telegram `/oi`) (`docs/features/open-interest.md`)
 - **Futures liquidations:** rolling 5m / 1h / 4h / 24h long vs short notional, count, and biggest hit from Binance USD-M and Bybit linear perpetual streams; `complete` / `coverageSeconds` count only live websocket time per coin and venue (`GET /api/v1/market/liquidations`, MCP `get_liquidations`) (`docs/features/liquidations.md`)
 - **Liquidity score:** 0–100 grade from live bid/ask notional only in ±0.1 / ±0.5 / ±1% bands the book actually reaches; market-wide uses the common venue range (`GET /api/v1/market/orderbook/liquidity`, MCP `get_market_liquidity`) (`docs/features/order-book.md`)
 - **Wall persistence:** order-book walls now include `behavior` (`short` / `persistent` / `suspicious`) plus how long they have been present and how often they flicker (`docs/features/order-book.md`)

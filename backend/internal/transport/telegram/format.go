@@ -511,6 +511,77 @@ func FormatSupply(s *domain.AssetSupply) string {
 	return b.String()
 }
 
+// FormatOpenInterest formats current OI and windowed change.
+func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
+	if s == nil {
+		return "No open interest."
+	}
+	var b strings.Builder
+	b.WriteString(header("📊", s.Symbol+" open interest"))
+	ex := s.Exchange
+	if ex == "all" {
+		ex = fmt.Sprintf("all · %d venues", s.VenueCount)
+	}
+	fmt.Fprintf(&b, "%s · unit %s\n", code(ex), code(s.Unit))
+	b.WriteString(divider())
+	b.WriteString(row("Now", code(s.Current.Contracts+" "+s.Unit)+"  "+italic(compactUSDT(s.Current.Value))))
+	if len(s.Windows) == 0 {
+		b.WriteString("\n" + italic("No history yet.") + "\n")
+	} else {
+		b.WriteString("\n" + bold("Change") + "\n")
+		for _, w := range s.Windows {
+			arrow := "●"
+			switch w.Direction {
+			case "up":
+				arrow = "🟢"
+			case "down":
+				arrow = "🔴"
+			}
+			flag := ""
+			if !w.Complete {
+				flag = "  " + italic("partial")
+			}
+			fmt.Fprintf(&b, "  %s %s  %s (%s)  %s%s\n",
+				arrow, code(w.Window), code(w.Change), code(w.ChangePct+"%"), italic(compactUSDT(w.ChangeValue)), flag)
+		}
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+func compactUSDT(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return "$0"
+	}
+	sign := ""
+	if strings.HasPrefix(s, "+") {
+		sign = "+"
+		s = s[1:]
+	} else if strings.HasPrefix(s, "-") {
+		sign = "−"
+		s = s[1:]
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return sign + s
+	}
+	abs := f
+	if abs < 0 {
+		abs = -abs
+	}
+	switch {
+	case abs >= 1e9:
+		return fmt.Sprintf("%s$%.2fB", sign, f/1e9)
+	case abs >= 1e6:
+		return fmt.Sprintf("%s$%.2fM", sign, f/1e6)
+	case abs >= 1e3:
+		return fmt.Sprintf("%s$%.2fK", sign, f/1e3)
+	default:
+		return sign + "$" + Float(f, 2)
+	}
+}
+
 // FormatIndicators formats RSI/EMA latest.
 func FormatIndicators(ser *domain.IndicatorSeries) string {
 	if ser == nil {
@@ -631,6 +702,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/lowmcap", "[exchange|all] [n]", "lowest circ. mcap"))
 	b.WriteString(cmdLine("/mcap", "<asset|pair>", "supply snapshot"))
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
+	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change"))
 	b.WriteString(cmdLine("/exchanges", "", "list venues"))
 	b.WriteString("\n")
 
@@ -667,6 +739,7 @@ func HelpText() string {
 	b.WriteString("  " + code("/lowmcap all 5") + "\n")
 	b.WriteString("  " + code("/spot bybit SOL") + "\n")
 	b.WriteString("  " + code("/rsi ETHUSDT 1h") + "\n")
+	b.WriteString("  " + code("/oi BTCUSDT") + "\n")
 	b.WriteString("  " + code("/ask What is BTC RSI and recent news?") + "\n")
 	b.WriteString("  " + code("/portfolio create 10000") + "\n")
 	b.WriteString("  " + code("/portfolio create 5000 Risky") + "\n")

@@ -61,6 +61,7 @@ func main() {
 	binanceTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	binanceBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	binanceSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	binanceOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
 	coinbaseCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
 	coinbaseTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	coinbaseBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
@@ -69,6 +70,7 @@ func main() {
 	bybitTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	bybitBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	bybitSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	bybitOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
 
 	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
@@ -92,6 +94,8 @@ func main() {
 				bybitTickers.Cleanup()
 				bybitBooks.Cleanup()
 				bybitSpot.Cleanup()
+				binanceOI.Cleanup()
+				bybitOI.Cleanup()
 				supplyCache.Cleanup()
 			case <-stopCleanup:
 				return
@@ -100,18 +104,20 @@ func main() {
 	}()
 
 	binanceClient := binance.NewClient(binance.Options{
-		BaseURL:         cfg.BinanceBaseURL,
-		ProductBaseURL:  cfg.BinanceProductBaseURL,
-		APIKey:          cfg.BinanceAPIKey,
-		HTTPClient:      httpClient,
-		CandleCache:     binanceCandles,
-		TickerCache:     binanceTickers,
-		OrderBookCache:  binanceBooks,
-		SpotMarketCache: binanceSpot,
-		SupplyCache:     supplyCache,
-		WSURL:           cfg.BinanceWSURL,
-		DepthIdle:       cfg.OrderBookIdleTTL,
-		DepthWait:       cfg.OrderBookSyncTimeout,
+		BaseURL:           cfg.BinanceBaseURL,
+		ProductBaseURL:    cfg.BinanceProductBaseURL,
+		APIKey:            cfg.BinanceAPIKey,
+		HTTPClient:        httpClient,
+		CandleCache:       binanceCandles,
+		TickerCache:       binanceTickers,
+		OrderBookCache:    binanceBooks,
+		SpotMarketCache:   binanceSpot,
+		SupplyCache:       supplyCache,
+		WSURL:             cfg.BinanceWSURL,
+		DepthIdle:         cfg.OrderBookIdleTTL,
+		DepthWait:         cfg.OrderBookSyncTimeout,
+		FuturesBaseURL:    cfg.BinanceFuturesBaseURL,
+		OpenInterestCache: binanceOI,
 	})
 	defer binanceClient.Close()
 	coinbaseClient := coinbase.NewClient(coinbase.Options{
@@ -128,15 +134,16 @@ func main() {
 	})
 	defer coinbaseClient.Close()
 	bybitClient := bybit.NewClient(bybit.Options{
-		BaseURL:         cfg.BybitBaseURL,
-		HTTPClient:      httpClient,
-		CandleCache:     bybitCandles,
-		TickerCache:     bybitTickers,
-		OrderBookCache:  bybitBooks,
-		SpotMarketCache: bybitSpot,
-		WSURL:           cfg.BybitWSURL,
-		DepthIdle:       cfg.OrderBookIdleTTL,
-		DepthWait:       cfg.OrderBookSyncTimeout,
+		BaseURL:           cfg.BybitBaseURL,
+		HTTPClient:        httpClient,
+		CandleCache:       bybitCandles,
+		TickerCache:       bybitTickers,
+		OrderBookCache:    bybitBooks,
+		SpotMarketCache:   bybitSpot,
+		WSURL:             cfg.BybitWSURL,
+		DepthIdle:         cfg.OrderBookIdleTTL,
+		DepthWait:         cfg.OrderBookSyncTimeout,
+		OpenInterestCache: bybitOI,
 	})
 	defer bybitClient.Close()
 
@@ -160,7 +167,10 @@ func main() {
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
-	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq)
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	})
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -495,8 +505,8 @@ func main() {
 				AllowAll:        cfg.TelegramAllowAll,
 				AI:              aiClient,
 				AITimeout:       cfg.AITimeout,
-				Identities: accountStore,
-				Portfolio:  portfolioSvc,
+				Identities:      accountStore,
+				Portfolio:       portfolioSvc,
 			})
 			bot := &telegram.Bot{
 				Client:      tgClient,

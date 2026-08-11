@@ -168,6 +168,16 @@ func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/liquidations", q)
 }
 
+// GetOpenInterest returns current futures open interest and windowed change.
+func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/open-interest", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

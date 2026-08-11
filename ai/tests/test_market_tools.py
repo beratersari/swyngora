@@ -15,6 +15,16 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
+        if request.url.path.endswith("/open-interest"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "unit": "BTC",
+                    "current": {"contracts": "100", "value": "10000"},
+                    "windows": [{"window": "24h", "change": "+10", "direction": "up"}],
+                },
+            )
         if request.url.path.endswith("/liquidations"):
             return httpx.Response(
                 200,
@@ -98,6 +108,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_liquidations" in by_name
     liqs = json.loads(by_name["get_liquidations"].invoke({"symbol": "BTCUSDT"}))
     assert liqs["windows"][0]["window"] == "24h"
+
+    assert "get_open_interest" in by_name
+    oi = json.loads(by_name["get_open_interest"].invoke({"symbol": "BTCUSDT"}))
+    assert oi["current"]["contracts"] == "100"
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(

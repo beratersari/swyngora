@@ -37,6 +37,7 @@ type Service struct {
 	wallWatch     map[string]wallWatch
 	liq           *domain.LiquidationBook
 	liqWatch      LiquidationWatch
+	oi            map[domain.Exchange]domain.OpenInterestPort
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.
@@ -50,6 +51,21 @@ func (s *Service) WithLiquidations(book *domain.LiquidationBook, watch Liquidati
 		s.liq = book
 		s.liqWatch = watch
 	}
+	return s
+}
+
+// WithOpenInterest attaches Binance USD-M / Bybit linear open-interest ports.
+func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterestPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.OpenInterestPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.oi = cp
 	return s
 }
 
@@ -396,6 +412,73 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 		}, nil
 	}
 	return s.liq.Snapshot(ex, symbol), nil
+}
+
+// GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.
+func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.OpenInterestPort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.oiPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildOpenInterestSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.OpenInterestSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetOpenInterestSeries(ctx, symbol)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.OpenInterestSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildOpenInterestSnapshot(ex, symbol, series, time.Now().UTC()), nil
+}
+
+func (s *Service) oiPort(ex domain.Exchange) domain.OpenInterestPort {
+	if s == nil || s.oi == nil {
+		return nil
+	}
+	return s.oi[ex]
 }
 
 // EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.

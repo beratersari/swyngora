@@ -71,6 +71,17 @@ func newTestRouter(t *testing.T) *Router {
 	})
 }
 
+func TestOpenInterestCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 12, 12, "/oi BTCUSDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "BTCUSDT") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestRSIArgOrder_EitherWay(t *testing.T) {
 	r := newTestRouter(t)
 	// Allow rate limit by using different chats.

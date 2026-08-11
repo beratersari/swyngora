@@ -645,6 +645,44 @@ paths:
                 $ref: '#/components/schemas/MarketLiquidations'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/market/open-interest:
+    get:
+      summary: Futures open interest and windowed change
+      description: |
+        Current outstanding futures size plus how much it increased or decreased
+        over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
+        Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist) and
+        **Bybit linear perpetual** (`/v5/market/tickers` + `/v5/market/open-interest`).
+        `contracts` is venue-published size in the base asset; `value` is USDT
+        notional. `exchange=all` (default) sums both venues. `complete` is false
+        when the historical sample is missing or older than the window slack.
+        Results are cached ~30s. Informational only.
+      operationId: getMarketOpenInterest
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Current open interest and windowed change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketOpenInterest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -4671,6 +4709,50 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        note: { type: string }
+    OpenInterestLevel:
+      type: object
+      properties:
+        contracts: { type: string, description: Outstanding size in the base asset }
+        value: { type: string, description: USDT notional }
+        time: { type: string, format: date-time }
+    OpenInterestWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [5m, 1h, 4h, 24h] }
+        openInterest: { type: string, description: Contracts at the past sample }
+        openInterestValue: { type: string, description: USDT notional at the past sample }
+        change: { type: string, description: Signed contract change vs now }
+        changePct: { type: string, description: Signed percent change in contracts }
+        changeValue: { type: string, description: Signed USDT notional change }
+        changeValuePct: { type: string, description: Signed percent change in USDT notional }
+        direction: { type: string, enum: [up, down, flat] }
+        complete: { type: boolean, description: False when the historical sample is missing or too old }
+        sampleTime: { type: string, format: date-time }
+    OpenInterestVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/OpenInterestLevel' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestWindow' }
+    MarketOpenInterest:
+      type: object
+      description: Current futures open interest plus 5m/1h/4h/24h change
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        unit: { type: string, description: Base asset, e.g. BTC }
+        current: { $ref: '#/components/schemas/OpenInterestLevel' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestWindow' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestVenue' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
         note: { type: string }
     OrderBookImpactFill:
       type: object

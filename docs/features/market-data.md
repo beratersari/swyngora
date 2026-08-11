@@ -39,6 +39,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated.
 - `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional that the book actually covers; market-wide uses the common venue range.
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
+- `GET /api/v1/market/open-interest` current futures open interest plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear). See [`open-interest.md`](open-interest.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`
