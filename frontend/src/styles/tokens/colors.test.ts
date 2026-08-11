@@ -31,5 +31,6 @@ describe('semanticColors role rules', () => {
     expect(semanticColors.bg.page).toBe(palette.darkGreen);
     expect(semanticColors.bg.chrome).toBe(palette.pine);
     expect(semanticColors.bg.elevated).toBe(palette.basil);
+    expect(semanticColors.bg.tableHeader).toBe(palette.pine);
   });
 });

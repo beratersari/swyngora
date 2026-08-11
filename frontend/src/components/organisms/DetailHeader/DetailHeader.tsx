@@ -67,23 +67,17 @@ export function DetailHeader({
             ) : null}
             {alertTo ? (
               <Link to={alertTo}>
-                <Button size="small" type="link">
-                  {t('alerts:addFromDetail', { defaultValue: 'Add alert' })}
-                </Button>
+                <Button size="small">{t('alerts:addFromDetail', { defaultValue: 'Add alert' })}</Button>
               </Link>
             ) : null}
             {compareTo ? (
               <Link to={compareTo}>
-                <Button size="small" type="link">
-                  {t('alerts:addToCompare', { defaultValue: 'Compare' })}
-                </Button>
+                <Button size="small">{t('alerts:addToCompare', { defaultValue: 'Compare' })}</Button>
               </Link>
             ) : null}
             {signalsTo ? (
               <Link to={signalsTo}>
-                <Button size="small" type="link">
-                  {t('signals:title')}
-                </Button>
+                <Button size="small">{t('signals:title')}</Button>
               </Link>
             ) : null}
             {assetName ? (

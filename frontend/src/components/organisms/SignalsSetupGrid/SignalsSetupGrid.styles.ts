@@ -2,7 +2,7 @@ import styled from 'styled-components';
 
 export const Grid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: ${({ theme }) => theme.spacing[3]}px;
 `;
 
@@ -15,6 +15,8 @@ export const Card = styled.article`
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
   min-height: 168px;
+  min-width: 0;
+  overflow: hidden;
   transition:
     transform ${({ theme }) => theme.motion.duration.base} ${({ theme }) => theme.motion.ease.standard},
     border-color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
@@ -35,6 +37,7 @@ export const Card = styled.article`
 
 export const CardTop = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing[2]}px;
@@ -63,6 +66,7 @@ export const SummaryList = styled.ul`
 
 export const CardFooter = styled.div`
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing[2]}px;

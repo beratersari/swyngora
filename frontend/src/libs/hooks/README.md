@@ -8,7 +8,7 @@ Examples (init / markets epics):
 | -------------------- | ----------------------------- |
 | `useDocumentVisible` | Pause polling when tab hidden |
 | `useDebouncedValue`  | Debounce search `q`           |
-| `useMediaQuery`      | Responsive layout (later)     |
+| `useMediaQuery`      | Match CSS breakpoints (chart height, etc.) |
 
 Feature-specific composition hooks may live next to the feature **only if** they are not reusable; prefer promoting shared ones here.
 

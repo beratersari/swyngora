@@ -22,7 +22,7 @@ describe('ExchangeTabs', () => {
         onChange={onChange}
       />,
     );
-    await user.click(screen.getByRole('tab', { name: 'coinbase' }));
+    await user.click(screen.getByRole('tab', { name: /coinbase/i }));
     expect(onChange).toHaveBeenCalledWith('coinbase');
   });
 });

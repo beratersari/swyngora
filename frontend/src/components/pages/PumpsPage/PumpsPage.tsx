@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Empty, Select, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Alert, Button, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
+import { PumpsTable } from '@/components/organisms/PumpsTable';
 import {
   rtkErrorMessage,
   useListIntervalsQuery,
   useScanPumpEventsQuery,
   type MarketExchange,
 } from '@/libs/api';
-import { defaultQuoteForExchange, formatSymbolDisplay } from '@/libs/utils';
-import { pumpScanHitsToRows, type PumpScanRow } from './PumpsPage.helpers';
+import { defaultQuoteForExchange } from '@/libs/utils';
+import { pumpScanHitsToRows } from './PumpsPage.helpers';
 import { Field, PageStack, Toolbar } from './PumpsPage.styles';
 
 /** Prefer 15m when supported; otherwise first venue interval. */
@@ -56,58 +56,6 @@ export function PumpsPage() {
 
   const hitCount = scan.data?.hitCount ?? rows.length;
 
-  const columns: ColumnsType<PumpScanRow> = [
-    {
-      title: t('pumps:symbol'),
-      dataIndex: 'symbol',
-      key: 'symbol',
-      render: (s: string) => (
-        <Text variant="label" mono color="primary">
-          {formatSymbolDisplay(s)}
-        </Text>
-      ),
-    },
-    {
-      title: t('pumps:returnPct'),
-      dataIndex: 'returnPct',
-      key: 'returnPct',
-      align: 'right',
-      render: (v: number | null) => (
-        <Text variant="numeric">
-          {v != null && Number.isFinite(v) ? `${v.toFixed(2)}%` : '—'}
-        </Text>
-      ),
-    },
-    {
-      title: t('pumps:volumeRatio'),
-      dataIndex: 'volumeRatio',
-      key: 'volumeRatio',
-      align: 'right',
-      render: (v: number | null) => (
-        <Text variant="numeric">
-          {v != null && Number.isFinite(v) ? v.toFixed(2) : '—'}
-        </Text>
-      ),
-    },
-    {
-      title: t('pumps:time'),
-      dataIndex: 'openTime',
-      key: 'openTime',
-      render: (v: string | null) => (
-        <Text variant="caption" color="secondary">
-          {v ? new Date(v).toLocaleString() : '—'}
-        </Text>
-      ),
-    },
-    {
-      title: t('pumps:events', { defaultValue: 'Events' }),
-      dataIndex: 'eventCount',
-      key: 'eventCount',
-      align: 'right',
-      render: (n: number) => <Text variant="numeric">{n}</Text>,
-    },
-  ];
-
   return (
     <PageStack>
       <PageHeader
@@ -126,9 +74,9 @@ export function PumpsPage() {
             value={exchange}
             style={{ minWidth: 120 }}
             options={[
-              { value: 'binance', label: 'binance' },
-              { value: 'coinbase', label: 'coinbase' },
-              { value: 'bybit', label: 'bybit' },
+              { value: 'binance', label: t('common:exchanges.binance') },
+              { value: 'coinbase', label: t('common:exchanges.coinbase') },
+              { value: 'bybit', label: t('common:exchanges.bybit') },
             ]}
             onChange={(v) => {
               setExchange(v);
@@ -195,44 +143,22 @@ export function PumpsPage() {
         />
       ) : null}
 
-      <Table
-        rowKey={(r) => `${r.exchange}:${r.symbol}:${r.openTime ?? r.returnPct}`}
+      <PumpsTable
+        rows={rows}
         loading={scan.isFetching}
-        dataSource={hasScanned ? rows : []}
-        columns={columns}
-        pagination={{ pageSize: 20 }}
-        onRow={(record) => {
-          const open = () => {
-            navigate(
-              `/markets/${encodeURIComponent(record.exchange)}/${encodeURIComponent(record.symbol)}`,
-            );
-          };
-          return {
-            onClick: open,
-            onKeyDown: (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                open();
-              }
-            },
-            tabIndex: 0,
-            role: 'link',
-            'aria-label': t('pumps:openDetail', {
-              defaultValue: 'Open {{symbol}}',
-              symbol: formatSymbolDisplay(record.symbol),
-            }),
-            style: { cursor: 'pointer' },
-          };
+        hasScanned={hasScanned}
+        emptyHint={t('pumps:emptyHint')}
+        emptyTitle={t('pumps:emptyTitle')}
+        columns={{
+          symbol: t('pumps:symbol'),
+          returnPct: t('pumps:returnPct'),
+          volumeRatio: t('pumps:volumeRatio'),
+          time: t('pumps:time'),
+          events: t('pumps:events', { defaultValue: 'Events' }),
         }}
-        locale={{
-          emptyText: (
-            <Empty
-              description={
-                !hasScanned ? t('pumps:emptyHint') : t('pumps:emptyTitle')
-              }
-            />
-          ),
-        }}
+        onRowOpen={(ex, symbol) =>
+          navigate(`/markets/${encodeURIComponent(ex)}/${encodeURIComponent(symbol)}`)
+        }
       />
     </PageStack>
   );

@@ -15,7 +15,6 @@ import {
   BrandCopy,
   BrandLink,
   BrandName,
-  BrandTagline,
   NavLink,
 } from '@/components/templates/AppShell';
 import { APP_NAME, DEFAULT_SPOT_POLL_MS } from '@/config/constants';
@@ -71,10 +70,9 @@ function DeskShell() {
       navAriaLabel={t('nav.main')}
       brand={
         <BrandLink to="/markets">
-          <BrandMark size={28} />
+          <BrandMark size={22} />
           <BrandCopy>
             <BrandName>{t('appName', { defaultValue: APP_NAME })}</BrandName>
-            <BrandTagline>{t('brand.tagline')}</BrandTagline>
           </BrandCopy>
         </BrandLink>
       }
@@ -91,7 +89,7 @@ function DeskShell() {
         <>
           <AppJumpSearch />
           <ConnectionStatus status={connection} label={t(`status.connection.${connection}`)} />
-          <LanguageSwitcher />
+          <LanguageSwitcher className="desk-lang" />
         </>
       }
       banner={

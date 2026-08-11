@@ -1,4 +1,5 @@
-import { Button, Empty, Popconfirm, Space } from 'antd';
+import { Button, Popconfirm, Space } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
@@ -88,7 +89,9 @@ export function AlertsTable({
         dataSource={items}
         columns={columns}
         pagination={{ pageSize: 20 }}
-        locale={{ emptyText: <Empty description={t('alerts:empty')} /> }}
+        locale={{ emptyText: <DeskEmpty title={t('alerts:empty')} /> }}
+        size="small"
+        scroll={{ x: 640 }}
       />
     </DataTableCard>
   );

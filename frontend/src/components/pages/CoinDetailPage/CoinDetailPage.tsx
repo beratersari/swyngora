@@ -37,8 +37,9 @@ import {
   type MarketExchange,
   type PumpEventDto,
 } from '@/libs/api';
-import { useDocumentVisible } from '@/libs/hooks';
+import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePriceSubscription } from '@/libs/realtime';
+import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
   detailStateToSearchParams,
@@ -68,6 +69,8 @@ import {
   DETAIL_CANDLE_MAX_LIMIT,
   DETAIL_CANDLE_PAGE_SIZE,
   DETAIL_INDICATOR_LIMIT,
+  DESK_CHART_HEIGHT,
+  PHONE_CHART_HEIGHT,
 } from '@/config/constants';
 import { ChartAndBook, ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
 import {
@@ -90,6 +93,7 @@ export function CoinDetailPage() {
   const { exchange: exchangeParam, symbol: symbolParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
+  const isPhone = useMediaQuery(mediaQueries.phone);
 
   const exchange = parseExchangeParam(exchangeParam);
   const symbol = parseSymbolParam(symbolParam);
@@ -636,7 +640,7 @@ export function CoinDetailPage() {
               isLoadingMore={isLoadingMore}
               hasMoreHistory={hasMoreHistory}
               onNeedMoreHistory={onNeedMoreHistory}
-              height={360}
+              height={isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT}
             />
           </>
         )}

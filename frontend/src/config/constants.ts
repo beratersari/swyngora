@@ -1,6 +1,12 @@
 /** Default UI poll interval for spot list (ms). Matches backend SPOT_MARKET_CACHE_TTL default (5s). */
 export const DEFAULT_SPOT_POLL_MS = 5_000;
 
+/** Candle chart height: desk vs phone (Lightweight Charts needs a px height). */
+export const DESK_CHART_HEIGHT = 520;
+export const PHONE_CHART_HEIGHT = 280;
+export const DESK_COMPARE_CHART_HEIGHT = 360;
+export const PHONE_COMPARE_CHART_HEIGHT = 240;
+
 /** Detail ticker / supply refresh while tab is visible (ms). Backend ticker TTL ~15s. */
 export const DEFAULT_DETAIL_TICKER_POLL_MS = 15_000;
 

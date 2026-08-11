@@ -10,6 +10,12 @@ export const PageStack = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[4]}px;
   min-height: min(70vh, 720px);
+  min-width: 0;
+
+  ${({ theme }) => theme.media.phone} {
+    min-height: 0;
+    gap: ${({ theme }) => theme.spacing[3]}px;
+  }
 `;
 
 export const PageIntro = styled.div`
@@ -25,6 +31,12 @@ export const Thread = styled.div`
   gap: ${({ theme }) => theme.spacing[3]}px;
   min-height: 280px;
   max-height: min(62vh, 640px);
+
+  ${({ theme }) => theme.media.phone} {
+    min-height: 42vh;
+    max-height: min(58vh, 520px);
+    padding: ${({ theme }) => theme.spacing[2]}px;
+  }
   overflow-y: auto;
   padding: ${({ theme }) => theme.spacing[3]}px;
   border-radius: ${({ theme }) => theme.radii.lg}px;
@@ -222,6 +234,10 @@ export const ProcessItem = styled.li<{ $kind: string; $active?: boolean }>`
   display: grid;
   grid-template-columns: 22px 64px 1fr;
   gap: 8px;
+
+  ${({ theme }) => theme.media.phone} {
+    grid-template-columns: 22px 1fr;
+  }
   align-items: start;
   font-size: 12px;
   line-height: 1.45;
@@ -240,6 +256,10 @@ export const ProcessIndex = styled.span`
 `;
 
 export const ProcessKind = styled.span<{ $kind: string }>`
+  ${({ theme }) => theme.media.phone} {
+    display: none;
+  }
+
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -284,6 +304,15 @@ export const ComposerRow = styled.div`
   flex-wrap: wrap;
   gap: ${({ theme }) => theme.spacing[2]}px;
   align-items: flex-end;
+
+  ${({ theme }) => theme.media.phone} {
+    flex-direction: column;
+    align-items: stretch;
+
+    .ant-btn {
+      width: 100%;
+    }
+  }
 `;
 
 export const Suggestions = styled.div`

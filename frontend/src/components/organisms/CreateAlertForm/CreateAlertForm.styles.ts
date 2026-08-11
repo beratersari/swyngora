@@ -5,6 +5,7 @@ export const FormStack = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[3]}px;
   max-width: 480px;
+  width: 100%;
 `;
 
 export const FieldRow = styled.div`
@@ -19,4 +20,10 @@ export const Field = styled.label`
   flex-direction: column;
   gap: 4px;
   min-width: 120px;
+  flex: 1 1 140px;
+
+  ${({ theme }) => theme.media.phone} {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
 `;

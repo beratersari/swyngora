@@ -125,7 +125,7 @@ describe('MarketsPage', () => {
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
 
     mockSpot.mockReturnValue(okSpot([coinbaseItem]));
-    await user.click(screen.getByRole('tab', { name: 'coinbase' }));
+    await user.click(screen.getByRole('tab', { name: /coinbase/i }));
     // Coinbase BTC-USD displays as BTC/USD (same BASE/QUOTE convention)
     expect(await screen.findByText('BTC/USD')).toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe('MarketsPage', () => {
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
 
     mockSpot.mockReturnValue(okSpot([coinbaseItem]));
-    await user.click(screen.getByRole('tab', { name: 'coinbase' }));
+    await user.click(screen.getByRole('tab', { name: /coinbase/i }));
     // Meta line shows venue default quote after switch
     await waitFor(() => {
       expect(screen.getByText(/Quote USD/i)).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe('MarketsPage', () => {
       error: undefined,
       refetch: vi.fn(),
     }));
-    await user.click(screen.getByRole('tab', { name: 'coinbase' }));
+    await user.click(screen.getByRole('tab', { name: /coinbase/i }));
     await waitFor(() => {
       expect(screen.queryByText('BTC/USDT')).not.toBeInTheDocument();
     });
@@ -184,8 +184,8 @@ describe('MarketsPage', () => {
       isError: true,
     });
     renderWithProviders(<MarketsPage />, { routerEntries: ['/markets'] });
-    expect(await screen.findByRole('tab', { name: 'binance' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'coinbase' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'bybit' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: /binance/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /coinbase/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /bybit/i })).toBeInTheDocument();
   });
 });

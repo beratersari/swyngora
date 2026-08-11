@@ -16,6 +16,10 @@ export const Pill = styled.div`
   border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
   background: ${({ theme }) => theme.semantic.bg.canvas};
   white-space: nowrap;
+
+  ${({ theme }) => theme.media.phone} {
+    padding: 4px 6px;
+  }
 `;
 
 export const Dot = styled.span<{ $status: ConnectionStatusKind }>`
@@ -47,4 +51,8 @@ export const Label = styled.span`
   font-weight: 600;
   letter-spacing: 0.02em;
   color: ${({ theme }) => theme.semantic.text.primary};
+
+  ${({ theme }) => theme.media.phone} {
+    display: none;
+  }
 `;

@@ -5,16 +5,17 @@ export const PageStack = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[4]}px;
   width: 100%;
+  min-width: 0;
 `;
 
 export const ChartCard = styled.section`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[3]}px;
-  padding: ${({ theme }) => theme.spacing[4]}px;
-  background: ${({ theme }) => theme.semantic.bg.muted};
-  border: 1px solid ${({ theme }) => theme.semantic.border.default};
-  border-radius: ${({ theme }) => theme.radii.lg}px;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  padding: ${({ theme }) => theme.spacing[3]}px;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  border-radius: ${({ theme }) => theme.radii.md}px;
 `;
 
 export const ChartTitleRow = styled.div`

@@ -5,8 +5,6 @@ import { createGlobalStyle } from 'styled-components';
  * Fonts: Google Fonts with system fallbacks from theme.fontFamilies.
  */
 export const GlobalStyle = createGlobalStyle`
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
   *,
   *::before,
   *::after {
@@ -18,6 +16,11 @@ export const GlobalStyle = createGlobalStyle`
   #root {
     height: 100%;
     margin: 0;
+    min-width: 0;
+  }
+
+  #root {
+    overflow-x: clip;
   }
 
   body {

@@ -1,5 +1,5 @@
 import type { KeyboardEvent } from 'react';
-import { Empty } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { ColumnsType } from 'antd/es/table';
 import { Text } from '@/components/atoms/Text';
 import {
@@ -95,10 +95,10 @@ export function PumpsTable({
           style: { cursor: 'pointer' },
         })}
         locale={{
-          emptyText: (
-            <Empty description={!hasScanned ? emptyHint : emptyTitle} />
-          ),
+          emptyText: <DeskEmpty title={!hasScanned ? emptyHint : emptyTitle} />,
         }}
+        size="small"
+        scroll={{ x: 640 }}
       />
     </TableCard>
   );

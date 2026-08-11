@@ -10,6 +10,7 @@ export const DataTableCard = styled.div`
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
   overflow: hidden;
+  max-width: 100%;
 `;
 
 export const DataTable = styled(Table)`
@@ -19,16 +20,21 @@ export const DataTable = styled(Table)`
   }
 
   .ant-table-thead > tr > th {
-    background: ${({ theme }) => theme.semantic.bg.tableHeader ?? 'rgba(3, 98, 76, 0.45)'} !important;
-    color: ${({ theme }) => theme.semantic.text.primary} !important;
-    border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
+    background: ${({ theme }) => theme.semantic.bg.tableHeader} !important;
+    color: ${({ theme }) => theme.semantic.text.secondary} !important;
+    border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle} !important;
     font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 8px 12px !important;
   }
 
   .ant-table-tbody > tr > td {
-    border-bottom-color: ${({ theme }) => theme.semantic.border.default} !important;
+    border-bottom-color: ${({ theme }) => theme.semantic.border.subtle} !important;
     color: ${({ theme }) => theme.semantic.text.primary};
     background: transparent !important;
+    padding: 7px 12px !important;
     transition: background-color ${({ theme }) => theme.motion.duration.fast}
       ${({ theme }) => theme.motion.ease.standard};
   }
@@ -67,6 +73,8 @@ export const DataTable = styled(Table)`
   .ant-pagination {
     margin: ${({ theme }) => theme.spacing[4]}px !important;
     color: ${({ theme }) => theme.semantic.text.primary};
+    flex-wrap: wrap;
+    row-gap: 8px;
   }
 
   .ant-pagination .ant-pagination-item {
@@ -79,8 +87,8 @@ export const DataTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-item-active {
-    background: ${({ theme }) => theme.colors.bangladeshGreen};
-    border-color: ${({ theme }) => theme.colors.caribbeanGreen};
+    background: ${({ theme }) => theme.semantic.action.primary};
+    border-color: ${({ theme }) => theme.semantic.border.accent};
   }
 
   .ant-pagination .ant-pagination-item-active a {
@@ -105,7 +113,7 @@ export const DataTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-total-text {
-    color: ${({ theme }) => theme.colors.pistachio};
+    color: ${({ theme }) => theme.semantic.text.secondary};
     font-weight: 500;
   }
 

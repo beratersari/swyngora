@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useMemo } from 'react';
-import { Button, Empty } from 'antd';
+import { Button } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
@@ -119,13 +120,11 @@ export function WatchlistTable({
         })}
         locale={{
           emptyText: (
-            <Empty description={t('watchlist:emptyTitle')}>
-              <Text variant="caption" color="secondary">
-                {t('watchlist:emptyHint')}
-              </Text>
-            </Empty>
+            <DeskEmpty title={t('watchlist:emptyTitle')} hint={t('watchlist:emptyHint')} />
           ),
         }}
+        size="small"
+        scroll={{ x: 720 }}
       />
     </TableCard>
   );

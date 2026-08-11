@@ -35,7 +35,7 @@ export const Cell = styled(Link)`
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
-  padding: 6px 16px;
+  padding: 4px 14px;
   text-decoration: none;
   color: ${({ theme }) => theme.semantic.text.primary};
   border-right: 1px solid ${({ theme }) => theme.semantic.border.subtle};

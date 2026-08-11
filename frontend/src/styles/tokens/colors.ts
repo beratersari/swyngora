@@ -112,8 +112,8 @@ export const semanticColors = {
     inverse: palette.antiFlashWhite,
     /** Row / control hover */
     hover: withAlpha(palette.frog, 0.22),
-    /** Table header band */
-    tableHeader: withAlpha(palette.bangladeshGreen, 0.42),
+    /** Table header — lifted chrome, not a green band */
+    tableHeader: palette.pine,
     /** Soft accent wash (badges, selected chips) */
     accentSoft: withAlpha(palette.mountainMeadow, 0.12),
     /** User chat bubble / selected surface */

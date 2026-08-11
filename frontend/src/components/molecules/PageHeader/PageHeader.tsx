@@ -8,11 +8,11 @@ export function PageHeader({ title, subtitle, eyebrow, extra }: PageHeaderProps)
     <Wrap>
       <Copy>
         {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-        <Text variant="h2" color="primary" as="h1">
+        <Text variant="h3" color="primary" as="h1">
           {title}
         </Text>
         {subtitle ? (
-          <Text variant="body" color="secondary">
+          <Text variant="bodySm" color="secondary">
             {subtitle}
           </Text>
         ) : null}

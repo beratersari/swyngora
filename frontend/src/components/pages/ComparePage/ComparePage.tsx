@@ -26,11 +26,14 @@ import {
   serializeComparePairs,
   type ComparePair,
 } from '@/libs/utils';
-import { useDocumentVisible } from '@/libs/hooks';
+import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
+import { mediaQueries } from '@/styles/tokens';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
   DEFAULT_DETAIL_INTERVAL,
   DEFAULT_DETAIL_SERIES_POLL_MS,
+  DESK_COMPARE_CHART_HEIGHT,
+  PHONE_COMPARE_CHART_HEIGHT,
 } from '@/config/constants';
 import {
   EmptyHint,
@@ -85,6 +88,7 @@ function usePairPercentSeries(
 
 export function ComparePage() {
   const { t } = useTranslation(['compare', 'common']);
+  const isPhone = useMediaQuery(mediaQueries.phone);
   const [searchParams, setSearchParams] = useSearchParams();
   const pairs = useMemo(
     () => parseComparePairsParam(searchParams.get('pairs')),
@@ -226,7 +230,11 @@ export function ComparePage() {
         </ErrorHint>
       ) : null}
 
-      <CompareChartHost series={seriesList} isLoading={loading && seriesList.length === 0} />
+      <CompareChartHost
+        series={seriesList}
+        isLoading={loading && seriesList.length === 0}
+        height={isPhone ? PHONE_COMPARE_CHART_HEIGHT : DESK_COMPARE_CHART_HEIGHT}
+      />
       <Text variant="caption" color="secondary">
         {t('compare:axisHint')}
       </Text>

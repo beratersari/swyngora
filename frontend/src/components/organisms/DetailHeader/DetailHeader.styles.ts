@@ -4,11 +4,8 @@ import { Link } from 'react-router-dom';
 export const HeaderCard = styled.section`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[3]}px;
-  padding: ${({ theme }) => theme.spacing[4]}px;
-  background: ${({ theme }) => theme.semantic.bg.muted};
-  border: 1px solid ${({ theme }) => theme.semantic.border.default};
-  border-radius: ${({ theme }) => theme.radii.lg}px;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  padding: ${({ theme }) => theme.spacing[2]}px 0 ${({ theme }) => theme.spacing[1]}px;
 `;
 
 export const TopRow = styled.div`
@@ -38,6 +35,12 @@ export const PriceBlock = styled.div`
   align-items: flex-end;
   gap: ${({ theme }) => theme.spacing[1]}px;
   text-align: right;
+
+  ${({ theme }) => theme.media.phone} {
+    align-items: flex-start;
+    text-align: left;
+    width: 100%;
+  }
 `;
 
 export const BackLink = styled(Link)`

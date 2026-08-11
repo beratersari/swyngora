@@ -3,15 +3,15 @@ import styled from 'styled-components';
 export const Wrap = styled.header`
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: ${({ theme }) => theme.spacing[3]}px;
+  gap: ${({ theme }) => theme.spacing[2]}px;
 `;
 
 export const Copy = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[1]}px;
+  gap: 2px;
   min-width: 0;
   max-width: 72ch;
 `;
@@ -30,4 +30,8 @@ export const Extra = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: ${({ theme }) => theme.spacing[2]}px;
+
+  ${({ theme }) => theme.media.phone} {
+    width: 100%;
+  }
 `;

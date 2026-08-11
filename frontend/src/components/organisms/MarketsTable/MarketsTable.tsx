@@ -1,6 +1,7 @@
 import type { KeyboardEvent, MouseEvent } from 'react';
 import { useCallback, useMemo } from 'react';
-import { Alert, Button, Empty, Space } from 'antd';
+import { Alert, Button } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { WatchStar } from '@/components/molecules/WatchStar';
 import type { ColumnsType, TablePaginationConfig } from 'antd/es/table';
 import type { FilterValue, SorterResult, TableCurrentDataSource } from 'antd/es/table/interface';
@@ -274,22 +275,13 @@ export function MarketsTable({
         })}
         locale={{
           emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <Space direction="vertical" size={4}>
-                  <Text variant="body" color="secondary">
-                    {t('markets:table.emptyTitle')}
-                  </Text>
-                  <Text variant="caption" color="secondary">
-                    {t('markets:table.emptyHint')}
-                  </Text>
-                </Space>
-              }
+            <DeskEmpty
+              title={t('markets:table.emptyTitle')}
+              hint={t('markets:table.emptyHint')}
             />
           ),
         }}
-        size="middle"
+        size="small"
         scroll={{ x: 900 }}
       />
     </TableCard>

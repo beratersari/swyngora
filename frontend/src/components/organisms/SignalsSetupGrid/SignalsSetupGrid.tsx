@@ -1,4 +1,5 @@
-import { Button, Empty, Skeleton } from 'antd';
+import { Button, Skeleton } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
@@ -35,7 +36,7 @@ export function SignalsSetupGrid({
   }
 
   if (setups.length === 0) {
-    return <Empty description={emptyText ?? t('setups.empty')} />;
+    return <DeskEmpty title={emptyText ?? t('setups.empty')} />;
   }
 
   return (

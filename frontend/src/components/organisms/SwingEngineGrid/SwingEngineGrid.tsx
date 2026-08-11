@@ -1,4 +1,5 @@
-import { Button, Empty, Skeleton } from 'antd';
+import { Button, Skeleton } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
@@ -9,15 +10,18 @@ import {
   CardTop,
   FactorRow,
   Grid,
+  LevelLabel,
+  LevelRow,
   Levels,
+  LevelValue,
   PairBlock,
 } from './SwingEngineGrid.styles';
 import type { SwingEngineGridProps } from './SwingEngineGrid.types';
 
-function gradeVariant(grade?: string): 'live' | 'status' | 'paused' {
-  if (grade === 'A') return 'live';
-  if (grade === 'B') return 'status';
-  return 'paused';
+function gradeVariant(grade?: string): 'gradeA' | 'gradeB' | 'gradeC' {
+  if (grade === 'A') return 'gradeA';
+  if (grade === 'B') return 'gradeB';
+  return 'gradeC';
 }
 
 export function SwingEngineGrid({
@@ -41,7 +45,7 @@ export function SwingEngineGrid({
   }
 
   if (items.length === 0) {
-    return <Empty description={emptyText ?? t('engine.empty')} />;
+    return <DeskEmpty title={emptyText ?? t('engine.empty')} />;
   }
 
   return (
@@ -63,36 +67,24 @@ export function SwingEngineGrid({
             </CardTop>
             <FactorRow>
               <BrandTag variant={s.accepted ? 'live' : 'paused'}>{s.stage}</BrandTag>
-              <BrandTag variant="status">{(s.setupType ?? '').replace(/_/g, ' ')}</BrandTag>
-              <BrandTag variant="status">{t('engine.regime', { regime: s.btcRegime ?? 'unknown' })}</BrandTag>
+              <BrandTag variant="outline">{(s.setupType ?? '').replace(/_/g, ' ')}</BrandTag>
+              <BrandTag variant="outline">{t('engine.regime', { regime: s.btcRegime ?? 'unknown' })}</BrandTag>
               {s.fresh ? <BrandTag variant="live">{t('engine.fresh')}</BrandTag> : null}
             </FactorRow>
             {s.levels ? (
               <Levels>
-                <div>
-                  <Text variant="caption" color="secondary">
-                    {t('engine.entry')}
-                  </Text>
-                  <Text variant="numeric" color="primary">
-                    {formatPrice(s.levels.entry)}
-                  </Text>
-                </div>
-                <div>
-                  <Text variant="caption" color="secondary">
-                    {t('engine.stop')}
-                  </Text>
-                  <Text variant="numeric" color="primary">
-                    {formatPrice(s.levels.stopLoss)}
-                  </Text>
-                </div>
-                <div>
-                  <Text variant="caption" color="secondary">
-                    {t('engine.target')}
-                  </Text>
-                  <Text variant="numeric" color="primary">
-                    {formatPrice(s.levels.takeProfit)}
-                  </Text>
-                </div>
+                <LevelRow>
+                  <LevelLabel>{t('engine.entry')}</LevelLabel>
+                  <LevelValue>{formatPrice(s.levels.entry)}</LevelValue>
+                </LevelRow>
+                <LevelRow>
+                  <LevelLabel>{t('engine.stop')}</LevelLabel>
+                  <LevelValue>{formatPrice(s.levels.stopLoss)}</LevelValue>
+                </LevelRow>
+                <LevelRow>
+                  <LevelLabel>{t('engine.target')}</LevelLabel>
+                  <LevelValue>{formatPrice(s.levels.takeProfit)}</LevelValue>
+                </LevelRow>
               </Levels>
             ) : null}
             <Text variant="caption" color="secondary">

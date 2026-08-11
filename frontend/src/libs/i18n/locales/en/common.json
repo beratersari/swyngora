@@ -17,6 +17,11 @@
     "placeholder": "Jump to pair…",
     "aria": "Jump to market"
   },
+  "exchanges": {
+    "binance": "Binance",
+    "coinbase": "Coinbase",
+    "bybit": "Bybit"
+  },
   "tape": {
     "aria": "Top USDT pairs by volume"
   },
@@ -50,6 +55,7 @@
     "loadingChart": "Loading chart",
     "loadingIndicatorChart": "Loading indicator chart",
     "loadingExchanges": "Loading exchanges",
+    "exchangeTabs": "Spot venues",
     "loadingMarketsTable": "Loading markets table",
     "loadingButton": "Loading button"
   },

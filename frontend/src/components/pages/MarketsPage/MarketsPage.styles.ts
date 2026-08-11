@@ -4,8 +4,9 @@ import { Alert } from 'antd';
 export const PageStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[4]}px;
+  gap: ${({ theme }) => theme.spacing[3]}px;
   width: 100%;
+  min-width: 0;
 `;
 
 export const PageIntro = styled.div`
@@ -19,11 +20,8 @@ export const MetaRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: ${({ theme }) => theme.spacing[3]}px;
-  padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[4]}px;
-  background: ${({ theme }) => theme.semantic.bg.chrome};
-  border: 1px solid ${({ theme }) => theme.semantic.border.default};
-  border-radius: ${({ theme }) => theme.radii.md}px;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  padding: 2px 2px 0;
 `;
 
 export const MetaLeft = styled.div`

@@ -27,5 +27,8 @@ describe('SwingEngineGrid', () => {
     );
     expect(screen.getByText(/ETH\/USDT|ETHUSDT/)).toBeInTheDocument();
     expect(screen.getByText(/trigger/i)).toBeInTheDocument();
+    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByText('95')).toBeInTheDocument();
+    expect(screen.getByText('110')).toBeInTheDocument();
   });
 });

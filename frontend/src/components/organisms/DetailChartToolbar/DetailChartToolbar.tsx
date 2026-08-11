@@ -2,6 +2,7 @@ import { Button, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
+import { IntervalRail } from '@/components/molecules/IntervalRail';
 import { DETAIL_PUMP_THRESHOLD_OPTIONS } from '@/config/constants';
 import { Field, InlineField, ToolbarRow } from './DetailChartToolbar.styles';
 import type { DetailChartToolbarProps } from './DetailChartToolbar.types';
@@ -22,11 +23,6 @@ export function DetailChartToolbar({
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
-  const options =
-    intervals.length > 0
-      ? intervals.map((iv) => ({ value: iv, label: iv }))
-      : [{ value: interval, label: interval }];
-
   // Keep current value in the list even if it was set outside presets (defensive).
   const thresholdOptions = Array.from(
     new Set([...DETAIL_PUMP_THRESHOLD_OPTIONS, pumpThresholdPct].filter((n): n is number => n != null)),
@@ -40,15 +36,12 @@ export function DetailChartToolbar({
         <Text variant="caption" color="secondary">
           {t('detail:chart.interval')}
         </Text>
-        <Select
-          size="small"
+        <IntervalRail
+          intervals={intervals}
           value={interval}
-          options={options}
-          loading={intervalsLoading}
           onChange={onIntervalChange}
-          style={{ minWidth: 100 }}
-          showSearch
-          optionFilterProp="label"
+          loading={intervalsLoading}
+          aria-label={t('detail:chart.interval')}
         />
       </Field>
 

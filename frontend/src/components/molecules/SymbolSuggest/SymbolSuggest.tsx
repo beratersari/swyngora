@@ -18,6 +18,7 @@ export function SymbolSuggest({
   placeholder = 'BTCUSDT',
   disabled,
   'aria-label': ariaLabel,
+  className,
   style,
 }: SymbolSuggestProps) {
   const { t } = useTranslation(['common', 'markets']);
@@ -58,10 +59,11 @@ export function SymbolSuggest({
 
   return (
     <AutoComplete
+      className={className}
       value={query}
       options={options}
       disabled={disabled}
-      style={{ minWidth: 160, ...style }}
+      style={{ minWidth: 0, width: '100%', maxWidth: '100%', ...style }}
       placeholder={placeholder}
       aria-label={ariaLabel ?? t('markets:toolbar.search', { defaultValue: 'Symbol' })}
       onSearch={(text) => {

@@ -10,5 +10,6 @@ export type SymbolSuggestProps = {
   placeholder?: string;
   disabled?: boolean;
   'aria-label'?: string;
+  className?: string;
   style?: CSSProperties;
 };

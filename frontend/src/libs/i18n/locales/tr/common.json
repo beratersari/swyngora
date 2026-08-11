@@ -17,6 +17,11 @@
     "placeholder": "Çifte git…",
     "aria": "Piyasaya git"
   },
+  "exchanges": {
+    "binance": "Binance",
+    "coinbase": "Coinbase",
+    "bybit": "Bybit"
+  },
   "tape": {
     "aria": "Hacme göre önde gelen USDT çiftleri"
   },
@@ -50,6 +55,7 @@
     "loadingChart": "Grafik yükleniyor",
     "loadingIndicatorChart": "Gösterge grafiği yükleniyor",
     "loadingExchanges": "Borsalar yükleniyor",
+    "exchangeTabs": "Spot borsalar",
     "loadingMarketsTable": "Piyasa tablosu yükleniyor",
     "loadingButton": "Düğme yükleniyor"
   },

@@ -65,7 +65,7 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 | `bg.muted` | darkGreen (cards / tables) |
 | `bg.elevated` | basil (popovers) |
 | `bg.hover` | frog @ ~22% |
-| `bg.tableHeader` | bangladeshGreen @ ~42% |
+| `bg.tableHeader` | pine (desk chrome, not a green band) |
 | `text.primary` | antiFlashWhite |
 | `text.secondary` | pistachio (readable secondary) |
 | `text.tertiary` | stone (muted meta) |
@@ -76,12 +76,23 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 | `chart.up` | caribbeanGreen (**charts + focus only**) |
 | `chart.down` | `#E07A7A` (readable red; not in brand set) |
 
+## 2a. Breakpoints
+
+Desktop-first desk. Tokens: `frontend/src/styles/tokens/breakpoints.ts` (`theme.media.*` in styled-components, `mediaQueries.*` with `useMediaQuery`).
+
+| Token | Width | Behavior |
+|---|---|---|
+| `xs` | 480 | Hide wordmark; keep mark |
+| `phone` | 720 | Stack toolbars, shrink charts, hide live label |
+| `tablet` | 960 | Command bar wraps: brand+tools, then scrollable nav |
+
 ## 2b. Motion
 
 Desk UI uses **short, functional** motion — never cinematic. Tokens: `theme.motion.duration` (`instant` / `fast` / `base` / `slow`) and `theme.motion.ease`.
 
 | Pattern | Where |
 |---|---|
+| Command bar (single 52px row) | `AppShell` brand · nav pills · jump search · live · locale |
 | Page enter (fade + 10px rise) | `PageEnter` on route change |
 | Star pop | `WatchStar` when a pair is added |
 | Price flash (green/red wash) | `FlashValue` on live ticks |
@@ -127,7 +138,7 @@ Colocate styles in **`ComponentName.styles.ts`** next to the component (no CSS/C
 | **Sans (UI)** | DM Sans, Segoe UI, system-ui |
 | **Mono (prices / code)** | JetBrains Mono, SF Mono, ui-monospace |
 
-Loaded via Google Fonts in `global.css` with system fallbacks.
+Loaded via Google Fonts in `frontend/index.html` with system fallbacks.
 
 ### Type scale (`typeScale`)
 

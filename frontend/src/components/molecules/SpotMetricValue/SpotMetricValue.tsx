@@ -54,7 +54,7 @@ export function SpotMetricValue({
           </BrandTag>
         ) : null}
         {productTags.slice(0, delistLabel ? 3 : 4).map((tag) => (
-          <BrandTag key={tag} variant="status">
+          <BrandTag key={tag} variant="outline">
             {tag}
           </BrandTag>
         ))}
@@ -91,9 +91,19 @@ export function SpotMetricValue({
       display = '—';
   }
 
+  if (metric.format === 'changePercent' && !isLoading) {
+    const tone = changeTone(raw as string | number | null | undefined);
+    const variant = tone === 'success' ? 'up' : tone === 'error' ? 'down' : 'paused';
+    return (
+      <FlashValue value={raw}>
+        <BrandTag variant={variant}>{display}</BrandTag>
+      </FlashValue>
+    );
+  }
+
   const color = metric.toneFromChange
     ? changeTone(raw as string | number | null | undefined)
-    : metric.format === 'price' || metric.format === 'changePercent'
+    : metric.format === 'price'
       ? 'primary'
       : 'secondary';
 

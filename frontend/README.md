@@ -2,7 +2,7 @@
 
 Production React application for Swyngora.
 
-> **Status:** Markets, coin detail, watchlist, **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a trading-desk chrome (ticker tape, jump search, live status).  
+> **Status:** Markets, coin detail, watchlist, **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a 2026 trading-desk chrome (single command bar, ticker tape, venue-aware jump search, live status). Layout wraps at 960 / 720 / 480.  
 > Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 

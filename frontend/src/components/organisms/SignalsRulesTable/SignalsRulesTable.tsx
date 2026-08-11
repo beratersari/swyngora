@@ -1,4 +1,5 @@
-import { Button, Empty, Popconfirm } from 'antd';
+import { Button, Popconfirm } from 'antd';
+import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
@@ -72,7 +73,9 @@ export function SignalsRulesTable({
         dataSource={items}
         columns={columns}
         pagination={false}
-        locale={{ emptyText: <Empty description={t('signals:rules.empty')} /> }}
+        locale={{ emptyText: <DeskEmpty title={t('signals:rules.empty')} /> }}
+        size="small"
+        scroll={{ x: 640 }}
       />
     </DataTableCard>
   );

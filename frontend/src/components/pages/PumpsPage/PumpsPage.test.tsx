@@ -53,7 +53,7 @@ describe('PumpsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /scan|tara/i }));
     expect(await screen.findByText('ETH/USDT')).toBeInTheDocument();
-    expect(screen.getByText('12.50%')).toBeInTheDocument();
+    expect(screen.getByText('+12.50%')).toBeInTheDocument();
     expect(screen.getByText('4.25')).toBeInTheDocument();
     // locale-dependent time string — assert year present
     expect(screen.getByText(/2024/)).toBeInTheDocument();
