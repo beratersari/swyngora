@@ -158,6 +158,16 @@ func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbo
 	return c.get(ctx, "/api/v1/market/orderbook/impact", q)
 }
 
+// GetLiquidations returns rolling 5m/1h/4h/24h futures liquidation totals.
+func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidations", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

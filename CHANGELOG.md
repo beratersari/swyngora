@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Futures liquidations:** rolling 5m / 1h / 4h / 24h long vs short notional, count, and biggest hit from Binance USD-M and Bybit linear perpetual streams (`GET /api/v1/market/liquidations`, MCP `get_liquidations`) (`docs/features/liquidations.md`)
 - **Liquidity score:** 0–100 grade from live bid/ask notional only in ±0.1 / ±0.5 / ±1% bands the book actually reaches; market-wide uses the common venue range (`GET /api/v1/market/orderbook/liquidity`, MCP `get_market_liquidity`) (`docs/features/order-book.md`)
 - **Wall persistence:** order-book walls now include `behavior` (`short` / `persistent` / `suspicious`) plus how long they have been present and how often they flicker (`docs/features/order-book.md`)
 - **Market impact / slippage:** simulate a market buy or sell by walking live order-book levels; returns average fill, slippage vs mid/best, and price impact as the new best ask/bid after leftover size (0 if the touch level is not fully consumed). If visible depth is wiped, impact is not calculated (`GET /api/v1/market/orderbook/impact`, MCP `estimate_market_impact`) (`docs/features/order-book.md`)

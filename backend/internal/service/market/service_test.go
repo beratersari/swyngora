@@ -482,6 +482,30 @@ func TestGetMarketLiquidity_AllVenues(t *testing.T) {
 	}
 }
 
+func TestGetLiquidations_EmptyFeed(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetLiquidations(context.Background(), "all", "BTCUSDT")
+	if err != nil || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestGetLiquidations_FromBook(t *testing.T) {
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 100, Quantity: 2, Notional: 200, Time: time.Now().UTC(),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetLiquidations(context.Background(), "binance", "btc-usd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Windows[0].Count != 1 {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

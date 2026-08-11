@@ -37,6 +37,34 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetLiquidations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidations" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "windows": []any{map[string]any{"window": "24h", "count": 2}},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLiquidations(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/liquidity" {

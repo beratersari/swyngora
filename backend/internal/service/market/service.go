@@ -35,6 +35,22 @@ type Service struct {
 	walls         *domain.WallMemory
 	watchMu       sync.Mutex
 	wallWatch     map[string]wallWatch
+	liq           *domain.LiquidationBook
+	liqWatch      LiquidationWatch
+}
+
+// LiquidationWatch asks a venue hub to subscribe a linear symbol.
+type LiquidationWatch interface {
+	Watch(symbol string)
+}
+
+// WithLiquidations attaches the rolling futures liquidation book.
+func (s *Service) WithLiquidations(book *domain.LiquidationBook, watch LiquidationWatch) *Service {
+	if s != nil {
+		s.liq = book
+		s.liqWatch = watch
+	}
+	return s
 }
 
 type wallWatch struct {
@@ -356,6 +372,30 @@ func (s *Service) GetMarketLiquidity(ctx context.Context, exchange, symbol strin
 	})
 	out.Market = domain.ScoreMarketLiquidity(books)
 	return out, nil
+}
+
+// GetLiquidations returns rolling 5m/1h/4h/24h USD-M / linear liquidation totals.
+func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) (*domain.LiquidationSnapshot, error) {
+	_ = ctx
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	if s.liqWatch != nil {
+		s.liqWatch.Watch(symbol)
+	}
+	if s.liq == nil {
+		return &domain.LiquidationSnapshot{
+			Symbol:   symbol,
+			Exchange: ex,
+			Windows:  []domain.LiquidationWindowTotals{},
+		}, nil
+	}
+	return s.liq.Snapshot(ex, symbol), nil
 }
 
 // EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.

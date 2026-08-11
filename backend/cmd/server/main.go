@@ -141,11 +141,25 @@ func main() {
 
 	delistStore := deliststore.NewMemory()
 	delistEnabled := cfg.BinanceAPIKey != ""
+	liqBook := domain.NewLiquidationBook()
+	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
+		WSURL: cfg.BinanceFuturesWSURL,
+		Sink:  liqBook,
+	})
+	bybitLiq := bybit.NewLiquidationHub(bybit.LiquidationOptions{
+		WSURL:   cfg.BybitLinearWSURL,
+		BaseURL: cfg.BybitBaseURL,
+		HTTP:    httpClient,
+		Sink:    liqBook,
+	})
+	defer binanceLiq.Close()
+	defer bybitLiq.Close()
+
 	marketSvc := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
-	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled)
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq)
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -439,6 +453,8 @@ func main() {
 		logger.Info("delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
 	}
 
+	go binanceLiq.Start(ctx)
+	go bybitLiq.Start(ctx)
 	go marketSvc.StartWallSampler(ctx)
 
 	alertChecker := &pricealert.Checker{

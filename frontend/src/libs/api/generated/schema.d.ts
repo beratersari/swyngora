@@ -283,6 +283,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rolling futures liquidation totals */
+        get: operations["getMarketLiquidations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/impact": {
         parameters: {
             query?: never;
@@ -2242,6 +2259,38 @@ export interface components {
             venues?: components["schemas"]["VenueLiquidity"][];
             note?: string;
         };
+        LiquidationHit: {
+            exchange?: string;
+            side?: "long" | "short";
+            price?: string;
+            quantity?: string;
+            notional?: string;
+            time?: string;
+        };
+        LiquidationWindow: {
+            window?: "5m" | "1h" | "4h" | "24h";
+            /** @description Quote value of liquidated longs */
+            longNotional?: string;
+            /** @description Quote value of liquidated shorts */
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+            biggest?: components["schemas"]["LiquidationHit"];
+            /** @description How many seconds of data this window actually has */
+            coverageSeconds?: number;
+            /** @description False until the process has been up for the full window */
+            complete?: boolean;
+        };
+        /** @description Rolling futures liquidation totals from live streams */
+        MarketLiquidations: {
+            symbol?: string;
+            exchange?: string;
+            collectingSince?: string;
+            live?: boolean;
+            venueCount?: number;
+            windows?: components["schemas"]["LiquidationWindow"][];
+            note?: string;
+        };
         OrderBookImpactFill: {
             exchange?: string;
             price?: string;
@@ -3494,6 +3543,31 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidations: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liquidation windows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidations"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getMarketLiquidity: {

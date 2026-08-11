@@ -15,6 +15,7 @@ type Config struct {
 	BinanceProductBaseURL  string
 	BinanceAPIKey          string
 	BinanceWSURL           string
+	BinanceFuturesWSURL    string
 	OrderBookIdleTTL       time.Duration
 	OrderBookSyncTimeout   time.Duration
 	DelistRefreshEvery     time.Duration
@@ -24,6 +25,7 @@ type Config struct {
 	CoinbaseWSURL          string
 	BybitBaseURL           string
 	BybitWSURL             string
+	BybitLinearWSURL       string
 	HTTPClientTimeout      time.Duration
 	CandleCacheTTL         time.Duration
 	CandleCacheMaxEntries  int
@@ -151,6 +153,7 @@ func Load() Config {
 		BinanceProductBaseURL:  getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
 		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
 		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
+		BinanceFuturesWSURL:    getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
 		OrderBookIdleTTL:       positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
 		OrderBookSyncTimeout:   positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
 		DelistRefreshEvery:     positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
@@ -160,6 +163,7 @@ func Load() Config {
 		CoinbaseWSURL:          getenv("COINBASE_WS_URL", "wss://ws-feed.exchange.coinbase.com"),
 		BybitBaseURL:           getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
 		BybitWSURL:             getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot"),
+		BybitLinearWSURL:       getenv("BYBIT_LINEAR_WS_URL", "wss://stream.bybit.com/v5/public/linear"),
 		HTTPClientTimeout:      positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
 		CandleCacheTTL:         positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
 		CandleCacheMaxEntries:  positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),

@@ -241,6 +241,17 @@ func (h *MarketHandler) GetCombinedOrderBook(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, combinedBookToDTO(got))
 }
 
+// GetLiquidations handles GET /api/v1/market/liquidations.
+func (h *MarketHandler) GetLiquidations(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetLiquidations(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, liquidationsToDTO(got))
+}
+
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
 func (h *MarketHandler) GetMarketLiquidity(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -512,6 +523,67 @@ func liquidityToDTO(a *domain.MarketLiquidity) marketLiquidityResponse {
 	return marketLiquidityResponse{
 		Symbol: a.Symbol, VenueCount: a.VenueCount, Market: mapScore(a.Market), Venues: venues,
 		Note: "Liquidity score 0–100 from resting bid/ask notional. Only ±0.1 / ±0.5 / ±1% bands the book actually reaches on both sides are shown. Market-wide uses the symmetric ±% every venue can reach. weakerSide is the thinner side in the widest included band. Informational only — not a quote.",
+	}
+}
+
+type liquidationHitDTO struct {
+	Exchange string `json:"exchange"`
+	Side     string `json:"side"`
+	Price    string `json:"price"`
+	Quantity string `json:"quantity"`
+	Notional string `json:"notional"`
+	Time     string `json:"time"`
+}
+
+type liquidationWindowDTO struct {
+	Window          string             `json:"window"`
+	LongNotional    string             `json:"longNotional"`
+	ShortNotional   string             `json:"shortNotional"`
+	TotalNotional   string             `json:"totalNotional"`
+	Count           int                `json:"count"`
+	Biggest         *liquidationHitDTO `json:"biggest,omitempty"`
+	CoverageSeconds int64              `json:"coverageSeconds"`
+	Complete        bool               `json:"complete"`
+}
+
+type liquidationsResponse struct {
+	Symbol          string                 `json:"symbol"`
+	Exchange        string                 `json:"exchange"`
+	CollectingSince string                 `json:"collectingSince,omitempty"`
+	Live            bool                   `json:"live"`
+	VenueCount      int                    `json:"venueCount"`
+	Windows         []liquidationWindowDTO `json:"windows"`
+	Note            string                 `json:"note"`
+}
+
+func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
+	if a == nil {
+		return liquidationsResponse{}
+	}
+	wins := make([]liquidationWindowDTO, 0, len(a.Windows))
+	for _, w := range a.Windows {
+		row := liquidationWindowDTO{
+			Window: w.Window, LongNotional: w.LongNotional, ShortNotional: w.ShortNotional,
+			TotalNotional: w.TotalNotional, Count: w.Count,
+			CoverageSeconds: w.CoverageSeconds, Complete: w.Complete,
+		}
+		if w.Biggest != nil {
+			row.Biggest = &liquidationHitDTO{
+				Exchange: w.Biggest.Exchange, Side: w.Biggest.Side,
+				Price: w.Biggest.Price, Quantity: w.Biggest.Quantity, Notional: w.Biggest.Notional,
+				Time: w.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		wins = append(wins, row)
+	}
+	since := ""
+	if !a.CollectingSince.IsZero() {
+		since = a.CollectingSince.UTC().Format(time.RFC3339Nano)
+	}
+	return liquidationsResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
+		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
+		Note: "Binance USD-M and Bybit linear perpetual liquidations seen since this process started. complete=false until that window of uptime has elapsed. Binance publishes at most the largest hit per symbol per second. Notional is quote (USDT). Informational only.",
 	}
 }
 

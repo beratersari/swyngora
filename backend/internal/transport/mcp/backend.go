@@ -116,6 +116,40 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidations(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "longNotional": w.LongNotional, "shortNotional": w.ShortNotional,
+			"totalNotional": w.TotalNotional, "count": w.Count,
+			"coverageSeconds": w.CoverageSeconds, "complete": w.Complete,
+		}
+		if w.Biggest != nil {
+			row["biggest"] = map[string]any{
+				"exchange": w.Biggest.Exchange, "side": w.Biggest.Side,
+				"price": w.Biggest.Price, "quantity": w.Biggest.Quantity, "notional": w.Biggest.Notional,
+				"time": w.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		wins = append(wins, row)
+	}
+	since := ""
+	if !got.CollectingSince.IsZero() {
+		since = got.CollectingSince.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "collectingSince": since,
+		"live": got.Live, "venueCount": got.VenueCount, "windows": wins,
+	})
+}
+
 func (b *Backend) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

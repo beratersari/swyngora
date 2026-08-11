@@ -610,6 +610,36 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidations:
+    get:
+      summary: Rolling futures liquidation totals
+      description: |
+        Long/short liquidation notional, count, and the biggest hit for the last
+        **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
+        (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
+        websocket streams. Totals only include events seen since this process
+        started (`complete` is false until the process has been up for that window).
+        `exchange=all` (default) sums both venues. Informational only.
+      operationId: getMarketLiquidations
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Liquidation windows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidations'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -4488,6 +4518,39 @@ components:
         venues:
           type: array
           items: { $ref: '#/components/schemas/VenueLiquidity' }
+        note: { type: string }
+    LiquidationHit:
+      type: object
+      properties:
+        exchange: { type: string }
+        side: { type: string, enum: [long, short] }
+        price: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
+        time: { type: string, format: date-time }
+    LiquidationWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [5m, 1h, 4h, 24h] }
+        longNotional: { type: string, description: Quote value of liquidated longs }
+        shortNotional: { type: string, description: Quote value of liquidated shorts }
+        totalNotional: { type: string }
+        count: { type: integer }
+        biggest: { $ref: '#/components/schemas/LiquidationHit' }
+        coverageSeconds: { type: integer, description: How many seconds of data this window actually has }
+        complete: { type: boolean, description: False until the process has been up for the full window }
+    MarketLiquidations:
+      type: object
+      description: Rolling futures liquidation totals from live streams
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        collectingSince: { type: string, format: date-time }
+        live: { type: boolean }
+        venueCount: { type: integer }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationWindow' }
         note: { type: string }
     OrderBookImpactFill:
       type: object

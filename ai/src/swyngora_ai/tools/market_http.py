@@ -107,6 +107,14 @@ class MarketOrderBookInput(BaseModel):
     )
 
 
+class LiquidationsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues)",
+    )
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -621,6 +629,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/orderbook/combined",
             {"symbol": symbol, "rangePct": range_pct},
+        )
+
+    def get_liquidations(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidations",
+            {"symbol": symbol, "exchange": exchange},
         )
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
@@ -1606,6 +1620,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "(requested ±range_pct when all cover it both ways). Use for overall pressure."
             ),
             args_schema=MarketOrderBookInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidations,
+            name="get_liquidations",
+            description=(
+                "Futures liquidations for a coin over the last 5 minutes, 1 hour, "
+                "4 hours, and 24 hours. Returns long vs short notional, count, and "
+                "the biggest hit. Binance USD-M + Bybit linear. exchange=all sums both. "
+                "complete=false until the process has been up for that window."
+            ),
+            args_schema=LiquidationsInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

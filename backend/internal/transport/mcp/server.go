@@ -29,6 +29,7 @@ type DataPort interface {
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -250,6 +251,22 @@ func registerTools(s *server.MCPServer, api DataPort) {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AnalyzeCombinedOrderBook(ctx, symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	s.AddTool(mcp.NewTool("get_liquidations",
+		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, and the biggest hit. Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both. complete=false until the process has been up for that window. Prefer this for 'how much BTC was liquidated'."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidations(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

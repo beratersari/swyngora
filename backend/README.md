@@ -34,6 +34,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/combined` | Market-wide pressure from all three venues in one price band |
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
+| `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -213,8 +214,10 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
 | `ORDERBOOK_CACHE_TTL` | `2s` | Reserved TTL for any leftover REST book cache (live books are not cached) |
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Binance spot stream host for the live local book |
+| `BINANCE_FUTURES_WS_URL` | `wss://fstream.binance.com` | Binance USD-M stream for liquidations |
 | `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |
 | `BYBIT_WS_URL` | `wss://stream.bybit.com/v5/public/spot` | Bybit spot stream for the live local book |
+| `BYBIT_LINEAR_WS_URL` | `wss://stream.bybit.com/v5/public/linear` | Bybit linear stream for liquidations |
 | `ORDERBOOK_IDLE_TTL` | `90s` | Drop unused live depth streams |
 | `ORDERBOOK_SYNC_TIMEOUT` | `8s` | Max wait for a synced local book |
 | `REALTIME_PRICE_INTERVAL` | `5s` | How often subscribed WebSocket prices are pushed |
