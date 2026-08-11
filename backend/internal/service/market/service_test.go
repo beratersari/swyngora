@@ -578,6 +578,109 @@ func TestGetOpenInterest_EmptyPorts(t *testing.T) {
 	}
 }
 
+type fakeFunding struct {
+	ser *domain.FundingSeries
+	err error
+}
+
+func (f *fakeFunding) GetFundingSeries(_ context.Context, symbol string, _ int) (*domain.FundingSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetFundingRate_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBinance,
+		Current:         domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+		NextFundingTime: now.Add(time.Hour),
+		IntervalHours:   8,
+		History:         []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.00008}},
+	}}
+	byb := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBybit,
+		Current:         domain.FundingPoint{Time: now, Rate: 0.00005, Predicted: true},
+		NextFundingTime: now.Add(time.Hour),
+		IntervalHours:   8,
+		History:         []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.00003}},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetFundingRate(context.Background(), "all", "btc-usd", 12)
+	if err != nil || got.VenueCount != 2 || got.Current != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	one, err := svc.GetFundingRate(context.Background(), "binance", "BTCUSDT", 0)
+	if err != nil || one.Current == nil || one.Current.Payer != "long" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+type fakeLS struct {
+	ser *domain.LongShortSeries
+	err error
+}
+
+func (f *fakeLS) GetLongShortSeries(_ context.Context, symbol string, _ int) (*domain.LongShortSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetLongShortRatio_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.63, ShortShare: 0.37, Ratio: 1.70},
+	}}
+	byb := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBybit,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.58, ShortShare: 0.42, Ratio: 1.38},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetLongShortRatio(context.Background(), "all", "btc-usd", 24)
+	if err != nil || got.VenueCount != 2 || got.Current != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	one, err := svc.GetLongShortRatio(context.Background(), "binance", "BTCUSDT", 0)
+	if err != nil || one.Current == nil || one.Current.Bias != "long" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+func TestGetOpenInterest_AttachesFunding(t *testing.T) {
+	now := time.Now().UTC()
+	oi := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 10000},
+		History:  []domain.OpenInterestPoint{{Time: now.Add(-5 * time.Minute), Contracts: 90, Value: 9000}},
+	}}
+	fund := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:      domain.ExchangeBinance,
+		Current:       domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+		IntervalHours: 8,
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: fund})
+	got, err := svc.GetOpenInterest(context.Background(), "binance", "BTCUSDT")
+	if err != nil || got.Funding == nil || got.Funding.Current == nil {
+		t.Fatalf("funding missing %+v %v", got, err)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

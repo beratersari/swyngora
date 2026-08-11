@@ -364,6 +364,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/funding-rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Perpetual funding rate and recent history
+         * @description Predicted next funding rate plus recent settled payments for
+         *     Binance USD-M and Bybit linear perpetual.
+         */
+        get: operations["getMarketFundingRate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/long-short-ratio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Long/short account ratio and recent history */
+        get: operations["getMarketLongShortRatio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -2451,6 +2489,81 @@ export interface components {
             /** Format: date-time */
             asOf?: string;
             venueCount?: number;
+            funding?: components["schemas"]["MarketFundingRate"];
+            longShort?: components["schemas"]["MarketLongShortRatio"];
+            note?: string;
+        };
+        FundingPrint: {
+            /** Format: date-time */
+            time?: string;
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            markPrice?: string;
+            predicted?: boolean;
+        };
+        FundingCurrent: {
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            /** Format: date-time */
+            nextFundingTime?: string;
+            intervalHours?: number;
+            /** Format: date-time */
+            time?: string;
+        };
+        FundingVenue: {
+            exchange?: string;
+            current?: components["schemas"]["FundingCurrent"];
+            lastSettled?: components["schemas"]["FundingPrint"];
+            avgLast3?: string;
+            avgLast3Pct?: string;
+            history?: components["schemas"]["FundingPrint"][];
+        };
+        /** @description Predicted next funding plus recent settlements */
+        MarketFundingRate: {
+            symbol?: string;
+            exchange?: string;
+            current?: components["schemas"]["FundingCurrent"];
+            venues?: components["schemas"]["FundingVenue"][];
+            history?: components["schemas"]["FundingPrint"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
+            note?: string;
+        };
+        LongShortLevel: {
+            /** Format: date-time */
+            time?: string;
+            longPct?: string;
+            shortPct?: string;
+            ratio?: string;
+            /** @enum {string} */
+            bias?: "long" | "short" | "balanced";
+            longShare?: string;
+        };
+        LongShortVenue: {
+            exchange?: string;
+            kind?: string;
+            period?: string;
+            current?: components["schemas"]["LongShortLevel"];
+            change?: string;
+            history?: components["schemas"]["LongShortLevel"][];
+        };
+        /** @description Account long/short ratio plus recent 5m history */
+        MarketLongShortRatio: {
+            symbol?: string;
+            exchange?: string;
+            kind?: string;
+            period?: string;
+            current?: components["schemas"]["LongShortLevel"];
+            venues?: components["schemas"]["LongShortVenue"][];
+            history?: components["schemas"]["LongShortLevel"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
             note?: string;
         };
         OrderBookImpactFill: {
@@ -3857,6 +3970,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketOpenInterest"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFundingRate: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Settled history size (1–30, default 12) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current funding and recent settlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketFundingRate"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLongShortRatio: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLongShortRatio"];
                 };
             };
             400: components["responses"]["Error"];

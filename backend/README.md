@@ -35,7 +35,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
-| `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
+| `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -179,7 +181,9 @@ Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market**, **watchlist**,
 | `/lowmcap [exchange\|all] [n]` | Lowest circulating market cap |
 | `/mcap <asset\|pair>` | Supply snapshot |
 | `/rsi <symbol> [interval] [exchange]` | RSI + EMA |
-| `/oi <symbol> [binance\|bybit\|all]` | Futures open interest + 5m/1h/4h/24h change |
+| `/oi <symbol> [binance\|bybit\|all]` | Futures open interest + change + funding |
+| `/funding <symbol> [binance\|bybit\|all]` | Current funding rate + recent history |
+| `/ls <symbol> [binance\|bybit\|all]` | Long/short account ratio + recent history |
 | `/exchanges` | Venues |
 | `/watch` · `add` · `del` · `top` | Per-user watchlist (`tg-<user_id>`) |
 | `/portfolio` · `/portfolio create [balance]` | Paper portfolio (`tg-<user_id>`) |

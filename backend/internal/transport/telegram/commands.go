@@ -37,12 +37,12 @@ type Options struct {
 
 // Router dispatches Telegram text commands to application services.
 type Router struct {
-	market    *market.Service
-	watch     *watchlist.Service
-	portfolio *portfolio.Service
-	ai        *aiagent.Client
-	opts      Options
-	now       func() time.Time
+	market     *market.Service
+	watch      *watchlist.Service
+	portfolio  *portfolio.Service
+	ai         *aiagent.Client
+	opts       Options
+	now        func() time.Time
 	mu         sync.Mutex
 	lastAt     map[int64]time.Time
 	pending    *pendingStore
@@ -127,6 +127,10 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdRSI(ctx, args))
 	case "/oi", "/openinterest", "/open-interest":
 		return textReply(r.cmdOpenInterest(ctx, args))
+	case "/funding", "/fr":
+		return textReply(r.cmdFunding(ctx, args))
+	case "/ls", "/longshort", "/long-short":
+		return textReply(r.cmdLongShort(ctx, args))
 	case "/exchanges":
 		return textReply(r.cmdExchanges())
 	case "/watch":
@@ -184,7 +188,6 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	}
 	return FormatAIAnswer(res.Reply, res.Thinking, res.Tools) + FormatAIReferences(toRefLinks(res.References))
 }
-
 
 // IsAIRequest reports whether text should be handled by the multi-agent AI path.
 func (r *Router) IsAIRequest(text string) bool {
@@ -383,6 +386,38 @@ func (r *Router) cmdOpenInterest(ctx context.Context, args []string) string {
 		return friendlyErr(err)
 	}
 	return FormatOpenInterest(got)
+}
+
+func (r *Router) cmdFunding(ctx context.Context, args []string) string {
+	if len(args) < 1 {
+		return "Usage: /funding <symbol> [binance|bybit|all]\nExample: /funding BTCUSDT\nExample: /funding ETHUSDT binance"
+	}
+	symbol := strings.ToUpper(args[0])
+	exchange := "all"
+	if len(args) > 1 {
+		exchange = strings.ToLower(args[1])
+	}
+	got, err := r.market.GetFundingRate(ctx, exchange, symbol, domain.DefaultFundingHistoryLimit)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatFunding(got)
+}
+
+func (r *Router) cmdLongShort(ctx context.Context, args []string) string {
+	if len(args) < 1 {
+		return "Usage: /ls <symbol> [binance|bybit|all]\nExample: /ls BTCUSDT\nExample: /ls ETHUSDT binance"
+	}
+	symbol := strings.ToUpper(args[0])
+	exchange := "all"
+	if len(args) > 1 {
+		exchange = strings.ToLower(args[1])
+	}
+	got, err := r.market.GetLongShortRatio(ctx, exchange, symbol, domain.DefaultLongShortHistoryLimit)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatLongShort(got)
 }
 
 func (r *Router) cmdRSI(ctx context.Context, args []string) string {

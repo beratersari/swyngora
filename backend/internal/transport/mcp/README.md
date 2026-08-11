@@ -15,7 +15,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `analyze_market_orderbook` | Combined Binance+Coinbase+Bybit pressure in one shared price band |
 | `get_market_liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations (Binance USD-M + Bybit linear) |
-| `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear) |
+| `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
+| `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
+| `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

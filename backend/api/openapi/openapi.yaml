@@ -656,6 +656,9 @@ paths:
         `contracts` is venue-published size in the base asset; `value` is USDT
         notional. `exchange=all` (default) sums both venues. `complete` is false
         when the historical sample is missing or older than the window slack.
+        The `funding` object is the predicted next funding rate plus recent
+        settlements (same payload as `/funding-rate`). `longShort` is the
+        account long/short ratio (same payload as `/long-short-ratio`).
         Results are cached ~30s. Informational only.
       operationId: getMarketOpenInterest
       tags: [Market]
@@ -675,6 +678,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketOpenInterest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/funding-rate:
+    get:
+      summary: Perpetual funding rate and recent history
+      description: |
+        Predicted **next** funding rate plus recent **settled** payments for
+        **Binance USD-M** and **Bybit linear perpetual**. `rate` is decimal
+        (`0.0001` = 0.01%); `ratePct` is percent. `payer` is who pays at
+        settlement (`long` = longs pay shorts). Combined `exchange=all` returns
+        each venue separately — rates are not averaged. `limit` is settled
+        history size (default 12, max 30). Cached ~30s. Informational only.
+      operationId: getMarketFundingRate
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: limit
+          in: query
+          description: Settled history size (1–30, default 12)
+          schema: { type: integer, default: 12, minimum: 1, maximum: 30 }
+      responses:
+        '200':
+          description: Current funding and recent settlements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketFundingRate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/long-short-ratio:
+    get:
+      summary: Long/short account ratio and recent history
+      description: |
+        Share of **accounts** that are long vs short (not position size) on
+        **Binance USD-M** (`globalLongShortAccountRatio`) and **Bybit linear**
+        (`/v5/market/account-ratio`). 5-minute samples. `ratio` is long/short
+        (1 = even). `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95.
+        Combined `exchange=all` does not average venues. `limit` default 24
+        (~2 hours). Cached ~30s. Informational only.
+      operationId: getMarketLongShortRatio
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: limit
+          in: query
+          description: History size (1–100, default 24)
+          schema: { type: integer, default: 24, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Current long/short ratio and recent 5m history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLongShortRatio'
         '400':
           $ref: '#/components/responses/Error'
         '404':
@@ -4751,6 +4834,91 @@ components:
         venues:
           type: array
           items: { $ref: '#/components/schemas/OpenInterestVenue' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
+        funding: { $ref: '#/components/schemas/MarketFundingRate' }
+        longShort: { $ref: '#/components/schemas/MarketLongShortRatio' }
+        note: { type: string }
+    FundingPrint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        rate: { type: string, description: Decimal rate (0.0001 = 0.01%) }
+        ratePct: { type: string, description: Percent }
+        payer: { type: string, enum: [long, short, none], description: Who pays at settlement }
+        markPrice: { type: string }
+        predicted: { type: boolean }
+    FundingCurrent:
+      type: object
+      properties:
+        rate: { type: string }
+        ratePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        nextFundingTime: { type: string, format: date-time }
+        intervalHours: { type: integer }
+        time: { type: string, format: date-time }
+    FundingVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/FundingCurrent' }
+        lastSettled: { $ref: '#/components/schemas/FundingPrint' }
+        avgLast3: { type: string, description: Average of the last 3 settlements }
+        avgLast3Pct: { type: string }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPrint' }
+    MarketFundingRate:
+      type: object
+      description: Predicted next funding plus recent settlements
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/FundingCurrent' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/FundingVenue' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPrint' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
+        note: { type: string }
+    LongShortLevel:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        longPct: { type: string, description: Percent of accounts that are long }
+        shortPct: { type: string }
+        ratio: { type: string, description: long/short (1 = even) }
+        bias: { type: string, enum: [long, short, balanced] }
+        longShare: { type: string, description: 0–1 share }
+    LongShortVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        kind: { type: string, description: accounts }
+        period: { type: string, description: 5m }
+        current: { $ref: '#/components/schemas/LongShortLevel' }
+        change: { type: string, description: Signed ratio change vs previous 5m print }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortLevel' }
+    MarketLongShortRatio:
+      type: object
+      description: Account long/short ratio plus recent 5m history
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        kind: { type: string }
+        period: { type: string }
+        current: { $ref: '#/components/schemas/LongShortLevel' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortVenue' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortLevel' }
         asOf: { type: string, format: date-time }
         venueCount: { type: integer }
         note: { type: string }

@@ -222,6 +222,50 @@ func TestGetOpenInterest_OK(t *testing.T) {
 	}
 }
 
+func TestGetFundingRate_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-rate?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingRate(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body fundingRateResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLongShortRatio_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/long-short-ratio?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLongShortRatio(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body longShortResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetFundingRate_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-rate?symbol=BTCUSDT&limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingRate(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetOpenInterest_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/open-interest", nil)

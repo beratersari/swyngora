@@ -71,6 +71,28 @@ func newTestRouter(t *testing.T) *Router {
 	})
 }
 
+func TestLongShortCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 14, 14, "/ls BTCUSDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "BTCUSDT") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestFundingCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 13, 13, "/funding BTCUSDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "BTCUSDT") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestOpenInterestCommand(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 12, 12, "/oi BTCUSDT")

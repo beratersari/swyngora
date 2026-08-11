@@ -37,6 +37,57 @@ func TestAPIClient_GetTicker(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetLongShortRatio(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/long-short-ratio" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"symbol": "BTCUSDT", "venues": []any{}})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLongShortRatio(context.Background(), "all", "BTCUSDT", 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_GetFundingRate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/funding-rate" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "venues": []any{map[string]any{"exchange": "binance", "current": map[string]any{"rate": "0.0001"}}},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetFundingRate(context.Background(), "all", "BTCUSDT", 12)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetOpenInterest(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/open-interest" {

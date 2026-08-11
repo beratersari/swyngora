@@ -170,6 +170,24 @@ class OpenInterestInput(BaseModel):
     )
 
 
+class LongShortInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, not averaged)",
+    )
+    limit: int = Field(default=24, ge=1, le=100, description="5m history size")
+
+
+class FundingRateInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, not averaged)",
+    )
+    limit: int = Field(default=12, ge=1, le=30, description="Settled history size")
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -700,6 +718,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/open-interest",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_long_short_ratio(symbol: str, exchange: str = "all", limit: int = 24) -> str:
+        return http.get(
+            "/api/v1/market/long-short-ratio",
+            {"symbol": symbol, "exchange": exchange, "limit": limit},
+        )
+
+    def get_funding_rate(symbol: str, exchange: str = "all", limit: int = 12) -> str:
+        return http.get(
+            "/api/v1/market/funding-rate",
+            {"symbol": symbol, "exchange": exchange, "limit": limit},
         )
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
@@ -1718,6 +1748,28 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Use for 'is OI rising or falling'."
             ),
             args_schema=OpenInterestInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_rate,
+            name="get_funding_rate",
+            description=(
+                "Perpetual futures funding rate: predicted next payment plus recent "
+                "settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. "
+                "payer=long means longs pay shorts. Binance USD-M + Bybit linear. "
+                "exchange=all returns each venue separately (not averaged)."
+            ),
+            args_schema=FundingRateInput,
+        ),
+        StructuredTool.from_function(
+            get_long_short_ratio,
+            name="get_long_short_ratio",
+            description=(
+                "Futures long/short account ratio: share of accounts that are long "
+                "vs short (not position size). ratio is long/short (1 = even). "
+                "bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. "
+                "Binance USD-M + Bybit linear. exchange=all is per venue, not averaged."
+            ),
+            args_schema=LongShortInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

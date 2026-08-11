@@ -34,3 +34,15 @@ type SupplyPort interface {
 type OpenInterestPort interface {
 	GetOpenInterestSeries(ctx context.Context, symbol string) (*OpenInterestSeries, error)
 }
+
+// FundingRatePort loads the predicted next funding rate plus settled history.
+// Implemented by Binance USD-M and Bybit linear adapters.
+type FundingRatePort interface {
+	GetFundingSeries(ctx context.Context, symbol string, limit int) (*FundingSeries, error)
+}
+
+// LongShortRatioPort loads the latest account long/short ratio plus recent history.
+// Implemented by Binance USD-M and Bybit linear adapters.
+type LongShortRatioPort interface {
+	GetLongShortSeries(ctx context.Context, symbol string, limit int) (*LongShortSeries, error)
+}

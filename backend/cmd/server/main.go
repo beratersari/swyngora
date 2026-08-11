@@ -170,6 +170,12 @@ func main() {
 	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
 	})
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)

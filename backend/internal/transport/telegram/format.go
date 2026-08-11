@@ -545,7 +545,94 @@ func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
 				arrow, code(w.Window), code(w.Change), code(w.ChangePct+"%"), italic(compactUSDT(w.ChangeValue)), flag)
 		}
 	}
+	if s.Funding != nil && len(s.Funding.Venues) > 0 {
+		b.WriteString("\n" + bold("Funding") + "\n")
+		b.WriteString(formatFundingVenues(s.Funding))
+	}
+	if s.LongShort != nil && len(s.LongShort.Venues) > 0 {
+		b.WriteString("\n" + bold("Long/short") + "\n")
+		b.WriteString(formatLongShortVenues(s.LongShort))
+	}
 	b.WriteString(footer())
+	return b.String()
+}
+
+// FormatLongShort formats account long/short ratio.
+func FormatLongShort(s *domain.LongShortSnapshot) string {
+	if s == nil {
+		return "No long/short ratio."
+	}
+	var b strings.Builder
+	b.WriteString(header("⚖️", s.Symbol+" long/short"))
+	ex := s.Exchange
+	if ex == "all" {
+		ex = fmt.Sprintf("all · %d venues", s.VenueCount)
+	}
+	fmt.Fprintf(&b, "%s · accounts · %s\n", code(ex), code(s.Period))
+	b.WriteString(divider())
+	b.WriteString(formatLongShortVenues(s))
+	b.WriteString(footer())
+	return b.String()
+}
+
+func formatLongShortVenues(s *domain.LongShortSnapshot) string {
+	if s == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, v := range s.Venues {
+		fmt.Fprintf(&b, "  %s  long %s%% / short %s%%  ratio %s  %s\n",
+			code(v.Exchange), code(v.Current.LongPct), code(v.Current.ShortPct),
+			code(v.Current.Ratio), italic(v.Current.Bias))
+		if v.Change != "" && v.Change != "0" {
+			b.WriteString(row("Δ 5m", code(v.Change)))
+		}
+	}
+	return b.String()
+}
+
+// FormatFunding formats predicted next funding plus recent settlements.
+func FormatFunding(s *domain.FundingSnapshot) string {
+	if s == nil {
+		return "No funding rate."
+	}
+	var b strings.Builder
+	b.WriteString(header("💸", s.Symbol+" funding"))
+	ex := s.Exchange
+	if ex == "all" {
+		ex = fmt.Sprintf("all · %d venues", s.VenueCount)
+	}
+	fmt.Fprintf(&b, "%s\n", code(ex))
+	b.WriteString(divider())
+	b.WriteString(formatFundingVenues(s))
+	b.WriteString(footer())
+	return b.String()
+}
+
+func formatFundingVenues(s *domain.FundingSnapshot) string {
+	if s == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, v := range s.Venues {
+		payer := v.Current.Payer
+		if payer == "long" {
+			payer = "longs pay"
+		} else if payer == "short" {
+			payer = "shorts pay"
+		}
+		fmt.Fprintf(&b, "  %s  %s%%  %s", code(v.Exchange), code(v.Current.RatePct), italic(payer))
+		if v.Current.IntervalHours > 0 {
+			fmt.Fprintf(&b, "  every %dh", v.Current.IntervalHours)
+		}
+		b.WriteString("\n")
+		if !v.Current.NextFundingTime.IsZero() {
+			b.WriteString(row("next", code(v.Current.NextFundingTime.UTC().Format(time.RFC3339))))
+		}
+		if v.LastSettled != nil {
+			b.WriteString(row("last", code(v.LastSettled.RatePct+"%")))
+		}
+	}
 	return b.String()
 }
 
@@ -702,7 +789,9 @@ func HelpText() string {
 	b.WriteString(cmdLine("/lowmcap", "[exchange|all] [n]", "lowest circ. mcap"))
 	b.WriteString(cmdLine("/mcap", "<asset|pair>", "supply snapshot"))
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
-	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change"))
+	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
+	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
+	b.WriteString(cmdLine("/ls", "<symbol> [binance|bybit|all]", "long/short account ratio + recent history"))
 	b.WriteString(cmdLine("/exchanges", "", "list venues"))
 	b.WriteString("\n")
 

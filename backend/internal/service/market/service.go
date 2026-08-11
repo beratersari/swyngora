@@ -38,6 +38,8 @@ type Service struct {
 	liq           *domain.LiquidationBook
 	liqWatch      LiquidationWatch
 	oi            map[domain.Exchange]domain.OpenInterestPort
+	funding       map[domain.Exchange]domain.FundingRatePort
+	longShort     map[domain.Exchange]domain.LongShortRatioPort
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.
@@ -66,6 +68,36 @@ func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterest
 		}
 	}
 	s.oi = cp
+	return s
+}
+
+// WithFundingRate attaches Binance USD-M / Bybit linear funding ports.
+func (s *Service) WithFundingRate(ports map[domain.Exchange]domain.FundingRatePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.FundingRatePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.funding = cp
+	return s
+}
+
+// WithLongShortRatio attaches Binance USD-M / Bybit linear long/short ports.
+func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortRatioPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.LongShortRatioPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.longShort = cp
 	return s
 }
 
@@ -471,7 +503,159 @@ func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 	if len(series) == 0 && lastErr != nil {
 		return nil, lastErr
 	}
-	return domain.BuildOpenInterestSnapshot(ex, symbol, series, time.Now().UTC()), nil
+	snap := domain.BuildOpenInterestSnapshot(ex, symbol, series, time.Now().UTC())
+	var fund *domain.FundingSnapshot
+	var ls *domain.LongShortSnapshot
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		fund, _ = s.GetFundingRate(ctx, exchange, symbol, domain.DefaultFundingHistoryLimit)
+	}()
+	go func() {
+		defer wg.Done()
+		ls, _ = s.GetLongShortRatio(ctx, exchange, symbol, domain.DefaultLongShortHistoryLimit)
+	}()
+	wg.Wait()
+	snap.Funding = fund
+	snap.LongShort = ls
+	return snap, nil
+}
+
+// GetLongShortRatio returns the latest account long/short ratio plus recent 5m history.
+func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (*domain.LongShortSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	limit = domain.ClampLongShortHistoryLimit(limit)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.LongShortRatioPort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.longShortPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildLongShortSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.LongShortSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetLongShortSeries(ctx, symbol, limit)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.LongShortSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildLongShortSnapshot(ex, symbol, series, time.Now().UTC()), nil
+}
+
+func (s *Service) longShortPort(ex domain.Exchange) domain.LongShortRatioPort {
+	if s == nil || s.longShort == nil {
+		return nil
+	}
+	return s.longShort[ex]
+}
+
+// GetFundingRate returns the predicted next funding rate plus recent settlements.
+func (s *Service) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (*domain.FundingSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	limit = domain.ClampFundingHistoryLimit(limit)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.FundingRatePort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.fundingPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildFundingSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.FundingSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetFundingSeries(ctx, symbol, limit)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.FundingSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildFundingSnapshot(ex, symbol, series, time.Now().UTC()), nil
+}
+
+func (s *Service) fundingPort(ex domain.Exchange) domain.FundingRatePort {
+	if s == nil || s.funding == nil {
+		return nil
+	}
+	return s.funding[ex]
 }
 
 func (s *Service) oiPort(ex domain.Exchange) domain.OpenInterestPort {

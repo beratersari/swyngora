@@ -25,34 +25,38 @@ const (
 
 // Client implements domain.MarketDataPort against Bybit v5 public market APIs (spot).
 type Client struct {
-	baseURL     string
-	httpClient  *http.Client
-	candles     *cache.TTL[[]domain.Candle]
-	tickers     *cache.TTL[*domain.Ticker24h]
-	orderBooks  *cache.TTL[*domain.RawOrderBook]
-	spotMarkets *cache.TTL[[]domain.SpotMarket]
-	spotSF      singleflight.Group
-	candleSF    singleflight.Group
-	tickerSF    singleflight.Group
-	orderBookSF singleflight.Group
-	depth       *DepthHub
-	depthOnce   sync.Once
-	depthWait   time.Duration
-	wsURL       string
-	wsDial      wsDialer
-	depthIdle   time.Duration
-	oiCache     *cache.TTL[*domain.OpenInterestSeries]
-	oiSF        singleflight.Group
+	baseURL      string
+	httpClient   *http.Client
+	candles      *cache.TTL[[]domain.Candle]
+	tickers      *cache.TTL[*domain.Ticker24h]
+	orderBooks   *cache.TTL[*domain.RawOrderBook]
+	spotMarkets  *cache.TTL[[]domain.SpotMarket]
+	spotSF       singleflight.Group
+	candleSF     singleflight.Group
+	tickerSF     singleflight.Group
+	orderBookSF  singleflight.Group
+	depth        *DepthHub
+	depthOnce    sync.Once
+	depthWait    time.Duration
+	wsURL        string
+	wsDial       wsDialer
+	depthIdle    time.Duration
+	oiCache      *cache.TTL[*domain.OpenInterestSeries]
+	oiSF         singleflight.Group
+	fundingCache *cache.TTL[*domain.FundingSeries]
+	fundingSF    singleflight.Group
+	lsCache      *cache.TTL[*domain.LongShortSeries]
+	lsSF         singleflight.Group
 }
 
 // Options configures the Bybit client.
 type Options struct {
-	BaseURL         string
-	HTTPClient      *http.Client
-	CandleCache     *cache.TTL[[]domain.Candle]
-	TickerCache     *cache.TTL[*domain.Ticker24h]
-	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
-	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
+	BaseURL           string
+	HTTPClient        *http.Client
+	CandleCache       *cache.TTL[[]domain.Candle]
+	TickerCache       *cache.TTL[*domain.Ticker24h]
+	OrderBookCache    *cache.TTL[*domain.RawOrderBook]
+	SpotMarketCache   *cache.TTL[[]domain.SpotMarket]
 	WSURL             string
 	WSDial            wsDialer
 	DepthIdle         time.Duration
@@ -88,6 +92,12 @@ func NewClient(opts Options) *Client {
 	}
 	if c.oiCache == nil {
 		c.oiCache = cache.New[*domain.OpenInterestSeries](30 * time.Second)
+	}
+	if c.fundingCache == nil {
+		c.fundingCache = cache.New[*domain.FundingSeries](30 * time.Second)
+	}
+	if c.lsCache == nil {
+		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
 	}
 	return c
 }

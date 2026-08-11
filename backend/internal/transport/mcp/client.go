@@ -178,6 +178,32 @@ func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/open-interest", q)
 }
 
+// GetFundingRate returns the predicted next funding rate plus recent settlements.
+func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/funding-rate", q)
+}
+
+// GetLongShortRatio returns the latest account long/short ratio plus recent history.
+func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/long-short-ratio", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

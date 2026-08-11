@@ -71,6 +71,8 @@ type OpenInterestSnapshot struct {
 	Venues     []OpenInterestVenueSnap
 	AsOf       time.Time
 	VenueCount int
+	Funding    *FundingSnapshot   // current rate + recent settlements when available
+	LongShort  *LongShortSnapshot // account long/short ratio when available
 }
 
 // ParseOpenInterestExchange accepts binance, bybit, or all (empty = all).

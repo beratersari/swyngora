@@ -15,6 +15,22 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
+        if request.url.path.endswith("/long-short-ratio"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "venues": [{"exchange": "binance", "current": {"ratio": "1.70", "bias": "long", "longPct": "63"}}],
+                },
+            )
+        if request.url.path.endswith("/funding-rate"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "venues": [{"exchange": "binance", "current": {"rate": "0.0001", "ratePct": "0.01", "payer": "long"}}],
+                },
+            )
         if request.url.path.endswith("/open-interest"):
             return httpx.Response(
                 200,
@@ -112,6 +128,14 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_open_interest" in by_name
     oi = json.loads(by_name["get_open_interest"].invoke({"symbol": "BTCUSDT"}))
     assert oi["current"]["contracts"] == "100"
+
+    assert "get_funding_rate" in by_name
+    fr = json.loads(by_name["get_funding_rate"].invoke({"symbol": "BTCUSDT"}))
+    assert fr["venues"][0]["current"]["payer"] == "long"
+
+    assert "get_long_short_ratio" in by_name
+    lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))
+    assert lsr["venues"][0]["current"]["bias"] == "long"
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(

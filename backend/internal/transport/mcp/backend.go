@@ -30,8 +30,8 @@ type Backend struct {
 	Export    *exportsvc.Service
 	Import    *dataimport.Service
 	PriceDiff *pricediff.Service
-	Swing   *swing.Service
-	APIKeys *apikey.Service
+	Swing     *swing.Service
+	APIKeys   *apikey.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -166,11 +166,145 @@ func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 	if !got.AsOf.IsZero() {
 		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
 	}
-	return mustJSON(map[string]any{
+	out := map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange, "unit": got.Unit,
 		"current": cur, "windows": wins, "venues": venues, "asOf": asOf, "venueCount": got.VenueCount,
-		"note": "Binance USD-M and Bybit linear perpetual open interest. contracts is base-asset size (Bybit is single-sided). value is USDT notional. Change is current minus ~window ago. Informational only.",
-	})
+		"note": "Binance USD-M and Bybit linear perpetual open interest. contracts is base-asset size (Bybit is single-sided). value is USDT notional. Change is current minus ~window ago. funding is predicted next rate plus recent settlements. Informational only.",
+	}
+	if got.Funding != nil {
+		out["funding"] = fundingSnapshotMap(got.Funding)
+	}
+	if got.LongShort != nil {
+		out["longShort"] = longShortSnapshotMap(got.LongShort)
+	}
+	return mustJSON(out)
+}
+
+func (b *Backend) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLongShortRatio(ctx, exchange, symbol, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(longShortSnapshotMap(got))
+}
+
+func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, map[string]any{
+			"exchange": v.Exchange, "kind": v.Kind, "period": v.Period,
+			"current": longShortLevelMap(v.Current), "change": v.Change,
+			"history": longShortLevelsMap(v.History),
+		})
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "kind": got.Kind, "period": got.Period,
+		"venues": venues, "history": longShortLevelsMap(got.History),
+		"asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Share of accounts that are long vs short (not position size). ratio is long/short. Combined all does not average venues.",
+	}
+	if got.Current != nil {
+		out["current"] = longShortLevelMap(*got.Current)
+	}
+	return out
+}
+
+func longShortLevelMap(p domain.LongShortLevel) map[string]any {
+	out := map[string]any{"longPct": p.LongPct, "shortPct": p.ShortPct, "ratio": p.Ratio, "bias": p.Bias, "longShare": p.LongShare}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortLevelsMap(in []domain.LongShortLevel) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		out = append(out, longShortLevelMap(p))
+	}
+	return out
+}
+
+func (b *Backend) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetFundingRate(ctx, exchange, symbol, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingSnapshotMap(got))
+}
+
+func fundingSnapshotMap(got *domain.FundingSnapshot) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		row := map[string]any{
+			"exchange": v.Exchange, "current": fundingCurrentMap(v.Current),
+			"avgLast3": v.AvgLast3, "avgLast3Pct": v.AvgLast3Pct,
+			"history": fundingPrintsMap(v.History),
+		}
+		if v.LastSettled != nil {
+			row["lastSettled"] = fundingPrintMap(*v.LastSettled)
+		}
+		venues = append(venues, row)
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "venues": venues,
+		"history": fundingPrintsMap(got.History), "asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Combined all does not average venues.",
+	}
+	if got.Current != nil {
+		out["current"] = fundingCurrentMap(*got.Current)
+	}
+	return out
+}
+
+func fundingCurrentMap(c domain.FundingCurrent) map[string]any {
+	out := map[string]any{"rate": c.Rate, "ratePct": c.RatePct, "payer": c.Payer, "intervalHours": c.IntervalHours}
+	if !c.NextFundingTime.IsZero() {
+		out["nextFundingTime"] = c.NextFundingTime.UTC().Format(time.RFC3339Nano)
+	}
+	if !c.Time.IsZero() {
+		out["time"] = c.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingPrintMap(p domain.FundingPrint) map[string]any {
+	out := map[string]any{"rate": p.Rate, "ratePct": p.RatePct, "payer": p.Payer, "predicted": p.Predicted}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	if p.MarkPrice != "" {
+		out["markPrice"] = p.MarkPrice
+	}
+	return out
+}
+
+func fundingPrintsMap(in []domain.FundingPrint) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		out = append(out, fundingPrintMap(p))
+	}
+	return out
 }
 
 func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -2179,7 +2313,7 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 			"debtPrincipal": p.DebtPrincipal, "debtInterest": p.DebtInterest, "debtAsset": string(p.DebtAsset),
 			"debtNotional": p.DebtNotional, "markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL,
 			"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
-			"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
+			"openedAt":  p.OpenedAt.UTC().Format(time.RFC3339Nano),
 			"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		}
 		if p.StopLoss != nil {

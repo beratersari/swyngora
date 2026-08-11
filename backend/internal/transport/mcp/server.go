@@ -33,6 +33,8 @@ type DataPort interface {
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
+	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -305,7 +307,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_open_interest",
-		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear perpetual. exchange=all (default) sums both. Prefer this for 'is OI rising or falling'."),
+		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. Also includes funding (predicted next rate + recent settlements) on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear perpetual. exchange=all (default) sums OI. Prefer this for 'is OI rising or falling'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -314,6 +316,40 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetOpenInterest(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_funding_rate",
+		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear. exchange=all (default) returns each venue separately (rates are not averaged). Prefer this for 'what is the funding rate' or carry analysis."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("limit", mcp.Description("Settled history size 1–30 (default 12)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFundingRate(ctx, req.GetString("exchange", "all"), symbol, int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_long_short_ratio",
+		mcp.WithDescription("Futures long/short account ratio: share of accounts that are long vs short (not position size). ratio is long/short (1 = even). bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. exchange=all returns each venue separately (not averaged). Prefer this for 'are more traders long or short'."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("limit", mcp.Description("History size 1–100 (default 24, ~2 hours of 5m prints)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLongShortRatio(ctx, req.GetString("exchange", "all"), symbol, int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

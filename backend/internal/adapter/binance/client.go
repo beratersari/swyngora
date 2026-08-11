@@ -43,42 +43,46 @@ type Client struct {
 	// (those were the main reason the UI saw ~30–40s between real updates).
 	exchangeSpot *cache.TTL[[]spotSymbolMeta]
 	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
-	productMeta *cache.TTL[*productMetaSnapshot]
-	supply      *cache.TTL[*domain.AssetSupply]
-	spotSF      singleflight.Group
-	supplySF    singleflight.Group
-	metaSF      singleflight.Group
-	candleSF    singleflight.Group
-	tickerSF    singleflight.Group
-	orderBookSF singleflight.Group
-	depth       *DepthHub
-	depthOnce   sync.Once
-	depthWait   time.Duration
-	wsURL       string
-	wsDial      wsDialer
-	depthIdle   time.Duration
-	futuresBase string // USD-M REST (fapi.binance.com)
-	oiCache     *cache.TTL[*domain.OpenInterestSeries]
-	oiSF        singleflight.Group
+	productMeta  *cache.TTL[*productMetaSnapshot]
+	supply       *cache.TTL[*domain.AssetSupply]
+	spotSF       singleflight.Group
+	supplySF     singleflight.Group
+	metaSF       singleflight.Group
+	candleSF     singleflight.Group
+	tickerSF     singleflight.Group
+	orderBookSF  singleflight.Group
+	depth        *DepthHub
+	depthOnce    sync.Once
+	depthWait    time.Duration
+	wsURL        string
+	wsDial       wsDialer
+	depthIdle    time.Duration
+	futuresBase  string // USD-M REST (fapi.binance.com)
+	oiCache      *cache.TTL[*domain.OpenInterestSeries]
+	oiSF         singleflight.Group
+	fundingCache *cache.TTL[*domain.FundingSeries]
+	fundingSF    singleflight.Group
+	lsCache      *cache.TTL[*domain.LongShortSeries]
+	lsSF         singleflight.Group
 }
 
 // Options configures the Binance client.
 type Options struct {
-	BaseURL         string
-	ProductBaseURL  string // default https://www.binance.com — product catalog with circulating supply
-	APIKey          string // optional BINANCE_API_KEY for delist schedule
-	HTTPClient      *http.Client
-	CandleCache     *cache.TTL[[]domain.Candle]
-	TickerCache     *cache.TTL[*domain.Ticker24h]
-	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
-	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
-	SupplyCache     *cache.TTL[*domain.AssetSupply]
-	WSURL               string
-	WSDial              wsDialer
-	DepthIdle           time.Duration
-	DepthWait           time.Duration
-	FuturesBaseURL      string // default https://fapi.binance.com
-	OpenInterestCache   *cache.TTL[*domain.OpenInterestSeries]
+	BaseURL           string
+	ProductBaseURL    string // default https://www.binance.com — product catalog with circulating supply
+	APIKey            string // optional BINANCE_API_KEY for delist schedule
+	HTTPClient        *http.Client
+	CandleCache       *cache.TTL[[]domain.Candle]
+	TickerCache       *cache.TTL[*domain.Ticker24h]
+	OrderBookCache    *cache.TTL[*domain.RawOrderBook]
+	SpotMarketCache   *cache.TTL[[]domain.SpotMarket]
+	SupplyCache       *cache.TTL[*domain.AssetSupply]
+	WSURL             string
+	WSDial            wsDialer
+	DepthIdle         time.Duration
+	DepthWait         time.Duration
+	FuturesBaseURL    string // default https://fapi.binance.com
+	OpenInterestCache *cache.TTL[*domain.OpenInterestSeries]
 }
 
 // NewClient constructs a Binance market-data + supply client.
@@ -123,6 +127,12 @@ func NewClient(opts Options) *Client {
 	}
 	if c.oiCache == nil {
 		c.oiCache = cache.New[*domain.OpenInterestSeries](30 * time.Second)
+	}
+	if c.fundingCache == nil {
+		c.fundingCache = cache.New[*domain.FundingSeries](30 * time.Second)
+	}
+	if c.lsCache == nil {
+		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
 	}
 	return c
 }
