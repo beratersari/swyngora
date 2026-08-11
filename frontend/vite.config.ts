@@ -35,6 +35,11 @@ export default defineConfig({
     host: '0.0.0.0', // reachable from Windows host / LAN (WSL)
     port: 5174,
     strictPort: true,
+    // /mnt/c (Windows FS) does not reliably emit inotify events; poll so HMR works.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     proxy: {
       // Same-origin /api/* and /health → backend (fixes WSL: browser localhost ≠ WSL)
       '/api': {

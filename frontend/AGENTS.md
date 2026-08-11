@@ -158,4 +158,6 @@ Do not format `src/libs/api/generated/`.
 
 **Env (optional):** `VITE_API_BASE_URL`, `VITE_CLIENT_ID` (watchlist `X-Client-Id`).
 
-**Last updated:** 2026-07-27
+**Vite on WSL `/mnt/c`:** `server.watch.usePolling` is on so HMR sees Windows-FS writes. Restart `npm run dev` if the browser still serves a stale module.
+
+**Last updated:** 2026-08-11

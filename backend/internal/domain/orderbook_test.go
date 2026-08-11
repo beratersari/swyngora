@@ -106,6 +106,30 @@ func TestSuggestedGroupSizes_BTCLike(t *testing.T) {
 	}
 }
 
+func TestSuggestedGroupSizes_PIVXLike(t *testing.T) {
+	sizes := SuggestedGroupSizes(0.02365)
+	if len(sizes) < 2 {
+		t.Fatalf("sizes=%v", sizes)
+	}
+	for _, s := range sizes {
+		if s < 1e-6-1e-18 {
+			t.Fatalf("step %g is too fine for a ~$0.02 coin: %v", s, sizes)
+		}
+	}
+	var hasMicro, hasTenthMilli bool
+	for _, s := range sizes {
+		if math.Abs(s-1e-6) < 1e-18 {
+			hasMicro = true
+		}
+		if math.Abs(s-1e-4) < 1e-18 {
+			hasTenthMilli = true
+		}
+	}
+	if !hasMicro && !hasTenthMilli {
+		t.Fatalf("want 0.000001 or 0.0001 in %v", sizes)
+	}
+}
+
 func TestGroupOrderBook_Empty(t *testing.T) {
 	book := GroupOrderBook(RawOrderBook{Symbol: "X"}, 0.01, 20)
 	if len(book.Bids) != 0 || len(book.Asks) != 0 {

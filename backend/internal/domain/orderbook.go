@@ -147,8 +147,13 @@ func SuggestedGroupSizes(refPrice float64) []float64 {
 	if refPrice <= 0 || math.IsNaN(refPrice) || math.IsInf(refPrice, 0) {
 		return []float64{0.01, 0.1, 1}
 	}
-	lo := refPrice / 1e7
-	hi := refPrice / 40
+	lo := refPrice / 1e6
+	// Coins above a cent should not offer 1e-8 buckets — those labels
+	// overflow the sidebar and are finer than a meaningful tick.
+	if refPrice >= 0.01 && lo < 1e-6 {
+		lo = 1e-6
+	}
+	hi := refPrice / 10
 	if lo <= 0 {
 		lo = groupSizeLadder[0]
 	}

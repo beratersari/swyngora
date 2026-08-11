@@ -32,6 +32,6 @@ export const ChartAndBook = styled.div`
   align-items: start;
 
   @media (min-width: 1100px) {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   }
 `;

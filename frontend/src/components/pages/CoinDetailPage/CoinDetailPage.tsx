@@ -211,6 +211,13 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
+  const suggestedBookGroups = orderBookQuery.data?.suggestedGroupSizes;
+  useEffect(() => {
+    if (!orderBookGroup || !suggestedBookGroups?.length) return;
+    if (!suggestedBookGroups.includes(orderBookGroup)) {
+      setOrderBookGroup('');
+    }
+  }, [orderBookGroup, suggestedBookGroups]);
 
   const tickerQuery = useGetTicker24hQuery(
     { exchange: exchangeArg, symbol },

@@ -28,9 +28,48 @@ describe('OrderBookPanel', () => {
       <OrderBookPanel book={book} group="0.1" onGroupChange={onGroupChange} />,
     );
     expect(screen.getByTestId('order-book')).toBeInTheDocument();
-    expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByTestId('ob-bid-100')).toHaveTextContent('|');
+    expect(screen.getByTestId('ob-bid-100')).toHaveTextContent('100.0');
     expect(screen.getAllByText(/wall/i).length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Price group')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Price group' })).toBeInTheDocument();
     expect(onGroupChange).not.toHaveBeenCalled();
+  });
+
+  it('pads tiny group steps so decimals share one column', () => {
+    renderWithProviders(
+      <OrderBookPanel
+        book={{
+          ...book,
+          lastPrice: '0.00001234',
+          groupSize: '0.00001',
+          suggestedGroupSizes: ['0.00000001', '0.0000001', '0.000001', '0.00001', '0.0001'],
+        }}
+        group="0.00001"
+        onGroupChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('option', { name: '0.00000001' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.00000010' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.00000100' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.00001000' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.00010000' })).toBeInTheDocument();
+  });
+
+  it('does not keep a leftover finer group than the server suggests', () => {
+    renderWithProviders(
+      <OrderBookPanel
+        book={{
+          ...book,
+          lastPrice: '0.0237',
+          groupSize: '0.000005',
+          suggestedGroupSizes: ['0.000001', '0.000005', '0.00001', '0.0001'],
+        }}
+        group="0.00000001"
+        onGroupChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('option', { name: '0.00000001' })).not.toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.000001' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '0.000100' })).toBeInTheDocument();
   });
 });

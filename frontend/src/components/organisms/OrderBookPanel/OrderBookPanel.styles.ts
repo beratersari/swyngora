@@ -9,6 +9,7 @@ export const Panel = styled.section`
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.lg}px;
   min-width: 0;
+  overflow: hidden;
 `;
 
 export const TitleRow = styled.div`
@@ -19,92 +20,67 @@ export const TitleRow = styled.div`
   gap: ${({ theme }) => theme.spacing[2]}px;
 `;
 
+export const GroupField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+`;
+
+/** One-line code-style picker. Padded option labels share a decimal column. */
+export const GroupSelect = styled.select`
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  color: ${({ theme }) => theme.semantic.text.primary};
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 12px;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1.4;
+`;
+
 export const MetaRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: ${({ theme }) => theme.spacing[3]}px;
 `;
 
-export const Ladder = styled.div`
-  display: flex;
-  flex-direction: column;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-`;
-
-export const Head = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  padding: 0 0 ${({ theme }) => theme.spacing[1]}px;
-  color: ${({ theme }) => theme.semantic.text.secondary};
-`;
-
-export const Row = styled.button<{ $side: 'bid' | 'ask'; $wall?: boolean }>`
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  width: 100%;
+/** Markdown table: pipes + spaces, never a wrapping grid. */
+export const BookPre = styled.pre`
   margin: 0;
-  padding: 3px 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: default;
+  padding: ${({ theme }) => theme.spacing[2]}px;
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 11px;
+  font-variant-numeric: tabular-nums lining-nums;
+  line-height: 1.45;
+  white-space: pre;
+  color: ${({ theme }) => theme.semantic.text.primary};
+`;
+
+export const BookLine = styled.div<{ $side?: 'bid' | 'ask'; $mid?: boolean }>`
+  margin: 0;
+  padding: 0;
+  color: ${({ theme, $side, $mid }) =>
+    $mid
+      ? theme.semantic.text.secondary
+      : $side === 'bid'
+        ? theme.semantic.chart.up
+        : $side === 'ask'
+          ? theme.semantic.chart.down
+          : theme.semantic.text.primary};
   font: inherit;
-  font-variant-numeric: tabular-nums;
-  ${({ $wall, theme }) =>
-    $wall ? `box-shadow: inset 0 0 0 1px ${theme.semantic.border.default};` : ''}
-`;
-
-export const DepthBar = styled.span<{ $side: 'bid' | 'ask'; $pct: number }>`
-  position: absolute;
-  top: 1px;
-  bottom: 1px;
-  right: 0;
-  width: ${({ $pct }) => `${$pct}%`};
-  background: ${({ theme, $side }) =>
-    $side === 'bid'
-      ? theme.semantic.chart.up
-      : theme.semantic.chart.down};
-  opacity: 0.16;
-  pointer-events: none;
-`;
-
-export const Price = styled.span<{ $side: 'bid' | 'ask' }>`
-  position: relative;
-  z-index: 1;
-  color: ${({ theme, $side }) =>
-    $side === 'bid' ? theme.semantic.chart.up : theme.semantic.chart.down};
-  font-weight: ${({ theme }) => theme.fontWeights.medium};
-`;
-
-export const Qty = styled.span`
-  position: relative;
-  z-index: 1;
-  text-align: right;
-`;
-
-export const SpreadRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  padding: ${({ theme }) => theme.spacing[2]}px 0;
-  margin: ${({ theme }) => theme.spacing[1]}px 0;
-  border-top: 1px solid ${({ theme }) => theme.semantic.border.default};
-  border-bottom: 1px solid ${({ theme }) => theme.semantic.border.default};
-`;
-
-export const WallTag = styled.span`
-  position: relative;
-  z-index: 1;
-  margin-left: 6px;
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.semantic.text.secondary};
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: pre;
 `;

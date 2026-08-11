@@ -101,7 +101,8 @@ If you open the UI from Windows as `http://172.x.x.x:5174`:
 
 1. Keep **`VITE_API_BASE_URL` empty** (default) so the browser calls the **same origin**.
 2. Vite proxies `/api` and `/health` to the Go API on `127.0.0.1:8080` **inside WSL**.
-3. Do **not** use `http://localhost:8080` as the API base from a Windows browser — that hits Windows, not WSL.
+3. The repo lives on `/mnt/c`, so Vite **polls** for file changes. If the page still looks old after an edit, restart `npm run dev` and hard-refresh the tab.
+4. Do **not** use `http://localhost:8080` as the API base from a Windows browser — that hits Windows, not WSL.
 
 Backend CORS already allows `*` for local dev.
 
