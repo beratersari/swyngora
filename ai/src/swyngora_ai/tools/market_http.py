@@ -1628,7 +1628,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Futures liquidations for a coin over the last 5 minutes, 1 hour, "
                 "4 hours, and 24 hours. Returns long vs short notional, count, and "
                 "the biggest hit. Binance USD-M + Bybit linear. exchange=all sums both. "
-                "complete is per coin and venue from when that symbol started being watched."
+                "complete only counts time the websocket was actually live for that coin and venue; "
+                "coverage does not grow if the stream never connects or drops."
             ),
             args_schema=LiquidationsInput,
         ),

@@ -127,7 +127,8 @@ func ParseLiquidationExchange(raw string) (string, error) {
 }
 
 // SummarizeLiquidations folds events since cut into one window.
-func SummarizeLiquidations(events []LiquidationEvent, windowID string, cut, now, started time.Time) LiquidationWindowTotals {
+// coverage is how long the websocket was actually live for this coin+venue.
+func SummarizeLiquidations(events []LiquidationEvent, windowID string, cut time.Time, coverage time.Duration) LiquidationWindowTotals {
 	var dur time.Duration
 	for _, w := range LiquidationWindows {
 		if w.ID == windowID {
@@ -136,20 +137,15 @@ func SummarizeLiquidations(events []LiquidationEvent, windowID string, cut, now,
 		}
 	}
 	out := LiquidationWindowTotals{Window: windowID}
-	if started.IsZero() {
-		// Not tracking this coin+venue yet.
-	} else {
-		up := now.Sub(started)
-		if up < 0 {
-			up = 0
-		}
-		if dur > 0 {
-			if up >= dur {
-				out.Complete = true
-				out.CoverageSeconds = int64(dur.Seconds())
-			} else {
-				out.CoverageSeconds = int64(up.Seconds())
-			}
+	if coverage < 0 {
+		coverage = 0
+	}
+	if dur > 0 {
+		if coverage >= dur {
+			out.Complete = true
+			out.CoverageSeconds = int64(dur.Seconds())
+		} else {
+			out.CoverageSeconds = int64(coverage.Seconds())
 		}
 	}
 	var longN, shortN float64
@@ -188,12 +184,50 @@ func SummarizeLiquidations(events []LiquidationEvent, windowID string, cut, now,
 	return out
 }
 
+// liveClock counts only time a websocket was actually connected.
+type liveClock struct {
+	accumulated  time.Duration
+	sessionStart time.Time // zero while disconnected
+}
+
+func (c *liveClock) set(now time.Time, live bool) {
+	if c == nil {
+		return
+	}
+	if live {
+		if c.sessionStart.IsZero() {
+			c.sessionStart = now
+		}
+		return
+	}
+	if !c.sessionStart.IsZero() {
+		c.accumulated += now.Sub(c.sessionStart)
+		c.sessionStart = time.Time{}
+	}
+}
+
+func (c *liveClock) elapsed(now time.Time) time.Duration {
+	if c == nil {
+		return 0
+	}
+	d := c.accumulated
+	if !c.sessionStart.IsZero() {
+		d += now.Sub(c.sessionStart)
+	}
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
 // LiquidationBook keeps a rolling 24h of futures liquidations in memory.
 type LiquidationBook struct {
 	mu         sync.Mutex
 	bySym      map[string][]LiquidationEvent
 	watchSince map[string]time.Time // symbol|exchange → first watch
 	venueSince map[Exchange]time.Time
+	venueClock map[Exchange]*liveClock
+	watchClock map[string]*liveClock
 	now        func() time.Time
 	live       map[Exchange]bool
 }
@@ -208,6 +242,8 @@ func NewLiquidationBook() *LiquidationBook {
 		bySym:      map[string][]LiquidationEvent{},
 		watchSince: map[string]time.Time{},
 		venueSince: map[Exchange]time.Time{},
+		venueClock: map[Exchange]*liveClock{},
+		watchClock: map[string]*liveClock{},
 		now:        time.Now,
 		live:       map[Exchange]bool{},
 	}
@@ -221,10 +257,21 @@ func (b *LiquidationBook) SetLive(ex Exchange, live bool) {
 		return
 	}
 	b.mu.Lock()
+	now := b.now().UTC()
 	b.live[ex] = live
+	if b.venueClock[ex] == nil {
+		b.venueClock[ex] = &liveClock{}
+	}
+	b.venueClock[ex].set(now, live)
 	if live {
 		if _, ok := b.venueSince[ex]; !ok {
-			b.venueSince[ex] = b.now().UTC()
+			b.venueSince[ex] = now
+		}
+	}
+	suffix := "|" + string(ex)
+	for k, c := range b.watchClock {
+		if strings.HasSuffix(k, suffix) {
+			c.set(now, live)
 		}
 	}
 	b.mu.Unlock()
@@ -251,6 +298,11 @@ func (b *LiquidationBook) markWatchLocked(ex Exchange, symbol string, at time.Ti
 		return
 	}
 	b.watchSince[k] = at
+	c := &liveClock{}
+	if b.live[ex] {
+		c.sessionStart = at
+	}
+	b.watchClock[k] = c
 }
 
 // Record appends one event and drops anything older than 24h.
@@ -263,7 +315,8 @@ func (b *LiquidationBook) Record(e LiquidationEvent) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now().UTC()
-	b.markWatchLocked(e.Exchange, e.Symbol, now)
+	// Events do not start a clock. Coverage is only live-socket time from
+	// SetLive / MarkWatch. A first print must not reset Binance venue coverage.
 	cut := now.Add(-liquidationRetain)
 	list := append(b.bySym[e.Symbol], e)
 	if len(list) > 1 && list[0].Time.Before(cut) {
@@ -282,12 +335,12 @@ func (b *LiquidationBook) Record(e LiquidationEvent) {
 }
 
 func (b *LiquidationBook) startOfLocked(symbol string, ex Exchange) time.Time {
-	if t, ok := b.watchSince[watchKey(symbol, ex)]; ok {
-		return t
-	}
 	// Binance USD-M all-market stream covers every symbol from venue connect.
 	if ex == ExchangeBinance {
 		return b.venueSince[ex]
+	}
+	if t, ok := b.watchSince[watchKey(symbol, ex)]; ok {
+		return t
 	}
 	return time.Time{}
 }
@@ -309,6 +362,36 @@ func (b *LiquidationBook) trackingStartLocked(symbol, exchange string) time.Time
 		}
 	}
 	return latest
+}
+
+func (b *LiquidationBook) coverageLocked(symbol, exchange string, now time.Time) time.Duration {
+	if exchange != "all" {
+		return b.coverageOneLocked(symbol, Exchange(exchange), now)
+	}
+	var minCov time.Duration
+	any := false
+	for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
+		if b.startOfLocked(symbol, ex).IsZero() {
+			continue
+		}
+		c := b.coverageOneLocked(symbol, ex, now)
+		if !any || c < minCov {
+			minCov = c
+			any = true
+		}
+	}
+	return minCov
+}
+
+func (b *LiquidationBook) coverageOneLocked(symbol string, ex Exchange, now time.Time) time.Duration {
+	// Binance USD-M is all-market: count venue-live time, not first print.
+	if ex == ExchangeBinance {
+		return b.venueClock[ex].elapsed(now)
+	}
+	if c := b.watchClock[watchKey(symbol, ex)]; c != nil {
+		return c.elapsed(now)
+	}
+	return 0
 }
 
 // Snapshot totals for every lookback window. exchange is binance, bybit, or all.
@@ -348,8 +431,9 @@ func (b *LiquidationBook) Snapshot(exchange, symbol string) *LiquidationSnapshot
 		}
 		filtered = append(filtered, e)
 	}
+	cov := b.coverageLocked(symbol, exchange, now)
 	for _, w := range LiquidationWindows {
-		out.Windows = append(out.Windows, SummarizeLiquidations(filtered, w.ID, now.Add(-w.Dur), now, started))
+		out.Windows = append(out.Windows, SummarizeLiquidations(filtered, w.ID, now.Add(-w.Dur), cov))
 	}
 	return out
 }

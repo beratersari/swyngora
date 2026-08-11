@@ -2276,9 +2276,9 @@ export interface components {
             totalNotional?: string;
             count?: number;
             biggest?: components["schemas"]["LiquidationHit"];
-            /** @description How many seconds of data this window actually has */
+            /** @description Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. */
             coverageSeconds?: number;
-            /** @description False until this coin+venue has been tracked for the full window */
+            /** @description False until this coin+venue has had a live websocket for the full window */
             complete?: boolean;
         };
         /** @description Rolling futures liquidation totals from live streams */

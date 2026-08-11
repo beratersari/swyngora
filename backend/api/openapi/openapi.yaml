@@ -618,9 +618,11 @@ paths:
         **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
         (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
         websocket streams. Totals only include events seen since this process
-        started. `complete` is per coin and venue from when that symbol started
-        being watched (not server uptime). Combined `all` uses the latest venue start.
-        `exchange=all` (default) sums both venues. Informational only.
+        started. `coverageSeconds` / `complete` count only time the websocket
+        was actually connected for that coin and venue — they do not advance if
+        the stream never connects or drops. Combined `all` uses the shorter live
+        coverage of the venues watching that coin. `exchange=all` (default) sums
+        both venues. Informational only.
       operationId: getMarketLiquidations
       tags: [Market]
       parameters:
@@ -4538,8 +4540,8 @@ components:
         totalNotional: { type: string }
         count: { type: integer }
         biggest: { $ref: '#/components/schemas/LiquidationHit' }
-        coverageSeconds: { type: integer, description: How many seconds of data this window actually has }
-        complete: { type: boolean, description: False until this coin+venue has been tracked for the full window }
+        coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. }
+        complete: { type: boolean, description: False until this coin+venue has had a live websocket for the full window }
     MarketLiquidations:
       type: object
       description: Rolling futures liquidation totals from live streams

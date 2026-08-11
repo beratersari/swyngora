@@ -15,9 +15,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `longNotional` / `shortNotional` / `totalNotional` (USDT)
   - `count`
   - `biggest` (side, price, qty, notional, venue, time)
-  - `complete` — false until **this coin on this venue** has been tracked for the full window
-    (`collectingSince`). Combined `all` uses the **latest** venue start so a newly
-    subscribed Bybit coin cannot inherit 24h-complete from a long-running server.
+  - `complete` — false until **this coin on this venue** has had a **live websocket**
+    for the full window. Time does not count if the socket never connects or drops.
+    Combined `all` uses the shorter live coverage of the venues watching that coin.
 - Streams (background, always on):
   - Binance: `wss://fstream.binance.com/ws/!forceOrder@arr` (all USD-M symbols). At most the **largest** liquidation per symbol per ~1s.
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
@@ -45,5 +45,5 @@ curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT&exchange=b
 ## Limits
 
 - Not Coinbase. Not COIN-M / inverse.
-- 24h is complete only after that coin has been watched for 24h on the requested venue(s). A newly tracked coin stays `complete=false` even if the server is older.
+- 24h is complete only after that coin has had a live feed for 24h on the requested venue(s). A newly tracked coin, or a dropped socket, stays `complete=false` even if the server is older.
 - Binance public feed is a 1s largest-hit sample, not every fill.

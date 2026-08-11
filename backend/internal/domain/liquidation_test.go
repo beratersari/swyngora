@@ -78,9 +78,10 @@ func TestLiquidationBook_CoverageIsPerCoinAndVenue(t *testing.T) {
 	b := NewLiquidationBook()
 	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
 	b.now = func() time.Time { return now }
-	// Process / Binance stream has been up more than 24h.
+	// Process / Binance stream has been live more than 24h.
 	b.SetLive(ExchangeBinance, true)
 	b.venueSince[ExchangeBinance] = now.Add(-25 * time.Hour)
+	b.venueClock[ExchangeBinance].sessionStart = now.Add(-25 * time.Hour)
 
 	// New Bybit coin just subscribed.
 	b.MarkWatch(ExchangeBybit, "DOGEUSDT")
@@ -115,6 +116,113 @@ func TestLiquidationBook_CoverageIsPerCoinAndVenue(t *testing.T) {
 	for _, w := range bn.Windows {
 		if w.Window == LiquidationWindow24h && !w.Complete {
 			t.Fatalf("binance all-market stream should complete 24h: %+v", w)
+		}
+	}
+}
+
+func TestLiquidationBook_CoverageFreezesWhenSocketDown(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
+	cur := now
+	b.now = func() time.Time { return cur }
+
+	b.MarkWatch(ExchangeBybit, "BTCUSDT")
+	// Never connected: time passing does not grow coverage.
+	cur = now.Add(2 * time.Hour)
+	down := b.Snapshot("bybit", "BTCUSDT")
+	for _, w := range down.Windows {
+		if w.CoverageSeconds != 0 || w.Complete {
+			t.Fatalf("offline watch must stay at 0 coverage: %+v", w)
+		}
+	}
+
+	cur = now
+	b.SetLive(ExchangeBybit, true)
+	cur = now.Add(6 * time.Minute)
+	live := b.Snapshot("bybit", "BTCUSDT")
+	var w5, w1h LiquidationWindowTotals
+	for _, w := range live.Windows {
+		switch w.Window {
+		case LiquidationWindow5m:
+			w5 = w
+		case LiquidationWindow1h:
+			w1h = w
+		}
+	}
+	if !w5.Complete || w1h.Complete || w1h.CoverageSeconds < 350 || w1h.CoverageSeconds > 370 {
+		t.Fatalf("after 6m live: 5m=%+v 1h=%+v", w5, w1h)
+	}
+
+	b.SetLive(ExchangeBybit, false)
+	frozen := w1h.CoverageSeconds
+	cur = now.Add(3 * time.Hour)
+	after := b.Snapshot("bybit", "BTCUSDT")
+	for _, w := range after.Windows {
+		if w.Window == LiquidationWindow1h {
+			if w.Complete || w.CoverageSeconds != frozen {
+				t.Fatalf("coverage grew while socket down: before=%d after=%+v", frozen, w)
+			}
+		}
+		if w.Window == LiquidationWindow4h && w.Complete {
+			t.Fatalf("4h must not complete while disconnected: %+v", w)
+		}
+	}
+
+	// Reconnect resumes from the frozen total; it does not count the gap.
+	b.SetLive(ExchangeBybit, true)
+	cur = now.Add(3*time.Hour + 4*time.Minute)
+	resumed := b.Snapshot("bybit", "BTCUSDT")
+	for _, w := range resumed.Windows {
+		if w.Window == LiquidationWindow1h {
+			if w.Complete || w.CoverageSeconds < 580 || w.CoverageSeconds > 620 {
+				t.Fatalf("reconnect should add ~4m to ~6m live: %+v", w)
+			}
+		}
+	}
+}
+
+func TestLiquidationBook_BinanceCoverageIsVenueLiveNotFirstEvent(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
+	cur := now
+	b.now = func() time.Time { return cur }
+
+	cur = now.Add(2 * time.Hour)
+	offline := b.Snapshot("binance", "BTCUSDT")
+	for _, w := range offline.Windows {
+		if w.CoverageSeconds != 0 || w.Complete {
+			t.Fatalf("binance never connected must stay at 0: %+v", w)
+		}
+	}
+
+	cur = now
+	b.SetLive(ExchangeBinance, true)
+	cur = now.Add(2 * time.Hour)
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong,
+		Price: 1, Quantity: 1, Notional: 1, Time: cur,
+	})
+	live := b.Snapshot("binance", "BTCUSDT")
+	var w1h, w4h LiquidationWindowTotals
+	for _, w := range live.Windows {
+		switch w.Window {
+		case LiquidationWindow1h:
+			w1h = w
+		case LiquidationWindow4h:
+			w4h = w
+		}
+	}
+	if !w1h.Complete || w4h.Complete || w4h.CoverageSeconds < 7100 || w4h.CoverageSeconds > 7300 {
+		t.Fatalf("first print must not reset 2h venue live: 1h=%+v 4h=%+v", w1h, w4h)
+	}
+
+	b.SetLive(ExchangeBinance, false)
+	frozen := w4h.CoverageSeconds
+	cur = now.Add(10 * time.Hour)
+	dropped := b.Snapshot("binance", "BTCUSDT")
+	for _, w := range dropped.Windows {
+		if w.Window == LiquidationWindow4h && (w.Complete || w.CoverageSeconds != frozen) {
+			t.Fatalf("binance coverage grew while socket down: before=%d after=%+v", frozen, w)
 		}
 	}
 }

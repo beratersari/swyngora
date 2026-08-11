@@ -258,7 +258,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_liquidations",
-		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, and the biggest hit. Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both. complete is per coin and venue from when that symbol started being watched, not server uptime. Prefer this for 'how much BTC was liquidated'."),
+		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, and the biggest hit. Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both. complete only counts time the websocket was actually live for that coin and venue; coverage does not grow if the stream never connects or drops. Prefer this for 'how much BTC was liquidated'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
