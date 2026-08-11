@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -64,7 +65,10 @@ func newTestRouter(t *testing.T) *Router {
 		domain.ExchangeBybit:    fm,
 	}, fakeSupply{})
 	ws := watchlist.New(watchliststore.NewMemory())
-	return NewRouter(ms, ws, Options{DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true})
+	return NewRouter(ms, ws, Options{
+		DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true,
+		Identities: accountstore.NewMemory(),
+	})
 }
 
 func TestRSIArgOrder_EitherWay(t *testing.T) {
@@ -77,6 +81,29 @@ func TestRSIArgOrder_EitherWay(t *testing.T) {
 	}
 	if strings.Contains(strings.ToLower(out2), "error") {
 		t.Fatalf("exchange,interval should work: %s", out2)
+	}
+}
+
+func TestWatchUsesStableUnguessableClientID(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 99, 42, "/watch add BTCUSDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("add: %s", out)
+	}
+	id1, err := r.clientIDForUser(context.Background(), 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id2, err := r.clientIDForUser(context.Background(), 42)
+	if err != nil || id1 != id2 {
+		t.Fatalf("stable id %q vs %q err=%v", id1, id2, err)
+	}
+	if strings.HasPrefix(id1, "tg-") {
+		t.Fatalf("enumerable telegram id leaked: %s", id1)
+	}
+	wl, err := r.watch.Get(context.Background(), id1, "")
+	if err != nil || len(wl.Items) != 1 || wl.Items[0].Symbol != "BTCUSDT" {
+		t.Fatalf("watchlist via mapped id: %+v %v", wl, err)
 	}
 }
 

@@ -12,7 +12,9 @@ libs/api/
 │   ├── marketApi.helpers.ts  # pure transforms + cache tag ids (unit-tested)
 │   ├── marketApi.types.ts
 │   ├── portfolioApi.ts  # paper portfolio + performance history
+│   ├── aiApi.ts         # POST /api/v1/ai/chat (non-stream fallback)
 │   └── healthApi.ts
+├── aiChatStream.ts      # POST /api/v1/ai/chat/stream NDJSON (not RTK)
 ├── generated/           # OpenAPI codegen output — DO NOT hand-edit
 └── index.ts             # public barrel
 ```
@@ -39,6 +41,7 @@ import {
   useGetWatchlistQuery,
   useAddWatchlistItemMutation,
   usePostAiChatMutation,
+  streamAiChat,
   useGetPortfolioPerformanceQuery,
   useListScannerRulesQuery,
   useListScannerResultsQuery,

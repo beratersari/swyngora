@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   changeTone,
   formatChangePercent,
+  formatCompactAsset,
   formatCompactUsd,
   formatMarketCapMax,
   formatTradeCount,
@@ -54,5 +55,11 @@ describe('formatMarket', () => {
   it('formats infinite max mcap and finite via compact', () => {
     expect(formatMarketCapMax('∞')).toBe('∞');
     expect(formatMarketCapMax(1_000_000)).toBe('1.00M');
+  });
+
+  it('appends asset codes without a dollar prefix', () => {
+    expect(formatCompactAsset(10_000, 'btc')).toBe('10.00K BTC');
+    expect(formatCompactAsset(42, 'USDT')).toBe(`${formatCompactUsd(42)} USDT`);
+    expect(formatCompactAsset(null, 'BTC')).toBe('—');
   });
 });

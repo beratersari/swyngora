@@ -9,6 +9,7 @@ import './endpoints/aiApi';
 import './endpoints/portfolioApi';
 import './endpoints/accountApi';
 import './endpoints/scannerApi';
+import './endpoints/swingApi';
 
 export const store = configureStore({
   reducer: {

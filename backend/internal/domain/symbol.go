@@ -1,6 +1,9 @@
 package domain
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // CrossVenueSymbol maps a user pair onto another venue (BTCUSDT ↔ BTC-USD).
 // Coinbase USDT-style pairs use USD; Binance/Bybit USD pairs use USDT.
@@ -71,6 +74,22 @@ func SplitBaseQuote(ex Exchange, symbol string) (base, quote string) {
 		}
 	}
 	return symbol, ""
+}
+
+// RequireQuoteMatchesCurrency rejects pairs whose quote asset is not the portfolio cash unit.
+func RequireQuoteMatchesCurrency(ex Exchange, symbol, currency string) error {
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency == "" {
+		return fmt.Errorf("%w: portfolio currency is required", ErrInvalidArgument)
+	}
+	_, quote := SplitBaseQuote(ex, symbol)
+	if quote == "" {
+		return fmt.Errorf("%w: cannot determine quote asset for %s", ErrInvalidArgument, symbol)
+	}
+	if quote != currency {
+		return fmt.Errorf("%w: pair quote %s does not match portfolio currency %s", ErrInvalidArgument, quote, currency)
+	}
+	return nil
 }
 
 // PairSymbol builds a venue pair from base + quote.

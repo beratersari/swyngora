@@ -408,6 +408,12 @@ func TestPortfolio_CreateBuySellAndPnL(t *testing.T) {
 		t.Fatalf("dup: %v", err)
 	}
 
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "trader-1", Symbol: "ETHBTC", Side: "buy", Quantity: 1,
+	}); err == nil {
+		t.Fatal("expected quote mismatch for ETHBTC on USDT book")
+	}
+
 	tr, view, err := svc.PlaceOrder(ctx, OrderInput{
 		ClientID: "trader-1", Symbol: "BTCUSDT", Side: "buy", Quantity: 2,
 	})

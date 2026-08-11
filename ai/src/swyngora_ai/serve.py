@@ -72,15 +72,16 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "message is required"})
             return
         session_id = str(payload.get("sessionId") or payload.get("session_id") or "default")
+        client_id = str(payload.get("clientId") or payload.get("client_id") or "").strip()
 
         if path in ("/v1/chat/stream", "/chat/stream"):
-            self._stream_chat(message, session_id)
+            self._stream_chat(message, session_id, client_id)
             return
         if path not in ("/v1/chat", "/chat"):
             self._json(404, {"error": "not found"})
             return
         try:
-            result = get_orch().chat(message, session_id=session_id)
+            result = get_orch().chat(message, session_id=session_id, client_id=client_id)
             self._json(
                 200,
                 {
@@ -95,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._json(502, {"error": "ai_failed", "message": str(e)[:500]})
 
-    def _stream_chat(self, message: str, session_id: str) -> None:
+    def _stream_chat(self, message: str, session_id: str, client_id: str = "") -> None:
         """NDJSON stream: one JSON object per line (status/tool/thinking/final/error/done)."""
         q: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
@@ -104,7 +105,9 @@ class Handler(BaseHTTPRequestHandler):
 
         def worker() -> None:
             try:
-                result = get_orch().chat(message, session_id=session_id, on_event=on_event)
+                result = get_orch().chat(
+                    message, session_id=session_id, on_event=on_event, client_id=client_id
+                )
                 q.put(
                     {
                         "type": "final",

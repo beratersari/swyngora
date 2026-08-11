@@ -21,6 +21,8 @@ export {
   formatDateTime,
   changeTone,
   formatCompactUsd,
+  formatCompactAmount,
+  formatCompactAsset,
   formatTradeCount,
   formatMarketCapMax,
 } from './formatMarket';

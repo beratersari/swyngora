@@ -264,7 +264,7 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 			HighPrice: strings.TrimSpace(p.High24h),
 			LowPrice:  strings.TrimSpace(p.Low24h),
 			OpenTime:  now.Add(-24 * time.Hour),
-			CloseTime: now,
+			// CloseTime stays zero unless Exchange /ticker provides an event time.
 		}
 
 		// Exchange stats: open, high, low, last, volume (public, no auth).
@@ -296,6 +296,21 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 				if last, e2 := strconv.ParseFloat(t.LastPrice, 64); e2 == nil {
 					t.PriceChangePercent = strconv.FormatFloat((last-open)/open*100, 'f', -1, 64)
 					t.PriceChange = strconv.FormatFloat(last-open, 'f', -1, 64)
+				}
+			}
+		}
+
+		// Exchange ticker carries last-trade time (stats do not). Missing/unparseable → not fresh.
+		tickerPath := "/products/" + url.PathEscape(symbol) + "/ticker"
+		if tickBody, tickErr := c.get(fetchCtx, c.exchangeURL, tickerPath, nil); tickErr == nil {
+			var tick productTicker
+			if err := json.Unmarshal(tickBody, &tick); err == nil {
+				if ts := strings.TrimSpace(tick.Time); ts != "" {
+					if parsed, perr := time.Parse(time.RFC3339Nano, ts); perr == nil {
+						t.CloseTime = parsed.UTC()
+					} else if parsed, perr := time.Parse(time.RFC3339, ts); perr == nil {
+						t.CloseTime = parsed.UTC()
+					}
 				}
 			}
 		}
@@ -532,6 +547,11 @@ type productStats struct {
 	Low    string `json:"low"`
 	Last   string `json:"last"`
 	Volume string `json:"volume"`
+}
+
+// productTicker is Coinbase Exchange public GET /products/{id}/ticker.
+type productTicker struct {
+	Time string `json:"time"`
 }
 
 func unmarshalFloat(raw json.RawMessage) (float64, error) {

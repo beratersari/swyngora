@@ -45,8 +45,8 @@ export function changeTone(
   return n > 0 ? 'success' : 'error';
 }
 
-/** Compact USD-style volume / mcap (e.g. 1.2B, 45.3M). */
-export function formatCompactUsd(value: string | number | null | undefined): string {
+/** Compact quantity (volume / mcap) without a currency prefix, e.g. 1.2B, 45.3M. */
+export function formatCompactAmount(value: string | number | null | undefined): string {
   if (value === '∞') return '∞';
   if (value === null || value === undefined || value === '') return DASH;
   const n = typeof value === 'number' ? value : Number(value);
@@ -59,6 +59,22 @@ export function formatCompactUsd(value: string | number | null | undefined): str
   if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(2)}M`;
   if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(2)}K`;
   return formatPrice(n);
+}
+
+/** Compact USD mcap/quote volume. Does not add a `$` prefix. */
+export function formatCompactUsd(value: string | number | null | undefined): string {
+  return formatCompactAmount(value);
+}
+
+/** Compact amount plus optional asset code, e.g. "10.00K BTC". */
+export function formatCompactAsset(
+  value: string | number | null | undefined,
+  asset?: string | null,
+): string {
+  const num = formatCompactAmount(value);
+  if (num === DASH) return DASH;
+  const code = (asset ?? '').trim().toUpperCase();
+  return code ? `${num} ${code}` : num;
 }
 
 export function formatTradeCount(

@@ -34,7 +34,7 @@ func TestClient_Chat(t *testing.T) {
 	defer srv.Close()
 
 	c := New(srv.URL, 5*time.Second)
-	res, err := c.Chat(context.Background(), "world", "s1")
+	res, err := c.Chat(context.Background(), "world", "s1", "client-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestClient_ChatStream(t *testing.T) {
 
 	c := New(srv.URL, 5*time.Second)
 	var seen []string
-	res, err := c.ChatStream(context.Background(), "BTC?", "s1", func(ev StreamEvent) {
+	res, err := c.ChatStream(context.Background(), "BTC?", "s1", "client-1", func(ev StreamEvent) {
 		seen = append(seen, ev.Type+":"+ev.Text+ev.Reply)
 	})
 	if err != nil {
@@ -95,7 +95,7 @@ func TestClient_ChatStream(t *testing.T) {
 
 func TestClient_Unreachable(t *testing.T) {
 	c := New("http://127.0.0.1:1", 200*time.Millisecond)
-	_, err := c.Chat(context.Background(), "x", "s")
+	_, err := c.Chat(context.Background(), "x", "s", "c")
 	if err == nil {
 		t.Fatal("expected error")
 	}

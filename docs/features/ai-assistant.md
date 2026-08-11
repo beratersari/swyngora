@@ -33,6 +33,9 @@ User → Orchestrator (LangGraph create_react_agent)
 - Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
 - Session memory is in-process (not durable across restarts).
+- HTTP/Telegram pass `clientId`; Python tools bind that id (and send `SWYNGORA_API_TOKEN` / `X-Client-Id`) so the model cannot switch tenants. Reserved ids (`ai-assistant`, `http-default`, `anonymous`) are rejected by the backend.
+- Web `/ai` streams `POST /api/v1/ai/chat/stream` and shows a **Process** timeline (status / think / tools / results) as each step happens. The list stays open while working, then collapses to a one-line summary so the answer stays readable. Non-stream `POST /api/v1/ai/chat` remains as fallback.
+- Telegram `/ask` uses the same stream for live progress edits.
 
 ## How to run
 
@@ -44,6 +47,7 @@ cd backend && go run ./cmd/server
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
 export SWYNGORA_API_URL=http://localhost:8080
+# export SWYNGORA_API_TOKEN=...   # same as backend API_AUTH_TOKEN when set
 swyngora-ai "BTC RSI on binance 1h and recent news"
 ```
 
@@ -78,8 +82,6 @@ Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_dif
 
 - No durable conversation store or multi-user auth yet
 - X agent is not official X API
-- Telegram AI mode (`/ask`) not wired yet
-- Streaming UI not shipped
 - Web research prefers Wikipedia, Google News RSS, CoinGecko, and Hacker News (free). DuckDuckGo is optional and often times out.
 - X is StockTwits/HN proxies, not the official API
 

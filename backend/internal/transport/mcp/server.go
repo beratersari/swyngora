@@ -19,6 +19,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -139,6 +140,8 @@ type DataPort interface {
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -175,9 +178,9 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service, swingSvc *swing.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc},
+		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc, Swing: swingSvc},
 		Accounts: accountSvc,
 		Name:     "swyngora-mcp",
 	})
@@ -2249,6 +2252,40 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.DeleteScannerRule(ctx, clientID, ruleID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("analyze_swing",
+		mcp.WithDescription("Analyze one symbol with the swing engine (4h+1d, Wilder RSI/ADX/ATR, quality gates, ATR structure stops). Informational only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. ETHUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit, default binance")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ex := req.GetString("exchange", "binance")
+		raw, err := api.AnalyzeSwing(ctx, ex, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_swing_setups",
+		mcp.WithDescription("Scan the client's watchlist for quality-gated swing setups (entry/stop/TP). Informational only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("exchange", mcp.Description("Optional venue filter")),
+		mcp.WithNumber("limit", mcp.Description("Max symbols, default 25")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ScanSwingSetups(ctx, clientID, req.GetString("exchange", ""), int(req.GetFloat("limit", 25)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

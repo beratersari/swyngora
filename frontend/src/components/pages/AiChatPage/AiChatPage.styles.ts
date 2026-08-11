@@ -153,6 +153,116 @@ export const TraceList = styled.ol`
   line-height: 1.45;
 `;
 
+export const ProcessPanel = styled.details`
+  margin: ${({ theme }) => theme.spacing[2]}px 0 ${({ theme }) => theme.spacing[3]}px;
+  padding: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[3]}px;
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  border: 1px dashed ${({ theme }) => theme.palette.frog};
+  background: ${({ theme }) => theme.palette.richBlack};
+`;
+
+export const ProcessTitle = styled.summary`
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.palette.pistachio};
+  user-select: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &::before {
+    content: '▸ ';
+    color: ${({ theme }) => theme.palette.mountainMeadow};
+  }
+
+  ${ProcessPanel}[open] &::before {
+    content: '▾ ';
+  }
+
+  ${ProcessPanel}[open] & {
+    margin-bottom: ${({ theme }) => theme.spacing[2]}px;
+  }
+`;
+
+export const ProcessPreview = styled.span`
+  display: block;
+  max-width: 100%;
+  padding-left: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  opacity: 0.82;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+export const ProcessList = styled.ol`
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+`;
+
+export const ProcessItem = styled.li<{ $kind: string; $active?: boolean }>`
+  display: grid;
+  grid-template-columns: 22px 64px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 12px;
+  line-height: 1.45;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  opacity: ${({ $active }) => ($active ? 1 : 0.88)};
+  padding-left: 6px;
+  border-left: 2px solid
+    ${({ theme, $active }) => ($active ? theme.palette.mountainMeadow : 'transparent')};
+`;
+
+export const ProcessIndex = styled.span`
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 11px;
+  color: ${({ theme }) => theme.palette.mountainMeadow};
+  padding-top: 1px;
+`;
+
+export const ProcessKind = styled.span<{ $kind: string }>`
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: 2px;
+  color: ${({ theme, $kind }) =>
+    $kind === 'tool' || $kind === 'tool_result'
+      ? theme.palette.mint
+      : $kind === 'tool_error'
+        ? '#E07A7A'
+        : theme.palette.pistachio};
+`;
+
+export const ProcessText = styled.span`
+  min-width: 0;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
 export const MetaRow = styled.div`
   display: flex;
   flex-wrap: wrap;

@@ -268,30 +268,13 @@ export interface paths {
         };
         /**
          * Liquidity score from live order-book depth
-         * @description Scores how easy a pair is to trade from resting bid/ask notional in
-         *     ±0.1%, ±0.5%, and ±1% of mid. Near depth is weighted more. Returns
-         *     one 0–100 score plus grade, which side is thinner (`weakerSide`),
-         *     and the same breakdown per venue. `exchange=all` (default) includes
-         *     Binance, Coinbase, and Bybit and a market-wide sum. Informational only.
+         * @description Scores how easy a pair is to trade from resting bid/ask notional.
+         *     Only ±0.1 / ±0.5 / ±1% bands the book actually reaches on **both**
+         *     sides are included (`usedRangePct`). Market-wide uses the symmetric
+         *     ±% Binance, Coinbase, and Bybit can all reach. Near included depth
+         *     is weighted more. Informational only.
          */
         get: operations["getMarketLiquidity"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/market/liquidations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Rolling futures liquidation totals */
-        get: operations["getMarketLiquidations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -329,6 +312,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rolling futures liquidation totals
+         * @description Long/short liquidation notional, count, and the biggest hit for the last
+         *     **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
+         *     (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
+         *     websocket streams. Totals only include events seen since this process
+         *     started. `coverageSeconds` / `complete` count only time the websocket
+         *     was actually connected for that coin and venue — they do not advance if
+         *     the stream never connects or drops. Combined `all` uses the shorter live
+         *     coverage of the venues watching that coin. `exchange=all` (default) sums
+         *     both venues. Informational only.
+         */
+        get: operations["getMarketLiquidations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -344,6 +355,45 @@ export interface paths {
          *     when Binance does not publish a hard cap.
          */
         get: operations["getSupply"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/swing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Analyze one symbol with the swing engine
+         * @description Closed 4h + 1d candles, Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB patterns,
+         *     BTC regime filter, min R:R 1.8 for triggers, ATR+structure stop.
+         *     Informational only — not financial advice.
+         */
+        get: operations["analyzeSwing"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/setups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scan watchlist for swing setups */
+        get: operations["listSwingSetups"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1958,6 +2008,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ai/chat/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stream AI chat thinking and tools (NDJSON)
+         * @description Same request as POST /api/v1/ai/chat. Response is NDJSON lines:
+         *     `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?}`.
+         *     Informational only — not financial advice.
+         */
+        post: operations["postAiChatStream"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1986,8 +2058,8 @@ export interface components {
             /** @description User message (non-empty after trim) */
             message: string;
             /**
-             * @description Optional multi-turn session key. Server defaults to http-default
-             *     when omitted. Clients should send a stable device session id.
+             * @description Optional multi-turn session key. Defaults to the authenticated clientId
+             *     (never a shared name) when omitted. Clients should send a stable device session id.
              */
             sessionId?: string;
         };
@@ -2274,13 +2346,16 @@ export interface components {
         };
         LiquidationHit: {
             exchange?: string;
+            /** @enum {string} */
             side?: "long" | "short";
             price?: string;
             quantity?: string;
             notional?: string;
+            /** Format: date-time */
             time?: string;
         };
         LiquidationWindow: {
+            /** @enum {string} */
             window?: "5m" | "1h" | "4h" | "24h";
             /** @description Quote value of liquidated longs */
             longNotional?: string;
@@ -2298,6 +2373,7 @@ export interface components {
         MarketLiquidations: {
             symbol?: string;
             exchange?: string;
+            /** Format: date-time */
             collectingSince?: string;
             live?: boolean;
             venueCount?: number;
@@ -2414,6 +2490,54 @@ export interface components {
             configured?: boolean;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        SwingPattern: {
+            name?: string;
+            score?: number;
+            description?: string;
+            timeframe?: string;
+            fresh?: boolean;
+        };
+        SwingLevels: {
+            entry?: number;
+            stopLoss?: number;
+            takeProfit?: number;
+            riskPct?: number;
+            rewardPct?: number;
+            rr?: number;
+            atr?: number;
+        };
+        SwingDecision: {
+            exchange?: string;
+            symbol?: string;
+            interval?: string;
+            accepted?: boolean;
+            /** @enum {string} */
+            stage?: "watch" | "trigger" | "rejected";
+            setupType?: string;
+            swingScore?: number;
+            grade?: string;
+            fresh?: boolean;
+            btcRegime?: string;
+            side?: string;
+            price?: number;
+            adx4h?: number;
+            adx1d?: number;
+            rsi?: number;
+            ema4h?: string;
+            ema1d?: string;
+            patterns?: components["schemas"]["SwingPattern"][];
+            levels?: components["schemas"]["SwingLevels"];
+            reasons?: string[];
+            note?: string;
+            /** Format: date-time */
+            barTime?: string;
+        };
+        SwingSetupList: {
+            items?: components["schemas"]["SwingDecision"][];
+            count?: number;
+            accepted?: number;
+            note?: string;
         };
         PortfolioSummary: {
             id?: string;
@@ -3558,31 +3682,6 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
-    getMarketLiquidations: {
-        parameters: {
-            query: {
-                symbol: string;
-                /** @description binance | bybit | all (default all) */
-                exchange?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Liquidation windows */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarketLiquidations"];
-                };
-            };
-            400: components["responses"]["Error"];
-        };
-    };
     getMarketLiquidity: {
         parameters: {
             query: {
@@ -3640,6 +3739,31 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketLiquidations: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Liquidation windows */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidations"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     getSupply: {
         parameters: {
             query?: {
@@ -3667,6 +3791,58 @@ export interface operations {
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    analyzeSwing: {
+        parameters: {
+            query: {
+                exchange?: "binance" | "coinbase" | "bybit";
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Swing decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingDecision"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    listSwingSetups: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                limit?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watchlist scan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SwingSetupList"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getIndicators: {
@@ -7137,6 +7313,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiChatResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+            503: components["responses"]["Error"];
+        };
+    };
+    postAiChatStream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiChatRequest"];
+            };
+        };
+        responses: {
+            /** @description NDJSON event stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": {
+                        type?: string;
+                        text?: string;
+                        reply?: string;
+                        tools?: string[];
+                        thinking?: string[];
+                        message?: string;
+                        sessionId?: string;
+                    };
                 };
             };
             400: components["responses"]["Error"];

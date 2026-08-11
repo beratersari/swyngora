@@ -15,6 +15,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/handler"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
@@ -44,6 +45,8 @@ type RouterOptions struct {
 	PriceDiff *pricediff.Service
 	// Scanner enables technical indicator scanner routes when non-nil.
 	Scanner *scanner.Service
+	// Swing enables swing-setup scan routes when non-nil.
+	Swing *swing.Service
 	// Export enables user data export routes when non-nil.
 	Export *exportsvc.Service
 	// Import enables user data import routes when non-nil.
@@ -92,6 +95,10 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("POST /api/v1/market/indicators/batch", mh.PostIndicatorsBatch)
 	mux.HandleFunc("GET /api/v1/market/pumps", mh.GetPumpEvents)
 	mux.HandleFunc("GET /api/v1/market/pumps/scan", mh.ScanPumpEvents)
+	if opts.Swing != nil {
+		sh := handler.NewSwingHandler(opts.Swing)
+		mux.HandleFunc("GET /api/v1/market/swing", sh.Analyze)
+	}
 
 	if watchSvc != nil {
 		wh := handler.NewWatchlistHandler(watchSvc)
@@ -190,6 +197,11 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}", pdh.GetOpportunity)
 	}
 
+	if opts.Swing != nil {
+		swh := handler.NewSwingHandler(opts.Swing)
+		mux.HandleFunc("GET /api/v1/swing/setups", swh.ListSetups)
+	}
+
 	if opts.Scanner != nil {
 		sh := handler.NewScannerHandler(opts.Scanner)
 		mux.HandleFunc("POST /api/v1/scanner/rules", sh.Create)
@@ -248,6 +260,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	if opts.AI != nil {
 		ah := handler.NewAIHandler(opts.AI, opts.AITimeout)
 		mux.HandleFunc("POST /api/v1/ai/chat", ah.Chat)
+		mux.HandleFunc("POST /api/v1/ai/chat/stream", ah.ChatStream)
 	}
 
 	var h http.Handler = mux

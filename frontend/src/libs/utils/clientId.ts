@@ -16,7 +16,9 @@ function randomId(): string {
 export function getOrCreateClientId(): string {
   const fromEnv = env.clientId?.trim();
   if (fromEnv) return fromEnv;
-  if (typeof localStorage === 'undefined') return 'anonymous';
+  if (typeof localStorage === 'undefined') {
+    throw new Error('clientId storage unavailable');
+  }
   try {
     const existing = localStorage.getItem(STORAGE_KEY)?.trim();
     if (existing) return existing;
@@ -24,6 +26,6 @@ export function getOrCreateClientId(): string {
     localStorage.setItem(STORAGE_KEY, created);
     return created;
   } catch {
-    return 'anonymous';
+    throw new Error('clientId storage unavailable');
   }
 }

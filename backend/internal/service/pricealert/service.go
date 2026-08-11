@@ -13,8 +13,6 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const maxClientIDLen = 128
-
 // CreateInput is the application input for creating a price or order-book alert.
 type CreateInput struct {
 	ClientID    string
@@ -468,23 +466,7 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 }
 
 func normalizeClientID(id string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument)
-	}
-	if len(id) > maxClientIDLen {
-		return "", fmt.Errorf("%w: clientId too long", domain.ErrInvalidArgument)
-	}
-	if strings.EqualFold(id, "default") {
-		return "", fmt.Errorf("%w: clientId must not be the shared name \"default\"", domain.ErrInvalidArgument)
-	}
-	for _, r := range id {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
-			continue
-		}
-		return "", fmt.Errorf("%w: clientId has invalid characters", domain.ErrInvalidArgument)
-	}
-	return id, nil
+	return domain.NormalizeClientID(id)
 }
 
 func normalizeExchangeSymbol(exchange, symbol string) (domain.Exchange, string, error) {

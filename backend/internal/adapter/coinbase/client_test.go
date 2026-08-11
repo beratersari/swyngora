@@ -60,6 +60,12 @@ func TestGetTicker24h_UsesExchangeStatsForHighLow(t *testing.T) {
 			})
 			return
 		}
+		if strings.HasSuffix(r.URL.Path, "/ticker") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"time": "2024-06-01T12:00:00.000000Z", "price": "100",
+			})
+			return
+		}
 		// Advanced Trade public products (path contains product list API).
 		if strings.Contains(r.URL.Path, "products") {
 			productsHits++
@@ -94,6 +100,9 @@ func TestGetTicker24h_UsesExchangeStatsForHighLow(t *testing.T) {
 	}
 	if tkr.LastPrice != "100" {
 		t.Fatalf("last from stats=%q", tkr.LastPrice)
+	}
+	if tkr.CloseTime.IsZero() {
+		t.Fatal("expected CloseTime from /ticker")
 	}
 	if productsHits < 1 || statsHits < 1 {
 		t.Fatalf("productsHits=%d statsHits=%d", productsHits, statsHits)

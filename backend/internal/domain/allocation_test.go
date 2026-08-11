@@ -99,3 +99,15 @@ func TestSplitBaseQuoteAndPair(t *testing.T) {
 		t.Fatalf("%s", p)
 	}
 }
+
+func TestRequireQuoteMatchesCurrency(t *testing.T) {
+	if err := RequireQuoteMatchesCurrency(ExchangeBinance, "BTCUSDT", "USDT"); err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireQuoteMatchesCurrency(ExchangeBinance, "ETHBTC", "USDT"); err == nil {
+		t.Fatal("expected quote mismatch")
+	}
+	if err := RequireQuoteMatchesCurrency(ExchangeCoinbase, "BTC-USD", "USDT"); err == nil {
+		t.Fatal("expected USD vs USDT mismatch")
+	}
+}

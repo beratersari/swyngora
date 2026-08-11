@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -158,7 +159,12 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 		`ALTER TABLE price_alerts ADD COLUMN kind TEXT NOT NULL DEFAULT 'price'`,
 		`ALTER TABLE price_alerts ADD COLUMN range_pct REAL NOT NULL DEFAULT 0`,
 	} {
-		_, _ = s.db.Exec(stmt) // ignore "duplicate column" errors
+		if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+			return err
+		}
+	}
+	if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+		return err
 	}
 	if err := s.migrateNotificationsDropAlertUnique(); err != nil {
 		return err

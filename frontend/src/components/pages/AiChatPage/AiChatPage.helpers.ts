@@ -1,4 +1,4 @@
-import type { ChatMessage } from './AiChatPage.types';
+import type { ChatMessage, ThinkStep, ThinkStepKind } from './AiChatPage.types';
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -21,20 +21,98 @@ export function createAssistantMessage(
   opts?: {
     tools?: string[];
     thinking?: string[];
+    steps?: ChatMessage['steps'];
+    streaming?: boolean;
     references?: ChatMessage['references'];
     isError?: boolean;
+    id?: string;
   },
 ): ChatMessage {
+  const thinking = opts?.thinking?.filter(Boolean);
+  const steps = opts?.steps?.length
+    ? opts.steps
+    : stepsFromThinking(thinking);
   return {
-    id: newId(),
+    id: opts?.id ?? newId(),
     role: 'assistant',
-    content: content.trim() || '—',
+    content: content.trim() || (opts?.streaming ? '' : '—'),
     tools: opts?.tools?.filter(Boolean),
-    thinking: opts?.thinking?.filter(Boolean),
+    thinking,
+    steps,
+    streaming: opts?.streaming,
     references: sanitizeChatReferences(opts?.references),
     isError: opts?.isError,
     createdAt: Date.now(),
   };
+}
+
+const STEP_KINDS = new Set(['status', 'thinking', 'tool', 'tool_result', 'tool_error']);
+
+export function thinkStepFromEvent(ev: {
+  type?: string;
+  text?: string;
+  message?: string;
+}): ThinkStep | null {
+  const type = (ev.type || '').trim();
+  if (!STEP_KINDS.has(type)) return null;
+  const text = (ev.text || ev.message || '').replace(/\s+/g, ' ').trim();
+  if (!text) return null;
+  return {
+    id: newId(),
+    kind: type as ThinkStepKind,
+    text: text.slice(0, 400),
+  };
+}
+
+export function mergeThinkStep(prev: ThinkStep[] | undefined, next: ThinkStep): ThinkStep[] {
+  const list = prev ?? [];
+  const last = list[list.length - 1];
+  if (last && last.kind === next.kind && last.text === next.text) return list;
+  return [...list, next];
+}
+
+/** Open while streaming unless the user toggled; collapsed after the turn. */
+export function processPanelOpen(streaming: boolean, userOpen?: boolean): boolean {
+  if (userOpen !== undefined) return userOpen;
+  return streaming;
+}
+
+/** Persist only a user override; matching the default clears it. */
+export function nextProcessOpenMap(
+  prev: Record<string, boolean>,
+  id: string,
+  streaming: boolean,
+  nextOpen: boolean,
+): Record<string, boolean> {
+  if (nextOpen === streaming) {
+    if (!(id in prev)) return prev;
+    const { [id]: _removed, ...rest } = prev;
+    return rest;
+  }
+  if (prev[id] === nextOpen) return prev;
+  return { ...prev, [id]: nextOpen };
+}
+
+export function latestStepPreview(
+  steps: readonly ThinkStep[] | undefined,
+  max = 88,
+): string {
+  const last = steps?.length ? steps[steps.length - 1] : undefined;
+  const text = (last?.text ?? '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  if (text.length <= max) return text;
+  return `${text.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
+export function stepsFromThinking(lines: readonly string[] | undefined): ThinkStep[] | undefined {
+  if (!lines?.length) return undefined;
+  const out: ThinkStep[] = [];
+  for (const raw of lines) {
+    const text = raw.replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    out.push({ id: newId(), kind: 'thinking', text: text.slice(0, 400) });
+  }
+  return out.length ? out : undefined;
 }
 
 export function sanitizeChatReferences(

@@ -19,6 +19,17 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 
 Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
 
+### Swing engine (from crypto_analyzer, hardened)
+
+Backend `GET /api/v1/market/swing` and `GET /api/v1/swing/setups` run a **closed-bar** 4h + 1d engine:
+
+- Patterns: EMA 9/21 cross, EMA50/200 pullback, SuperTrend, Wilder RSI recovery, MACD, Wilder ADX, BB squeeze, volume breakout.
+- Quality: BTC regime (longs blocked in bear except mean-reversion), multi-TF EMA alignment, ADX chop filter, min 24h quote volume, fresh event required, min R:R **1.8** for trigger.
+- Stops: farther of structure swing-low − 0.25 ATR and entry − 1.5 ATR (capped at 2.5 ATR). TP at least 1.8R (or 2.5 ATR if larger).
+- Math uses Wilder RSI/ADX/ATR and SMA-seeded EMA (the source Python scanner used SMA-of-last-N RSI and first-price EMA seed).
+
+Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
+
 **Not financial advice.** Live checker may match a forming bar; treat hits as informational until you confirm on a closed candle.
 
 ## API

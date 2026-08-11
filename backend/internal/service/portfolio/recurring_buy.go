@@ -59,6 +59,9 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if err != nil {
 		return nil, err
 	}
+	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
+		return nil, err
+	}
 	if in.Amount < domain.MinRecurringBuyAmount || in.Amount > domain.MaxRecurringBuyAmount ||
 		math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
 		return nil, fmt.Errorf("%w: amount must be between %g and %g", domain.ErrInvalidArgument,

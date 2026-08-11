@@ -38,6 +38,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 	httpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/http"
 	mcpx "gitlab.com/trace-analysis/swyngora/backend/internal/transport/mcp"
@@ -400,10 +401,12 @@ func main() {
 
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
 
+	swingSvc := swing.New(marketSvc, watchSvc)
+
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler
 	if cfg.MCPEnabled {
-		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc)
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc, swingSvc)
 		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
 	}
 
@@ -420,6 +423,7 @@ func main() {
 		Portfolio:        portfolioSvc,
 		PriceDiff:        priceDiffSvc,
 		Scanner:          scannerSvc,
+		Swing:            swingSvc,
 		Export:           exportSvc,
 		Import:           importSvc,
 		Accounts:         accountSvc,
@@ -491,7 +495,8 @@ func main() {
 				AllowAll:        cfg.TelegramAllowAll,
 				AI:              aiClient,
 				AITimeout:       cfg.AITimeout,
-				Portfolio:       portfolioSvc,
+				Identities: accountStore,
+				Portfolio:  portfolioSvc,
 			})
 			bot := &telegram.Bot{
 				Client:      tgClient,

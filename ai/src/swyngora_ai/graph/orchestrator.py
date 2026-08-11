@@ -16,6 +16,7 @@ from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.progress import emit, reset_progress, set_progress
 from swyngora_ai.references import extract_references
+from swyngora_ai.tools.market_http import bind_client_id, reset_bound_client_id
 
 
 @dataclass
@@ -131,6 +132,63 @@ def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list
     return final, uniq_tools, uniq_think[:12]
 
 
+def _chunk_messages(chunk: Any) -> list[BaseMessage]:
+    """Best-effort extract of messages from a LangGraph stream chunk."""
+    if chunk is None:
+        return []
+    if isinstance(chunk, dict):
+        msgs = chunk.get("messages")
+        if isinstance(msgs, list):
+            return list(msgs)
+        out: list[BaseMessage] = []
+        for v in chunk.values():
+            if isinstance(v, dict) and isinstance(v.get("messages"), list):
+                out.extend(v["messages"])
+            elif isinstance(v, list) and v and isinstance(v[0], BaseMessage):
+                out.extend(v)
+        return out
+    if isinstance(chunk, tuple) and chunk:
+        return _chunk_messages(chunk[0])
+    return []
+
+
+def run_agent_with_progress(
+    graph: Any,
+    messages: list[BaseMessage],
+    config: dict[str, Any],
+) -> list[BaseMessage]:
+    """Run a LangGraph agent, emitting thinking/tool steps as messages appear.
+
+    Prefers ``stream`` so UIs can show the process live; falls back to ``invoke``.
+    """
+    stream_fn = getattr(graph, "stream", None)
+    if callable(stream_fn):
+        for extra in ({"stream_mode": "values"}, {}):
+            try:
+                last: list[BaseMessage] = []
+                seen = 0
+                for chunk in stream_fn({"messages": messages}, config=config, **extra):
+                    msgs = _chunk_messages(chunk)
+                    if not msgs:
+                        continue
+                    last = msgs
+                    for msg in msgs[seen:]:
+                        Orchestrator._emit_from_message(msg)
+                    seen = len(msgs)
+                if last:
+                    return last
+            except TypeError:
+                continue
+            except Exception:
+                break
+    result = graph.invoke({"messages": messages}, config=config)
+    out_msgs = list((result or {}).get("messages") or [])
+    start = min(len(messages), len(out_msgs))
+    for msg in out_msgs[start:]:
+        Orchestrator._emit_from_message(msg)
+    return out_msgs
+
+
 class Orchestrator:
     """Top-level Swyngora AI orchestrator."""
 
@@ -152,6 +210,7 @@ class Orchestrator:
         user_message: str,
         session_id: str = "default",
         on_event=None,
+        client_id: str = "",
     ) -> ChatResult:
         """Run one user turn; returns answer + tool/thinking trace.
 
@@ -171,6 +230,8 @@ class Orchestrator:
                 on_event(ev)
 
         token = set_progress(_cb)
+        cid = (client_id or "").strip() or (self.settings.default_client_id or "").strip()
+        bind_tok = bind_client_id(cid)
         try:
             emit("status", "Planning…")
             history = self.memory.get(session_id)
@@ -179,21 +240,11 @@ class Orchestrator:
                 "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
             }
 
-            # invoke is the reliable path for a final answer; progress emits from
-            # specialist tools + a lightweight stream-of-updates for live UI only.
-            # (stream-only accumulation previously risked missing the final AI text.)
-            out_msgs: list[BaseMessage] = []
             emit("status", "Orchestrator running…")
-
-            # Optional live updates via stream in a side channel would need threads;
-            # keep a single invoke so deep analysis always terminates with a reply.
-            result = self._graph.invoke({"messages": messages}, config=config)
-            out_msgs = list(result.get("messages") or [])
-            # Emit tool/thinking from the completed transcript for UIs that missed live wraps.
+            # Stream node updates so the web Process panel fills step-by-step.
+            # Falls back to invoke if the compiled graph has no usable stream.
+            out_msgs = run_agent_with_progress(self._graph, messages, config)
             turn_slice = out_msgs[len(history) :] if history else out_msgs
-            for msg in turn_slice:
-                self._emit_from_message(msg)
-
             turn_msgs = turn_slice if turn_slice else out_msgs
             reply, tools_msg, thinking_msg = extract_trace(turn_msgs if turn_msgs else out_msgs)
             if not reply:
@@ -228,7 +279,9 @@ class Orchestrator:
                 ],
                 reply,
             )
-            emit("final", reply[:200])
+            # Do not emit type=final here — the HTTP stream layer sends the
+            # structured final payload (full reply + tools + references).
+            emit("status", "Composing answer…")
             return ChatResult(
                 reply=reply,
                 tools=tools_acc,
@@ -237,6 +290,7 @@ class Orchestrator:
                 references=[r.as_dict() for r in refs],
             )
         finally:
+            reset_bound_client_id(bind_tok)
             reset_progress(token)
 
     @staticmethod

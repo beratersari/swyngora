@@ -292,7 +292,9 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 			QuoteVolume:        t.Turnover24h,
 			PriceChangePercent: pct,
 			OpenTime:           now.Add(-24 * time.Hour),
-			CloseTime:          now,
+		}
+		if ms, err := strconv.ParseInt(strings.TrimSpace(t.Time), 10, 64); err == nil && ms > 0 {
+			out.CloseTime = time.UnixMilli(ms).UTC()
 		}
 		if c.tickers != nil {
 			c.tickers.Set(symbol, out)
@@ -560,6 +562,7 @@ type tickerRow struct {
 	Volume24h    string `json:"volume24h"`
 	Turnover24h  string `json:"turnover24h"`
 	Price24hPcnt string `json:"price24hPcnt"`
+	Time         string `json:"time"` // venue event time, ms
 }
 
 type klineResponse struct {

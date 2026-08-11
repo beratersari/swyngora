@@ -21,6 +21,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_spot_markets` | Search/sort spot list |
 | `list_delist_schedule` | Binance scheduled spot delists |
 | `get_indicators` | RSI/EMA |
+| `analyze_swing` | 4h+1d swing engine (quality gates, ATR stop/TP) |
+| `scan_swing_setups` | Watchlist swing scan |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
 | `get_watchlist` | Read watchlist (optional `ownerClientId` for shared lists) |

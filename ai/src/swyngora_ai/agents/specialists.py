@@ -93,23 +93,20 @@ def _run_react(
     specialist: str,
     recursion_limit: int = 12,
 ) -> str:
-    from swyngora_ai.graph.orchestrator import extract_trace
+    from swyngora_ai.graph.orchestrator import extract_trace, run_agent_with_progress
 
     emit("status", f"Running {specialist}…")
     emit("thinking", f"{specialist}: {task[:200]}")
     tools = _wrap_tools_with_progress(tools, specialist)
     agent = create_agent(model, list(tools), system_prompt=system)
-    out = agent.invoke(
-        {"messages": [HumanMessage(content=task)]},
-        config={"recursion_limit": recursion_limit},
+    msgs = run_agent_with_progress(
+        agent,
+        [HumanMessage(content=task)],
+        {"recursion_limit": recursion_limit},
     )
-    msgs = list(out.get("messages") or [])
-    reply, nested_tools, _thinking = extract_trace(msgs)
+    reply, _nested_tools, _thinking = extract_trace(msgs)
     if not reply:
-        reply = _last_text(out)
-    # Re-emit nested tools for live UIs that missed leaf-tool wraps.
-    for t in nested_tools[:30]:
-        emit("tool", f"{specialist}: {t}")
+        reply = _last_text({"messages": msgs})
     emit("status", f"{specialist} finished")
     # Keep URLs on the specialist return so the orchestrator can list Sources.
     blobs = [

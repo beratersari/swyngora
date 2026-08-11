@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/atoms/Button';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
-import { rtkErrorMessage, usePostAiChatMutation } from '@/libs/api';
+import { rtkErrorMessage, streamAiChat, usePostAiChatMutation } from '@/libs/api';
 import {
   getOrCreateAiSessionId,
   persistAiSessionId,
@@ -16,9 +16,14 @@ import {
   clampMessage,
   createAssistantMessage,
   createUserMessage,
+  latestStepPreview,
+  mergeThinkStep,
+  nextProcessOpenMap,
   parseChatMarkdown,
   parseInlineMd,
-  sanitizeThinkingLines,
+  processPanelOpen,
+  stepsFromThinking,
+  thinkStepFromEvent,
   uniqueToolNames,
 } from './AiChatPage.helpers';
 import type { ChatMessage } from './AiChatPage.types';
@@ -45,8 +50,14 @@ import {
   Suggestions,
   Thread,
   ToolbarRow,
-  TraceDetails,
-  TraceList,
+  ProcessIndex,
+  ProcessItem,
+  ProcessKind,
+  ProcessList,
+  ProcessPanel,
+  ProcessPreview,
+  ProcessText,
+  ProcessTitle,
   UserBody,
   RefItem,
   RefLink,
@@ -100,8 +111,11 @@ export function AiChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [sessionId, setSessionId] = useState(() => getOrCreateAiSessionId());
-  const [postChat, { isLoading }] = usePostAiChatMutation();
+  const [postChat] = usePostAiChatMutation();
+  const [isLoading, setIsLoading] = useState(false);
+  const [processOpen, setProcessOpen] = useState<Record<string, boolean>>({});
   const threadRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const el = threadRef.current;
@@ -109,41 +123,103 @@ export function AiChatPage() {
     el.scrollTop = el.scrollHeight;
   }, [messages, isLoading]);
 
+  const mapErr = (err: unknown) =>
+    rtkErrorMessage(err, {
+      resource: t('ai:resource'),
+      statusMessages: {
+        502: t('ai:errors.unavailable'),
+        503: t('ai:errors.unavailable'),
+      },
+    });
+
   const send = async (raw: string) => {
     const text = clampMessage(raw.trim(), MAX_MESSAGE_LENGTH);
     if (!canSendMessage(text, isLoading)) return;
 
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+
     setDraft('');
-    setMessages((prev) => [...prev, createUserMessage(text)]);
+    const placeholder = createAssistantMessage('', { streaming: true, steps: [] });
+    setMessages((prev) => [...prev, createUserMessage(text), placeholder]);
+    setIsLoading(true);
+
+    const patch = (fn: (m: ChatMessage) => ChatMessage) => {
+      setMessages((prev) => prev.map((m) => (m.id === placeholder.id ? fn(m) : m)));
+    };
 
     try {
-      const res = await postChat({ message: text, sessionId }).unwrap();
-      if (res.sessionId && res.sessionId !== sessionId) {
-        persistAiSessionId(res.sessionId);
-        setSessionId(res.sessionId);
+      const finish = (res: {
+        reply?: string;
+        sessionId?: string;
+        tools?: string[];
+        thinking?: string[];
+        references?: ChatMessage['references'];
+      }) => {
+        if (res.sessionId && res.sessionId !== sessionId) {
+          persistAiSessionId(res.sessionId);
+          setSessionId(res.sessionId);
+        }
+        patch((m) => {
+          const thinking = res.thinking ?? m.thinking;
+          const steps = m.steps?.length ? m.steps : stepsFromThinking(thinking);
+          return {
+            ...m,
+            content: (res.reply ?? '').trim() || m.content || '—',
+            tools: res.tools ?? m.tools,
+            thinking,
+            steps,
+            references: res.references ?? m.references,
+            streaming: false,
+          };
+        });
+      };
+
+      try {
+        const finalEv = await streamAiChat({
+          message: text,
+          sessionId,
+          signal: ac.signal,
+          onEvent: (ev) => {
+            if (ev.sessionId && ev.sessionId !== sessionId) {
+              persistAiSessionId(ev.sessionId);
+              setSessionId(ev.sessionId);
+            }
+            const step = thinkStepFromEvent(ev);
+            if (step) {
+              patch((m) => ({ ...m, steps: mergeThinkStep(m.steps, step), streaming: true }));
+            }
+            if (ev.type === 'final' && (ev.reply || ev.tools || ev.thinking || ev.references)) {
+              finish({
+                reply: ev.reply,
+                sessionId: ev.sessionId,
+                tools: ev.tools,
+                thinking: ev.thinking,
+                references: ev.references,
+              });
+            }
+          },
+        });
+        if (finalEv.reply) {
+          finish(finalEv);
+        }
+      } catch (streamErr) {
+        if (ac.signal.aborted) return;
+        const status = (streamErr as { status?: number })?.status;
+        if (status === 404) {
+          const res = await postChat({ message: text, sessionId }).unwrap();
+          finish(res);
+        } else {
+          throw streamErr;
+        }
       }
-      setMessages((prev) => [
-        ...prev,
-        createAssistantMessage(res.reply ?? '', {
-          tools: res.tools ?? undefined,
-          thinking: res.thinking ?? undefined,
-          references: res.references ?? undefined,
-        }),
-      ]);
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        createAssistantMessage(
-          rtkErrorMessage(err, {
-            resource: t('ai:resource'),
-            statusMessages: {
-              502: t('ai:errors.unavailable'),
-              503: t('ai:errors.unavailable'),
-            },
-          }),
-          { isError: true },
-        ),
-      ]);
+      if (ac.signal.aborted) return;
+      patch(() => createAssistantMessage(mapErr(err), { isError: true, id: placeholder.id }));
+    } finally {
+      if (abortRef.current === ac) abortRef.current = null;
+      setIsLoading(false);
     }
   };
 
@@ -153,7 +229,10 @@ export function AiChatPage() {
   };
 
   const onNewChat = () => {
+    abortRef.current?.abort();
+    setIsLoading(false);
     setMessages([]);
+    setProcessOpen({});
     setDraft('');
     setSessionId(resetAiSessionId());
   };
@@ -198,31 +277,77 @@ export function AiChatPage() {
         ) : null}
 
         {messages.map((m) => {
-          const think = sanitizeThinkingLines(m.thinking, m.content);
+          const steps = m.steps ?? [];
           const tools = uniqueToolNames(m.tools);
+          const processOpenNow = processPanelOpen(Boolean(m.streaming), processOpen[m.id]);
+          const processPreview = processOpenNow ? '' : latestStepPreview(steps);
           return (
             <BubbleRow key={m.id} $role={m.role}>
               <Bubble $role={m.role} $error={m.isError}>
                 <Text variant="caption" color="primary" as="div" style={{ opacity: 0.85 }}>
                   {m.role === 'user' ? t('ai:you') : t('ai:assistant')}
                 </Text>
+                {m.role === 'assistant' && !m.isError && (steps.length > 0 || m.streaming) ? (
+                  <ProcessPanel
+                    open={processOpenNow}
+                    onToggle={(e) => {
+                      const nextOpen = e.currentTarget.open;
+                      setProcessOpen((prev) =>
+                        nextProcessOpenMap(prev, m.id, Boolean(m.streaming), nextOpen),
+                      );
+                    }}
+                    aria-label={t('ai:processLabel')}
+                  >
+                    <ProcessTitle>
+                      {m.streaming
+                        ? `${t('ai:processLabel')} · ${t('ai:thinkingLabel')}`
+                        : t('ai:thinkingSummary', { count: steps.length })}
+                      {processPreview ? (
+                        <ProcessPreview title={steps[steps.length - 1]?.text}>
+                          {processPreview}
+                        </ProcessPreview>
+                      ) : null}
+                    </ProcessTitle>
+                    {processOpenNow ? (
+                      <ProcessList aria-live={m.streaming ? 'polite' : 'off'}>
+                        {steps.length === 0 && m.streaming ? (
+                          <ProcessItem $kind="status" $active>
+                            <ProcessIndex>1</ProcessIndex>
+                            <ProcessKind $kind="status">
+                              {t('ai:stepKind.status')}
+                            </ProcessKind>
+                            <ProcessText>{t('ai:thinking')}</ProcessText>
+                          </ProcessItem>
+                        ) : (
+                          steps.map((step, i) => (
+                            <ProcessItem
+                              key={step.id}
+                              $kind={step.kind}
+                              $active={Boolean(m.streaming && i === steps.length - 1)}
+                            >
+                              <ProcessIndex>{i + 1}</ProcessIndex>
+                              <ProcessKind $kind={step.kind}>
+                                {t(`ai:stepKind.${step.kind}`, { defaultValue: step.kind })}
+                              </ProcessKind>
+                              <ProcessText title={step.text}>{step.text}</ProcessText>
+                            </ProcessItem>
+                          ))
+                        )}
+                      </ProcessList>
+                    ) : null}
+                  </ProcessPanel>
+                ) : null}
                 {m.role === 'assistant' && !m.isError ? (
-                  <AssistantMarkdown text={m.content} />
+                  m.content ? (
+                    <AssistantMarkdown text={m.content} />
+                  ) : m.streaming ? (
+                    <Text variant="body" color="secondary">
+                      {t('ai:composing')}
+                    </Text>
+                  ) : null
                 ) : (
                   <UserBody data-text-role="body">{m.content}</UserBody>
                 )}
-                {think.length > 0 ? (
-                  <TraceDetails>
-                    <summary>
-                      {t('ai:thinkingSummary', { count: think.length, defaultValue: `Thinking · ${think.length}` })}
-                    </summary>
-                    <TraceList>
-                      {think.map((line) => (
-                        <li key={line}>{line}</li>
-                      ))}
-                    </TraceList>
-                  </TraceDetails>
-                ) : null}
                 {tools.length > 0 ? (
                   <MetaRow>
                     <MetaLabel>{t('ai:toolsLabel', { defaultValue: 'Tools' })}</MetaLabel>
@@ -253,15 +378,6 @@ export function AiChatPage() {
           );
         })}
 
-        {isLoading ? (
-          <BubbleRow $role="assistant">
-            <Bubble $role="assistant">
-              <Text variant="body" color="secondary">
-                {t('ai:thinking')}
-              </Text>
-            </Bubble>
-          </BubbleRow>
-        ) : null}
       </Thread>
 
       <Composer onSubmit={onSubmit}>

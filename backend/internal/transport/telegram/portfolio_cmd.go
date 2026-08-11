@@ -12,9 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 )
 
-func telegramClientID(userID int64) string {
-	return fmt.Sprintf("tg-%d", userID)
-}
+
 
 func (r *Router) selectedBookID(userID int64) string {
 	r.mu.Lock()
@@ -39,7 +37,10 @@ func (r *Router) setSelectedBook(userID int64, id string) {
 }
 
 func (r *Router) resolveBook(ctx context.Context, userID int64) (clientID, bookID string, err error) {
-	clientID = telegramClientID(userID)
+	clientID, err = r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return "", "", err
+	}
 	list, err := r.portfolio.List(ctx, clientID)
 	if err != nil {
 		return clientID, "", err
@@ -78,7 +79,10 @@ func (r *Router) cmdPortfolio(ctx context.Context, userID int64, args []string) 
 	if r.portfolio == nil {
 		return textReply("Paper trading is not configured on this bot.")
 	}
-	clientID := telegramClientID(userID)
+	clientID, err := r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
 	if len(args) > 0 {
 		switch strings.ToLower(args[0]) {
 		case "create":
@@ -180,7 +184,10 @@ func (r *Router) cmdPortfolioRename(ctx context.Context, userID int64, args []st
 }
 
 func (r *Router) cmdPortfolioDelete(ctx context.Context, userID int64, args []string) Reply {
-	clientID := telegramClientID(userID)
+	clientID, err := r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
 	ref := strings.Join(args, " ")
 	if ref == "" {
 		_, bookID, err := r.resolveBook(ctx, userID)
@@ -255,7 +262,11 @@ func (r *Router) cmdPortfolioShares(ctx context.Context, userID int64) Reply {
 }
 
 func (r *Router) cmdPortfolioShared(ctx context.Context, userID int64) Reply {
-	list, err := r.portfolio.ListSharedWithMe(ctx, telegramClientID(userID))
+	clientID, err := r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return textReply(friendlyErr(err))
+	}
+	list, err := r.portfolio.ListSharedWithMe(ctx, clientID)
 	if err != nil {
 		return textReply(friendlyErr(err))
 	}
@@ -351,7 +362,11 @@ func (r *Router) cmdCashMove(ctx context.Context, userID int64, kind domain.Cash
 		}
 		return textReply(friendlyErr(err2))
 	}
-	in := portfolio.CashMoveInput{ClientID: telegramClientID(userID), PortfolioID: bookID, Amount: amt, Note: note}
+	clientID, cerr := r.clientIDForUser(ctx, userID)
+	if cerr != nil {
+		return textReply(friendlyErr(cerr))
+	}
+	in := portfolio.CashMoveInput{ClientID: clientID, PortfolioID: bookID, Amount: amt, Note: note}
 	var (
 		m *domain.CashMovement
 		v *domain.PortfolioView
@@ -387,7 +402,11 @@ func (r *Router) cmdCashHistory(ctx context.Context, userID int64, args []string
 		}
 		return textReply(friendlyErr(err))
 	}
-	list, total, err := r.portfolio.ListCashMovements(ctx, telegramClientID(userID), limit, 0, bookID)
+	clientID, cerr := r.clientIDForUser(ctx, userID)
+	if cerr != nil {
+		return textReply(friendlyErr(cerr))
+	}
+	list, total, err := r.portfolio.ListCashMovements(ctx, clientID, limit, 0, bookID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
 			return textReply("No paper portfolio yet. Create one:\n" + code("/portfolio create 10000"))

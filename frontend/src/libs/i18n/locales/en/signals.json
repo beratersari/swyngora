@@ -1,8 +1,8 @@
 {
   "title": "Swing signals",
   "eyebrow": "Watchlist scanner",
-  "subtitle": "Confluence setups from RSI, EMA crossover, and volume on your watchlist. Informational only — not financial advice.",
-  "disclaimer": "Setups are mechanical rule hits, not trade orders. Prefer 2–3 agreeing factors and confirm on the chart. Live scanner may evaluate a forming bar.",
+  "subtitle": "4h+1d swing engine with quality gates, plus rule-based confluence on your watchlist. Informational only — not financial advice.",
+  "disclaimer": "Mechanical setups, not trade orders. Engine uses closed bars, BTC regime, ADX, and min 1.8 R:R for triggers. Confirm on the chart.",
   "loadFailed": "Could not load signals",
   "resource": "scanner",
   "openChart": "Open chart",
@@ -18,7 +18,7 @@
   "metrics": {
     "rules": "Active rules",
     "hits24h": "Hits · 24h",
-    "setups": "Confluence setups",
+    "setups": "Engine setups",
     "backtests": "Backtests running"
   },
   "tabs": {
@@ -26,6 +26,17 @@
     "hits": "Hits",
     "rules": "Rules",
     "lab": "Lab"
+  },
+  "engine": {
+    "hint": "Quality-gated 4h swing scan (Wilder RSI/ADX/ATR, SuperTrend, MACD, BTC regime). Trigger needs a fresh event and ≥1.8 R:R.",
+    "empty": "No engine setups on the watchlist. Add liquid USDT pairs and wait for the next closed 4h bar.",
+    "grade": "Grade {{grade}} · {{score}}",
+    "fresh": "Fresh",
+    "regime": "BTC {{regime}}",
+    "entry": "Entry",
+    "stop": "Stop",
+    "target": "Target",
+    "rr": "R:R {{rr}} · risk {{risk}}%"
   },
   "setups": {
     "empty": "No confluence yet. Add the 4h swing stack and wait for the next closed bars.",

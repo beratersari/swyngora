@@ -595,6 +595,9 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	} else if rec != nil {
 		return s.replayMarginOpen(ctx, rec)
 	}
+	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
+		return nil, nil, err
+	}
 	nPos, err := s.store.CountOpenMarginPositions(ctx, clientID)
 	if err != nil {
 		return nil, nil, err
@@ -788,7 +791,11 @@ func (s *Service) markMarginPosition(ctx context.Context, pos *domain.MarginPosi
 	}
 	mark, err := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
 	if err != nil || mark <= 0 {
-		mark = pos.EntryPrice
+		// Fail closed: do not pretend entry is a live mark (that skips liquidation).
+		pos.MarkPrice = 0
+		pos.UnrealizedPnL = 0
+		pos.DebtNotional = domain.DebtNotionalQuote(pos.Side, pos.DebtPrincipal, pos.DebtInterest, pos.EntryPrice)
+		return
 	}
 	pos.MarkPrice = mark
 	pos.UnrealizedPnL = domain.MarginUnrealizedPnL(pos.Side, pos.Quantity, pos.EntryPrice, mark)
@@ -1170,7 +1177,8 @@ func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID strin
 		}
 		mark := worst.MarkPrice
 		if mark <= 0 {
-			mark = worst.EntryPrice
+			// No live mark — do not liquidate (or invent cash) at entry.
+			return n, nil
 		}
 		cq := domain.CrossPartialLiquidationQty(
 			worst.Side, worst.Quantity, worst.EntryPrice, mark,

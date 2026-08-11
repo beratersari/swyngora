@@ -45,6 +45,8 @@ export function SymbolSuggest({
   }, [debounced, exchange, fetchSpot]);
 
   const options = useMemo(() => {
+    const args = spotState.originalArgs;
+    if (!args || args.exchange !== exchange) return [];
     const items = spotState.data?.items ?? [];
     return items
       .filter((it) => it.symbol)
@@ -52,7 +54,7 @@ export function SymbolSuggest({
         value: it.symbol!,
         label: formatSymbolDisplay(it.symbol),
       }));
-  }, [spotState.data?.items]);
+  }, [spotState.data?.items, spotState.originalArgs, exchange]);
 
   return (
     <AutoComplete

@@ -11,7 +11,7 @@ import (
 // Price-diff watch limits.
 const (
 	MaxPriceDiffWatchesPerClient = 20
-	MinPriceDiffNetPct           = 0.01  // 0.01%
+	MinPriceDiffNetPct           = 0.20  // 0.20% — above typical USDT/USD noise
 	MaxPriceDiffNetPct           = 50.0  // 50%
 	MaxPriceDiffFeePct           = 10.0  // 10% per exchange
 	// DefaultPriceDiffMaxAge is how fresh a ticker CloseTime must be to count.

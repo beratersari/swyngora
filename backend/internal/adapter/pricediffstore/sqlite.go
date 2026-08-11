@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -113,8 +114,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pd_opp_open_route
 	ON price_diff_opportunities(watch_id, buy_exchange, sell_exchange)
 	WHERE status = 'open';
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return sqliteutil.SetUserVersion(s.db, 1)
 }
 
 const watchCols = `id, client_id, symbol, min_net_diff_pct, fee_binance_pct, fee_coinbase_pct,

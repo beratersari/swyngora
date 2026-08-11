@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -30,29 +31,39 @@ type aiChatBody struct {
 	SessionID string `json:"sessionId"`
 }
 
-// Chat handles POST /api/v1/ai/chat
-func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
+func (h *AIHandler) parseChat(r *http.Request) (msg, session, clientID string, err error) {
 	if h.client == nil {
-		writeError(w, fmt.Errorf("%w: AI service not configured", domain.ErrUpstream))
-		return
+		return "", "", "", fmt.Errorf("%w: AI service not configured", domain.ErrUpstream)
 	}
 	var body aiChatBody
 	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
-		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
-		return
+		return "", "", "", fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument)
 	}
-	msg := strings.TrimSpace(body.Message)
+	msg = strings.TrimSpace(body.Message)
 	if msg == "" {
-		writeError(w, fmt.Errorf("%w: message is required", domain.ErrInvalidArgument))
-		return
+		return "", "", "", fmt.Errorf("%w: message is required", domain.ErrInvalidArgument)
 	}
-	session := strings.TrimSpace(body.SessionID)
+	clientID, err = domain.NormalizeClientID(clientIDFrom(r))
+	if err != nil {
+		return "", "", "", err
+	}
+	session = strings.TrimSpace(body.SessionID)
 	if session == "" {
-		session = "http-default"
+		session = clientID
+	}
+	return msg, session, clientID, nil
+}
+
+// Chat handles POST /api/v1/ai/chat
+func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
+	msg, session, clientID, err := h.parseChat(r)
+	if err != nil {
+		writeError(w, err)
+		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
 	defer cancel()
-	res, err := h.client.Chat(ctx, msg, session)
+	res, err := h.client.Chat(ctx, msg, session, clientID)
 	if err != nil {
 		writeError(w, fmt.Errorf("%w: %v", domain.ErrUpstream, err))
 		return
@@ -65,4 +76,58 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		"references": res.References,
 		"note":       "Informational only — not financial advice.",
 	})
+}
+
+// ChatStream handles POST /api/v1/ai/chat/stream (NDJSON thinking/tool/final events).
+func (h *AIHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
+	msg, session, clientID, err := h.parseChat(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, fmt.Errorf("%w: streaming not supported", domain.ErrUpstream))
+		return
+	}
+	w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	enc := json.NewEncoder(w)
+	writeEv := func(v any) {
+		_ = enc.Encode(v)
+		flusher.Flush()
+	}
+	writeEv(map[string]string{"type": "status", "text": "Planning…", "sessionId": session})
+
+	ctx, cancel := context.WithTimeout(r.Context(), h.timeout)
+	defer cancel()
+	var sawFinal bool
+	res, err := h.client.ChatStream(ctx, msg, session, clientID, func(ev aiagent.StreamEvent) {
+		if ev.Type == "" {
+			return
+		}
+		if ev.Type == "final" {
+			sawFinal = true
+		}
+		writeEv(ev)
+	})
+	if err != nil {
+		writeEv(map[string]string{"type": "error", "message": err.Error(), "sessionId": session})
+		writeEv(map[string]string{"type": "done", "sessionId": session})
+		return
+	}
+	if !sawFinal {
+		writeEv(map[string]any{
+			"type":       "final",
+			"reply":      res.Reply,
+			"tools":      res.Tools,
+			"thinking":   res.Thinking,
+			"references": res.References,
+			"sessionId":  session,
+			"note":       "Informational only — not financial advice.",
+		})
+	}
+	writeEv(map[string]string{"type": "done", "sessionId": session})
 }

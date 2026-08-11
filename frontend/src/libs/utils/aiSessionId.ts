@@ -10,7 +10,7 @@ function randomSuffix(): string {
 }
 
 /**
- * Stable multi-turn session id for POST /api/v1/ai/chat.
+ * Stable multi-turn session id for POST /api/v1/ai/chat and /chat/stream.
  * Prefixed so server logs can distinguish web from other clients.
  */
 export function getOrCreateAiSessionId(): string {

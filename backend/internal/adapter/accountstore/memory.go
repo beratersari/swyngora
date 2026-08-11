@@ -2,22 +2,30 @@ package accountstore
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // Memory is an in-process account store for tests.
 type Memory struct {
-	mu   sync.Mutex
-	byID map[string]*domain.Account
-	keys map[string]*domain.APIKey
+	mu       sync.Mutex
+	byID     map[string]*domain.Account
+	telegram map[int64]string
+	keys     map[string]*domain.APIKey
 }
 
 // NewMemory constructs an empty store.
 func NewMemory() *Memory {
-	return &Memory{byID: map[string]*domain.Account{}, keys: map[string]*domain.APIKey{}}
+	return &Memory{
+		byID:     map[string]*domain.Account{},
+		telegram: map[int64]string{},
+		keys:     map[string]*domain.APIKey{},
+	}
 }
 
 func cloneAcc(a *domain.Account) *domain.Account {
@@ -136,4 +144,19 @@ func (m *Memory) Delete(_ context.Context, clientID string) error {
 	}
 	delete(m.byID, clientID)
 	return nil
+}
+
+// ClientIDForTelegramUser returns a stable unguessable tenant id for a Telegram user.
+func (m *Memory) ClientIDForTelegramUser(_ context.Context, telegramUserID int64) (string, error) {
+	if telegramUserID == 0 {
+		return "", fmt.Errorf("%w: telegram user id is required", domain.ErrInvalidArgument)
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if id, ok := m.telegram[telegramUserID]; ok {
+		return id, nil
+	}
+	id := uuid.NewString()
+	m.telegram[telegramUserID] = id
+	return id, nil
 }

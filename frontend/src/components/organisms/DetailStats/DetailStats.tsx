@@ -2,9 +2,10 @@ import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import {
-  formatCompactUsd,
+  formatCompactAsset,
   formatPrice,
   formatTradeCount,
+  parseTradingPair,
 } from '@/libs/utils';
 import { formatMaxSupply } from './DetailStats.helpers';
 import { StatCard, StatsGrid, StatsSection } from './DetailStats.styles';
@@ -51,6 +52,7 @@ export function DetailStats({
   isLoading = false,
 }: DetailStatsProps) {
   const { t, i18n } = useTranslation('detail');
+  const pair = parseTradingPair(ticker?.symbol ?? '');
 
   return (
     <StatsSection>
@@ -67,12 +69,12 @@ export function DetailStats({
         <Stat label={t('stats.low24h')} value={formatPrice(ticker?.lowPrice)} isLoading={isLoading} />
         <Stat
           label={t('stats.baseVol')}
-          value={formatCompactUsd(ticker?.volume)}
+          value={formatCompactAsset(ticker?.volume, pair.base)}
           isLoading={isLoading}
         />
         <Stat
           label={t('stats.quoteVol')}
-          value={formatCompactUsd(ticker?.quoteVolume)}
+          value={formatCompactAsset(ticker?.quoteVolume, pair.quote)}
           isLoading={isLoading}
         />
         <Stat

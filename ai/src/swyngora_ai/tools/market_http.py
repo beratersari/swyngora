@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextvars import ContextVar
 from typing import Any
 
 import httpx
@@ -11,15 +12,47 @@ from pydantic import BaseModel, Field
 
 from swyngora_ai.config import Settings, get_settings
 
+bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
+
+
+def bind_client_id(client_id: str) -> Any:
+    """Force tenant tools to the authenticated subject for this chat turn."""
+    return bound_client_id.set((client_id or "").strip())
+
+
+def reset_bound_client_id(token: Any) -> None:
+    bound_client_id.reset(token)
+
 
 class _HTTP:
-    def __init__(self, base_url: str, timeout: float = 25.0) -> None:
+    def __init__(self, base_url: str, timeout: float = 25.0, auth_token: str = "") -> None:
         self.base = base_url.rstrip("/")
         self.timeout = timeout
+        self.auth_token = (auth_token or "").strip()
+
+    def _headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+        cid = bound_client_id.get()
+        if cid:
+            headers["X-Client-Id"] = cid
+        return headers
+
+    def _apply_client_id(self, params: dict[str, Any] | None, body: dict[str, Any] | None) -> None:
+        cid = bound_client_id.get()
+        if not cid:
+            return
+        if params is not None:
+            params["clientId"] = cid
+        if body is not None and "clientId" in body:
+            body["clientId"] = cid
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
+        params = dict(params or {})
+        self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:
-            r = client.get(f"{self.base}{path}", params=params or {})
+            r = client.get(f"{self.base}{path}", params=params, headers=self._headers())
             if r.status_code >= 400:
                 return f"ERROR {r.status_code}: {r.text[:500]}"
             try:
@@ -28,8 +61,10 @@ class _HTTP:
                 return r.text
 
     def post(self, path: str, body: dict[str, Any]) -> str:
+        body = dict(body or {})
+        self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
-            r = client.post(f"{self.base}{path}", json=body)
+            r = client.post(f"{self.base}{path}", json=body, headers=self._headers())
             if r.status_code >= 400:
                 return f"ERROR {r.status_code}: {r.text[:500]}"
             try:
@@ -38,8 +73,10 @@ class _HTTP:
                 return r.text
 
     def put(self, path: str, body: dict[str, Any]) -> str:
+        body = dict(body or {})
+        self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
-            r = client.put(f"{self.base}{path}", json=body)
+            r = client.put(f"{self.base}{path}", json=body, headers=self._headers())
             if r.status_code >= 400:
                 return f"ERROR {r.status_code}: {r.text[:500]}"
             try:
@@ -48,8 +85,10 @@ class _HTTP:
                 return r.text
 
     def patch(self, path: str, body: dict[str, Any]) -> str:
+        body = dict(body or {})
+        self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
-            r = client.patch(f"{self.base}{path}", json=body)
+            r = client.patch(f"{self.base}{path}", json=body, headers=self._headers())
             if r.status_code >= 400:
                 return f"ERROR {r.status_code}: {r.text[:500]}"
             try:
@@ -58,8 +97,10 @@ class _HTTP:
                 return r.text
 
     def delete(self, path: str, params: dict[str, Any]) -> str:
+        params = dict(params or {})
+        self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:
-            r = client.delete(f"{self.base}{path}", params=params)
+            r = client.delete(f"{self.base}{path}", params=params, headers=self._headers())
             if r.status_code >= 400:
                 return f"ERROR {r.status_code}: {r.text[:500]}"
             try:
@@ -71,6 +112,12 @@ class _HTTP:
 class TickerInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+
+
+class SwingScanInput(BaseModel):
+    client_id: str = Field(description="Opaque client id")
+    exchange: str = Field(default="", description="Optional venue filter")
+    limit: int = Field(default=25, ge=1, le=25)
 
 
 class OrderBookInput(BaseModel):
@@ -595,7 +642,7 @@ class PumpScanInput(BaseModel):
 
 def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]:
     cfg = settings or get_settings()
-    http = _HTTP(cfg.api_base_url)
+    http = _HTTP(cfg.api_base_url, auth_token=cfg.api_auth_token)
 
     def health() -> str:
         return http.get("/health")
@@ -770,6 +817,15 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "emaPeriods": ep,
             },
         )
+
+    def analyze_swing(symbol: str, exchange: str = "binance") -> str:
+        return http.get("/api/v1/market/swing", {"symbol": symbol, "exchange": exchange})
+
+    def scan_swing_setups(client_id: str, exchange: str = "", limit: int = 25) -> str:
+        params: dict = {"clientId": client_id, "limit": limit}
+        if exchange:
+            params["exchange"] = exchange
+        return http.get("/api/v1/swing/setups", params)
 
     def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
         params: dict[str, Any] = {"clientId": client_id}
@@ -1375,7 +1431,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
 
     def close_margin_position(
         client_id: str, position_id: str, quantity: float = 0, idempotency_key: str = ""
-    ) -> str:        body: dict[str, Any] = {}
+    ) -> str:
+        body: dict[str, Any] = {}
         if quantity > 0:
             body["quantity"] = quantity
         if idempotency_key:
@@ -1685,6 +1742,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_indicators",
             description="RSI + EMA indicators. Informational only.",
             args_schema=IndicatorsInput,
+        ),
+        StructuredTool.from_function(
+            analyze_swing,
+            name="analyze_swing",
+            description=(
+                "4h+1d swing engine: Wilder RSI/ADX/ATR, SuperTrend, MACD, BTC regime, "
+                "quality gates, ATR/structure stop and 1.8R target. Informational only."
+            ),
+            args_schema=TickerInput,
+        ),
+        StructuredTool.from_function(
+            scan_swing_setups,
+            name="scan_swing_setups",
+            description="Scan the client's watchlist for quality-gated swing setups.",
+            args_schema=SwingScanInput,
         ),
         StructuredTool.from_function(
             get_watchlist,

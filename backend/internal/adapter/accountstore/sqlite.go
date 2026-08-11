@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -76,6 +79,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 	updated_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_accounts_purge ON accounts(status, purge_at);
+CREATE TABLE IF NOT EXISTS telegram_identities (
+	telegram_user_id INTEGER PRIMARY KEY NOT NULL,
+	client_id        TEXT NOT NULL UNIQUE
+);
 CREATE TABLE IF NOT EXISTS api_keys (
 	id          TEXT PRIMARY KEY NOT NULL,
 	client_id   TEXT NOT NULL,
@@ -90,7 +97,10 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE INDEX IF NOT EXISTS idx_api_keys_client ON api_keys(client_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(hash);
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	return sqliteutil.SetUserVersion(s.db, 1)
 }
 
 func nullTime(t *time.Time) any {
@@ -257,4 +267,33 @@ func (s *SQLite) Delete(ctx context.Context, clientID string) error {
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+// ClientIDForTelegramUser returns a persisted unguessable tenant id for a Telegram user.
+func (s *SQLite) ClientIDForTelegramUser(ctx context.Context, telegramUserID int64) (string, error) {
+	if telegramUserID == 0 {
+		return "", fmt.Errorf("%w: telegram user id is required", domain.ErrInvalidArgument)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var existing string
+	err := s.db.QueryRowContext(ctx, `SELECT client_id FROM telegram_identities WHERE telegram_user_id = ?`, telegramUserID).Scan(&existing)
+	if err == nil && existing != "" {
+		return existing, nil
+	}
+	if err != nil && err != sql.ErrNoRows {
+		return "", err
+	}
+	id := uuid.NewString()
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO telegram_identities (telegram_user_id, client_id) VALUES (?, ?)
+		ON CONFLICT(telegram_user_id) DO NOTHING
+	`, telegramUserID, id)
+	if err != nil {
+		return "", err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT client_id FROM telegram_identities WHERE telegram_user_id = ?`, telegramUserID).Scan(&existing); err != nil {
+		return "", err
+	}
+	return existing, nil
 }

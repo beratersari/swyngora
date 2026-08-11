@@ -67,6 +67,64 @@ def test_orchestrator_chat_with_scripted_model():
     assert isinstance(out.references, list)
 
 
+def test_orchestrator_emits_live_process_events():
+    events: list[dict] = []
+    model = ScriptedModel(
+        responses=[
+            AIMessage(content="BTC is around 100 (scripted). Not financial advice."),
+        ]
+    )
+    orch = Orchestrator(
+        settings=Settings(_env_file=None),
+        memory=SessionMemory(),
+        model=model,
+    )
+    out = orch.chat("What is BTC price?", session_id="t-live", on_event=events.append)
+    assert out.reply
+    types = [e.get("type") for e in events]
+    assert "status" in types
+    assert "final" not in types  # structured final is added by the HTTP layer
+    texts = " ".join(str(e.get("text") or "") for e in events)
+    assert "Planning" in texts or "Orchestrator" in texts or "Composing" in texts
+
+
+def test_run_agent_with_progress_streams_then_emits():
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+    from swyngora_ai.graph.orchestrator import run_agent_with_progress
+    from swyngora_ai.progress import reset_progress, set_progress
+
+    human = HumanMessage(content="q")
+    think = AIMessage(
+        content="I'll check market data",
+        tool_calls=[{"name": "market_agent", "args": {"task": "BTC"}, "id": "1", "type": "tool_call"}],
+    )
+    tool = ToolMessage(content='{"lastPrice":"1"}', name="market_agent", tool_call_id="1")
+    final = AIMessage(content="done")
+
+    class FakeGraph:
+        def stream(self, _input, config=None, stream_mode=None):
+            assert stream_mode == "values"
+            yield {"messages": [human]}
+            yield {"messages": [human, think]}
+            yield {"messages": [human, think, tool, final]}
+
+        def invoke(self, _input, config=None):
+            raise AssertionError("invoke should not run when stream works")
+
+    events: list[dict] = []
+    token = set_progress(events.append)
+    try:
+        out = run_agent_with_progress(FakeGraph(), [human], {"recursion_limit": 4})
+    finally:
+        reset_progress(token)
+    assert out[-1].content == "done"
+    types = [e.get("type") for e in events]
+    assert "thinking" in types
+    assert "tool" in types
+    assert "tool_result" in types
+    assert "status" in types
+
+
 def test_extract_trace_tools():
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 

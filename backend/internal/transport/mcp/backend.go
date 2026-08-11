@@ -16,6 +16,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
 
@@ -29,7 +30,8 @@ type Backend struct {
 	Export    *exportsvc.Service
 	Import    *dataimport.Service
 	PriceDiff *pricediff.Service
-	APIKeys   *apikey.Service
+	Swing   *swing.Service
+	APIKeys *apikey.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -2112,13 +2114,37 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 			"unrealizedPnL": p.UnrealizedPnL, "costBasis": p.CostBasis,
 		})
 	}
+	mpos := make([]map[string]any, 0, len(v.MarginPositions))
+	for i := range v.MarginPositions {
+		p := v.MarginPositions[i]
+		m := map[string]any{
+			"id": p.ID, "clientId": p.ClientID, "exchange": string(p.Exchange), "symbol": p.Symbol,
+			"side": string(p.Side), "mode": string(p.Mode), "quantity": p.Quantity,
+			"entryPrice": p.EntryPrice, "leverage": p.Leverage, "margin": p.Margin,
+			"debtPrincipal": p.DebtPrincipal, "debtInterest": p.DebtInterest, "debtAsset": string(p.DebtAsset),
+			"debtNotional": p.DebtNotional, "markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL,
+			"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
+			"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
+			"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if p.StopLoss != nil {
+			m["stopLoss"] = *p.StopLoss
+		}
+		if p.TakeProfit != nil {
+			m["takeProfit"] = *p.TakeProfit
+		}
+		mpos = append(mpos, m)
+	}
 	return mustJSON(map[string]any{
-		"id": v.ID, "clientId": v.ClientID, "name": v.Name, "role": string(v.Role), "currency": v.Currency, "startingBalance": v.StartingBalance,
+		"id": v.ID, "clientId": v.ClientID, "name": v.Name, "role": string(v.Role),
+		"currency": v.Currency, "startingBalance": v.StartingBalance,
 		"cashBalance": v.CashBalance, "netDeposits": v.NetDeposits, "contributedCapital": v.ContributedCapital,
-		"reservedCash": v.ReservedCash, "availableCash": v.AvailableCash,
-		"positionsValue": v.PositionsValue, "equity": v.Equity,
-		"unrealizedPnL": v.UnrealizedPnL, "realizedPnLTotal": v.RealizedPnLTotal, "totalPnL": v.TotalPnL,
-		"positions": pos, "note": v.Note,
+		"reservedCash": v.ReservedCash, "reservedMargin": v.ReservedMargin,
+		"availableCash": v.AvailableCash, "positionsValue": v.PositionsValue,
+		"marginMode": string(v.MarginMode), "marginLocked": v.MarginLocked,
+		"marginUnrealizedPnL": v.MarginUnrealizedPnL, "marginEquity": v.MarginEquity,
+		"equity": v.Equity, "unrealizedPnL": v.UnrealizedPnL, "realizedPnLTotal": v.RealizedPnLTotal,
+		"totalPnL": v.TotalPnL, "positions": pos, "marginPositions": mpos, "note": v.Note,
 		"createdAt": v.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": v.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	})
@@ -2725,4 +2751,77 @@ func strFromAny(v any, def string) string {
 		return s
 	}
 	return def
+}
+
+func (b *Backend) AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	dec, err := b.Swing.Analyze(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(swingDecisionMap(dec))
+}
+
+func (b *Backend) ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	list, err := b.Swing.ScanWatchlist(ctx, clientID, exchange, limit)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	accepted := 0
+	for i := range list {
+		items = append(items, swingDecisionMap(&list[i]))
+		if list[i].Accepted {
+			accepted++
+		}
+	}
+	return mustJSON(map[string]any{
+		"items": items, "count": len(items), "accepted": accepted,
+		"note": "Informational only — not financial advice.",
+	})
+}
+
+func swingDecisionMap(d *domain.SwingDecision) map[string]any {
+	if d == nil {
+		return map[string]any{}
+	}
+	pats := make([]map[string]any, 0, len(d.Patterns))
+	for _, p := range d.Patterns {
+		pats = append(pats, map[string]any{
+			"name": p.Name, "score": p.Score, "description": p.Description,
+			"timeframe": p.Timeframe, "fresh": p.Fresh,
+		})
+	}
+	m := map[string]any{
+		"exchange": string(d.Exchange), "symbol": d.Symbol, "interval": d.Interval,
+		"accepted": d.Accepted, "stage": d.Stage, "setupType": d.SetupType,
+		"swingScore": d.SwingScore, "grade": d.Grade, "fresh": d.Fresh,
+		"btcRegime": d.BTCRegime, "side": d.Side, "price": d.Price,
+		"ema4h": d.EMA4h, "ema1d": d.EMA1d, "patterns": pats, "reasons": d.Reasons,
+		"note": d.Note,
+	}
+	if d.ADX4h != nil {
+		m["adx4h"] = *d.ADX4h
+	}
+	if d.ADX1d != nil {
+		m["adx1d"] = *d.ADX1d
+	}
+	if d.RSI != nil {
+		m["rsi"] = *d.RSI
+	}
+	if !d.BarTime.IsZero() {
+		m["barTime"] = d.BarTime.UTC().Format(time.RFC3339Nano)
+	}
+	if d.Levels != nil {
+		m["levels"] = map[string]any{
+			"entry": d.Levels.Entry, "stopLoss": d.Levels.StopLoss, "takeProfit": d.Levels.TakeProfit,
+			"riskPct": d.Levels.RiskPct, "rewardPct": d.Levels.RewardPct, "rr": d.Levels.RR, "atr": d.Levels.ATR,
+		}
+	}
+	return m
 }

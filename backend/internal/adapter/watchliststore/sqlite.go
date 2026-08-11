@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -132,7 +133,7 @@ CREATE INDEX IF NOT EXISTS idx_watchlist_audit_owner ON watchlist_audit(owner_cl
 			return fmt.Errorf("watchlist sqlite migrate version column: %w", err)
 		}
 	}
-	return nil
+	return sqliteutil.SetUserVersion(s.db, 1)
 }
 
 func (s *SQLite) columnExists(table, col string) bool {

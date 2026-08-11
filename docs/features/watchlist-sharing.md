@@ -84,4 +84,4 @@ curl 'http://localhost:8080/api/v1/watchlist/audit?clientId=alice'
 - No real authentication — anyone who knows a `clientId` can act as that client.
 - No multi-list-per-user model yet (one list per `clientId`).
 - UI for sharing is not in this change (API + MCP + AI tools only).
-- Telegram bot still operates only on the caller's own `tg-<user_id>` list.
+- Telegram bot still operates only on the caller's own mapped tenant id (UUID, not `tg-<user_id>`).

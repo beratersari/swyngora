@@ -15,7 +15,6 @@ import (
 
 const (
 	maxItems       = domain.MaxWatchlistItems
-	maxClientIDLen = 128
 	maxNoteRunes   = 200
 )
 
@@ -431,23 +430,7 @@ func (s *Service) accessRole(ctx context.Context, actor, owner string) (domain.W
 }
 
 func normalizeClientID(id string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument)
-	}
-	if len(id) > maxClientIDLen {
-		return "", fmt.Errorf("%w: clientId too long", domain.ErrInvalidArgument)
-	}
-	if strings.EqualFold(id, "default") {
-		return "", fmt.Errorf("%w: clientId must not be the shared name \"default\"", domain.ErrInvalidArgument)
-	}
-	for _, r := range id {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
-			continue
-		}
-		return "", fmt.Errorf("%w: clientId has invalid characters", domain.ErrInvalidArgument)
-	}
-	return id, nil
+	return domain.NormalizeClientID(id)
 }
 
 func normalizeItems(items []domain.WatchlistItem) ([]domain.WatchlistItem, error) {

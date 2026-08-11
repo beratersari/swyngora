@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -398,20 +399,12 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_margin_trades_sl_tp ON margin_trades(position_id, action) WHERE action IN ('stop_loss', 'take_profit')`,
 	}
 	for _, q := range alters {
-		if _, err := s.db.Exec(q); err != nil {
-			// SQLite returns error if column already exists — ignore those.
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
-				// modernc may say "duplicate column name"
-				if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
-					// continue only on duplicate; other errors are fatal
-					msg := strings.ToLower(err.Error())
-					if strings.Contains(msg, "duplicate") {
-						continue
-					}
-					return err
-				}
-			}
+		if err := sqliteutil.ExecAllowExists(s.db, q); err != nil {
+			return err
 		}
+	}
+	if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+		return err
 	}
 	// Backfill remaining_quantity for legacy open orders that only had quantity.
 	_, _ = s.db.Exec(`

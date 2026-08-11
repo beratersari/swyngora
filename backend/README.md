@@ -115,6 +115,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`POST` | `/api/v1/account/api-keys` | List / create named API keys (`read` or `trade`) |
 | `DELETE` | `/api/v1/account/api-keys/{id}` | Revoke a key |
 | `POST` | `/api/v1/ai/chat` | Proxy to Python multi-agent assistant |
+| `POST` | `/api/v1/ai/chat/stream` | NDJSON thinking/tool/final events (web Process panel) |
 | `GET` | `/api/v1/market/candles?symbol=BTCUSDT&interval=1h&limit=100` | OHLCV from Binance |
 | `GET` | `/api/v1/market/ticker/24h?symbol=BTCUSDT` | 24h stats + base/quote volume |
 | `GET` | `/api/v1/market/supply?asset=BTC` | Circulating supply (Binance product catalog) |
@@ -134,6 +135,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price **plus per-exchange slippage and taker fee**, pending limit/stop orders with cash/position **reservations** (buy reserve covers slip + fee), **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`). Rates: `GET /api/v1/portfolio/trading-costs`.
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
+
+**Swing engine:** `GET /api/v1/market/swing?symbol=` analyzes one pair on **closed** 4h+1d bars (Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB, BTC regime, min R:R 1.8 for trigger). `GET /api/v1/swing/setups` scans the watchlist (max 25). Informational only.
 
 **User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, backtests, and paper portfolios. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
 

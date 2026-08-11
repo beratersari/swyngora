@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -38,7 +39,17 @@ func newPaperRouter(t *testing.T) *Router {
 	ps := portfolio.New(st, ms).WithPaperCosts(domain.ZeroTradingCosts)
 	return NewRouter(ms, ws, Options{
 		DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true, Portfolio: ps,
+		Identities: accountstore.NewMemory(),
 	})
+}
+
+func mappedClientID(t *testing.T, r *Router, userID int64) string {
+	t.Helper()
+	id, err := r.clientIDForUser(context.Background(), userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func TestPortfolio_CreateAndView(t *testing.T) {
@@ -96,7 +107,7 @@ func TestBuy_RequiresConfirmThenFills(t *testing.T) {
 		t.Fatalf("callback=%s", confirm)
 	}
 	// Trade must not have executed yet.
-	view, err := r.portfolio.View(ctx, "tg-88")
+	view, err := r.portfolio.View(ctx, mappedClientID(t, r, 88))
 	if err != nil || view.CashBalance != 10000 {
 		t.Fatalf("pre-confirm cash=%v err=%v", view, err)
 	}
@@ -108,7 +119,7 @@ func TestBuy_RequiresConfirmThenFills(t *testing.T) {
 	if !done.ClearKeyboard {
 		t.Fatal("want buttons cleared after fill")
 	}
-	view, err = r.portfolio.View(ctx, "tg-88")
+	view, err = r.portfolio.View(ctx, mappedClientID(t, r, 88))
 	if err != nil || view.CashBalance != 9800 {
 		t.Fatalf("post cash=%v err=%v", view.CashBalance, err)
 	}
@@ -131,7 +142,7 @@ func TestBuy_CancelDoesNotTrade(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out.Text), "cancel") {
 		t.Fatalf("%s", out.Text)
 	}
-	view, _ := r.portfolio.View(ctx, "tg-89")
+	view, _ := r.portfolio.View(ctx, mappedClientID(t, r, 89))
 	if view.CashBalance != 10000 {
 		t.Fatalf("cash after cancel=%v", view.CashBalance)
 	}
@@ -149,7 +160,7 @@ func TestBuy_WrongUserRejected(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out.Text), "another") {
 		t.Fatalf("%s", out.Text)
 	}
-	view, _ := r.portfolio.View(ctx, "tg-90")
+	view, _ := r.portfolio.View(ctx, mappedClientID(t, r, 90))
 	if view.CashBalance != 10000 {
 		t.Fatalf("cash=%v", view.CashBalance)
 	}
@@ -172,7 +183,7 @@ func TestSell_PreviewAndFill(t *testing.T) {
 	if !strings.Contains(strings.ToLower(out.Text), "filled") {
 		t.Fatalf("%s", out.Text)
 	}
-	view, _ := r.portfolio.View(ctx, "tg-92")
+	view, _ := r.portfolio.View(ctx, mappedClientID(t, r, 92))
 	if view.CashBalance < 9999 {
 		t.Fatalf("cash after roundtrip=%v", view.CashBalance)
 	}
@@ -198,7 +209,7 @@ func TestTelegram_DepositWithdrawHistory(t *testing.T) {
 	if !strings.Contains(out, "Cash history") || !strings.Contains(out, "Opening") {
 		t.Fatalf("%s", out)
 	}
-	view, _ := r.portfolio.View(ctx, "tg-94")
+	view, _ := r.portfolio.View(ctx, mappedClientID(t, r, 94))
 	if view.CashBalance != 10400 || view.TotalPnL != 0 {
 		t.Fatalf("cash=%v pnl=%v", view.CashBalance, view.TotalPnL)
 	}

@@ -9,6 +9,7 @@ import { SignalsHitsTable } from '@/components/organisms/SignalsHitsTable';
 import { SignalsRuleForm } from '@/components/organisms/SignalsRuleForm';
 import { SignalsRulesTable } from '@/components/organisms/SignalsRulesTable';
 import { SignalsSetupGrid } from '@/components/organisms/SignalsSetupGrid';
+import { SwingEngineGrid } from '@/components/organisms/SwingEngineGrid';
 import {
   rtkErrorMessage,
   useCancelScannerBacktestMutation,
@@ -21,6 +22,7 @@ import {
   useListScannerResultsQuery,
   useListScannerRulesQuery,
   useStartScannerBacktestMutation,
+  useListSwingSetupsQuery,
   type CreateScannerRuleArg,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
@@ -57,6 +59,14 @@ export function SignalsPage() {
       refetchOnFocus: true,
     },
   );
+  const engineQuery = useListSwingSetupsQuery(
+    { limit: 25 },
+    {
+      pollingInterval: visible ? SIGNALS_RESULTS_POLL_MS * 2 : 0,
+      refetchOnFocus: true,
+      skip: !watchlist.isLoading && (watchlist.data?.items?.length ?? 0) === 0,
+    },
+  );
   const backtestsQuery = useListScannerBacktestsQuery(undefined, {
     pollingInterval: visible ? SIGNALS_BACKTEST_POLL_MS : 0,
     refetchOnFocus: true,
@@ -78,6 +88,8 @@ export function SignalsPage() {
   const watchCount = watchlist.data?.items?.length ?? 0;
 
   const setups = useMemo(() => buildSwingSetups(results), [results]);
+  const engineItems = engineQuery.data?.items ?? [];
+  const engineAccepted = engineQuery.data?.accepted ?? 0;
   const hits24h = useMemo(() => countHitsSince(results, Date.now() - 24 * 60 * 60 * 1000), [results]);
   const activeJobs = jobs.filter((j) => j.status === 'pending' || j.status === 'running').length;
 
@@ -184,7 +196,7 @@ export function SignalsPage() {
             {t('signals:metrics.setups')}
           </Text>
           <Text variant="h3" color="primary" mono>
-            {setups.length}
+            {engineAccepted || setups.length}
           </Text>
         </MetricCard>
         <MetricCard>
@@ -206,6 +218,14 @@ export function SignalsPage() {
             label: t('signals:tabs.setups'),
             children: (
               <Section>
+                <Text variant="caption" color="secondary">
+                  {t('signals:engine.hint')}
+                </Text>
+                <SwingEngineGrid
+                  items={engineItems}
+                  loading={engineQuery.isFetching || engineQuery.isLoading}
+                  onOpen={openChart}
+                />
                 <Text variant="caption" color="secondary">
                   {t('signals:setups.hint')}
                 </Text>

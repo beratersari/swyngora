@@ -15,8 +15,7 @@ import (
 )
 
 const (
-	maxClientIDLen = 128
-	paperNote      = "Paper trading only — simulated fills at last price plus venue slippage and taker fee. Not financial advice. No real money."
+	paperNote = "Paper trading only — simulated fills at last price plus venue slippage and taker fee. Not financial advice. No real money."
 )
 
 // PriceFetcher loads last prices for paper fills and marks.
@@ -378,6 +377,11 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	}
 	unlock := s.lockClient(clientID)
 	defer unlock()
+	fresh, ferr := s.store.GetPortfolio(ctx, clientID)
+	if ferr != nil {
+		return nil, nil, ferr
+	}
+	p = fresh
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return nil, nil, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -392,6 +396,9 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	}
 	lotMethod, err := domain.NormalizeLotMethod(in.LotMethod)
 	if err != nil {
+		return nil, nil, err
+	}
+	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
 		return nil, nil, err
 	}
 	idempHash := hashParts("market", string(ex), sym, string(side), in.Quantity, string(lotMethod))
@@ -653,6 +660,9 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	}
 	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
 		return nil, nil, nil, err
 	}
 	idempHash := hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
@@ -932,6 +942,9 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		if trigger <= 0 {
 			return nil, fmt.Errorf("%w: trail produces non-positive stop price at current market", domain.ErrInvalidArgument)
 		}
+	}
+	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
+		return nil, err
 	}
 	n, err := s.store.CountOpenPendingOrders(ctx, clientID)
 	if err != nil {
@@ -1772,23 +1785,7 @@ func (s *Service) lastPrice(ctx context.Context, exchange, symbol string) (float
 }
 
 func normalizeClientID(id string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument)
-	}
-	if len(id) > maxClientIDLen {
-		return "", fmt.Errorf("%w: clientId too long", domain.ErrInvalidArgument)
-	}
-	if strings.EqualFold(id, "default") {
-		return "", fmt.Errorf("%w: clientId must not be the shared name \"default\"", domain.ErrInvalidArgument)
-	}
-	for _, r := range id {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
-			continue
-		}
-		return "", fmt.Errorf("%w: clientId has invalid characters", domain.ErrInvalidArgument)
-	}
-	return id, nil
+	return domain.NormalizeClientID(id)
 }
 
 func normalizeExchangeSymbol(exchange, symbol string) (domain.Exchange, string, error) {

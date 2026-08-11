@@ -1400,6 +1400,31 @@ func (c *APIClient) DeleteScannerRule(ctx context.Context, clientID, id string) 
 	return c.sendJSON(ctx, http.MethodDelete, path, nil)
 }
 
+// AnalyzeSwing runs the swing engine on one symbol.
+func (c *APIClient) AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	q.Set("symbol", symbol)
+	return c.get(ctx, "/api/v1/market/swing", q)
+}
+
+// ScanSwingSetups scans the client watchlist for swing setups.
+func (c *APIClient) ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/swing/setups", q)
+}
+
 // ListScannerResults lists scanner match history.
 func (c *APIClient) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -173,7 +172,12 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 		status   = "Planning…"
 		lastEdit time.Time
 	)
-	session := "tg-" + strconv.FormatInt(userID, 10)
+	session, serr := b.Router.clientIDForUser(ctx, userID)
+	if serr != nil {
+		log.Warn("telegram identity", "err", serr)
+		_, _ = b.Client.SendMessage(ctx, chatID, "Could not resolve your account id.")
+		return
+	}
 	aiCtx, cancel := context.WithTimeout(ctx, b.Router.opts.AITimeout)
 	defer cancel()
 
@@ -235,7 +239,7 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 		editProgress(force)
 	}
 
-	res, err := b.Router.ai.ChatStream(aiCtx, q, session, onEvent)
+	res, err := b.Router.ai.ChatStream(aiCtx, q, session, session, onEvent)
 	if err != nil {
 		log.Warn("telegram AI stream failed", "err", err)
 		// Only fall back to non-stream Chat when the stream endpoint is missing
@@ -255,7 +259,7 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 			editProgress(true)
 			// Fresh timeout budget for the fallback call.
 			fbCtx, fbCancel := context.WithTimeout(ctx, b.Router.opts.AITimeout)
-			res, err = b.Router.ai.Chat(fbCtx, q, session)
+			res, err = b.Router.ai.Chat(fbCtx, q, session, session)
 			fbCancel()
 		}
 

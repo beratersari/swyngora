@@ -40,6 +40,7 @@ func New(baseURL string, timeout time.Duration) *Client {
 type ChatRequest struct {
 	Message   string `json:"message"`
 	SessionID string `json:"sessionId"`
+	ClientID  string `json:"clientId,omitempty"`
 }
 
 // ChatReference is one public web/X source collected during the turn.
@@ -71,16 +72,21 @@ type StreamEvent struct {
 }
 
 // Chat sends a user message (non-streaming).
-func (c *Client) Chat(ctx context.Context, message, sessionID string) (ChatResult, error) {
+func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string) (ChatResult, error) {
 	var zero ChatResult
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return zero, fmt.Errorf("message is required")
 	}
+	sessionID = strings.TrimSpace(sessionID)
+	clientID = strings.TrimSpace(clientID)
 	if sessionID == "" {
-		sessionID = "default"
+		sessionID = clientID
 	}
-	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID})
+	if sessionID == "" {
+		return zero, fmt.Errorf("sessionId is required")
+	}
+	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID})
 	if err != nil {
 		return zero, err
 	}
@@ -129,16 +135,21 @@ func (c *Client) Chat(ctx context.Context, message, sessionID string) (ChatResul
 
 // ChatStream streams NDJSON events. onEvent is called for each event (including final).
 // Returns the final ChatResult when type=final is seen.
-func (c *Client) ChatStream(ctx context.Context, message, sessionID string, onEvent func(StreamEvent)) (ChatResult, error) {
+func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID string, onEvent func(StreamEvent)) (ChatResult, error) {
 	var zero ChatResult
 	message = strings.TrimSpace(message)
 	if message == "" {
 		return zero, fmt.Errorf("message is required")
 	}
+	sessionID = strings.TrimSpace(sessionID)
+	clientID = strings.TrimSpace(clientID)
 	if sessionID == "" {
-		sessionID = "default"
+		sessionID = clientID
 	}
-	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID})
+	if sessionID == "" {
+		return zero, fmt.Errorf("sessionId is required")
+	}
+	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID})
 	if err != nil {
 		return zero, err
 	}

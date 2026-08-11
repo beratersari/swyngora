@@ -1,8 +1,8 @@
 {
   "title": "Salınım sinyalleri",
   "eyebrow": "İzleme tarayıcısı",
-  "subtitle": "İzleme listenizdeki RSI, EMA kesişimi ve hacim kurallarından birleşik kurulumlar. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
-  "disclaimer": "Kurulumlar mekanik kural eşleşmeleridir, emir değildir. 2–3 faktörün uyumunu bekleyin ve grafikte doğrulayın. Canlı tarayıcı henüz kapanmamış mumu da değerlendirebilir.",
+  "subtitle": "4s+1g salınım motoru (kalite kapıları) ve izleme listesi kural birleşimleri. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "disclaimer": "Mekanik kurulumlar, emir değildir. Motor kapanmış mum, BTC rejimi, ADX ve tetik için en az 1.8 R:R kullanır. Grafikte doğrulayın.",
   "loadFailed": "Sinyaller yüklenemedi",
   "resource": "tarayıcı",
   "openChart": "Grafiği aç",
@@ -18,7 +18,7 @@
   "metrics": {
     "rules": "Aktif kurallar",
     "hits24h": "Eşleşme · 24s",
-    "setups": "Birleşik kurulumlar",
+    "setups": "Motor kurulumları",
     "backtests": "Çalışan lab"
   },
   "tabs": {
@@ -26,6 +26,17 @@
     "hits": "Eşleşmeler",
     "rules": "Kurallar",
     "lab": "Lab"
+  },
+  "engine": {
+    "hint": "Kalite kapılı 4s tarama (Wilder RSI/ADX/ATR, SuperTrend, MACD, BTC rejimi). Tetik için taze olay ve ≥1.8 R:R gerekir.",
+    "empty": "İzleme listesinde motor kurulumu yok. Likit USDT çiftleri ekleyip kapanan 4s mumu bekleyin.",
+    "grade": "Not {{grade}} · {{score}}",
+    "fresh": "Taze",
+    "regime": "BTC {{regime}}",
+    "entry": "Giriş",
+    "stop": "Stop",
+    "target": "Hedef",
+    "rr": "R:R {{rr}} · risk {{risk}}%"
   },
   "setups": {
     "empty": "Henüz birleşim yok. 4s salınım paketini ekleyip kapanan mumları bekleyin.",

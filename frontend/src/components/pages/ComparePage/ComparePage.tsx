@@ -26,7 +26,12 @@ import {
   serializeComparePairs,
   type ComparePair,
 } from '@/libs/utils';
-import { DEFAULT_DETAIL_CANDLE_LIMIT, DEFAULT_DETAIL_INTERVAL } from '@/config/constants';
+import { useDocumentVisible } from '@/libs/hooks';
+import {
+  DEFAULT_DETAIL_CANDLE_LIMIT,
+  DEFAULT_DETAIL_INTERVAL,
+  DEFAULT_DETAIL_SERIES_POLL_MS,
+} from '@/config/constants';
 import {
   EmptyHint,
   ErrorHint,
@@ -42,6 +47,7 @@ function usePairPercentSeries(
   interval: string,
   color: string,
 ): { series: CompareSeries | null; isLoading: boolean; isError: boolean; error: unknown } {
+  const visible = useDocumentVisible();
   const q = useGetCandlesQuery(
     {
       exchange: (pair?.exchange ?? 'binance') as MarketExchange,
@@ -49,7 +55,11 @@ function usePairPercentSeries(
       interval,
       limit: DEFAULT_DETAIL_CANDLE_LIMIT,
     },
-    { skip: !pair?.symbol },
+    {
+      skip: !pair?.symbol,
+      pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
   );
   const series = useMemo(() => {
     if (!pair || !q.data?.candles) return null;

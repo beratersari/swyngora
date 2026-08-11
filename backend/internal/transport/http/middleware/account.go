@@ -1,11 +1,16 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 )
+
+const maxAccountGatePeek = 1 << 20 // 1 MiB
 
 // AccountGate blocks closed clientIds from user-scoped API routes.
 // Allows POST /api/v1/account/reopen and GET /api/v1/account (status) so users can reopen.
@@ -36,22 +41,55 @@ func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 				clientID = id.ClientID
 			}
 			if clientID == "" {
-				clientID = strings.TrimSpace(r.Header.Get("X-Client-Id"))
+				clientID = tenantClientID(r)
 			}
 			if clientID == "" {
-				clientID = strings.TrimSpace(r.URL.Query().Get("clientId"))
+				writeJSONError(w, http.StatusBadRequest, "invalid_argument", "clientId is required")
+				return
 			}
-			// Body clientId is not available here without buffering; handlers still check via service if needed.
-			if clientID != "" {
-				if err := svc.RequireActive(r.Context(), clientID); err != nil {
-					// Defer to handler error mapping via a simple JSON response
-					writeAccountClosed(w, err)
-					return
-				}
+			if err := svc.RequireActive(r.Context(), clientID); err != nil {
+				writeAccountClosed(w, err)
+				return
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// tenantClientID reads header, query, then JSON body clientId (restoring the body).
+func tenantClientID(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("X-Client-Id")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.URL.Query().Get("clientId")); v != "" {
+		return v
+	}
+	ct := strings.ToLower(r.Header.Get("Content-Type"))
+	if r.Body == nil || r.ContentLength == 0 {
+		return ""
+	}
+	if !strings.Contains(ct, "application/json") && ct != "" {
+		return ""
+	}
+	raw, err := io.ReadAll(io.LimitReader(r.Body, maxAccountGatePeek+1))
+	_ = r.Body.Close()
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	if err != nil || len(raw) == 0 || len(raw) > maxAccountGatePeek {
+		return ""
+	}
+	var body struct {
+		ClientID string `json:"clientId"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return ""
+	}
+	return strings.TrimSpace(body.ClientID)
+}
+
+func writeJSONError(w http.ResponseWriter, status int, code, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write([]byte(`{"error":{"code":` + jsonQuote(code) + `,"message":` + jsonQuote(message) + `}}`))
 }
 
 func writeAccountClosed(w http.ResponseWriter, err error) {

@@ -20,7 +20,9 @@ Users need to close their account (opaque `clientId` tenancy). While closed they
 | `POST` | `/api/v1/account/close` | Close account; sets `purgeAt = now + 7d` |
 | `POST` | `/api/v1/account/reopen` | Restore access if still before `purgeAt` |
 
-Middleware blocks closed `X-Client-Id` / query `clientId` on other user-scoped REST routes. Public market routes are unaffected. **`/mcp` is not header-gated** (tools pass `clientId` in the JSON body); in-process MCP tools call `RequireActive` when `clientId` is present so closed accounts cannot mutate via agents.
+Middleware reads tenant id from `X-Client-Id`, `?clientId=`, or JSON `clientId` (body is restored for the handler). User-scoped routes **fail closed** with `400 invalid_argument` when no clientId is present. Closed accounts get `403 account_closed`. Public market routes are unaffected. **`/mcp` is not header-gated** (tools pass `clientId` in the JSON body); in-process MCP tools call `RequireActive` when `clientId` is present so closed accounts cannot mutate via agents.
+
+Reserved tenant names (`default`, `anonymous`, `http-default`, `ai-assistant`, enumerable `tg-<digits>`) are rejected. Telegram users get a persisted UUID mapping (not `tg-<userId>`).
 
 ### Purge contents (after grace)
 

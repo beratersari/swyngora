@@ -9,7 +9,11 @@ vi.mock('@/libs/api', async (importOriginal) => {
     ...actual,
     useLazyListSpotMarketsQuery: () => [
       vi.fn(),
-      { data: { items: [{ symbol: 'BTCUSDT', baseAsset: 'BTC' }] }, isFetching: false },
+      {
+        data: { items: [{ symbol: 'BTCUSDT', baseAsset: 'BTC' }] },
+        originalArgs: { exchange: 'binance' },
+        isFetching: false,
+      },
     ],
   };
 });

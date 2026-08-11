@@ -30,6 +30,7 @@ export const baseApi = createApi({
     'ScannerRule',
     'ScannerResult',
     'ScannerBacktest',
+    'SwingSetup',
   ],
   endpoints: () => ({}),
 });

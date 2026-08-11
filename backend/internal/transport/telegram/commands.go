@@ -29,6 +29,8 @@ type Options struct {
 	AI *aiagent.Client
 	// AITimeout bounds /ask orchestration (default 120s).
 	AITimeout time.Duration
+	// Identities maps Telegram user ids to unguessable clientIds. Required for /watch.
+	Identities domain.TelegramIdentityPort
 	// Portfolio enables paper /portfolio /buy /sell (optional).
 	Portfolio *portfolio.Service
 }
@@ -168,10 +170,13 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	if r.ai == nil {
 		return "AI is not configured. Set AI_SERVICE_URL / AI_AUTOSTART + AI_PYTHON, then restart the backend."
 	}
-	session := fmt.Sprintf("tg-%d", userID)
+	session, err := r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return friendlyErr(err)
+	}
 	aiCtx, cancel := context.WithTimeout(ctx, r.opts.AITimeout)
 	defer cancel()
-	res, err := r.ai.Chat(aiCtx, q, session)
+	res, err := r.ai.Chat(aiCtx, q, session, session)
 	if err != nil {
 		return "AI unavailable: " + esc(err.Error()) + "\n\nEnsure the AI service is running (backend can auto-start it) and try again."
 	}
@@ -393,11 +398,21 @@ func (r *Router) cmdExchanges() string {
 	return FormatExchanges(names, r.defaultExchange())
 }
 
+func (r *Router) clientIDForUser(ctx context.Context, userID int64) (string, error) {
+	if r.opts.Identities == nil {
+		return "", fmt.Errorf("%w: telegram identity store not configured", domain.ErrUpstream)
+	}
+	return r.opts.Identities.ClientIDForTelegramUser(ctx, userID)
+}
+
 func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) string {
 	if r.watch == nil {
 		return "Watchlist is not configured."
 	}
-	clientID := fmt.Sprintf("tg-%d", userID)
+	clientID, err := r.clientIDForUser(ctx, userID)
+	if err != nil {
+		return friendlyErr(err)
+	}
 	if len(args) == 0 {
 		wl, err := r.watch.Get(ctx, clientID, "")
 		if err != nil {

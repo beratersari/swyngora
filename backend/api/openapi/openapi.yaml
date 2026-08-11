@@ -38,6 +38,8 @@ info:
       the edge falls below the limit and rises again. Stale or missing prices skip signals.
     - Technical indicator scanner: RSI, EMA crossover, and volume-increase rules over the
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
+    - Swing engine: 4h+1d pattern detection (Wilder RSI/ADX/ATR, SuperTrend, MACD), BTC regime
+      and R:R quality gates, ATR/structure trade levels. Informational only.
     - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
       cancel jobs, and view signals with 1/5/20-day forward returns.
     - User data export: download watchlist, shares, price-alert history, and backtest results as
@@ -682,6 +684,61 @@ paths:
         '429':
           $ref: '#/components/responses/Error'
         '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/swing:
+    get:
+      summary: Analyze one symbol with the swing engine
+      description: |
+        Closed 4h + 1d candles, Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB patterns,
+        BTC regime filter, min R:R 1.8 for triggers, ATR+structure stop.
+        Informational only — not financial advice.
+      operationId: analyzeSwing
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: ETHUSDT }
+      responses:
+        '200':
+          description: Swing decision
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwingDecision'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/swing/setups:
+    get:
+      summary: Scan watchlist for swing setups
+      operationId: listSwingSetups
+      tags: [Scanner]
+      parameters:
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25, maximum: 25 }
+      responses:
+        '200':
+          description: Watchlist scan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwingSetupList'
+        '400':
           $ref: '#/components/responses/Error'
   /api/v1/market/indicators:
     get:
@@ -4160,6 +4217,46 @@ paths:
           $ref: '#/components/responses/Error'
         '503':
           $ref: '#/components/responses/Error'
+  /api/v1/ai/chat/stream:
+    post:
+      summary: Stream AI chat thinking and tools (NDJSON)
+      description: |
+        Same request as POST /api/v1/ai/chat. Response is NDJSON lines:
+        `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?}`.
+        Informational only — not financial advice.
+      operationId: postAiChatStream
+      tags: [AI]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiChatRequest'
+      responses:
+        '200':
+          description: NDJSON event stream
+          content:
+            application/x-ndjson:
+              schema:
+                type: object
+                properties:
+                  type: { type: string }
+                  text: { type: string }
+                  reply: { type: string }
+                  tools:
+                    type: array
+                    items: { type: string }
+                  thinking:
+                    type: array
+                    items: { type: string }
+                  message: { type: string }
+                  sessionId: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
 
 
 components:
@@ -4220,8 +4317,8 @@ components:
         sessionId:
           type: string
           description: |
-            Optional multi-turn session key. Server defaults to http-default
-            when omitted. Clients should send a stable device session id.
+            Optional multi-turn session key. Defaults to the authenticated clientId
+            (never a shared name) when omitted. Clients should send a stable device session id.
     AiChatResponse:
       type: object
       required: [reply, sessionId]
@@ -4704,6 +4801,65 @@ components:
             end: { type: string }
         configured: { type: boolean }
         updatedAt: { type: string, format: date-time }
+    SwingPattern:
+      type: object
+      properties:
+        name: { type: string }
+        score: { type: number }
+        description: { type: string }
+        timeframe: { type: string }
+        fresh: { type: boolean }
+    SwingLevels:
+      type: object
+      properties:
+        entry: { type: number }
+        stopLoss: { type: number }
+        takeProfit: { type: number }
+        riskPct: { type: number }
+        rewardPct: { type: number }
+        rr: { type: number }
+        atr: { type: number }
+    SwingDecision:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        interval: { type: string }
+        accepted: { type: boolean }
+        stage: { type: string, enum: [watch, trigger, rejected] }
+        setupType: { type: string }
+        swingScore: { type: number }
+        grade: { type: string }
+        fresh: { type: boolean }
+        btcRegime: { type: string }
+        side: { type: string }
+        price: { type: number }
+        adx4h: { type: number }
+        adx1d: { type: number }
+        rsi: { type: number }
+        ema4h: { type: string }
+        ema1d: { type: string }
+        patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/SwingPattern'
+        levels:
+          $ref: '#/components/schemas/SwingLevels'
+        reasons:
+          type: array
+          items: { type: string }
+        note: { type: string }
+        barTime: { type: string, format: date-time }
+    SwingSetupList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SwingDecision'
+        count: { type: integer }
+        accepted: { type: integer }
+        note: { type: string }
     PortfolioSummary:
       type: object
       properties:

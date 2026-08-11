@@ -5,10 +5,15 @@ import {
   compactToolName,
   createAssistantMessage,
   createUserMessage,
+  latestStepPreview,
+  mergeThinkStep,
+  nextProcessOpenMap,
   parseChatMarkdown,
+  processPanelOpen,
   parseInlineMd,
   sanitizeChatReferences,
   sanitizeThinkingLines,
+  thinkStepFromEvent,
   uniqueToolNames,
 } from './AiChatPage.helpers';
 
@@ -46,6 +51,42 @@ describe('compactToolName / uniqueToolNames', () => {
       'market_agent',
       'get_ticker',
     ]);
+  });
+});
+
+describe('thinkStepFromEvent / mergeThinkStep', () => {
+  it('maps live events and skips ping/final', () => {
+    expect(thinkStepFromEvent({ type: 'ping' })).toBeNull();
+    expect(thinkStepFromEvent({ type: 'final', reply: 'x' } as never)).toBeNull();
+    const step = thinkStepFromEvent({ type: 'thinking', text: 'Need RSI' });
+    expect(step?.kind).toBe('thinking');
+    expect(step?.text).toBe('Need RSI');
+    const merged = mergeThinkStep([step!], { ...step!, id: '2' });
+    expect(merged).toHaveLength(1);
+    expect(mergeThinkStep([step!], { id: '3', kind: 'tool', text: 'get_ticker' })).toHaveLength(2);
+  });
+
+  it('processPanelOpen stays live unless the user toggles', () => {
+    expect(processPanelOpen(true)).toBe(true);
+    expect(processPanelOpen(false)).toBe(false);
+    expect(processPanelOpen(true, false)).toBe(false);
+    expect(processPanelOpen(false, true)).toBe(true);
+  });
+
+  it('nextProcessOpenMap ignores default open/close and keeps user overrides', () => {
+    expect(nextProcessOpenMap({}, 'a', true, true)).toEqual({});
+    expect(nextProcessOpenMap({}, 'a', true, false)).toEqual({ a: false });
+    expect(nextProcessOpenMap({ a: false }, 'a', false, false)).toEqual({});
+    expect(nextProcessOpenMap({}, 'a', false, true)).toEqual({ a: true });
+  });
+
+  it('latestStepPreview clamps the last step', () => {
+    expect(latestStepPreview([])).toBe('');
+    expect(latestStepPreview([{ id: '1', kind: 'tool', text: 'get_ticker' }])).toBe('get_ticker');
+    const long = 'x'.repeat(120);
+    const preview = latestStepPreview([{ id: '1', kind: 'thinking', text: long }], 20);
+    expect(preview.endsWith('…')).toBe(true);
+    expect(preview.length).toBeLessThanOrEqual(20);
   });
 });
 

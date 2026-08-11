@@ -16,8 +16,9 @@ Users want to know when the same coin trades at a meaningful price gap across **
 5. **While open**: same `(watch, buy, sell)` is only updated (prices / lastSeenAt), not recreated.
 6. When net falls **below** the limit (with fresh prices on both legs): opportunity is **closed**.
 7. When edge later exceeds the limit again: a **new** opportunity is created.
-8. If a venue price is **missing or stale** (CloseTime older than 2 minutes): that venue is skipped for this tick; incomplete data does **not** open or close a route.
-9. Open opportunities live in SQLite and **survive worker restarts**.
+8. If a venue price is **missing or stale** (CloseTime older than 2 minutes, or **zero/unknown**): that venue is skipped for this tick; incomplete data does **not** open or close a route. Binance uses API `closeTime`; Bybit uses ticker `time`; Coinbase uses Exchange `/ticker` trade time. Adapters must not stamp `time.Now()` as CloseTime.
+9. `minNetDiffPct` floor is **0.20%** so USDT≈USD noise does not open false opportunities.
+10. Open opportunities live in SQLite and **survive worker restarts**.
 
 ## API
 

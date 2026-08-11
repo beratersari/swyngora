@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # Backend + MCP
     api_base_url: str = Field(default="http://localhost:8080", alias="SWYNGORA_API_URL")
+    api_auth_token: str = Field(default="", alias="SWYNGORA_API_TOKEN")
     mcp_command: str = Field(
         default="",
         alias="SWYNGORA_MCP_COMMAND",

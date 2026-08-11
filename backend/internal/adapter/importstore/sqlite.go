@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -95,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_import_jobs_expires ON import_jobs(expires_at);
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("import sqlite migrate: %w", err)
 	}
-	return nil
+	return sqliteutil.SetUserVersion(s.db, 1)
 }
 
 func nullTime(t *time.Time) any {

@@ -61,6 +61,8 @@ export {
 export type { Watchlist, WatchlistItem } from './endpoints/watchlistApi';
 export { usePostAiChatMutation } from './endpoints/aiApi';
 export type { AiChatRequest, AiChatResponse, PostAiChatArg } from './endpoints/aiApi';
+export { streamAiChat } from './aiChatStream';
+export type { AiStreamEvent, StreamAiChatArg } from './aiChatStream';
 export {
   rtkErrorMessage,
   getRtkErrorStatus,
@@ -137,3 +139,5 @@ export type {
   ScannerRuleType,
   StartScannerBacktestArg,
 } from './endpoints/scannerApi';
+export { useAnalyzeSwingQuery, useListSwingSetupsQuery } from './endpoints/swingApi';
+export type { SwingDecision, SwingLevels, SwingPattern, SwingSetupList } from './endpoints/swingApi';

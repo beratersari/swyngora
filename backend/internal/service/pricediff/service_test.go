@@ -48,6 +48,16 @@ func freshTicker(price string, now time.Time) *domain.Ticker24h {
 	return &domain.Ticker24h{LastPrice: price, CloseTime: now.Add(-10 * time.Second)}
 }
 
+func TestCreateWatch_RejectsTinyNetFloor(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{})
+	_, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "u-floor", Symbol: "BTCUSDT", MinNetDiffPct: 0.01,
+	})
+	if err == nil {
+		t.Fatal("expected minNetDiffPct 0.01 to be rejected")
+	}
+}
+
 func TestCreateListDeleteWatch(t *testing.T) {
 	svc := newSvc(t, &fakeTicker{})
 	ctx := context.Background()

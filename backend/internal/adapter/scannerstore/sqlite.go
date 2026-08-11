@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -137,8 +138,10 @@ CREATE TABLE IF NOT EXISTS scanner_backtest_signals (
 );
 CREATE INDEX IF NOT EXISTS idx_scanner_backtest_signals ON scanner_backtest_signals(backtest_id, signal_at ASC);
 `
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return sqliteutil.SetUserVersion(s.db, 1)
 }
 
 // Path returns absolute DB path.
