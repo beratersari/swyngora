@@ -439,6 +439,8 @@ func main() {
 		logger.Info("delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
 	}
 
+	go marketSvc.StartWallSampler(ctx)
+
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,
 		Market:   marketSvc,

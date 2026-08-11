@@ -141,6 +141,11 @@ func TestGetOrderBook_OK(t *testing.T) {
 	if body.Analysis.BidLevels > 3 {
 		t.Fatalf("far depth leaked into 2%% band: %+v", body.Analysis)
 	}
+	for _, w := range body.Analysis.Walls {
+		if w.Behavior == "" {
+			t.Fatalf("wall missing behavior: %+v", w)
+		}
+	}
 }
 
 func TestGetOrderBook_BadRange(t *testing.T) {
@@ -168,7 +173,7 @@ func TestGetOrderBookImpact_OK(t *testing.T) {
 	if body.AveragePrice == "" || body.Side != "buy" || body.Exhausted {
 		t.Fatalf("%+v", body)
 	}
-	if body.ImpactPct != 0 {
+	if !body.ImpactAvailable || body.ImpactPct != 0 {
 		t.Fatalf("partial best ask must be 0 impact: %+v", body)
 	}
 }

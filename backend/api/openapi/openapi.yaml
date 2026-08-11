@@ -542,8 +542,10 @@ paths:
         (base, e.g. 5 BTC) **or** **notional** (quote, e.g. 1000000000 USDT).
         Returns average fill, slippage vs mid/best, and price impact as the move
         of the best ask (buy) or best bid (sell) after leftover size. If the touch
-        level still has quantity, impact is 0. If it is fully consumed, impact is
-        the new best versus the old best. Simulation only — not a quote.
+        level still has quantity, impact is 0. If it is fully consumed and a new
+        best remains, impact is the new best versus the old best. If the visible
+        side is wiped, `impactAvailable` is false — the next best is unknown and
+        impact is not invented from the last fill. Simulation only — not a quote.
       operationId: estimateSpotOrderBookImpact
       tags: [Market]
       parameters:
@@ -4302,6 +4304,16 @@ components:
         notional: { type: string }
         distancePct: { type: string, description: Distance from mid as a percent }
         share: { type: number, description: Fraction of that side's band notional }
+        behavior:
+          type: string
+          enum: [short, persistent, suspicious]
+          description: |
+            short = seen briefly; persistent = stayed near this price (~2+ min);
+            suspicious = added and pulled many times in a short window
+        ageSeconds: { type: number, description: Seconds since this wall zone was first seen }
+        presentForSeconds: { type: number, description: Current uninterrupted present streak }
+        visibleSeconds: { type: number, description: Total time the wall was present }
+        appearCount: { type: integer, description: How many times it appeared (absent → present) }
     OrderBookBand:
       type: object
       properties:
@@ -4350,6 +4362,11 @@ components:
         notional: { type: string }
         distancePct: { type: string }
         share: { type: number, description: Fraction of combined side notional }
+        behavior: { type: string, enum: [short, persistent, suspicious] }
+        ageSeconds: { type: number }
+        presentForSeconds: { type: number }
+        visibleSeconds: { type: number }
+        appearCount: { type: integer }
     CombinedOrderBookVenue:
       type: object
       properties:
@@ -4429,7 +4446,9 @@ components:
         visibleNotional: { type: string }
         slippagePct: { type: number, description: Adverse percent vs mid }
         slippageVsBestPct: { type: number, description: Adverse percent vs best bid/ask }
-        impactPct: { type: number, description: Adverse percent the best ask/bid moved after leftover size (0 if the touch level still has quantity) }
+        impactPct: { type: number, description: Adverse percent the best ask/bid moved after leftover size (0 if the touch level still has quantity). Meaningful only when impactAvailable is true. }
+        impactAvailable: { type: boolean, description: False when visible depth was fully consumed so the next best price is unknown }
+        impactNote: { type: string, description: Set when impact cannot be calculated from this snapshot }
         exhausted: { type: boolean }
         levelsUsed: { type: integer }
         venueCount: { type: integer }

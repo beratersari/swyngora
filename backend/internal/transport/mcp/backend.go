@@ -109,6 +109,7 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 		"unfilledQuantity": got.UnfilledQuantity, "unfilledNotional": got.UnfilledNotional,
 		"visibleQuantity": got.VisibleQuantity, "visibleNotional": got.VisibleNotional,
 		"slippagePct": got.SlippagePct, "slippageVsBestPct": got.SlippageVsBestPct, "impactPct": got.ImpactPct,
+		"impactAvailable": got.ImpactAvailable, "impactNote": got.ImpactNote,
 		"exhausted": got.Exhausted, "levelsUsed": got.LevelsUsed, "venueCount": got.VenueCount, "live": got.Live,
 		"fills": fills,
 		"note":  "Simulated market order walking live resting depth. Not a quote, fill, or financial advice. Visible book may be thinner than the real market.",
@@ -138,6 +139,8 @@ func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, r
 		walls = append(walls, map[string]any{
 			"exchange": w.Exchange, "side": w.Side, "price": w.Price, "quantity": w.Quantity,
 			"notional": w.Notional, "distancePct": w.DistancePct, "share": w.Share,
+			"behavior": w.Behavior, "ageSeconds": w.AgeSeconds, "presentForSeconds": w.PresentForSeconds,
+			"visibleSeconds": w.VisibleSeconds, "appearCount": w.AppearCount,
 		})
 	}
 	return mustJSON(map[string]any{

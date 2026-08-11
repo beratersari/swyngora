@@ -21,6 +21,11 @@ Futures / other markets are out of scope for now version.
   - `analysis` — buy/sell **pressure**, notional **imbalance**, and large **walls** from every
     live level within ±`rangePct` of mid (not only the first few orders). Nested `bands`
     (0.5 / 1 / 2 / 5%) show near vs farther depth. Same logic on Binance, Coinbase, and Bybit.
+    Each wall has `behavior`:
+    - `short` — seen recently, not yet long enough to call support/resistance
+    - `persistent` — stayed near the same price for about 2+ minutes (more like real rest)
+    - `suspicious` — added and pulled many times in a short window (more like a tease / flicker)
+    Also `ageSeconds`, `presentForSeconds`, `visibleSeconds`, `appearCount`.
 - `GET /api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2`
   - Sums live bid/ask **notional** from Binance + Coinbase + Bybit only in a
     **symmetric ±%** every venue can reach on both sides (the smaller of common
@@ -36,8 +41,10 @@ Futures / other markets are out of scope for now version.
   - Returns `averagePrice`, `slippagePct` (vs mid), `slippageVsBestPct`, `endPrice`,
     `newBestPrice`, and `impactPct` (how far the **touch** moved). If the best ask
     (buy) or best bid (sell) still has leftover size, `impactPct` is **0**. If that
-    price is fully consumed, impact is the new best versus the old best. `exhausted`
-    is true if the visible book ran out. First 30 fill rows are included.
+    price is fully consumed and a new best remains, impact is the new best versus
+    the old best. If the visible side is wiped, `impactAvailable` is **false** and
+    `impactNote` explains that impact cannot be calculated (do not use last fill).
+    `exhausted` is true if the order did not fully fill. First 30 fill rows are included.
   - Simulation only — not a quote, fill, or financial advice. Visible depth is often
     much thinner than a real $1B print; `exhausted=true` is the honest answer then.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
@@ -50,7 +57,7 @@ Futures / other markets are out of scope for now version.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `depthbook.go` |
+| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `wall_track.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact` |
 | HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact` |
@@ -69,10 +76,11 @@ curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&quanti
 curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notional=1000000000&exchange=all"
 ```
 
-`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `newBestPrice`, `impactPct` (0 unless the touch level was fully eaten), and `exhausted`.
+`live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `newBestPrice`, `impactAvailable`, and `impactPct` (only when a new best is known).
 
 ## Limits / follow-ups
 
 - Spot only.
 - Idle streams are dropped after `ORDERBOOK_IDLE_TTL` (default 90s) and started again on the next request.
 - Walls are a heuristic (size vs median / share of visible book), not exchange-labeled iceberg orders.
+- Wall persistence needs more than one look. A background sampler re-reads recently requested books every 3s (stops ~2 minutes after the last user/AI request). First sighting is always `short`.

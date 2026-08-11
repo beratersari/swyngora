@@ -417,6 +417,15 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 	if book.Analysis.BidLevels != 4 || book.Analysis.AskLevels != 4 {
 		t.Fatalf("far depth must be excluded: %+v", book.Analysis)
 	}
+	var sawLife bool
+	for _, w := range book.Analysis.Walls {
+		if w.Behavior == domain.WallBehaviorShort && w.AppearCount == 1 {
+			sawLife = true
+		}
+	}
+	if len(book.Analysis.Walls) > 0 && !sawLife {
+		t.Fatalf("new walls should be short: %+v", book.Analysis.Walls)
+	}
 	if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "nope", 10, 2); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("bad group: %v", err)
 	}
@@ -461,15 +470,15 @@ func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	if avg < 100.1 || avg > 100.15 {
 		t.Fatalf("avg %s", got.AveragePrice)
 	}
-	if got.NewBestPrice != "100.2" || got.ImpactPct <= 0 {
+	if !got.ImpactAvailable || got.NewBestPrice != "100.2" || got.ImpactPct <= 0 {
 		t.Fatalf("touch move %+v", got)
 	}
 	tiny, err := svc.EstimateOrderBookImpact(context.Background(), "binance", "BTCUSDT", "buy", 0.25, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tiny.ImpactPct != 0 {
-		t.Fatalf("partial best must be 0 impact, got %v", tiny.ImpactPct)
+	if !tiny.ImpactAvailable || tiny.ImpactPct != 0 {
+		t.Fatalf("partial best must be 0 impact, got %+v", tiny)
 	}
 	big, err := svc.EstimateOrderBookImpact(context.Background(), "all", "BTCUSDT", "buy", 0, 1e9)
 	if err != nil {
@@ -477,6 +486,9 @@ func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	}
 	if big.Scope != domain.ImpactScopeCombined || big.VenueCount != 3 {
 		t.Fatalf("combined %+v", big)
+	}
+	if big.ImpactAvailable || big.ImpactNote == "" {
+		t.Fatalf("oversize must not invent impact: %+v", big)
 	}
 }
 

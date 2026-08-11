@@ -89,10 +89,12 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 ## Tool discipline
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
 - Prefer: `get_ticker` → live quote; `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
-  `analyze_spot_orderbook` → one-venue pressure/walls; `get_spot_orderbook` → grouped ladder + analysis;
+  `analyze_spot_orderbook` → one-venue pressure/walls (read wall `behavior`: persistent ≈ resting support/resistance, suspicious ≈ flicker/pulled often, short ≈ just appeared);
+  `get_spot_orderbook` → grouped ladder + analysis;
   `estimate_market_impact` → walk live depth for a market buy/sell: average fill, slippage vs mid/best,
-  impact as the new best ask/bid after leftover size (0 if the touch level still has quantity),
-  exhausted if visible liquidity ran out. Use `quantity` (e.g. 5 BTC)
+  impact as the new best ask/bid after leftover size (0 if the touch level still has quantity).
+  If `impactAvailable` is false the visible book was wiped — say impact cannot be calculated, do not use last fill.
+  Exhausted if the order did not fully fill. Use `quantity` (e.g. 5 BTC)
   **or** `notional` (e.g. 1e9 USDT). `exchange=all` (default) merges three venues cheapest-first;
   `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_supply` → supply; `list_spot_markets` → rankings/filters; watchlist tools only if asked.

@@ -1566,8 +1566,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_spot_orderbook",
             description=(
                 "Grouped live spot order book plus analysis: pressure, imbalance, and "
-                "walls from depth within ±range_pct of mid (default 2%), not only the "
-                "first rows. Works on binance, coinbase, and bybit."
+                "walls from depth within ±range_pct of mid (default 2%). Each wall has "
+                "behavior short | persistent (resting) | suspicious (flicker). "
+                "Works on binance, coinbase, and bybit."
             ),
             args_schema=OrderBookInput,
         ),
@@ -1576,8 +1577,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="analyze_spot_orderbook",
             description=(
                 "Buy/sell pressure, notional imbalance, and large walls from live spot "
-                "depth within ±range_pct of mid. Prefer this when the question is "
-                "pressure or walls rather than the full ladder."
+                "depth within ±range_pct of mid. Wall behavior: short, persistent "
+                "(resting support/resistance), or suspicious (added/removed often). "
+                "Prefer this when the question is pressure or walls rather than the full ladder."
             ),
             args_schema=OrderBookAnalysisInput,
         ),
@@ -1600,7 +1602,8 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) "
                 "merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, "
                 "and price impact as the new best ask/bid after leftover size (0 if the touch "
-                "level still has quantity). Simulation only — not a quote."
+                "level still has quantity). If impactAvailable is false the visible book was "
+                "wiped and impact cannot be calculated. Simulation only — not a quote."
             ),
             args_schema=MarketImpactInput,
         ),

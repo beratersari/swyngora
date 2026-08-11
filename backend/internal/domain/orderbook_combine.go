@@ -15,13 +15,18 @@ type VenueRawBook struct {
 
 // CombinedWall is a wall tagged with the venue it came from.
 type CombinedWall struct {
-	Exchange    string
-	Side        string
-	Price       string
-	Quantity    string
-	Notional    string
-	DistancePct string
-	Share       float64 // fraction of combined side notional
+	Exchange          string
+	Side              string
+	Price             string
+	Quantity          string
+	Notional          string
+	DistancePct       string
+	Share             float64 // fraction of combined side notional
+	Behavior          string
+	AgeSeconds        float64
+	PresentForSeconds float64
+	VisibleSeconds    float64
+	AppearCount       int
 }
 
 // CombinedVenueSlice is one venue's contribution inside the shared price band.

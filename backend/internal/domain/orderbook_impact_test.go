@@ -27,8 +27,8 @@ func TestSimulateMarketImpact_BuyQuantity(t *testing.T) {
 		t.Fatalf("slip=%v", got.SlippagePct)
 	}
 	// first ask fully eaten; new best is 101 → (101-100)/100 = 1%
-	if got.NewBestPrice != "101" || got.ImpactPct < 0.99 || got.ImpactPct > 1.01 {
-		t.Fatalf("newBest=%s impact=%v", got.NewBestPrice, got.ImpactPct)
+	if !got.ImpactAvailable || got.NewBestPrice != "101" || got.ImpactPct < 0.99 || got.ImpactPct > 1.01 {
+		t.Fatalf("newBest=%s impact=%v avail=%v", got.NewBestPrice, got.ImpactPct, got.ImpactAvailable)
 	}
 }
 
@@ -70,6 +70,9 @@ func TestSimulateMarketImpact_NotionalAndExhaust(t *testing.T) {
 	unf, _ := strconv.ParseFloat(got.UnfilledNotional, 64)
 	if spent < 99 || spent > 101 || unf < 149 || unf > 151 {
 		t.Fatalf("spent=%s unfilled=%s", got.SpentNotional, got.UnfilledNotional)
+	}
+	if got.ImpactAvailable || got.ImpactPct != 0 || got.ImpactNote == "" {
+		t.Fatalf("wiped book must not invent impact: %+v", got)
 	}
 }
 
@@ -120,6 +123,23 @@ func TestSimulateMarketImpact_EmptyBook(t *testing.T) {
 	if !got.Exhausted || got.UnfilledQuantity == "" {
 		t.Fatalf("%+v", got)
 	}
+	if got.ImpactAvailable || got.ImpactNote == "" {
+		t.Fatalf("empty book impact must be unknown: %+v", got)
+	}
+}
+
+func TestSimulateMarketImpact_ExactWipeHasNoImpact(t *testing.T) {
+	levels := []ImpactSourceLevel{
+		{Exchange: "binance", Price: 100, Quantity: 1},
+		{Exchange: "binance", Price: 101, Quantity: 1},
+	}
+	got := SimulateMarketImpact("BTCUSDT", "binance", ImpactSideBuy, 100, levels, 2, 0)
+	if got.Exhausted {
+		t.Fatal("filled the visible book exactly")
+	}
+	if got.ImpactAvailable || got.NewBestPrice != "" || got.ImpactPct != 0 || got.ImpactNote == "" {
+		t.Fatalf("no new best after wipe: %+v", got)
+	}
 }
 
 func TestImpactBookMid_MergedBBO(t *testing.T) {
@@ -143,8 +163,11 @@ func TestImpactBookMid_MergedBBO(t *testing.T) {
 func TestSimulateMarketImpact_NoNegativeSlip(t *testing.T) {
 	levels := []ImpactSourceLevel{{Exchange: "binance", Price: 99, Quantity: 1}}
 	got := SimulateMarketImpact("BTCUSDT", "combined", ImpactSideBuy, 100, levels, 1, 0)
-	if got.SlippagePct != 0 || got.ImpactPct != 0 {
-		t.Fatalf("want 0 adverse, got slip=%v impact=%v", got.SlippagePct, got.ImpactPct)
+	if got.SlippagePct != 0 {
+		t.Fatalf("want 0 slip, got %v", got.SlippagePct)
+	}
+	if got.ImpactAvailable || got.ImpactPct != 0 {
+		t.Fatalf("single-level wipe has no new best: %+v", got)
 	}
 }
 

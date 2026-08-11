@@ -204,7 +204,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_spot_orderbook",
-		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and analysis.pressure / analysis.walls from depth within ±rangePct of mid (default 2%), not only the first rows. Binance/Coinbase/Bybit. Spot only."),
+		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and analysis.pressure / analysis.walls from depth within ±rangePct of mid (default 2%). Each wall has behavior: short, persistent (stayed near the same price), or suspicious (added/removed many times). Binance/Coinbase/Bybit. Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
@@ -223,7 +223,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("analyze_spot_orderbook",
-		mcp.WithDescription("Buy/sell pressure, notional imbalance, and large walls from live spot depth within ±rangePct of mid (default 2%). Uses the full local book in that band, not only the top few orders. Works on binance, coinbase, and bybit. Prefer this over the ladder when the question is pressure or walls."),
+		mcp.WithDescription("Buy/sell pressure, notional imbalance, and large walls from live spot depth within ±rangePct of mid (default 2%). Walls include behavior short | persistent (resting support/resistance) | suspicious (flicker / pulled often). Prefer this over the ladder when the question is pressure or walls."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithNumber("rangePct", mcp.Description("±% of mid to include (0.25–10, default 2)")),
@@ -256,7 +256,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("estimate_market_impact",
-		mcp.WithDescription("Simulate a market buy or sell against live order-book depth. Walks asks (buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, and price impact as the move of the best ask/bid after leftover size (0 if the touch level still has quantity). Simulation only."),
+		mcp.WithDescription("Simulate a market buy or sell against live order-book depth. Walks asks (buy) or bids (sell) level by level. Use quantity for base size (e.g. 5 BTC) or notional for quote size (e.g. 1000000000 USDT). exchange=all (default) merges Binance+Coinbase+Bybit cheapest-first. Returns average fill, slippage, and price impact as the new best ask/bid after leftover size (0 if the touch still has quantity). If the visible book is wiped, impactAvailable is false — do not invent impact from the last fill. Simulation only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("side", mcp.Description("buy (default) | sell")),
 		mcp.WithNumber("quantity", mcp.Description("Base size to fill (e.g. 5). Do not set together with notional.")),

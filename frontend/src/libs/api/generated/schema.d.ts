@@ -274,8 +274,10 @@ export interface paths {
          *     (base, e.g. 5 BTC) **or** **notional** (quote, e.g. 1000000000 USDT).
          *     Returns average fill, slippage vs mid/best, and price impact as the move
          *     of the best ask (buy) or best bid (sell) after leftover size. If the touch
-         *     level still has quantity, impact is 0. If it is fully consumed, impact is
-         *     the new best versus the old best. Simulation only — not a quote.
+         *     level still has quantity, impact is 0. If it is fully consumed and a new
+         *     best remains, impact is the new best versus the old best. If the visible
+         *     side is wiped, `impactAvailable` is false — the next best is unknown and
+         *     impact is not invented from the last fill. Simulation only — not a quote.
          */
         get: operations["estimateSpotOrderBookImpact"];
         put?: never;
@@ -2059,6 +2061,20 @@ export interface components {
             distancePct?: string;
             /** @description Fraction of that side's band notional */
             share?: number;
+            /**
+             * @description short = seen briefly; persistent = stayed near this price (~2+ min);
+             *     suspicious = added and pulled many times in a short window
+             * @enum {string}
+             */
+            behavior?: "short" | "persistent" | "suspicious";
+            /** @description Seconds since this wall zone was first seen */
+            ageSeconds?: number;
+            /** @description Current uninterrupted present streak */
+            presentForSeconds?: number;
+            /** @description Total time the wall was present */
+            visibleSeconds?: number;
+            /** @description How many times it appeared (absent → present) */
+            appearCount?: number;
         };
         OrderBookBand: {
             rangePct?: number;
@@ -2105,6 +2121,12 @@ export interface components {
             distancePct?: string;
             /** @description Fraction of combined side notional */
             share?: number;
+            /** @enum {string} */
+            behavior?: "short" | "persistent" | "suspicious";
+            ageSeconds?: number;
+            presentForSeconds?: number;
+            visibleSeconds?: number;
+            appearCount?: number;
         };
         CombinedOrderBookVenue: {
             exchange?: string;
@@ -2188,8 +2210,12 @@ export interface components {
             slippagePct?: number;
             /** @description Adverse percent vs best bid/ask */
             slippageVsBestPct?: number;
-            /** @description Adverse percent the best ask/bid moved after leftover size (0 if the touch level still has quantity) */
+            /** @description Adverse percent the best ask/bid moved after leftover size (0 if the touch level still has quantity). Meaningful only when impactAvailable is true. */
             impactPct?: number;
+            /** @description False when visible depth was fully consumed so the next best price is unknown */
+            impactAvailable?: boolean;
+            /** @description Set when impact cannot be calculated from this snapshot */
+            impactNote?: string;
             exhausted?: boolean;
             levelsUsed?: number;
             venueCount?: number;

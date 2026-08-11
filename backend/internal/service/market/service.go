@@ -6,9 +6,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+)
+
+const (
+	wallSampleEvery = 3 * time.Second
+	wallWatchIdle   = 2 * time.Minute
 )
 
 // Service orchestrates market-data use cases. Handlers call this layer only.
@@ -17,6 +23,15 @@ type Service struct {
 	supply        domain.SupplyPort
 	delist        domain.SpotDelistStore
 	delistEnabled bool
+	walls         *domain.WallMemory
+	watchMu       sync.Mutex
+	wallWatch     map[string]wallWatch
+}
+
+type wallWatch struct {
+	exchange domain.Exchange
+	symbol   string
+	seen     time.Time
 }
 
 // New constructs a market application service with a single market data port
@@ -35,7 +50,7 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 			cp[k] = v
 		}
 	}
-	return &Service{markets: cp, supply: supply}
+	return &Service{markets: cp, supply: supply, walls: domain.NewWallMemory(), wallWatch: map[string]wallWatch{}}
 }
 
 // WithDelistStore attaches optional delist schedule for spot enrichment.
@@ -194,6 +209,7 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 	if book.Symbol == "" {
 		book.Symbol = symbol
 	}
+	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
 	return &book, nil
 }
 
@@ -218,6 +234,17 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 		display = strings.ToUpper(symbol)
 	}
 	combined := domain.CombineOrderBooks(display, mid, rangePct, books)
+	now := time.Now().UTC()
+	for _, vb := range books {
+		if vb.Err != "" {
+			continue
+		}
+		an := domain.AnalyzeOrderBookAt(vb.Book, mid, combined.UsedRangePct)
+		s.recordWalls(vb.Exchange, vb.Symbol, an.Walls)
+	}
+	if s.walls != nil {
+		s.walls.ApplyCombined(now, combined.Walls)
+	}
 	return &combined, nil
 }
 
@@ -406,6 +433,81 @@ func (s *Service) withDelistFilterTag(ex domain.Exchange, tags []string) []strin
 // normalizeSymbolForExchange delegates to domain.NormalizeSymbol (shared with watchlist).
 func normalizeSymbolForExchange(ex domain.Exchange, symbol string) string {
 	return domain.NormalizeSymbol(ex, symbol)
+}
+
+func (s *Service) recordWalls(ex domain.Exchange, symbol string, walls []domain.OrderBookWall) {
+	s.noteWallWatch(ex, symbol)
+	s.observeWalls(ex, symbol, walls)
+}
+
+func (s *Service) observeWalls(ex domain.Exchange, symbol string, walls []domain.OrderBookWall) {
+	if s == nil {
+		return
+	}
+	if s.walls == nil {
+		s.walls = domain.NewWallMemory()
+	}
+	s.walls.Observe(time.Now().UTC(), string(ex), symbol, walls)
+}
+
+func (s *Service) noteWallWatch(ex domain.Exchange, symbol string) {
+	if s == nil || ex == "" || symbol == "" {
+		return
+	}
+	key := string(ex) + "|" + symbol
+	s.watchMu.Lock()
+	if s.wallWatch == nil {
+		s.wallWatch = map[string]wallWatch{}
+	}
+	s.wallWatch[key] = wallWatch{exchange: ex, symbol: symbol, seen: time.Now().UTC()}
+	s.watchMu.Unlock()
+}
+
+// StartWallSampler keeps sampling recently requested books so wall persistence
+// and flicker can be measured while the live local book is attached.
+func (s *Service) StartWallSampler(ctx context.Context) {
+	if s == nil {
+		return
+	}
+	tick := time.NewTicker(wallSampleEvery)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			s.sampleWatchedWalls(ctx)
+		}
+	}
+}
+
+func (s *Service) sampleWatchedWalls(ctx context.Context) {
+	now := time.Now().UTC()
+	s.watchMu.Lock()
+	watches := make([]wallWatch, 0, len(s.wallWatch))
+	for k, w := range s.wallWatch {
+		if now.Sub(w.seen) > wallWatchIdle {
+			delete(s.wallWatch, k)
+			continue
+		}
+		watches = append(watches, w)
+	}
+	s.watchMu.Unlock()
+	for _, w := range watches {
+		if ctx.Err() != nil {
+			return
+		}
+		p, err := s.port(w.exchange)
+		if err != nil {
+			continue
+		}
+		raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: w.symbol, Limit: domain.MaxOrderBookRawLimit})
+		if err != nil || raw == nil {
+			continue
+		}
+		an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
+		s.observeWalls(w.exchange, w.symbol, an.Walls)
+	}
 }
 
 const (

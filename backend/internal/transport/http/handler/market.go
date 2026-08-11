@@ -159,12 +159,17 @@ type orderBookResponse struct {
 }
 
 type orderBookWallDTO struct {
-	Side        string  `json:"side"`
-	Price       string  `json:"price"`
-	Quantity    string  `json:"quantity"`
-	Notional    string  `json:"notional"`
-	DistancePct string  `json:"distancePct"`
-	Share       float64 `json:"share"`
+	Side              string  `json:"side"`
+	Price             string  `json:"price"`
+	Quantity          string  `json:"quantity"`
+	Notional          string  `json:"notional"`
+	DistancePct       string  `json:"distancePct"`
+	Share             float64 `json:"share"`
+	Behavior          string  `json:"behavior,omitempty"`
+	AgeSeconds        float64 `json:"ageSeconds,omitempty"`
+	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
+	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
+	AppearCount       int     `json:"appearCount,omitempty"`
 }
 
 type orderBookBandDTO struct {
@@ -293,6 +298,8 @@ type orderBookImpactResponse struct {
 	SlippagePct       float64         `json:"slippagePct"`
 	SlippageVsBestPct float64         `json:"slippageVsBestPct"`
 	ImpactPct         float64         `json:"impactPct"`
+	ImpactAvailable   bool            `json:"impactAvailable"`
+	ImpactNote        string          `json:"impactNote,omitempty"`
 	Exhausted         bool            `json:"exhausted"`
 	LevelsUsed        int             `json:"levelsUsed"`
 	VenueCount        int             `json:"venueCount"`
@@ -321,6 +328,7 @@ func impactToDTO(a *domain.OrderBookImpact) orderBookImpactResponse {
 		UnfilledQuantity: a.UnfilledQuantity, UnfilledNotional: a.UnfilledNotional,
 		VisibleQuantity: a.VisibleQuantity, VisibleNotional: a.VisibleNotional,
 		SlippagePct: a.SlippagePct, SlippageVsBestPct: a.SlippageVsBestPct, ImpactPct: a.ImpactPct,
+		ImpactAvailable: a.ImpactAvailable, ImpactNote: a.ImpactNote,
 		Exhausted: a.Exhausted, LevelsUsed: a.LevelsUsed, VenueCount: a.VenueCount, Live: a.Live,
 		Fills: fills,
 		Note:  "Simulated market order walking live resting depth. Not a quote, fill, or financial advice. Visible book may be thinner than the real market.",
@@ -328,13 +336,18 @@ func impactToDTO(a *domain.OrderBookImpact) orderBookImpactResponse {
 }
 
 type combinedWallDTO struct {
-	Exchange    string  `json:"exchange"`
-	Side        string  `json:"side"`
-	Price       string  `json:"price"`
-	Quantity    string  `json:"quantity"`
-	Notional    string  `json:"notional"`
-	DistancePct string  `json:"distancePct"`
-	Share       float64 `json:"share"`
+	Exchange          string  `json:"exchange"`
+	Side              string  `json:"side"`
+	Price             string  `json:"price"`
+	Quantity          string  `json:"quantity"`
+	Notional          string  `json:"notional"`
+	DistancePct       string  `json:"distancePct"`
+	Share             float64 `json:"share"`
+	Behavior          string  `json:"behavior,omitempty"`
+	AgeSeconds        float64 `json:"ageSeconds,omitempty"`
+	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
+	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
+	AppearCount       int     `json:"appearCount,omitempty"`
 }
 
 type combinedVenueDTO struct {
@@ -387,6 +400,8 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 		walls = append(walls, combinedWallDTO{
 			Exchange: w.Exchange, Side: w.Side, Price: w.Price, Quantity: w.Quantity,
 			Notional: w.Notional, DistancePct: w.DistancePct, Share: w.Share,
+			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
+			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))
@@ -456,6 +471,8 @@ func analysisToDTO(a domain.OrderBookAnalysis) orderBookAnalysisDTO {
 		walls = append(walls, orderBookWallDTO{
 			Side: w.Side, Price: w.Price, Quantity: w.Quantity, Notional: w.Notional,
 			DistancePct: w.DistancePct, Share: w.Share,
+			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
+			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))

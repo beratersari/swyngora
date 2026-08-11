@@ -54,6 +54,8 @@ type OrderBookImpact struct {
 	SlippagePct       float64 // adverse vs mid
 	SlippageVsBestPct float64 // adverse vs best bid/ask
 	ImpactPct         float64 // adverse move of the touch: new best vs old best (0 if best level still has size)
+	ImpactAvailable   bool    // false when the visible side was wiped — no new best, impact unknown
+	ImpactNote        string  // set when ImpactAvailable is false
 	Exhausted         bool
 	LevelsUsed        int
 	VenueCount        int
@@ -198,6 +200,7 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 		out.Exhausted = quantity > 0 || notional > 0
 		out.UnfilledQuantity = out.RequestedQuantity
 		out.UnfilledNotional = out.RequestedNotional
+		markImpactUnknown(&out)
 		return out
 	}
 	out.BestPrice = formatFixed(levels[0].Price, decimalsForStep(levels[0].Price/10000)+1)
@@ -268,6 +271,12 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 	newBest, hasNew := remainingBestPrice(levels, leftover)
 	if hasNew {
 		out.NewBestPrice = formatFixed(newBest, decimalsForStep(newBest/10000)+1)
+		out.ImpactAvailable = true
+		if filled > 0 {
+			out.ImpactPct = touchImpactPct(side, oldBest, newBest)
+		}
+	} else {
+		markImpactUnknown(&out)
 	}
 	if filled > 0 {
 		avg := spent / filled
@@ -286,7 +295,6 @@ func SimulateMarketImpact(symbol, scope, side string, mid float64, levels []Impa
 				out.SlippageVsBestPct = adversePct(avg, oldBest)
 			}
 		}
-		out.ImpactPct = touchImpactPct(side, oldBest, newBest, hasNew, lastPx)
 	}
 	if useQuote {
 		if remainQuote > 1e-8 {
@@ -313,28 +321,26 @@ func remainingBestPrice(levels []ImpactSourceLevel, leftover []float64) (float64
 	return 0, false
 }
 
+const impactUnknownNote = "Visible order-book depth was fully consumed; the next best price is unknown, so market impact cannot be calculated from this snapshot."
+
+func markImpactUnknown(out *OrderBookImpact) {
+	out.ImpactAvailable = false
+	out.ImpactPct = 0
+	out.NewBestPrice = ""
+	out.ImpactNote = impactUnknownNote
+}
+
 // touchImpactPct is how far the best ask (buy) or best bid (sell) moved.
-// If the touch price still has size, impact is 0. If it was fully eaten, impact
-// is the move to the new best. If the side is wiped, last fill vs old best.
-func touchImpactPct(side string, oldBest, newBest float64, hasNew bool, lastPx float64) float64 {
-	if oldBest <= 0 {
-		return 0
-	}
-	if hasNew && sameTouchPrice(newBest, oldBest) {
-		return 0
-	}
-	movedTo := newBest
-	if !hasNew {
-		movedTo = lastPx
-	}
-	if movedTo <= 0 || sameTouchPrice(movedTo, oldBest) {
+// Requires a known new best after leftover size. Same touch price → 0.
+func touchImpactPct(side string, oldBest, newBest float64) float64 {
+	if oldBest <= 0 || newBest <= 0 || sameTouchPrice(newBest, oldBest) {
 		return 0
 	}
 	var v float64
 	if side == ImpactSideSell {
-		v = (oldBest - movedTo) / oldBest * 100
+		v = (oldBest - newBest) / oldBest * 100
 	} else {
-		v = (movedTo - oldBest) / oldBest * 100
+		v = (newBest - oldBest) / oldBest * 100
 	}
 	if v < 0 {
 		return 0

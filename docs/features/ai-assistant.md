@@ -56,7 +56,7 @@ cd ai && pytest -q
 ## Market / watchlist tools
 
 Market specialist tools mirror Go MCP (ticker, **spot order book** / **order-book analysis** / **market-wide book** / **market impact**, **order-book alerts**, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**, **API keys**).  
-Impact: `estimate_market_impact` walks live depth for a market buy/sell (`quantity` or `notional`). See `docs/features/order-book.md`.  
+Impact: `estimate_market_impact` walks live depth for a market buy/sell (`quantity` or `notional`). Walls include `behavior` (`short` / `persistent` / `suspicious`). See `docs/features/order-book.md`.  
 Sharing tools: `share_watchlist`, `update_watchlist_share`, `revoke_watchlist_share`, `list_watchlist_shares`, `list_shared_watchlists`, `list_watchlist_audit`. See `docs/features/watchlist-sharing.md`.  
 Export tools: `start_export`, `get_export`, `list_exports`, `cancel_export` (includes paper `portfolios`). See `docs/features/user-data-export.md`.  
 Import tools: `preview_import`, `confirm_import`, `get_import`, `list_imports`, `cancel_import` (merge or replace portfolios). See `docs/features/user-data-import.md`.  
