@@ -1612,9 +1612,10 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_market_liquidity",
             description=(
                 "How liquid a coin is right now. Scores resting buy/sell notional "
-                "in ±0.1 / ±0.5 / ±1% of mid (0–100 plus grade). weakerSide is the "
-                "thinner side. exchange=all (default) returns Binance, Coinbase, and "
-                "Bybit separately plus a market-wide score."
+                "only in ±0.1 / ±0.5 / ±1% bands the book actually reaches on both "
+                "sides (usedRangePct). Market-wide uses the overlap all venues can "
+                "reach. 0–100 plus grade; weakerSide is the thinner side. "
+                "exchange=all (default) returns Binance, Coinbase, Bybit, and a market-wide score."
             ),
             args_schema=MarketLiquidityInput,
         ),

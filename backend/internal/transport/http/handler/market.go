@@ -458,12 +458,13 @@ type liquidityBandDTO struct {
 }
 
 type liquidityScoreDTO struct {
-	MidPrice   string             `json:"midPrice"`
-	Score      float64            `json:"score"`
-	Grade      string             `json:"grade"`
-	WeakerSide string             `json:"weakerSide"`
-	Weakness   float64            `json:"weakness"`
-	Bands      []liquidityBandDTO `json:"bands"`
+	MidPrice     string             `json:"midPrice"`
+	UsedRangePct float64            `json:"usedRangePct"`
+	Score        float64            `json:"score"`
+	Grade        string             `json:"grade"`
+	WeakerSide   string             `json:"weakerSide"`
+	Weakness     float64            `json:"weakness"`
+	Bands        []liquidityBandDTO `json:"bands"`
 }
 
 type venueLiquidityDTO struct {
@@ -496,7 +497,8 @@ func liquidityToDTO(a *domain.MarketLiquidity) marketLiquidityResponse {
 			})
 		}
 		return liquidityScoreDTO{
-			MidPrice: s.MidPrice, Score: s.Score, Grade: s.Grade,
+			MidPrice: s.MidPrice, UsedRangePct: s.UsedRangePct,
+			Score: s.Score, Grade: s.Grade,
 			WeakerSide: s.WeakerSide, Weakness: s.Weakness, Bands: bands,
 		}
 	}
@@ -509,7 +511,7 @@ func liquidityToDTO(a *domain.MarketLiquidity) marketLiquidityResponse {
 	}
 	return marketLiquidityResponse{
 		Symbol: a.Symbol, VenueCount: a.VenueCount, Market: mapScore(a.Market), Venues: venues,
-		Note: "Liquidity score 0–100 from resting bid/ask notional in ±0.1 / ±0.5 / ±1% of mid (near depth weighted more). weakerSide is the thinner side at ±1%. Informational only — not a quote.",
+		Note: "Liquidity score 0–100 from resting bid/ask notional. Only ±0.1 / ±0.5 / ±1% bands the book actually reaches on both sides are shown. Market-wide uses the symmetric ±% every venue can reach. weakerSide is the thinner side in the widest included band. Informational only — not a quote.",
 	}
 }
 

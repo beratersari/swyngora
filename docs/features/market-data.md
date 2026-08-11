@@ -37,7 +37,7 @@ Expose first market-data APIs so clients can:
 - `analysis` uses depth within ±`rangePct` of mid (default 2%) for pressure, imbalance, and walls. Walls include `behavior` (`short` / `persistent` / `suspicious`).
 - `GET /api/v1/market/orderbook/combined` sums all three venues in a symmetric ±% both sides can reach.
 - `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated.
-- `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional, per venue and market-wide.
+- `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional that the book actually covers; market-wide uses the common venue range.
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

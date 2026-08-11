@@ -9,12 +9,12 @@ func TestScoreBookLiquidity_DeepBookHigh(t *testing.T) {
 		Bids: []PriceLevel{
 			{Price: 99.95, Quantity: 2000}, // inside 0.1% of 100
 			{Price: 99.6, Quantity: 5000},  // inside 0.5%
-			{Price: 99.1, Quantity: 8000},  // inside 1%
+			{Price: 99.0, Quantity: 8000},  // inside 1%
 		},
 		Asks: []PriceLevel{
 			{Price: 100.05, Quantity: 2000},
 			{Price: 100.4, Quantity: 5000},
-			{Price: 100.9, Quantity: 8000},
+			{Price: 101.0, Quantity: 8000},
 		},
 	}
 	got := ScoreBookLiquidity(raw, 100)
@@ -81,21 +81,50 @@ func TestScoreNotionalUSD_Anchors(t *testing.T) {
 	}
 }
 
-func TestMergeLiquidityScores_SumsBands(t *testing.T) {
-	a := ScoreBookLiquidity(RawOrderBook{
+func TestScoreBookLiquidity_OmitsUnreachableBands(t *testing.T) {
+	// Only ±0.05% of depth — must not publish 0.1 / 0.5 / 1 as if they were full.
+	raw := RawOrderBook{
 		Bids: []PriceLevel{{Price: 99.95, Quantity: 10}},
 		Asks: []PriceLevel{{Price: 100.05, Quantity: 10}},
-	}, 100)
-	b := ScoreBookLiquidity(RawOrderBook{
-		Bids: []PriceLevel{{Price: 99.95, Quantity: 10}},
-		Asks: []PriceLevel{{Price: 100.05, Quantity: 10}},
-	}, 100)
-	got := MergeLiquidityScores([]LiquidityScore{a, b})
-	// 0.1% band: 2 * (10*99.95 + 10*100.05) ≈ 4000
-	if parseQty(got.Bands[0].TotalNotional) < 3900 || parseQty(got.Bands[0].TotalNotional) > 4100 {
-		t.Fatalf("merged 0.1%% %s", got.Bands[0].TotalNotional)
 	}
-	if got.Score <= a.Score {
-		t.Fatalf("merged score should rise: a=%v merged=%v", a.Score, got.Score)
+	got := ScoreBookLiquidity(raw, 100)
+	if len(got.Bands) != 0 {
+		t.Fatalf("no preset band is covered: %+v", got.Bands)
+	}
+	if got.UsedRangePct > 0.06 {
+		t.Fatalf("used=%v", got.UsedRangePct)
+	}
+}
+
+func TestScoreBookLiquidity_StopsAtHalfPercent(t *testing.T) {
+	raw := RawOrderBook{
+		Bids: []PriceLevel{{Price: 99.95, Quantity: 5}, {Price: 99.50, Quantity: 5}},
+		Asks: []PriceLevel{{Price: 100.05, Quantity: 5}, {Price: 100.50, Quantity: 5}},
+	}
+	got := ScoreBookLiquidity(raw, 100)
+	if len(got.Bands) != 2 || got.Bands[0].RangePct != 0.1 || got.Bands[1].RangePct != 0.5 {
+		t.Fatalf("want 0.1 and 0.5 only: %+v", got.Bands)
+	}
+}
+
+func TestScoreMarketLiquidity_UsesCommonReach(t *testing.T) {
+	deep := VenueRawBook{Exchange: ExchangeBinance, Book: RawOrderBook{
+		Bids: []PriceLevel{{Price: 99.95, Quantity: 10}, {Price: 99.0, Quantity: 50}},
+		Asks: []PriceLevel{{Price: 100.05, Quantity: 10}, {Price: 101.0, Quantity: 50}},
+	}}
+	shallow := VenueRawBook{Exchange: ExchangeBybit, Book: RawOrderBook{
+		Bids: []PriceLevel{{Price: 99.95, Quantity: 10}},
+		Asks: []PriceLevel{{Price: 100.05, Quantity: 10}},
+	}}
+	got := ScoreMarketLiquidity([]VenueRawBook{deep, shallow})
+	if len(got.Bands) != 0 {
+		t.Fatalf("common reach is ~0.05%%, no preset band: %+v", got)
+	}
+	// Give shallow enough to cover 0.1% both ways but not 0.5%.
+	shallow.Book.Bids = append(shallow.Book.Bids, PriceLevel{Price: 99.89, Quantity: 1})
+	shallow.Book.Asks = append(shallow.Book.Asks, PriceLevel{Price: 100.11, Quantity: 1})
+	got = ScoreMarketLiquidity([]VenueRawBook{deep, shallow})
+	if len(got.Bands) != 1 || got.Bands[0].RangePct != 0.1 {
+		t.Fatalf("common should be 0.1%% only: %+v", got)
 	}
 }

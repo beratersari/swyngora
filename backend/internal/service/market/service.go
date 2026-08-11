@@ -342,13 +342,11 @@ func (s *Service) GetMarketLiquidity(ctx context.Context, exchange, symbol strin
 		Symbol: display,
 		Venues: []domain.VenueLiquidity{},
 	}
-	var parts []domain.LiquidityScore
 	for _, vb := range books {
 		row := domain.VenueLiquidity{Exchange: vb.Exchange, Symbol: vb.Symbol, Error: vb.Err}
 		if vb.Err == "" {
 			row.Live = vb.Book.Live
 			row.LiquidityScore = domain.ScoreBookLiquidity(vb.Book, 0)
-			parts = append(parts, row.LiquidityScore)
 			out.VenueCount++
 		}
 		out.Venues = append(out.Venues, row)
@@ -356,7 +354,7 @@ func (s *Service) GetMarketLiquidity(ctx context.Context, exchange, symbol strin
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
-	out.Market = domain.MergeLiquidityScores(parts)
+	out.Market = domain.ScoreMarketLiquidity(books)
 	return out, nil
 }
 

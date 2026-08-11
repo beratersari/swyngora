@@ -257,7 +257,7 @@ func registerTools(s *server.MCPServer, api DataPort) {
 	})
 
 	s.AddTool(mcp.NewTool("get_market_liquidity",
-		mcp.WithDescription("How liquid a coin is right now. Scores resting buy/sell notional in ±0.1 / ±0.5 / ±1% of mid (0–100 plus grade). weakerSide is the thinner side. exchange=all (default) returns Binance, Coinbase, and Bybit separately plus a market-wide score. Prefer this when asked how liquid a market is."),
+		mcp.WithDescription("How liquid a coin is right now. Scores resting buy/sell notional only in ±0.1 / ±0.5 / ±1% bands the book actually reaches on both sides (usedRangePct). Market-wide uses the overlap all venues can reach. 0–100 plus grade; weakerSide is the thinner side. exchange=all (default) returns Binance, Coinbase, Bybit, and a market-wide score."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

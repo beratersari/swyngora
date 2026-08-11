@@ -134,7 +134,8 @@ func (b *Backend) GetMarketLiquidity(ctx context.Context, exchange, symbol strin
 			})
 		}
 		return map[string]any{
-			"midPrice": s.MidPrice, "score": s.Score, "grade": s.Grade,
+			"midPrice": s.MidPrice, "usedRangePct": s.UsedRangePct,
+			"score": s.Score, "grade": s.Grade,
 			"weakerSide": s.WeakerSide, "weakness": s.Weakness, "bands": bands,
 		}
 	}

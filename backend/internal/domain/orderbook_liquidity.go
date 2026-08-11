@@ -2,7 +2,6 @@ package domain
 
 import (
 	"math"
-	"strconv"
 )
 
 // Liquidity bands around mid used for the score (not clamped by analysis min 0.25%).
@@ -43,12 +42,13 @@ type LiquidityBand struct {
 
 // LiquidityScore is a 0–100 read of how easy the book is to trade.
 type LiquidityScore struct {
-	MidPrice   string
-	Score      float64
-	Grade      string
-	WeakerSide string
-	Weakness   float64 // 0–1; how lopsided the 1% band is
-	Bands      []LiquidityBand
+	MidPrice     string
+	UsedRangePct float64 // symmetric ±% both sides actually reach
+	Score        float64
+	Grade        string
+	WeakerSide   string
+	Weakness     float64 // 0–1; how lopsided the widest included band is
+	Bands        []LiquidityBand
 }
 
 // VenueLiquidity is one venue's liquidity score.
@@ -68,29 +68,49 @@ type MarketLiquidity struct {
 	Venues     []VenueLiquidity
 }
 
-// ScoreBookLiquidity measures buy/sell notional in ±0.1 / ±0.5 / ±1% of mid
-// and folds them into one score. mid ≤ 0 falls back to the book's own mid.
+// ScoreBookLiquidity measures buy/sell notional only in ±0.1 / ±0.5 / ±1%
+// bands the book actually reaches on both sides. mid ≤ 0 uses the book's mid.
 func ScoreBookLiquidity(raw RawOrderBook, mid float64) LiquidityScore {
 	if mid <= 0 {
 		mid = midPrice(raw)
 	}
+	return scoreLiquidityAt(mid, bookCoverPct(raw, mid), []RawOrderBook{raw})
+}
+
+// ScoreMarketLiquidity sums venues only inside the symmetric ±% every
+// contributing book can reach from the shared mid.
+func ScoreMarketLiquidity(books []VenueRawBook) LiquidityScore {
+	var raws []RawOrderBook
+	for _, b := range books {
+		if b.Err != "" {
+			continue
+		}
+		raws = append(raws, b.Book)
+	}
+	mid := SharedBookMid(books)
+	return scoreLiquidityAt(mid, commonCoverPct(mid, books), raws)
+}
+
+func scoreLiquidityAt(mid, coverPct float64, books []RawOrderBook) LiquidityScore {
 	out := LiquidityScore{
 		Grade:      LiquidityGradeVeryLow,
 		WeakerSide: LiquidityWeakerBalanced,
 		Bands:      []LiquidityBand{},
 	}
-	if mid <= 0 {
+	if mid <= 0 || len(books) == 0 {
 		return out
 	}
 	out.MidPrice = formatFixed(mid, decimalsForStep(mid/10000)+1)
+	out.UsedRangePct = round4(coverPct)
 
-	var weighted float64
-	var onePct bandStats
+	var weighted, wsum float64
+	var widest bandStats
+	var haveWidest bool
 	for i, pct := range liquidityBandPcts {
-		st := summarizeBand(raw, mid, pct)
-		if pct == 1 {
-			onePct = st
+		if !bandFullyCovered(coverPct, pct) {
+			continue
 		}
+		st := sumBooksInBand(books, mid, pct)
 		tot := st.bidNotional + st.askNotional
 		bandScore := scoreNotionalUSD(tot)
 		w := 0.0
@@ -98,6 +118,9 @@ func ScoreBookLiquidity(raw RawOrderBook, mid float64) LiquidityScore {
 			w = liquidityBandWeights[i]
 		}
 		weighted += bandScore * w
+		wsum += w
+		widest = st
+		haveWidest = true
 		out.Bands = append(out.Bands, LiquidityBand{
 			RangePct:      pct,
 			BidNotional:   formatQty(st.bidNotional),
@@ -109,88 +132,87 @@ func ScoreBookLiquidity(raw RawOrderBook, mid float64) LiquidityScore {
 			Score:         bandScore,
 		})
 	}
-	weaker, weakness := weakerFromBand(onePct)
-	out.WeakerSide = weaker
-	out.Weakness = weakness
-	out.Score = round4(clamp01(weighted/100.0*(1-liquidityBalancePenalty*weakness)) * 100)
+	if !haveWidest && coverPct > 0 {
+		// Book does not reach even ±0.1%; score the real window, do not invent 0.5/1%.
+		widest = sumBooksInBand(books, mid, coverPct)
+		haveWidest = true
+		tot := widest.bidNotional + widest.askNotional
+		weighted = scoreNotionalUSD(tot)
+		wsum = 1
+	}
+	if haveWidest {
+		weaker, weakness := weakerFromBand(widest)
+		out.WeakerSide = weaker
+		out.Weakness = weakness
+		if wsum > 0 {
+			out.Score = round4(clamp01((weighted/wsum)/100.0*(1-liquidityBalancePenalty*weakness)) * 100)
+		}
+	}
 	out.Grade = liquidityGrade(out.Score)
 	return out
 }
 
-// MergeLiquidityScores sums band notionals (each venue vs its own mid) and
-// re-scores the market-wide book. Empty input returns a zero score.
-func MergeLiquidityScores(parts []LiquidityScore) LiquidityScore {
-	out := LiquidityScore{
-		Grade:      LiquidityGradeVeryLow,
-		WeakerSide: LiquidityWeakerBalanced,
-		Bands:      []LiquidityBand{},
+func sumBooksInBand(books []RawOrderBook, mid, pct float64) bandStats {
+	var tot bandStats
+	for _, raw := range books {
+		st := summarizeBand(raw, mid, pct)
+		tot.bidNotional += st.bidNotional
+		tot.askNotional += st.askNotional
+		tot.bidQty += st.bidQty
+		tot.askQty += st.askQty
+		tot.bidLevels += st.bidLevels
+		tot.askLevels += st.askLevels
 	}
-	if len(parts) == 0 {
-		return out
+	if s := tot.bidNotional + tot.askNotional; s > 0 {
+		tot.imbalance = round4((tot.bidNotional - tot.askNotional) / s)
 	}
-	type acc struct {
-		bidN, askN, bidQ, askQ float64
+	return tot
+}
+
+// bookCoverPct is the symmetric ±% both sides of this book actually reach.
+func bookCoverPct(raw RawOrderBook, mid float64) float64 {
+	if mid <= 0 {
+		return 0
 	}
-	byPct := map[float64]*acc{}
-	for _, pct := range liquidityBandPcts {
-		byPct[pct] = &acc{}
+	minBid, maxAsk, ok := bookExtent(raw)
+	if !ok {
+		return 0
 	}
-	var mid float64
-	for _, p := range parts {
-		if m, err := parsePlainFloat(p.MidPrice); err == nil && m > mid {
-			mid = m
+	bidPct := (mid - minBid) / mid * 100
+	askPct := (maxAsk - mid) / mid * 100
+	if bidPct < 0 {
+		bidPct = 0
+	}
+	if askPct < 0 {
+		askPct = 0
+	}
+	if askPct < bidPct {
+		return askPct
+	}
+	return bidPct
+}
+
+func commonCoverPct(mid float64, books []VenueRawBook) float64 {
+	first := true
+	var used float64
+	for _, b := range books {
+		if b.Err != "" {
+			continue
 		}
-		for _, b := range p.Bands {
-			a := byPct[b.RangePct]
-			if a == nil {
-				a = &acc{}
-				byPct[b.RangePct] = a
-			}
-			a.bidN += parseQty(b.BidNotional)
-			a.askN += parseQty(b.AskNotional)
-			a.bidQ += parseQty(b.BidQuantity)
-			a.askQ += parseQty(b.AskQuantity)
+		c := bookCoverPct(b.Book, mid)
+		if first || c < used {
+			used = c
+			first = false
 		}
 	}
-	if mid > 0 {
-		out.MidPrice = formatFixed(mid, decimalsForStep(mid/10000)+1)
+	if first {
+		return 0
 	}
-	var weighted float64
-	var onePctImb, onePctTot float64
-	for i, pct := range liquidityBandPcts {
-		a := byPct[pct]
-		tot := a.bidN + a.askN
-		imb := 0.0
-		if tot > 0 {
-			imb = round4((a.bidN - a.askN) / tot)
-		}
-		bandScore := scoreNotionalUSD(tot)
-		w := 0.0
-		if i < len(liquidityBandWeights) {
-			w = liquidityBandWeights[i]
-		}
-		weighted += bandScore * w
-		if pct == 1 {
-			onePctImb = imb
-			onePctTot = tot
-		}
-		out.Bands = append(out.Bands, LiquidityBand{
-			RangePct:      pct,
-			BidNotional:   formatQty(a.bidN),
-			AskNotional:   formatQty(a.askN),
-			BidQuantity:   formatQty(a.bidQ),
-			AskQuantity:   formatQty(a.askQ),
-			TotalNotional: formatQty(tot),
-			Imbalance:     imb,
-			Score:         bandScore,
-		})
-	}
-	weaker, weakness := weakerFromImbalance(onePctImb, onePctTot)
-	out.WeakerSide = weaker
-	out.Weakness = weakness
-	out.Score = round4(clamp01(weighted/100.0*(1-liquidityBalancePenalty*weakness)) * 100)
-	out.Grade = liquidityGrade(out.Score)
-	return out
+	return used
+}
+
+func bandFullyCovered(coverPct, bandPct float64) bool {
+	return coverPct+1e-9 >= bandPct
 }
 
 func scoreNotionalUSD(usd float64) float64 {
@@ -247,18 +269,6 @@ func clamp01(v float64) float64 {
 	}
 	if v > 1 {
 		return 1
-	}
-	return v
-}
-
-func parsePlainFloat(s string) (float64, error) {
-	return strconv.ParseFloat(s, 64)
-}
-
-func parseQty(s string) float64 {
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0
 	}
 	return v
 }

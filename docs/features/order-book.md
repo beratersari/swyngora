@@ -48,13 +48,15 @@ Futures / other markets are out of scope for now version.
   - Simulation only — not a quote, fill, or financial advice. Visible depth is often
     much thinner than a real $1B print; `exhausted=true` is the honest answer then.
 - `GET /api/v1/market/orderbook/liquidity?symbol=BTCUSDT`
-  - Scores how easy the pair is to trade from resting bid/ask **notional** in
-    **±0.1% / ±0.5% / ±1%** of mid. Nearer depth is weighted more. Lopsided
-    books (one side thin) pull the score down.
+  - Scores how easy the pair is to trade from resting bid/ask **notional**.
+    Only **±0.1% / ±0.5% / ±1%** bands the book **actually reaches on both sides**
+    are shown (`usedRangePct`). Incomplete farther depth is not treated as a full band.
+  - Market-wide uses the symmetric ±% **every** live venue can reach (same idea as combined book).
+  - Nearer included bands are weighted more. Lopsided books pull the score down.
   - `score` is 0–100 with `grade` (`very_low` … `very_high`). It rises with
     notional: linear to 20 at $1k, then log from that same 20 ($10k≈40, $1M≈80).
-  - `weakerSide` is `buy` (thin bids), `sell` (thin asks), or `balanced` from the ±1% band.
-  - `venues[]` is Binance / Coinbase / Bybit separately; `market` is the summed book.
+  - `weakerSide` is `buy` (thin bids), `sell` (thin asks), or `balanced` from the widest included band.
+  - `venues[]` is Binance / Coinbase / Bybit separately; `market` is the common-range sum.
   - `exchange=binance` (etc.) for one venue only.
 - Grouping: bids floor to the step, asks ceil to the step (same idea as exchange UIs).
 - All three venues keep a **live local book**. A dropped connection or missed update **invalidates** the copy and resyncs. Unsynced books are not served.

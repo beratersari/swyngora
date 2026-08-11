@@ -2213,16 +2213,18 @@ export interface components {
         };
         LiquidityScore: {
             midPrice?: string;
-            /** @description 0–100 overall (near bands weighted more; lopsided books penalized) */
+            /** @description Symmetric ±% both sides actually reach */
+            usedRangePct?: number;
+            /** @description 0–100 overall (near included bands weighted more; lopsided books penalized) */
             score?: number;
             /** @enum {string} */
             grade?: "very_low" | "low" | "medium" | "high" | "very_high";
             /**
-             * @description Thinner side in the ±1% band
+             * @description Thinner side in the widest included band
              * @enum {string}
              */
             weakerSide?: "buy" | "sell" | "balanced";
-            /** @description 0–1 how lopsided the ±1% band is */
+            /** @description 0–1 how lopsided the widest included band is */
             weakness?: number;
             bands?: components["schemas"]["LiquidityBand"][];
         };

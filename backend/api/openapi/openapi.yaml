@@ -536,11 +536,11 @@ paths:
     get:
       summary: Liquidity score from live order-book depth
       description: |
-        Scores how easy a pair is to trade from resting bid/ask notional in
-        ±0.1%, ±0.5%, and ±1% of mid. Near depth is weighted more. Returns
-        one 0–100 score plus grade, which side is thinner (`weakerSide`),
-        and the same breakdown per venue. `exchange=all` (default) includes
-        Binance, Coinbase, and Bybit and a market-wide sum. Informational only.
+        Scores how easy a pair is to trade from resting bid/ask notional.
+        Only ±0.1 / ±0.5 / ±1% bands the book actually reaches on **both**
+        sides are included (`usedRangePct`). Market-wide uses the symmetric
+        ±% Binance, Coinbase, and Bybit can all reach. Near included depth
+        is weighted more. Informational only.
       operationId: getMarketLiquidity
       tags: [Market]
       parameters:
@@ -4461,10 +4461,11 @@ components:
       type: object
       properties:
         midPrice: { type: string }
-        score: { type: number, description: 0–100 overall (near bands weighted more; lopsided books penalized) }
+        usedRangePct: { type: number, description: Symmetric ±% both sides actually reach }
+        score: { type: number, description: 0–100 overall (near included bands weighted more; lopsided books penalized) }
         grade: { type: string, enum: [very_low, low, medium, high, very_high] }
-        weakerSide: { type: string, enum: [buy, sell, balanced], description: Thinner side in the ±1% band }
-        weakness: { type: number, description: 0–1 how lopsided the ±1% band is }
+        weakerSide: { type: string, enum: [buy, sell, balanced], description: Thinner side in the widest included band }
+        weakness: { type: number, description: 0–1 how lopsided the widest included band is }
         bands:
           type: array
           items: { $ref: '#/components/schemas/LiquidityBand' }
