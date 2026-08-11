@@ -83,4 +83,4 @@ curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notion
 - Spot only.
 - Idle streams are dropped after `ORDERBOOK_IDLE_TTL` (default 90s) and started again on the next request.
 - Walls are a heuristic (size vs median / share of visible book), not exchange-labeled iceberg orders.
-- Wall persistence needs more than one look. A background sampler re-reads recently requested books every 3s (stops ~2 minutes after the last user/AI request). First sighting is always `short`.
+- Wall persistence needs more than one look. A background sampler re-reads recently requested books every 3s and stays attached a little past the 2-minute persistent threshold (so the last tick is not cut off just short). First sighting is always `short`.

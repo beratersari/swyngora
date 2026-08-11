@@ -24,13 +24,13 @@ func TestWallMemory_PersistentAfterStreak(t *testing.T) {
 	now := time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC)
 	walls := []OrderBookWall{testBidWall("100")}
 	m.Observe(now, "binance", "BTCUSDT", walls)
-	later := now.Add(wallPersistentMin + time.Second)
+	later := now.Add(WallPersistentMin + time.Second)
 	walls = []OrderBookWall{testBidWall("100.05")} // same zone
 	m.Observe(later, "binance", "BTCUSDT", walls)
 	if walls[0].Behavior != WallBehaviorPersistent {
 		t.Fatalf("want persistent, got %+v", walls[0])
 	}
-	if walls[0].PresentForSeconds < wallPersistentMin.Seconds() {
+	if walls[0].PresentForSeconds < WallPersistentMin.Seconds() {
 		t.Fatalf("streak %v", walls[0].PresentForSeconds)
 	}
 }

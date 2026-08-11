@@ -15,7 +15,11 @@ const (
 )
 
 const (
-	wallPersistentMin     = 2 * time.Minute
+	// WallPersistentMin is how long a wall must rest near the same price
+	// before it is labeled persistent. The book sampler must stay attached
+	// longer than this plus one sample tick, or the last look lands short.
+	WallPersistentMin = 2 * time.Minute
+
 	wallSuspiciousWindow  = 2 * time.Minute
 	wallSuspiciousAppears = 4
 	wallAbsenceGrace      = 8 * time.Second
@@ -252,9 +256,9 @@ func wallLife(tr *wallTrack, now time.Time) wallLifeView {
 	behavior := WallBehaviorShort
 	if flips >= wallSuspiciousAppears {
 		behavior = WallBehaviorSuspicious
-	} else if streak >= wallPersistentMin {
+	} else if streak >= WallPersistentMin {
 		behavior = WallBehaviorPersistent
-	} else if visible >= wallPersistentMin && age > 0 && float64(visible)/float64(age) >= wallPersistentDuty {
+	} else if visible >= WallPersistentMin && age > 0 && float64(visible)/float64(age) >= wallPersistentDuty {
 		behavior = WallBehaviorPersistent
 	}
 	return wallLifeView{

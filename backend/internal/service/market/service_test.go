@@ -431,6 +431,14 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 	}
 }
 
+func TestWallWatchIdleOutlastsPersistentMin(t *testing.T) {
+	idle := wallWatchIdle()
+	need := domain.WallPersistentMin + wallSampleEvery
+	if idle <= need {
+		t.Fatalf("idle %s must be > persistent min + sample %s so the last tick can pass 2m", idle, need)
+	}
+}
+
 func TestGetCombinedOrderBookAnalysis(t *testing.T) {
 	bin := &fakeMarket{}
 	cb := &fakeMarket{}

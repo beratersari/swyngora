@@ -14,8 +14,17 @@ import (
 
 const (
 	wallSampleEvery = 3 * time.Second
-	wallWatchIdle   = 2 * time.Minute
+	// Hold a little past WallPersistentMin so the last 3s tick can land
+	// after the 2-minute mark instead of deleting the watch just short.
+	wallWatchSlack = 15 * time.Second
 )
+
+// wallWatchIdle is how long the sampler keeps a book after the last user/AI
+// look. It must outlast persistent-min plus a sample tick, otherwise the last
+// check happens before the wall can be labeled persistent.
+func wallWatchIdle() time.Duration {
+	return domain.WallPersistentMin + wallSampleEvery + wallWatchSlack
+}
 
 // Service orchestrates market-data use cases. Handlers call this layer only.
 type Service struct {
@@ -486,7 +495,7 @@ func (s *Service) sampleWatchedWalls(ctx context.Context) {
 	s.watchMu.Lock()
 	watches := make([]wallWatch, 0, len(s.wallWatch))
 	for k, w := range s.wallWatch {
-		if now.Sub(w.seen) > wallWatchIdle {
+		if now.Sub(w.seen) > wallWatchIdle() {
 			delete(s.wallWatch, k)
 			continue
 		}
