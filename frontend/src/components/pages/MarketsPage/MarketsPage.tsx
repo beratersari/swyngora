@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Alert, Button, Tag, message } from 'antd';
+import { Alert, Button, message } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { MarketsTable } from '@/components/organisms/MarketsTable';
@@ -38,7 +40,6 @@ import {
   MetaLeft,
   MetaRight,
   MetaRow,
-  PageIntro,
   PageStack,
   ResultsBadge,
   ResultsCount,
@@ -205,14 +206,11 @@ export function MarketsPage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary">
-          {t('markets:title')}
-        </Text>
-        <Text variant="body" color="secondary">
-          {t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })}
-        </Text>
-      </PageIntro>
+      <PageHeader
+        eyebrow={t('markets:eyebrow')}
+        title={t('markets:title')}
+        subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })}
+      />
 
       <ExchangeTabs
         exchanges={exchanges}
@@ -284,8 +282,8 @@ export function MarketsPage() {
               <ResultsLabel>{t('markets:results.noneYet')}</ResultsLabel>
             </ResultsBadge>
           )}
-          {isRefreshing ? <Tag color="processing">{t('common:status.updating')}</Tag> : null}
-          {!visible ? <Tag color="default">{t('common:status.pollingPaused')}</Tag> : null}
+          {isRefreshing ? <BrandTag variant="live">{t('common:status.updating')}</BrandTag> : null}
+          {!visible ? <BrandTag variant="paused">{t('common:status.pollingPaused')}</BrandTag> : null}
         </MetaLeft>
         <MetaRight>
           <Text variant="caption" color="secondary">

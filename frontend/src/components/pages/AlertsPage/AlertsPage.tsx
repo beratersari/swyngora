@@ -3,6 +3,7 @@ import { Alert, Button, message } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { AlertsTable } from '@/components/organisms/AlertsTable';
 import {
   CreateAlertForm,
@@ -15,7 +16,7 @@ import {
   useListPriceAlertsQuery,
   type MarketExchange,
 } from '@/libs/api';
-import { PageIntro, PageStack, Section } from './AlertsPage.styles';
+import { PageStack, Section } from './AlertsPage.styles';
 
 const EXCHANGES = new Set(['binance', 'coinbase', 'bybit']);
 
@@ -49,14 +50,11 @@ export function AlertsPage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary" as="h1">
-          {t('alerts:title')}
-        </Text>
-        <Text variant="body" color="secondary">
-          {t('alerts:subtitle')}
-        </Text>
-      </PageIntro>
+      <PageHeader
+        eyebrow={t('alerts:eyebrow')}
+        title={t('alerts:title')}
+        subtitle={t('alerts:subtitle')}
+      />
 
       <Section>
         <CreateAlertForm

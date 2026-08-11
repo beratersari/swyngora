@@ -42,22 +42,32 @@ type ChatRequest struct {
 	SessionID string `json:"sessionId"`
 }
 
+// ChatReference is one public web/X source collected during the turn.
+type ChatReference struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Source  string `json:"source"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
 // ChatResult is the structured assistant result for Telegram/UI.
 type ChatResult struct {
-	Reply    string
-	Tools    []string
-	Thinking []string
+	Reply      string
+	Tools      []string
+	Thinking   []string
+	References []ChatReference
 }
 
 // StreamEvent is one NDJSON line from /v1/chat/stream.
 type StreamEvent struct {
-	Type      string   `json:"type"`
-	Text      string   `json:"text"`
-	Reply     string   `json:"reply"`
-	Tools     []string `json:"tools"`
-	Thinking  []string `json:"thinking"`
-	Message   string   `json:"message"`
-	SessionID string   `json:"sessionId"`
+	Type       string          `json:"type"`
+	Text       string          `json:"text"`
+	Reply      string          `json:"reply"`
+	Tools      []string        `json:"tools"`
+	Thinking   []string        `json:"thinking"`
+	References []ChatReference `json:"references"`
+	Message    string          `json:"message"`
+	SessionID  string          `json:"sessionId"`
 }
 
 // Chat sends a user message (non-streaming).
@@ -90,12 +100,13 @@ func (c *Client) Chat(ctx context.Context, message, sessionID string) (ChatResul
 		return zero, err
 	}
 	var out struct {
-		Reply     string   `json:"reply"`
-		SessionID string   `json:"sessionId"`
-		Tools     []string `json:"tools"`
-		Thinking  []string `json:"thinking"`
-		Error     string   `json:"error"`
-		Message   string   `json:"message"`
+		Reply      string          `json:"reply"`
+		SessionID  string          `json:"sessionId"`
+		Tools      []string        `json:"tools"`
+		Thinking   []string        `json:"thinking"`
+		References []ChatReference `json:"references"`
+		Error      string          `json:"error"`
+		Message    string          `json:"message"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return zero, fmt.Errorf("AI bad response: %s", truncate(string(raw), 200))
@@ -113,7 +124,7 @@ func (c *Client) Chat(ctx context.Context, message, sessionID string) (ChatResul
 	if strings.TrimSpace(out.Reply) == "" {
 		return zero, fmt.Errorf("AI returned empty reply")
 	}
-	return ChatResult{Reply: out.Reply, Tools: out.Tools, Thinking: out.Thinking}, nil
+	return ChatResult{Reply: out.Reply, Tools: out.Tools, Thinking: out.Thinking, References: out.References}, nil
 }
 
 // ChatStream streams NDJSON events. onEvent is called for each event (including final).
@@ -172,6 +183,7 @@ func (c *Client) ChatStream(ctx context.Context, message, sessionID string, onEv
 			final.Reply = ev.Reply
 			final.Tools = ev.Tools
 			final.Thinking = ev.Thinking
+			final.References = ev.References
 		case "error":
 			msg := ev.Message
 			if msg == "" {

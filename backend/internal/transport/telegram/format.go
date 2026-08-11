@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 )
 
 // Disclaimer footer (HTML).
@@ -821,6 +822,23 @@ func FormatAIProgress(status string, tools []string) string {
 	return b.String()
 }
 
+// RefLink is a public source shown under an AI answer.
+type RefLink struct {
+	Title string
+	URL   string
+}
+
+func toRefLinks(refs []aiagent.ChatReference) []RefLink {
+	out := make([]RefLink, 0, len(refs))
+	for _, r := range refs {
+		if strings.TrimSpace(r.URL) == "" {
+			continue
+		}
+		out = append(out, RefLink{Title: r.Title, URL: r.URL})
+	}
+	return out
+}
+
 // FormatAIAnswer is the final answer card (HTML; dynamic content escaped).
 // Only main agents are listed (not every leaf tool).
 func FormatAIAnswer(reply string, thinking, tools []string) string {
@@ -841,6 +859,30 @@ func FormatAIAnswer(reply string, thinking, tools []string) string {
 		b.WriteString("\n")
 	}
 	b.WriteString(footer())
+	return b.String()
+}
+
+// FormatAIReferences appends numbered source URLs (HTML escaped).
+func FormatAIReferences(refs []RefLink) string {
+	if len(refs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(divider())
+	b.WriteString(bold("Sources") + "\n")
+	n := len(refs)
+	if n > 8 {
+		n = 8
+	}
+	for i := 0; i < n; i++ {
+		r := refs[i]
+		title := strings.TrimSpace(r.Title)
+		if title == "" {
+			title = r.URL
+		}
+		fmt.Fprintf(&b, "  %d. %s\n     %s\n", i+1, esc(title), esc(r.URL))
+	}
 	return b.String()
 }
 

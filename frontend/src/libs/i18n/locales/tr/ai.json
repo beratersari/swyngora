@@ -1,5 +1,6 @@
 {
   "title": "AI asistan",
+  "eyebrow": "Araştırma masası",
   "subtitle": "Piyasalar, göstergeler ve izleme listesi hakkında sorun. Yanıtlar mümkünse canlı araçları kullanır.",
   "resource": "AI asistan",
   "disclaimer": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Rakamlar model bellekten değil, araçlardan gelmelidir.",
@@ -10,7 +11,9 @@
   "assistant": "Asistan",
   "thinking": "Düşünüyor… bu birkaç dakika sürebilir.",
   "thinkingLabel": "Düşünme",
+  "thinkingSummary": "Düşünme · {{count}} adım",
   "toolsLabel": "Araçlar",
+  "sourcesLabel": "Kaynaklar",
   "emptyHint": "Bir sohbet başlatın veya öneriyi deneyin:",
   "sessionLabel": "Oturum",
   "enterHint": "Göndermek için Enter · Yeni satır için Shift+Enter",

@@ -1,5 +1,6 @@
 {
   "title": "Alerts",
+  "eyebrow": "Price triggers",
   "subtitle": "Server-side price alerts (one-time or repeating). Informational only — not financial advice.",
   "createTitle": "Create alert",
   "createHint": "Fires when the condition is true (with a short cooldown). Enable browser notifications for desktop pop-ups.",

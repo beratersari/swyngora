@@ -6,11 +6,13 @@ import {
   AppLayout,
   HeaderNav,
   HeaderSpacer,
+  HeaderTools,
+  HeaderTop,
 } from './AppShell.styles';
 import type { AppShellProps } from './AppShell.types';
 
 /**
- * Product chrome: header nav + main content + optional footer.
+ * Product chrome: sticky brand/tools row, nav pills, optional ticker banner, footer.
  * Data-free layout shell (Atomic Design template).
  */
 export function AppShell({
@@ -26,12 +28,12 @@ export function AppShell({
   return (
     <AppLayout>
       <AppHeader>
-        <HeaderNav aria-label={navAriaLabel}>
+        <HeaderTop>
           {brand}
-          {nav}
-        </HeaderNav>
-        <HeaderSpacer />
-        {tools}
+          <HeaderSpacer />
+          {tools ? <HeaderTools>{tools}</HeaderTools> : null}
+        </HeaderTop>
+        <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
       </AppHeader>
       {banner ? <AppBanner>{banner}</AppBanner> : null}
       <AppContent $wide={wide}>{children}</AppContent>

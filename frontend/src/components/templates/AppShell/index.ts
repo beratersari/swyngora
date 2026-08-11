@@ -1,3 +1,3 @@
 export { AppShell } from './AppShell';
 export type { AppShellProps } from './AppShell.types';
-export { BrandLink, NavLink } from './AppShell.styles';
+export { BrandCopy, BrandLink, BrandName, BrandTagline, NavLink } from './AppShell.styles';

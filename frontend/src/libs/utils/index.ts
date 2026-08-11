@@ -86,3 +86,13 @@ export { pumpScanHitsToRows } from './pumpScan';
 export { evaluateAlert, ALERT_KINDS, alertDisplayLabel, ALERT_FIRE_COOLDOWN_MS, parseFiniteNumber } from './alerts';
 export { comparePairKey, parseComparePairsParam, serializeComparePairs, closesToPercentSeries, MAX_COMPARE_PAIRS } from './compareSeries';
 export type { ComparePair } from './compareSeries';
+export {
+  SIGNALS_CONFLUENCE_WINDOW_MS,
+  gradeFromScore,
+  ruleTypeShort,
+  describeRule,
+  buildSwingSetups,
+  countHitsSince,
+  backtestRangeIso,
+} from './swingSetups';
+export type { SwingGrade, SwingSetup } from './swingSetups';

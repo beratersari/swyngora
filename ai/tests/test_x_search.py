@@ -49,6 +49,7 @@ def test_x_search_stocktwits_primary():
     assert "StockTwits" in out
     assert "looking strong" in out
     assert "@trader1" in out
+    assert "https://stocktwits.com/symbol/" in out
     assert "NOT the official X API" in out
     # Must not pretend site:x.com worked
     assert "No indexed X/Twitter results" not in out

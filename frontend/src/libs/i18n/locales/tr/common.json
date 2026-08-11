@@ -7,9 +7,21 @@
     "pumps": "Pump",
     "ai": "AI",
     "alerts": "Uyarılar",
+    "signals": "Sinyaller",
     "compare": "Karşılaştır"
   },
+  "brand": {
+    "tagline": "Piyasa masası"
+  },
+  "search": {
+    "placeholder": "Çifte git…",
+    "aria": "Piyasaya git"
+  },
+  "tape": {
+    "aria": "Hacme göre önde gelen USDT çiftleri"
+  },
   "footer": {
+    "venues": "Binance · Coinbase · Bybit · canlı spot defterler",
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"
   },
   "language": {
@@ -26,7 +38,13 @@
   "status": {
     "updating": "güncelleniyor…",
     "loading": "Yükleniyor…",
-    "pollingPaused": "sekme gizli — yenileme durdu"
+    "pollingPaused": "sekme gizli — yenileme durdu",
+    "connection": {
+      "live": "Canlı",
+      "offline": "API kapalı",
+      "paused": "Duraklatıldı",
+      "loading": "Bağlanıyor"
+    }
   },
   "a11y": {
     "loadingChart": "Grafik yükleniyor",

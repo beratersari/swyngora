@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from swyngora_ai.agents.prompts import ORCHESTRATOR_SYSTEM
 from swyngora_ai.agents.specialists import build_specialist_tools
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.progress import emit, reset_progress, set_progress
+from swyngora_ai.references import extract_references
 
 
 @dataclass
@@ -23,6 +26,7 @@ class ChatResult:
     tools: list[str] = field(default_factory=list)
     thinking: list[str] = field(default_factory=list)
     session_id: str = "default"
+    references: list[dict[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -63,7 +67,7 @@ def _content_text(content: Any) -> str:
     return str(content)
 
 
-def extract_trace(messages: list[BaseMessage]) -> tuple[str, list[str], list[str]]:
+def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list[str]]:
     """Return (final_reply, tools_used, thinking_steps) from agent messages."""
     tools: list[str] = []
     thinking: list[str] = []
@@ -156,8 +160,8 @@ class Orchestrator:
         tools_acc: list[str] = []
         thinking_acc: list[str] = []
 
-        def _cb(ev: dict) -> None:
-            t = (ev.get("type") or "")
+        def _cb(ev: dict[str, Any]) -> None:
+            t = ev.get("type") or ""
             text = (ev.get("text") or "").strip()
             if t in ("tool", "tool_result", "tool_error") and text:
                 tools_acc.append(text)
@@ -171,7 +175,9 @@ class Orchestrator:
             emit("status", "Planning…")
             history = self.memory.get(session_id)
             messages: list[BaseMessage] = list(history) + [HumanMessage(content=user_message)]
-            config = {"recursion_limit": max(24, self.settings.max_agent_iterations * 4)}
+            config: RunnableConfig = {
+                "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
+            }
 
             # invoke is the reliable path for a final answer; progress emits from
             # specialist tools + a lightweight stream-of-updates for live UI only.
@@ -214,12 +220,21 @@ class Orchestrator:
                 if "not financial advice" not in reply.lower():
                     reply = f"{reply}\n\n{self.settings.disclaimer}"
 
+            refs = extract_references(
+                *[
+                    _content_text(getattr(m, "content", ""))
+                    for m in turn_msgs
+                    if isinstance(m, ToolMessage)
+                ],
+                reply,
+            )
             emit("final", reply[:200])
             return ChatResult(
                 reply=reply,
                 tools=tools_acc,
                 thinking=thinking_acc,
                 session_id=session_id,
+                references=[r.as_dict() for r in refs],
             )
         finally:
             reset_progress(token)

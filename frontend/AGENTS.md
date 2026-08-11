@@ -20,7 +20,7 @@ React SPA that talks to the Go backend via **OpenAPI-described HTTP**. Not `simp
 | Server state       | **RTK Query** only for backend REST — lives in **`libs/api`**                                                                   |
 | Types from backend | **Generated** into `libs/api/generated/` from OpenAPI                                                                           |
 | Bundle             | Vite + React + TypeScript                                                                                                       |
-| Design system      | Tokens + Text + Skeleton — `docs/design/frontend-design-system.md`                                                              |
+| Design system      | Tokens + Text + Skeleton + motion — `docs/design/frontend-design-system.md`                                                     |
 | Styling            | **styled-components only** — colocate `*.styles.ts` (no CSS/CSS modules)                                                        |
 | Brand colors       | Green system: `#000F0F` / `#032221` / `#03624C` / `#4FD4A5` / `#00FF81` / `#F1F7F6` + secondary pine–mint + stone/pistachio — see `styles/tokens/colors.ts` |
 | Loading            | All content components support `isLoading` → Skeleton                                                                           |

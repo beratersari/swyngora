@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 from langchain_core.tools import StructuredTool
@@ -357,8 +357,12 @@ class PortfolioCashListInput(BaseModel):
 
 class RiskLimitsSetInput(BaseModel):
     client_id: str
-    max_daily_loss_pct: float = Field(default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables")
-    max_asset_weight_pct: float = Field(default=0, description="e.g. 30 = max one coin % of equity; 0 disables")
+    max_daily_loss_pct: float = Field(
+        default=0, description="e.g. 5 = stop new risk at 5% daily MTM loss; 0 disables"
+    )
+    max_asset_weight_pct: float = Field(
+        default=0, description="e.g. 30 = max one coin % of equity; 0 disables"
+    )
 
 
 class PortfolioOrderInput(BaseModel):
@@ -768,7 +772,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         )
 
     def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
-        params: dict = {"clientId": client_id}
+        params: dict[str, Any] = {"clientId": client_id}
         if owner_client_id:
             params["ownerClientId"] = owner_client_id
         return http.get("/api/v1/watchlist", params)
@@ -780,7 +784,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         note: str = "",
         owner_client_id: str = "",
     ) -> str:
-        body: dict = {
+        body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "exchange": exchange,
@@ -796,7 +800,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         exchange: str = "binance",
         owner_client_id: str = "",
     ) -> str:
-        params: dict = {
+        params: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "exchange": exchange,
@@ -848,7 +852,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         format: str = "json",
         sections: str = "",
     ) -> str:
-        body: dict = {"clientId": client_id, "format": format or "json"}
+        body: dict[str, Any] = {"clientId": client_id, "format": format or "json"}
         if sections:
             body["sections"] = [s.strip() for s in sections.split(",") if s.strip()]
         return http.post("/api/v1/export", body)
@@ -1371,8 +1375,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
 
     def close_margin_position(
         client_id: str, position_id: str, quantity: float = 0, idempotency_key: str = ""
-    ) -> str:
-        body: dict[str, Any] = {}
+    ) -> str:        body: dict[str, Any] = {}
         if quantity > 0:
             body["quantity"] = quantity
         if idempotency_key:

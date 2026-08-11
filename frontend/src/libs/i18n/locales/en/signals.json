@@ -1,0 +1,103 @@
+{
+  "title": "Swing signals",
+  "eyebrow": "Watchlist scanner",
+  "subtitle": "Confluence setups from RSI, EMA crossover, and volume on your watchlist. Informational only — not financial advice.",
+  "disclaimer": "Setups are mechanical rule hits, not trade orders. Prefer 2–3 agreeing factors and confirm on the chart. Live scanner may evaluate a forming bar.",
+  "loadFailed": "Could not load signals",
+  "resource": "scanner",
+  "openChart": "Open chart",
+  "symbol": "Symbol",
+  "exchange": "Exchange",
+  "interval": "Interval",
+  "factor": "Factor",
+  "summary": "Summary",
+  "matchedAt": "Matched",
+  "actions": "Actions",
+  "watchlistEmptyTitle": "Watchlist is empty",
+  "watchlistEmptyBody": "The scanner only evaluates coins on your watchlist. Add pairs first:",
+  "metrics": {
+    "rules": "Active rules",
+    "hits24h": "Hits · 24h",
+    "setups": "Confluence setups",
+    "backtests": "Backtests running"
+  },
+  "tabs": {
+    "setups": "Setups",
+    "hits": "Hits",
+    "rules": "Rules",
+    "lab": "Lab"
+  },
+  "setups": {
+    "empty": "No confluence yet. Add the 4h swing stack and wait for the next closed bars.",
+    "hint": "A setup needs at least two of trend (EMA), momentum (RSI), and volume in the last 24h. Grade A is 3/3.",
+    "grade": "Grade {{grade}} · {{score}}/3",
+    "sameBar": "Same bar",
+    "window": "24h window"
+  },
+  "hits": {
+    "empty": "No scanner hits yet. Rules run about once a minute against your watchlist."
+  },
+  "types": {
+    "rsi": "RSI threshold",
+    "ma_crossover": "EMA crossover",
+    "volume_increase": "Volume increase"
+  },
+  "rules": {
+    "createTitle": "New rule",
+    "createHint": "Single-factor rules feed the confluence grid. Stack trend + momentum + volume for swing setups.",
+    "create": "Create rule",
+    "createSuccess": "Rule created",
+    "createFailed": "Could not create rule",
+    "listTitle": "Your rules",
+    "type": "Type",
+    "params": "Parameters",
+    "enabled": "Enabled",
+    "on": "On",
+    "off": "Off",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this rule and its saved hits?",
+    "deleteSuccess": "Rule deleted",
+    "empty": "No rules yet. Create one or add the 4h swing stack.",
+    "addStack": "Add 4h swing stack",
+    "stackSuccess": "Added 4h RSI + EMA + volume stack",
+    "rsiPeriod": "RSI period",
+    "rsiCondition": "Condition",
+    "rsiThreshold": "Threshold",
+    "below": "Below",
+    "above": "Above",
+    "maFast": "Fast EMA",
+    "maSlow": "Slow EMA",
+    "maDirection": "Direction",
+    "goldenCross": "Golden cross",
+    "deathCross": "Death cross",
+    "volLookback": "Lookback bars",
+    "volRatio": "Min volume ×"
+  },
+  "lab": {
+    "title": "Historical lab",
+    "hint": "Replay a saved rule on one symbol. Forward returns are calendar-day close-to-close when data exists.",
+    "rule": "Rule",
+    "pickRule": "Select a rule",
+    "range": "Range",
+    "start": "Run backtest",
+    "startSuccess": "Backtest started",
+    "startFailed": "Could not start backtest",
+    "status": "Status",
+    "progress": "Progress",
+    "signals": "Signals",
+    "view": "View",
+    "empty": "No backtests yet",
+    "noSignals": "No historical hits in this range",
+    "signalAt": "Signal time",
+    "close": "Close",
+    "ret1d": "+1d",
+    "ret5d": "+5d",
+    "ret20d": "+20d",
+    "ranges": {
+      "30d": "30 days",
+      "90d": "90 days",
+      "180d": "180 days",
+      "365d": "365 days"
+    }
+  }
+}

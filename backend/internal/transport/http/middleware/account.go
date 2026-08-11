@@ -18,6 +18,8 @@ func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 			// Always allow health, market public data, reopen + status.
+			// /mcp is skipped here: tools send clientId in the JSON body, not headers.
+			// In-process MCP enforces RequireActive when clientId is present (see transport/mcp).
 			if path == "/health" || strings.HasPrefix(path, "/api/v1/market/") ||
 				path == "/mcp" || strings.HasPrefix(path, "/mcp/") {
 				next.ServeHTTP(w, r)

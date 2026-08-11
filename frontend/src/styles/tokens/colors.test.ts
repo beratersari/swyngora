@@ -20,9 +20,10 @@ describe('semanticColors role rules', () => {
     expect(semanticColors.border.focus).toBe(palette.caribbeanGreen);
   });
 
-  it('uses pistachio for secondary text readability', () => {
+  it('uses pistachio/sage for readable muted text (not stone)', () => {
     expect(semanticColors.text.secondary).toBe(palette.pistachio);
-    expect(semanticColors.text.tertiary).toBe(palette.stone);
+    expect(semanticColors.text.tertiary).toBe(palette.sage);
+    expect(semanticColors.text.tertiary).not.toBe(palette.stone);
   });
 
   it('maps surface hierarchy', () => {

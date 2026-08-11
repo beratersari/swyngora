@@ -1,7 +1,6 @@
 import json
 
 import httpx
-import pytest
 
 from swyngora_ai.config import Settings
 from swyngora_ai.tools.market_http import build_market_tools

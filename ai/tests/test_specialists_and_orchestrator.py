@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_core.tools import StructuredTool
 
 from swyngora_ai.agents.specialists import build_specialist_tools
 from swyngora_ai.config import Settings
@@ -27,7 +26,7 @@ class ScriptedModel(BaseChatModel):
     def _generate(
         self,
         messages: list[Any],
-        stop: Optional[list[str]] = None,
+        stop: list[str] | None = None,
         run_manager: Any = None,
         **kwargs: Any,
     ) -> ChatResult:
@@ -38,7 +37,7 @@ class ScriptedModel(BaseChatModel):
             self._i += 1
         return ChatResult(generations=[ChatGeneration(message=msg)])
 
-    def bind_tools(self, tools: Any, **kwargs: Any) -> "ScriptedModel":
+    def bind_tools(self, tools: Any, **kwargs: Any) -> ScriptedModel:
         # Return self so create_react_agent can bind tools without changing behaviour.
         return self
 
@@ -65,17 +64,21 @@ def test_orchestrator_chat_with_scripted_model():
     assert out.reply
     assert isinstance(out.tools, list)
     assert isinstance(out.thinking, list)
+    assert isinstance(out.references, list)
 
 
 def test_extract_trace_tools():
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
     from swyngora_ai.graph.orchestrator import extract_trace
 
     msgs = [
         HumanMessage(content="q"),
         AIMessage(
             content="I'll check market data",
-            tool_calls=[{"name": "market_agent", "args": {"task": "JUV"}, "id": "1", "type": "tool_call"}],
+            tool_calls=[
+                {"name": "market_agent", "args": {"task": "JUV"}, "id": "1", "type": "tool_call"}
+            ],
         ),
         ToolMessage(content='{"lastPrice":"1"}', name="market_agent", tool_call_id="1"),
         AIMessage(content="JUV looks quiet."),
@@ -88,7 +91,7 @@ def test_extract_trace_tools():
 
 def test_session_memory():
     mem = SessionMemory(max_messages=4)
-    from langchain_core.messages import HumanMessage, AIMessage
+    from langchain_core.messages import AIMessage, HumanMessage
 
     mem.append("s", [HumanMessage(content="a"), AIMessage(content="b")])
     mem.append("s", [HumanMessage(content="c"), AIMessage(content="d")])

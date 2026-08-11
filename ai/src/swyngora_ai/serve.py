@@ -25,7 +25,7 @@ _orch: Orchestrator | None = None
 
 
 def get_orch() -> Orchestrator:
-    global _orch
+    global _orch  # noqa: PLW0603 — process-wide HTTP singleton
     if _orch is None:
         _orch = build_orchestrator()
     return _orch
@@ -34,8 +34,8 @@ def get_orch() -> Orchestrator:
 class Handler(BaseHTTPRequestHandler):
     server_version = "SwyngoraAI/0.1"
 
-    def log_message(self, fmt: str, *args: Any) -> None:
-        sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
+    def log_message(self, format: str, *args: Any) -> None:
+        sys.stderr.write(f"{self.address_string()} - {format % args}\n")
 
     def _read_json(self) -> dict[str, Any] | None:
         length = int(self.headers.get("Content-Length") or "0")
@@ -88,6 +88,7 @@ class Handler(BaseHTTPRequestHandler):
                     "sessionId": result.session_id,
                     "tools": result.tools,
                     "thinking": result.thinking,
+                    "references": result.references,
                 },
             )
         except Exception as e:  # noqa: BLE001
@@ -110,6 +111,7 @@ class Handler(BaseHTTPRequestHandler):
                         "reply": result.reply,
                         "tools": result.tools,
                         "thinking": result.thinking,
+                        "references": result.references,
                         "sessionId": result.session_id,
                     }
                 )
@@ -161,8 +163,16 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"failed to start orchestrator: {e}", file=sys.stderr)
         return 1
+    from swyngora_ai.config import get_settings
+
+    cfg = get_settings()
+    model = cfg.grok_model if cfg.llm_provider == "grok" else cfg.ollama_model
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"swyngora-ai listening on http://{args.host}:{args.port}", flush=True)
+    print(
+        f"swyngora-ai listening on http://{args.host}:{args.port} "
+        f"provider={cfg.llm_provider} model={model}",
+        flush=True,
+    )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -1,5 +1,6 @@
 {
   "title": "Uyarılar",
+  "eyebrow": "Fiyat tetikleri",
   "subtitle": "Fiyat ve 24s değişim eşikleri. Bu sekme açıkken değerlendirilir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
   "createTitle": "Uyarı oluştur",
   "createHint": "Koşul sağlandığında tetiklenir (kısa bekleme süresi). Masaüstü bildirimleri için tarayıcı izni verin.",

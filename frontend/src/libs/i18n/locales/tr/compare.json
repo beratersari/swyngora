@@ -1,5 +1,6 @@
 {
   "title": "Karşılaştır",
+  "eyebrow": "Göreli performans",
   "subtitle": "En fazla {{max}} çifti ilk bardan % değişim olarak üst üste bindirin. Yalnızca bilgilendirme.",
   "exchange": "Borsa",
   "symbol": "Sembol",

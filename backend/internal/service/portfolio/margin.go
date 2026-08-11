@@ -15,16 +15,16 @@ import (
 
 // MarginOrderInput opens a leveraged long/short via market or limit.
 type MarginOrderInput struct {
-	ClientID      string
-	PortfolioID   string
-	OwnerClientID string
-	Exchange      string
-	Symbol     string
-	Side       string // long | short
-	Type       string // market | limit
-	Quantity   float64
-	Leverage   int
-	LimitPrice float64  // required for limit
+	ClientID       string
+	PortfolioID    string
+	OwnerClientID  string
+	Exchange       string
+	Symbol         string
+	Side           string // long | short
+	Type           string // market | limit
+	Quantity       float64
+	Leverage       int
+	LimitPrice     float64  // required for limit
 	StopLoss       *float64 // optional
 	TakeProfit     *float64 // optional
 	IdempotencyKey string
@@ -36,7 +36,7 @@ type MarginAdjustInput struct {
 	PortfolioID   string
 	OwnerClientID string
 	PositionID    string
-	Delta      float64 // >0 add from cash; <0 return to cash
+	Delta         float64 // >0 add from cash; <0 return to cash
 }
 
 // SetMarginModeInput changes account-wide margin mode.
@@ -53,14 +53,14 @@ type MarginRepayInput struct {
 	PortfolioID   string
 	OwnerClientID string
 	PositionID    string
-	Amount     float64
+	Amount        float64
 }
 
 // MarginCloseInput closes all or part of a margin position at market.
 type MarginCloseInput struct {
-	ClientID      string
-	PortfolioID   string
-	OwnerClientID string
+	ClientID       string
+	PortfolioID    string
+	OwnerClientID  string
 	PositionID     string
 	Quantity       float64 // 0 = full close
 	IdempotencyKey string
@@ -144,6 +144,8 @@ func (s *Service) SetMarginMode(ctx context.Context, in SetMarginModeInput) (*do
 		return nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	mode, err := domain.NormalizeMarginMode(in.Mode)
 	if err != nil {
 		return nil, err
@@ -179,6 +181,8 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 		return nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Delta == 0 || math.IsNaN(in.Delta) || math.IsInf(in.Delta, 0) {
 		return nil, fmt.Errorf("%w: delta must be a non-zero number", domain.ErrInvalidArgument)
 	}
@@ -254,6 +258,8 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 		return nil, nil, err
 	}
 	clientID := book.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Amount <= 0 || math.IsNaN(in.Amount) || math.IsInf(in.Amount, 0) {
 		return nil, nil, fmt.Errorf("%w: amount must be positive", domain.ErrInvalidArgument)
 	}
@@ -488,6 +494,8 @@ func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *doma
 // Concurrent user close/repay is safe: already-closed → no-op; debt/qty CAS + retries on conflict.
 // Returns true only when this call successfully applied a liquidation close trade.
 func (s *Service) tryLiquidateIfBreached(ctx context.Context, clientID, positionID string, now time.Time) (bool, error) {
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	cur, err := s.store.GetMarginPosition(ctx, clientID, positionID)
 	if err != nil {
 		if errors.Is(err, domain.ErrNotFound) {
@@ -559,6 +567,8 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	side, err := domain.NormalizeMarginSide(in.Side)
 	if err != nil {
 		return nil, nil, err
@@ -799,6 +809,8 @@ func (s *Service) CloseMarginPosition(ctx context.Context, in MarginCloseInput) 
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id := strings.TrimSpace(in.PositionID)
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: position id is required", domain.ErrInvalidArgument)
@@ -916,6 +928,8 @@ func (s *Service) CancelMarginOrder(ctx context.Context, clientID, id string, po
 		return nil, err
 	}
 	clientID = p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
@@ -997,14 +1011,20 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 		}
 		// Stop loss
 		if domain.ShouldTriggerStopLoss(pos.Side, mark, pos.StopLoss) {
-			if _, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseStopLoss); e == nil {
+			unlock := s.lockClient(pos.ClientID)
+			_, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseStopLoss)
+			unlock()
+			if e == nil {
 				stopped++
 			}
 			continue
 		}
 		// Take profit
 		if domain.ShouldTriggerTakeProfit(pos.Side, mark, pos.TakeProfit) {
-			if _, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseTakeProfit); e == nil {
+			unlock := s.lockClient(pos.ClientID)
+			_, _, e := s.closeMarginAt(ctx, &pos, pos.Quantity, mark, domain.MarginCloseTakeProfit)
+			unlock()
+			if e == nil {
 				stopped++
 			}
 		}
@@ -1121,6 +1141,8 @@ func pickWorstCrossPosition(list []domain.MarginPosition) *domain.MarginPosition
 // (partial close when the account is slightly under). After each successful close it reloads
 // cash, remaining sizes, and marks — never batch-closes on a stale snapshot.
 func (s *Service) liquidateCrossIfUnderMaint(ctx context.Context, clientID string, now time.Time) (int, error) {
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	n := 0
 	// Bound rounds: partials may take more than one step per position.
 	maxRounds := domain.MaxOpenMarginPositions*3 + 5
@@ -1180,6 +1202,8 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	if o == nil || o.Status != domain.MarginOrderOpen {
 		return false
 	}
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
 	last, err := s.lastPrice(ctx, string(o.Exchange), o.Symbol)
 	if err != nil || last <= 0 {
 		return false

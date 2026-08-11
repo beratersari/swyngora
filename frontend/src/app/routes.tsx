@@ -5,6 +5,7 @@ import { CoinDetailPage } from '@/components/pages/CoinDetailPage';
 import { ComparePage } from '@/components/pages/ComparePage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
+import { SignalsPage } from '@/components/pages/SignalsPage';
 import { WatchlistPage } from '@/components/pages/WatchlistPage';
 
 export function AppRoutes() {
@@ -14,6 +15,7 @@ export function AppRoutes() {
       <Route path="/markets" element={<MarketsPage />} />
       <Route path="/markets/:exchange/:symbol" element={<CoinDetailPage />} />
       <Route path="/watchlist" element={<WatchlistPage />} />
+      <Route path="/signals" element={<SignalsPage />} />
       <Route path="/pumps" element={<PumpsPage />} />
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/compare" element={<ComparePage />} />

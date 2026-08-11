@@ -54,6 +54,53 @@ describe('AiChatPage', () => {
     expect(await screen.findByText('What is BTC RSI?')).toBeInTheDocument();
     expect(await screen.findByText('BTC looks interesting on the 1h.')).toBeInTheDocument();
     expect(screen.getByText('market_agent')).toBeInTheDocument();
+    expect(screen.queryByText(/get_indicators →/)).not.toBeInTheDocument();
+  });
+
+  it('renders markdown reply and collapses long traces', async () => {
+    const user = userEvent.setup();
+    postChat.mockResolvedValue({
+      reply: '**BTCUSDT 1h RSI (14):** 59.32\n\n- Neutral zone',
+      sessionId: 'web-ai-test',
+      tools: [
+        'market_agent(task=Get current BTCUSDT 1h RSI)',
+        '↳ get_indicators → { "latest": { "rsi": 59.32 } }',
+      ],
+      thinking: ['Planning…', 'Orchestrator running…', 'Running market_agent…'],
+    });
+
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await user.type(screen.getByRole('textbox'), 'rsi?');
+    await user.click(screen.getByRole('button', { name: /send|gönder/i }));
+
+    expect(await screen.findByText('59.32')).toBeInTheDocument();
+    expect(screen.getByText('Neutral zone')).toBeInTheDocument();
+    expect(screen.getByText(/Thinking · 3/i)).toBeInTheDocument();
+    expect(screen.queryByText(/"latest"/)).not.toBeInTheDocument();
+    expect(screen.getByText('market_agent')).toBeInTheDocument();
+    expect(screen.getByText('get_indicators')).toBeInTheDocument();
+  });
+
+  it('shows clickable source URLs from research', async () => {
+    const user = userEvent.setup();
+    postChat.mockResolvedValue({
+      reply: 'BTC near 65k. Not financial advice.',
+      sessionId: 'web-ai-test',
+      tools: ['web_agent'],
+      thinking: ['research'],
+      references: [
+        {
+          title: 'Bitcoin price',
+          url: 'https://coinmarketcap.com/currencies/bitcoin/',
+          source: 'web',
+        },
+      ],
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await user.type(screen.getByRole('textbox'), 'btc news');
+    await user.click(screen.getByRole('button', { name: /send|gönder/i }));
+    const link = await screen.findByRole('link', { name: /bitcoin price/i });
+    expect(link).toHaveAttribute('href', 'https://coinmarketcap.com/currencies/bitcoin/');
   });
 
   it('shows error bubble when the API fails', async () => {

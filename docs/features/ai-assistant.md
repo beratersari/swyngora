@@ -30,6 +30,7 @@ User → Orchestrator (LangGraph create_react_agent)
 - Paper sell realized PnL uses tax lots (`list_portfolio_lots`, `lotMethod` fifo|lifo) after the sell fee; buy lot cost includes the buy fee. Per-exchange rates: `get_paper_trading_costs`.
 - Live UI updates use the backend WebSocket (`realtime_stream_info` / `GET /api/v1/realtime`); tools remain request/response.
 - Social/X results are labeled weak and incomplete.
+- Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
 - Session memory is in-process (not durable across restarts).
 
@@ -40,7 +41,7 @@ User → Orchestrator (LangGraph create_react_agent)
 cd backend && go run ./cmd/server
 
 # AI CLI (separate process — needs LLM)
-cd ai && pip install -e ".[dev]"
+cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
 export SWYNGORA_API_URL=http://localhost:8080
 swyngora-ai "BTC RSI on binance 1h and recent news"
@@ -50,7 +51,12 @@ swyngora-ai "BTC RSI on binance 1h and recent news"
 
 ```bash
 cd backend && go test ./internal/transport/mcp/...
-cd ai && pytest -q
+
+cd ai
+source .venv/bin/activate   # after uv sync
+pytest -q
+ruff check . && ruff format --check .
+ty check
 ```
 
 ## Market / watchlist tools
@@ -74,6 +80,8 @@ Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_dif
 - X agent is not official X API
 - Telegram AI mode (`/ask`) not wired yet
 - Streaming UI not shipped
+- Web research prefers Wikipedia, Google News RSS, CoinGecko, and Hacker News (free). DuckDuckGo is optional and often times out.
+- X is StockTwits/HN proxies, not the official API
 
 ## Mobile client
 

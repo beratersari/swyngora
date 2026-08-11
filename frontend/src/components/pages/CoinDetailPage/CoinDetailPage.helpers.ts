@@ -1,5 +1,6 @@
 import type { CandleChartMarker } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
-import type { PumpEventDto } from '@/libs/api';
+import type { PumpEventDto, ScannerResult } from '@/libs/api';
+import { ruleTypeShort } from '@/libs/utils';
 import { palette, semanticColors } from '@/styles/tokens';
 
 /**
@@ -66,4 +67,64 @@ export function pumpEventsToChartMarkers(
     return rb - ra;
   });
   return out;
+}
+
+/**
+ * Map scanner hits for this venue/symbol → circle markers (UTC seconds).
+ */
+export function scannerResultsToChartMarkers(
+  results: readonly ScannerResult[] | undefined,
+  exchange: string,
+  symbol: string,
+): CandleChartMarker[] {
+  if (!results?.length) return [];
+  const ex = exchange.trim().toLowerCase();
+  const sym = symbol.trim().toUpperCase();
+  const byTime = new Map<number, string[]>();
+  for (const r of results) {
+    if ((r.exchange ?? '').toLowerCase() !== ex) continue;
+    if ((r.symbol ?? '').toUpperCase() !== sym) continue;
+    const ms = Date.parse(r.marketDataKey || r.matchedAt || '');
+    if (!Number.isFinite(ms)) continue;
+    const t = Math.floor(ms / 1000);
+    const labels = byTime.get(t) ?? [];
+    const tag = ruleTypeShort(r.ruleType);
+    if (!labels.includes(tag)) labels.push(tag);
+    byTime.set(t, labels);
+  }
+  const out: CandleChartMarker[] = [];
+  for (const [time, labels] of byTime) {
+    out.push({
+      time,
+      position: 'aboveBar',
+      color: palette.caribbeanGreen,
+      shape: 'circle',
+      text: labels.join('·'),
+    });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+/** Merge pump arrows and scanner circles; same bar keeps pump shape and appends labels. */
+export function mergeChartMarkers(
+  pumps: readonly CandleChartMarker[],
+  signals: readonly CandleChartMarker[],
+): CandleChartMarker[] {
+  const byTime = new Map<number, CandleChartMarker>();
+  for (const m of pumps) {
+    byTime.set(m.time, { ...m });
+  }
+  for (const m of signals) {
+    const prev = byTime.get(m.time);
+    if (!prev) {
+      byTime.set(m.time, { ...m });
+      continue;
+    }
+    const extra = (m.text ?? '').trim();
+    if (!extra) continue;
+    const base = (prev.text ?? '').trim();
+    if (base.includes(extra)) continue;
+    byTime.set(m.time, { ...prev, text: base ? `${base} · ${extra}` : extra });
+  }
+  return [...byTime.values()].sort((a, b) => a.time - b.time);
 }

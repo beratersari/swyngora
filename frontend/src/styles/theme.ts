@@ -7,6 +7,7 @@ import {
   typeScale,
   spacing,
   radii,
+  motion,
 } from '@/styles/tokens';
 
 /** App theme for styled-components ThemeProvider */
@@ -19,6 +20,7 @@ export const appTheme = {
   typeScale,
   spacing,
   radii,
+  motion,
 } as const;
 
 export type AppTheme = typeof appTheme;

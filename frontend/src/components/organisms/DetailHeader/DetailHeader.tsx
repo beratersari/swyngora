@@ -1,9 +1,10 @@
-import { Button, Tag } from 'antd';
-import { StarFilled, StarOutlined } from '@ant-design/icons';
+import { Button } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
+import { FlashValue } from '@/components/molecules/FlashValue';
+import { WatchStar } from '@/components/molecules/WatchStar';
 import {
   changeTone,
   formatChangePercent,
@@ -34,9 +35,10 @@ export function DetailHeader({
   watchLoading = false,
   alertTo,
   compareTo,
+  signalsTo,
   delistTime,
 }: DetailHeaderProps) {
-  const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets']);
+  const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets', 'signals']);
   const delistLabel = formatDelistDate(delistTime);
 
   return (
@@ -48,20 +50,19 @@ export function DetailHeader({
             <Text variant="h2" color="primary" mono isLoading={isLoading} skeletonWidth={140}>
               {formatSymbolDisplay(symbol)}
             </Text>
-            <Tag color="processing">{exchange}</Tag>
+            <BrandTag variant="exchange">{exchange}</BrandTag>
             {delistLabel ? (
               <BrandTag variant="delist">
                 {t('markets:table.delistTag', { date: delistLabel })}
               </BrandTag>
             ) : null}
             {onToggleWatch ? (
-              <Button
-                type="text"
-                size="small"
+              <WatchStar
+                watched={watched}
                 loading={watchLoading}
-                icon={watched ? <StarFilled /> : <StarOutlined />}
+                addLabel={t('watchlist:add')}
+                removeLabel={t('watchlist:remove')}
                 onClick={onToggleWatch}
-                aria-label={watched ? t('watchlist:remove') : t('watchlist:add')}
               />
             ) : null}
             {alertTo ? (
@@ -78,6 +79,13 @@ export function DetailHeader({
                 </Button>
               </Link>
             ) : null}
+            {signalsTo ? (
+              <Link to={signalsTo}>
+                <Button size="small" type="link">
+                  {t('signals:title')}
+                </Button>
+              </Link>
+            ) : null}
             {assetName ? (
               <Text variant="body" color="secondary">
                 {assetName}
@@ -86,18 +94,22 @@ export function DetailHeader({
           </TitleRow>
         </TitleBlock>
         <PriceBlock>
-          <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={120}>
-            {formatPrice(lastPrice)}
-          </Text>
-          <Text
-            variant="label"
-            color={changeTone(priceChangePercent)}
-            mono
-            isLoading={isLoading}
-            skeletonWidth={72}
-          >
-            {formatChangePercent(priceChangePercent)}
-          </Text>
+          <FlashValue value={lastPrice}>
+            <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={120}>
+              {formatPrice(lastPrice)}
+            </Text>
+          </FlashValue>
+          <FlashValue value={priceChangePercent}>
+            <Text
+              variant="label"
+              color={changeTone(priceChangePercent)}
+              mono
+              isLoading={isLoading}
+              skeletonWidth={72}
+            >
+              {formatChangePercent(priceChangePercent)}
+            </Text>
+          </FlashValue>
         </PriceBlock>
       </TopRow>
     </HeaderCard>

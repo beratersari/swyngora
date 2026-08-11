@@ -280,7 +280,7 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 		return
 	}
 
-	final := FormatAIAnswer(res.Reply, res.Thinking, finalTools)
+	final := FormatAIAnswer(res.Reply, res.Thinking, finalTools) + FormatAIReferences(toRefLinks(res.References))
 	b.deliverAIMessage(ctx, chatID, progressID, final)
 }
 

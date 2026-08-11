@@ -113,3 +113,27 @@ export type {
   PortfolioShare,
   SharedPortfolioSummary,
 } from './endpoints/portfolioApi';
+
+export {
+  useListScannerRulesQuery,
+  useCreateScannerRuleMutation,
+  useDeleteScannerRuleMutation,
+  useListScannerResultsQuery,
+  useListScannerBacktestsQuery,
+  useStartScannerBacktestMutation,
+  useGetScannerBacktestQuery,
+  useCancelScannerBacktestMutation,
+  useListScannerBacktestSignalsQuery,
+} from './endpoints/scannerApi';
+export type {
+  CreateScannerRuleArg,
+  ScannerBacktest,
+  ScannerBacktestSignal,
+  ScannerBacktestStatus,
+  ScannerMaDirection,
+  ScannerResult,
+  ScannerRsiCondition,
+  ScannerRule,
+  ScannerRuleType,
+  StartScannerBacktestArg,
+} from './endpoints/scannerApi';

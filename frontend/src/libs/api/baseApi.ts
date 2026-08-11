@@ -27,6 +27,9 @@ export const baseApi = createApi({
     'Pump',
     'Portfolio',
     'AccountAPIKey',
+    'ScannerRule',
+    'ScannerResult',
+    'ScannerBacktest',
   ],
   endpoints: () => ({}),
 });

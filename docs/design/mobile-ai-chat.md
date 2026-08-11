@@ -118,7 +118,7 @@ Navigation: add `AskTab` to `MainTabParamList` alongside Home / Markets / Favori
 cd backend && go run ./cmd/server   # :8080
 
 # terminal 2 — AI (or AI_AUTOSTART=true + AI_PYTHON)
-cd ai && pip install -e ".[dev]"
+cd ai && uv sync
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
 # start serve process per ai README (port 8090)
 

@@ -2,6 +2,7 @@ import { Alert, Button, message } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { MetricColumnPicker } from '@/components/molecules/MetricColumnPicker';
 import { SpotMetricValue } from '@/components/molecules/SpotMetricValue';
 import { WatchlistTable } from '@/components/organisms/WatchlistTable';
@@ -12,7 +13,7 @@ import {
 } from '@/libs/api';
 import { useSpotMetricColumns, useWatchlistSpot } from '@/libs/hooks';
 import { metricColumnTitle, type SpotMetricDef } from '@/libs/utils';
-import { PageIntro, PageStack, ToolbarRow } from './WatchlistPage.styles';
+import { PageStack, ToolbarRow } from './WatchlistPage.styles';
 
 /** Page-owned live metric cell — RTK stays out of organisms. */
 function WatchlistLiveMetric({
@@ -49,14 +50,11 @@ export function WatchlistPage() {
 
   return (
     <PageStack>
-      <PageIntro>
-        <Text variant="h2" color="primary">
-          {t('watchlist:title')}
-        </Text>
-        <Text variant="body" color="secondary">
-          {t('watchlist:subtitle')}
-        </Text>
-      </PageIntro>
+      <PageHeader
+        eyebrow={t('watchlist:eyebrow')}
+        title={t('watchlist:title')}
+        subtitle={t('watchlist:subtitle')}
+      />
 
       {wl.isError ? (
         <Alert

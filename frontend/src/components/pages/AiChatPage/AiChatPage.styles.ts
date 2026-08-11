@@ -24,7 +24,7 @@ export const Thread = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[3]}px;
   min-height: 280px;
-  max-height: min(55vh, 520px);
+  max-height: min(62vh, 640px);
   overflow-y: auto;
   padding: ${({ theme }) => theme.spacing[3]}px;
   border-radius: ${({ theme }) => theme.radii.lg}px;
@@ -41,9 +41,8 @@ export const Bubble = styled.div<{ $role: 'user' | 'assistant' | 'system'; $erro
   max-width: min(720px, 92%);
   padding: ${({ theme }) => `${theme.spacing[3]}px ${theme.spacing[4]}px`};
   border-radius: ${({ theme }) => theme.radii.md}px;
-  white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.5;
+  line-height: 1.55;
   border: 1px solid
     ${({ theme, $error, $role }) =>
       $error
@@ -63,6 +62,95 @@ export const Bubble = styled.div<{ $role: 'user' | 'assistant' | 'system'; $erro
   & [data-text-role='body'] {
     color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
   }
+`;
+
+export const UserBody = styled.div`
+  white-space: pre-wrap;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+`;
+
+export const MdStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.65em;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+`;
+
+export const MdP = styled.p`
+  margin: 0;
+`;
+
+export const MdList = styled.ul`
+  margin: 0;
+  padding-left: 1.2em;
+`;
+
+export const MdOl = styled.ol`
+  margin: 0;
+  padding-left: 1.2em;
+`;
+
+export const MdPre = styled.pre`
+  margin: 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  background: ${({ theme }) => theme.palette.richBlack};
+  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+`;
+
+export const MdStrong = styled.strong`
+  font-weight: 700;
+  color: ${({ theme }) => theme.palette.antiFlashWhite};
+`;
+
+export const MdCode = styled.code`
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 0.92em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: ${({ theme }) => theme.palette.pine};
+`;
+
+export const TraceDetails = styled.details`
+  margin-top: ${({ theme }) => theme.spacing[3]}px;
+  padding-top: ${({ theme }) => theme.spacing[2]}px;
+  border-top: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+
+  summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: ${({ theme }) => theme.palette.pistachio};
+    list-style: none;
+  }
+
+  summary::-webkit-details-marker {
+    display: none;
+  }
+
+  summary::before {
+    content: '▸ ';
+    color: ${({ theme }) => theme.palette.mountainMeadow};
+  }
+
+  &[open] summary::before {
+    content: '▾ ';
+  }
+`;
+
+export const TraceList = styled.ol`
+  margin: ${({ theme }) => theme.spacing[2]}px 0 0;
+  padding-left: 1.2em;
+  color: ${({ theme }) => theme.palette.pistachio};
+  font-size: 12px;
+  line-height: 1.45;
 `;
 
 export const MetaRow = styled.div`
@@ -150,14 +238,16 @@ export const DisclaimerBody = styled.div`
 export const MetaChip = styled.span<{ $kind?: 'tool' | 'thinking' }>`
   display: inline-flex;
   align-items: center;
-  max-width: 100%;
-  padding: 4px 12px;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 10px;
   border-radius: ${({ theme }) => theme.radii.pill}px;
   font-family: ${({ theme }) => theme.fontFamilies.mono};
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
-  word-break: break-all;
   color: ${({ theme, $kind }) =>
     $kind === 'thinking' ? theme.palette.pistachio : theme.palette.antiFlashWhite};
   background: ${({ theme, $kind }) =>
@@ -165,6 +255,45 @@ export const MetaChip = styled.span<{ $kind?: 'tool' | 'thinking' }>`
   border: 1px solid
     ${({ theme, $kind }) =>
       $kind === 'thinking' ? theme.palette.frog : theme.palette.mountainMeadow};
+`;
+
+export const RefList = styled.ol`
+  margin: ${({ theme }) => theme.spacing[2]}px 0 0;
+  padding: 0;
+  width: 100%;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+export const RefItem = styled.li`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  background: ${({ theme }) => theme.palette.richBlack};
+`;
+
+export const RefLink = styled.a`
+  color: ${({ theme }) => theme.palette.mint} !important;
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-word;
+
+  &:hover {
+    color: ${({ theme }) => theme.palette.caribbeanGreen} !important;
+    text-decoration: underline;
+  }
+`;
+
+export const RefUrl = styled.span`
+  font-family: ${({ theme }) => theme.fontFamilies.mono};
+  font-size: 11px;
+  color: ${({ theme }) => theme.palette.pistachio};
+  word-break: break-all;
 `;
 
 export const MetaLabel = styled.span`

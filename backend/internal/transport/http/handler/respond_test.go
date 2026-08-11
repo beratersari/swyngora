@@ -25,6 +25,7 @@ func TestWriteError_Mapping(t *testing.T) {
 		{fmt.Errorf("%w: x", domain.ErrNotFound), http.StatusNotFound, "not_found", "not found"},
 		{fmt.Errorf("%w: binance 429", domain.ErrRateLimited), http.StatusTooManyRequests, "rate_limited", "try again"},
 		{fmt.Errorf("%w: request failed: dial tcp secret", domain.ErrUpstream), http.StatusBadGateway, "upstream_error", "unavailable"},
+		{fmt.Errorf("%w: AI service unreachable at http://127.0.0.1:8090", domain.ErrUpstream), http.StatusBadGateway, "ai_unavailable", "Ollama"},
 		{errors.New("boom internal stack"), http.StatusInternalServerError, "internal_error", "internal error"},
 		{context.Canceled, http.StatusBadRequest, "canceled", "canceled"},
 		{context.DeadlineExceeded, http.StatusGatewayTimeout, "timeout", "timed out"},

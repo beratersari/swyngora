@@ -26,6 +26,9 @@ func TestClient_Chat(t *testing.T) {
 			"sessionId": req.SessionID,
 			"tools":     []string{"t1"},
 			"thinking":  []string{"think"},
+			"references": []map[string]string{
+				{"title": "Bitcoin", "url": "https://coinmarketcap.com/currencies/bitcoin/", "source": "web"},
+			},
 		})
 	}))
 	defer srv.Close()
@@ -40,6 +43,9 @@ func TestClient_Chat(t *testing.T) {
 	}
 	if len(res.Tools) != 1 || res.Tools[0] != "t1" {
 		t.Fatalf("tools=%v", res.Tools)
+	}
+	if len(res.References) != 1 || res.References[0].URL == "" {
+		t.Fatalf("references=%v", res.References)
 	}
 }
 

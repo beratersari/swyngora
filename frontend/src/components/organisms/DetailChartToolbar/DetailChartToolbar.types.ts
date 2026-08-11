@@ -11,4 +11,6 @@ export type DetailChartToolbarProps = {
   /** Show pump markers on the chart (default true when threshold control is present). */
   showPumpMarkers?: boolean;
   onShowPumpMarkersChange?: (show: boolean) => void;
+  showSignalMarkers?: boolean;
+  onShowSignalMarkersChange?: (show: boolean) => void;
 };

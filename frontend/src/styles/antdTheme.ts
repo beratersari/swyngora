@@ -39,6 +39,11 @@ export const antdTheme: ThemeConfig = {
     fontFamilyCode: fontFamilies.mono,
     fontSize: 14,
     controlHeight: 36,
+    motion: true,
+    motionUnit: 0.08,
+    motionDurationFast: '0.12s',
+    motionDurationMid: '0.2s',
+    motionDurationSlow: '0.28s',
   },
   components: {
     Layout: {
@@ -77,7 +82,7 @@ export const antdTheme: ThemeConfig = {
       activeBorderColor: semanticColors.border.focus,
       hoverBorderColor: semanticColors.accent.strong,
       colorText: semanticColors.text.primary,
-      colorTextPlaceholder: semanticColors.text.tertiary,
+      colorTextPlaceholder: semanticColors.text.secondary,
     },
     Select: {
       colorBgContainer: semanticColors.bg.chrome,
@@ -86,7 +91,12 @@ export const antdTheme: ThemeConfig = {
       optionActiveBg: semanticColors.bg.hover,
       colorBorder: semanticColors.border.default,
       colorText: semanticColors.text.primary,
-      colorTextPlaceholder: semanticColors.text.tertiary,
+      colorTextPlaceholder: semanticColors.text.secondary,
+    },
+    Popover: {
+      colorBgElevated: semanticColors.bg.elevated,
+      colorText: semanticColors.text.primary,
+      colorTextHeading: semanticColors.text.primary,
     },
     Tabs: {
       // mountainMeadow — not caribbean neon for chrome
@@ -135,7 +145,7 @@ export const antdTheme: ThemeConfig = {
     },
     Empty: {
       colorText: semanticColors.text.secondary,
-      colorTextDisabled: semanticColors.text.tertiary,
+      colorTextDisabled: semanticColors.text.secondary,
     },
     Message: {
       contentBg: semanticColors.bg.elevated,

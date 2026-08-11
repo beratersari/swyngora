@@ -1999,8 +1999,21 @@ export interface components {
             tools?: string[];
             /** @description High-level plan lines (optional) */
             thinking?: string[];
+            /** @description Public web/X/news URLs gathered by research tools (optional) */
+            references?: components["schemas"]["AiChatReference"][];
             /** @description Disclaimer (e.g. not financial advice) */
             note?: string;
+        };
+        AiChatReference: {
+            title?: string;
+            /** Format: uri */
+            url: string;
+            /**
+             * @description Origin bucket for the UI chip
+             * @enum {string}
+             */
+            source?: "web" | "news" | "x" | "hn";
+            snippet?: string;
         };
         CandlesResponse: {
             symbol?: string;

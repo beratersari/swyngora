@@ -6,6 +6,7 @@ import pumpsEn from './locales/en/pumps.json';
 import aiEn from './locales/en/ai.json';
 import alertsEn from './locales/en/alerts.json';
 import compareEn from './locales/en/compare.json';
+import signalsEn from './locales/en/signals.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
 import detailTr from './locales/tr/detail.json';
@@ -14,6 +15,7 @@ import pumpsTr from './locales/tr/pumps.json';
 import aiTr from './locales/tr/ai.json';
 import alertsTr from './locales/tr/alerts.json';
 import compareTr from './locales/tr/compare.json';
+import signalsTr from './locales/tr/signals.json';
 
 /**
  * Bundled translation catalogs.
@@ -29,6 +31,7 @@ export const resources = {
     ai: aiEn,
     alerts: alertsEn,
     compare: compareEn,
+    signals: signalsEn,
   },
   tr: {
     common: commonTr,
@@ -39,6 +42,7 @@ export const resources = {
     ai: aiTr,
     alerts: alertsTr,
     compare: compareTr,
+    signals: signalsTr,
   },
 } as const;
 

@@ -275,6 +275,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 - Portfolios, positions, trades, pending orders, remaining size, reservations, and recurring buy plans/runs are in SQLite (`PORTFOLIO_DB_PATH`).
 - Fill/cancel/reject use `status = open` predicates so a canceled order never fills and a completed order is not double-filled.
 - Amend uses `status = open` plus remaining/trigger compare-and-set so a concurrent fill cannot be overwritten (HTTP **409**).
+- Service-layer cash/position updates are **serialized per `clientId`** so HTTP orders, recurring buys, and the multi-symbol filler cannot last-write-wins the same wallet.
 - Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
 - Recurring buy worker runs on `RECURRING_BUY_INTERVAL` and once on process start.
 

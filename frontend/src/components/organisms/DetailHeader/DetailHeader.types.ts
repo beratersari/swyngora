@@ -12,5 +12,6 @@ export type DetailHeaderProps = WithLoadingProps & {
   watchLoading?: boolean;
   alertTo?: string;
   compareTo?: string;
+  signalsTo?: string;
   delistTime?: string | null;
 };

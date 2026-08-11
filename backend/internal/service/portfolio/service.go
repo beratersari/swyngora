@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -25,10 +26,11 @@ type PriceFetcher interface {
 
 // Service orchestrates paper-trading portfolios.
 type Service struct {
-	store  domain.PortfolioPort
-	market PriceFetcher
-	sink   domain.PortfolioChangeSink
-	costFor func(domain.Exchange) domain.TradingCost
+	store    domain.PortfolioPort
+	market   PriceFetcher
+	sink     domain.PortfolioChangeSink
+	costFor  func(domain.Exchange) domain.TradingCost
+	clientMu sync.Map // clientID → *sync.Mutex; serializes RMW per client
 }
 
 // New constructs a portfolio service.
@@ -117,15 +119,15 @@ type CreateInput struct {
 
 // OrderInput is a market buy/sell.
 type OrderInput struct {
-	ClientID      string
-	PortfolioID   string
-	OwnerClientID string
-	Exchange      string
-	Symbol        string
-	Side          string // buy | sell
-	Quantity      float64
-	LotMethod       string // fifo | lifo (sells; ignored on buys)
-	IdempotencyKey  string // optional; same key + same request returns the original fill
+	ClientID       string
+	PortfolioID    string
+	OwnerClientID  string
+	Exchange       string
+	Symbol         string
+	Side           string // buy | sell
+	Quantity       float64
+	LotMethod      string // fifo | lifo (sells; ignored on buys)
+	IdempotencyKey string // optional; same key + same request returns the original fill
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -147,6 +149,8 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.Portfolio
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.StartingBalance < domain.MinStartingBalance || in.StartingBalance > domain.MaxStartingBalance ||
 		math.IsNaN(in.StartingBalance) || math.IsInf(in.StartingBalance, 0) {
 		return nil, fmt.Errorf("%w: startingBalance must be between %g and %g", domain.ErrInvalidArgument, domain.MinStartingBalance, domain.MaxStartingBalance)
@@ -372,6 +376,8 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return nil, nil, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -571,16 +577,16 @@ type PendingOrderInput struct {
 	ClientID      string
 	PortfolioID   string
 	OwnerClientID string
-	Exchange     string
-	Symbol       string
-	Type         string // limit_buy | limit_sell | stop_loss | trailing_stop
-	Quantity     float64
-	TriggerPrice float64 // limit/stop; ignored for trailing_stop (derived from peak)
+	Exchange      string
+	Symbol        string
+	Type          string // limit_buy | limit_sell | stop_loss | trailing_stop
+	Quantity      float64
+	TriggerPrice  float64 // limit/stop; ignored for trailing_stop (derived from peak)
 	// TrailType: percent | offset (trailing_stop only).
 	TrailType string
 	// TrailValue: fraction e.g. 0.05 or fixed price offset (trailing_stop only).
-	TrailValue float64
-	TimeInForce string     // gtc (default) | ioc | fok
+	TrailValue     float64
+	TimeInForce    string     // gtc (default) | ioc | fok
 	ExpiresAt      *time.Time // optional; GTC only
 	LotMethod      string     // fifo | lifo for sell types
 	IdempotencyKey string
@@ -632,6 +638,8 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		return nil, nil, nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -702,7 +710,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
 		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.TakeProfitPrice,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
-		Status: domain.PendingStatusPending,
+		Status:     domain.PendingStatusPending,
 		OCOGroupID: ocoID, OCOPeerID: slID,
 		BracketID: bracketID, BracketRole: domain.BracketRoleTakeProfit,
 		LotMethod: pendingLotMethod(in.LotMethod),
@@ -713,7 +721,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		Type: domain.PendingStopLoss, Side: domain.TradeSideSell,
 		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.StopLossPrice,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
-		Status: domain.PendingStatusPending,
+		Status:     domain.PendingStatusPending,
 		OCOGroupID: ocoID, OCOPeerID: tpID,
 		BracketID: bracketID, BracketRole: domain.BracketRoleStopLoss,
 		LotMethod: pendingLotMethod(in.LotMethod),
@@ -747,6 +755,8 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -855,6 +865,8 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		return nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
 	if !domain.IsValidPendingOrderType(string(typ)) {
 		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, stop_loss, or trailing_stop", domain.ErrInvalidArgument)
@@ -1243,8 +1255,8 @@ type CancelOpenOrdersInput struct {
 	ClientID      string
 	PortfolioID   string
 	OwnerClientID string
-	Exchange    string // optional; default binance when Symbol is set
-	Symbol      string // empty = all markets (or all pairs on Exchange if only exchange is set)
+	Exchange      string // optional; default binance when Symbol is set
+	Symbol        string // empty = all markets (or all pairs on Exchange if only exchange is set)
 }
 
 // CancelOpenPendingOrders cancels open GTC/IOC/FOK/OCO/bracket/trailing orders in one action.
@@ -1255,6 +1267,11 @@ func (s *Service) CancelOpenPendingOrders(ctx context.Context, in CancelOpenOrde
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
+	if _, err := s.store.GetPortfolio(ctx, clientID); err != nil {
+		return nil, nil, err
+	}
 	var ex domain.Exchange
 	var sym string
 	if strings.TrimSpace(in.Symbol) != "" {
@@ -1287,6 +1304,8 @@ func (s *Service) CancelPendingOrder(ctx context.Context, clientID, id string, p
 	if err != nil {
 		return nil, err
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
@@ -1328,6 +1347,8 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -1423,7 +1444,7 @@ func (s *Service) ProcessOpenOrder(ctx context.Context, o domain.PendingOrder, l
 	}
 
 	// OCO legs: only the winner for this tick may fill (handled by ProcessOCOPair / caller).
-	filled, ok, err := s.TryFillPendingOrder(ctx, o, lastPrice, maxFillQty)
+	filled, ok, err := s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1480,6 +1501,8 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
+	unlock := s.lockClient(a.ClientID)
+	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -1512,7 +1535,7 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 	if winner == nil {
 		return nil, false, nil
 	}
-	return s.TryFillPendingOrder(ctx, *winner, lastPrice, maxFillQty)
+	return s.tryFillPendingOrderLocked(ctx, *winner, lastPrice, maxFillQty)
 }
 
 // TryFillPendingOrder evaluates one open order against lastPrice and applies a fill.
@@ -1528,6 +1551,17 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
+	if o.Status != domain.PendingStatusOpen {
+		return nil, false, nil
+	}
+	// Direct callers (tests, amend fill attempt). ProcessOpenOrder/ProcessOCOPair
+	// already hold lockClient and call tryFillPendingOrderLocked instead.
+	unlock := s.lockClient(o.ClientID)
+	defer unlock()
+	return s.tryFillPendingOrderLocked(ctx, o, lastPrice, maxFillQty)
+}
+
+func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}

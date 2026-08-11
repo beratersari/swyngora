@@ -175,7 +175,7 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	if err != nil {
 		return "AI unavailable: " + esc(err.Error()) + "\n\nEnsure the AI service is running (backend can auto-start it) and try again."
 	}
-	return FormatAIAnswer(res.Reply, res.Thinking, res.Tools)
+	return FormatAIAnswer(res.Reply, res.Thinking, res.Tools) + FormatAIReferences(toRefLinks(res.References))
 }
 
 

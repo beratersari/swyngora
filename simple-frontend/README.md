@@ -65,7 +65,7 @@ Default API base is `http://localhost:8080` (editable in the header).
 ```bash
 # Backend already running on :8080
 # Python AI (Ollama or Grok):
-cd ai && source .venv/bin/activate   # after pip install -e .
+cd ai && uv sync && source .venv/bin/activate
 export SWYNGORA_API_URL=http://127.0.0.1:8080
 python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 ```

@@ -32,7 +32,7 @@ import {
   useGetIndicatorsQuery,
 } from '@/libs/api';
 
-// pumps / watchlist / AI chat
+// pumps / watchlist / AI chat / scanner
 import {
   useGetPumpEventsQuery,
   useScanPumpEventsQuery,
@@ -40,6 +40,8 @@ import {
   useAddWatchlistItemMutation,
   usePostAiChatMutation,
   useGetPortfolioPerformanceQuery,
+  useListScannerRulesQuery,
+  useListScannerResultsQuery,
 } from '@/libs/api';
 ```
 
@@ -48,6 +50,8 @@ import {
 - **SpotList** tags are **arg-scoped** (`spotListTagId`) plus a shared `LIST` id so invalidation can target one filter set or all lists.
 - Detail series (candles / ticker / indicators / supply) use composite ids (exchange/symbol/…).
 - **Pump** tag type covers `getPumpEvents` / `scanPumpEvents`.
+- **ScannerRule / ScannerResult / ScannerBacktest** cover `/api/v1/scanner/*`.
+- **Portfolio** covers paper snapshot + performance series.
 - **Watchlist** tag is registered. `prepareHeaders` always sets `X-Client-Id` via `getOrCreateClientId()` (optional `VITE_CLIENT_ID` overrides the generated id).
 - Live prices/portfolio patch these caches from `libs/realtime` (WebSocket). Polling is only the fallback while disconnected.
 

@@ -33,7 +33,10 @@ export const secondaryColors = {
 
 /** Neutrals */
 export const neutralColors = {
+  /** Muted chrome / hairlines — not body text (fails WCAG on dark green). */
   stone: '#707D7D',
+  /** Readable muted text on dark greens (~7:1 on page bg). */
+  sage: '#8FAEA8',
   pistachio: '#AACBC4',
 } as const;
 
@@ -90,7 +93,8 @@ export function withAlpha(hex: string, alpha: number): string {
  * - Surfaces: canvas (richest black) → muted cards (darkGreen) → elevated (basil) → chrome (pine)
  * - UI accents / links / active: mountainMeadow (not neon caribbean)
  * - caribbeanGreen: chart “up” + focus ring only
- * - Secondary text: pistachio (readable); stone = tertiary / muted chrome
+ * - Secondary text: pistachio (readable on dark greens)
+ * - Tertiary text: sage (still ≥4.5:1) — never stone for copy
  */
 export const semanticColors = {
   bg: {
@@ -121,12 +125,12 @@ export const semanticColors = {
     primary: palette.antiFlashWhite,
     /** Labels, captions — pistachio for contrast on dark greens */
     secondary: neutralColors.pistachio,
-    /** Meta / disabled-looking chrome */
-    tertiary: neutralColors.stone,
+    /** Meta / placeholders — sage, not stone (stone fails WCAG on page bg) */
+    tertiary: neutralColors.sage,
     inverse: palette.richBlack,
     link: palette.mountainMeadow,
     linkHover: palette.mint,
-    disabled: withAlpha(neutralColors.stone, 0.55),
+    disabled: withAlpha(neutralColors.sage, 0.55),
     accent: palette.mountainMeadow,
   },
   border: {

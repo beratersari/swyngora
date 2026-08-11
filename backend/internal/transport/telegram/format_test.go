@@ -127,6 +127,15 @@ func TestFormatAIAnswerEscapesAndFocuses(t *testing.T) {
 	}
 }
 
+func TestFormatAIReferences(t *testing.T) {
+	s := FormatAIReferences([]RefLink{
+		{Title: "Bitcoin", URL: "https://coinmarketcap.com/currencies/bitcoin/"},
+	})
+	if !strings.Contains(s, "Sources") || !strings.Contains(s, "coinmarketcap.com") {
+		t.Fatalf("got %s", s)
+	}
+}
+
 func TestFilterMainAITools(t *testing.T) {
 	got := FilterMainAITools([]string{
 		"market_agent(task=a)",

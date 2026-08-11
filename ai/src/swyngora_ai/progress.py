@@ -7,17 +7,18 @@ runs work on threads that do not inherit the request context.
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, Optional
+from typing import Any
 
 ProgressCallback = Callable[[dict[str, Any]], None]
 
-_progress_cb: ContextVar[Optional[ProgressCallback]] = ContextVar("swyngora_progress", default=None)
+_progress_cb: ContextVar[ProgressCallback | None] = ContextVar("swyngora_progress", default=None)
 _stack_lock = threading.Lock()
 _callback_stack: list[ProgressCallback] = []
 
 
-def set_progress(cb: Optional[ProgressCallback]):
+def set_progress(cb: ProgressCallback | None):
     """Register a progress callback for the current chat turn. Returns a reset token."""
     if cb is not None:
         with _stack_lock:
