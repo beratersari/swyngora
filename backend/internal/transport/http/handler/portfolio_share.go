@@ -41,9 +41,9 @@ func (h *PortfolioHandler) SharePortfolio(w http.ResponseWriter, r *http.Request
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	owner := body.ClientID
-	if owner == "" {
-		owner = clientIDFrom(r)
+	owner, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	sh, err := h.svc.Share(r.Context(), owner, coalescePortfolioID(r, body.PortfolioID), body.GranteeClientID, body.Role)
 	if err != nil {
@@ -60,9 +60,9 @@ func (h *PortfolioHandler) UpdatePortfolioShare(w http.ResponseWriter, r *http.R
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	owner := body.ClientID
-	if owner == "" {
-		owner = clientIDFrom(r)
+	owner, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	sh, err := h.svc.UpdateShareRole(r.Context(), owner, coalescePortfolioID(r, body.PortfolioID), body.GranteeClientID, body.Role)
 	if err != nil {

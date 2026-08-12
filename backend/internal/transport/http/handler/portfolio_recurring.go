@@ -100,9 +100,9 @@ func (h *PortfolioHandler) CreateRecurringBuy(w http.ResponseWriter, r *http.Req
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	var start *time.Time
 	if body.StartAt != "" {

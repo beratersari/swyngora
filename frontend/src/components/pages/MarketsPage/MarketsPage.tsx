@@ -34,7 +34,7 @@ import {
   toSpotListQuery,
   type MarketsUrlState,
 } from '@/libs/utils';
-import { DEFAULT_SPOT_POLL_MS } from '@/config/constants';
+import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
 import {
   McapHintAlert,
   MetaLeft,
@@ -100,7 +100,8 @@ export function MarketsPage() {
   const livePrices = useRealtimeConnected();
 
   const spotQuery = useListSpotMarketsQuery(spotArgs, {
-    pollingInterval: visible && !livePrices ? DEFAULT_SPOT_POLL_MS : 0,
+    // Fast poll when offline; slow REST while WS is live so mcap/tradeCount stay fresh.
+    pollingInterval: !visible ? 0 : livePrices ? SPOT_LIST_WS_REST_POLL_MS : DEFAULT_SPOT_POLL_MS,
     refetchOnFocus: true,
   });
   const delistQuery = useListDelistScheduleQuery(

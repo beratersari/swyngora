@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, message } from 'antd';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Alert, Button, Select, message } from 'antd';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
@@ -18,6 +18,7 @@ import {
   ORDER_BOOK_LEVELS,
   ORDER_BOOK_POLL_MS,
 } from '@/components/organisms/OrderBookPanel';
+import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
 import {
   rtkErrorMessage,
   useAddWatchlistItemMutation,
@@ -32,13 +33,17 @@ import {
   useLazyGetCandlesQuery,
   useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
+  useListPortfoliosQuery,
+  useGetPortfolioQuery,
   useListScannerResultsQuery,
+  usePlacePortfolioOrderMutation,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
   type PumpEventDto,
 } from '@/libs/api';
 import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
-import { usePriceSubscription } from '@/libs/realtime';
+import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
+import { formatPrice } from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
@@ -72,7 +77,14 @@ import {
   DESK_CHART_HEIGHT,
   PHONE_CHART_HEIGHT,
 } from '@/config/constants';
-import { ChartAndBook, ChartCard, ChartTitleRow, PageStack } from './CoinDetailPage.styles';
+import {
+  ChartAndBook,
+  ChartCard,
+  ChartTitleRow,
+  PageStack,
+  PaperTradeCard,
+  SideStack,
+} from './CoinDetailPage.styles';
 import {
   mergeChartMarkers,
   mergePumpEvents,
@@ -187,6 +199,25 @@ export function CoinDetailPage() {
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
   const [fetchOlderPumps] = useLazyGetPumpEventsQuery();
+  const booksQuery = useListPortfoliosQuery(undefined, { refetchOnFocus: true });
+  const books = booksQuery.data?.portfolios ?? [];
+  const [paperBookId, setPaperBookId] = useState(() => {
+    try {
+      return localStorage.getItem('swyngora.portfolioBookId') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  useEffect(() => {
+    if (paperBookId) return;
+    if (books.length === 1 && books[0]?.id) setPaperBookId(books[0].id);
+  }, [books, paperBookId]);
+  usePortfolioSubscription(paperBookId || undefined, visible && Boolean(paperBookId));
+  const paperPortfolio = useGetPortfolioQuery(
+    paperBookId ? { portfolioId: paperBookId } : undefined,
+    { skip: !paperBookId, refetchOnFocus: true },
+  );
+  const [placePaperOrder, placePaperState] = usePlacePortfolioOrderMutation();
   const scannerResultsQuery = useListScannerResultsQuery(
     { limit: 100, offset: 0 },
     { skip, pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0, refetchOnFocus: true },
@@ -646,6 +677,7 @@ export function CoinDetailPage() {
         )}
       </ChartCard>
 
+      <SideStack>
       <OrderBookPanel
         book={orderBookQuery.data}
         group={orderBookGroup || orderBookQuery.data?.groupSize || ''}
@@ -660,6 +692,88 @@ export function CoinDetailPage() {
             : null
         }
       />
+      <PaperTradeCard>
+        <Text variant="h4" color="primary">
+          {t('detail:paperTrade.title')}
+        </Text>
+        <Text variant="caption" color="secondary">
+          {t('detail:paperTrade.hint')}
+        </Text>
+        {books.length === 0 ? (
+          <>
+            <Text variant="body" color="secondary">
+              {t('detail:paperTrade.noBook')}
+            </Text>
+            <Link to="/portfolio">
+              <Button type="link" size="small">
+                {t('detail:paperTrade.openPortfolio')}
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <Text variant="caption" color="secondary">
+                {t('detail:paperTrade.book')}
+              </Text>
+              <Select
+                size="small"
+                style={{ minWidth: 160 }}
+                value={paperBookId || undefined}
+                options={books.map((b) => ({
+                  value: b.id ?? '',
+                  label: b.name || b.id,
+                }))}
+                onChange={(id) => {
+                  setPaperBookId(id);
+                  try {
+                    localStorage.setItem('swyngora.portfolioBookId', id);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              />
+              <Link to={`/portfolio?book=${encodeURIComponent(paperBookId || '')}`}>
+                <Button type="link" size="small">
+                  {t('detail:paperTrade.openPortfolio')}
+                </Button>
+              </Link>
+            </div>
+            {paperPortfolio.data?.availableCash != null ? (
+              <Text variant="caption" color="secondary">
+                {t('detail:paperTrade.availableCash', {
+                  amount: formatPrice(paperPortfolio.data.availableCash),
+                })}
+              </Text>
+            ) : null}
+            <PaperTradeForm
+              lockedExchange={exchangeArg}
+              lockedSymbol={symbol}
+              compact
+              showLotMethod={false}
+              isSubmitting={placePaperState.isLoading}
+              submitError={placePaperState.isError ? placePaperState.error : undefined}
+              onSubmit={async (values: PaperTradeFormValues) => {
+                await placePaperOrder({
+                  portfolioId: paperBookId || undefined,
+                  exchange: values.exchange,
+                  symbol: values.symbol,
+                  side: values.side,
+                  type: 'market',
+                  quantity: values.quantity,
+                  idempotencyKey: `detail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                }).unwrap();
+                void message.success(
+                  values.side === 'buy'
+                    ? t('detail:paperTrade.successBuy')
+                    : t('detail:paperTrade.successSell'),
+                );
+              }}
+            />
+          </>
+        )}
+      </PaperTradeCard>
+      </SideStack>
       </ChartAndBook>
 
       <IndicatorPanel

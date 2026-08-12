@@ -5,6 +5,25 @@ import (
 	"time"
 )
 
+func TestValidateSecurity_OpenAuthNonLoopback(t *testing.T) {
+	cfg := Config{HTTPAddr: ":8080", APIAuthToken: ""}
+	if err := cfg.ValidateSecurity(); err == nil {
+		t.Fatal("expected error for open auth on all interfaces")
+	}
+	cfg.AllowOpenAuth = true
+	if err := cfg.ValidateSecurity(); err != nil {
+		t.Fatal(err)
+	}
+	cfg = Config{HTTPAddr: "127.0.0.1:8080", APIAuthToken: ""}
+	if err := cfg.ValidateSecurity(); err != nil {
+		t.Fatal(err)
+	}
+	cfg = Config{HTTPAddr: "0.0.0.0:8080", APIAuthToken: "secret"}
+	if err := cfg.ValidateSecurity(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("HTTP_ADDR", "")
 	t.Setenv("BINANCE_BASE_URL", "")
@@ -33,8 +52,11 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("PORTFOLIO_DB_PATH", "")
 
 	cfg := Load()
-	if cfg.HTTPAddr != ":8080" {
+	if cfg.HTTPAddr != "127.0.0.1:8080" {
 		t.Fatalf("HTTPAddr=%q", cfg.HTTPAddr)
+	}
+	if err := cfg.ValidateSecurity(); err != nil {
+		t.Fatalf("default bind should allow open auth: %v", err)
 	}
 	if cfg.BinanceProductBaseURL != "https://www.binance.com" {
 		t.Fatalf("product base=%q", cfg.BinanceProductBaseURL)

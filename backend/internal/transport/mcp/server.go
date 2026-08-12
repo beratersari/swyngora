@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
@@ -21,6 +22,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
 
 // DataPort is the data surface MCP tools need (in-process backend or HTTP client).
@@ -207,11 +209,54 @@ func toolClientActiveError(ctx context.Context, accounts *account.Service, req m
 	return accounts.RequireActive(ctx, id)
 }
 
+// bindMCPTenant enforces user-key tenant isolation on MCP tools:
+// - force clientId to the key binding (reject mismatches)
+// - block key-admin tools for user keys (same as HTTP APIKeyScope)
+func bindMCPTenant(ctx context.Context, req *mcp.CallToolRequest) error {
+	if req == nil {
+		return nil
+	}
+	id := middleware.IdentityFrom(ctx)
+	if id == nil || !id.UserKey {
+		return nil
+	}
+	name := strings.TrimSpace(req.Params.Name)
+	switch name {
+	case "create_api_key", "list_api_keys", "revoke_api_key":
+		return fmt.Errorf("%w: this API key cannot manage account or other keys", domain.ErrForbidden)
+	}
+	if id.ClientID == "" {
+		return fmt.Errorf("%w: API key has no client binding", domain.ErrForbidden)
+	}
+	requested := strings.TrimSpace(req.GetString("clientId", ""))
+	if requested != "" && requested != id.ClientID {
+		return fmt.Errorf("%w: clientId does not match API key binding", domain.ErrForbidden)
+	}
+	args := req.GetArguments()
+	if args == nil {
+		args = map[string]any{}
+	} else {
+		// Copy so we do not mutate a shared map unexpectedly.
+		cp := make(map[string]any, len(args)+1)
+		for k, v := range args {
+			cp[k] = v
+		}
+		args = cp
+	}
+	args["clientId"] = id.ClientID
+	req.Params.Arguments = args
+	return nil
+}
+
 func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service) {
 	// HTTP AccountGate skips /mcp (tools pass clientId in JSON, not headers).
 	// Enforce the same active-account rule here when clientId is present.
+	// User API keys are bound to their clientId (bindMCPTenant).
 	addTool := func(tool mcp.Tool, h func(context.Context, mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
 		s.AddTool(tool, func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if err := bindMCPTenant(ctx, &req); err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
 			if err := toolClientActiveError(ctx, accounts, req); err != nil {
 				return mcp.NewToolResultError(err.Error()), nil
 			}

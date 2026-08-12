@@ -2,6 +2,8 @@ package config
 
 import (
 	"bufio"
+	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -137,6 +139,9 @@ type Config struct {
 	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
 	// Empty = open local-dev mode (not multi-tenant safe).
 	APIAuthToken string
+	// AllowOpenAuth permits empty APIAuthToken when HTTPAddr is not loopback.
+	// Default false — refuse open auth on 0.0.0.0 / LAN binds.
+	AllowOpenAuth bool
 	// MCPEnabled mounts streamable MCP at /mcp (default true). Set false to disable the agent surface.
 	MCPEnabled bool
 	// WebhookAllowPrivate permits loopback/RFC1918 webhook targets (local tests only). Default false (SSRF-safe).
@@ -148,7 +153,8 @@ type Config struct {
 func Load() Config {
 	loc := loadLocation(getenv("SUPPLY_REFRESH_TZ", "UTC"))
 	return Config{
-		HTTPAddr:               getenv("HTTP_ADDR", ":8080"),
+		// Loopback by default so empty API_AUTH_TOKEN open mode is not LAN-wide.
+		HTTPAddr:               getenv("HTTP_ADDR", "127.0.0.1:8080"),
 		BinanceBaseURL:         getenv("BINANCE_BASE_URL", "https://api.binance.com"),
 		BinanceProductBaseURL:  getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
 		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
@@ -242,9 +248,54 @@ func Load() Config {
 		AccountPurgeInterval: positiveDurationEnv("ACCOUNT_PURGE_INTERVAL", 1*time.Hour),
 
 		APIAuthToken:        strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
+		// AllowOpenAuth permits empty API_AUTH_TOKEN when HTTP_ADDR is non-loopback.
+		// Default false: refuse to start open auth on 0.0.0.0 / LAN binds.
+		AllowOpenAuth:       boolEnv("ALLOW_OPEN_AUTH", false),
 		MCPEnabled:          boolEnv("MCP_ENABLED", true),
 		WebhookAllowPrivate: boolEnv("WEBHOOK_ALLOW_PRIVATE", false),
 	}
+}
+
+// ValidateSecurity checks unsafe auth/bind combinations.
+// Open auth (no API_AUTH_TOKEN) is only allowed on loopback unless ALLOW_OPEN_AUTH=true.
+func (c Config) ValidateSecurity() error {
+	if strings.TrimSpace(c.APIAuthToken) != "" {
+		return nil
+	}
+	if c.AllowOpenAuth {
+		return nil
+	}
+	if isLoopbackHTTPAddr(c.HTTPAddr) {
+		return nil
+	}
+	return fmt.Errorf("API_AUTH_TOKEN is empty and HTTP_ADDR %q is not loopback; set a token or ALLOW_OPEN_AUTH=true for explicit open mode", c.HTTPAddr)
+}
+
+func isLoopbackHTTPAddr(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return true
+	}
+	// ":8080" binds all interfaces.
+	if strings.HasPrefix(addr, ":") {
+		return false
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		// bare host or port-only forms
+		if addr == "localhost" || addr == "127.0.0.1" || addr == "::1" {
+			return true
+		}
+		return false
+	}
+	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return strings.EqualFold(host, "localhost")
 }
 
 // parseCSVList splits a comma-separated env value; empty → nil.

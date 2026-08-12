@@ -217,9 +217,9 @@ func (h *WatchlistHandler) Replace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	actor := body.ClientID
-	if actor == "" {
-		actor = clientIDFrom(r)
+	actor, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	owner := body.OwnerClientID
 	if owner == "" {
@@ -271,9 +271,9 @@ func (h *WatchlistHandler) Add(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	actor := body.ClientID
-	if actor == "" {
-		actor = clientIDFrom(r)
+	actor, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	owner := body.OwnerClientID
 	if owner == "" {
@@ -334,9 +334,9 @@ func (h *WatchlistHandler) Share(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	owner := body.ClientID
-	if owner == "" {
-		owner = clientIDFrom(r)
+	owner, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	sh, err := h.svc.Share(r.Context(), owner, body.GranteeClientID, body.Role)
 	if err != nil {
@@ -353,9 +353,9 @@ func (h *WatchlistHandler) UpdateShare(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	owner := body.ClientID
-	if owner == "" {
-		owner = clientIDFrom(r)
+	owner, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	sh, err := h.svc.UpdateShareRole(r.Context(), owner, body.GranteeClientID, body.Role)
 	if err != nil {

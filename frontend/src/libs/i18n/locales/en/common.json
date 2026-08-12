@@ -8,7 +8,8 @@
     "ai": "AI",
     "alerts": "Alerts",
     "signals": "Signals",
-    "compare": "Compare"
+    "compare": "Compare",
+    "portfolio": "Paper"
   },
   "brand": {
     "tagline": "Market desk"
@@ -46,6 +47,7 @@
     "pollingPaused": "polling paused",
     "connection": {
       "live": "Live",
+      "degraded": "Delayed",
       "offline": "API offline",
       "paused": "Paused",
       "loading": "Connecting"

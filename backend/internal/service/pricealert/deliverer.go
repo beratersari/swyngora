@@ -46,7 +46,8 @@ func (d *Deliverer) Start(ctx context.Context) {
 		d.BatchSize = 50
 	}
 	if d.HTTP == nil {
-		d.HTTP = newWebhookHTTPClient(10 * time.Second)
+		allowPrivate := d.Alerts != nil && d.Alerts.AllowPrivateWebhooks
+		d.HTTP = newWebhookHTTPClient(10*time.Second, allowPrivate)
 	} else {
 		hardenWebhookHTTPClient(d.HTTP)
 	}
@@ -221,9 +222,16 @@ func (d *Deliverer) postWebhook(ctx context.Context, webhookURL, payload string)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "swyngora-alerts/1.0")
+	// Pin Host for TLS/virtual hosting before rewriting URL to a public IP.
+	if req.Host == "" {
+		req.Host = req.URL.Host
+	}
+	if err := pinWebhookRequestURL(req, allowPrivate); err != nil {
+		return 0, "", fmt.Errorf("webhook url blocked: %w", err)
+	}
 	client := d.HTTP
 	if client == nil {
-		client = newWebhookHTTPClient(10 * time.Second)
+		client = newWebhookHTTPClient(10*time.Second, allowPrivate)
 	} else {
 		hardenWebhookHTTPClient(client)
 	}
@@ -234,13 +242,6 @@ func (d *Deliverer) postWebhook(ctx context.Context, webhookURL, payload string)
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 	return resp.StatusCode, string(b), nil
-}
-
-// newWebhookHTTPClient returns an HTTP client that never follows redirects.
-func newWebhookHTTPClient(timeout time.Duration) *http.Client {
-	c := &http.Client{Timeout: timeout}
-	hardenWebhookHTTPClient(c)
-	return c
 }
 
 func hardenWebhookHTTPClient(c *http.Client) {

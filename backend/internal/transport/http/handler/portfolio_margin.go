@@ -160,9 +160,9 @@ func (h *PortfolioHandler) PlaceMarginOrder(w http.ResponseWriter, r *http.Reque
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	pos, ord, err := h.svc.PlaceMarginOrder(r.Context(), portfolio.MarginOrderInput{
 		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol, Side: body.Side, Type: body.Type,
@@ -322,9 +322,9 @@ func (h *PortfolioHandler) SetMarginMode(w http.ResponseWriter, r *http.Request)
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	p, err := h.svc.SetMarginMode(r.Context(), portfolio.SetMarginModeInput{ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Mode: body.Mode})
 	if err != nil {

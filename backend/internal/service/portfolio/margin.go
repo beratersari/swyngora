@@ -798,7 +798,11 @@ func (s *Service) markMarginPosition(ctx context.Context, pos *domain.MarginPosi
 		return
 	}
 	pos.MarkPrice = mark
-	pos.UnrealizedPnL = domain.MarginUnrealizedPnL(pos.Side, pos.Quantity, pos.EntryPrice, mark)
+	// EntryPrice may bake open fee (EffectiveMarginEntry). Equity must not
+	// double-count that fee (already debited from cash on open).
+	cost := s.paperCost(pos.Exchange)
+	rawEntry := domain.RawFillFromEffectiveEntry(pos.Side, pos.EntryPrice, cost.FeeRate)
+	pos.UnrealizedPnL = domain.MarginUnrealizedPnL(pos.Side, pos.Quantity, rawEntry, mark)
 	pos.DebtNotional = domain.DebtNotionalQuote(pos.Side, pos.DebtPrincipal, pos.DebtInterest, mark)
 }
 
@@ -1353,12 +1357,16 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		// (already deducted at fill and baked into entry) is not charged twice.
 		rawEntry := domain.RawFillFromEffectiveEntry(cur.Side, cur.EntryPrice, cost.FeeRate)
 		rawPnL := domain.MarginRealizedPnL(cur.Side, cq, rawEntry, fill)
+		// Collateral model: open only debited initial margin (+ open fee). Close
+		// returns margin + raw PnL − close fee − interest. Do NOT also subtract
+		// remaining quote principal — that double-counts the borrow (not in cash).
 		cashDelta := marginRelease + rawPnL - closeFee
 		switch cur.DebtAsset {
 		case domain.DebtAssetBase:
 			cashDelta -= ip * price
 		default:
-			cashDelta -= pp + ip
+			// Interest only; principal (pp) is reduced on the position, not cash.
+			cashDelta -= ip
 		}
 		p.CashBalance += cashDelta
 		p.RealizedPnLTotal += realized

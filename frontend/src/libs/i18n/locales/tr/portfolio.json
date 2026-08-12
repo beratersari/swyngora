@@ -1,0 +1,106 @@
+{
+  "eyebrow": "Simülasyon masası",
+  "title": "Kağıt işlem",
+  "subtitle": "Son fiyata artı komisyon ve kayma ile simüle edilmiş defterler. Gerçek para değildir — yalnızca bilgilendirme.",
+  "resource": "portföy",
+  "disclaimer": "Yalnızca kağıt işlem. Yatırım tavsiyesi değildir. Gerçek para yok.",
+  "loadFailed": "Portföy yüklenemedi",
+  "books": {
+    "label": "Defter",
+    "create": "Yeni defter",
+    "createTitle": "Kağıt defter oluştur",
+    "name": "Ad",
+    "startingBalance": "Başlangıç nakit",
+    "createSuccess": "Defter oluşturuldu",
+    "empty": "Henüz kağıt defter yok — başlamak için oluşturun.",
+    "select": "Defter seç"
+  },
+  "metrics": {
+    "equity": "Özkaynak",
+    "cash": "Nakit",
+    "available": "Kullanılabilir",
+    "positions": "Pozisyon değeri",
+    "unrealized": "Gerçekleşmemiş K/Z",
+    "realized": "Gerçekleşen K/Z",
+    "totalPnl": "Toplam K/Z"
+  },
+  "period": {
+    "1d": "1G",
+    "1w": "1H",
+    "1m": "1A",
+    "3m": "3A"
+  },
+  "equityChart": {
+    "title": "Özkaynak",
+    "empty": "Henüz örnek yok — işlem yapın veya sonraki anlık görüntüyü bekleyin.",
+    "loadFailed": "Performans yüklenemedi"
+  },
+  "trade": {
+    "title": "Piyasa emri",
+    "hint": "Son fiyata kağıt komisyon ve kayma ile dolar. Kotasyon defter para birimiyle (USDT) aynı olmalı.",
+    "exchange": "Borsa",
+    "symbol": "Sembol",
+    "side": "Yön",
+    "buy": "Al",
+    "sell": "Sat",
+    "quantity": "Miktar",
+    "submitBuy": "Kağıt al",
+    "submitSell": "Kağıt sat",
+    "successBuy": "{{qty}} {{symbol}} alındı",
+    "successSell": "{{qty}} {{symbol}} satıldı",
+    "failed": "Emir başarısız",
+    "lotMethod": "Lot yöntemi",
+    "fifo": "FIFO",
+    "lifo": "LIFO"
+  },
+  "cash": {
+    "title": "Nakit",
+    "deposit": "Yatır",
+    "withdraw": "Çek",
+    "amount": "Tutar",
+    "note": "Not",
+    "depositSuccess": "Yatırma kaydedildi",
+    "withdrawSuccess": "Çekim kaydedildi"
+  },
+  "positions": {
+    "title": "Pozisyonlar",
+    "empty": "Açık spot pozisyon yok",
+    "symbol": "Sembol",
+    "exchange": "Borsa",
+    "qty": "Miktar",
+    "avgCost": "Ort. maliyet",
+    "mark": "Mark",
+    "value": "Değer",
+    "uPnl": "uK/Z",
+    "open": "Aç"
+  },
+  "orders": {
+    "title": "Açık emirler",
+    "empty": "Açık bekleyen emir yok",
+    "type": "Tür",
+    "trigger": "Tetik",
+    "remaining": "Kalan",
+    "status": "Durum",
+    "cancel": "İptal",
+    "cancelConfirm": "Bu bekleyen emir iptal edilsin mi?",
+    "cancelSuccess": "Emir iptal edildi"
+  },
+  "trades": {
+    "title": "İşlem geçmişi",
+    "empty": "Henüz işlem yok",
+    "side": "Yön",
+    "price": "Fiyat",
+    "fee": "Komisyon",
+    "notional": "Nominal",
+    "realized": "Gerçekleşen",
+    "time": "Zaman"
+  },
+  "movements": {
+    "title": "Nakit defteri",
+    "empty": "Nakit hareketi yok",
+    "kind": "Tür",
+    "amount": "Tutar",
+    "after": "Sonraki nakit",
+    "time": "Zaman"
+  }
+}

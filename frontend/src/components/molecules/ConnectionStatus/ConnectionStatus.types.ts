@@ -1,4 +1,4 @@
-export type ConnectionStatusKind = 'live' | 'offline' | 'paused' | 'loading';
+export type ConnectionStatusKind = 'live' | 'degraded' | 'offline' | 'paused' | 'loading';
 
 export type ConnectionStatusProps = {
   status: ConnectionStatusKind;

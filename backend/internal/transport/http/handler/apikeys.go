@@ -61,9 +61,9 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	created, err := h.svc.Create(r.Context(), apikey.CreateInput{
 		ClientID: clientID, Name: body.Name, Permission: body.Permission,

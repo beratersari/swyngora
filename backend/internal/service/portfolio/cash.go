@@ -62,6 +62,14 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 		return nil, nil, err
 	}
 	clientID := p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
+	// Re-load under lock so concurrent trades cannot last-write-wins cash.
+	p, err = s.requireBook(ctx, in.ClientID, p.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	clientID = p.BookID()
 	if err := domain.ValidateCashMovementAmount(in.Amount); err != nil {
 		return nil, nil, err
 	}
@@ -174,6 +182,23 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 	}
 	if from.ClientID != to.ClientID {
 		return nil, nil, nil, nil, fmt.Errorf("%w: can only transfer between your own portfolios", domain.ErrForbidden)
+	}
+	// Ordered locks avoid deadlock when two transfers reverse the book pair.
+	idA, idB := from.BookID(), to.BookID()
+	if idA > idB {
+		idA, idB = idB, idA
+	}
+	unlockA := s.lockClient(idA)
+	defer unlockA()
+	unlockB := s.lockClient(idB)
+	defer unlockB()
+	from, err = s.requireBook(ctx, in.ClientID, from.ID)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	to, err = s.requireBook(ctx, in.ClientID, to.ID)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 	if err := domain.ValidateCashMovementAmount(in.Amount); err != nil {
 		return nil, nil, nil, nil, err

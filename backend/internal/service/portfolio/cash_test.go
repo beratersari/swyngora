@@ -3,10 +3,50 @@ package portfolio
 import (
 	"context"
 	"math"
+	"sync"
 	"testing"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
+
+func TestCash_ConcurrentDepositAndMarketBuy(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "cash-race", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	errCh := make(chan error, 2)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _, err := svc.Deposit(ctx, CashMoveInput{ClientID: "cash-race", Amount: 2500})
+		errCh <- err
+	}()
+	go func() {
+		defer wg.Done()
+		_, _, err := svc.PlaceOrder(ctx, OrderInput{
+			ClientID: "cash-race", Exchange: "binance", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		})
+		errCh <- err
+	}()
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			t.Fatalf("op: %v", err)
+		}
+	}
+	view, err := svc.View(ctx, "cash-race")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 10000 + 2500 - 100 buy = 12400 (lost deposit would leave ~9900 or ~12500 without buy)
+	if math.Abs(view.CashBalance-12400) > 1e-6 {
+		t.Fatalf("cash=%v want 12400", view.CashBalance)
+	}
+}
 
 func TestCash_DepositWithdrawHistoryAndPnL(t *testing.T) {
 	svc := newSvc(t, nil)

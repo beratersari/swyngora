@@ -127,9 +127,9 @@ func (h *PortfolioHandler) CreateBasket(w http.ResponseWriter, r *http.Request) 
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	b, err := h.svc.CreateAllocationBasket(r.Context(), portfolio.AllocationBasketCreateInput{
 		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Name: body.Name, Targets: parseTargetBodies(body.Targets),

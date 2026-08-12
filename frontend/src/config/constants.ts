@@ -1,6 +1,12 @@
 /** Default UI poll interval for spot list (ms). Matches backend SPOT_MARKET_CACHE_TTL default (5s). */
 export const DEFAULT_SPOT_POLL_MS = 5_000;
 
+/**
+ * Slower REST refresh while the price WebSocket is connected.
+ * Keeps derived list fields (mcap, tradeCount) from freezing forever under WS-only mode.
+ */
+export const SPOT_LIST_WS_REST_POLL_MS = 30_000;
+
 /** Candle chart height: desk vs phone (Lightweight Charts needs a px height). */
 export const DESK_CHART_HEIGHT = 520;
 export const PHONE_CHART_HEIGHT = 280;

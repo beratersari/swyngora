@@ -57,9 +57,9 @@ func (h *PortfolioHandler) cashMove(w http.ResponseWriter, r *http.Request, kind
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	in := portfolio.CashMoveInput{ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Amount: body.Amount, Note: body.Note}
 	var (
@@ -121,9 +121,9 @@ func (h *PortfolioHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	fromID := strings.TrimSpace(body.FromPortfolioID)
 	if fromID == "" {

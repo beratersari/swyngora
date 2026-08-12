@@ -62,9 +62,81 @@ func TestMargin_OpenLongPartialCloseAndPnL(t *testing.T) {
 		t.Fatalf("%+v", closed)
 	}
 	view, _ = svc.View(ctx, "m1")
-	// Open: -20 margin, debt 80. Partial 0.5: +10 margin +5 pnl -40 principal = 10000-20+10+5-40=9955
-	if math.Abs(view.CashBalance-9955) > 1e-6 {
-		t.Fatalf("cash after partial=%v", view.CashBalance)
+	// Open: -20 margin. Partial 0.5: +10 margin +5 pnl (no principal cash debit) → 9995
+	// Remaining half still open: +5 uPnL, equity = 9995 + 10 margin + 5 uPnL = 10010
+	if math.Abs(view.CashBalance-9995) > 1e-6 {
+		t.Fatalf("cash after partial=%v want 9995", view.CashBalance)
+	}
+	if math.Abs(view.Equity-10010) > 1e-6 {
+		t.Fatalf("equity after partial=%v want 10010 cash=%v locked=%v mUPnL=%v",
+			view.Equity, view.CashBalance, view.MarginLocked, view.MarginUnrealizedPnL)
+	}
+}
+
+func TestMargin_LongFullClosePreservesCashPnL(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m1full", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m1full", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil || pos == nil {
+		t.Fatal(err)
+	}
+	svc.market = &fakePx{prices: map[string]string{"binance|BTCUSDT": "110"}}
+	_, tr, err := svc.CloseMarginPosition(ctx, MarginCloseInput{
+		ClientID: "m1full", PositionID: pos.ID, Quantity: 1,
+	})
+	if err != nil || tr == nil {
+		t.Fatal(err)
+	}
+	if math.Abs(tr.RealizedPnL-10) > 1e-6 {
+		t.Fatalf("realized=%v", tr.RealizedPnL)
+	}
+	view, _ := svc.View(ctx, "m1full")
+	// Start 10000, open −20, close +20 margin +10 pnl → 10010
+	if math.Abs(view.CashBalance-10010) > 1e-6 {
+		t.Fatalf("cash after full close=%v want 10010", view.CashBalance)
+	}
+}
+
+func TestMargin_OpenFeeNotDoubleCountedInEquity(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	svc = svc.WithPaperCosts(func(domain.Exchange) domain.TradingCost {
+		return domain.TradingCost{FeeRate: 0.001, SlippageRate: 0}
+	})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "mfee", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "mfee", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil || pos == nil {
+		t.Fatal(err)
+	}
+	// fill 100, fee 0.1, margin 20 → cash 9979.9; uPnL at mark 100 must be ~0 not −0.1
+	if math.Abs(pos.UnrealizedPnL) > 1e-6 {
+		// re-mark via get
+		pos, _ = svc.GetMarginPosition(ctx, "mfee", pos.ID)
+	}
+	pos, _ = svc.GetMarginPosition(ctx, "mfee", pos.ID)
+	if math.Abs(pos.UnrealizedPnL) > 1e-6 {
+		t.Fatalf("uPnL at flat mark should be 0, got %v (fee double-count?)", pos.UnrealizedPnL)
+	}
+	view, _ := svc.View(ctx, "mfee")
+	// Equity ≈ 10000 − openFee (0.10) = 9999.90
+	wantEq := 9999.90
+	eq := view.Equity
+	if eq == 0 {
+		eq = view.CashBalance + view.MarginLocked + pos.UnrealizedPnL
+	}
+	if math.Abs(eq-wantEq) > 1e-4 {
+		t.Fatalf("equity=%v want %v cash=%v locked=%v upnl=%v", eq, wantEq, view.CashBalance, view.MarginLocked, pos.UnrealizedPnL)
 	}
 }
 

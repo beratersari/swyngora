@@ -92,10 +92,10 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 // Preview handles POST /api/v1/import/preview
 // Accepts multipart field "file" or raw body with Content-Type application/json|text/csv.
 func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
-	clientID := clientIDFrom(r)
 	var fileName string
 	var data []byte
 	var formatHint string
+	var formClientID string
 
 	ct := strings.ToLower(r.Header.Get("Content-Type"))
 	if strings.HasPrefix(ct, "multipart/") {
@@ -103,9 +103,7 @@ func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
 			writeError(w, fmt.Errorf("%w: invalid multipart form", domain.ErrInvalidArgument))
 			return
 		}
-		if v := strings.TrimSpace(r.FormValue("clientId")); v != "" {
-			clientID = v
-		}
+		formClientID = strings.TrimSpace(r.FormValue("clientId"))
 		formatHint = r.FormValue("format")
 		f, hdr, err := r.FormFile("file")
 		if err != nil {
@@ -122,9 +120,7 @@ func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if v := r.URL.Query().Get("clientId"); v != "" && clientID == "" {
-			clientID = v
-		}
+		formClientID = strings.TrimSpace(r.URL.Query().Get("clientId"))
 		formatHint = r.URL.Query().Get("format")
 		fileName = r.URL.Query().Get("fileName")
 		var err error
@@ -138,6 +134,10 @@ func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		} else if strings.Contains(ct, "json") {
 			formatHint = "json"
 		}
+	}
+	clientID, ok := mustResolveClientID(w, r, formClientID)
+	if !ok {
+		return
 	}
 	if len(data) > domain.MaxImportUploadBytes {
 		writeError(w, fmt.Errorf("%w: file too large", domain.ErrInvalidArgument))
@@ -166,9 +166,9 @@ func (h *ImportHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		// allow empty body with query mode
 		body.Mode = r.URL.Query().Get("mode")
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	mode := body.Mode
 	if mode == "" {

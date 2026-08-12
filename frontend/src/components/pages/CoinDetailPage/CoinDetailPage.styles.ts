@@ -36,3 +36,20 @@ export const ChartAndBook = styled.div`
     grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   }
 `;
+
+export const SideStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[3]}px;
+  min-width: 0;
+`;
+
+export const PaperTradeCard = styled.section`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  padding: ${({ theme }) => theme.spacing[3]}px;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  border-radius: ${({ theme }) => theme.radii.md}px;
+`;

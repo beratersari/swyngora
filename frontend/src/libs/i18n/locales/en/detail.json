@@ -86,5 +86,19 @@
     "bidHeavy": "More bids",
     "askHeavy": "More asks",
     "balanced": "Balanced"
+  },
+  "paperTrade": {
+    "title": "Paper trade",
+    "hint": "Simulated market fill on your selected paper book. Not real money.",
+    "openPortfolio": "Open paper desk",
+    "book": "Book",
+    "noBook": "Create a paper book first on the Paper desk.",
+    "qty": "Quantity",
+    "buy": "Paper buy",
+    "sell": "Paper sell",
+    "successBuy": "Paper buy filled",
+    "successSell": "Paper sell filled",
+    "failed": "Paper order failed",
+    "availableCash": "Available cash {{amount}}"
   }
 }

@@ -2,7 +2,7 @@
 
 Production React application for Swyngora.
 
-> **Status:** Markets, coin detail, watchlist, **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a 2026 trading-desk chrome (single command bar, ticker tape, venue-aware jump search, live status). Layout wraps at 960 / 720 / 480.  
+> **Status:** Markets, coin detail, watchlist, **paper trading** (`/portfolio` + trade-from-detail), **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a 2026 trading-desk chrome (single command bar, ticker tape, venue-aware jump search, live status). Layout wraps at 960 / 720 / 480.  
 > Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 
@@ -40,7 +40,7 @@ Tokens: `src/styles/tokens/colors.ts` · Motion: `src/styles/tokens/motion.ts` �
 | Package agent rules | `frontend/AGENTS.md`                    |
 | System design       | `docs/design/frontend-system-design.md` |
 | Local tasks / board | `project-management/board.md`           |
-| Features            | Markets · detail · watchlist · pumps · AI chat |
+| Features            | Markets · detail · watchlist · paper trading · pumps · AI chat |
 
 ## Intended layout
 
@@ -71,7 +71,7 @@ frontend/
 ### Localization
 
 - **i18next** catalogs: `src/libs/i18n/locales/{en,tr}/`
-- Namespaces: `common`, `markets`, `detail`, `watchlist`, `pumps`, `ai`, `alerts`, `compare`, `signals`
+- Namespaces: `common`, `markets`, `detail`, `watchlist`, `pumps`, `ai`, `alerts`, `compare`, `signals`, `portfolio`
 - Language switcher in the app header (persists to `localStorage`)
 - Add a language: new locale folder + register in `libs/i18n/resources.ts` + `SUPPORTED_LOCALES`
 

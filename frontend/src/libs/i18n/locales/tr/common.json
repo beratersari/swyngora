@@ -8,7 +8,8 @@
     "ai": "AI",
     "alerts": "Uyarılar",
     "signals": "Sinyaller",
-    "compare": "Karşılaştır"
+    "compare": "Karşılaştır",
+    "portfolio": "Kağıt"
   },
   "brand": {
     "tagline": "Piyasa masası"
@@ -46,6 +47,7 @@
     "pollingPaused": "sekme gizli — yenileme durdu",
     "connection": {
       "live": "Canlı",
+      "degraded": "Gecikmeli",
       "offline": "API kapalı",
       "paused": "Duraklatıldı",
       "loading": "Bağlanıyor"

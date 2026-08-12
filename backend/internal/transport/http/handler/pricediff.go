@@ -95,9 +95,9 @@ func (h *PriceDiffHandler) CreateWatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	watch, err := h.svc.CreateWatch(r.Context(), pricediff.CreateInput{
 		ClientID: clientID, Symbol: body.Symbol, MinNetDiffPct: body.MinNetDiffPct,

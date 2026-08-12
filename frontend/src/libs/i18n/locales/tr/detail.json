@@ -86,5 +86,19 @@
     "bidHeavy": "Alış ağır",
     "askHeavy": "Satış ağır",
     "balanced": "Dengeli"
+  },
+  "paperTrade": {
+    "title": "Kağıt işlem",
+    "hint": "Seçili kağıt defterde simüle piyasa emri. Gerçek para değildir.",
+    "openPortfolio": "Kağıt masasını aç",
+    "book": "Defter",
+    "noBook": "Önce Kağıt masasında bir defter oluşturun.",
+    "qty": "Miktar",
+    "buy": "Kağıt al",
+    "sell": "Kağıt sat",
+    "successBuy": "Kağıt alım doldu",
+    "successSell": "Kağıt satım doldu",
+    "failed": "Kağıt emir başarısız",
+    "availableCash": "Kullanılabilir nakit {{amount}}"
   }
 }

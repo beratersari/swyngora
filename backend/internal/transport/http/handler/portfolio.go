@@ -211,9 +211,9 @@ func (h *PortfolioHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	p, err := h.svc.Create(r.Context(), portfolio.CreateInput{
 		ClientID: clientID, Name: body.Name, StartingBalance: body.StartingBalance, Currency: body.Currency,
@@ -392,9 +392,9 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	pfID := coalescePortfolioID(r, body.PortfolioID)
 	ownerID := ownerClientIDFrom(r)
@@ -629,9 +629,9 @@ func (h *PortfolioHandler) CancelAllOrders(w http.ResponseWriter, r *http.Reques
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	list, view, err := h.svc.CancelOpenPendingOrders(r.Context(), portfolio.CancelOpenOrdersInput{
 		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), OwnerClientID: coalesceOwner(r, body.OwnerClientID),

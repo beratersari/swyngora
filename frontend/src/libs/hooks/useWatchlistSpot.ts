@@ -5,7 +5,7 @@ import {
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks/useDocumentVisible';
 import { usePriceSubscription } from '@/libs/realtime';
-import { DEFAULT_SPOT_POLL_MS } from '@/config/constants';
+import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
 
 /** Prefer exact symbol match from a spot search result list. */
 export function pickSpotForSymbol(
@@ -58,7 +58,7 @@ export function useWatchlistSpot(
     },
     {
       skip: !exchange || !symbol,
-      pollingInterval: visible && !livePrices ? DEFAULT_SPOT_POLL_MS : 0,
+      pollingInterval: !visible ? 0 : livePrices ? SPOT_LIST_WS_REST_POLL_MS : DEFAULT_SPOT_POLL_MS,
       refetchOnFocus: true,
     },
   );

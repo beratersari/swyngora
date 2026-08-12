@@ -133,9 +133,17 @@ func AssemblePerformance(
 	}
 
 	points := make([]EquityPoint, 0, len(snaps)+2)
+	// Synthetic start is needed unless an in-window snapshot sits at windowStart.
+	// A snapshot *before* the window must not suppress the synthetic (it is skipped below).
 	needSynthetic := true
-	if len(snaps) > 0 && !snaps[0].BucketAt.After(windowStart) {
-		needSynthetic = false
+	for i := range snaps {
+		if snaps[i].BucketAt.Before(windowStart) {
+			continue
+		}
+		if !snaps[i].BucketAt.After(windowStart) {
+			needSynthetic = false
+		}
+		break
 	}
 	if needSynthetic {
 		syn := EquityPoint{Time: windowStart, Equity: startEquity}

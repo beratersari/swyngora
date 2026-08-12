@@ -51,6 +51,10 @@ func main() {
 	config.LoadDotEnv("backend/.env")
 
 	cfg := config.Load()
+	if err := cfg.ValidateSecurity(); err != nil {
+		slog.Error("unsafe auth/bind configuration", "err", err)
+		os.Exit(1)
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
 

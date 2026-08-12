@@ -28,6 +28,7 @@ export const Dot = styled.span<{ $status: ConnectionStatusKind }>`
   border-radius: 50%;
   background: ${({ theme, $status }) => {
     if ($status === 'live') return theme.semantic.chart.up;
+    if ($status === 'degraded') return theme.semantic.status.warning;
     if ($status === 'offline') return theme.semantic.status.error;
     if ($status === 'paused') return theme.semantic.status.warning;
     return theme.semantic.text.tertiary;

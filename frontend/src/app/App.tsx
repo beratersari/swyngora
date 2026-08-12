@@ -20,10 +20,12 @@ import {
 import { APP_NAME, DEFAULT_SPOT_POLL_MS } from '@/config/constants';
 import { useGetHealthQuery, useListSpotMarketsQuery } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
+import { useRealtimeConnected } from '@/libs/realtime';
 
 const NAV_ITEMS = [
   { to: '/markets', key: 'nav.markets' as const },
   { to: '/watchlist', key: 'nav.watchlist' as const },
+  { to: '/portfolio', key: 'nav.portfolio' as const },
   { to: '/signals', key: 'nav.signals' as const },
   { to: '/pumps', key: 'nav.pumps' as const },
   { to: '/alerts', key: 'nav.alerts' as const },
@@ -59,10 +61,14 @@ function DeskShell() {
       .filter((item): item is NonNullable<typeof item> => item != null);
   }, [tapeQuery.data?.items]);
 
+  const wsConnected = useRealtimeConnected();
   let connection: ConnectionStatusKind = 'loading';
   if (!visible) connection = 'paused';
   else if (health.isError) connection = 'offline';
-  else if (health.isSuccess || health.data) connection = 'live';
+  else if (health.isSuccess || health.data) {
+    // "Live" only when the market stream is up; API-only is "Delayed".
+    connection = wsConnected ? 'live' : 'degraded';
+  }
 
   return (
     <AppShell

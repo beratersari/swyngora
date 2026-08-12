@@ -146,14 +146,14 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`** (service mutex + store write lock); optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); closed `clientId`s are blocked on tenant REST and on MCP tools that send `clientId`; **`MCP_ENABLED=false`** unmounts MCP.
 
-**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Users can mint named `swy_…` keys (`read` or `trade`) for bots so they do not share the master token (`docs/features/api-keys.md`). Full multi-user identity (JWT/session) is a separate follow-up.
+**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Users can mint named `swy_…` keys (`read` or `trade`) for bots so they do not share the master token (`docs/features/api-keys.md`). **User keys force their bound `clientId`** on REST body/query/form fields and MCP tool args (mismatches → 403); key-admin MCP tools are denied for user keys. Empty `API_AUTH_TOKEN` open mode is only allowed on **loopback** unless `ALLOW_OPEN_AUTH=true`. Default listen is `127.0.0.1:8080`. Full multi-user identity (JWT/session) is a separate follow-up.
 
 ## Run
 
 ```bash
 # from backend/
 go run ./cmd/server
-# listens on :8080 by default
+# listens on 127.0.0.1:8080 by default
 # optional Telegram bot starts when TELEGRAM_BOT_TOKEN is set
 ```
 
@@ -191,8 +191,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HTTP_ADDR` | `:8080` | Listen address |
-| `API_AUTH_TOKEN` | _(empty = open local mode)_ | Master token for tenant routes + `/mcp` + key management; user `swy_…` keys also accepted |
+| `HTTP_ADDR` | `127.0.0.1:8080` | Listen address (loopback default) |
+| `API_AUTH_TOKEN` | _(empty = open local mode on loopback only)_ | Master token for tenant routes + `/mcp` + key management; user `swy_…` keys also accepted |
+| `ALLOW_OPEN_AUTH` | `false` | Permit empty `API_AUTH_TOKEN` when `HTTP_ADDR` is non-loopback (`0.0.0.0`, `:8080`, LAN) |
 | `MCP_ENABLED` | `true` | Mount streamable MCP at `/mcp`; set `false` to disable |
 | `WEBHOOK_ALLOW_PRIVATE` | `false` | Allow loopback/private webhook targets (local tests only; SSRF risk if true) |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |

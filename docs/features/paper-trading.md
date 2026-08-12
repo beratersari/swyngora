@@ -4,6 +4,10 @@
 
 Simulated portfolios with starting cash, market buy/sell at last price, **pending limit/stop orders with reservations and partial fills**, open positions, realized/unrealized P&L, and trade history. **Not real money.** Data is stored in SQLite and survives restarts.
 
+### Product web UI
+
+The React app exposes paper trading at **`/portfolio`** (`PortfolioPage`): multi-book select/create, cash deposit/withdraw, market orders, positions, open pending orders (cancel), trade history, cash ledger, and equity performance chart. Coin detail (`/markets/:exchange/:symbol`) includes a **Paper trade** panel that places market orders against the selected book. Realtime portfolio WS updates are subscribed when a book is selected.
+
 Spot, pending, margin, and recurring-buy symbols must use the **same quote asset as the portfolio currency** (default `USDT`). `ETHBTC` on a USDT book is rejected. When a live mark cannot be fetched, margin positions are **not** marked at entry (liquidation is skipped until a real last price exists).
 
 Live order/position/cash updates for a selected book (and price ticks for selected coins) go over **`GET /api/v1/ws`** — see [`realtime.md`](realtime.md).

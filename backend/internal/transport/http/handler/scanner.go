@@ -99,9 +99,9 @@ func (h *ScannerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	rule, err := h.svc.Create(r.Context(), scanner.CreateInput{
 		ClientID: clientID, Type: body.Type, Interval: body.Interval,
@@ -249,9 +249,9 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	start, err := parseRFC3339(body.RangeStart)
 	if err != nil {

@@ -1,0 +1,106 @@
+{
+  "eyebrow": "Paper desk",
+  "title": "Paper trading",
+  "subtitle": "Simulated books with market fills at last price plus venue fee and slippage. Not real money — informational only.",
+  "resource": "portfolio",
+  "disclaimer": "Paper trading only. Not financial advice. No real money.",
+  "loadFailed": "Could not load portfolio",
+  "books": {
+    "label": "Book",
+    "create": "New book",
+    "createTitle": "Create paper book",
+    "name": "Name",
+    "startingBalance": "Starting cash",
+    "createSuccess": "Book created",
+    "empty": "No paper books yet — create one to start.",
+    "select": "Select book"
+  },
+  "metrics": {
+    "equity": "Equity",
+    "cash": "Cash",
+    "available": "Available",
+    "positions": "Positions value",
+    "unrealized": "Unrealized P&L",
+    "realized": "Realized P&L",
+    "totalPnl": "Total P&L"
+  },
+  "period": {
+    "1d": "1D",
+    "1w": "1W",
+    "1m": "1M",
+    "3m": "3M"
+  },
+  "equityChart": {
+    "title": "Equity",
+    "empty": "No equity samples yet — trade or wait for the next snapshot.",
+    "loadFailed": "Could not load performance"
+  },
+  "trade": {
+    "title": "Place market order",
+    "hint": "Fills at last price with paper fee and slippage. Quote must match book currency (USDT).",
+    "exchange": "Exchange",
+    "symbol": "Symbol",
+    "side": "Side",
+    "buy": "Buy",
+    "sell": "Sell",
+    "quantity": "Quantity",
+    "submitBuy": "Paper buy",
+    "submitSell": "Paper sell",
+    "successBuy": "Bought {{qty}} {{symbol}}",
+    "successSell": "Sold {{qty}} {{symbol}}",
+    "failed": "Order failed",
+    "lotMethod": "Lot method",
+    "fifo": "FIFO",
+    "lifo": "LIFO"
+  },
+  "cash": {
+    "title": "Cash",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "amount": "Amount",
+    "note": "Note",
+    "depositSuccess": "Deposit recorded",
+    "withdrawSuccess": "Withdrawal recorded"
+  },
+  "positions": {
+    "title": "Positions",
+    "empty": "No open spot positions",
+    "symbol": "Symbol",
+    "exchange": "Exchange",
+    "qty": "Qty",
+    "avgCost": "Avg cost",
+    "mark": "Mark",
+    "value": "Value",
+    "uPnl": "uPnL",
+    "open": "Open"
+  },
+  "orders": {
+    "title": "Open orders",
+    "empty": "No open pending orders",
+    "type": "Type",
+    "trigger": "Trigger",
+    "remaining": "Remaining",
+    "status": "Status",
+    "cancel": "Cancel",
+    "cancelConfirm": "Cancel this pending order?",
+    "cancelSuccess": "Order canceled"
+  },
+  "trades": {
+    "title": "Trade history",
+    "empty": "No trades yet",
+    "side": "Side",
+    "price": "Fill",
+    "fee": "Fee",
+    "notional": "Notional",
+    "realized": "Realized",
+    "time": "Time"
+  },
+  "movements": {
+    "title": "Cash ledger",
+    "empty": "No cash movements",
+    "kind": "Kind",
+    "amount": "Amount",
+    "after": "Cash after",
+    "time": "Time"
+  }
+}

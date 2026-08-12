@@ -1,7 +1,7 @@
 import { baseApi } from '../baseApi';
 import type { components } from '../generated/schema';
+import type { MarketExchange } from './marketApi';
 
-export type PortfolioView = components['schemas']['PortfolioView'];
 export type PortfolioSummary = components['schemas']['PortfolioSummary'];
 export type PortfolioPerformance = components['schemas']['PortfolioPerformance'];
 export type PortfolioEquityPoint = components['schemas']['PortfolioEquityPoint'];
@@ -14,6 +14,48 @@ export type PortfolioTransferResponse = components['schemas']['PortfolioTransfer
 export type TaxLot = components['schemas']['TaxLot'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
+export type PaperTrade = components['schemas']['PaperTrade'];
+export type PendingOrder = components['schemas']['PendingOrder'];
+
+/** Spot position row (OpenAPI codegen flattens positions to `Record<string, never>[]`). */
+export type SpotPosition = {
+  exchange?: string;
+  symbol?: string;
+  quantity?: number;
+  reservedQuantity?: number;
+  availableQuantity?: number;
+  avgCost?: number;
+  markPrice?: number;
+  marketValue?: number;
+  unrealizedPnL?: number;
+  costBasis?: number;
+  lots?: TaxLot[];
+};
+
+export type PortfolioView = Omit<components['schemas']['PortfolioView'], 'positions'> & {
+  positions?: SpotPosition[];
+};
+
+export type PlacePortfolioOrderArg = {
+  portfolioId?: string;
+  exchange?: MarketExchange;
+  symbol: string;
+  side: 'buy' | 'sell';
+  type?: 'market' | 'limit_buy' | 'limit_sell' | 'stop_loss';
+  quantity: number;
+  triggerPrice?: number;
+  lotMethod?: 'fifo' | 'lifo';
+  timeInForce?: 'gtc' | 'ioc' | 'fok';
+  idempotencyKey?: string;
+};
+
+export type PlacePortfolioOrderResponse = {
+  type?: string;
+  trade?: PaperTrade;
+  order?: PendingOrder;
+  portfolio?: PortfolioView;
+  note?: string;
+};
 
 type BookArg = { portfolioId?: string };
 type CashMoveArg = { amount: number; note?: string; portfolioId?: string };
@@ -29,6 +71,20 @@ type PortfolioListResponse = {
   clientId?: string;
   count?: number;
   portfolios?: PortfolioSummary[];
+};
+type OrdersListResponse = {
+  clientId?: string;
+  status?: string;
+  count?: number;
+  orders?: PendingOrder[];
+};
+type TradesListResponse = {
+  clientId?: string;
+  count?: number;
+  total?: number;
+  limit?: number;
+  offset?: number;
+  trades?: PaperTrade[];
 };
 
 const bookParams = (portfolioId?: string) => (portfolioId ? { portfolioId } : undefined);
@@ -150,6 +206,66 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['Portfolio'],
     }),
+    placePortfolioOrder: build.mutation<PlacePortfolioOrderResponse, PlacePortfolioOrderArg>({
+      query: (body) => ({
+        url: '/api/v1/portfolio/orders',
+        method: 'POST',
+        body: {
+          portfolioId: body.portfolioId,
+          exchange: body.exchange ?? 'binance',
+          symbol: body.symbol,
+          side: body.side,
+          type: body.type ?? 'market',
+          quantity: body.quantity,
+          triggerPrice: body.triggerPrice,
+          lotMethod: body.lotMethod,
+          timeInForce: body.timeInForce,
+          idempotencyKey: body.idempotencyKey,
+        },
+        headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    listPortfolioOrders: build.query<
+      OrdersListResponse,
+      ({ status?: string; limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/orders',
+        params: {
+          status: arg?.status ?? 'open',
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    cancelPortfolioOrder: build.mutation<
+      { order?: PendingOrder; portfolio?: PortfolioView },
+      { id: string; portfolioId?: string }
+    >({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/orders/${encodeURIComponent(id)}`,
+        method: 'DELETE',
+        params: bookParams(portfolioId),
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    listPortfolioTrades: build.query<
+      TradesListResponse,
+      ({ limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/trades',
+        params: {
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
   }),
 });
 
@@ -170,4 +286,8 @@ export const {
   useSharePortfolioMutation,
   useUpdatePortfolioShareMutation,
   useRevokePortfolioShareMutation,
+  usePlacePortfolioOrderMutation,
+  useListPortfolioOrdersQuery,
+  useCancelPortfolioOrderMutation,
+  useListPortfolioTradesQuery,
 } = portfolioApi;

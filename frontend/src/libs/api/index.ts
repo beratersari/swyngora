@@ -95,6 +95,10 @@ export {
   useSharePortfolioMutation,
   useUpdatePortfolioShareMutation,
   useRevokePortfolioShareMutation,
+  usePlacePortfolioOrderMutation,
+  useListPortfolioOrdersQuery,
+  useCancelPortfolioOrderMutation,
+  useListPortfolioTradesQuery,
 } from './endpoints/portfolioApi';
 export {
   useListAccountAPIKeysQuery,
@@ -114,6 +118,11 @@ export type {
   TaxLot,
   PortfolioShare,
   SharedPortfolioSummary,
+  SpotPosition,
+  PaperTrade,
+  PendingOrder,
+  PlacePortfolioOrderArg,
+  PlacePortfolioOrderResponse,
 } from './endpoints/portfolioApi';
 
 export {

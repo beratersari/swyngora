@@ -74,12 +74,16 @@ func (h *AccountHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 // Close handles POST /api/v1/account/close
 func (h *AccountHandler) Close(w http.ResponseWriter, r *http.Request) {
-	clientID := clientIDFrom(r)
+	var bodyClientID string
 	if r.Body != nil && r.ContentLength != 0 {
 		var body accountBody
-		if err := decodeJSON(r, &body, DefaultMaxJSONBody); err == nil && body.ClientID != "" {
-			clientID = body.ClientID
+		if err := decodeJSON(r, &body, DefaultMaxJSONBody); err == nil {
+			bodyClientID = body.ClientID
 		}
+	}
+	clientID, ok := mustResolveClientID(w, r, bodyClientID)
+	if !ok {
+		return
 	}
 	if clientID == "" {
 		writeError(w, fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument))
@@ -95,12 +99,16 @@ func (h *AccountHandler) Close(w http.ResponseWriter, r *http.Request) {
 
 // Reopen handles POST /api/v1/account/reopen
 func (h *AccountHandler) Reopen(w http.ResponseWriter, r *http.Request) {
-	clientID := clientIDFrom(r)
+	var bodyClientID string
 	if r.Body != nil && r.ContentLength != 0 {
 		var body accountBody
-		if err := decodeJSON(r, &body, DefaultMaxJSONBody); err == nil && body.ClientID != "" {
-			clientID = body.ClientID
+		if err := decodeJSON(r, &body, DefaultMaxJSONBody); err == nil {
+			bodyClientID = body.ClientID
 		}
+	}
+	clientID, ok := mustResolveClientID(w, r, bodyClientID)
+	if !ok {
+		return
 	}
 	if clientID == "" {
 		writeError(w, fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument))

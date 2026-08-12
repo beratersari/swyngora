@@ -95,4 +95,33 @@ func TestAssemblePerformance_YoungPortfolio(t *testing.T) {
 	if got.StartEquity != 10000 || got.EndEquity != 10100 {
 		t.Fatalf("%+v", got)
 	}
+	// Synthetic open + live so charts always get a segment.
+	if got.PointCount < 2 {
+		t.Fatalf("want ≥2 points for young book, got %d %+v", got.PointCount, got.Points)
+	}
+}
+
+func TestAssemblePerformance_SnapBeforeWindowStillSyntheticsStart(t *testing.T) {
+	created := time.Date(2026, 8, 12, 17, 46, 47, 0, time.UTC)
+	end := time.Date(2026, 8, 12, 17, 50, 0, 0, time.UTC)
+	requested := end.Add(-7 * 24 * time.Hour)
+	// Snapshot bucket slightly before create time (15m grid) must not wipe the open point.
+	pre := EquitySnapshot{
+		BucketAt: created.Add(-2 * time.Minute), TakenAt: created.Add(-2 * time.Minute),
+		Equity: 9990, CashBalance: 3000, PositionsValue: 6990,
+	}
+	live := EquityPoint{Time: end, Equity: 9992, CashBalance: 3019, PositionsValue: 6973}
+	got := AssemblePerformance(
+		PerformancePeriod1W, requested, end, created,
+		10000, "USDT", "c3", nil, []EquitySnapshot{pre}, live, "",
+	)
+	if got.PointCount < 2 {
+		t.Fatalf("points=%d %+v", got.PointCount, got.Points)
+	}
+	if got.Points[0].Equity != 10000 {
+		t.Fatalf("synthetic start equity=%v want 10000", got.Points[0].Equity)
+	}
+	if got.Points[len(got.Points)-1].Equity != 9992 {
+		t.Fatalf("live last=%v", got.Points[len(got.Points)-1].Equity)
+	}
 }

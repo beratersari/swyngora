@@ -119,9 +119,9 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	kind := strings.ToLower(strings.TrimSpace(body.Kind))
 	if body.TargetPrice == 0 && kind != "wall" {
@@ -231,9 +231,9 @@ func (h *AlertHandler) PutWebhook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
 		return
 	}
-	clientID := body.ClientID
-	if clientID == "" {
-		clientID = clientIDFrom(r)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
 	}
 	in := domain.WebhookSettings{
 		URL:          body.URL,
