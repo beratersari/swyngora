@@ -1,9 +1,15 @@
 import json
 
 import httpx
+from langchain_core.messages import AIMessage, HumanMessage
 
 from swyngora_ai.config import Settings
-from swyngora_ai.tools.market_http import build_market_tools
+from swyngora_ai.graph.orchestrator import SessionMemory, memory_key
+from swyngora_ai.tools.market_http import (
+    bind_tool_scope,
+    build_market_tools,
+    reset_tool_scope,
+)
 
 
 class _Transport(httpx.BaseTransport):
@@ -116,3 +122,53 @@ def test_market_tools_hit_api(monkeypatch):
 
     health = by_name["health"].invoke({})
     assert "ok" in health
+
+
+def test_read_only_scope_blocks_mutations(monkeypatch):
+    posted: list[str] = []
+
+    class _MutTransport(httpx.BaseTransport):
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            posted.append(f"{request.method} {request.url.path}")
+            return httpx.Response(200, json={"ok": True})
+
+    real_client = httpx.Client
+
+    def fake_client(*args, **kwargs):
+        kwargs["transport"] = _MutTransport()
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_MutTransport())
+
+    monkeypatch.setattr(httpx, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {t.name: t for t in tools}
+
+    toks = bind_tool_scope(can_trade=False, can_manage_keys=False)
+    try:
+        out = by_name["place_portfolio_order"].invoke(
+            {
+                "client_id": "c1",
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "quantity": 1,
+            }
+        )
+        assert "403" in out and "read-only" in out
+        assert posted == []
+
+        keys = by_name["create_api_key"].invoke(
+            {"client_id": "c1", "name": "x", "permission": "trade"}
+        )
+        assert "403" in keys and "not available" in keys
+    finally:
+        reset_tool_scope(toks)
+
+
+def test_memory_key_isolates_tenants():
+    mem = SessionMemory()
+    a = memory_key("alice", "shared")
+    b = memory_key("bob", "shared")
+    assert a != b
+    mem.append(a, [HumanMessage(content="alice secret"), AIMessage(content="ok")])
+    assert mem.get(b) == []
+    assert len(mem.get(a)) == 2

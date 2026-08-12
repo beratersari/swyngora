@@ -96,6 +96,7 @@ export function PortfolioPositionsTable({ items, loading, onOpen }: PortfolioPos
         loading={loading}
         columns={columns}
         dataSource={items}
+        scroll={{ x: 720 }}
       />
     </DataTableCard>
   );

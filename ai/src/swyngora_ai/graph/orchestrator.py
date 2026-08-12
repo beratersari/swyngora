@@ -16,7 +16,12 @@ from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.progress import emit, reset_progress, set_progress
 from swyngora_ai.references import extract_references
-from swyngora_ai.tools.market_http import bind_client_id, reset_bound_client_id
+from swyngora_ai.tools.market_http import (
+    bind_client_id,
+    bind_tool_scope,
+    reset_bound_client_id,
+    reset_tool_scope,
+)
 
 
 @dataclass
@@ -30,9 +35,16 @@ class ChatResult:
     references: list[dict[str, str]] = field(default_factory=list)
 
 
+def memory_key(client_id: str, session_id: str) -> str:
+    """Namespace conversation memory by tenant so sessionId cannot cross clients."""
+    cid = (client_id or "").strip() or "_"
+    sid = (session_id or "default").strip() or "default"
+    return f"{cid}\n{sid}"
+
+
 @dataclass
 class SessionMemory:
-    """Simple per-session message buffer (not durable)."""
+    """Simple per-session message buffer (not durable). Keys should be memory_key(...)."""
 
     sessions: dict[str, list[BaseMessage]] = field(default_factory=dict)
     max_messages: int = 40
@@ -211,10 +223,14 @@ class Orchestrator:
         session_id: str = "default",
         on_event=None,
         client_id: str = "",
+        *,
+        can_trade: bool = True,
+        can_manage_keys: bool = True,
     ) -> ChatResult:
         """Run one user turn; returns answer + tool/thinking trace.
 
         on_event: optional callback(dict) for live updates (type/text).
+        can_trade / can_manage_keys gate HTTP tools when the Go proxy uses master auth.
         """
         tools_acc: list[str] = []
         thinking_acc: list[str] = []
@@ -231,10 +247,13 @@ class Orchestrator:
 
         token = set_progress(_cb)
         cid = (client_id or "").strip() or (self.settings.default_client_id or "").strip()
+        public_session = (session_id or "default").strip() or "default"
+        mem_key = memory_key(cid, public_session)
         bind_tok = bind_client_id(cid)
+        scope_toks = bind_tool_scope(can_trade=can_trade, can_manage_keys=can_manage_keys)
         try:
             emit("status", "Planning…")
-            history = self.memory.get(session_id)
+            history = self.memory.get(mem_key)
             messages: list[BaseMessage] = list(history) + [HumanMessage(content=user_message)]
             config: RunnableConfig = {
                 "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
@@ -262,7 +281,7 @@ class Orchestrator:
                     thinking_acc.append(t)
 
             final_msg = AIMessage(content=reply)
-            self.memory.append(session_id, [HumanMessage(content=user_message), final_msg])
+            self.memory.append(mem_key, [HumanMessage(content=user_message), final_msg])
 
             if any(
                 k in user_message.lower()
@@ -286,10 +305,11 @@ class Orchestrator:
                 reply=reply,
                 tools=tools_acc,
                 thinking=thinking_acc,
-                session_id=session_id,
+                session_id=public_session,
                 references=[r.as_dict() for r in refs],
             )
         finally:
+            reset_tool_scope(scope_toks)
             reset_bound_client_id(bind_tok)
             reset_progress(token)
 

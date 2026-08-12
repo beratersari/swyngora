@@ -43,7 +43,7 @@ import {
 } from '@/libs/api';
 import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
-import { formatPrice } from '@/libs/utils';
+import { formatPrice, newPaperIdempotencyKey } from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
@@ -761,7 +761,7 @@ export function CoinDetailPage() {
                   side: values.side,
                   type: 'market',
                   quantity: values.quantity,
-                  idempotencyKey: `detail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  idempotencyKey: newPaperIdempotencyKey('detail'),
                 }).unwrap();
                 void message.success(
                   values.side === 'buy'

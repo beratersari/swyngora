@@ -22,6 +22,7 @@ import {
   parseChatMarkdown,
   parseInlineMd,
   processPanelOpen,
+  sanitizeChatReferences,
   stepsFromThinking,
   thinkStepFromEvent,
   uniqueToolNames,
@@ -170,7 +171,7 @@ export function AiChatPage() {
             tools: res.tools ?? m.tools,
             thinking,
             steps,
-            references: res.references ?? m.references,
+            references: sanitizeChatReferences(res.references) ?? m.references,
             streaming: false,
           };
         });

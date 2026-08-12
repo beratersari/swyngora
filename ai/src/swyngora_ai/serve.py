@@ -73,15 +73,30 @@ class Handler(BaseHTTPRequestHandler):
             return
         session_id = str(payload.get("sessionId") or payload.get("session_id") or "default")
         client_id = str(payload.get("clientId") or payload.get("client_id") or "").strip()
+        # Missing flags default to full access (CLI / older backends).
+        can_trade = payload["canTrade"] if "canTrade" in payload else payload.get("can_trade", True)
+        can_manage_keys = (
+            payload["canManageKeys"]
+            if "canManageKeys" in payload
+            else payload.get("can_manage_keys", True)
+        )
+        can_trade = bool(can_trade)
+        can_manage_keys = bool(can_manage_keys)
 
         if path in ("/v1/chat/stream", "/chat/stream"):
-            self._stream_chat(message, session_id, client_id)
+            self._stream_chat(message, session_id, client_id, can_trade, can_manage_keys)
             return
         if path not in ("/v1/chat", "/chat"):
             self._json(404, {"error": "not found"})
             return
         try:
-            result = get_orch().chat(message, session_id=session_id, client_id=client_id)
+            result = get_orch().chat(
+                message,
+                session_id=session_id,
+                client_id=client_id,
+                can_trade=can_trade,
+                can_manage_keys=can_manage_keys,
+            )
             self._json(
                 200,
                 {
@@ -96,7 +111,14 @@ class Handler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._json(502, {"error": "ai_failed", "message": str(e)[:500]})
 
-    def _stream_chat(self, message: str, session_id: str, client_id: str = "") -> None:
+    def _stream_chat(
+        self,
+        message: str,
+        session_id: str,
+        client_id: str = "",
+        can_trade: bool = True,
+        can_manage_keys: bool = True,
+    ) -> None:
         """NDJSON stream: one JSON object per line (status/tool/thinking/final/error/done)."""
         q: queue.Queue[dict[str, Any] | None] = queue.Queue()
 
@@ -106,7 +128,12 @@ class Handler(BaseHTTPRequestHandler):
         def worker() -> None:
             try:
                 result = get_orch().chat(
-                    message, session_id=session_id, on_event=on_event, client_id=client_id
+                    message,
+                    session_id=session_id,
+                    on_event=on_event,
+                    client_id=client_id,
+                    can_trade=can_trade,
+                    can_manage_keys=can_manage_keys,
                 )
                 q.put(
                     {

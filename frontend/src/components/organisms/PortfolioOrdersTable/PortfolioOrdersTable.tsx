@@ -98,6 +98,7 @@ export function PortfolioOrdersTable({
         loading={loading}
         columns={columns}
         dataSource={items}
+        scroll={{ x: 720 }}
       />
     </DataTableCard>
   );

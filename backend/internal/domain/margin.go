@@ -435,10 +435,9 @@ func LiquidationPriceWithDebt(side MarginSide, entry, qty, margin, debtPrincipal
 	switch side {
 	case MarginLong:
 		// Interest is cash liability on top of posted margin.
+		// buffer may be negative when interest > margin-maint → liq rises above entry
+		// so ShouldLiquidate still fires while the book is under maintenance.
 		buffer := margin - maint - debtInterest
-		if buffer < 0 {
-			buffer = 0
-		}
 		p := entry - buffer/qty
 		if p < 0 {
 			p = 0

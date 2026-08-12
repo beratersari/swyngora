@@ -13,6 +13,18 @@ from pydantic import BaseModel, Field
 from swyngora_ai.config import Settings, get_settings
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
+# Defaults True for CLI/local so tools work without an HTTP scope envelope.
+bound_can_trade: ContextVar[bool] = ContextVar("bound_can_trade", default=True)
+bound_can_manage_keys: ContextVar[bool] = ContextVar("bound_can_manage_keys", default=True)
+
+_READ_ONLY_DENY = (
+    "ERROR 403: this AI session is read-only; a trade-permission API key is required "
+    "for portfolio, alert, and other mutating tools"
+)
+_KEY_ADMIN_DENY = (
+    "ERROR 403: API key and account-admin tools are not available in this AI session "
+    "(user keys cannot manage other keys)"
+)
 
 
 def bind_client_id(client_id: str) -> Any:
@@ -22,6 +34,26 @@ def bind_client_id(client_id: str) -> Any:
 
 def reset_bound_client_id(token: Any) -> None:
     bound_client_id.reset(token)
+
+
+def bind_tool_scope(*, can_trade: bool = True, can_manage_keys: bool = True) -> tuple[Any, Any]:
+    """Bind trade + key-admin scope for one chat turn (returns tokens for reset)."""
+    return bound_can_trade.set(bool(can_trade)), bound_can_manage_keys.set(bool(can_manage_keys))
+
+
+def reset_tool_scope(tokens: tuple[Any, Any]) -> None:
+    trade_tok, keys_tok = tokens
+    bound_can_trade.reset(trade_tok)
+    bound_can_manage_keys.reset(keys_tok)
+
+
+def _is_key_or_account_admin_path(path: str) -> bool:
+    p = (path or "").split("?", 1)[0]
+    if "/api/v1/account/api-keys" in p:
+        return True
+    if p in ("/api/v1/account/close", "/api/v1/account/reopen"):
+        return True
+    return False
 
 
 class _HTTP:
@@ -48,7 +80,16 @@ class _HTTP:
         if body is not None and "clientId" in body:
             body["clientId"] = cid
 
+    def _scope_error(self, path: str, *, mutating: bool) -> str | None:
+        if _is_key_or_account_admin_path(path) and not bound_can_manage_keys.get():
+            return _KEY_ADMIN_DENY
+        if mutating and not bound_can_trade.get():
+            return _READ_ONLY_DENY
+        return None
+
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
+        if err := self._scope_error(path, mutating=False):
+            return err
         params = dict(params or {})
         self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:
@@ -61,6 +102,8 @@ class _HTTP:
                 return r.text
 
     def post(self, path: str, body: dict[str, Any]) -> str:
+        if err := self._scope_error(path, mutating=True):
+            return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
@@ -73,6 +116,8 @@ class _HTTP:
                 return r.text
 
     def put(self, path: str, body: dict[str, Any]) -> str:
+        if err := self._scope_error(path, mutating=True):
+            return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
@@ -85,6 +130,8 @@ class _HTTP:
                 return r.text
 
     def patch(self, path: str, body: dict[str, Any]) -> str:
+        if err := self._scope_error(path, mutating=True):
+            return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
@@ -97,6 +144,8 @@ class _HTTP:
                 return r.text
 
     def delete(self, path: str, params: dict[str, Any]) -> str:
+        if err := self._scope_error(path, mutating=True):
+            return err
         params = dict(params or {})
         self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:

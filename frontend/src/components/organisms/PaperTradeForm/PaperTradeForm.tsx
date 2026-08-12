@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
@@ -29,6 +29,8 @@ export function PaperTradeForm({
   const [side, setSide] = useState<'buy' | 'sell'>(defaultSide);
   const [quantity, setQuantity] = useState<number | null>(null);
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
+  const [localBusy, setLocalBusy] = useState(false);
+  const inFlightRef = useRef(false);
 
   useEffect(() => {
     if (lockedExchange) setExchange(String(lockedExchange));
@@ -37,7 +39,10 @@ export function PaperTradeForm({
     if (lockedSymbol) setSymbol(lockedSymbol);
   }, [lockedSymbol]);
 
+  const busy = isSubmitting || localBusy;
+
   const submit = async (nextSide?: 'buy' | 'sell') => {
+    if (isSubmitting || inFlightRef.current) return;
     const s = nextSide ?? side;
     const sym = symbol.trim().toUpperCase();
     if (!sym || quantity == null || !Number.isFinite(quantity) || quantity <= 0) return;
@@ -48,11 +53,16 @@ export function PaperTradeForm({
       quantity,
       lotMethod: s === 'sell' ? lotMethod : undefined,
     };
+    inFlightRef.current = true;
+    setLocalBusy(true);
     try {
       await onSubmit(values);
       setQuantity(null);
     } catch {
       // parent surfaces
+    } finally {
+      inFlightRef.current = false;
+      setLocalBusy(false);
     }
   };
 
@@ -79,7 +89,6 @@ export function PaperTradeForm({
               <Select
                 value={exchange}
                 aria-label={t('portfolio:trade.exchange')}
-                style={{ minWidth: 120 }}
                 options={['binance', 'coinbase', 'bybit'].map((e) => ({ value: e, label: e }))}
                 onChange={setExchange}
               />
@@ -121,7 +130,6 @@ export function PaperTradeForm({
             step={0.001}
             value={quantity}
             onChange={(v) => setQuantity(typeof v === 'number' ? v : null)}
-            style={{ minWidth: 140 }}
             aria-label={t('portfolio:trade.quantity')}
           />
         </Field>
@@ -132,7 +140,6 @@ export function PaperTradeForm({
             </Text>
             <Select
               value={lotMethod}
-              style={{ minWidth: 100 }}
               options={[
                 { value: 'fifo', label: t('portfolio:trade.fifo') },
                 { value: 'lifo', label: t('portfolio:trade.lifo') },
@@ -146,10 +153,20 @@ export function PaperTradeForm({
       <Actions>
         {compact ? (
           <>
-            <Button type="primary" loading={isSubmitting} onClick={() => void submit('buy')}>
+            <Button
+              type="primary"
+              loading={isSubmitting}
+              disabled={busy}
+              onClick={() => void submit('buy')}
+            >
               {t('portfolio:trade.submitBuy')}
             </Button>
-            <Button danger loading={isSubmitting} onClick={() => void submit('sell')}>
+            <Button
+              danger
+              loading={isSubmitting}
+              disabled={busy}
+              onClick={() => void submit('sell')}
+            >
               {t('portfolio:trade.submitSell')}
             </Button>
           </>
@@ -158,6 +175,7 @@ export function PaperTradeForm({
             type="primary"
             danger={side === 'sell'}
             loading={isSubmitting}
+            disabled={busy}
             onClick={() => void submit()}
           >
             {side === 'buy' ? t('portfolio:trade.submitBuy') : t('portfolio:trade.submitSell')}

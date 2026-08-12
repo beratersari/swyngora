@@ -11,6 +11,15 @@ export const DataTableCard = styled.div`
   border-radius: ${({ theme }) => theme.radii.md}px;
   overflow: hidden;
   max-width: 100%;
+  min-width: 0;
+
+  /* Let Ant table horizontal scroll stay inside the card on narrow viewports */
+  .ant-table-wrapper,
+  .ant-spin-nested-loading,
+  .ant-spin-container {
+    min-width: 0;
+    max-width: 100%;
+  }
 `;
 
 export const DataTable = styled(Table)`

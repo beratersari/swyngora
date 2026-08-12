@@ -32,7 +32,6 @@ export function PortfolioBookSelect({
         <Select
           loading={loading}
           placeholder={t('portfolio:books.select')}
-          style={{ minWidth: 220 }}
           value={selectedId || undefined}
           options={options}
           onChange={onSelect}

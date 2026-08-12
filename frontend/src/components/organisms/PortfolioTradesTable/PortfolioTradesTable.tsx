@@ -82,10 +82,11 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
       <DataTable
         rowKey={(r) => r.id ?? `${r.symbol}-${r.createdAt}`}
         size="small"
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        pagination={{ pageSize: 10, hideOnSinglePage: true, simple: true }}
         loading={loading}
         columns={columns}
         dataSource={items}
+        scroll={{ x: 720 }}
       />
     </DataTableCard>
   );

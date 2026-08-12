@@ -8,14 +8,15 @@ A single process `API_AUTH_TOKEN` is too coarse for bots and extra apps. Users n
 
 | Permission | Allowed |
 |------------|---------|
-| `read` | GET (and HEAD) on tenant APIs; `POST /api/v1/ai/chat` |
-| `trade` | `read` plus mutations (paper orders, cash, watchlist writes, alerts, …) |
+| `read` | GET (and HEAD) on tenant APIs; `POST /api/v1/ai/chat` (and stream) with **read-only tools** |
+| `trade` | `read` plus mutations (paper orders, cash, watchlist writes, alerts, …); AI chat may use those tools |
 
 User keys **cannot**:
 
-- Create, list, or revoke other keys
+- Create, list, or revoke other keys (including via AI tools — the proxy passes `canManageKeys=false`)
 - Close or reopen the account
 - Use `/mcp` unless `permission=trade`
+- Use AI to place trades or mutate state when `permission=read` (`canTrade=false` is enforced in the AI tool HTTP layer even though tools authenticate with the process master token)
 
 The process master token (`API_AUTH_TOKEN`) still has full access and is how the main app manages keys when the API is locked down. In open local mode (empty master token), `X-Client-Id` is enough to manage keys; a `swy_…` user key still binds that client and its scopes.
 
