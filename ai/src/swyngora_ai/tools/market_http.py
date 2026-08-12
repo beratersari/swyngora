@@ -170,6 +170,14 @@ class OpenInterestInput(BaseModel):
     )
 
 
+class LiquidationHuntInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, never averaged)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -726,6 +734,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_open_interest(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/open-interest",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def estimate_liquidation_hunt(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-hunt",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1799,6 +1813,19 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Binance USD-M + Bybit linear. exchange=all is per venue, not averaged."
             ),
             args_schema=LongShortInput,
+        ),
+        StructuredTool.from_function(
+            estimate_liquidation_hunt,
+            name="estimate_liquidation_hunt",
+            description=(
+                "Hypothetical only: if Binance or Bybit walked their own spot "
+                "book to push price and force futures liquidations, where is "
+                "the main long/short pressure, how much spot buy/sell the "
+                "visible book needs, and a rough desk result (book-only vs "
+                "with cascade exit). Venues are never averaged. Not evidence "
+                "of exchange behavior. Not financial advice."
+            ),
+            args_schema=LiquidationHuntInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

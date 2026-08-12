@@ -437,3 +437,25 @@ func (b *LiquidationBook) Snapshot(exchange, symbol string) *LiquidationSnapshot
 	}
 	return out
 }
+
+// Events returns copies of stored prints for one coin (newest last) since cutoff.
+func (b *LiquidationBook) Events(exchange, symbol string, since time.Time) []LiquidationEvent {
+	symbol = NormalizeLiquidationSymbol(symbol)
+	if b == nil || symbol == "" {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	list := b.bySym[symbol]
+	out := make([]LiquidationEvent, 0, len(list))
+	for _, e := range list {
+		if exchange != "" && exchange != "all" && string(e.Exchange) != exchange {
+			continue
+		}
+		if !since.IsZero() && e.Time.Before(since) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}

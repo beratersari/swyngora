@@ -808,6 +808,42 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-hunt:
+    get:
+      summary: Hypothetical liquidation hunt (per venue)
+      description: |
+        **Hypothetical model only** — not evidence that any exchange moves
+        price, and not financial advice.
+
+        For Binance USD-M and Bybit linear separately: estimate where long/short
+        liquidation pressure sits if price moves up or down, how much **spot**
+        buying or selling the visible book needs to reach those areas, and a
+        rough desk result (unwind on the current opposite side vs assuming
+        part of estimated liquidations become exit flow). Uses live spot book,
+        open interest, account long/short (blended toward 50/50), funding, and
+        recent liquidation prints. Leverage mix is assumed.
+      operationId: getMarketLiquidationHunt
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both, never averaged)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue hunt report
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)

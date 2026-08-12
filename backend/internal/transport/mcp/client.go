@@ -204,6 +204,16 @@ func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol stri
 	return c.get(ctx, "/api/v1/market/long-short-ratio", q)
 }
 
+// GetLiquidationHunt returns the hypothetical per-venue liquidation-hunt model.
+func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

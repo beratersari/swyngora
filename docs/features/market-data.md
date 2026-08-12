@@ -43,6 +43,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).
 - `GET /api/v1/market/long-short-ratio` account long/short ratio plus recent 5m history. See [`long-short-ratio.md`](long-short-ratio.md).
 - `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
+- `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + rough desk result). See [`liquidation-hunt.md`](liquidation-hunt.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

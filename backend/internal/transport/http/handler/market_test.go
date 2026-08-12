@@ -239,6 +239,33 @@ func TestGetFundingRate_OK(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationHunt_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHunt(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body huntResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHunt(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetFuturesHistory_NotConfigured(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT", nil)

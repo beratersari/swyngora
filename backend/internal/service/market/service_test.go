@@ -681,6 +681,55 @@ func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationHunt_PerVenueFailSoft(t *testing.T) {
+	now := time.Now().UTC()
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 10, Value: 1_000_000},
+	}}
+	bybOI := &fakeOI{err: errors.New("bybit down")}
+	binLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.4, ShortShare: 0.6, Ratio: 0.67},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI,
+			domain.ExchangeBybit:   bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: binLS,
+		})
+	got, err := svc.GetLiquidationHunt(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 {
+		t.Fatalf("venues %+v", got.Venues)
+	}
+	var bin *domain.HuntVenueReport
+	for i := range got.Venues {
+		if got.Venues[i].Exchange == domain.ExchangeBinance {
+			bin = &got.Venues[i]
+		}
+	}
+	if bin == nil || bin.OpenInterestValue != 1_000_000 || bin.Price <= 0 {
+		t.Fatalf("binance %+v", bin)
+	}
+	if bin.UpHunt.Thesis == "" || bin.DownHunt.Thesis == "" {
+		t.Fatalf("missing scenarios %+v", bin)
+	}
+}
+
+func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationHunt(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

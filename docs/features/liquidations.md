@@ -23,6 +23,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
 - Side meaning: **long** = long positions were force-closed; **short** = shorts were force-closed.
 - Live windows are computed from an in-memory 24h book. Events are also written to SQLite and reloaded on startup (last 24h). Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
+- Hypothetical “what if spot is walked to force liquidations” is a separate model: [`liquidation-hunt.md`](liquidation-hunt.md).
 
 ## Where the code lives
 

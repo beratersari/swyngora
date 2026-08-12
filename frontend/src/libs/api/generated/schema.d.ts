@@ -425,6 +425,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-hunt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hypothetical liquidation hunt (per venue)
+         * @description Hypothetical model only. Per-venue estimate of liquidation
+         *     pressure, spot size to reach those areas, and a rough desk result.
+         */
+        get: operations["getMarketLiquidationHunt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4089,6 +4110,38 @@ export interface operations {
                         symbol?: string;
                         count?: number;
                         items?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationHunt: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both, never averaged) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue hunt report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
                         note?: string;
                     };
                 };
