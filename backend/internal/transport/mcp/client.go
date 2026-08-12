@@ -214,6 +214,16 @@ func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol str
 	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
 }
 
+// GetSqueezeRisk returns long/short squeeze risk scores per venue and combined.
+func (c *APIClient) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/squeeze-risk", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

@@ -20,6 +20,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
+| `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

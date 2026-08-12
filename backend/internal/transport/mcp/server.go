@@ -37,6 +37,7 @@ type DataPort interface {
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -392,6 +393,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_squeeze_risk",
+		mcp.WithDescription("Long-squeeze and short-squeeze risk scores (0–100) for a coin on Binance USD-M and Bybit linear, plus an OI-weighted combined view. Uses open interest change, funding, account long/short crowding, recent liquidations, and nearby liquidation-pocket estimates. Explains which side is crowded and why risk is high or low. Not a prediction or financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetSqueezeRisk(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

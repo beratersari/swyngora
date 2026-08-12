@@ -446,6 +446,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/squeeze-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Long and short squeeze risk
+         * @description Scores long-squeeze and short-squeeze risk (0–100) for Binance
+         *     and Bybit separately, plus an OI-weighted combined view.
+         */
+        get: operations["getMarketSqueezeRisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4142,6 +4163,39 @@ export interface operations {
                         exchange?: string;
                         asOf?: string;
                         venues?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketSqueezeRisk: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined squeeze risk */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
                         note?: string;
                     };
                 };

@@ -178,6 +178,14 @@ class LiquidationHuntInput(BaseModel):
     )
 
 
+class SqueezeRiskInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -740,6 +748,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def estimate_liquidation_hunt(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidation-hunt",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/squeeze-risk",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1826,6 +1840,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "of exchange behavior. Not financial advice."
             ),
             args_schema=LiquidationHuntInput,
+        ),
+        StructuredTool.from_function(
+            get_squeeze_risk,
+            name="get_squeeze_risk",
+            description=(
+                "Long-squeeze and short-squeeze risk scores (0–100) for a coin "
+                "on Binance and Bybit, plus an OI-weighted combined view. "
+                "Explains which side is crowded and why risk is high or low. "
+                "Uses OI change, funding, long/short accounts, liquidations. "
+                "Not a prediction or financial advice."
+            ),
+            args_schema=SqueezeRiskInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

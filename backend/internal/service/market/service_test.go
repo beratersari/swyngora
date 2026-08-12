@@ -681,6 +681,67 @@ func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	}
 }
 
+func TestGetSqueezeRisk_PerVenueAndCombined(t *testing.T) {
+	now := time.Now().UTC()
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 9_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 90, Value: 8_100_000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 80, Value: 7_200_000},
+		},
+	}}
+	bybOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 20, Value: 1_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 18, Value: 900_000},
+		},
+	}}
+	binLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.68, ShortShare: 0.32, Ratio: 2.125},
+	}}
+	bybLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45, Ratio: 1.22},
+	}}
+	binFund := &fakeFunding{ser: &domain.FundingSeries{
+		Current: domain.FundingPoint{Time: now, Rate: 0.00025, Predicted: true},
+		History: []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.0002}},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "100", PriceChangePercent: "1.5"}},
+		domain.ExchangeBybit:   &fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "100", PriceChangePercent: "1.2"}},
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI, domain.ExchangeBybit: bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: binLS, domain.ExchangeBybit: bybLS,
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: binFund,
+		})
+	got, err := svc.GetSqueezeRisk(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	if got.Combined.DominantVenue != "binance" {
+		t.Fatalf("dom %s", got.Combined.DominantVenue)
+	}
+	if got.Combined.LongSqueeze.Score <= 0 {
+		t.Fatalf("combined long score %+v", got.Combined)
+	}
+}
+
+func TestGetSqueezeRisk_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetSqueezeRisk(context.Background(), "all", "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestGetLiquidationHunt_PerVenueFailSoft(t *testing.T) {
 	now := time.Now().UTC()
 	binOI := &fakeOI{ser: &domain.OpenInterestSeries{

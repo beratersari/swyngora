@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Squeeze risk:** long-squeeze and short-squeeze scores (0–100) for any coin on Binance USD-M and Bybit linear, with reasons and an OI-weighted combined view (`GET /api/v1/market/squeeze-risk`, MCP `get_squeeze_risk`) (`docs/features/squeeze-risk.md`)
 - **Liquidation hunt (hypothetical):** per-venue model of where long/short pressure sits if spot is walked up or down, how much visible spot size that takes, and a rough desk result (book-only unwind vs cascade exit). Not evidence of exchange behavior (`GET /api/v1/market/liquidation-hunt`, MCP `estimate_liquidation_hunt`) (`docs/features/liquidation-hunt.md`)
 - **Durable futures history:** SQLite archive of open interest, funding, long/short, and liquidations for Binance USD-M and Bybit linear; 5m sampler, restart-safe, no duplicate rows, per-venue fail-soft (`GET /api/v1/market/futures-history`, MCP `get_futures_history`) (`docs/features/futures-history.md`)
 - **Futures long/short ratio:** share of accounts that are long vs short plus recent 5m history for Binance USD-M and Bybit linear; also attached on the open-interest payload (`GET /api/v1/market/long-short-ratio`, MCP `get_long_short_ratio`, Telegram `/ls`) (`docs/features/long-short-ratio.md`)
