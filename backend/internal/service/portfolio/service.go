@@ -1575,6 +1575,15 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 }
 
 func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	// Always re-read under the book lock so concurrent workers never fill from a stale snapshot.
+	fresh, ferr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
+	if ferr != nil {
+		if ferr == domain.ErrNotFound {
+			return nil, false, nil
+		}
+		return nil, false, ferr
+	}
+	o = *fresh
 	if o.Status != domain.PendingStatusOpen {
 		return nil, false, nil
 	}

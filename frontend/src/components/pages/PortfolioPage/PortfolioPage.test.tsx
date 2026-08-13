@@ -36,9 +36,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useListPortfolioCashMovementsQuery: () => ({ data: { movements: [] }, isLoading: false }),
     useCreatePortfolioMutation: () => [vi.fn(), { isLoading: false }],
     usePlacePortfolioOrderMutation: () => [vi.fn(), { isLoading: false, isError: false }],
+    useAmendPortfolioOrderMutation: () => [vi.fn(), { isLoading: false }],
     useCancelPortfolioOrderMutation: () => [vi.fn(), { isLoading: false }],
     useDepositPortfolioCashMutation: () => [vi.fn(), { isLoading: false, isError: false }],
     useWithdrawPortfolioCashMutation: () => [vi.fn(), { isLoading: false, isError: false }],
+    useListMarginPositionsQuery: () => ({ data: { positions: [] }, isLoading: false }),
+    useSetMarginModeMutation: () => [vi.fn(), { isLoading: false }],
+    usePlaceMarginOrderMutation: () => [vi.fn(), { isLoading: false, isError: false }],
+    useCloseMarginPositionMutation: () => [vi.fn(), { isLoading: false }],
     useLazyListSpotMarketsQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
   };
 });
@@ -55,6 +60,7 @@ describe('PortfolioPage', () => {
     expect(await screen.findByRole('button', { name: /new book|yeni defter/i })).toBeInTheDocument();
     // Summary strip + market form (buy control is segmented or primary submit)
     expect(screen.getAllByText(/equity|özkaynak/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/place market order|piyasa emri/i)).toBeInTheDocument();
+    expect(screen.getByText(/spot order ticket|spot emir fişi|order ticket|emir fişi/i)).toBeInTheDocument();
+    expect(screen.getByText(/margin ticket|marjin fişi/i)).toBeInTheDocument();
   });
 });

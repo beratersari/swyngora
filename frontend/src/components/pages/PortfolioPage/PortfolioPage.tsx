@@ -4,26 +4,33 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
+import { PaperMarginForm, type PaperMarginFormValues } from '@/components/organisms/PaperMarginForm';
 import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
 import { PortfolioBookSelect } from '@/components/organisms/PortfolioBookSelect';
 import { PortfolioCashPanel } from '@/components/organisms/PortfolioCashPanel';
 import { PortfolioEquityChart } from '@/components/organisms/PortfolioEquityChart';
+import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
 import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummaryStrip';
 import { PortfolioTradesTable } from '@/components/organisms/PortfolioTradesTable';
 import {
   rtkErrorMessage,
+  useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
+  useCloseMarginPositionMutation,
   useCreatePortfolioMutation,
   useDepositPortfolioCashMutation,
   useGetPortfolioPerformanceQuery,
   useGetPortfolioQuery,
+  useListMarginPositionsQuery,
   useListPortfolioCashMovementsQuery,
   useListPortfolioOrdersQuery,
   useListPortfolioTradesQuery,
   useListPortfoliosQuery,
+  usePlaceMarginOrderMutation,
   usePlacePortfolioOrderMutation,
+  useSetMarginModeMutation,
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
@@ -99,15 +106,24 @@ export function PortfolioPage() {
     { limit: 30, portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
+  const marginPosQuery = useListMarginPositionsQuery(
+    { portfolioId: bookId },
+    { skip: !bookId && books.length !== 1, pollingInterval: visible ? 12_000 : 0, refetchOnFocus: true },
+  );
 
   const [createBook, createState] = useCreatePortfolioMutation();
   const [placeOrder, placeState] = usePlacePortfolioOrderMutation();
+  const [amendOrder, amendState] = useAmendPortfolioOrderMutation();
   const [cancelOrder, cancelState] = useCancelPortfolioOrderMutation();
   const [deposit, depositState] = useDepositPortfolioCashMutation();
   const [withdraw, withdrawState] = useWithdrawPortfolioCashMutation();
+  const [setMarginMode, marginModeState] = useSetMarginModeMutation();
+  const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
+  const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
 
   const view = portfolioQuery.data;
   const positions = view?.positions ?? [];
+  const marginPositions = marginPosQuery.data?.positions ?? view?.marginPositions ?? [];
   const currency = view?.currency ?? 'USDT';
 
   const selectBook = (id: string) => {
@@ -122,21 +138,47 @@ export function PortfolioPage() {
   };
 
   const onTrade = async (values: PaperTradeFormValues) => {
-    await placeOrder({
+    const res = await placeOrder({
       portfolioId: bookId,
       exchange: values.exchange,
       symbol: values.symbol,
       side: values.side,
-      type: 'market',
+      type: values.orderType,
       quantity: values.quantity,
+      triggerPrice: values.triggerPrice,
+      takeProfitPrice: values.takeProfitPrice,
+      stopLossPrice: values.stopLossPrice,
+      trailType: values.trailType,
+      trailValue: values.trailValue,
       lotMethod: values.lotMethod,
+      timeInForce: values.timeInForce,
       idempotencyKey: `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     }).unwrap();
+    const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);
     void message.success(
-      values.side === 'buy'
-        ? t('portfolio:trade.successBuy', { qty: values.quantity, symbol: values.symbol })
-        : t('portfolio:trade.successSell', { qty: values.quantity, symbol: values.symbol }),
+      isPending
+        ? t('portfolio:trade.successPending', { symbol: values.symbol })
+        : values.side === 'buy'
+          ? t('portfolio:trade.successBuy', { qty: values.quantity, symbol: values.symbol })
+          : t('portfolio:trade.successSell', { qty: values.quantity, symbol: values.symbol }),
     );
+  };
+
+  const onMargin = async (values: PaperMarginFormValues) => {
+    await placeMargin({
+      portfolioId: bookId,
+      exchange: values.exchange,
+      symbol: values.symbol,
+      side: values.side,
+      type: values.orderType,
+      quantity: values.quantity,
+      leverage: values.leverage,
+      limitPrice: values.limitPrice,
+      stopLoss: values.stopLoss,
+      takeProfit: values.takeProfit,
+      idempotencyKey: `web-m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    }).unwrap();
+    void message.success(t('portfolio:margin.successOpen', { symbol: values.symbol, lev: values.leverage }));
   };
 
   const cashColumns = useMemo(
@@ -259,6 +301,22 @@ export function PortfolioPage() {
           </Split>
 
           <Section>
+            <PanelCard>
+              <PaperMarginForm
+                marginMode={view?.marginMode}
+                modeLoading={marginModeState.isLoading}
+                isSubmitting={placeMarginState.isLoading}
+                submitError={placeMarginState.isError ? placeMarginState.error : undefined}
+                onModeChange={async (mode) => {
+                  await setMarginMode({ mode, portfolioId: bookId }).unwrap();
+                  void message.success(t('portfolio:margin.modeSuccess', { mode }));
+                }}
+                onSubmit={onMargin}
+              />
+            </PanelCard>
+          </Section>
+
+          <Section>
             <PortfolioEquityChart
               points={perfQuery.data?.points}
               startEquity={perfQuery.data?.startEquity}
@@ -291,12 +349,42 @@ export function PortfolioPage() {
                     items={ordersQuery.data?.orders ?? []}
                     loading={ordersQuery.isLoading}
                     cancelLoading={cancelState.isLoading}
+                    amendLoading={amendState.isLoading}
                     onOpen={openMarket}
+                    onAmend={async (values) => {
+                      await amendOrder({
+                        id: values.id,
+                        portfolioId: bookId,
+                        triggerPrice: values.triggerPrice,
+                        remainingQuantity: values.remainingQuantity,
+                      }).unwrap();
+                      void message.success(t('portfolio:orders.amendSuccess'));
+                    }}
                     onCancel={(id) => {
                       void cancelOrder({ id, portfolioId: bookId })
                         .unwrap()
                         .then(() => message.success(t('portfolio:orders.cancelSuccess')))
                         .catch(() => undefined);
+                    }}
+                  />
+                ),
+              },
+              {
+                key: 'margin',
+                label: t('portfolio:margin.positionsTitle'),
+                children: (
+                  <PortfolioMarginPositionsTable
+                    items={marginPositions}
+                    loading={marginPosQuery.isLoading || portfolioQuery.isLoading}
+                    closeLoading={closeMarginState.isLoading}
+                    onOpen={openMarket}
+                    onClose={async (id) => {
+                      await closeMargin({
+                        id,
+                        portfolioId: bookId,
+                        idempotencyKey: `web-mc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                      }).unwrap();
+                      void message.success(t('portfolio:margin.closeSuccess'));
                     }}
                   />
                 ),

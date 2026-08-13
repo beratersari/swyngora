@@ -750,6 +750,7 @@ export function CoinDetailPage() {
               lockedExchange={exchangeArg}
               lockedSymbol={symbol}
               compact
+              advanced={false}
               showLotMethod={false}
               isSubmitting={placePaperState.isLoading}
               submitError={placePaperState.isError ? placePaperState.error : undefined}
@@ -759,14 +760,21 @@ export function CoinDetailPage() {
                   exchange: values.exchange,
                   symbol: values.symbol,
                   side: values.side,
-                  type: 'market',
+                  type: values.orderType,
                   quantity: values.quantity,
+                  triggerPrice: values.triggerPrice,
+                  timeInForce: values.timeInForce,
+                  lotMethod: values.lotMethod,
                   idempotencyKey: `detail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 }).unwrap();
                 void message.success(
-                  values.side === 'buy'
-                    ? t('detail:paperTrade.successBuy')
-                    : t('detail:paperTrade.successSell'),
+                  values.orderType !== 'market'
+                    ? t('detail:paperTrade.successPending', {
+                        defaultValue: 'Pending paper order placed',
+                      })
+                    : values.side === 'buy'
+                      ? t('detail:paperTrade.successBuy')
+                      : t('detail:paperTrade.successSell'),
                 );
               }}
             />

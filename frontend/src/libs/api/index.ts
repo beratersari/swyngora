@@ -97,8 +97,17 @@ export {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   useListPortfolioOrdersQuery,
+  useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
+  useSetMarginModeMutation,
+  usePlaceMarginOrderMutation,
+  useListMarginPositionsQuery,
+  useListMarginOrdersQuery,
+  useCancelMarginOrderMutation,
+  useCloseMarginPositionMutation,
+  useSetMarginBracketsMutation,
+  useRepayMarginDebtMutation,
 } from './endpoints/portfolioApi';
 export {
   useListAccountAPIKeysQuery,
@@ -121,8 +130,16 @@ export type {
   SpotPosition,
   PaperTrade,
   PendingOrder,
+  PaperOrderType,
   PlacePortfolioOrderArg,
   PlacePortfolioOrderResponse,
+  AmendPortfolioOrderArg,
+  AmendPortfolioOrderResponse,
+  MarginPosition,
+  MarginMode,
+  PlaceMarginOrderArg,
+  PlaceMarginOrderResponse,
+  CloseMarginPositionArg,
 } from './endpoints/portfolioApi';
 
 export {

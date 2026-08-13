@@ -1386,10 +1386,10 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	defer func() { _ = tx.Rollback() }()
 
 	var status string
-	var remaining float64
+	var remaining, filled float64
 	err = tx.QueryRowContext(ctx, `
-		SELECT status, remaining_quantity FROM pending_orders WHERE id = ?
-	`, order.ID).Scan(&status, &remaining)
+		SELECT status, remaining_quantity, filled_quantity FROM pending_orders WHERE id = ?
+	`, order.ID).Scan(&status, &remaining, &filled)
 	if err == sql.ErrNoRows {
 		return domain.ErrNotFound
 	}
@@ -1402,8 +1402,29 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	if t.Quantity > remaining+1e-9 {
 		return fmt.Errorf("%w: fill quantity exceeds remaining", domain.ErrInvalidArgument)
 	}
-
+	// Authoritative counters from DB (not caller snapshot) so concurrent partials cannot reset filled.
+	remainingAfter := remaining - t.Quantity
+	if remainingAfter < domain.PositionEpsilon {
+		remainingAfter = 0
+	}
+	filledAfter := filled + t.Quantity
+	statusAfter := string(domain.PendingStatusOpen)
+	reservedCash, reservedQty := order.ReservedCash, order.ReservedQuantity
 	atStr := at.UTC().Format(time.RFC3339Nano)
+	var filledAt any
+	if remainingAfter <= domain.PositionEpsilon {
+		statusAfter = string(domain.PendingStatusFilled)
+		remainingAfter = 0
+		reservedCash = 0
+		reservedQty = 0
+		filledAt = atStr
+	}
+	// Reflect DB-authoritative counters on the caller's order for peer/sync paths.
+	order.FilledQuantity = filledAfter
+	order.RemainingQuantity = remainingAfter
+	order.ReservedCash = reservedCash
+	order.ReservedQuantity = reservedQty
+	order.Status = domain.PendingOrderStatus(statusAfter)
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
 		WHERE id = ?
@@ -1445,19 +1466,14 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 		return err
 	}
 
-	var filledAt any
-	if order.Status == domain.PendingStatusFilled {
-		filledAt = atStr
-	} else {
-		filledAt = nil
-	}
+	// CAS on remaining so a second concurrent partial with a stale snapshot cannot apply.
 	res, err := tx.ExecContext(ctx, `
 		UPDATE pending_orders
 		SET filled_quantity = ?, remaining_quantity = ?, reserved_cash = ?, reserved_quantity = ?,
 		    status = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?, filled_at = COALESCE(?, filled_at)
-		WHERE id = ? AND status = 'open'
-	`, order.FilledQuantity, order.RemainingQuantity, order.ReservedCash, order.ReservedQuantity,
-		string(order.Status), atStr, t.ID, t.Price, filledAt, order.ID)
+		WHERE id = ? AND status = 'open' AND ABS(remaining_quantity - ?) < 1e-9
+	`, filledAfter, remainingAfter, reservedCash, reservedQty,
+		statusAfter, atStr, t.ID, t.Price, filledAt, order.ID, remaining)
 	if err != nil {
 		return err
 	}
@@ -1486,10 +1502,10 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	defer func() { _ = tx.Rollback() }()
 
 	var status string
-	var remaining float64
+	var remaining, priorFilled float64
 	err = tx.QueryRowContext(ctx, `
-		SELECT status, remaining_quantity FROM pending_orders WHERE id = ?
-	`, filled.ID).Scan(&status, &remaining)
+		SELECT status, remaining_quantity, filled_quantity FROM pending_orders WHERE id = ?
+	`, filled.ID).Scan(&status, &remaining, &priorFilled)
 	if err == sql.ErrNoRows {
 		return domain.ErrNotFound
 	}
@@ -1502,8 +1518,28 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	if t.Quantity > remaining+1e-9 {
 		return fmt.Errorf("%w: fill quantity exceeds remaining", domain.ErrInvalidArgument)
 	}
-
+	remainingAfter := remaining - t.Quantity
+	if remainingAfter < domain.PositionEpsilon {
+		remainingAfter = 0
+	}
+	filledAfter := priorFilled + t.Quantity
+	statusAfter := string(domain.PendingStatusOpen)
+	reservedCash, reservedQty := filled.ReservedCash, filled.ReservedQuantity
 	atStr := at.UTC().Format(time.RFC3339Nano)
+	var filledAt any
+	if remainingAfter <= domain.PositionEpsilon {
+		statusAfter = string(domain.PendingStatusFilled)
+		remainingAfter = 0
+		reservedCash = 0
+		reservedQty = 0
+		filledAt = atStr
+	}
+	filled.FilledQuantity = filledAfter
+	filled.RemainingQuantity = remainingAfter
+	filled.ReservedCash = reservedCash
+	filled.ReservedQuantity = reservedQty
+	filled.Status = domain.PendingOrderStatus(statusAfter)
+
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
 		WHERE id = ?
@@ -1543,19 +1579,13 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 		return err
 	}
 
-	var filledAt any
-	if filled.Status == domain.PendingStatusFilled {
-		filledAt = atStr
-	} else {
-		filledAt = nil
-	}
 	res, err := tx.ExecContext(ctx, `
 		UPDATE pending_orders
 		SET filled_quantity = ?, remaining_quantity = ?, reserved_cash = ?, reserved_quantity = ?,
 		    status = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?, filled_at = COALESCE(?, filled_at)
-		WHERE id = ? AND status = 'open'
-	`, filled.FilledQuantity, filled.RemainingQuantity, filled.ReservedCash, filled.ReservedQuantity,
-		string(filled.Status), atStr, t.ID, t.Price, filledAt, filled.ID)
+		WHERE id = ? AND status = 'open' AND ABS(remaining_quantity - ?) < 1e-9
+	`, filledAfter, remainingAfter, reservedCash, reservedQty,
+		statusAfter, atStr, t.ID, t.Price, filledAt, filled.ID, remaining)
 	if err != nil {
 		return err
 	}

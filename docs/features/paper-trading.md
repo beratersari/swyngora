@@ -271,6 +271,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 - When triggered, the filler may fill only part of the remaining size; the order stays `open` until remaining is zero, then becomes `filled`.
 - **Each fill** creates a separate trade history row with `pendingOrderId`.
 - Latest fill metadata: `fillTradeId`, `fillPrice`.
+- Fill path **re-reads** the order under the book lock and applies `remaining_quantity` compare-and-set so concurrent partials cannot reset `filled`/`remaining` or overshoot original size.
 
 ### Accounting
 - **Buy fill:** debit cash at fill price; increase position; average cost updated.
@@ -285,6 +286,16 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 - Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
 - Recurring buy worker runs on `RECURRING_BUY_INTERVAL` and once on process start.
 
+## Web UI (`frontend/`)
+
+| Surface | Notes |
+|---------|--------|
+| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells |
+| Open orders table | Cancel + **amend** (standalone GTC limit/stop: trigger and remaining qty) |
+| `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP |
+| Margin positions tab | Mark, liq, debt, uPnL, market close |
+| Coin detail compact ticket | Market + limit + stop (no OCO/bracket) |
+
 ## Code
 
 | Layer | Path |
@@ -295,6 +306,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 | Filler | `backend/internal/service/portfolio/filler.go` |
 | Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
 | HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_allocation.go`, `portfolio_margin.go` |
+| Web | `frontend/src/components/organisms/PaperTradeForm`, `PaperMarginForm`, `PortfolioOrdersTable`, `PortfolioMarginPositionsTable`, `pages/PortfolioPage` |
 | MCP | portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + allocation basket / rebalance tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
 
 ## Config
