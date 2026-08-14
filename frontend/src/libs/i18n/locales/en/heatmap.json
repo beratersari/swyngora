@@ -1,0 +1,17 @@
+{
+  "eyebrow": "Market map",
+  "title": "Price heatmap",
+  "subtitle": "24-hour percent change. Tile size is quote volume or circulating market cap. Click a tile to open the pair. Informational only.",
+  "resource": "heatmap",
+  "exchange": "Exchange",
+  "quote": "Quote",
+  "sizeBy": "Tile size",
+  "metric": {
+    "volume": "24h volume",
+    "marketCap": "Market cap"
+  },
+  "sizeHint": "Cell size · {{metric}}  ·  24h change",
+  "mapAria": "Price change heatmap",
+  "empty": "No markets to map for this venue and quote.",
+  "loadFailed": "Could not load heatmap"
+}

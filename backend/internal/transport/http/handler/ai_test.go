@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
 
 func TestAIHandler_Chat(t *testing.T) {
@@ -81,5 +82,58 @@ func TestAIHandler_NotConfigured(t *testing.T) {
 	h.Chat(rr, req)
 	if rr.Code != http.StatusBadGateway {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestAIHandler_ReadKeyForwardsReadOnlyScope(t *testing.T) {
+	var got aiagent.ChatRequest
+	aiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(map[string]string{"reply": "readonly ok", "sessionId": "s"})
+	}))
+	defer aiSrv.Close()
+
+	h := NewAIHandler(aiagent.New(aiSrv.URL, 5*time.Second), 5*time.Second)
+	body, _ := json.Marshal(map[string]string{"message": "hi", "sessionId": "s"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/chat", bytes.NewReader(body))
+	req.Header.Set("X-Client-Id", "user-a")
+	req = req.WithContext(middleware.WithIdentity(req.Context(), &middleware.AuthIdentity{
+		ClientID: "user-a", CanTrade: false, UserKey: true, KeyID: "k1",
+	}))
+	rr := httptest.NewRecorder()
+	h.Chat(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d %s", rr.Code, rr.Body.String())
+	}
+	if got.CanTrade || got.CanManageKeys {
+		t.Fatalf("expected read-only scope, got canTrade=%v canManageKeys=%v", got.CanTrade, got.CanManageKeys)
+	}
+	if got.ClientID != "user-a" {
+		t.Fatalf("clientId=%q", got.ClientID)
+	}
+}
+
+func TestAIHandler_TradeKeyCannotManageKeys(t *testing.T) {
+	var got aiagent.ChatRequest
+	aiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(map[string]string{"reply": "trade ok", "sessionId": "s"})
+	}))
+	defer aiSrv.Close()
+
+	h := NewAIHandler(aiagent.New(aiSrv.URL, 5*time.Second), 5*time.Second)
+	body, _ := json.Marshal(map[string]string{"message": "hi", "sessionId": "s"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/chat", bytes.NewReader(body))
+	req.Header.Set("X-Client-Id", "user-b")
+	req = req.WithContext(middleware.WithIdentity(req.Context(), &middleware.AuthIdentity{
+		ClientID: "user-b", CanTrade: true, UserKey: true, KeyID: "k2",
+	}))
+	rr := httptest.NewRecorder()
+	h.Chat(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d %s", rr.Code, rr.Body.String())
+	}
+	if !got.CanTrade || got.CanManageKeys {
+		t.Fatalf("want trade without key admin, got trade=%v keys=%v", got.CanTrade, got.CanManageKeys)
 	}
 }

@@ -176,7 +176,7 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	}
 	aiCtx, cancel := context.WithTimeout(ctx, r.opts.AITimeout)
 	defer cancel()
-	res, err := r.ai.Chat(aiCtx, q, session, session)
+	res, err := r.ai.Chat(aiCtx, q, session, session, nil)
 	if err != nil {
 		return "AI unavailable: " + esc(err.Error()) + "\n\nEnsure the AI service is running (backend can auto-start it) and try again."
 	}

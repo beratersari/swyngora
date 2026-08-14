@@ -34,7 +34,7 @@ func TestClient_Chat(t *testing.T) {
 	defer srv.Close()
 
 	c := New(srv.URL, 5*time.Second)
-	res, err := c.Chat(context.Background(), "world", "s1", "client-1")
+	res, err := c.Chat(context.Background(), "world", "s1", "client-1", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestClient_ChatStream(t *testing.T) {
 
 	c := New(srv.URL, 5*time.Second)
 	var seen []string
-	res, err := c.ChatStream(context.Background(), "BTC?", "s1", "client-1", func(ev StreamEvent) {
+	res, err := c.ChatStream(context.Background(), "BTC?", "s1", "client-1", nil, func(ev StreamEvent) {
 		seen = append(seen, ev.Type+":"+ev.Text+ev.Reply)
 	})
 	if err != nil {
@@ -95,8 +95,25 @@ func TestClient_ChatStream(t *testing.T) {
 
 func TestClient_Unreachable(t *testing.T) {
 	c := New("http://127.0.0.1:1", 200*time.Millisecond)
-	_, err := c.Chat(context.Background(), "x", "s", "c")
+	_, err := c.Chat(context.Background(), "x", "s", "c", nil)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestClient_ChatForwardsScope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req ChatRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		if req.CanTrade || req.CanManageKeys {
+			t.Fatalf("want read-only scope, got trade=%v keys=%v", req.CanTrade, req.CanManageKeys)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"reply": "ok", "sessionId": req.SessionID})
+	}))
+	defer srv.Close()
+	c := New(srv.URL, 5*time.Second)
+	_, err := c.Chat(context.Background(), "hi", "s", "c", &ChatOptions{CanTrade: false, CanManageKeys: false})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

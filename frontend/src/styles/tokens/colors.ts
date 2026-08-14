@@ -167,6 +167,10 @@ export const semanticColors = {
     /** Neon reserved for price direction / focus, not chrome */
     up: palette.caribbeanGreen,
     down: '#E07A7A',
+    /** Cool slate for unchanged / heatmap dead band — not green-gray stone */
+    neutral: '#3D444C',
+    /** Map well: charcoal in the page hue so the mosaic sits in the desk */
+    mapBed: '#111817',
     grid: withAlpha(neutralColors.pistachio, 0.16),
     background: palette.richBlack,
     text: neutralColors.pistachio,

@@ -29,6 +29,10 @@ Expose first market-data APIs so clients can:
 - **24h trade count** is only available from Binance public APIs; Coinbase/Bybit return 0 / UI shows "—"
 - **Coinbase high/low:** Advanced Trade public `products` leaves `high_24h`/`low_24h` empty; detail ticker fills them from Exchange `GET /products/{id}/stats`
 
+### Price heatmap (web)
+
+`/heatmap` is a full-bleed market map of `GET /api/v1/market/spot`. Opaque red / slate / green on a charcoal well (`chart.mapBed`); `|Δ| < 0.4%` is dead-band gray (`chart.neutral`). Cell size is volume or market cap. Hairline gutters match the well. Hover HUD (not a chip tooltip). Click opens coin detail.
+
 ### Spot order book — `GET /api/v1/market/orderbook`
 
 - Grouped bid/ask depth (spot only). `group` is the price step (e.g. `0.1`); omit for a suggested default.

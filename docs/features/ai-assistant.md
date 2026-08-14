@@ -32,8 +32,9 @@ User → Orchestrator (LangGraph create_react_agent)
 - Social/X results are labeled weak and incomplete.
 - Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
-- Session memory is in-process (not durable across restarts).
+- Session memory is in-process (not durable across restarts) and **namespaced by `clientId` + `sessionId`** so one tenant cannot load another’s history by reusing `sessionId`.
 - HTTP/Telegram pass `clientId`; Python tools bind that id (and send `SWYNGORA_API_TOKEN` / `X-Client-Id`) so the model cannot switch tenants. Reserved ids (`ai-assistant`, `http-default`, `anonymous`) are rejected by the backend.
+- The Go AI proxy also passes `canTrade` / `canManageKeys` from the authenticated identity. User **read** keys keep AI chat but mutating tools return 403; user keys never get key-admin tools even with trade permission.
 - Web `/ai` streams `POST /api/v1/ai/chat/stream` and shows a **Process** timeline (status / think / tools / results) as each step happens. The list stays open while working, then collapses to a one-line summary so the answer stays readable. Non-stream `POST /api/v1/ai/chat` remains as fallback.
 - Telegram `/ask` uses the same stream for live progress edits.
 

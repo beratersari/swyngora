@@ -27,7 +27,8 @@ const PERIODS: PortfolioPerformancePeriod[] = ['1d', '1w', '1m', '3m'];
 
 /**
  * Equity history line chart.
- * Chart remounts when period/data readiness changes so axis formatters stay correct.
+ * Chart remounts when period/locale/span formatting inputs change — not on every resize.
+ * Height/width updates go through ResizeObserver + applyOptions so the series stays mounted.
  */
 export function PortfolioEquityChart({
   points = [],
@@ -46,6 +47,7 @@ export function PortfolioEquityChart({
   const periodRef = useRef(period);
   const spanRef = useRef(0);
   const localeRef = useRef(i18n.language || 'en');
+  const lineDataRef = useRef<ReturnType<typeof toEquityLineData>>([]);
 
   const lineData = useMemo(
     () => toEquityLineData(points, { startEquity, startAt }),
@@ -57,8 +59,20 @@ export function PortfolioEquityChart({
   periodRef.current = period;
   spanRef.current = spanSec;
   localeRef.current = i18n.language || 'en';
+  lineDataRef.current = lineData;
 
-  // Create chart only when the host is in the DOM; rebuild on period/locale so axis format updates.
+  const applyHostSize = (chart: IChartApi, host: HTMLElement, fallbackHeight: number) => {
+    const width = host.clientWidth || host.parentElement?.clientWidth || 0;
+    const hostHeight = host.clientHeight || fallbackHeight;
+    // Intermediate layout frames can report 0×0 while the drawer/grid reflows;
+    // applying zero size blanks the canvas until a later tick.
+    if (width < 8 || hostHeight < 8) return;
+    chart.applyOptions({ width, height: hostHeight });
+  };
+
+  // Create chart when the host is mounted with data; rebuild only for axis format inputs.
+  // Do NOT depend on `height` — phone breakpoint height changes would remount without
+  // re-running setData (lineData unchanged) and leave an empty chart until the next fetch.
   useLayoutEffect(() => {
     if (!ready) return;
     const el = boxRef.current;
@@ -66,8 +80,8 @@ export function PortfolioEquityChart({
 
     const locale = localeRef.current;
     const chart = createChart(el, {
-      width: el.clientWidth || el.parentElement?.clientWidth || 320,
-      height,
+      width: Math.max(el.clientWidth || el.parentElement?.clientWidth || 320, 8),
+      height: Math.max(el.clientHeight || height, 8),
       layout: {
         background: { color: 'transparent' },
         textColor: semanticColors.text.secondary,
@@ -107,10 +121,18 @@ export function PortfolioEquityChart({
     chartRef.current = chart;
     seriesRef.current = series;
 
+    // Seed data immediately on create (resize-only remounts used to skip the data effect).
+    const initial = lineDataRef.current;
+    if (initial.length > 0) {
+      series.setData(initial);
+      chart.timeScale().fitContent();
+    }
+
     const ro = new ResizeObserver(() => {
       const host = boxRef.current;
-      if (!host || !chartRef.current) return;
-      chartRef.current.applyOptions({ width: host.clientWidth, height });
+      const live = chartRef.current;
+      if (!host || !live) return;
+      applyHostSize(live, host, height);
     });
     ro.observe(el);
 
@@ -120,7 +142,17 @@ export function PortfolioEquityChart({
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, [ready, height, period, i18n.language, spanSec]);
+    // height intentionally omitted from deps — applied via ResizeObserver / height effect
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- remount only for format inputs
+  }, [ready, period, i18n.language, spanSec]);
+
+  // Responsive height from parent (phone vs desk): resize in place, never remount.
+  useEffect(() => {
+    const host = boxRef.current;
+    const chart = chartRef.current;
+    if (!host || !chart) return;
+    applyHostSize(chart, host, height);
+  }, [height]);
 
   useEffect(() => {
     const series = seriesRef.current;

@@ -173,6 +173,26 @@ func TestLiquidationPriceWithDebtInterest(t *testing.T) {
 	}
 }
 
+func TestLiquidationPriceWithDebtInterestAboveEntry(t *testing.T) {
+	// interest > margin - maint → buffer negative → liq above entry so price-only
+	// liquidation still fires while equity is already under maintenance.
+	// margin=20, maint=0.5, interest=30 → buffer=-10.5 → liq=100-(-10.5)=110.5
+	liq, err := LiquidationPriceWithDebt(MarginLong, 100, 1, 20, 80, 30, 0.005)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(liq-110.5) > 1e-9 {
+		t.Fatalf("want liq above entry, got %v", liq)
+	}
+	if !ShouldLiquidate(MarginLong, 105, liq) {
+		t.Fatalf("mark 105 must liquidate when liq=%v", liq)
+	}
+	// Without above-entry liq, a mark still above entry would skip liquidation while insolvent.
+	if ShouldLiquidate(MarginLong, 105, 100) {
+		t.Fatal("mark 105 should not liquidate against a clamped liq of 100")
+	}
+}
+
 func TestMarginPnL(t *testing.T) {
 	// long: entry 100 mark 110 qty 2 → +20
 	if u := MarginUnrealizedPnL(MarginLong, 2, 100, 110); math.Abs(u-20) > 1e-9 {

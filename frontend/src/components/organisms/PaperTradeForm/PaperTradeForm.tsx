@@ -49,8 +49,8 @@ export function PaperTradeForm({
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
   const [localError, setLocalError] = useState<string | null>(null);
-  const inFlightRef = useRef(false);
   const [localBusy, setLocalBusy] = useState(false);
+  const inFlightRef = useRef(false);
   const busy = isSubmitting || localBusy;
 
   useEffect(() => {
@@ -155,7 +155,6 @@ export function PaperTradeForm({
               <Select
                 value={exchange}
                 aria-label={t('portfolio:trade.exchange')}
-                style={{ minWidth: 120 }}
                 options={['binance', 'coinbase', 'bybit'].map((e) => ({ value: e, label: e }))}
                 onChange={setExchange}
               />
@@ -318,7 +317,6 @@ export function PaperTradeForm({
             </Text>
             <Select
               value={lotMethod}
-              style={{ minWidth: 100 }}
               options={[
                 { value: 'fifo', label: t('portfolio:trade.fifo') },
                 { value: 'lifo', label: t('portfolio:trade.lifo') },
@@ -332,10 +330,20 @@ export function PaperTradeForm({
       <Actions>
         {compact && kind === 'market' ? (
           <>
-            <Button type="primary" loading={busy} disabled={busy} onClick={() => void submit('buy')}>
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={busy}
+              onClick={() => void submit('buy')}
+            >
               {t('portfolio:trade.submitBuy')}
             </Button>
-            <Button danger loading={busy} disabled={busy} onClick={() => void submit('sell')}>
+            <Button
+              danger
+              loading={busy}
+              disabled={busy}
+              onClick={() => void submit('sell')}
+            >
               {t('portfolio:trade.submitSell')}
             </Button>
           </>

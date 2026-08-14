@@ -8,6 +8,7 @@ import alertsEn from './locales/en/alerts.json';
 import compareEn from './locales/en/compare.json';
 import signalsEn from './locales/en/signals.json';
 import portfolioEn from './locales/en/portfolio.json';
+import heatmapEn from './locales/en/heatmap.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
 import detailTr from './locales/tr/detail.json';
@@ -18,6 +19,7 @@ import alertsTr from './locales/tr/alerts.json';
 import compareTr from './locales/tr/compare.json';
 import signalsTr from './locales/tr/signals.json';
 import portfolioTr from './locales/tr/portfolio.json';
+import heatmapTr from './locales/tr/heatmap.json';
 
 /**
  * Bundled translation catalogs.
@@ -35,6 +37,7 @@ export const resources = {
     compare: compareEn,
     signals: signalsEn,
     portfolio: portfolioEn,
+    heatmap: heatmapEn,
   },
   tr: {
     common: commonTr,
@@ -47,6 +50,7 @@ export const resources = {
     compare: compareTr,
     signals: signalsTr,
     portfolio: portfolioTr,
+    heatmap: heatmapTr,
   },
 } as const;
 

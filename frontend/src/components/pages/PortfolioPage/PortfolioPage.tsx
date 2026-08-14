@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, message, Tabs } from 'antd';
+import { Alert, Button, message } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
@@ -34,11 +34,12 @@ import {
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
-import { useDocumentVisible } from '@/libs/hooks';
+import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePortfolioSubscription } from '@/libs/realtime';
-import { formatDateTime, formatPrice } from '@/libs/utils';
+import { formatDateTime, formatPrice, newPaperIdempotencyKey } from '@/libs/utils';
+import { mediaQueries } from '@/styles/tokens';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { PageStack, PanelCard, Section, Split } from './PortfolioPage.styles';
+import { DeskTabs, PageStack, PanelCard, Section, Split } from './PortfolioPage.styles';
 
 const BOOK_KEY = 'swyngora.portfolioBookId';
 
@@ -51,6 +52,8 @@ export function PortfolioPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
+  const isPhone = useMediaQuery(mediaQueries.phone);
+  const chartHeight = isPhone ? 180 : 220;
   const booksQuery = useListPortfoliosQuery(undefined, { refetchOnFocus: true });
   const books = booksQuery.data?.portfolios ?? [];
 
@@ -152,7 +155,7 @@ export function PortfolioPage() {
       trailValue: values.trailValue,
       lotMethod: values.lotMethod,
       timeInForce: values.timeInForce,
-      idempotencyKey: `web-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      idempotencyKey: newPaperIdempotencyKey('web'),
     }).unwrap();
     const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);
     void message.success(
@@ -325,10 +328,12 @@ export function PortfolioPage() {
               onPeriodChange={setPeriod}
               isLoading={perfQuery.isLoading || perfQuery.isFetching}
               isError={perfQuery.isError}
+              height={chartHeight}
             />
           </Section>
 
-          <Tabs
+          <DeskTabs
+            size={isPhone ? 'small' : 'middle'}
             items={[
               {
                 key: 'positions',
@@ -414,9 +419,10 @@ export function PortfolioPage() {
                         rowKey={(r) => (r as { id?: string }).id ?? Math.random().toString()}
                         size="small"
                         loading={cashQuery.isLoading}
-                        pagination={false}
+                        pagination={{ pageSize: 8, hideOnSinglePage: true, simple: isPhone }}
                         columns={cashColumns}
                         dataSource={cashQuery.data?.movements ?? []}
+                        scroll={{ x: 480 }}
                       />
                     </DataTableCard>
                   ),

@@ -38,9 +38,17 @@ func New(baseURL string, timeout time.Duration) *Client {
 
 // ChatRequest is the JSON body for POST /v1/chat.
 type ChatRequest struct {
-	Message   string `json:"message"`
-	SessionID string `json:"sessionId"`
-	ClientID  string `json:"clientId,omitempty"`
+	Message       string `json:"message"`
+	SessionID     string `json:"sessionId"`
+	ClientID      string `json:"clientId,omitempty"`
+	CanTrade      bool   `json:"canTrade"`
+	CanManageKeys bool   `json:"canManageKeys"`
+}
+
+// ChatOptions controls tool scope for the AI service (read vs trade vs key admin).
+type ChatOptions struct {
+	CanTrade      bool
+	CanManageKeys bool
 }
 
 // ChatReference is one public web/X source collected during the turn.
@@ -71,8 +79,8 @@ type StreamEvent struct {
 	SessionID  string          `json:"sessionId"`
 }
 
-// Chat sends a user message (non-streaming).
-func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string) (ChatResult, error) {
+// Chat sends a user message (non-streaming). opts nil → full tool access (legacy).
+func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string, opts *ChatOptions) (ChatResult, error) {
 	var zero ChatResult
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -86,7 +94,12 @@ func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string) 
 	if sessionID == "" {
 		return zero, fmt.Errorf("sessionId is required")
 	}
-	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID})
+	reqBody := ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID, CanTrade: true, CanManageKeys: true}
+	if opts != nil {
+		reqBody.CanTrade = opts.CanTrade
+		reqBody.CanManageKeys = opts.CanManageKeys
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return zero, err
 	}
@@ -134,8 +147,8 @@ func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string) 
 }
 
 // ChatStream streams NDJSON events. onEvent is called for each event (including final).
-// Returns the final ChatResult when type=final is seen.
-func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID string, onEvent func(StreamEvent)) (ChatResult, error) {
+// Returns the final ChatResult when type=final is seen. opts nil → full tool access.
+func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID string, opts *ChatOptions, onEvent func(StreamEvent)) (ChatResult, error) {
 	var zero ChatResult
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -149,7 +162,12 @@ func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID st
 	if sessionID == "" {
 		return zero, fmt.Errorf("sessionId is required")
 	}
-	body, err := json.Marshal(ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID})
+	reqBody := ChatRequest{Message: message, SessionID: sessionID, ClientID: clientID, CanTrade: true, CanManageKeys: true}
+	if opts != nil {
+		reqBody.CanTrade = opts.CanTrade
+		reqBody.CanManageKeys = opts.CanManageKeys
+	}
+	body, err := json.Marshal(reqBody)
 	if err != nil {
 		return zero, err
 	}

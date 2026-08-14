@@ -75,6 +75,8 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 | `status.success` | mountainMeadow |
 | `chart.up` | caribbeanGreen (**charts + focus only**) |
 | `chart.down` | `#E07A7A` (readable red; not in brand set) |
+| `chart.neutral` | `#3D444C` (unchanged / heatmap dead band) |
+| `chart.mapBed` | `#111817` (heatmap well; charcoal in the page hue) |
 
 ## 2a. Breakpoints
 
