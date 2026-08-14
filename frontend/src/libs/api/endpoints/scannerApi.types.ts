@@ -93,7 +93,7 @@ export type CreateScannerRuleArg = {
 export type StartScannerBacktestArg = {
   ruleId: string;
   symbol: string;
-  exchange?: 'binance' | 'coinbase' | 'bybit';
+  exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;
 };

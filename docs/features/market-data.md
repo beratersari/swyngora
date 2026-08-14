@@ -23,9 +23,9 @@ Expose first market-data APIs so clients can:
 
 ### Exchanges — `GET /api/v1/market/exchanges`
 
-- Venues: `binance` (default), `coinbase`, `bybit`
+- Venues: `binance` (default), `coinbase`, `bybit`, **`nasdaq`** (US stocks, USD), **`bist`** (Borsa Istanbul, TRY)
 - Pass `exchange` on spot/candles/ticker/intervals/tags
-- **Product tags** come from the Binance marketing catalog and are **applied cross-venue by base asset** (Coinbase/Bybit rows get the same tags as Binance when the base matches)
+- **Product tags** come from the Binance marketing catalog and are **applied cross-venue by base asset** for **crypto** venues only (Coinbase/Bybit rows get the same tags as Binance when the base matches). Nasdaq/BIST never inherit crypto tags — `LINK` on BIST is Link Bilgisayar, not Chainlink.
 - **24h trade count** is only available from Binance public APIs; Coinbase/Bybit return 0 / UI shows "—"
 - **Coinbase high/low:** Advanced Trade public `products` leaves `high_24h`/`low_24h` empty; detail ticker fills them from Exchange `GET /products/{id}/stats`
 
@@ -45,9 +45,21 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
 - See [`order-book.md`](order-book.md).
 
+### Equities — `nasdaq` / `bist`
+
+Cash stocks use the same list/ticker/candle contracts as crypto pairs:
+
+| Venue | Quote | Symbols | Source |
+|-------|-------|---------|--------|
+| `nasdaq` | USD | Full Nasdaq tape (~4k) | Nasdaq.com public screener (last, % change, volume, **market cap**) |
+| `bist` | TRY | Live BIST board (~640) | TradingView public Turkey scanner (last, % change, volume, **TRY market cap**, sector). Fallback: Bigpara list + Yahoo spark (no mcap). |
+
+Metrics: last, session change %, day high/low (Yahoo/spark on detail), share volume, notional volume (`price × volume`). Nasdaq **market cap** comes from the Nasdaq screener. BIST **market cap** comes from the Turkey scanner (TRY). Yahoo spark (used for candles and the BIST fallback tape) does **not** publish mcap. No public order book (detail book is empty / 404).
+
 ### Spot markets — `GET /api/v1/market/spot`
 
-- **Source:** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded). Product catalog is **required** for the filter: without a warm or stale catalog snapshot, the spot list returns `502` rather than listing non-crypto products.
+- **Source (crypto):** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded). Product catalog is **required** for the filter: without a warm or stale catalog snapshot, the spot list returns `502` rather than listing non-crypto products.
+- **Source (nasdaq/bist):** Nasdaq.com screener and the public TradingView Turkey scanner. Market-cap sort uses the venue mcap field (no Binance supply snapshot — crypto circulating supply is never applied to stocks).
 - **Params:**
   - `q` — search substring (symbol / base / quote / **tag name**)
   - `quote`, `base`, `status` — filters

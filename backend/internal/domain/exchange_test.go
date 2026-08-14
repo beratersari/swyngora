@@ -38,6 +38,27 @@ func TestSupportedIntervalsFor_CoinbaseSubset(t *testing.T) {
 	}
 }
 
+func TestIsEquityExchangeAndDefaultQuote(t *testing.T) {
+	if !IsEquityExchange(ExchangeNasdaq) || !IsEquityExchange(ExchangeBist) {
+		t.Fatal("equity venues")
+	}
+	if IsEquityExchange(ExchangeBinance) {
+		t.Fatal("binance is not equity")
+	}
+	if DefaultQuoteAsset(ExchangeNasdaq) != "USD" || DefaultQuoteAsset(ExchangeBist) != "TRY" {
+		t.Fatal("equity quotes")
+	}
+	if !IsValidIntervalFor(ExchangeNasdaq, "1d") || IsValidIntervalFor(ExchangeNasdaq, "3m") {
+		t.Fatal("nasdaq intervals")
+	}
+	if got := NormalizeSymbol(ExchangeBist, "thyao.is"); got != "THYAO" {
+		t.Fatalf("bist norm %q", got)
+	}
+	if b, q := SplitBaseQuote(ExchangeNasdaq, "AAPL"); b != "AAPL" || q != "USD" {
+		t.Fatalf("split %s %s", b, q)
+	}
+}
+
 func TestSupportedIntervalsFor_UnknownExchangeNil(t *testing.T) {
 	if got := SupportedIntervalsFor(Exchange("kraken")); got != nil {
 		t.Fatalf("unknown exchange should return nil, got %v", got)

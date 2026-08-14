@@ -22,13 +22,15 @@
   "exchanges": {
     "binance": "Binance",
     "coinbase": "Coinbase",
-    "bybit": "Bybit"
+    "bybit": "Bybit",
+    "nasdaq": "Nasdaq",
+    "bist": "BIST"
   },
   "tape": {
     "aria": "Hacme göre önde gelen USDT çiftleri"
   },
   "footer": {
-    "venues": "Binance · Coinbase · Bybit · canlı spot defterler",
+    "venues": "Binance · Coinbase · Bybit · Nasdaq · BIST",
     "disclaimer": "{{appName}} · bilgilendirme amaçlı piyasa verisi · yatırım tavsiyesi değildir"
   },
   "language": {

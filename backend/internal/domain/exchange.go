@@ -9,6 +9,8 @@ const (
 	ExchangeBinance  Exchange = "binance"
 	ExchangeCoinbase Exchange = "coinbase"
 	ExchangeBybit    Exchange = "bybit"
+	ExchangeNasdaq   Exchange = "nasdaq"
+	ExchangeBist     Exchange = "bist"
 )
 
 // SupportedExchanges is the ordered list of venues exposed by the API.
@@ -16,6 +18,8 @@ var SupportedExchanges = []Exchange{
 	ExchangeBinance,
 	ExchangeCoinbase,
 	ExchangeBybit,
+	ExchangeNasdaq,
+	ExchangeBist,
 }
 
 // DefaultExchange is used when the client omits ?exchange=.
@@ -66,10 +70,36 @@ func SupportedIntervalsFor(ex Exchange) []CandleInterval {
 			Interval1h, Interval2h, Interval4h, Interval6h, Interval12h,
 			Interval1d, Interval1w, Interval1M,
 		}
+	case ExchangeNasdaq, ExchangeBist:
+		return []CandleInterval{
+			Interval1m, Interval5m, Interval15m, Interval30m, Interval1h, Interval1d, Interval1w, Interval1M,
+		}
 	case ExchangeBinance, "":
 		return append([]CandleInterval(nil), SupportedIntervals...)
 	default:
 		return nil
+	}
+}
+
+// IsEquityExchange reports cash-equity venues (Nasdaq, BIST).
+func IsEquityExchange(ex Exchange) bool {
+	switch ParseExchange(string(ex)) {
+	case ExchangeNasdaq, ExchangeBist:
+		return true
+	default:
+		return false
+	}
+}
+
+// DefaultQuoteAsset is the primary quote for list filters (USDT/USD/TRY).
+func DefaultQuoteAsset(ex Exchange) string {
+	switch ParseExchange(string(ex)) {
+	case ExchangeCoinbase, ExchangeNasdaq:
+		return "USD"
+	case ExchangeBist:
+		return "TRY"
+	default:
+		return "USDT"
 	}
 }
 

@@ -153,7 +153,7 @@ export function ComparePage() {
           <Select
             value={draftExchange}
             style={{ minWidth: 120 }}
-            options={['binance', 'coinbase', 'bybit'].map((e) => ({ value: e, label: e }))}
+            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
             onChange={(v) => setDraftExchange(v)}
           />
         </Field>

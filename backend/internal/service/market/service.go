@@ -276,7 +276,11 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 func (s *Service) fetchVenueBooks(ctx context.Context, symbol string, only []domain.Exchange) ([]domain.VenueRawBook, error) {
 	exchanges := only
 	if len(exchanges) == 0 {
-		exchanges = s.ListExchanges()
+		for _, ex := range s.ListExchanges() {
+			if !domain.IsEquityExchange(ex) {
+				exchanges = append(exchanges, ex)
+			}
+		}
 	}
 	if len(exchanges) == 0 {
 		return nil, fmt.Errorf("%w: no exchanges configured", domain.ErrUpstream)
@@ -505,7 +509,7 @@ func (s *Service) ListProductTags(ctx context.Context, exchange string) ([]strin
 	if err != nil {
 		return nil, err
 	}
-	if len(tags) == 0 && ex != domain.ExchangeBinance {
+	if len(tags) == 0 && ex != domain.ExchangeBinance && !domain.IsEquityExchange(ex) {
 		if bp, berr := s.port(domain.ExchangeBinance); berr == nil {
 			tags, err = bp.ListProductTags(ctx)
 			if err != nil {
@@ -633,15 +637,28 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 
 	// Attach Binance product tags by base when the venue has none (Coinbase/Bybit).
 	// Must run before tag filters so ?tag=Meme works on every exchange.
-	s.enrichProductTags(ctx, all)
+	// Never apply the crypto catalog to cash equities: BIST/Nasdaq tickers
+	// such as LINK, QUICK, BERA are unrelated companies.
+	if !domain.IsEquityExchange(ex) {
+		s.enrichProductTags(ctx, all)
+	}
 	s.enrichDelistTimes(ex, all)
 
 	filtered := filterSpotMarkets(all, q)
 
 	// Mcap sorts need supply on the full filtered set before ordering.
 	if q.SortBy.NeedsSupplyEnrichment() {
-		enriched := s.enrichSpotMarkets(ctx, filtered)
-		if enriched == 0 {
+		enriched := 0
+		if !domain.IsEquityExchange(ex) {
+			enriched = s.enrichSpotMarkets(ctx, filtered)
+		}
+		already := 0
+		for i := range filtered {
+			if filtered[i].MarketCapCirculating != nil {
+				already++
+			}
+		}
+		if enriched == 0 && already == 0 {
 			return nil, fmt.Errorf("%w: supply snapshot unavailable for market-cap sort", domain.ErrUpstream)
 		}
 		// One row per base so full-asset mcap is not repeated across every quote pair.
@@ -658,7 +675,9 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 	sortSpotMarkets(filtered, q.SortBy, q.Order)
 	total := len(filtered)
 	page := pageSpotMarkets(filtered, q.Offset, q.Limit)
-	_ = s.enrichSpotMarkets(ctx, page)
+	if !domain.IsEquityExchange(ex) {
+		_ = s.enrichSpotMarkets(ctx, page)
+	}
 
 	return &domain.SpotListResult{
 		Items:    page,

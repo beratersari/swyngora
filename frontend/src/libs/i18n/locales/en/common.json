@@ -22,13 +22,15 @@
   "exchanges": {
     "binance": "Binance",
     "coinbase": "Coinbase",
-    "bybit": "Bybit"
+    "bybit": "Bybit",
+    "nasdaq": "Nasdaq",
+    "bist": "BIST"
   },
   "tape": {
     "aria": "Top USDT pairs by volume"
   },
   "footer": {
-    "venues": "Binance · Coinbase · Bybit · live spot books",
+    "venues": "Binance · Coinbase · Bybit · Nasdaq · BIST",
     "disclaimer": "{{appName}} · informational market data · not financial advice"
   },
   "language": {

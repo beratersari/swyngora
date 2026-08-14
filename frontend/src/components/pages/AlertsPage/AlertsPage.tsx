@@ -18,7 +18,7 @@ import {
 } from '@/libs/api';
 import { PageStack, Section } from './AlertsPage.styles';
 
-const EXCHANGES = new Set(['binance', 'coinbase', 'bybit']);
+const EXCHANGES = new Set(['binance', 'coinbase', 'bybit', 'nasdaq', 'bist']);
 
 function parsePrefillExchange(raw: string | null): MarketExchange {
   const v = (raw ?? '').trim().toLowerCase();

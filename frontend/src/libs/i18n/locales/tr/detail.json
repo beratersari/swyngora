@@ -5,7 +5,7 @@
   "missingSymbolTitle": "Sembol eksik",
   "missingSymbolBody": "URL'de işlem çifti yok.",
   "invalidExchangeTitle": "Bilinmeyen borsa",
-  "invalidExchangeBody": "Desteklenen borsalar: binance, coinbase, bybit.",
+  "invalidExchangeBody": "Desteklenen borsalar: binance, coinbase, bybit, nasdaq, bist.",
   "watchFailed": "İzleme listesi güncellenemedi",
   "chart": {
     "title": "Fiyat grafiği",

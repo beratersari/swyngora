@@ -132,6 +132,7 @@ export function CoinDetailPage() {
   const skip = !symbol || !exchange;
   // RTK args require a concrete exchange; skipped when path venue is invalid.
   const exchangeArg = exchange ?? 'binance';
+  const isEquity = exchange === 'nasdaq' || exchange === 'bist';
   const intervalsQuery = useListIntervalsQuery(
     { exchange: exchangeArg },
     { skip: !exchange },
@@ -241,7 +242,7 @@ export function CoinDetailPage() {
       limit: ORDER_BOOK_LEVELS,
     },
     {
-      skip,
+      skip: skip || isEquity,
       pollingInterval: visible ? ORDER_BOOK_POLL_MS : 0,
       refetchOnFocus: true,
     },
@@ -266,7 +267,7 @@ export function CoinDetailPage() {
   const supplyQuery = useGetSupplyQuery(
     { asset: supplyAsset },
     {
-      skip: skip || !supplyAsset,
+      skip: skip || !supplyAsset || isEquity,
       pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
       refetchOnFocus: true,
     },
@@ -310,7 +311,7 @@ export function CoinDetailPage() {
       maxEvents: 40,
     },
     {
-      skip: skipSeries || !showPumpMarkers,
+      skip: skipSeries || !showPumpMarkers || isEquity,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
       refetchOnFocus: true,
     },

@@ -562,7 +562,7 @@ func TestPortfolioHTTP_TradingCostsAndFeeOnTrade(t *testing.T) {
 	var all map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &all)
 	items, _ := all["items"].([]any)
-	if len(items) != 3 {
+	if len(items) != 5 {
 		t.Fatalf("items %v", all)
 	}
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/trading-costs?exchange=coinbase", nil)

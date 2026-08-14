@@ -30,6 +30,11 @@ func NormalizeSymbol(ex Exchange, symbol string) string {
 	if symbol == "" {
 		return ""
 	}
+	if IsEquityExchange(ex) {
+		s := strings.ToUpper(strings.ReplaceAll(symbol, "-", ""))
+		s = strings.TrimSuffix(s, ".IS")
+		return s
+	}
 	if ex == ExchangeCoinbase {
 		symbol = strings.ToUpper(symbol)
 		if !strings.Contains(symbol, "-") {
@@ -50,6 +55,9 @@ func NormalizeSymbol(ex Exchange, symbol string) string {
 
 // KnownQuoteAssets are longest-first quote suffixes used to split a pair into base/quote.
 func KnownQuoteAssets(ex Exchange) []string {
+	if IsEquityExchange(ex) {
+		return []string{DefaultQuoteAsset(ex)}
+	}
 	if ex == ExchangeCoinbase {
 		return []string{"USDT", "USDC", "USD", "EUR", "GBP", "BTC", "ETH"}
 	}
@@ -61,6 +69,9 @@ func SplitBaseQuote(ex Exchange, symbol string) (base, quote string) {
 	symbol = NormalizeSymbol(ex, symbol)
 	if symbol == "" {
 		return "", ""
+	}
+	if IsEquityExchange(ex) {
+		return symbol, DefaultQuoteAsset(ex)
 	}
 	if ex == ExchangeCoinbase && strings.Contains(symbol, "-") {
 		parts := strings.SplitN(symbol, "-", 2)
@@ -98,6 +109,9 @@ func PairSymbol(ex Exchange, base, quote string) string {
 	quote = strings.ToUpper(strings.TrimSpace(quote))
 	if base == "" || quote == "" {
 		return ""
+	}
+	if IsEquityExchange(ex) {
+		return NormalizeSymbol(ex, base)
 	}
 	if ex == ExchangeCoinbase {
 		return base + "-" + quote

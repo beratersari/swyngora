@@ -60,6 +60,6 @@ export const DEFAULT_DETAIL_INTERVAL = '1h';
 
 export const APP_NAME = 'Swyngora';
 
-export const SUPPORTED_EXCHANGES = ['binance', 'coinbase', 'bybit'] as const;
+export const SUPPORTED_EXCHANGES = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'] as const;
 
 export type SupportedExchange = (typeof SUPPORTED_EXCHANGES)[number];

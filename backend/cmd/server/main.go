@@ -16,6 +16,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
@@ -164,6 +165,8 @@ func main() {
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
+		domain.ExchangeNasdaq:   equities.NewNasdaq(equities.Options{HTTPClient: httpClient}),
+		domain.ExchangeBist:     equities.NewBist(equities.Options{HTTPClient: httpClient}),
 	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq)
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
@@ -499,8 +502,8 @@ func main() {
 				AllowAll:        cfg.TelegramAllowAll,
 				AI:              aiClient,
 				AITimeout:       cfg.AITimeout,
-				Identities: accountStore,
-				Portfolio:  portfolioSvc,
+				Identities:      accountStore,
+				Portfolio:       portfolioSvc,
 			})
 			bot := &telegram.Bot{
 				Client:      tgClient,
@@ -535,7 +538,7 @@ func main() {
 		}
 		logger.Info("server listening",
 			"addr", cfg.HTTPAddr,
-			"exchanges", []string{"binance", "coinbase", "bybit"},
+			"exchanges", []string{"binance", "coinbase", "bybit", "nasdaq", "bist"},
 			"mcp", mcpPath,
 			"mcp_enabled", cfg.MCPEnabled,
 			"api_auth", cfg.APIAuthToken != "",

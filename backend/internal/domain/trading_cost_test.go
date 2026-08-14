@@ -83,7 +83,7 @@ func TestEffectiveMarginAndRawFillRoundTrip(t *testing.T) {
 
 func TestAllPaperTradingCosts(t *testing.T) {
 	all := AllPaperTradingCosts()
-	if len(all) != 3 {
+	if len(all) != len(SupportedExchanges) {
 		t.Fatalf("len=%d", len(all))
 	}
 	if all[0].Exchange != ExchangeBinance || all[0].FeePct != BinanceFeeRate*100 {

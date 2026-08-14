@@ -72,7 +72,12 @@ function listExchangeFromArgs(args: unknown): string {
 }
 
 export function applyPriceTick(dispatch: AppDispatch, getState: () => RootState, tick: RealtimePriceTick): void {
-  const exchange = (tick.exchange || 'binance') as 'binance' | 'coinbase' | 'bybit';
+  const exchange = (tick.exchange || 'binance') as
+    | 'binance'
+    | 'coinbase'
+    | 'bybit'
+    | 'nasdaq'
+    | 'bist';
   const symbol = tick.symbol;
   if (!symbol) return;
   const tickEx = exchange.toLowerCase();

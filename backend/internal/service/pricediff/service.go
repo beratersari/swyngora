@@ -207,6 +207,9 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 	}
 	prices := map[domain.Exchange]float64{}
 	for _, ex := range domain.SupportedExchanges {
+		if domain.IsEquityExchange(ex) {
+			continue
+		}
 		sym := domain.PriceDiffSymbolForExchange(ex, w.Symbol)
 		tkr, err := s.market.GetTicker24h(ctx, string(ex), sym)
 		if err != nil || tkr == nil {

@@ -14,6 +14,8 @@ describe('defaultQuoteForExchange', () => {
     expect(defaultQuoteForExchange('Coinbase')).toBe('USD');
     expect(defaultQuoteForExchange('binance')).toBe('USDT');
     expect(defaultQuoteForExchange('bybit')).toBe('USDT');
+    expect(defaultQuoteForExchange('nasdaq')).toBe('USD');
+    expect(defaultQuoteForExchange('bist')).toBe('TRY');
   });
 });
 

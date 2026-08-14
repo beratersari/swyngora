@@ -155,7 +155,7 @@ export function PaperTradeForm({
               <Select
                 value={exchange}
                 aria-label={t('portfolio:trade.exchange')}
-                options={['binance', 'coinbase', 'bybit'].map((e) => ({ value: e, label: e }))}
+                options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
                 onChange={setExchange}
               />
             </Field>

@@ -22,7 +22,7 @@ export const DEFAULT_MARKETS_STATE: MarketsUrlState = {
   offset: 0,
 };
 
-const EXCHANGES = new Set(['binance', 'coinbase', 'bybit']);
+const EXCHANGES = new Set(['binance', 'coinbase', 'bybit', 'nasdaq', 'bist']);
 const SORTS = new Set<SpotSortField>([
   'quoteVolume',
   'volume',
@@ -43,7 +43,8 @@ const SORTS = new Set<SpotSortField>([
  */
 export function defaultQuoteForExchange(exchange: string): string {
   const ex = exchange.toLowerCase();
-  if (ex === 'coinbase') return 'USD';
+  if (ex === 'coinbase' || ex === 'nasdaq') return 'USD';
+  if (ex === 'bist') return 'TRY';
   return 'USDT';
 }
 

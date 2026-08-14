@@ -121,7 +121,7 @@ export function MarketsPage() {
 
   const exchanges = exchangesQuery.data?.exchanges?.length
     ? exchangesQuery.data.exchanges
-    : ['binance', 'coinbase', 'bybit'];
+    : ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
   // Keep last rows only for the *current* filter set (sort/page/poll).
   // Key the cache so a filter change never paints the previous venue's rows

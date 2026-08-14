@@ -2665,7 +2665,7 @@ export interface components {
         };
         PaperTradingCost: {
             /** @enum {string} */
-            exchange?: "binance" | "coinbase" | "bybit";
+            exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             /** @description Taker fee as a fraction (0.001 = 0.10%) */
             feeRate?: number;
             /** @description Adverse slippage as a fraction */
@@ -2926,7 +2926,7 @@ export interface components {
              * @description Venue used to trade this asset (ignored for cash)
              * @enum {string}
              */
-            exchange?: "binance" | "coinbase" | "bybit";
+            exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             /**
              * @description Target percent of spot equity (0.01–100); all targets must sum to 100
              * @example 50
@@ -2997,9 +2997,9 @@ export interface components {
             clientId?: string;
             symbol?: string;
             /** @enum {string} */
-            buyExchange?: "binance" | "coinbase" | "bybit";
+            buyExchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             /** @enum {string} */
-            sellExchange?: "binance" | "coinbase" | "bybit";
+            sellExchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             buyPrice?: number;
             sellPrice?: number;
             grossDiffPct?: number;
@@ -3413,8 +3413,8 @@ export interface operations {
     listIntervals: {
         parameters: {
             query?: {
-                /** @description Venue id (binance | coinbase | bybit). Default binance. Interval sets differ per venue. */
-                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Venue id (binance | coinbase | bybit | nasdaq | bist). Default binance. Interval sets differ per venue. */
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             };
             header?: never;
             path?: never;
@@ -3448,8 +3448,8 @@ export interface operations {
     listProductTags: {
         parameters: {
             query?: {
-                /** @description Venue id (binance | coinbase | bybit). Default binance. */
-                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Venue id (binance | coinbase | bybit | nasdaq | bist). Default binance. */
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             };
             header?: never;
             path?: never;
@@ -3484,7 +3484,7 @@ export interface operations {
     listDelistSchedule: {
         parameters: {
             query?: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             };
             header?: never;
             path?: never;
@@ -3507,8 +3507,8 @@ export interface operations {
     listSpotMarkets: {
         parameters: {
             query?: {
-                /** @description Venue id (binance | coinbase | bybit). Default binance. */
-                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Venue id (binance | coinbase | bybit | nasdaq | bist). Default binance. */
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 /** @description Case-insensitive search on symbol, baseAsset, or quoteAsset */
                 q?: string;
                 /** @description Filter by quote asset (e.g. USDT) */
@@ -3557,7 +3557,7 @@ export interface operations {
     getCandles: {
         parameters: {
             query: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 /** @description Trading pair (Binance/Bybit BTCUSDT; Coinbase BTC-USD) */
                 symbol: string;
                 /**
@@ -3597,8 +3597,8 @@ export interface operations {
     getTicker24h: {
         parameters: {
             query: {
-                /** @description Venue id (binance | coinbase | bybit). Default binance. */
-                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Venue id (binance | coinbase | bybit | nasdaq | bist). Default binance. */
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 symbol: string;
             };
             header?: never;
@@ -3625,7 +3625,7 @@ export interface operations {
     getSpotOrderBook: {
         parameters: {
             query: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 symbol: string;
                 /** @description Price bucket size (e.g. 0.1). Omit to use a suggested default. */
                 group?: string;
@@ -3796,7 +3796,7 @@ export interface operations {
     analyzeSwing: {
         parameters: {
             query: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 symbol: string;
             };
             header?: never;
@@ -3822,7 +3822,7 @@ export interface operations {
         parameters: {
             query?: {
                 clientId?: string;
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 limit?: number;
             };
             header?: {
@@ -3848,7 +3848,7 @@ export interface operations {
     getIndicators: {
         parameters: {
             query: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 symbol: string;
                 interval?: string;
                 /** @description Number of output bars (extra history is fetched for warm-up) */
@@ -3903,7 +3903,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 interval?: string;
                 lookbackHours?: number;
                 limit?: number;
@@ -3938,7 +3938,7 @@ export interface operations {
     scanPumpEvents: {
         parameters: {
             query?: {
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 quote?: string;
                 interval?: string;
                 lookbackHours?: number;
@@ -3984,7 +3984,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     /**
                      * @description Exchange-specific; use /intervals?exchange=
                      * @default 1h
@@ -4272,7 +4272,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     symbol: string;
                     /**
                      * @default price
@@ -5209,7 +5209,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Optional venue; omit to list all */
-                exchange?: "binance" | "coinbase" | "bybit";
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
             };
             header?: never;
             path?: never;
@@ -5274,7 +5274,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     symbol: string;
                     /**
                      * @default market
@@ -5378,7 +5378,7 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /** @enum {string} */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     /**
                      * @description When set, cancel only this pair; omit to cancel all markets
                      * @example BTCUSDT
@@ -5802,7 +5802,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     /** @example BTCUSDT */
                     symbol: string;
                     /**
@@ -6105,7 +6105,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     symbol: string;
                     /** @enum {string} */
                     side: "long" | "short";
@@ -6716,7 +6716,7 @@ export interface operations {
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                     symbol: string;
                     /** Format: date-time */
                     rangeStart: string;

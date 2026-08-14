@@ -23,7 +23,7 @@ export const DEFAULT_MARKETS_FILTER: MarketsFilterState = {
   offset: 0,
 };
 
-const EXCHANGES = new Set(['binance', 'coinbase', 'bybit']);
+const EXCHANGES = new Set(['binance', 'coinbase', 'bybit', 'nasdaq', 'bist']);
 const SORTS = new Set<SpotSortField>([
   'quoteVolume',
   'volume',

@@ -17,6 +17,8 @@ const (
 	CoinbaseSlippageRate = 0.0008 // 0.08%
 	BybitFeeRate         = 0.001  // 0.10%
 	BybitSlippageRate    = 0.0005 // 0.05%
+	EquityFeeRate        = 0.001  // 0.10% paper
+	EquitySlippageRate   = 0.001  // 0.10%
 )
 
 // TradingCostFor returns paper fee/slippage for an exchange.
@@ -26,6 +28,8 @@ func TradingCostFor(ex Exchange) TradingCost {
 		return TradingCost{FeeRate: CoinbaseFeeRate, SlippageRate: CoinbaseSlippageRate}
 	case ExchangeBybit:
 		return TradingCost{FeeRate: BybitFeeRate, SlippageRate: BybitSlippageRate}
+	case ExchangeNasdaq, ExchangeBist:
+		return TradingCost{FeeRate: EquityFeeRate, SlippageRate: EquitySlippageRate}
 	default:
 		return TradingCost{FeeRate: BinanceFeeRate, SlippageRate: BinanceSlippageRate}
 	}
@@ -188,13 +192,13 @@ func PaperTradingCostViewFor(ex Exchange) PaperTradingCostView {
 	}
 }
 
-// AllPaperTradingCosts returns binance, coinbase, and bybit paper rates.
+// AllPaperTradingCosts returns paper rates for every supported venue.
 func AllPaperTradingCosts() []PaperTradingCostView {
-	return []PaperTradingCostView{
-		PaperTradingCostViewFor(ExchangeBinance),
-		PaperTradingCostViewFor(ExchangeCoinbase),
-		PaperTradingCostViewFor(ExchangeBybit),
+	out := make([]PaperTradingCostView, 0, len(SupportedExchanges))
+	for _, ex := range SupportedExchanges {
+		out = append(out, PaperTradingCostViewFor(ex))
 	}
+	return out
 }
 
 // PaperTradingCostsNote is returned with the public rates endpoint.

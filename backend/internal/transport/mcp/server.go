@@ -265,9 +265,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	}
 
 	addTool(mcp.NewTool("get_ticker",
-		mcp.WithDescription("Get 24h price, volume, and change for a trading pair on an exchange (binance|coinbase|bybit). Use for live quotes."),
+		mcp.WithDescription("Get 24h price, volume, and change for a trading pair on an exchange (binance|coinbase|bybit|nasdaq|bist). Use for live quotes."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT or BTC-USD")),
-		mcp.WithString("exchange", mcp.Description("Venue id: binance (default), coinbase, bybit")),
+		mcp.WithString("exchange", mcp.Description("Venue id: binance (default), coinbase, bybit, nasdaq, bist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -283,7 +283,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_spot_orderbook",
 		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and analysis.pressure / analysis.walls from depth within ±rangePct of mid (default 2%). Each wall has behavior: short, persistent (stayed near the same price), or suspicious (added/removed many times). Binance/Coinbase/Bybit. Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
-		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit | nasdaq | bist")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
 		mcp.WithNumber("limit", mcp.Description("Grouped rows per side 5–100 (default 20)")),
 		mcp.WithNumber("rangePct", mcp.Description("Analyze resting depth within this ±% of mid (0.25–10, default 2)")),
@@ -302,7 +302,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("analyze_spot_orderbook",
 		mcp.WithDescription("Buy/sell pressure, notional imbalance, and large walls from live spot depth within ±rangePct of mid (default 2%). Walls include behavior short | persistent (resting support/resistance) | suspicious (flicker / pulled often). Prefer this over the ladder when the question is pressure or walls."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
-		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit | nasdaq | bist")),
 		mcp.WithNumber("rangePct", mcp.Description("±% of mid to include (0.25–10, default 2)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
@@ -386,7 +386,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_candles",
 		mcp.WithDescription("Fetch OHLCV candlesticks for a symbol. Chronological oldest-first."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("interval", mcp.Description("Candle interval e.g. 1h, 15m, 1d (default 1h)")),
 		mcp.WithNumber("limit", mcp.Description("Number of bars 1–1000 (default 50)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -418,7 +418,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 
 	addTool(mcp.NewTool("list_spot_markets",
 		mcp.WithDescription("List/search/sort spot markets on an exchange. Supports quote filter, product tags, mcap sorts, pagination."),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("q", mcp.Description("Search substring on symbol/base/quote")),
 		mcp.WithString("quote", mcp.Description("Quote asset filter e.g. USDT or USD")),
 		mcp.WithString("sort", mcp.Description("Sort field e.g. quoteVolume, marketCapCirculating, lastPrice")),
@@ -446,7 +446,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_indicators",
 		mcp.WithDescription("Compute RSI (Wilder) and EMA series for a symbol. Informational only — not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("interval", mcp.Description("Candle interval default 1h")),
 		mcp.WithNumber("limit", mcp.Description("Output bars default 30")),
 		mcp.WithNumber("rsiPeriod", mcp.Description("RSI period default 14")),
@@ -478,7 +478,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 				"Informational mechanical filter — not a trade signal.",
 		),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or JUVUSDT")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist (default binance)")),
 		mcp.WithString("interval", mcp.Description("Candle interval e.g. 1m,5m,15m,1h,4h (default 1h)")),
 		mcp.WithNumber("lookbackHours", mcp.Description("Hours of history to analyze (derives bar count; e.g. 24 or 48)")),
 		mcp.WithNumber("limit", mcp.Description("Explicit candle bar count if lookbackHours omitted (default 100, max 1000)")),
@@ -523,7 +523,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 				"Same thresholds as detect_pump_events (minReturnPct, interval, lookbackHours, mode, direction, minVolumeRatio). "+
 				"Use for 'what pumped in the last N hours'. Informational only.",
 		),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("quote", mcp.Description("Quote filter e.g. USDT or USD")),
 		mcp.WithString("interval", mcp.Description("Candle interval default 15m")),
 		mcp.WithNumber("lookbackHours", mcp.Description("Hours to scan (default 24)")),
@@ -596,7 +596,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithDescription("Add or update a symbol on a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("note", mcp.Description("Optional note")),
 		mcp.WithString("ownerClientId", mcp.Description("List owner when editing a shared list")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -620,7 +620,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithDescription("Remove a symbol from a watchlist. Owner or editor may mutate; optional ownerClientId for shared lists."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("ownerClientId", mcp.Description("List owner when editing a shared list")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -779,7 +779,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair symbol e.g. BTCUSDT")),
 		mcp.WithString("condition", mcp.Required(), mcp.Description("above | below")),
 		mcp.WithNumber("targetPrice", mcp.Required(), mcp.Description("Threshold price")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist (default binance)")),
 		mcp.WithString("mode", mcp.Description("one_time | repeating (default one_time)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -813,7 +813,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("condition", mcp.Required(), mcp.Description("imbalance: above|below; wall: bid|ask|any")),
 		mcp.WithNumber("threshold", mcp.Description("Imbalance |value| 0.05–0.95, or wall min share 0–1 (0 = any detected wall)")),
 		mcp.WithNumber("rangePct", mcp.Description("±% of mid to analyze (default 2)")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist (default binance)")),
 		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -1342,7 +1342,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_paper_trading_costs",
-		mcp.WithDescription("Paper taker fee and slippage rates per exchange (binance, coinbase, bybit). Fills use slipped last price; buy cash/lot cost include the fee; sell PnL is after the fee. Pending buy reservations cover slip + fee."),
+		mcp.WithDescription("Paper taker fee and slippage rates per exchange (binance, coinbase, bybit, nasdaq, bist). Fills use slipped last price; buy cash/lot cost include the fee; sell PnL is after the fee. Pending buy reservations cover slip + fee."),
 		mcp.WithString("exchange", mcp.Description("Optional venue; omit to list all")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetPaperTradingCosts(ctx, req.GetString("exchange", ""))
@@ -1359,7 +1359,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo — sell lot matching")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original fill")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1435,7 +1435,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("trailType", mcp.Description("trailing_stop: percent | offset")),
 		mcp.WithNumber("trailValue", mcp.Description("trailing_stop: fraction e.g. 0.05 or fixed offset")),
 		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo for sell types")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("timeInForce", mcp.Description("gtc (default) | ioc | fok")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC only")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original order")),
@@ -1481,7 +1481,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base size for both legs")),
 		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell price (must be above stop)")),
 		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop-loss trigger (must be below take-profit)")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC legs")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original pair")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1521,7 +1521,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("entryPrice", mcp.Required(), mcp.Description("Limit buy price")),
 		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell above entry")),
 		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop below entry")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original bracket")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1628,7 +1628,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithDescription("Cancel all open paper pending orders for a client, or only one market when symbol is set. Releases reservations. Empty result is success."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Description("When set, cancel only this pair (e.g. BTCUSDT); omit for all markets")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit; default binance when symbol is set")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist; default binance when symbol is set")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -1671,7 +1671,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("weekday", mcp.Description("Weekly: monday..sunday")),
 		mcp.WithNumber("dayOfMonth", mcp.Description("Monthly salary day 1-31")),
 		mcp.WithNumber("intervalHours", mcp.Description("Interval frequency: 1-168 hours")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 first run; default now")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -2063,7 +2063,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base quantity")),
 		mcp.WithNumber("leverage", mcp.Required(), mcp.Description("1–10")),
 		mcp.WithString("type", mcp.Description("market (default) | limit")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithNumber("limitPrice", mcp.Description("Required for limit")),
 		mcp.WithNumber("stopLoss", mcp.Description("Optional stop-loss price")),
 		mcp.WithNumber("takeProfit", mcp.Description("Optional take-profit price")),
@@ -2306,7 +2306,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("analyze_swing",
 		mcp.WithDescription("Analyze one symbol with the swing engine (4h+1d, Wilder RSI/ADX/ATR, quality gates, ATR structure stops). Informational only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. ETHUSDT")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit, default binance")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist, default binance")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {

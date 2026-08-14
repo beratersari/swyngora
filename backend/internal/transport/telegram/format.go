@@ -674,7 +674,7 @@ func HelpText() string {
 	b.WriteString("  " + code("/transfer 500 Risky") + "\n")
 	b.WriteString("  " + code("/buy BTCUSDT 0.01") + "\n")
 	b.WriteString("\n")
-	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit"))
+	b.WriteString(italic("Venues: ") + code("binance") + ", " + code("coinbase") + ", " + code("bybit") + ", " + code("nasdaq") + ", " + code("bist"))
 	b.WriteString(footer())
 	return b.String()
 }

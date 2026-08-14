@@ -19,4 +19,4 @@ export const SORT_OPTIONS: { value: SpotSortField }[] = [
   { value: 'symbol' },
 ];
 
-export const FALLBACK_EXCHANGES = ['binance', 'coinbase', 'bybit'];
+export const FALLBACK_EXCHANGES = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];

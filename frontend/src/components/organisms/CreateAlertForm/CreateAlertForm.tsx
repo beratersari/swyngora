@@ -79,7 +79,7 @@ export function CreateAlertForm({
             value={exchange}
             aria-label={t('alerts:exchange')}
             style={{ minWidth: 120 }}
-            options={['binance', 'coinbase', 'bybit'].map((e) => ({ value: e, label: e }))}
+            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
             onChange={setExchange}
           />
         </Field>

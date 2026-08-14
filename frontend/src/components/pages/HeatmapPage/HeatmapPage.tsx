@@ -28,7 +28,7 @@ import {
   PageStack,
 } from './HeatmapPage.styles';
 
-const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit'];
+const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
 export function HeatmapPage() {
   const { t } = useTranslation(['heatmap', 'common']);
@@ -96,15 +96,19 @@ export function HeatmapPage() {
               value={quote}
               style={{ minWidth: 100 }}
               options={
-                exchange === 'coinbase'
-                  ? [
-                      { value: 'USD', label: 'USD' },
-                      { value: 'USDT', label: 'USDT' },
-                    ]
-                  : [
-                      { value: 'USDT', label: 'USDT' },
-                      { value: 'USDC', label: 'USDC' },
-                    ]
+                exchange === 'nasdaq'
+                  ? [{ value: 'USD', label: 'USD' }]
+                  : exchange === 'bist'
+                    ? [{ value: 'TRY', label: 'TRY' }]
+                    : exchange === 'coinbase'
+                      ? [
+                          { value: 'USD', label: 'USD' },
+                          { value: 'USDT', label: 'USDT' },
+                        ]
+                      : [
+                          { value: 'USDT', label: 'USDT' },
+                          { value: 'USDC', label: 'USDC' },
+                        ]
               }
               onChange={setQuote}
             />

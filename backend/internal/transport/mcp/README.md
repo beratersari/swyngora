@@ -18,7 +18,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
-| `list_spot_markets` | Search/sort spot list |
+| `list_spot_markets` | Search/sort spot/equity list (`binance` / `coinbase` / `bybit` / `nasdaq` / `bist`) |
 | `list_delist_schedule` | Binance scheduled spot delists |
 | `get_indicators` | RSI/EMA |
 | `analyze_swing` | 4h+1d swing engine (quality gates, ATR stop/TP) |

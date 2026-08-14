@@ -370,6 +370,60 @@ func TestListSpotMarkets_EnrichesTagsFromBinance(t *testing.T) {
 	}
 }
 
+func TestListSpotMarkets_EquitySkipsBinanceCryptoEnrichment(t *testing.T) {
+	// BIST LINK/QUICK are Turkish companies. Binance must not paint crypto
+	// tags or circulating-supply mcap onto them.
+	bist := &fakeMarket{
+		spot: []domain.SpotMarket{
+			{Symbol: "LINK", BaseAsset: "LINK", QuoteAsset: "TRY", Status: "TRADING", QuoteVolume: "278e6", LastPrice: "5.94"},
+			{Symbol: "QUICK", BaseAsset: "QUICK", QuoteAsset: "TRY", Status: "TRADING", QuoteVolume: "578e6", LastPrice: "73.35"},
+			{Symbol: "A1CAP", BaseAsset: "A1CAP", QuoteAsset: "TRY", Status: "TRADING", QuoteVolume: "48e6", LastPrice: "8.02"},
+		},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBist:    bist,
+	}, &fakeSupply{byAsset: map[string]*domain.AssetSupply{
+		"LINK":  {CirculatingSupply: ptr(1.13e9)},
+		"QUICK": {CirculatingSupply: ptr(9.6e4)},
+	}})
+	res, err := svc.ListSpotMarkets(context.Background(), "bist", domain.SpotListQuery{Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]domain.SpotMarket{}
+	for _, m := range res.Items {
+		by[m.Symbol] = m
+	}
+	if len(by["LINK"].Tags) != 0 {
+		t.Fatalf("LINK must not inherit crypto tags: %v", by["LINK"].Tags)
+	}
+	if len(by["QUICK"].Tags) != 0 {
+		t.Fatalf("QUICK must not inherit crypto tags: %v", by["QUICK"].Tags)
+	}
+	if by["LINK"].MarketCapCirculating != nil {
+		t.Fatalf("LINK must not get crypto mcap: %v", *by["LINK"].MarketCapCirculating)
+	}
+	if by["QUICK"].MarketCapCirculating != nil {
+		t.Fatalf("QUICK must not get crypto mcap: %v", *by["QUICK"].MarketCapCirculating)
+	}
+}
+
+func TestListProductTags_EquityDoesNotFallBackToBinance(t *testing.T) {
+	empty := &tagsEmptyMarket{fakeMarket: &fakeMarket{spot: []domain.SpotMarket{}}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBist:    empty,
+	}, &fakeSupply{})
+	tags, err := svc.ListProductTags(context.Background(), "bist")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tags) != 0 {
+		t.Fatalf("bist must not reuse Binance crypto tags: %v", tags)
+	}
+}
+
 func TestListProductTags_FallsBackToBinance(t *testing.T) {
 	emptyTags := &fakeMarket{spot: []domain.SpotMarket{}}
 	// coinbase-style empty tags list

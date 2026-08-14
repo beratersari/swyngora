@@ -331,7 +331,7 @@ func (r *Router) lowMcapOne(ctx context.Context, exchange string, limit int) str
 }
 
 func (r *Router) lowMcapAll(ctx context.Context, limit int) string {
-	exchanges := []string{"binance", "coinbase", "bybit"}
+	exchanges := []string{"binance", "coinbase", "bybit", "nasdaq", "bist"}
 	sections := make([]LowMcapSection, 0, len(exchanges))
 	for _, ex := range exchanges {
 		query := domain.SpotListQuery{
@@ -494,7 +494,7 @@ func (r *Router) cmdWatchTop(ctx context.Context, clientID string) string {
 
 func isExchange(s string) bool {
 	switch strings.ToLower(s) {
-	case "binance", "coinbase", "bybit":
+	case "binance", "coinbase", "bybit", "nasdaq", "bist":
 		return true
 	default:
 		return false

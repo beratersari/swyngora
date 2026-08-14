@@ -5,7 +5,7 @@
   "missingSymbolTitle": "Missing symbol",
   "missingSymbolBody": "No trading pair in the URL.",
   "invalidExchangeTitle": "Unknown exchange",
-  "invalidExchangeBody": "Supported venues: binance, coinbase, bybit.",
+  "invalidExchangeBody": "Supported venues: binance, coinbase, bybit, nasdaq, bist.",
   "watchFailed": "Could not update watchlist",
   "chart": {
     "title": "Price chart",
