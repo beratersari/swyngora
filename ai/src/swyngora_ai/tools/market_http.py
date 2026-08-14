@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from contextvars import ContextVar
 from typing import Any
 
@@ -13,6 +14,44 @@ from pydantic import BaseModel, Field
 from swyngora_ai.config import Settings, get_settings
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
+
+# One-time secrets and similar must never reach the LLM / tool trace.
+_SECRET_KEYS = frozenset(
+    {
+        "secret",
+        "apikey",
+        "api_key",
+        "token",
+        "access_token",
+        "refresh_token",
+        "password",
+        "private_key",
+        "privatekey",
+    }
+)
+_SWY_SECRET_RE = re.compile(r"\bswy_[0-9a-fA-F]{32,}\b")
+
+
+def redact_secrets(value: Any) -> Any:
+    """Strip secret-bearing fields and swy_… tokens from tool payloads."""
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for k, v in value.items():
+            key = str(k)
+            if key.lower().replace("-", "_") in _SECRET_KEYS:
+                out[key] = "[redacted]"
+            else:
+                out[key] = redact_secrets(v)
+        return out
+    if isinstance(value, list):
+        return [redact_secrets(v) for v in value]
+    if isinstance(value, str):
+        return _SWY_SECRET_RE.sub("[redacted]", value)
+    return value
+
+
+def format_tool_json(payload: Any) -> str:
+    return json.dumps(redact_secrets(payload), indent=2)
 
 
 def bind_client_id(client_id: str) -> Any:
@@ -48,65 +87,48 @@ class _HTTP:
         if body is not None and "clientId" in body:
             body["clientId"] = cid
 
+    def _body_text(self, r: httpx.Response) -> str:
+        if r.status_code >= 400:
+            return f"ERROR {r.status_code}: {r.text[:500]}"
+        try:
+            return format_tool_json(r.json())
+        except Exception:
+            return _SWY_SECRET_RE.sub("[redacted]", r.text)
+
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
         params = dict(params or {})
         self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:
             r = client.get(f"{self.base}{path}", params=params, headers=self._headers())
-            if r.status_code >= 400:
-                return f"ERROR {r.status_code}: {r.text[:500]}"
-            try:
-                return json.dumps(r.json(), indent=2)
-            except Exception:
-                return r.text
+            return self._body_text(r)
 
     def post(self, path: str, body: dict[str, Any]) -> str:
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
             r = client.post(f"{self.base}{path}", json=body, headers=self._headers())
-            if r.status_code >= 400:
-                return f"ERROR {r.status_code}: {r.text[:500]}"
-            try:
-                return json.dumps(r.json(), indent=2)
-            except Exception:
-                return r.text
+            return self._body_text(r)
 
     def put(self, path: str, body: dict[str, Any]) -> str:
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
             r = client.put(f"{self.base}{path}", json=body, headers=self._headers())
-            if r.status_code >= 400:
-                return f"ERROR {r.status_code}: {r.text[:500]}"
-            try:
-                return json.dumps(r.json(), indent=2)
-            except Exception:
-                return r.text
+            return self._body_text(r)
 
     def patch(self, path: str, body: dict[str, Any]) -> str:
         body = dict(body or {})
         self._apply_client_id(None, body)
         with httpx.Client(timeout=self.timeout) as client:
             r = client.patch(f"{self.base}{path}", json=body, headers=self._headers())
-            if r.status_code >= 400:
-                return f"ERROR {r.status_code}: {r.text[:500]}"
-            try:
-                return json.dumps(r.json(), indent=2)
-            except Exception:
-                return r.text
+            return self._body_text(r)
 
     def delete(self, path: str, params: dict[str, Any]) -> str:
         params = dict(params or {})
         self._apply_client_id(params, None)
         with httpx.Client(timeout=self.timeout) as client:
             r = client.delete(f"{self.base}{path}", params=params, headers=self._headers())
-            if r.status_code >= 400:
-                return f"ERROR {r.status_code}: {r.text[:500]}"
-            try:
-                return json.dumps(r.json(), indent=2)
-            except Exception:
-                return r.text
+            return self._body_text(r)
 
 
 class TickerInput(BaseModel):

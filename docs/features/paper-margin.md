@@ -23,7 +23,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 - **Limit:** reserves required margin **and** worst-case open fee until fill, cancel, or reject (released on cancel)
 
 ### Liquidation (maintenance 0.5% of **entry** notional)
-- **Isolated:** assigned-margin formula, interest-adjusted (`LiquidationPriceWithDebt`). Long buffer is `margin − maint − debtInterest`; short divides by coin debt including interest. Without extra margin/interest this is `entry × (1 − 1/lev + mmr)` long and `entry × (1 + 1/lev − mmr)` short.
+- **Isolated:** assigned-margin formula, interest-adjusted (`LiquidationPriceWithDebt`). Long buffer is `margin − maint − debtInterest` (may be **negative** when interest is large → liq **above** entry). Short divides by coin debt including interest. Without extra margin/interest this is `entry × (1 − 1/lev + mmr)` long and `entry × (1 + 1/lev − mmr)` short.
 - **Cross:** per-position display liq holds other UPNL fixed so this symbol’s mark would drive account equity to total maint. Execution is **account-level**: if equity is under total maint, close the worst position (most negative UPNL) — partial qty when quote debt is tiny (e.g. 1x / no borrow); leveraged longs with quote debt typically **full-close** that position. After each close, re-read cash, sizes, and marks. Debt+qty CAS and deterministic full-close trade ids prevent duplicate records.
 - Worker auto-closes when mark crosses liquidation (reason `liquidation`). Last price is used (no separate mark/index).
 
@@ -87,6 +87,15 @@ Cash/position read-modify-write is **serialized per `clientId`** in the portfoli
 
 Snapshot: `marginMode`, `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`, `marginEquity`, `marginPositions`.
 
+## Web UI (`frontend/`)
+
+Paper margin desk on `/portfolio`:
+
+- Mode toggle (isolated / cross) on the margin ticket
+- Open market/limit long/short with leverage and optional SL/TP
+- Summary strip shows margin mode, locked margin, margin uPnL
+- **Margin positions** tab: entry, mark, liq, debt, close
+
 ## Code
 
 | Layer | Path |
@@ -96,6 +105,7 @@ Snapshot: `marginMode`, `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`,
 | Service | `backend/internal/service/portfolio/margin.go` |
 | Worker | `ProcessMarginMaintenance` via portfolio filler |
 | HTTP | `backend/internal/transport/http/handler/portfolio_margin.go` |
+| Web | `frontend/src/components/organisms/PaperMarginForm`, `PortfolioMarginPositionsTable`, `pages/PortfolioPage` |
 
 ## Tests
 

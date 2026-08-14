@@ -31,6 +31,7 @@ describe('PaperTradeForm', () => {
     expect(arg.exchange).toBe('binance');
     expect(arg.symbol).toBe('BTCUSDT');
     expect(arg.side).toBe('buy');
+    expect(arg.orderType).toBe('market');
     expect(arg.quantity).toBe(0.01);
   });
 });

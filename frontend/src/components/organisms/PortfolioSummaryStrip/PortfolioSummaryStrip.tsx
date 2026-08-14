@@ -15,6 +15,8 @@ export function PortfolioSummaryStrip({ view, isLoading, currency = 'USDT' }: Po
   if (isLoading && !view) {
     return <Skeleton height={88} />;
   }
+  const marginLocked = view?.marginLocked ?? 0;
+  const marginU = view?.marginUnrealizedPnL ?? 0;
   const items: { key: string; label: string; value: string; color?: 'primary' | 'success' | 'error' }[] = [
     { key: 'equity', label: t('metrics.equity'), value: `${formatPrice(view?.equity)} ${currency}` },
     { key: 'cash', label: t('metrics.cash'), value: `${formatPrice(view?.cashBalance)} ${currency}` },
@@ -37,6 +39,22 @@ export function PortfolioSummaryStrip({ view, isLoading, currency = 'USDT' }: Po
       label: t('metrics.totalPnl'),
       value: `${formatPrice(view?.totalPnL)} ${currency}`,
       color: pnlColor(view?.totalPnL),
+    },
+    {
+      key: 'mmode',
+      label: t('metrics.marginMode'),
+      value: view?.marginMode === 'cross' ? t('margin.cross') : t('margin.isolated'),
+    },
+    {
+      key: 'mlock',
+      label: t('metrics.marginLocked'),
+      value: `${formatPrice(marginLocked)} ${currency}`,
+    },
+    {
+      key: 'mupnl',
+      label: t('metrics.marginUnrealized'),
+      value: `${formatPrice(marginU)} ${currency}`,
+      color: pnlColor(marginU),
     },
   ];
   return (

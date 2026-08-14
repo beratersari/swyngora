@@ -36,16 +36,30 @@ export type PortfolioView = Omit<components['schemas']['PortfolioView'], 'positi
   positions?: SpotPosition[];
 };
 
+export type PaperOrderType =
+  | 'market'
+  | 'limit_buy'
+  | 'limit_sell'
+  | 'stop_loss'
+  | 'trailing_stop'
+  | 'oco'
+  | 'bracket';
+
 export type PlacePortfolioOrderArg = {
   portfolioId?: string;
   exchange?: MarketExchange;
   symbol: string;
-  side: 'buy' | 'sell';
-  type?: 'market' | 'limit_buy' | 'limit_sell' | 'stop_loss';
+  side?: 'buy' | 'sell';
+  type?: PaperOrderType;
   quantity: number;
   triggerPrice?: number;
+  takeProfitPrice?: number;
+  stopLossPrice?: number;
+  trailType?: 'percent' | 'offset';
+  trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
   timeInForce?: 'gtc' | 'ioc' | 'fok';
+  expiresAt?: string;
   idempotencyKey?: string;
 };
 
@@ -53,8 +67,66 @@ export type PlacePortfolioOrderResponse = {
   type?: string;
   trade?: PaperTrade;
   order?: PendingOrder;
+  entry?: PendingOrder;
+  takeProfit?: PendingOrder;
+  stopLoss?: PendingOrder;
+  ocoGroupId?: string;
+  bracketId?: string;
   portfolio?: PortfolioView;
   note?: string;
+};
+
+export type AmendPortfolioOrderArg = {
+  id: string;
+  portfolioId?: string;
+  triggerPrice?: number;
+  remainingQuantity?: number;
+};
+
+export type AmendPortfolioOrderResponse = {
+  order?: PendingOrder;
+  portfolio?: PortfolioView;
+  note?: string;
+};
+
+export type MarginPosition = components['schemas']['MarginPosition'];
+export type MarginMode = 'isolated' | 'cross';
+
+export type PlaceMarginOrderArg = {
+  portfolioId?: string;
+  exchange?: MarketExchange;
+  symbol: string;
+  side: 'long' | 'short';
+  type?: 'market' | 'limit';
+  quantity: number;
+  leverage: number;
+  limitPrice?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  idempotencyKey?: string;
+};
+
+export type PlaceMarginOrderResponse = {
+  type?: string;
+  position?: MarginPosition;
+  order?: {
+    id?: string;
+    symbol?: string;
+    side?: string;
+    type?: string;
+    quantity?: number;
+    leverage?: number;
+    limitPrice?: number;
+    status?: string;
+  };
+  note?: string;
+};
+
+export type CloseMarginPositionArg = {
+  id: string;
+  portfolioId?: string;
+  quantity?: number;
+  idempotencyKey?: string;
 };
 
 type BookArg = { portfolioId?: string };
@@ -218,8 +290,13 @@ export const portfolioApi = baseApi.injectEndpoints({
           type: body.type ?? 'market',
           quantity: body.quantity,
           triggerPrice: body.triggerPrice,
+          takeProfitPrice: body.takeProfitPrice,
+          stopLossPrice: body.stopLossPrice,
+          trailType: body.trailType,
+          trailValue: body.trailValue,
           lotMethod: body.lotMethod,
           timeInForce: body.timeInForce,
+          expiresAt: body.expiresAt,
           idempotencyKey: body.idempotencyKey,
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
@@ -240,6 +317,18 @@ export const portfolioApi = baseApi.injectEndpoints({
         },
       }),
       providesTags: ['Portfolio'],
+    }),
+    amendPortfolioOrder: build.mutation<AmendPortfolioOrderResponse, AmendPortfolioOrderArg>({
+      query: ({ id, portfolioId, triggerPrice, remainingQuantity }) => ({
+        url: `/api/v1/portfolio/orders/${encodeURIComponent(id)}`,
+        method: 'PATCH',
+        params: bookParams(portfolioId),
+        body: {
+          ...(triggerPrice != null ? { triggerPrice } : {}),
+          ...(remainingQuantity != null ? { remainingQuantity } : {}),
+        },
+      }),
+      invalidatesTags: ['Portfolio'],
     }),
     cancelPortfolioOrder: build.mutation<
       { order?: PendingOrder; portfolio?: PortfolioView },
@@ -266,6 +355,119 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    setMarginMode: build.mutation<
+      { marginMode?: MarginMode; clientId?: string },
+      { mode: MarginMode; portfolioId?: string }
+    >({
+      query: (body) => ({
+        url: '/api/v1/portfolio/margin/mode',
+        method: 'PUT',
+        body: { mode: body.mode, portfolioId: body.portfolioId },
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    placeMarginOrder: build.mutation<PlaceMarginOrderResponse, PlaceMarginOrderArg>({
+      query: (body) => ({
+        url: '/api/v1/portfolio/margin/orders',
+        method: 'POST',
+        body: {
+          portfolioId: body.portfolioId,
+          exchange: body.exchange ?? 'binance',
+          symbol: body.symbol,
+          side: body.side,
+          type: body.type ?? 'market',
+          quantity: body.quantity,
+          leverage: body.leverage,
+          limitPrice: body.limitPrice,
+          stopLoss: body.stopLoss,
+          takeProfit: body.takeProfit,
+          idempotencyKey: body.idempotencyKey,
+        },
+        headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    listMarginPositions: build.query<
+      { positions?: MarginPosition[]; count?: number },
+      BookArg | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/margin/positions',
+        params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    listMarginOrders: build.query<
+      { orders?: PlaceMarginOrderResponse['order'][]; count?: number },
+      ({ status?: string } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/margin/orders',
+        params: {
+          status: arg?.status ?? 'open',
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    cancelMarginOrder: build.mutation<
+      { order?: PlaceMarginOrderResponse['order'] },
+      { id: string; portfolioId?: string }
+    >({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/margin/orders/${encodeURIComponent(id)}`,
+        method: 'DELETE',
+        params: bookParams(portfolioId),
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    closeMarginPosition: build.mutation<
+      { position?: MarginPosition; trade?: unknown; note?: string },
+      CloseMarginPositionArg
+    >({
+      query: ({ id, portfolioId, quantity, idempotencyKey }) => ({
+        url: `/api/v1/portfolio/margin/positions/${encodeURIComponent(id)}/close`,
+        method: 'POST',
+        params: bookParams(portfolioId),
+        body: {
+          ...(quantity != null && quantity > 0 ? { quantity } : {}),
+          ...(idempotencyKey ? { idempotencyKey } : {}),
+        },
+        headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    setMarginBrackets: build.mutation<
+      MarginPosition,
+      {
+        id: string;
+        portfolioId?: string;
+        stopLoss?: number;
+        takeProfit?: number;
+        clearStopLoss?: boolean;
+        clearTakeProfit?: boolean;
+      }
+    >({
+      query: ({ id, portfolioId, ...body }) => ({
+        url: `/api/v1/portfolio/margin/positions/${encodeURIComponent(id)}/brackets`,
+        method: 'PUT',
+        params: bookParams(portfolioId),
+        body,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    repayMarginDebt: build.mutation<
+      { position?: MarginPosition; trade?: unknown },
+      { id: string; amount: number; portfolioId?: string }
+    >({
+      query: ({ id, amount, portfolioId }) => ({
+        url: `/api/v1/portfolio/margin/positions/${encodeURIComponent(id)}/repay`,
+        method: 'POST',
+        params: bookParams(portfolioId),
+        body: { amount },
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
   }),
 });
 
@@ -288,6 +490,15 @@ export const {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   useListPortfolioOrdersQuery,
+  useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
+  useSetMarginModeMutation,
+  usePlaceMarginOrderMutation,
+  useListMarginPositionsQuery,
+  useListMarginOrdersQuery,
+  useCancelMarginOrderMutation,
+  useCloseMarginPositionMutation,
+  useSetMarginBracketsMutation,
+  useRepayMarginDebtMutation,
 } = portfolioApi;
