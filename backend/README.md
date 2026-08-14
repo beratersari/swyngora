@@ -41,6 +41,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
 | `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |
+| `GET` | `/api/v1/market/positioning` | Price+OI regime (buildup / unwinding / covering) per venue + combined market |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

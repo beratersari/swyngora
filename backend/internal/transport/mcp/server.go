@@ -38,6 +38,7 @@ type DataPort interface {
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -409,6 +410,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetSqueezeRisk(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_positioning",
+		mcp.WithDescription("Price + open interest positioning for a coin: long_buildup, short_buildup, long_unwinding, or short_covering on Binance and Bybit, plus a general market (combined) read. Short summary and reasons (funding / long-short corroboration). Not a prediction or financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPositioning(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -467,6 +467,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/positioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price and open-interest positioning
+         * @description long_buildup / short_buildup / long_unwinding / short_covering
+         *     per venue plus combined market direction.
+         */
+        get: operations["getMarketPositioning"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4185,6 +4206,39 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Per-venue and optional combined squeeze risk */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPositioning: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined positioning */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -186,6 +186,14 @@ class SqueezeRiskInput(BaseModel):
     )
 
 
+class PositioningInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined market direction)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -754,6 +762,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/squeeze-risk",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_positioning(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/positioning",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1852,6 +1866,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Not a prediction or financial advice."
             ),
             args_schema=SqueezeRiskInput,
+        ),
+        StructuredTool.from_function(
+            get_positioning,
+            name="get_positioning",
+            description=(
+                "Price + open interest positioning: long_buildup, short_buildup, "
+                "long_unwinding, or short_covering for Binance and Bybit, plus "
+                "a general market (combined) direction. Short summary and why. "
+                "Not a prediction or financial advice."
+            ),
+            args_schema=PositioningInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

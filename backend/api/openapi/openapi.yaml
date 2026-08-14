@@ -808,6 +808,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/positioning:
+    get:
+      summary: Price and open-interest positioning
+      description: |
+        Classifies **long buildup**, **short buildup**, **long unwinding**, or
+        **short covering** from price change vs open-interest change (classic
+        futures matrix) on Binance USD-M and Bybit linear. Short summary and
+        reasons use funding and account long/short as corroboration. When
+        `exchange=all`, also returns a **combined** general market direction
+        (OI-weighted). Informational only — not financial advice.
+      operationId: getMarketPositioning
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined positioning
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/squeeze-risk:
     get:
       summary: Long and short squeeze risk

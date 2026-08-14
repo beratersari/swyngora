@@ -45,6 +45,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
 - `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + rough desk result). See [`liquidation-hunt.md`](liquidation-hunt.md).
 - `GET /api/v1/market/squeeze-risk` long/short squeeze risk scores per venue + combined. See [`squeeze-risk.md`](squeeze-risk.md).
+- `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

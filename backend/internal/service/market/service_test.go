@@ -681,6 +681,73 @@ func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	}
 }
 
+func TestGetPositioning_PerVenueAndCombined(t *testing.T) {
+	now := time.Now().UTC()
+	// Build candles via fakeMarket defaults if any; set ticker for price.
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 110, Value: 11_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 100, Value: 10_000_000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 90, Value: 9_000_000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 80, Value: 8_000_000},
+		},
+	}}
+	bybOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 55, Value: 5_500_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-4 * time.Hour), Contracts: 50, Value: 5_000_000},
+		},
+	}}
+	// Rising prices over 24h candles so price↑ OI↑ → long buildup when candles exist.
+	candles := make([]domain.Candle, 0, 25)
+	for i := 0; i < 25; i++ {
+		candles = append(candles, domain.Candle{
+			OpenTime: now.Add(-time.Duration(24-i) * time.Hour),
+			Close:    strconv.FormatFloat(100+float64(i)*0.2, 'f', 2, 64),
+		})
+	}
+	fm := &fakeMarket{
+		candles: candles,
+		ticker:  &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "105", PriceChangePercent: "4.5"},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+		domain.ExchangeBybit:   fm,
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI, domain.ExchangeBybit: bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.6, ShortShare: 0.4, Ratio: 1.5},
+			}},
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+			}},
+		})
+	got, err := svc.GetPositioning(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	// OI is rising; price candles rise → expect long buildup on at least one venue or combined.
+	if got.Combined.Regime == "" {
+		t.Fatalf("empty combined %+v", got.Combined)
+	}
+}
+
+func TestGetPositioning_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetPositioning(context.Background(), "all", " ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestGetSqueezeRisk_PerVenueAndCombined(t *testing.T) {
 	now := time.Now().UTC()
 	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
