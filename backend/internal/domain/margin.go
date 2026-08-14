@@ -719,7 +719,12 @@ type MarginPort interface {
 	ListAllOpenMarginPositions(ctx context.Context) ([]MarginPosition, error)
 	CountOpenMarginPositions(ctx context.Context, clientID string) (int, error)
 	// UpdateMarginPosition writes fields for an open position (qty, margin, sl/tp, realized, etc.).
+	// It may also write debt columns; production liq/SL/TP updates must use UpdateMarginPositionMeta
+	// so a stale in-memory row cannot rewind interest.
 	UpdateMarginPosition(ctx context.Context, pos MarginPosition) error
+	// UpdateMarginPositionMeta writes quantity, margin, liquidation, brackets, and realized PnL
+	// without touching debt_principal, debt_interest, or last_interest_at.
+	UpdateMarginPositionMeta(ctx context.Context, pos MarginPosition) error
 	// CloseMarginPosition marks closed with reason.
 	CloseMarginPosition(ctx context.Context, pos MarginPosition) error
 

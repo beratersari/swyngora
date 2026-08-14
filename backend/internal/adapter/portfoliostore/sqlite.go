@@ -1385,6 +1385,9 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Caller already set RemainingQuantity to the post-fill leftover. Bind CAS to the
+	// remaining the fill was sized from so an amend-up cannot drop reserved_*.
+	expectedRemaining := order.RemainingQuantity + t.Quantity
 	var status string
 	var remaining, filled float64
 	err = tx.QueryRowContext(ctx, `
@@ -1398,6 +1401,9 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	}
 	if status != string(domain.PendingStatusOpen) || remaining <= domain.PositionEpsilon {
 		return domain.ErrNotFound
+	}
+	if math.Abs(remaining-expectedRemaining) > 1e-9 {
+		return domain.ErrConflict
 	}
 	if t.Quantity > remaining+1e-9 {
 		return fmt.Errorf("%w: fill quantity exceeds remaining", domain.ErrInvalidArgument)
@@ -1501,6 +1507,7 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	expectedRemaining := filled.RemainingQuantity + t.Quantity
 	var status string
 	var remaining, priorFilled float64
 	err = tx.QueryRowContext(ctx, `
@@ -1514,6 +1521,9 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	}
 	if status != string(domain.PendingStatusOpen) || remaining <= domain.PositionEpsilon {
 		return domain.ErrNotFound
+	}
+	if math.Abs(remaining-expectedRemaining) > 1e-9 {
+		return domain.ErrConflict
 	}
 	if t.Quantity > remaining+1e-9 {
 		return fmt.Errorf("%w: fill quantity exceeds remaining", domain.ErrInvalidArgument)

@@ -1116,6 +1116,8 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	if id == "" {
 		return nil, nil, fmt.Errorf("%w: order id is required", domain.ErrInvalidArgument)
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	o, err := s.store.GetPendingOrder(ctx, clientID, id)
 	if err != nil {
 		return nil, nil, err
@@ -1189,7 +1191,7 @@ func (s *Service) AmendPendingOrder(ctx context.Context, in AmendPendingOrderInp
 	}
 
 	if last, lerr := s.lastPrice(ctx, string(updated.Exchange), updated.Symbol); lerr == nil && last > 0 {
-		if filled, ok, ferr := s.ProcessOpenOrder(ctx, *updated, last, now, 0); ferr == nil && ok && filled != nil {
+		if filled, ok, ferr := s.tryFillPendingOrderLocked(ctx, *updated, last, 0); ferr == nil && ok && filled != nil {
 			updated = filled
 		}
 	}
@@ -1754,14 +1756,14 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 			peer = nil
 		}
 		if err := s.store.ExecuteOCOFill(ctx, &updated, peer, p, posOut, tr, now, lotOps); err != nil {
-			if err == domain.ErrNotFound {
+			if err == domain.ErrNotFound || err == domain.ErrConflict {
 				return nil, false, nil
 			}
 			return nil, false, err
 		}
 	} else {
 		if err := s.store.ExecutePendingFill(ctx, &updated, p, posOut, tr, now, lotOps); err != nil {
-			if err == domain.ErrNotFound {
+			if err == domain.ErrNotFound || err == domain.ErrConflict {
 				return nil, false, nil
 			}
 			return nil, false, err

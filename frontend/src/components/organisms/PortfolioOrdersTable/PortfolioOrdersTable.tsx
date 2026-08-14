@@ -30,11 +30,15 @@ export function PortfolioOrdersTable({
   const [edit, setEdit] = useState<PendingOrder | null>(null);
   const [trigger, setTrigger] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [openedTrigger, setOpenedTrigger] = useState<number | null>(null);
+  const [openedRemaining, setOpenedRemaining] = useState<number | null>(null);
 
   const openAmend = (row: PendingOrder) => {
     setEdit(row);
     setTrigger(row.triggerPrice ?? null);
     setRemaining(row.remainingQuantity ?? null);
+    setOpenedTrigger(row.triggerPrice ?? null);
+    setOpenedRemaining(row.remainingQuantity ?? null);
   };
 
   const columns: ColumnsType<PendingOrder> = [
@@ -151,10 +155,21 @@ export function PortfolioOrdersTable({
         onCancel={() => setEdit(null)}
         onOk={() => {
           if (!edit?.id || !onAmend) return;
+          const triggerChanged =
+            trigger != null &&
+            (openedTrigger == null || Math.abs(trigger - openedTrigger) > 1e-12);
+          const remainingChanged =
+            remaining != null &&
+            (openedRemaining == null || Math.abs(remaining - openedRemaining) > 1e-12);
+          if (remainingChanged && remaining <= 0) return;
+          if (!triggerChanged && !remainingChanged) {
+            setEdit(null);
+            return;
+          }
           void onAmend({
             id: edit.id,
-            triggerPrice: trigger ?? undefined,
-            remainingQuantity: remaining ?? undefined,
+            triggerPrice: triggerChanged ? (trigger ?? undefined) : undefined,
+            remainingQuantity: remainingChanged ? (remaining ?? undefined) : undefined,
           }).then(() => setEdit(null));
         }}
       >

@@ -163,7 +163,8 @@ func (s *SQLite) CountOpenMarginPositions(ctx context.Context, clientID string) 
 	return n, err
 }
 
-// UpdateMarginPosition updates an open position's mutable fields.
+// UpdateMarginPosition updates an open position's mutable fields, including debt.
+// Prefer UpdateMarginPositionMeta for liq/bracket writes so interest cannot be rewound.
 func (s *SQLite) UpdateMarginPosition(ctx context.Context, pos domain.MarginPosition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -178,6 +179,26 @@ func (s *SQLite) UpdateMarginPosition(ctx context.Context, pos domain.MarginPosi
 		WHERE id = ? AND status = 'open'
 	`, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
 		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
+		pos.RealizedPnL, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+// UpdateMarginPositionMeta updates display/lifecycle fields and leaves debt columns alone.
+func (s *SQLite) UpdateMarginPositionMeta(ctx context.Context, pos domain.MarginPosition) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE margin_positions SET quantity = ?, margin = ?, liquidation_price = ?,
+			stop_loss = ?, take_profit = ?, realized_pnl = ?, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, pos.Quantity, pos.Margin, pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		pos.RealizedPnL, pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
 	if err != nil {
 		return err
@@ -730,22 +751,26 @@ func (s *SQLite) ApplyMarginAdjust(ctx context.Context, p *domain.Portfolio, pos
 	if err := s.txUpdatePortfolioCash(ctx, tx, p); err != nil {
 		return err
 	}
-	lastInt := any(nil)
+	expLast := any(nil)
 	if !pos.LastInterestAt.IsZero() {
-		lastInt = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
+		expLast = pos.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
 	res, err := tx.ExecContext(ctx, `
-		UPDATE margin_positions SET margin = ?, debt_principal = ?, debt_interest = ?, last_interest_at = ?,
-			liquidation_price = ?, updated_at = ?
+		UPDATE margin_positions SET margin = ?, liquidation_price = ?, updated_at = ?
 		WHERE id = ? AND status = 'open'
-	`, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, lastInt, pos.LiquidationPrice,
-		pos.UpdatedAt.UTC().Format(time.RFC3339Nano), pos.ID)
+		  AND ABS(debt_principal - ?) < 1e-9 AND ABS(debt_interest - ?) < 1e-9
+		  AND (
+		    (? IS NULL AND (last_interest_at IS NULL OR last_interest_at = ''))
+		    OR last_interest_at = ?
+		  )
+	`, pos.Margin, pos.LiquidationPrice, pos.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		pos.ID, pos.DebtPrincipal, pos.DebtInterest, expLast, expLast)
 	if err != nil {
 		return err
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		return domain.ErrNotFound
+		return domain.ErrConflict
 	}
 	if err := s.txInsertMarginTrade(ctx, tx, t); err != nil {
 		return err

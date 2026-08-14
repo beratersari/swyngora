@@ -58,7 +58,10 @@ export function HeatmapPage() {
     () => (listQuery.data?.items ?? []).map((row) => row.symbol).filter((s): s is string => Boolean(s)),
     [listQuery.data?.items],
   );
-  usePriceSubscription(exchange, symbols, visible && symbols.length > 0);
+  usePriceSubscription(
+    symbols.map((symbol) => ({ exchange, symbol })),
+    visible && symbols.length > 0,
+  );
 
   const items = useMemo(
     () =>

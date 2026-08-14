@@ -26,6 +26,8 @@ Users want leveraged long/short paper trading without real money: market and lim
 - **Isolated:** assigned-margin formula, interest-adjusted (`LiquidationPriceWithDebt`). Long buffer is `margin − maint − debtInterest` (may be **negative** when interest exceeds free buffer → liquidation price rises **above** entry so insolvent longs still liquidate). Short divides by coin debt including interest. Without extra margin/interest this is `entry × (1 − 1/lev + mmr)` long and `entry × (1 + 1/lev − mmr)` short.
 - **Cross:** per-position display liq holds other UPNL fixed so this symbol’s mark would drive account equity to total maint. Execution is **account-level**: if equity is under total maint, close the worst position (most negative UPNL) — partial qty when quote debt is tiny (e.g. 1x / no borrow); leveraged longs with quote debt typically **full-close** that position. After each close, re-read cash, sizes, and marks. Debt+qty CAS and deterministic full-close trade ids prevent duplicate records.
 - Worker auto-closes when mark crosses liquidation (reason `liquidation`). Last price is used (no separate mark/index).
+- **Interest worker:** isolated positions use isolated `ShouldLiquidate` after accrue. **Cross** positions never use isolated liq on the interest path — they go through account-level `liquidateCrossIfUnderMaint` (same as maintenance).
+- Liq/SL/TP display writes (`UpdateMarginPositionMeta`) do **not** rewrite debt columns, so a stale in-memory row cannot rewind `AccrueInterestCAS`.
 
 ### Add / remove margin (isolated only)
 - `POST .../positions/{id}/margin` with `delta` (+ add from cash, − return to cash)
