@@ -271,7 +271,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 - When triggered, the filler may fill only part of the remaining size; the order stays `open` until remaining is zero, then becomes `filled`.
 - **Each fill** creates a separate trade history row with `pendingOrderId`.
 - Latest fill metadata: `fillTradeId`, `fillPrice`.
-- Fill path **re-reads** the order under the book lock and applies `remaining_quantity` compare-and-set so concurrent partials cannot reset `filled`/`remaining` or overshoot original size.
+- Fill path **re-reads** the order under the book lock and compare-and-sets `remaining_quantity` against the remaining the fill was **sized from**. A concurrent amend that changed remaining is `ErrConflict`; the next filler tick retries with a fresh snapshot so leftover size cannot sit open with `reserved_* = 0`.
 
 ### Accounting
 - **Buy fill:** debit cash at fill price; increase position; average cost updated.
@@ -281,7 +281,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 ### Durability & safety
 - Portfolios, positions, trades, pending orders, remaining size, reservations, and recurring buy plans/runs are in SQLite (`PORTFOLIO_DB_PATH`).
 - Fill/cancel/reject use `status = open` predicates so a canceled order never fills and a completed order is not double-filled.
-- Amend uses `status = open` plus remaining/trigger compare-and-set so a concurrent fill cannot be overwritten (HTTP **409**).
+- Amend uses `status = open` plus remaining/trigger compare-and-set so a concurrent fill cannot be overwritten (HTTP **409**). The web amend modal sends `remainingQuantity` only when the user changed that field (a price-only edit does not restore a pre-fill size).
 - Service-layer cash/position updates are **serialized per `clientId`** so HTTP orders, recurring buys, and the multi-symbol filler cannot last-write-wins the same wallet.
 - Background filler runs on `PORTFOLIO_ORDER_CHECK_INTERVAL` and once on process start.
 - Recurring buy worker runs on `RECURRING_BUY_INTERVAL` and once on process start.

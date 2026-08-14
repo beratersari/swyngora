@@ -189,60 +189,71 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 	if p.MarginMode != domain.MarginModeIsolated {
 		return nil, fmt.Errorf("%w: add/remove margin is only allowed in isolated mode", domain.ErrInvalidArgument)
 	}
-	pos, err := s.store.GetMarginPosition(ctx, clientID, strings.TrimSpace(in.PositionID))
-	if err != nil {
-		return nil, err
-	}
-	if pos.Status != domain.MarginPositionOpen {
-		return nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
-	}
-	if pos.Mode != domain.MarginModeIsolated {
-		return nil, fmt.Errorf("%w: position is not isolated", domain.ErrInvalidArgument)
-	}
-	now := time.Now().UTC()
-	newMargin := pos.Margin + in.Delta
-	minM, err := domain.MinIsolatedMargin(pos.Quantity, pos.EntryPrice, pos.Leverage)
-	if err != nil {
-		return nil, err
-	}
-	if newMargin+1e-9 < minM {
-		return nil, fmt.Errorf("%w: margin cannot go below initial margin %g", domain.ErrInvalidArgument, minM)
-	}
-	if in.Delta > 0 {
-		avail, err := s.availableCashForTradingMode(ctx, clientID, p.CashBalance, domain.MarginModeIsolated)
+	for attempt := 0; attempt < maxDebtMutationRetries; attempt++ {
+		book, err := s.store.GetPortfolio(ctx, clientID)
 		if err != nil {
 			return nil, err
 		}
-		if avail+1e-9 < in.Delta {
-			return nil, fmt.Errorf("%w: insufficient available cash to add margin", domain.ErrInvalidArgument)
+		pos, err := s.store.GetMarginPosition(ctx, clientID, strings.TrimSpace(in.PositionID))
+		if err != nil {
+			return nil, err
 		}
-		p.CashBalance -= in.Delta
-	} else {
-		p.CashBalance += -in.Delta // remove from position back to cash
+		if pos.Status != domain.MarginPositionOpen {
+			return nil, fmt.Errorf("%w: position is not open", domain.ErrInvalidArgument)
+		}
+		if pos.Mode != domain.MarginModeIsolated {
+			return nil, fmt.Errorf("%w: position is not isolated", domain.ErrInvalidArgument)
+		}
+		now := time.Now().UTC()
+		newMargin := pos.Margin + in.Delta
+		minM, err := domain.MinIsolatedMargin(pos.Quantity, pos.EntryPrice, pos.Leverage)
+		if err != nil {
+			return nil, err
+		}
+		if newMargin+1e-9 < minM {
+			return nil, fmt.Errorf("%w: margin cannot go below initial margin %g", domain.ErrInvalidArgument, minM)
+		}
+		if in.Delta > 0 {
+			avail, err := s.availableCashForTradingMode(ctx, clientID, book.CashBalance, domain.MarginModeIsolated)
+			if err != nil {
+				return nil, err
+			}
+			if avail+1e-9 < in.Delta {
+				return nil, fmt.Errorf("%w: insufficient available cash to add margin", domain.ErrInvalidArgument)
+			}
+			book.CashBalance -= in.Delta
+		} else {
+			book.CashBalance += -in.Delta
+		}
+		book.UpdatedAt = now
+		_ = s.accruePositionInterest(ctx, pos, now)
+		liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, pos.DebtPrincipal, pos.DebtInterest)
+		if err != nil {
+			return nil, err
+		}
+		pos.Margin = newMargin
+		pos.LiquidationPrice = liq
+		pos.UpdatedAt = now
+		action := domain.MarginActionAddMargin
+		if in.Delta < 0 {
+			action = domain.MarginActionRemoveMargin
+		}
+		tr := domain.MarginTrade{
+			ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: pos.Exchange, Symbol: pos.Symbol,
+			Side: pos.Side, Action: action, Quantity: 0, Price: pos.EntryPrice, Notional: 0,
+			MarginDelta: -in.Delta,
+			Leverage:    pos.Leverage, CreatedAt: now,
+		}
+		err = s.store.ApplyMarginAdjust(ctx, book, *pos, tr)
+		if errors.Is(err, domain.ErrConflict) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return s.GetMarginPosition(ctx, clientID, pos.ID)
 	}
-	p.UpdatedAt = now
-	_ = s.accruePositionInterest(ctx, pos, now)
-	liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, pos.DebtPrincipal, pos.DebtInterest)
-	if err != nil {
-		return nil, err
-	}
-	pos.Margin = newMargin
-	pos.LiquidationPrice = liq
-	pos.UpdatedAt = now
-	action := domain.MarginActionAddMargin
-	if in.Delta < 0 {
-		action = domain.MarginActionRemoveMargin
-	}
-	tr := domain.MarginTrade{
-		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: pos.Exchange, Symbol: pos.Symbol,
-		Side: pos.Side, Action: action, Quantity: 0, Price: pos.EntryPrice, Notional: 0,
-		MarginDelta: -in.Delta,
-		Leverage:    pos.Leverage, CreatedAt: now,
-	}
-	if err := s.store.ApplyMarginAdjust(ctx, p, *pos, tr); err != nil {
-		return nil, err
-	}
-	return s.GetMarginPosition(ctx, clientID, pos.ID)
+	return nil, fmt.Errorf("%w: margin adjust lost the debt race", domain.ErrConflict)
 }
 
 const maxDebtMutationRetries = 10
@@ -486,6 +497,17 @@ func (s *Service) accrueInterestAndMaybeLiquidate(ctx context.Context, pos *doma
 	if s.market == nil {
 		return true, false, nil
 	}
+	cur, rerr := s.store.GetMarginPosition(ctx, pos.ClientID, pos.ID)
+	if rerr != nil {
+		if errors.Is(rerr, domain.ErrNotFound) {
+			return true, false, nil
+		}
+		return true, false, rerr
+	}
+	if cur.Mode == domain.MarginModeCross {
+		n, lerr := s.liquidateCrossIfUnderMaint(ctx, cur.ClientID, now)
+		return true, n > 0, lerr
+	}
 	did, lerr := s.tryLiquidateIfBreached(ctx, pos.ClientID, pos.ID, now)
 	return true, did, lerr
 }
@@ -504,6 +526,11 @@ func (s *Service) tryLiquidateIfBreached(ctx context.Context, clientID, position
 		return false, err
 	}
 	if cur.Status != domain.MarginPositionOpen {
+		return false, nil
+	}
+	// Cross health is account-level. Isolated ShouldLiquidate here would close a
+	// healthy shared book (and, after interest, even a mark above entry).
+	if cur.Mode == domain.MarginModeCross {
 		return false, nil
 	}
 	mark, merr := s.lastPrice(ctx, string(cur.Exchange), cur.Symbol)
@@ -895,7 +922,7 @@ func (s *Service) SetMarginBrackets(ctx context.Context, in MarginBracketsInput)
 	}
 	pos.StopLoss, pos.TakeProfit = sl, tp
 	pos.UpdatedAt = time.Now().UTC()
-	if err := s.store.UpdateMarginPosition(ctx, *pos); err != nil {
+	if err := s.store.UpdateMarginPositionMeta(ctx, *pos); err != nil {
 		return nil, err
 	}
 	return s.GetMarginPosition(ctx, clientID, pos.ID)
@@ -1081,7 +1108,7 @@ func (s *Service) recomputeCrossLiquidations(ctx context.Context, clientID strin
 		}
 		list[i].LiquidationPrice = liq
 		list[i].UpdatedAt = now
-		_ = s.store.UpdateMarginPosition(ctx, list[i])
+		_ = s.store.UpdateMarginPositionMeta(ctx, list[i])
 	}
 	return nil
 }
