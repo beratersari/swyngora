@@ -9,7 +9,8 @@
     "alerts": "Alerts",
     "signals": "Signals",
     "compare": "Compare",
-    "portfolio": "Paper"
+    "portfolio": "Paper",
+    "heatmap": "Heatmap"
   },
   "brand": {
     "tagline": "Market desk"

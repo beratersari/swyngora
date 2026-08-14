@@ -18,6 +18,7 @@ describe('App shell navigation', () => {
     expect(links.some((a) => a.getAttribute('href') === '/ai')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/alerts')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/compare')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/heatmap')).toBe(true);
     expect(screen.getByTestId('routes')).toBeInTheDocument();
     expect(screen.getByRole('status')).toBeInTheDocument();
   });

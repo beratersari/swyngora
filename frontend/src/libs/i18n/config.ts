@@ -17,6 +17,7 @@ export const I18N_NAMESPACES = [
   'compare',
   'signals',
   'portfolio',
+  'heatmap',
 ] as const;
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];
 
