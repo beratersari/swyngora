@@ -225,6 +225,17 @@ func (b *Backend) GetPositioning(ctx context.Context, exchange, symbol string) (
 	return mustJSON(got)
 }
 
+func (b *Backend) GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetVenueDivergence(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

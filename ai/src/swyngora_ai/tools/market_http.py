@@ -194,6 +194,10 @@ class PositioningInput(BaseModel):
     )
 
 
+class VenueDivergenceInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -769,6 +773,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/positioning",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_venue_divergence(symbol: str) -> str:
+        return http.get(
+            "/api/v1/market/venue-divergence",
+            {"symbol": symbol},
         )
 
     def get_futures_history(
@@ -1877,6 +1887,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Not a prediction or financial advice."
             ),
             args_schema=PositioningInput,
+        ),
+        StructuredTool.from_function(
+            get_venue_divergence,
+            name="get_venue_divergence",
+            description=(
+                "Compare Binance vs Bybit for one coin: same or opposite "
+                "direction. Lists which of OI, funding, crowding, and "
+                "positioning differ and why that split can matter."
+            ),
+            args_schema=VenueDivergenceInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

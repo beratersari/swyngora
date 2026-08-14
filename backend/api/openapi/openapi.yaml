@@ -808,6 +808,33 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/venue-divergence:
+    get:
+      summary: Binance vs Bybit signal split
+      description: |
+        Compares **Binance USD-M** and **Bybit linear** for one coin using
+        open-interest change, funding payer, account long/short crowding, and
+        price+OI positioning. Returns `same`, `opposite`, or `mixed`, lists
+        which metrics differ, and a short note on why a split can matter.
+        Informational only.
+      operationId: getMarketVenueDivergence
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+      responses:
+        '200':
+          description: Venue comparison
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/positioning:
     get:
       summary: Price and open-interest positioning

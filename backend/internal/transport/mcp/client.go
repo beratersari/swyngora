@@ -234,6 +234,13 @@ func (c *APIClient) GetPositioning(ctx context.Context, exchange, symbol string)
 	return c.get(ctx, "/api/v1/market/positioning", q)
 }
 
+// GetVenueDivergence compares Binance vs Bybit signals for one coin.
+func (c *APIClient) GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	return c.get(ctx, "/api/v1/market/venue-divergence", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

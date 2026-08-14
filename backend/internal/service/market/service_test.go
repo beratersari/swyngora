@@ -681,6 +681,58 @@ func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	}
 }
 
+func TestGetVenueDivergence_Opposite(t *testing.T) {
+	now := time.Now().UTC()
+	binCandles := make([]domain.Candle, 0, 25)
+	bybCandles := make([]domain.Candle, 0, 25)
+	for i := 0; i < 25; i++ {
+		t0 := now.Add(-time.Duration(24-i) * time.Hour)
+		binCandles = append(binCandles, domain.Candle{OpenTime: t0, Close: strconv.FormatFloat(100+float64(i)*0.3, 'f', 2, 64)})
+		bybCandles = append(bybCandles, domain.Candle{OpenTime: t0, Close: strconv.FormatFloat(107-float64(i)*0.2, 'f', 2, 64)})
+	}
+	binM := &fakeMarket{candles: binCandles, ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "107", PriceChangePercent: "4"}}
+	bybM := &fakeMarket{candles: bybCandles, ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "102", PriceChangePercent: "-4"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: binM, domain.ExchangeBybit: bybM,
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: &fakeOI{ser: &domain.OpenInterestSeries{
+				Current: domain.OpenInterestPoint{Time: now, Contracts: 120, Value: 12e6},
+				History: []domain.OpenInterestPoint{{Time: now.Add(-4 * time.Hour), Contracts: 100, Value: 10e6}},
+			}},
+			domain.ExchangeBybit: &fakeOI{ser: &domain.OpenInterestSeries{
+				Current: domain.OpenInterestPoint{Time: now, Contracts: 80, Value: 8e6},
+				History: []domain.OpenInterestPoint{{Time: now.Add(-4 * time.Hour), Contracts: 70, Value: 7e6}},
+			}},
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.66, ShortShare: 0.34, Ratio: 1.9},
+			}},
+			domain.ExchangeBybit: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.34, ShortShare: 0.66, Ratio: 0.5},
+			}},
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: 0.0002, Predicted: true},
+			}},
+			domain.ExchangeBybit: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: -0.0002, Predicted: true},
+			}},
+		})
+	got, err := svc.GetVenueDivergence(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Alignment == domain.AlignUnknown {
+		t.Fatalf("%+v", got)
+	}
+	if got.Summary == "" || len(got.Diffs) < 3 {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestGetPositioning_PerVenueAndCombined(t *testing.T) {
 	now := time.Now().UTC()
 	// Build candles via fakeMarket defaults if any; set ticker for price.

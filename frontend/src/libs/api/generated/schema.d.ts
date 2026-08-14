@@ -488,6 +488,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/venue-divergence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Binance vs Bybit signal split
+         * @description same / opposite / mixed on OI, funding, crowding, positioning.
+         */
+        get: operations["getMarketVenueDivergence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4250,6 +4270,38 @@ export interface operations {
                         asOf?: string;
                         venues?: Record<string, unknown>[];
                         combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVenueDivergence: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Venue comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        alignment?: string;
+                        title?: string;
+                        summary?: string;
+                        important?: boolean;
+                        diffs?: Record<string, unknown>[];
                         note?: string;
                     };
                 };
