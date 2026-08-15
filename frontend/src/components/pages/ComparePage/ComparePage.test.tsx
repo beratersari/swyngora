@@ -28,6 +28,26 @@ vi.mock('@/libs/api', async (importOriginal) => {
           },
         ],
       },
+      currentData: {
+        candles: [
+          {
+            openTime: '2024-01-01T00:00:00Z',
+            open: '100',
+            high: '110',
+            low: '90',
+            close: '100',
+            volume: '1',
+          },
+          {
+            openTime: '2024-01-01T01:00:00Z',
+            open: '100',
+            high: '120',
+            low: '100',
+            close: '110',
+            volume: '1',
+          },
+        ],
+      },
       isLoading: false,
       isError: false,
     }),

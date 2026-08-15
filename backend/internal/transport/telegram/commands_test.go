@@ -8,6 +8,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
 )
@@ -104,6 +105,45 @@ func TestWatchUsesStableUnguessableClientID(t *testing.T) {
 	wl, err := r.watch.Get(context.Background(), id1, "")
 	if err != nil || len(wl.Items) != 1 || wl.Items[0].Symbol != "BTCUSDT" {
 		t.Fatalf("watchlist via mapped id: %+v %v", wl, err)
+	}
+}
+
+func TestWatchAddRejectedWhenAccountClosed(t *testing.T) {
+	ids := accountstore.NewMemory()
+	acc := account.New(ids, account.DataPurgeDeps{})
+	fm := &fakeMarket{}
+	ms := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  fm,
+		domain.ExchangeCoinbase: fm,
+		domain.ExchangeBybit:    fm,
+	}, fakeSupply{})
+	ws := watchlist.New(watchliststore.NewMemory())
+	r := NewRouter(ms, ws, Options{
+		DefaultExchange: "binance", LowMcapLimit: 10, AllowAll: true,
+		Identities: ids, Accounts: acc,
+	})
+	ctx := context.Background()
+	out := r.Handle(ctx, 7, 99, "/watch add ETHUSDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("pre-close add: %s", out)
+	}
+	id, err := ids.ClientIDForTelegramUser(ctx, 99)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := acc.Close(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	out = r.Handle(ctx, 8, 99, "/watch add BTCUSDT")
+	if !strings.Contains(strings.ToLower(out), "closed") {
+		t.Fatalf("want closed, got %s", out)
+	}
+	wl, err := ws.Get(ctx, id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(wl.Items) != 1 || wl.Items[0].Symbol != "ETHUSDT" {
+		t.Fatalf("watchlist mutated after close: %+v", wl.Items)
 	}
 }
 

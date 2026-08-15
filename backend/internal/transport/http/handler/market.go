@@ -825,6 +825,38 @@ func (h *MarketHandler) ListExchanges(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type fxRatesResponse struct {
+	Base  string             `json:"base"`
+	AsOf  string             `json:"asOf"`
+	Rates map[string]float64 `json:"rates"`
+	Stale bool               `json:"stale"`
+	Note  string             `json:"note,omitempty"`
+}
+
+// GetFxRates handles GET /api/v1/market/fx
+func (h *MarketHandler) GetFxRates(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.GetFxRates(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	asOf := ""
+	if got != nil && !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339)
+	}
+	rates := map[string]float64{}
+	note := ""
+	stale := false
+	if got != nil {
+		rates = got.Rates
+		note = got.Note
+		stale = got.Stale
+	}
+	writeJSON(w, http.StatusOK, fxRatesResponse{
+		Base: domain.FxBaseUSD, AsOf: asOf, Rates: rates, Stale: stale, Note: note,
+	})
+}
+
 // ListSpotMarkets handles GET /api/v1/market/spot
 func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

@@ -36,7 +36,7 @@ import {
 } from '@/libs/api';
 import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePortfolioSubscription } from '@/libs/realtime';
-import { formatDateTime, formatPrice, newPaperIdempotencyKey } from '@/libs/utils';
+import { formatDateTime, formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import { DeskTabs, PageStack, PanelCard, Section, Split } from './PortfolioPage.styles';
@@ -124,9 +124,9 @@ export function PortfolioPage() {
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
 
-  const view = portfolioQuery.data;
+  const view = rtkCurrent(portfolioQuery);
   const positions = view?.positions ?? [];
-  const marginPositions = marginPosQuery.data?.positions ?? view?.marginPositions ?? [];
+  const marginPositions = rtkCurrent(marginPosQuery)?.positions ?? view?.marginPositions ?? [];
   const currency = view?.currency ?? 'USDT';
 
   const selectBook = (id: string) => {
@@ -273,7 +273,7 @@ export function PortfolioPage() {
         <>
           <PortfolioSummaryStrip
             view={view}
-            isLoading={portfolioQuery.isLoading}
+            isLoading={rtkCurrentPending(portfolioQuery)}
             currency={currency}
           />
 
@@ -321,12 +321,12 @@ export function PortfolioPage() {
 
           <Section>
             <PortfolioEquityChart
-              points={perfQuery.data?.points}
-              startEquity={perfQuery.data?.startEquity}
-              startAt={perfQuery.data?.startAt}
+              points={rtkCurrent(perfQuery)?.points}
+              startEquity={rtkCurrent(perfQuery)?.startEquity}
+              startAt={rtkCurrent(perfQuery)?.startAt}
               period={period}
               onPeriodChange={setPeriod}
-              isLoading={perfQuery.isLoading || perfQuery.isFetching}
+              isLoading={rtkCurrentPending(perfQuery) || perfQuery.isFetching}
               isError={perfQuery.isError}
               height={chartHeight}
             />
@@ -341,7 +341,7 @@ export function PortfolioPage() {
                 children: (
                   <PortfolioPositionsTable
                     items={positions}
-                    loading={portfolioQuery.isLoading}
+                    loading={rtkCurrentPending(portfolioQuery)}
                     onOpen={openMarket}
                   />
                 ),
@@ -351,8 +351,8 @@ export function PortfolioPage() {
                 label: t('portfolio:orders.title'),
                 children: (
                   <PortfolioOrdersTable
-                    items={ordersQuery.data?.orders ?? []}
-                    loading={ordersQuery.isLoading}
+                    items={rtkCurrent(ordersQuery)?.orders ?? []}
+                    loading={rtkCurrentPending(ordersQuery)}
                     cancelLoading={cancelState.isLoading}
                     amendLoading={amendState.isLoading}
                     onOpen={openMarket}
@@ -380,7 +380,7 @@ export function PortfolioPage() {
                 children: (
                   <PortfolioMarginPositionsTable
                     items={marginPositions}
-                    loading={marginPosQuery.isLoading || portfolioQuery.isLoading}
+                    loading={rtkCurrentPending(marginPosQuery) || rtkCurrentPending(portfolioQuery)}
                     closeLoading={closeMarginState.isLoading}
                     onOpen={openMarket}
                     onClose={async (id) => {
@@ -399,8 +399,8 @@ export function PortfolioPage() {
                 label: t('portfolio:trades.title'),
                 children: (
                   <PortfolioTradesTable
-                    items={tradesQuery.data?.trades ?? []}
-                    loading={tradesQuery.isLoading}
+                    items={rtkCurrent(tradesQuery)?.trades ?? []}
+                    loading={rtkCurrentPending(tradesQuery)}
                     onOpen={openMarket}
                   />
                 ),
@@ -409,7 +409,7 @@ export function PortfolioPage() {
                 key: 'cash',
                 label: t('portfolio:movements.title'),
                 children:
-                  !cashQuery.isLoading && (cashQuery.data?.movements?.length ?? 0) === 0 ? (
+                  !rtkCurrentPending(cashQuery) && (rtkCurrent(cashQuery)?.movements?.length ?? 0) === 0 ? (
                     <Text variant="body" color="secondary">
                       {t('portfolio:movements.empty')}
                     </Text>
@@ -418,10 +418,10 @@ export function PortfolioPage() {
                       <DataTable
                         rowKey={(r) => (r as { id?: string }).id ?? Math.random().toString()}
                         size="small"
-                        loading={cashQuery.isLoading}
+                        loading={rtkCurrentPending(cashQuery)}
                         pagination={{ pageSize: 8, hideOnSinglePage: true, simple: isPhone }}
                         columns={cashColumns}
-                        dataSource={cashQuery.data?.movements ?? []}
+                        dataSource={rtkCurrent(cashQuery)?.movements ?? []}
                         scroll={{ x: 480 }}
                       />
                     </DataTableCard>

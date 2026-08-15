@@ -41,9 +41,9 @@ import {
   type MarketExchange,
   type PumpEventDto,
 } from '@/libs/api';
-import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
+import { useDisplayCurrency, useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
-import { formatPrice, newPaperIdempotencyKey } from '@/libs/utils';
+import { formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
@@ -58,6 +58,8 @@ import {
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
+  scalePriceSeries,
+  venueQuote,
   sortedEmaKeys,
   toSupplyAsset,
   trimCandlesToMax,
@@ -102,6 +104,7 @@ import {
  */
 export function CoinDetailPage() {
   const { t } = useTranslation(['detail', 'common']);
+  const { convert, currency: displayCurrency, rates: fxRates } = useDisplayCurrency();
   const { exchange: exchangeParam, symbol: symbolParam } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
@@ -247,7 +250,7 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
-  const suggestedBookGroups = orderBookQuery.data?.suggestedGroupSizes;
+  const suggestedBookGroups = rtkCurrent(orderBookQuery)?.suggestedGroupSizes;
   useEffect(() => {
     if (!orderBookGroup || !suggestedBookGroups?.length) return;
     if (!suggestedBookGroups.includes(orderBookGroup)) {
@@ -283,9 +286,10 @@ export function CoinDetailPage() {
     },
   );
 
+  const liveCandleRows = rtkCurrent(candlesQuery)?.candles;
   const liveCandles = useMemo(
-    () => filterValidApiCandles(candlesQuery.data?.candles),
-    [candlesQuery.data?.candles],
+    () => filterValidApiCandles(liveCandleRows),
+    [liveCandleRows],
   );
 
   const allCandles = useMemo(
@@ -297,7 +301,18 @@ export function CoinDetailPage() {
     [historyCandles, liveCandles],
   );
 
-  const chartData = useMemo(() => apiCandlesToChart(allCandles), [allCandles]);
+  const chartData = useMemo(() => {
+    const raw = apiCandlesToChart(allCandles);
+    if (displayCurrency === 'native') return raw;
+    const q = venueQuote(exchange);
+    return raw.map((bar) => ({
+      ...bar,
+      open: convert(bar.open, q) ?? bar.open,
+      high: convert(bar.high, q) ?? bar.high,
+      low: convert(bar.low, q) ?? bar.low,
+      close: convert(bar.close, q) ?? bar.close,
+    }));
+  }, [allCandles, convert, displayCurrency, exchange]);
 
   // Live pump window matches the polled candle head (API max 1000).
   const pumpsQuery = useGetPumpEventsQuery(
@@ -427,18 +442,25 @@ export function CoinDetailPage() {
     symbol,
   ]);
 
-  const indicatorPoints = indicatorsQuery.data?.points;
-  const latestEma = indicatorsQuery.data?.latest?.ema;
+  const liveIndicators = rtkCurrent(indicatorsQuery);
+  const indicatorPoints = liveIndicators?.points;
+  const latestEma = liveIndicators?.latest?.ema;
   const overlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
     const keys = sortedEmaKeys(latestEma);
+    const quote = venueQuote(exchange);
     return keys.map((key, i) => ({
       id: `ema-${key}`,
       title: t('detail:indicators.emaLabel', { period: key }),
       color: emaColor(key, i),
-      data: indicatorPointsToEmaLine(indicatorPoints, key),
+      data: scalePriceSeries(
+        indicatorPointsToEmaLine(indicatorPoints, key),
+        quote,
+        displayCurrency,
+        fxRates,
+      ),
     }));
-  }, [showEma, latestEma, indicatorPoints, t]);
+  }, [showEma, latestEma, indicatorPoints, t, exchange, displayCurrency, fxRates]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
@@ -522,10 +544,8 @@ export function CoinDetailPage() {
 
   const backTo = marketsBackPath(exchange);
 
-  const headerLoading = tickerQuery.isLoading && !tickerQuery.data;
-  const statsLoading =
-    (tickerQuery.isLoading && !tickerQuery.data) ||
-    (supplyQuery.isLoading && !supplyQuery.data);
+  const headerLoading = rtkCurrentPending(tickerQuery);
+  const statsLoading = rtkCurrentPending(tickerQuery) || rtkCurrentPending(supplyQuery);
   const seriesLoading =
     ((candlesQuery.isLoading || indicatorsQuery.isLoading) && chartData.length === 0) ||
     waitingForIntervals;
@@ -543,9 +563,9 @@ export function CoinDetailPage() {
       <DetailHeader
         symbol={symbol}
         exchange={exchange}
-        lastPrice={tickerQuery.data?.lastPrice}
-        priceChangePercent={tickerQuery.data?.priceChangePercent}
-        assetName={supplyQuery.data?.name}
+        lastPrice={rtkCurrent(tickerQuery)?.lastPrice}
+        priceChangePercent={rtkCurrent(tickerQuery)?.priceChangePercent}
+        assetName={rtkCurrent(supplyQuery)?.name}
         backTo={backTo}
         isLoading={headerLoading}
         watched={watched}
@@ -568,8 +588,8 @@ export function CoinDetailPage() {
 
       <DetailStats
         exchange={exchange}
-        ticker={tickerQuery.data}
-        supply={supplyQuery.data}
+        ticker={rtkCurrent(tickerQuery)}
+        supply={rtkCurrent(supplyQuery)}
         isLoading={statsLoading}
         tickerError={
           tickerQuery.isError
@@ -680,10 +700,10 @@ export function CoinDetailPage() {
 
       <SideStack>
       <OrderBookPanel
-        book={orderBookQuery.data}
-        group={orderBookGroup || orderBookQuery.data?.groupSize || ''}
+        book={rtkCurrent(orderBookQuery)}
+        group={orderBookGroup || rtkCurrent(orderBookQuery)?.groupSize || ''}
         onGroupChange={setOrderBookGroup}
-        isLoading={orderBookQuery.isLoading && !orderBookQuery.data}
+        isLoading={rtkCurrentPending(orderBookQuery)}
         isFetching={orderBookQuery.isFetching}
         errorMessage={
           orderBookQuery.isError
@@ -740,10 +760,10 @@ export function CoinDetailPage() {
                 </Button>
               </Link>
             </div>
-            {paperPortfolio.data?.availableCash != null ? (
+            {rtkCurrent(paperPortfolio)?.availableCash != null ? (
               <Text variant="caption" color="secondary">
                 {t('detail:paperTrade.availableCash', {
-                  amount: formatPrice(paperPortfolio.data.availableCash),
+                  amount: formatPrice(rtkCurrent(paperPortfolio)?.availableCash),
                 })}
               </Text>
             ) : null}
@@ -786,8 +806,9 @@ export function CoinDetailPage() {
       </ChartAndBook>
 
       <IndicatorPanel
-        data={indicatorsQuery.data}
-        isLoading={indicatorsQuery.isLoading && !indicatorsQuery.data}
+        data={liveIndicators}
+        priceQuote={venueQuote(exchange)}
+        isLoading={rtkCurrentPending(indicatorsQuery)}
         errorMessage={
           indicatorsQuery.isError
             ? rtkErrorMessage(indicatorsQuery.error, {

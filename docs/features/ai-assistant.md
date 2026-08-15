@@ -66,7 +66,7 @@ ty check
 
 ## Market / watchlist tools
 
-Market specialist tools mirror Go MCP (ticker, **spot order book** / **order-book analysis** / **market-wide book** / **market impact**, **order-book alerts**, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**, **API keys**).  
+Market specialist tools mirror Go MCP (ticker, **FX rates** `get_fx_rates`, **spot order book** / **order-book analysis** / **market-wide book** / **market impact**, **order-book alerts**, candles, indicators, pumps, paper portfolio, scanner, **watchlist sharing**, **API keys**).  
 Impact: `estimate_market_impact` walks live depth for a market buy/sell (`quantity` or `notional`). Liquidity: `get_market_liquidity` (0–100 + weaker side, per venue + market-wide). Liquidations: `get_liquidations` (5m/1h/4h/24h long vs short, Binance USD-M + Bybit linear). Walls include `behavior` (`short` / `persistent` / `suspicious`). See `docs/features/order-book.md` and `docs/features/liquidations.md`.  
 Sharing tools: `share_watchlist`, `update_watchlist_share`, `revoke_watchlist_share`, `list_watchlist_shares`, `list_shared_watchlists`, `list_watchlist_audit`. See `docs/features/watchlist-sharing.md`.  
 Export tools: `start_export`, `get_export`, `list_exports`, `cancel_export` (includes paper `portfolios`). See `docs/features/user-data-export.md`.  

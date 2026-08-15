@@ -1,11 +1,12 @@
 import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { useDisplayCurrency } from '@/libs/hooks';
 import {
   formatCompactAsset,
-  formatPrice,
   formatTradeCount,
   parseTradingPair,
+  venueQuote,
 } from '@/libs/utils';
 import { formatMaxSupply } from './DetailStats.helpers';
 import { StatCard, StatsGrid, StatsSection } from './DetailStats.styles';
@@ -52,7 +53,9 @@ export function DetailStats({
   isLoading = false,
 }: DetailStatsProps) {
   const { t, i18n } = useTranslation('detail');
+  const { formatPrice, formatCompact } = useDisplayCurrency();
   const pair = parseTradingPair(ticker?.symbol ?? '');
+  const quote = venueQuote(exchange);
 
   return (
     <StatsSection>
@@ -64,9 +67,9 @@ export function DetailStats({
       ) : null}
 
       <StatsGrid>
-        <Stat label={t('stats.open')} value={formatPrice(ticker?.openPrice)} isLoading={isLoading} />
-        <Stat label={t('stats.high24h')} value={formatPrice(ticker?.highPrice)} isLoading={isLoading} />
-        <Stat label={t('stats.low24h')} value={formatPrice(ticker?.lowPrice)} isLoading={isLoading} />
+        <Stat label={t('stats.open')} value={formatPrice(ticker?.openPrice, quote)} isLoading={isLoading} />
+        <Stat label={t('stats.high24h')} value={formatPrice(ticker?.highPrice, quote)} isLoading={isLoading} />
+        <Stat label={t('stats.low24h')} value={formatPrice(ticker?.lowPrice, quote)} isLoading={isLoading} />
         <Stat
           label={t('stats.baseVol')}
           value={formatCompactAsset(ticker?.volume, pair.base)}
@@ -74,7 +77,7 @@ export function DetailStats({
         />
         <Stat
           label={t('stats.quoteVol')}
-          value={formatCompactAsset(ticker?.quoteVolume, pair.quote)}
+          value={formatCompact(ticker?.quoteVolume, quote)}
           isLoading={isLoading}
         />
         <Stat
@@ -99,7 +102,7 @@ export function DetailStats({
         />
         <Stat
           label={t('stats.usdSnap')}
-          value={formatPrice(supply?.currentPriceUsd)}
+          value={formatPrice(supply?.currentPriceUsd, 'USD')}
           isLoading={isLoading}
         />
       </StatsGrid>

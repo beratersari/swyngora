@@ -71,6 +71,15 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 				t.Fatalf("health body=%s", body)
 			}
 		}},
+		{"/api/v1/market/fx", http.StatusOK, func(t *testing.T, body []byte) {
+			var m map[string]any
+			if err := json.Unmarshal(body, &m); err != nil {
+				t.Fatal(err)
+			}
+			if m["base"] != "USD" {
+				t.Fatalf("fx=%v", m)
+			}
+		}},
 		{"/api/v1/market/intervals", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any
 			if err := json.Unmarshal(body, &m); err != nil {

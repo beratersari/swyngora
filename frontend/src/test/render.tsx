@@ -6,6 +6,7 @@ import { Provider as ReduxProvider } from 'react-redux';
 import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom';
 import { ThemeProvider } from 'styled-components';
 import { store } from '@/libs/api';
+import { DisplayCurrencyProvider } from '@/libs/hooks';
 import { getAntdLocale, i18n } from '@/libs/i18n';
 import { antdTheme } from '@/styles/antdTheme';
 import { appTheme } from '@/styles/theme';
@@ -42,7 +43,9 @@ export function renderWithProviders(
         <I18nextProvider i18n={i18n}>
           <ThemeProvider theme={appTheme}>
             <ConfigProvider theme={antdTheme} locale={getAntdLocale(i18n.language)}>
-              <MemoryRouter initialEntries={routerEntries}>{children}</MemoryRouter>
+              <DisplayCurrencyProvider>
+                <MemoryRouter initialEntries={routerEntries}>{children}</MemoryRouter>
+              </DisplayCurrencyProvider>
             </ConfigProvider>
           </ThemeProvider>
         </I18nextProvider>

@@ -17,6 +17,7 @@ import type {
   CandlesQuery,
   CandlesResponse,
   ExchangesResponse,
+  FxRatesResponse,
   IndicatorsQuery,
   IndicatorsResponse,
   IntervalsQuery,
@@ -60,6 +61,7 @@ export type {
   IntervalsResponse,
   IndicatorsResponse,
   ExchangesResponse,
+  FxRatesResponse,
   ProductTagsResponse,
   PumpEventsQuery,
   PumpEventsResponse,
@@ -87,6 +89,10 @@ export {
 
 export const marketApi = baseApi.injectEndpoints({
   endpoints: (build) => ({
+    getFxRates: build.query<FxRatesResponse, void>({
+      query: () => '/api/v1/market/fx',
+    }),
+
     listExchanges: build.query<ExchangesResponse, void>({
       query: () => '/api/v1/market/exchanges',
       transformResponse: transformExchangesResponse,
@@ -241,6 +247,7 @@ export const marketApi = baseApi.injectEndpoints({
 });
 
 export const {
+  useGetFxRatesQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,

@@ -100,6 +100,9 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 		if in.Amount > avail+1e-9 {
 			return nil, nil, fmt.Errorf("%w: insufficient available cash (have %g)", domain.ErrInvalidArgument, avail)
 		}
+		if err := s.guardCrossWithdrawMaint(ctx, p, in.Amount); err != nil {
+			return nil, nil, err
+		}
 		newCash = p.CashBalance - in.Amount
 		newNet = p.NetDeposits - in.Amount
 		if newCash < 0 {
@@ -125,6 +128,25 @@ func (s *Service) moveCash(ctx context.Context, in CashMoveInput, kind domain.Ca
 	_ = s.recordViewSnapshot(ctx, view, now)
 	s.notifyChange(ctx, p.ID, domain.PortfolioChangeCash, nil, nil, view)
 	return m, view, nil
+}
+
+// guardCrossWithdrawMaint rejects a withdraw that would leave cross equity under total maintenance.
+func (s *Service) guardCrossWithdrawMaint(ctx context.Context, p *domain.Portfolio, amount float64) error {
+	if p == nil || p.MarginMode != domain.MarginModeCross {
+		return nil
+	}
+	risk, err := s.loadCrossAccountRisk(ctx, p.BookID())
+	if err != nil {
+		return err
+	}
+	if risk == nil || risk.totalMaint <= 0 {
+		return nil
+	}
+	after := risk.equity - amount
+	if after+1e-9 < risk.totalMaint {
+		return fmt.Errorf("%w: withdrawal would leave equity %g below maintenance %g", domain.ErrInvalidArgument, after, risk.totalMaint)
+	}
+	return nil
 }
 
 // ListCashMovements returns deposit/withdraw history (newest first).

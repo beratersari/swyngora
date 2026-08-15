@@ -9,7 +9,7 @@ Users need to close their account (opaque `clientId` tenancy). While closed they
 | State | API as that clientId | Shared lists they own | Data |
 |-------|----------------------|------------------------|------|
 | **active** | normal | shared | kept |
-| **closed** (≤7 days) | blocked (403 `account_closed`) except status/reopen/close | **no access** for grantees | kept; active jobs canceled |
+| **closed** (≤7 days) | blocked (403 `account_closed`) except status/reopen/close; Telegram tenant commands also refuse | **no access** for grantees | kept; active jobs canceled |
 | **after 7 days** | N/A | N/A | **purged** |
 
 ### HTTP
@@ -43,6 +43,7 @@ Reserved tenant names (`default`, `anonymous`, `http-default`, `ai-assistant`, e
 | Service + worker | `backend/internal/service/account/` |
 | Middleware | `backend/internal/transport/http/middleware/account.go` |
 | HTTP | `backend/internal/transport/http/handler/account.go` |
+| Telegram | `backend/internal/transport/telegram/commands.go` (`clientIDForUser` → `RequireActive`) |
 
 ## Config
 
@@ -65,4 +66,5 @@ go test ./internal/service/account/... -count=1
 - “Login” is the clientId model; there is no separate auth provider yet.  
 - Body-only `clientId` (no header/query) is not gated by REST middleware. Prefer `X-Client-Id`.  
 - MCP tools with `clientId` are blocked while closed (same `RequireActive` error as REST).  
+- Telegram uses the same `RequireActive` check after resolving the mapped tenant id. Public market commands (`/price`, `/rsi`, …) stay available.  
 - Paper portfolio purge is not included in this change.

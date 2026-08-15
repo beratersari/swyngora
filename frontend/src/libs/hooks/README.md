@@ -9,6 +9,7 @@ Examples (init / markets epics):
 | `useDocumentVisible` | Pause polling when tab hidden |
 | `useDebouncedValue`  | Debounce search `q`           |
 | `useMediaQuery`      | Match CSS breakpoints (chart height, etc.) |
+| `useDisplayCurrency` | Header FX preference + convert/format helpers |
 
 Feature-specific composition hooks may live next to the feature **only if** they are not reusable; prefer promoting shared ones here.
 

@@ -724,6 +724,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def list_exchanges() -> str:
         return http.get("/api/v1/market/exchanges")
 
+    def get_fx_rates() -> str:
+        return http.get("/api/v1/market/fx")
+
     def get_ticker(symbol: str, exchange: str = "binance") -> str:
         return http.get(
             "/api/v1/market/ticker/24h",
@@ -1713,6 +1716,14 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             list_exchanges,
             name="list_exchanges",
             description="List configured market venues.",
+        ),
+        StructuredTool.from_function(
+            get_fx_rates,
+            name="get_fx_rates",
+            description=(
+                "Spot FX rates (units per 1 USD) to convert BIST TRY, Nasdaq USD, "
+                "and crypto USDT display values. USDT is treated as USD. Display only."
+            ),
         ),
         StructuredTool.from_function(
             get_ticker,

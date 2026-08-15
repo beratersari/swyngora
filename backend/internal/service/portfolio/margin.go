@@ -79,13 +79,13 @@ type MarginBracketsInput struct {
 	ClearTakeProfit bool
 }
 
-// availableCashForTrading returns cash free of spot pending + margin limit reservations.
-// In cross mode, open margin unrealized PnL is added to free margin.
+// availableCashForTrading returns unused wallet cash (spot + margin reservations).
+// Unrealized margin PnL is not spendable — it only counts toward cross equity / liq.
 func (s *Service) availableCashForTrading(ctx context.Context, clientID string, cashBalance float64) (float64, error) {
 	return s.availableCashForTradingMode(ctx, clientID, cashBalance, "")
 }
 
-func (s *Service) availableCashForTradingMode(ctx context.Context, clientID string, cashBalance float64, mode domain.MarginMode) (float64, error) {
+func (s *Service) availableCashForTradingMode(ctx context.Context, clientID string, cashBalance float64, _ domain.MarginMode) (float64, error) {
 	reservedSpot, err := s.store.SumReservedCash(ctx, clientID)
 	if err != nil {
 		return 0, err
@@ -94,20 +94,7 @@ func (s *Service) availableCashForTradingMode(ctx context.Context, clientID stri
 	if err != nil {
 		return 0, err
 	}
-	avail := domain.AvailableCash(cashBalance, reservedSpot+reservedMargin)
-	if mode == "" {
-		if p, err := s.store.GetPortfolio(ctx, clientID); err == nil {
-			mode = p.MarginMode
-		}
-	}
-	if mode == domain.MarginModeCross {
-		upnl, err := s.sumOpenMarginUnrealized(ctx, clientID)
-		if err != nil {
-			return 0, err
-		}
-		avail += upnl
-	}
-	return avail, nil
+	return domain.AvailableCash(cashBalance, reservedSpot+reservedMargin), nil
 }
 
 // marginReserveNeed is initial margin plus worst-case open fee (slipped limit * fee).
@@ -715,7 +702,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
-	if avail+1e-9 < needCash {
+	if avail+1e-9 < needCash || p.CashBalance+1e-9 < needCash {
 		return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, needCash, avail)
 	}
 	borrowP, debtAsset, err := domain.BorrowedPrincipalOnOpen(side, in.Quantity, price, in.Leverage)
@@ -1395,7 +1382,11 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			// Interest only; principal (pp) is reduced on the position, not cash.
 			cashDelta -= ip
 		}
-		p.CashBalance += cashDelta
+		mode := cur.Mode
+		if mode == "" {
+			mode = p.MarginMode
+		}
+		p.CashBalance, cashDelta = domain.ApplyMarginCloseCash(mode, p.CashBalance, cashDelta)
 		p.RealizedPnLTotal += realized
 		p.UpdatedAt = now
 

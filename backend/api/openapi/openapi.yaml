@@ -148,6 +148,24 @@ paths:
                     type: string
                     example: binance
 
+  /api/v1/market/fx:
+    get:
+      summary: Spot FX rates for display conversion
+      description: |
+        USD-based spot rates (units of each currency per 1 USD) for converting
+        BIST TRY, Nasdaq/Coinbase USD, and crypto USDT quotes in the UI.
+        USDT is treated as USD. Rates are cached; `stale` is true when serving
+        last-good after an upstream miss. Display only — not settlement FX.
+      operationId: getFxRates
+      tags: [Market]
+      responses:
+        '200':
+          description: USD-based FX snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxRates'
+
   /api/v1/market/intervals:
     get:
       summary: List supported candle intervals
@@ -5571,6 +5589,26 @@ components:
           items:
             $ref: '#/components/schemas/PumpScanHit'
         note: { type: string }
+
+    FxRates:
+      type: object
+      properties:
+        base:
+          type: string
+          example: USD
+        asOf:
+          type: string
+          format: date-time
+        rates:
+          type: object
+          additionalProperties:
+            type: number
+          description: Units of each currency per 1 USD (USDT=1)
+          example: { USD: 1, USDT: 1, TRY: 40.5, EUR: 0.92 }
+        stale:
+          type: boolean
+        note:
+          type: string
 
     SpotMarket:
       type: object
