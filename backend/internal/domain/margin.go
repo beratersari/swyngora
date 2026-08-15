@@ -88,16 +88,16 @@ const (
 
 // MarginPosition is a leveraged long/short paper position (isolated or cross).
 type MarginPosition struct {
-	ID               string
-	ClientID         string
-	Exchange         Exchange
-	Symbol           string
-	Side             MarginSide
-	Mode             MarginMode // snapshot of account mode at open
-	Quantity         float64    // remaining open size
-	EntryPrice       float64
-	Leverage         int
-	Margin           float64 // margin assigned (isolated: only this backs the pos; cross: IM share)
+	ID         string
+	ClientID   string
+	Exchange   Exchange
+	Symbol     string
+	Side       MarginSide
+	Mode       MarginMode // snapshot of account mode at open
+	Quantity   float64    // remaining open size
+	EntryPrice float64
+	Leverage   int
+	Margin     float64 // margin assigned (isolated: only this backs the pos; cross: IM share)
 	// DebtPrincipal: long = borrowed cash; short = borrowed base coins.
 	DebtPrincipal float64
 	// DebtInterest: accrued interest in the same unit as DebtPrincipal.
@@ -113,52 +113,52 @@ type MarginPosition struct {
 	UnrealizedPnL    float64 // view-only / last mark
 	MarkPrice        float64 // view-only
 	// DebtNotional is view-only: principal+interest in quote terms (short uses mark).
-	DebtNotional  float64
-	RealizedPnL   float64 // cumulative realized on this position (partials + final)
-	CloseReason   string
-	OpenedAt      time.Time
-	UpdatedAt     time.Time
-	ClosedAt      *time.Time
+	DebtNotional float64
+	RealizedPnL  float64 // cumulative realized on this position (partials + final)
+	CloseReason  string
+	OpenedAt     time.Time
+	UpdatedAt    time.Time
+	ClosedAt     *time.Time
 }
 
 // MarginOrder is a pending limit open for margin (market fills immediately).
 type MarginOrder struct {
-	ID            string
-	ClientID      string
-	Exchange      Exchange
-	Symbol        string
-	Side          MarginSide
-	Type          MarginOrderType
-	Quantity      float64
-	Leverage      int
-	LimitPrice    float64 // required for limit
+	ID             string
+	ClientID       string
+	Exchange       Exchange
+	Symbol         string
+	Side           MarginSide
+	Type           MarginOrderType
+	Quantity       float64
+	Leverage       int
+	LimitPrice     float64 // required for limit
 	ReservedMargin float64
-	StopLoss      *float64
-	TakeProfit    *float64
-	Status        MarginOrderStatus
-	PositionID    string // set when filled
-	RejectReason  string
-	CancelReason  string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	FilledAt      *time.Time
-	CanceledAt    *time.Time
+	StopLoss       *float64
+	TakeProfit     *float64
+	Status         MarginOrderStatus
+	PositionID     string // set when filled
+	RejectReason   string
+	CancelReason   string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	FilledAt       *time.Time
+	CanceledAt     *time.Time
 }
 
 // MarginTrade is a margin open/close/repay fill record.
 type MarginTrade struct {
-	ID           string
-	ClientID     string
-	PositionID   string
-	Exchange     Exchange
-	Symbol       string
-	Side         MarginSide
-	Action       string // open | close | liquidation | stop_loss | take_profit | repay | interest
-	Quantity     float64
-	Price        float64
-	Notional     float64
-	RealizedPnL  float64
-	MarginDelta  float64 // cash change from margin lock/release (negative open, positive release)
+	ID          string
+	ClientID    string
+	PositionID  string
+	Exchange    Exchange
+	Symbol      string
+	Side        MarginSide
+	Action      string // open | close | liquidation | stop_loss | take_profit | repay | interest
+	Quantity    float64
+	Price       float64
+	Notional    float64
+	RealizedPnL float64
+	MarginDelta float64 // cash change from margin lock/release (negative open, positive release)
 	// PrincipalPaid / InterestPaid track debt reduction on repay or partial close.
 	PrincipalPaid float64
 	InterestPaid  float64
@@ -326,6 +326,7 @@ func DebtNotionalQuote(side MarginSide, principal, interest, mark float64) float
 //   - if now is not strictly after lastAt (clock skew or already accrued), returns zero hours
 //     and leaves interest/lastAt unchanged (never reduces interest or rewinds lastAt)
 //   - newLast is always lastAt + hours (forward only)
+//
 // Fully paid principal (principal <= 0) accrues nothing.
 //
 // Returns new interest total, new lastInterestAt, full hours applied.
@@ -555,6 +556,25 @@ func CrossPartialLiquidationQty(
 		return qty
 	}
 	return cq
+}
+
+// ApplyMarginCloseCash applies a close wallet delta with bankruptcy floors.
+// Isolated: a losing close cannot consume cash that was never assigned as margin
+// (negative delta is floored at 0 — the open already deducted IM).
+// All modes: cash balance never goes negative.
+func ApplyMarginCloseCash(mode MarginMode, cashBalance, cashDelta float64) (newCash, appliedDelta float64) {
+	if mode == "" {
+		mode = MarginModeIsolated
+	}
+	if mode == MarginModeIsolated && cashDelta < 0 {
+		cashDelta = 0
+	}
+	newCash = cashBalance + cashDelta
+	if newCash < 0 {
+		cashDelta -= newCash
+		newCash = 0
+	}
+	return newCash, cashDelta
 }
 
 // CrossLiquidationPrice is the mark of this position that would drive total equity

@@ -17,7 +17,7 @@ import {
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
-import { defaultQuoteForExchange } from '@/libs/utils';
+import { defaultQuoteForExchange, rtkCurrent } from '@/libs/utils';
 import {
   Chrome,
   ChromeLeft,
@@ -54,9 +54,10 @@ export function HeatmapPage() {
     { pollingInterval: poll, refetchOnFocus: true },
   );
 
+  const liveList = rtkCurrent(listQuery);
   const symbols = useMemo(
-    () => (listQuery.data?.items ?? []).map((row) => row.symbol).filter((s): s is string => Boolean(s)),
-    [listQuery.data?.items],
+    () => (liveList?.items ?? []).map((row) => row.symbol).filter((s): s is string => Boolean(s)),
+    [liveList?.items],
   );
   usePriceSubscription(
     symbols.map((symbol) => ({ exchange, symbol })),
@@ -65,7 +66,7 @@ export function HeatmapPage() {
 
   const items = useMemo(
     () =>
-      (listQuery.data?.items ?? []).map((row) => ({
+      (liveList?.items ?? []).map((row) => ({
         symbol: row.symbol ?? '',
         exchange,
         lastPrice: row.lastPrice,
@@ -73,7 +74,7 @@ export function HeatmapPage() {
         quoteVolume: row.quoteVolume,
         marketCapCirculating: row.marketCapCirculating,
       })),
-    [exchange, listQuery.data?.items],
+    [exchange, liveList?.items],
   );
 
   const setVenue = (next: MarketExchange) => {

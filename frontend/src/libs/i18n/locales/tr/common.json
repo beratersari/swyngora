@@ -38,6 +38,13 @@
     "en": "English",
     "tr": "Türkçe"
   },
+  "currency": {
+    "label": "Görüntü para birimi",
+    "native": "Yerel",
+    "USD": "USD",
+    "TRY": "TRY",
+    "EUR": "EUR"
+  },
   "actions": {
     "retry": "Yeniden dene",
     "refresh": "Yenile",

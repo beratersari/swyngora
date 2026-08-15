@@ -40,8 +40,10 @@ const coinbaseItem = {
 };
 
 function okSpot(items: typeof binanceItem[], total = items.length) {
+  const payload = { items, total };
   return {
-    data: { items, total },
+    data: payload,
+    currentData: payload,
     isLoading: false,
     isFetching: false,
     isSuccess: true,
@@ -86,6 +88,7 @@ describe('MarketsPage', () => {
   it('keeps rows and shows refresh warning when poll fails with prior data', async () => {
     mockSpot.mockReturnValue({
       data: { items: [binanceItem], total: 1 },
+      currentData: { items: [binanceItem], total: 1 },
       isLoading: false,
       isFetching: false,
       isSuccess: false,
@@ -154,7 +157,8 @@ describe('MarketsPage', () => {
 
     // After tab click, URL exchange changes; mock returns no data for new key
     mockSpot.mockImplementation(() => ({
-      data: undefined,
+      data: { items: [binanceItem], total: 1 },
+      currentData: undefined,
       isLoading: false,
       isFetching: true,
       isSuccess: false,

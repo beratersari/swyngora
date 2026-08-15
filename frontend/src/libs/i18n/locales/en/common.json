@@ -38,6 +38,13 @@
     "en": "English",
     "tr": "Türkçe"
   },
+  "currency": {
+    "label": "Display currency",
+    "native": "Native",
+    "USD": "USD",
+    "TRY": "TRY",
+    "EUR": "EUR"
+  },
   "actions": {
     "retry": "Retry",
     "refresh": "Refresh",

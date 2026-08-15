@@ -55,6 +55,14 @@ export type ExchangesResponse = {
   default: string;
 };
 
+export type FxRatesResponse = {
+  base?: string;
+  asOf?: string;
+  rates?: Record<string, number>;
+  stale?: boolean;
+  note?: string;
+};
+
 export type ProductTagsResponse = {
   exchange: string;
   tags: string[];

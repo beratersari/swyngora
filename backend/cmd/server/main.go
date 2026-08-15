@@ -18,6 +18,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
@@ -167,7 +168,7 @@ func main() {
 		domain.ExchangeBybit:    bybitClient,
 		domain.ExchangeNasdaq:   equities.NewNasdaq(equities.Options{HTTPClient: httpClient}),
 		domain.ExchangeBist:     equities.NewBist(equities.Options{HTTPClient: httpClient}),
-	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq)
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -503,6 +504,7 @@ func main() {
 				AI:              aiClient,
 				AITimeout:       cfg.AITimeout,
 				Identities:      accountStore,
+				Accounts:        accountSvc,
 				Portfolio:       portfolioSvc,
 			})
 			bot := &telegram.Bot{

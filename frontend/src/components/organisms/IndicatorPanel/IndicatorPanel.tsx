@@ -2,6 +2,7 @@ import { Alert, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { IndicatorChartHost } from '@/components/molecules/IndicatorChartHost';
+import { useDisplayCurrency } from '@/libs/hooks';
 import {
   formatIndicator,
   indicatorPointsToRsiLine,
@@ -23,12 +24,14 @@ import type { IndicatorPanelProps } from './IndicatorPanel.types';
 
 export function IndicatorPanel({
   data,
+  priceQuote,
   errorMessage,
   isLoading = false,
   showEmaOnChart = true,
   onToggleEma,
 }: IndicatorPanelProps) {
   const { t } = useTranslation('detail');
+  const { formatPrice } = useDisplayCurrency();
   const rsi = data?.latest?.rsi;
   const emaKeys = sortedEmaKeys(data?.latest?.ema);
   const rsiLine = indicatorPointsToRsiLine(data?.points);
@@ -99,7 +102,9 @@ export function IndicatorPanel({
               {t('indicators.emaLatest', { period: key })}
             </Text>
             <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={90}>
-              {formatIndicator(data?.latest?.ema?.[key], 4)}
+              {priceQuote
+                ? formatPrice(data?.latest?.ema?.[key], priceQuote)
+                : formatIndicator(data?.latest?.ema?.[key], 4)}
             </Text>
           </SnapshotCard>
         ))}

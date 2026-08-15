@@ -291,6 +291,11 @@ func (c *APIClient) ListExchanges(ctx context.Context) (json.RawMessage, error) 
 	return c.get(ctx, "/api/v1/market/exchanges", nil)
 }
 
+// GetFxRates returns USD-based spot FX for display conversion.
+func (c *APIClient) GetFxRates(ctx context.Context) (json.RawMessage, error) {
+	return c.get(ctx, "/api/v1/market/fx", nil)
+}
+
 // GetWatchlist fetches a client watchlist.
 
 func (c *APIClient) ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error) {

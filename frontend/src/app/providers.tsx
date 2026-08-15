@@ -9,6 +9,7 @@ import { getAntdLocale } from '@/libs/i18n';
 import { antdTheme } from '@/styles/antdTheme';
 import { appTheme } from '@/styles/theme';
 import { GlobalStyle } from '@/styles/GlobalStyle';
+import { DisplayCurrencyProvider } from '@/libs/hooks';
 import { ErrorBoundary } from './ErrorBoundary';
 import { RealtimeBridge } from './RealtimeBridge';
 
@@ -45,8 +46,10 @@ export function Providers({ children }: ProvidersProps) {
         <AntdLocaleBridge>
           <ErrorBoundary>
             <BrowserRouter>
-              <RealtimeBridge />
-              {children}
+              <DisplayCurrencyProvider>
+                <RealtimeBridge />
+                {children}
+              </DisplayCurrencyProvider>
             </BrowserRouter>
           </ErrorBoundary>
         </AntdLocaleBridge>

@@ -1,4 +1,5 @@
-import { formatChangePercent, formatPrice, formatSymbolDisplay } from '@/libs/utils';
+import { formatChangePercent, formatConvertedPrice, formatSymbolDisplay, venueQuote } from '@/libs/utils';
+import type { DisplayCurrency, FxRatesMap } from '@/libs/utils';
 import type { TickerTapeItem } from './TickerTape.types';
 
 function parseChange(value: string | number | null | undefined): number | null {
@@ -7,19 +8,23 @@ function parseChange(value: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function toTickerTapeItem(row: {
-  exchange?: string;
-  symbol?: string;
-  lastPrice?: string | number | null;
-  priceChangePercent?: string | number | null;
-}): TickerTapeItem | null {
+export function toTickerTapeItem(
+  row: {
+    exchange?: string;
+    symbol?: string;
+    lastPrice?: string | number | null;
+    priceChangePercent?: string | number | null;
+  },
+  display?: { currency: DisplayCurrency; rates?: FxRatesMap },
+): TickerTapeItem | null {
   const exchange = (row.exchange ?? '').trim().toLowerCase();
   const symbol = (row.symbol ?? '').trim().toUpperCase();
   if (!exchange || !symbol) return null;
+  const pref = display?.currency ?? 'native';
   return {
     exchange,
     symbol,
-    lastPrice: formatPrice(row.lastPrice),
+    lastPrice: formatConvertedPrice(row.lastPrice, venueQuote(exchange), pref, display?.rates),
     changePercent: formatChangePercent(row.priceChangePercent),
     changeValue: parseChange(row.priceChangePercent),
     href: `/markets/${exchange}/${encodeURIComponent(symbol)}`,

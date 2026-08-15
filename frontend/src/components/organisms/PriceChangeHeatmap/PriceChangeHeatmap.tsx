@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
-import { formatChangePercent, formatCompactAmount, formatPrice } from '@/libs/utils';
+import { useDisplayCurrency } from '@/libs/hooks';
+import { formatChangePercent, marketCapQuote, venueQuote } from '@/libs/utils';
 import {
   baseSymbol,
   changeFill,
@@ -37,6 +38,7 @@ export function PriceChangeHeatmap({
   onOpen,
 }: PriceChangeHeatmapProps) {
   const { t } = useTranslation(['heatmap', 'common']);
+  const { formatPrice, formatCompact } = useDisplayCurrency();
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
   const [hud, setHud] = useState<HudState | null>(null);
@@ -115,7 +117,9 @@ export function PriceChangeHeatmap({
                 {density === 'full' || density === 'compact' ? (
                   <TileChange>{change}</TileChange>
                 ) : null}
-                {density === 'full' ? <TilePrice>{formatPrice(tile.lastPrice)}</TilePrice> : null}
+                {density === 'full' ? (
+                  <TilePrice>{formatPrice(tile.lastPrice, venueQuote(tile.exchange))}</TilePrice>
+                ) : null}
               </TileButton>
             </TileHost>
           );
@@ -124,11 +128,11 @@ export function PriceChangeHeatmap({
           <Hud $x={hud.x} $y={hud.y}>
             <HudPair>{hud.tile.symbol}</HudPair>
             <HudChange>{formatChangePercent(hud.tile.changePct)}</HudChange>
-            <HudMeta>{formatPrice(hud.tile.lastPrice)}</HudMeta>
+            <HudMeta>{formatPrice(hud.tile.lastPrice, venueQuote(hud.tile.exchange))}</HudMeta>
             <HudMeta>
               {metric === 'marketCap'
-                ? formatCompactAmount(hud.tile.marketCapCirculating)
-                : formatCompactAmount(hud.tile.quoteVolume)}
+                ? formatCompact(hud.tile.marketCapCirculating, marketCapQuote(hud.tile.exchange))
+                : formatCompact(hud.tile.quoteVolume, venueQuote(hud.tile.exchange))}
             </HudMeta>
           </Hud>
         ) : null}

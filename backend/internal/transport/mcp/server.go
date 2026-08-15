@@ -41,6 +41,7 @@ type DataPort interface {
 	DetectPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ScanPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListExchanges(ctx context.Context) (json.RawMessage, error)
+	GetFxRates(ctx context.Context) (json.RawMessage, error)
 	ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetWatchlistOwned(ctx context.Context, actorClientID, ownerClientID string) (json.RawMessage, error)
@@ -549,6 +550,16 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			"maxTotalEvents": req.GetInt("maxTotalEvents", 30),
 		}
 		raw, err := api.ScanPumpEvents(ctx, args)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_fx_rates",
+		mcp.WithDescription("Spot FX rates (units per 1 USD) for converting BIST TRY, Nasdaq USD, and crypto USDT display values. USDT is treated as USD. Display only."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetFxRates(ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

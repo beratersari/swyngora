@@ -31,6 +31,7 @@ import {
   marketsStateToSearchParams,
   metricColumnTitle,
   parseMarketsSearchParams,
+  rtkCurrent,
   toSpotListQuery,
   type MarketsUrlState,
 } from '@/libs/utils';
@@ -133,19 +134,20 @@ export function MarketsPage() {
     total: number;
   }>({ key: filterKey, items: [], total: 0 });
 
+  const liveSpot = rtkCurrent(spotQuery);
   useEffect(() => {
-    if (spotQuery.data?.items) {
+    if (liveSpot?.items) {
       setRowCache({
         key: filterKey,
-        items: spotQuery.data.items,
-        total: spotQuery.data.total ?? spotQuery.data.items.length,
+        items: liveSpot.items,
+        total: liveSpot.total ?? liveSpot.items.length,
       });
     }
-  }, [spotQuery.data, filterKey]);
+  }, [liveSpot, filterKey]);
 
   const cachedForFilter = rowCache.key === filterKey ? rowCache : null;
-  // Prefer current query data; while a new sort/page is loading keep last rows.
-  const items = spotQuery.data?.items ?? cachedForFilter?.items ?? [];
+  // currentData only — never paint the previous venue from RTK `.data`.
+  const items = liveSpot?.items ?? cachedForFilter?.items ?? [];
   const liveSymbols = useMemo(
     () =>
       items
@@ -154,7 +156,7 @@ export function MarketsPage() {
     [items, state.exchange],
   );
   usePriceSubscription(liveSymbols, visible);
-  const total = spotQuery.data?.total ?? cachedForFilter?.total ?? 0;
+  const total = liveSpot?.total ?? cachedForFilter?.total ?? 0;
   const hasRows = items.length > 0;
   const loadErrorText = spotQuery.isError
     ? rtkErrorMessage(spotQuery.error, {

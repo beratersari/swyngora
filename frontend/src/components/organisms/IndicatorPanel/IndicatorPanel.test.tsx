@@ -14,6 +14,19 @@ describe('IndicatorPanel', () => {
     expect(screen.getByText('boom')).toBeInTheDocument();
   });
 
+  it('formats latest EMA in the display currency when priceQuote is set', () => {
+    renderWithTheme(
+      <IndicatorPanel
+        priceQuote="TRY"
+        data={{
+          latest: { rsi: 55, ema: { '12': 400 } },
+        }}
+      />,
+    );
+    expect(screen.getByText(/400/)).toBeInTheDocument();
+    expect(screen.getByText(/TRY/)).toBeInTheDocument();
+  });
+
   it('renders RSI snapshot and chart when data present', () => {
     renderWithTheme(
       <IndicatorPanel

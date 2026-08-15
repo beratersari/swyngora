@@ -9,9 +9,10 @@ import {
   changeTone,
   formatChangePercent,
   formatDelistDate,
-  formatPrice,
   formatSymbolDisplay,
+  venueQuote,
 } from '@/libs/utils';
+import { useDisplayCurrency } from '@/libs/hooks';
 import {
   BackLink,
   HeaderCard,
@@ -39,6 +40,7 @@ export function DetailHeader({
   delistTime,
 }: DetailHeaderProps) {
   const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets', 'signals']);
+  const { formatPrice } = useDisplayCurrency();
   const delistLabel = formatDelistDate(delistTime);
 
   return (
@@ -90,7 +92,7 @@ export function DetailHeader({
         <PriceBlock>
           <FlashValue value={lastPrice}>
             <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={120}>
-              {formatPrice(lastPrice)}
+              {formatPrice(lastPrice, venueQuote(exchange))}
             </Text>
           </FlashValue>
           <FlashValue value={priceChangePercent}>

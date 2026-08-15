@@ -5,6 +5,7 @@ export { useAppDispatch, useAppSelector } from './hooks';
 export { useGetHealthQuery } from './endpoints/healthApi';
 export type { HealthResponse } from './endpoints/healthApi';
 export {
+  useGetFxRatesQuery,
   useListExchangesQuery,
   useListProductTagsQuery,
   useListSpotMarketsQuery,
@@ -31,6 +32,7 @@ export type {
   SpotSortOrder,
   MarketExchange,
   ExchangesResponse,
+  FxRatesResponse,
   ProductTagsResponse,
   CandlesResponse,
   Candle,

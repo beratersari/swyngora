@@ -89,6 +89,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/fx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Spot FX rates for display conversion
+         * @description USD-based spot rates (units of each currency per 1 USD) for converting
+         *     BIST TRY, Nasdaq/Coinbase USD, and crypto USDT quotes in the UI.
+         *     USDT is treated as USD. Rates are cached; `stale` is true when serving
+         *     last-good after an upstream miss. Display only — not settlement FX.
+         */
+        get: operations["getFxRates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/intervals": {
         parameters: {
             query?: never;
@@ -3244,6 +3267,26 @@ export interface components {
             hits?: components["schemas"]["PumpScanHit"][];
             note?: string;
         };
+        FxRates: {
+            /** @example USD */
+            base?: string;
+            /** Format: date-time */
+            asOf?: string;
+            /**
+             * @description Units of each currency per 1 USD (USDT=1)
+             * @example {
+             *       "USD": 1,
+             *       "USDT": 1,
+             *       "TRY": 40.5,
+             *       "EUR": 0.92
+             *     }
+             */
+            rates?: {
+                [key: string]: number;
+            };
+            stale?: boolean;
+            note?: string;
+        };
         SpotMarket: {
             symbol?: string;
             lastPrice?: string;
@@ -3406,6 +3449,26 @@ export interface operations {
                         /** @example binance */
                         default?: string;
                     };
+                };
+            };
+        };
+    };
+    getFxRates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description USD-based FX snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FxRates"];
                 };
             };
         };

@@ -23,6 +23,8 @@ import {
   filterValidApiCandles,
   formatSymbolDisplay,
   parseComparePairsParam,
+  rtkCurrent,
+  rtkCurrentPending,
   serializeComparePairs,
   type ComparePair,
 } from '@/libs/utils';
@@ -65,8 +67,9 @@ function usePairPercentSeries(
     },
   );
   const series = useMemo(() => {
-    if (!pair || !q.data?.candles) return null;
-    const candles = filterValidApiCandles(q.data.candles);
+    const candlesRaw = rtkCurrent(q)?.candles;
+    if (!pair || !candlesRaw) return null;
+    const candles = filterValidApiCandles(candlesRaw);
     const chart = apiCandlesToChart(candles);
     const pct = closesToPercentSeries(
       chart.map((c) => ({ time: c.time, close: c.close })),
@@ -77,10 +80,10 @@ function usePairPercentSeries(
       color,
       data: pct,
     } satisfies CompareSeries;
-  }, [pair, q.data?.candles, color]);
+  }, [pair, q.currentData, color]);
   return {
     series,
-    isLoading: q.isLoading,
+    isLoading: rtkCurrentPending(q),
     isError: q.isError,
     error: q.error,
   };

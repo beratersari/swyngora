@@ -7,6 +7,7 @@ import { AppJumpSearch } from './AppJumpSearch';
 import { BrandMark } from '@/components/atoms/BrandMark';
 import { Text } from '@/components/atoms/Text';
 import { ConnectionStatus, type ConnectionStatusKind } from '@/components/molecules/ConnectionStatus';
+import { CurrencySwitcher } from '@/components/molecules/CurrencySwitcher';
 import { LanguageSwitcher } from '@/components/molecules/LanguageSwitcher';
 import { PageEnter } from '@/components/molecules/PageEnter';
 import { TickerTape, toTickerTapeItem } from '@/components/molecules/TickerTape';
@@ -19,7 +20,7 @@ import {
 } from '@/components/templates/AppShell';
 import { APP_NAME, DEFAULT_SPOT_POLL_MS } from '@/config/constants';
 import { useGetHealthQuery, useListSpotMarketsQuery } from '@/libs/api';
-import { useDocumentVisible } from '@/libs/hooks';
+import { useDisplayCurrency, useDocumentVisible } from '@/libs/hooks';
 import { useRealtimeConnected } from '@/libs/realtime';
 
 const NAV_ITEMS = [
@@ -38,6 +39,7 @@ function DeskShell() {
   const { t } = useTranslation('common');
   const location = useLocation();
   const visible = useDocumentVisible();
+  const display = useDisplayCurrency();
   const health = useGetHealthQuery(undefined, {
     pollingInterval: visible ? 15_000 : 0,
     refetchOnFocus: true,
@@ -58,9 +60,14 @@ function DeskShell() {
   const tapeItems = useMemo(() => {
     const rows = tapeQuery.data?.items ?? [];
     return rows
-      .map((row) => toTickerTapeItem({ ...row, exchange: 'binance' }))
+      .map((row) =>
+        toTickerTapeItem(
+          { ...row, exchange: 'binance' },
+          { currency: display.currency, rates: display.rates },
+        ),
+      )
       .filter((item): item is NonNullable<typeof item> => item != null);
-  }, [tapeQuery.data?.items]);
+  }, [tapeQuery.data?.items, display.currency, display.rates]);
 
   const wsConnected = useRealtimeConnected();
   let connection: ConnectionStatusKind = 'loading';
@@ -96,6 +103,7 @@ function DeskShell() {
         <>
           <AppJumpSearch />
           <ConnectionStatus status={connection} label={t(`status.connection.${connection}`)} />
+          <CurrencySwitcher className="desk-fx" />
           <LanguageSwitcher className="desk-lang" />
         </>
       }

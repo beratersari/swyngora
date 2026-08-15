@@ -30,8 +30,8 @@ type Backend struct {
 	Export    *exportsvc.Service
 	Import    *dataimport.Service
 	PriceDiff *pricediff.Service
-	Swing   *swing.Service
-	APIKeys *apikey.Service
+	Swing     *swing.Service
+	APIKeys   *apikey.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -415,6 +415,28 @@ func (b *Backend) GetIndicators(ctx context.Context, exchange, symbol, interval 
 		},
 		"points": points,
 		"note":   "Informational only — not financial advice.",
+	})
+}
+
+func (b *Backend) GetFxRates(ctx context.Context) (json.RawMessage, error) {
+	got, err := b.Market.GetFxRates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	asOf := ""
+	rates := map[string]float64{}
+	note := ""
+	stale := false
+	if got != nil {
+		if !got.AsOf.IsZero() {
+			asOf = got.AsOf.UTC().Format(time.RFC3339)
+		}
+		rates = got.Rates
+		note = got.Note
+		stale = got.Stale
+	}
+	return mustJSON(map[string]any{
+		"base": domain.FxBaseUSD, "asOf": asOf, "rates": rates, "stale": stale, "note": note,
 	})
 }
 
@@ -2124,7 +2146,7 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 			"debtPrincipal": p.DebtPrincipal, "debtInterest": p.DebtInterest, "debtAsset": string(p.DebtAsset),
 			"debtNotional": p.DebtNotional, "markPrice": p.MarkPrice, "unrealizedPnL": p.UnrealizedPnL,
 			"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
-			"openedAt": p.OpenedAt.UTC().Format(time.RFC3339Nano),
+			"openedAt":  p.OpenedAt.UTC().Format(time.RFC3339Nano),
 			"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		}
 		if p.StopLoss != nil {

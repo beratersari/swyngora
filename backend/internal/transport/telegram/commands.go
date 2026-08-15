@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
@@ -31,18 +32,20 @@ type Options struct {
 	AITimeout time.Duration
 	// Identities maps Telegram user ids to unguessable clientIds. Required for /watch.
 	Identities domain.TelegramIdentityPort
+	// Accounts enforces the same closed-account gate as HTTP/MCP when set.
+	Accounts *account.Service
 	// Portfolio enables paper /portfolio /buy /sell (optional).
 	Portfolio *portfolio.Service
 }
 
 // Router dispatches Telegram text commands to application services.
 type Router struct {
-	market    *market.Service
-	watch     *watchlist.Service
-	portfolio *portfolio.Service
-	ai        *aiagent.Client
-	opts      Options
-	now       func() time.Time
+	market     *market.Service
+	watch      *watchlist.Service
+	portfolio  *portfolio.Service
+	ai         *aiagent.Client
+	opts       Options
+	now        func() time.Time
 	mu         sync.Mutex
 	lastAt     map[int64]time.Time
 	pending    *pendingStore
@@ -182,7 +185,6 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	}
 	return FormatAIAnswer(res.Reply, res.Thinking, res.Tools) + FormatAIReferences(toRefLinks(res.References))
 }
-
 
 // IsAIRequest reports whether text should be handled by the multi-agent AI path.
 func (r *Router) IsAIRequest(text string) bool {
@@ -402,7 +404,16 @@ func (r *Router) clientIDForUser(ctx context.Context, userID int64) (string, err
 	if r.opts.Identities == nil {
 		return "", fmt.Errorf("%w: telegram identity store not configured", domain.ErrUpstream)
 	}
-	return r.opts.Identities.ClientIDForTelegramUser(ctx, userID)
+	id, err := r.opts.Identities.ClientIDForTelegramUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if r.opts.Accounts != nil {
+		if err := r.opts.Accounts.RequireActive(ctx, id); err != nil {
+			return "", err
+		}
+	}
+	return id, nil
 }
 
 func (r *Router) cmdWatch(ctx context.Context, userID int64, args []string) string {
@@ -504,6 +515,10 @@ func isExchange(s string) bool {
 func friendlyErr(err error) string {
 	if err == nil {
 		return "Unknown error"
+	}
+	var closed *domain.ErrAccountClosed
+	if errors.As(err, &closed) {
+		return "This account is closed."
 	}
 	switch {
 	case errors.Is(err, domain.ErrNotFound):

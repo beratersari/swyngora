@@ -21,6 +21,13 @@ Expose first market-data APIs so clients can:
 - Used for UI filters; excludes non-crypto tags (`bStocks`, `tCommodities`)
 - Examples: `Meme`, `defi`, `Layer1_Layer2`, `AI`, `Payments`
 
+### Display FX — `GET /api/v1/market/fx`
+
+- USD-based spot rates (units of currency per 1 USD) from the free Frankfurter/ECB feed
+- Always includes `USD=1` and `USDT=1` (USDT treated as USD)
+- Cached 15 minutes; `stale=true` when last-good is served after an upstream miss
+- Display conversion only — not settlement FX. Web header switcher converts BIST TRY, Nasdaq/Coinbase USD, and crypto USDT last/open/high/low/quote volume/mcap/chart OHLC
+
 ### Exchanges — `GET /api/v1/market/exchanges`
 
 - Venues: `binance` (default), `coinbase`, `bybit`, **`nasdaq`** (US stocks, USD), **`bist`** (Borsa Istanbul, TRY)

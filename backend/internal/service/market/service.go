@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -37,6 +38,8 @@ type Service struct {
 	wallWatch     map[string]wallWatch
 	liq           *domain.LiquidationBook
 	liqWatch      LiquidationWatch
+	fx            FxSource
+	fxCache       *cache.TTL[*domain.FxRates]
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.

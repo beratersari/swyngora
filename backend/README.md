@@ -24,6 +24,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/realtime` | WebSocket protocol description |
 | `GET` | `/api/v1/ws` | WebSocket: live prices + paper portfolio events |
 | `GET` | `/api/v1/market/exchanges` | Supported venues |
+| `GET` | `/api/v1/market/fx` | Spot FX rates (USD base) for display conversion |
 | `GET` | `/api/v1/market/intervals` | Candle intervals (per `exchange`) |
 | `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |

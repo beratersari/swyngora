@@ -327,10 +327,6 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 	if mode == "" {
 		mode = domain.MarginModeIsolated
 	}
-	// Cross free margin includes open margin unrealized.
-	if mode == domain.MarginModeCross {
-		avail += marginUnreal
-	}
 	return &domain.PortfolioView{
 		ID:                  p.ID,
 		ClientID:            p.ClientID,
@@ -454,13 +450,16 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	switch side {
 	case domain.TradeSideBuy:
 		debit := domain.BuyCashDebit(in.Quantity, price, cost.FeeRate)
-		if availCash+1e-9 < debit {
+		if availCash+1e-9 < debit || p.CashBalance+1e-9 < debit {
 			return nil, nil, fmt.Errorf("%w: insufficient cash balance", domain.ErrInvalidArgument)
 		}
 		unit := domain.BuyUnitCost(price, cost.FeeRate)
 		_, newQty, newAvg, err = domain.ApplyBuy(availCash, in.Quantity, unit, posQty, avg)
 		if err == nil {
 			newCash = p.CashBalance - debit
+			if newCash < 0 {
+				return nil, nil, fmt.Errorf("%w: insufficient cash balance", domain.ErrInvalidArgument)
+			}
 			lotOps = prepareBuyLots(clientID, ex, sym, existingLots, posQty, avg, in.Quantity, unit, tradeID, now)
 			merged := append(append([]domain.TaxLot(nil), existingLots...), lotOps.Created...)
 			if a := domain.AvgCostFromLots(merged); a > 0 {

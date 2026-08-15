@@ -63,6 +63,7 @@ describe('CoinDetailPage', () => {
     });
     mockTicker.mockReturnValue({
       data: { lastPrice: '67000', priceChangePercent: '1.5', symbol: 'BTCUSDT' },
+      currentData: { lastPrice: '67000', priceChangePercent: '1.5', symbol: 'BTCUSDT' },
       isLoading: false,
       isError: false,
       isFetching: false,
@@ -70,6 +71,7 @@ describe('CoinDetailPage', () => {
     });
     mockSupply.mockReturnValue({
       data: { asset: 'BTC', name: 'Bitcoin', circulatingSupply: 19e6 },
+      currentData: { asset: 'BTC', name: 'Bitcoin', circulatingSupply: 19e6 },
       isLoading: false,
       isError: false,
       isFetching: false,
@@ -77,6 +79,7 @@ describe('CoinDetailPage', () => {
     });
     mockCandles.mockReturnValue({
       data: { candles: [candle] },
+      currentData: { candles: [candle] },
       isLoading: false,
       isError: false,
       isSuccess: true,
@@ -88,6 +91,10 @@ describe('CoinDetailPage', () => {
         latest: { rsi: 55, ema: { '12': 100, '26': 99 } },
         points: [{ openTime: '2024-01-01T00:00:00Z', rsi: 55, ema: { '12': 100, '26': 99 } }],
       },
+      currentData: {
+        latest: { rsi: 55, ema: { '12': 100, '26': 99 } },
+        points: [{ openTime: '2024-01-01T00:00:00Z', rsi: 55, ema: { '12': 100, '26': 99 } }],
+      },
       isLoading: false,
       isError: false,
       isFetching: false,
@@ -95,6 +102,14 @@ describe('CoinDetailPage', () => {
     });
     mockOrderBook.mockReturnValue({
       data: {
+        lastPrice: '100',
+        groupSize: '0.1',
+        suggestedGroupSizes: ['0.01', '0.1'],
+        bids: [{ price: '99.9', quantity: '1', isWall: false }],
+        asks: [{ price: '100.1', quantity: '1', isWall: false }],
+        spread: '0.2',
+      },
+      currentData: {
         lastPrice: '100',
         groupSize: '0.1',
         suggestedGroupSizes: ['0.01', '0.1'],
@@ -140,6 +155,7 @@ describe('CoinDetailPage', () => {
   it('keeps chart and soft-warns when candle poll fails with prior data', async () => {
     mockCandles.mockReturnValue({
       data: { candles: [candle] },
+      currentData: { candles: [candle] },
       isLoading: false,
       isError: true,
       isSuccess: false,
@@ -155,6 +171,7 @@ describe('CoinDetailPage', () => {
   it('shows empty chart alert when success with zero candles', async () => {
     mockCandles.mockReturnValue({
       data: { candles: [] },
+      currentData: { candles: [] },
       isLoading: false,
       isError: false,
       isSuccess: true,
@@ -255,6 +272,7 @@ describe('CoinDetailPage', () => {
     });
     mockCandles.mockReturnValue({
       data: { candles: [candle] },
+      currentData: { candles: [candle] },
       isLoading: false,
       isError: false,
       isSuccess: true,

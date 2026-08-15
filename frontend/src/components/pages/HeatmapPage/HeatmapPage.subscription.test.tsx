@@ -19,6 +19,16 @@ vi.mock('@/libs/api', async (importOriginal) => {
           },
         ],
       },
+      currentData: {
+        items: [
+          {
+            symbol: 'BTCUSDT',
+            lastPrice: '100',
+            priceChangePercent: '1.5',
+            quoteVolume: '5000',
+          },
+        ],
+      },
       isLoading: false,
       isFetching: false,
       isError: false,

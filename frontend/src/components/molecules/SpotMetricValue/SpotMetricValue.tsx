@@ -2,13 +2,15 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { FlashValue } from '@/components/molecules/FlashValue';
+import { useDisplayCurrency } from '@/libs/hooks';
 import {
   changeTone,
   formatChangePercent,
   formatCompactUsd,
   formatDelistDate,
-  formatPrice,
   formatTradeCount,
+  marketCapQuote,
+  venueQuote,
 } from '@/libs/utils';
 import { TagsWrap } from './SpotMetricValue.styles';
 import type { SpotMetricValueProps } from './SpotMetricValue.types';
@@ -24,8 +26,11 @@ export function SpotMetricValue({
   locale: localeProp,
 }: SpotMetricValueProps) {
   const { t, i18n } = useTranslation(['markets', 'common']);
+  const { formatPrice: formatMoney, formatCompact } = useDisplayCurrency();
   const locale = localeProp ?? i18n.language;
   const raw = spot?.[metric.field];
+  const quote = venueQuote(exchange);
+  const mcapQuote = marketCapQuote(exchange);
 
   if (metric.format === 'tags') {
     const tags = (raw as string[] | undefined) ?? [];
@@ -68,13 +73,20 @@ export function SpotMetricValue({
   let display: string;
   switch (metric.format) {
     case 'price':
-      display = formatPrice(raw as string | number | null | undefined);
+      display = formatMoney(raw as string | number | null | undefined, quote);
       break;
     case 'changePercent':
       display = formatChangePercent(raw as string | number | null | undefined);
       break;
     case 'compactUsd':
-      display = formatCompactUsd(raw as string | number | null | undefined);
+      display =
+        metric.id === 'quoteVolume'
+          ? formatCompact(raw as string | number | null | undefined, quote)
+          : metric.id === 'marketCapCirculating' ||
+              metric.id === 'marketCapTotal' ||
+              metric.id === 'marketCapMax'
+            ? formatCompact(raw as string | number | null | undefined, mcapQuote)
+            : formatCompactUsd(raw as string | number | null | undefined);
       break;
     case 'tradeCount':
       display = formatTradeCount(raw as number | null | undefined, exchange);

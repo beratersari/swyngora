@@ -1,8 +1,26 @@
 export { formatPrice } from './formatPrice';
+export {
+  DISPLAY_CURRENCIES,
+  DISPLAY_CURRENCY_STORAGE_KEY,
+  aliasFxCode,
+  convertAmount,
+  formatConvertedCompact,
+  formatConvertedPrice,
+  isDisplayCurrency,
+  loadDisplayCurrency,
+  marketCapQuote,
+  resolveDisplayCode,
+  saveDisplayCurrency,
+  scalePriceSeries,
+  venueQuote,
+} from './displayCurrency';
+export type { DisplayCurrency, FxRatesMap } from './displayCurrency';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
 export { newPaperIdempotencyKey } from './paperIdempotency';
+export { rtkCurrent, rtkCurrentPending } from './rtkQuery';
+export type { RtkQuerySlice } from './rtkQuery';
 export {
   getOrCreateAiSessionId,
   resetAiSessionId,
