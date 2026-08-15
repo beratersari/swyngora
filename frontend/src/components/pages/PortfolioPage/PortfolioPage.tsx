@@ -217,11 +217,7 @@ export function PortfolioPage() {
 
   return (
     <PageStack>
-      <PageHeader
-        eyebrow={t('portfolio:eyebrow')}
-        title={t('portfolio:title')}
-        subtitle={t('portfolio:subtitle')}
-      />
+      <PageHeader title={t('portfolio:title')} />
       <Text variant="caption" color="secondary">
         {t('portfolio:disclaimer')}
       </Text>

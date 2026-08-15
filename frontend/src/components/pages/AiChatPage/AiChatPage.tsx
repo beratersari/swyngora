@@ -240,7 +240,7 @@ export function AiChatPage() {
 
   return (
     <PageStack>
-      <PageHeader eyebrow={t('ai:eyebrow')} title={t('ai:title')} subtitle={t('ai:subtitle')} />
+      <PageHeader title={t('ai:title')} />
 
       <DisclaimerBanner role="note">
         <DisclaimerIcon aria-hidden />

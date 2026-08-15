@@ -11,6 +11,8 @@
 
 A single source of truth for **color**, **typography**, **loading**, and **core atoms** so features (markets, detail, watchlist) stay visually consistent.
 
+Product chrome is a **finance terminal**: left venue rail, thin utility bar, quote strip, full-bleed workspace. Heatmap is a map + docked inspector, not a marketing page.
+
 | Concern | Location |
 |---|---|
 | Brand + semantic colors | `frontend/src/styles/tokens/colors.ts` |

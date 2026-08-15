@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react';
 import { Alert, Button, Select } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Text } from '@/components/atoms/Text';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import {
   PriceChangeHeatmap,
   type HeatmapMetric,
 } from '@/components/organisms/PriceChangeHeatmap';
-import { HEATMAP_LEGEND_GRADIENT, HEATMAP_MAX_TILES } from '@/components/organisms/PriceChangeHeatmap/PriceChangeHeatmap.constants';
+import { HEATMAP_MAX_TILES } from '@/components/organisms/PriceChangeHeatmap/PriceChangeHeatmap.constants';
 import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
 import {
   rtkErrorMessage,
@@ -18,15 +17,7 @@ import {
 import { useDocumentVisible } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
 import { defaultQuoteForExchange, rtkCurrent } from '@/libs/utils';
-import {
-  Chrome,
-  ChromeLeft,
-  Field,
-  Legend,
-  LegendBar,
-  LegendTick,
-  PageStack,
-} from './HeatmapPage.styles';
+import { BoardWrap, Chrome, ChromeLeft, Field, PageStack, Title } from './HeatmapPage.styles';
 
 const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
@@ -84,21 +75,17 @@ export function HeatmapPage() {
 
   return (
     <PageStack>
-      <Text variant="h4" color="primary" as="h1">
-        {t('heatmap:title')}
-      </Text>
-
       <Chrome>
         <ChromeLeft>
+          <Title>{t('heatmap:title')}</Title>
           <ExchangeTabs exchanges={VENUES} value={exchange} onChange={setVenue} />
           <Field>
-            <Text variant="caption" color="secondary" id="heatmap-quote-label">
-              {t('heatmap:quote')}
-            </Text>
+            <span id="heatmap-quote-label">{t('heatmap:quote')}</span>
             <Select
               aria-labelledby="heatmap-quote-label"
               value={quote}
-              style={{ minWidth: 100 }}
+              size="small"
+              style={{ minWidth: 88 }}
               options={
                 exchange === 'nasdaq'
                   ? [{ value: 'USD', label: 'USD' }]
@@ -118,13 +105,12 @@ export function HeatmapPage() {
             />
           </Field>
           <Field>
-            <Text variant="caption" color="secondary" id="heatmap-metric-label">
-              {t('heatmap:sizeBy')}
-            </Text>
+            <span id="heatmap-metric-label">{t('heatmap:sizeBy')}</span>
             <Select
               aria-labelledby="heatmap-metric-label"
               value={metric}
-              style={{ minWidth: 150 }}
+              size="small"
+              style={{ minWidth: 132 }}
               options={[
                 { value: 'quoteVolume', label: t('heatmap:metric.volume') },
                 { value: 'marketCap', label: t('heatmap:metric.marketCap') },
@@ -133,11 +119,6 @@ export function HeatmapPage() {
             />
           </Field>
         </ChromeLeft>
-        <Legend aria-hidden>
-          <LegendTick>−8%</LegendTick>
-          <LegendBar style={{ background: `linear-gradient(90deg, ${HEATMAP_LEGEND_GRADIENT})` }} />
-          <LegendTick>+8%</LegendTick>
-        </Legend>
       </Chrome>
 
       {listQuery.isError ? (
@@ -154,12 +135,14 @@ export function HeatmapPage() {
         />
       ) : null}
 
-      <PriceChangeHeatmap
-        items={items}
-        metric={metric}
-        isLoading={listQuery.isLoading || listQuery.isFetching}
-        onOpen={(ex, sym) => navigate(`/markets/${encodeURIComponent(ex)}/${encodeURIComponent(sym)}`)}
-      />
+      <BoardWrap>
+        <PriceChangeHeatmap
+          items={items}
+          metric={metric}
+          isLoading={listQuery.isLoading || listQuery.isFetching}
+          onOpen={(ex, sym) => navigate(`/markets/${encodeURIComponent(ex)}/${encodeURIComponent(sym)}`)}
+        />
+      </BoardWrap>
     </PageStack>
   );
 }

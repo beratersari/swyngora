@@ -126,9 +126,7 @@ export function SignalsPage() {
   return (
     <PageStack>
       <PageHeader
-        eyebrow={t('signals:eyebrow')}
         title={t('signals:title')}
-        subtitle={t('signals:subtitle')}
         extra={
           <Button onClick={() => void addStack()} loading={createState.isLoading} disabled={createState.isLoading}>
             {t('signals:rules.addStack')}

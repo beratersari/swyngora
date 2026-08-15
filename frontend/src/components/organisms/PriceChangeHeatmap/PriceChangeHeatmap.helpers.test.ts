@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HEATMAP_MAX_TILES, HEATMAP_SCALE } from './PriceChangeHeatmap.constants';
+import { HEATMAP_MAX_TILES, HEATMAP_NEUTRAL, HEATMAP_SCALE } from './PriceChangeHeatmap.constants';
 import {
   baseSymbol,
   changeFill,
@@ -26,8 +26,8 @@ describe('PriceChangeHeatmap helpers', () => {
   });
 
   it('uses a translucent discrete scale', () => {
-    expect(changeFill(0)).toBe('#3D444C');
-    expect(changeFill(0.2)).toBe('#3D444C');
+    expect(changeFill(0)).toBe(HEATMAP_NEUTRAL);
+    expect(changeFill(0.2)).toBe(HEATMAP_NEUTRAL);
     expect(changeFill(8)).toMatch(/^#/);
     expect(changeFill(-8)).toMatch(/^#/);
     expect(changeFill(5)).not.toBe(changeFill(-5));

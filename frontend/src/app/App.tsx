@@ -4,6 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { Providers } from './providers';
 import { AppRoutes } from './routes';
 import { AppJumpSearch } from './AppJumpSearch';
+import {
+  AppstoreOutlined,
+  BellOutlined,
+  FireOutlined,
+  LineChartOutlined,
+  RobotOutlined,
+  StarOutlined,
+  SwapOutlined,
+  ThunderboltOutlined,
+  WalletOutlined,
+} from '@ant-design/icons';
 import { BrandMark } from '@/components/atoms/BrandMark';
 import { Text } from '@/components/atoms/Text';
 import { ConnectionStatus, type ConnectionStatusKind } from '@/components/molecules/ConnectionStatus';
@@ -25,15 +36,15 @@ import { useDisplayCurrency, useDocumentVisible } from '@/libs/hooks';
 import { useRealtimeConnected } from '@/libs/realtime';
 
 const NAV_ITEMS = [
-  { to: '/markets', key: 'nav.markets' as const },
-  { to: '/watchlist', key: 'nav.watchlist' as const },
-  { to: '/portfolio', key: 'nav.portfolio' as const },
-  { to: '/signals', key: 'nav.signals' as const },
-  { to: '/pumps', key: 'nav.pumps' as const },
-  { to: '/alerts', key: 'nav.alerts' as const },
-  { to: '/compare', key: 'nav.compare' as const },
-  { to: '/heatmap', key: 'nav.heatmap' as const },
-  { to: '/ai', key: 'nav.ai' as const },
+  { to: '/markets', key: 'nav.markets' as const, icon: <LineChartOutlined /> },
+  { to: '/heatmap', key: 'nav.heatmap' as const, icon: <AppstoreOutlined /> },
+  { to: '/watchlist', key: 'nav.watchlist' as const, icon: <StarOutlined /> },
+  { to: '/portfolio', key: 'nav.portfolio' as const, icon: <WalletOutlined /> },
+  { to: '/signals', key: 'nav.signals' as const, icon: <ThunderboltOutlined /> },
+  { to: '/pumps', key: 'nav.pumps' as const, icon: <FireOutlined /> },
+  { to: '/alerts', key: 'nav.alerts' as const, icon: <BellOutlined /> },
+  { to: '/compare', key: 'nav.compare' as const, icon: <SwapOutlined /> },
+  { to: '/ai', key: 'nav.ai' as const, icon: <RobotOutlined /> },
 ];
 
 function DeskShell() {
@@ -82,13 +93,14 @@ function DeskShell() {
   return (
     <AppShell
       wide
+      flush={location.pathname.startsWith('/heatmap')}
       navAriaLabel={t('nav.main')}
       brand={
         <BrandLink to="/markets">
           <BrandMark size={22} />
           <BrandCopy>
             <BrandName>{t('appName', { defaultValue: APP_NAME })}</BrandName>
-            <BrandTagline>{t('brand.tagline', { defaultValue: 'Markets' })}</BrandTagline>
+            <BrandTagline>{t('brand.tagline', { defaultValue: 'Terminal' })}</BrandTagline>
           </BrandCopy>
         </BrandLink>
       }
@@ -96,6 +108,7 @@ function DeskShell() {
         <>
           {NAV_ITEMS.map((item) => (
             <NavLink key={item.to} to={item.to}>
+              {item.icon}
               {t(item.key)}
             </NavLink>
           ))}

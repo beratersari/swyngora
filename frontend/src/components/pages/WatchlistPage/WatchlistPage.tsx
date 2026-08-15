@@ -50,11 +50,7 @@ export function WatchlistPage() {
 
   return (
     <PageStack>
-      <PageHeader
-        eyebrow={t('watchlist:eyebrow')}
-        title={t('watchlist:title')}
-        subtitle={t('watchlist:subtitle')}
-      />
+      <PageHeader title={t('watchlist:title')} />
 
       {wl.isError ? (
         <Alert

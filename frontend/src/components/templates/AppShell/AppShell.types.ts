@@ -7,8 +7,10 @@ export type AppShellProps = {
   footer?: ReactNode;
   children: ReactNode;
   navAriaLabel?: string;
-  /** Wider content column for dense list pages (Markets, Watchlist, Pumps). */
+  /** Kept for callers; workspace is always full-bleed. */
   wide?: boolean;
-  /** Optional strip below header (health / monitoring status). */
+  /** Drop workspace padding (heatmap / chart boards). */
+  flush?: boolean;
+  /** Quote strip under the utility bar. */
   banner?: ReactNode;
 };

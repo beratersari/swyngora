@@ -142,11 +142,7 @@ export function ComparePage() {
 
   return (
     <PageStack>
-      <PageHeader
-        eyebrow={t('compare:eyebrow')}
-        title={t('compare:title')}
-        subtitle={t('compare:subtitle', { max: MAX_COMPARE_PAIRS })}
-      />
+      <PageHeader title={t('compare:title')} />
 
       <Toolbar>
         <Field>

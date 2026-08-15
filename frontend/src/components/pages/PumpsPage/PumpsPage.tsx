@@ -58,11 +58,7 @@ export function PumpsPage() {
 
   return (
     <PageStack>
-      <PageHeader
-        eyebrow={t('pumps:eyebrow')}
-        title={t('pumps:title')}
-        subtitle={t('pumps:subtitle')}
-      />
+      <PageHeader title={t('pumps:title')} />
 
       <Toolbar>
         <Field>

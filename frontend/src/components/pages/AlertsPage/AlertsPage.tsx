@@ -50,11 +50,7 @@ export function AlertsPage() {
 
   return (
     <PageStack>
-      <PageHeader
-        eyebrow={t('alerts:eyebrow')}
-        title={t('alerts:title')}
-        subtitle={t('alerts:subtitle')}
-      />
+      <PageHeader title={t('alerts:title')} />
 
       <Section>
         <CreateAlertForm

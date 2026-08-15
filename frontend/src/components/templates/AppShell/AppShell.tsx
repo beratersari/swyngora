@@ -1,10 +1,11 @@
 import {
   AppBanner,
-  AppContent,
-  AppFooter,
-  AppHeader,
   AppLayout,
-  HeaderBar,
+  AppSidebar,
+  AppStage,
+  AppStatus,
+  AppTopbar,
+  AppWorkspace,
   HeaderBrand,
   HeaderNav,
   HeaderTools,
@@ -12,8 +13,7 @@ import {
 import type { AppShellProps } from './AppShell.types';
 
 /**
- * Product chrome: command bar (brand · nav · tools), optional tape, footer.
- * On tablet/phone the bar wraps: brand+tools on row 1, scrollable nav on row 2.
+ * Terminal chrome: venue rail + utility bar + workspace.
  */
 export function AppShell({
   brand,
@@ -23,20 +23,23 @@ export function AppShell({
   children,
   navAriaLabel,
   wide = false,
+  flush = false,
   banner,
 }: AppShellProps) {
   return (
     <AppLayout>
-      <AppHeader>
-        <HeaderBar>
-          <HeaderBrand>{brand}</HeaderBrand>
-          <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
-          {tools ? <HeaderTools>{tools}</HeaderTools> : null}
-        </HeaderBar>
-      </AppHeader>
-      {banner ? <AppBanner>{banner}</AppBanner> : null}
-      <AppContent $wide={wide}>{children}</AppContent>
-      {footer ? <AppFooter>{footer}</AppFooter> : null}
+      <AppSidebar>
+        <HeaderBrand>{brand}</HeaderBrand>
+        <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
+      </AppSidebar>
+      <AppStage>
+        <AppTopbar>{tools ? <HeaderTools>{tools}</HeaderTools> : null}</AppTopbar>
+        {banner ? <AppBanner>{banner}</AppBanner> : null}
+        <AppWorkspace $wide={wide} $flush={flush}>
+          {children}
+        </AppWorkspace>
+        {footer ? <AppStatus>{footer}</AppStatus> : null}
+      </AppStage>
     </AppLayout>
   );
 }

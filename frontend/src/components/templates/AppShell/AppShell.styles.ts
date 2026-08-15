@@ -1,153 +1,122 @@
 import { Link, NavLink as RouterNavLink } from 'react-router-dom';
 import styled from 'styled-components';
-import { Layout } from 'antd';
 
-export const AppLayout = styled(Layout)`
+export const AppLayout = styled.div`
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
   min-height: 100%;
   min-width: 0;
   background: ${({ theme }) => theme.semantic.bg.canvas};
+
+  ${({ theme }) => theme.media.tablet} {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
 `;
 
-export const AppHeader = styled(Layout.Header)`
+export const AppSidebar = styled.aside`
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  height: auto;
-  line-height: 1.2;
-  padding: 0;
+  min-height: 0;
   background: ${({ theme }) => theme.semantic.bg.canvas};
+  border-right: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+
+  ${({ theme }) => theme.media.tablet} {
+    flex-direction: row;
+    align-items: center;
+    gap: ${({ theme }) => theme.spacing[2]}px;
+    padding: 0 ${({ theme }) => theme.spacing[2]}px;
+    border-right: 0;
+    border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  }
+`;
+
+export const AppStage = styled.div`
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+`;
+
+export const AppTopbar = styled.header`
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  min-height: 44px;
+  padding: 0 ${({ theme }) => theme.spacing[3]}px;
+  background: ${({ theme }) => theme.semantic.bg.page};
   border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  border-top: 2px solid ${({ theme }) => theme.semantic.accent.default};
-  position: sticky;
-  top: 0;
-  z-index: 40;
+`;
+
+export const AppWorkspace = styled.main<{ $wide?: boolean; $flush?: boolean }>`
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: ${({ $flush }) => ($flush ? 'hidden' : 'auto')};
+  display: flex;
+  flex-direction: column;
+  padding: ${({ theme, $flush }) => ($flush ? 0 : `${theme.spacing[3]}px ${theme.spacing[4]}px`)};
+`;
+
+export const AppStatus = styled.footer`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing[3]}px;
+  min-height: 26px;
+  padding: 0 ${({ theme }) => theme.spacing[3]}px;
+  border-top: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  color: ${({ theme }) => theme.semantic.text.tertiary};
+  font-size: 11px;
+`;
+
+/** @deprecated Names kept so existing imports compile. */
+export const AppHeader = AppTopbar;
+export const AppContent = AppWorkspace;
+export const AppFooter = AppStatus;
+export const AppBanner = styled.div`
+  width: 100%;
+  flex-shrink: 0;
 `;
 
 export const HeaderBar = styled.div`
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing[3]}px;
-  min-height: 48px;
-  padding: 0 ${({ theme }) => theme.spacing[5]}px;
-
-  ${({ theme }) => theme.media.tablet} {
-    grid-template-columns: auto minmax(0, 1fr);
-    grid-template-areas:
-      'brand tools'
-      'nav nav';
-    gap: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[3]}px;
-    padding: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[3]}px
-      ${({ theme }) => theme.spacing[2]}px;
-  }
-
-  ${({ theme }) => theme.media.phone} {
-    padding: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[2]}px
-      ${({ theme }) => theme.spacing[1]}px;
-  }
+  display: contents;
 `;
 
-/** @deprecated Use HeaderBar — kept so older snapshots keep compiling. */
-export const HeaderTop = HeaderBar;
-
 export const HeaderBrand = styled.div`
-  min-width: 0;
+  padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[3]}px
+    ${({ theme }) => theme.spacing[2]}px;
 
   ${({ theme }) => theme.media.tablet} {
-    grid-area: brand;
+    padding: ${({ theme }) => theme.spacing[1]}px ${({ theme }) => theme.spacing[1]}px
+      ${({ theme }) => theme.spacing[1]}px 0;
+    flex-shrink: 0;
   }
 `;
 
 export const HeaderNav = styled.nav`
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 1px;
+  padding: ${({ theme }) => theme.spacing[1]}px 0;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
+  overflow: auto;
 
   ${({ theme }) => theme.media.tablet} {
-    grid-area: nav;
-    padding-bottom: 2px;
+    flex-direction: row;
+    flex: 1;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
-`;
-
-export const BrandLink = styled(Link)`
-  display: inline-flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  text-decoration: none;
-  color: ${({ theme }) => theme.semantic.text.primary};
-  min-width: 0;
-  transition: color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard};
-
-  &:hover {
-    color: ${({ theme }) => theme.semantic.accent.default};
-  }
-`;
-
-export const BrandCopy = styled.span`
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-
-  ${({ theme }) => theme.media.xs} {
-    display: none;
-  }
-`;
-
-export const BrandName = styled.span`
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  line-height: 1.15;
-  text-transform: uppercase;
-`;
-
-export const BrandTagline = styled.span`
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: ${({ theme }) => theme.semantic.text.tertiary};
-`;
-
-export const NavLink = styled(RouterNavLink)`
-  text-decoration: none;
-  color: ${({ theme }) => theme.semantic.text.secondary};
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 14px 10px 12px;
-  border-radius: 0;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition:
-    color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
-    border-color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard};
-
-  &:hover {
-    color: ${({ theme }) => theme.semantic.text.primary};
-    background: transparent;
-  }
-
-  &.active {
-    color: ${({ theme }) => theme.semantic.text.primary};
-    background: transparent;
-    border-bottom-color: ${({ theme }) => theme.semantic.accent.default};
-    box-shadow: none;
-  }
-`;
-
-export const HeaderSpacer = styled.div`
-  display: none;
 `;
 
 export const HeaderTools = styled.div`
@@ -156,10 +125,7 @@ export const HeaderTools = styled.div`
   justify-content: flex-end;
   gap: ${({ theme }) => theme.spacing[2]}px;
   min-width: 0;
-
-  ${({ theme }) => theme.media.tablet} {
-    grid-area: tools;
-  }
+  width: 100%;
 
   ${({ theme }) => theme.media.phone} {
     gap: ${({ theme }) => theme.spacing[1]}px;
@@ -176,37 +142,83 @@ export const HeaderTools = styled.div`
   }
 `;
 
-export const AppContent = styled(Layout.Content)<{ $wide?: boolean }>`
-  padding: ${({ theme }) => theme.spacing[4]}px ${({ theme }) => theme.spacing[5]}px
-    ${({ theme }) => theme.spacing[8]}px;
-  max-width: ${({ $wide }) => ($wide ? '1600px' : '1200px')};
-  width: 100%;
+export const HeaderSpacer = styled.div`
+  display: none;
+`;
+
+export const BrandLink = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  text-decoration: none;
+  color: ${({ theme }) => theme.semantic.text.primary};
   min-width: 0;
-  margin: 0 auto;
 
-  ${({ theme }) => theme.media.tablet} {
-    padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[3]}px
-      ${({ theme }) => theme.spacing[5]}px;
-  }
-
-  ${({ theme }) => theme.media.phone} {
-    padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[2]}px
-      ${({ theme }) => theme.spacing[4]}px;
+  &:hover {
+    color: ${({ theme }) => theme.semantic.accent.default};
   }
 `;
 
-export const AppBanner = styled.div`
-  width: 100%;
-`;
-
-export const AppFooter = styled(Layout.Footer)`
+export const BrandCopy = styled.span`
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  text-align: left;
-  background: ${({ theme }) => theme.semantic.bg.canvas};
-  border-top: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[5]}px
-    ${({ theme }) => theme.spacing[4]}px;
+  min-width: 0;
+
+  ${({ theme }) => theme.media.phone} {
+    display: none;
+  }
+`;
+
+export const BrandName = styled.span`
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+`;
+
+export const BrandTagline = styled.span`
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.semantic.text.tertiary};
+`;
+
+export const NavLink = styled(RouterNavLink)`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: ${({ theme }) => theme.semantic.text.secondary};
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 9px 16px;
+  border-left: 2px solid transparent;
+  white-space: nowrap;
+
+  &:hover {
+    color: ${({ theme }) => theme.semantic.text.primary};
+    background: ${({ theme }) => theme.semantic.bg.hover};
+  }
+
+  &.active {
+    color: ${({ theme }) => theme.semantic.text.primary};
+    background: ${({ theme }) => theme.semantic.bg.hover};
+    border-left-color: ${({ theme }) => theme.semantic.accent.default};
+  }
+
+  ${({ theme }) => theme.media.tablet} {
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    padding: 10px 10px 8px;
+
+    &.active {
+      border-left-color: transparent;
+      border-bottom-color: ${({ theme }) => theme.semantic.accent.default};
+      background: transparent;
+    }
+  }
 `;
