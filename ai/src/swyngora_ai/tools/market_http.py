@@ -88,11 +88,10 @@ def reset_tool_scope(tokens: tuple[Any, Any]) -> None:
 
 def _is_key_or_account_admin_path(path: str) -> bool:
     p = (path or "").split("?", 1)[0]
-    if "/api/v1/account/api-keys" in p:
-        return True
-    if p in ("/api/v1/account/close", "/api/v1/account/reopen"):
-        return True
-    return False
+    return "/api/v1/account/api-keys" in p or p in (
+        "/api/v1/account/close",
+        "/api/v1/account/reopen",
+    )
 
 
 class _HTTP:
@@ -131,7 +130,7 @@ class _HTTP:
             return f"ERROR {r.status_code}: {r.text[:500]}"
         try:
             return format_tool_json(r.json())
-        except Exception:
+        except (ValueError, TypeError):
             return _SWY_SECRET_RE.sub("[redacted]", r.text)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
@@ -194,7 +193,9 @@ class SwingScanInput(BaseModel):
 class OrderBookInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
-    group: str = Field(default="", description="Price bucket e.g. 0.1 or 0.01; empty = suggested default")
+    group: str = Field(
+        default="", description="Price bucket e.g. 0.1 or 0.01; empty = suggested default"
+    )
     limit: int = Field(default=20, ge=5, le=100, description="Grouped rows per side")
     range_pct: float = Field(
         default=2.0,
@@ -893,7 +894,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get("/api/v1/market/swing", {"symbol": symbol, "exchange": exchange})
 
     def scan_swing_setups(client_id: str, exchange: str = "", limit: int = 25) -> str:
-        params: dict = {"clientId": client_id, "limit": limit}
+        params: dict[str, Any] = {"clientId": client_id, "limit": limit}
         if exchange:
             params["exchange"] = exchange
         return http.get("/api/v1/swing/setups", params)
@@ -1236,9 +1237,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             body["note"] = note
         return http.post("/api/v1/portfolio/withdrawals", body)
 
-    def list_portfolio_cash_movements(
-        client_id: str, limit: int = 50, offset: int = 0
-    ) -> str:
+    def list_portfolio_cash_movements(client_id: str, limit: int = 50, offset: int = 0) -> str:
         return http.get(
             "/api/v1/portfolio/cash-movements",
             {"clientId": client_id, "limit": limit, "offset": offset},

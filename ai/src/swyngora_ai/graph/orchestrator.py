@@ -164,10 +164,43 @@ def _chunk_messages(chunk: Any) -> list[BaseMessage]:
     return []
 
 
+def _emit_from_message(msg: BaseMessage) -> None:
+    """Push live events from streamed agent messages."""
+    if isinstance(msg, AIMessage):
+        text = _content_text(msg.content).strip()
+        tcalls = getattr(msg, "tool_calls", None) or []
+        if tcalls:
+            if text:
+                emit("thinking", text[:300])
+            for tc in tcalls:
+                name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "?")
+                args = tc.get("args") if isinstance(tc, dict) else getattr(tc, "args", {})
+                arg_s = ""
+                if isinstance(args, dict):
+                    bits = []
+                    for k, v in list(args.items())[:4]:
+                        vs = str(v)
+                        if len(vs) > 60:
+                            vs = vs[:57] + "…"
+                        bits.append(f"{k}={vs}")
+                    arg_s = ", ".join(bits)
+                emit("tool", f"{name}({arg_s})" if arg_s else str(name))
+                emit("status", f"Calling {name}…")
+        elif text:
+            emit("status", "Composing answer…")
+    elif isinstance(msg, ToolMessage):
+        name = getattr(msg, "name", None) or "tool"
+        preview = _content_text(msg.content).replace("\n", " ").strip()
+        if len(preview) > 100:
+            preview = preview[:97] + "…"
+        emit("tool_result", f"{name} ✓ {preview}" if preview else f"{name} ✓")
+        emit("status", f"{name} done")
+
+
 def run_agent_with_progress(
     graph: Any,
     messages: list[BaseMessage],
-    config: dict[str, Any],
+    config: RunnableConfig,
 ) -> list[BaseMessage]:
     """Run a LangGraph agent, emitting thinking/tool steps as messages appear.
 
@@ -185,19 +218,19 @@ def run_agent_with_progress(
                         continue
                     last = msgs
                     for msg in msgs[seen:]:
-                        Orchestrator._emit_from_message(msg)
+                        _emit_from_message(msg)
                     seen = len(msgs)
                 if last:
                     return last
             except TypeError:
                 continue
-            except Exception:
+            except Exception:  # noqa: BLE001
                 break
     result = graph.invoke({"messages": messages}, config=config)
     out_msgs = list((result or {}).get("messages") or [])
     start = min(len(messages), len(out_msgs))
     for msg in out_msgs[start:]:
-        Orchestrator._emit_from_message(msg)
+        _emit_from_message(msg)
     return out_msgs
 
 
@@ -283,12 +316,24 @@ class Orchestrator:
             final_msg = AIMessage(content=reply)
             self.memory.append(mem_key, [HumanMessage(content=user_message), final_msg])
 
-            if any(
-                k in user_message.lower()
-                for k in ("price", "btc", "eth", "buy", "sell", "mcap", "rsi", "analysis", "juv")
+            if (
+                any(
+                    k in user_message.lower()
+                    for k in (
+                        "price",
+                        "btc",
+                        "eth",
+                        "buy",
+                        "sell",
+                        "mcap",
+                        "rsi",
+                        "analysis",
+                        "juv",
+                    )
+                )
+                and "not financial advice" not in reply.lower()
             ):
-                if "not financial advice" not in reply.lower():
-                    reply = f"{reply}\n\n{self.settings.disclaimer}"
+                reply = f"{reply}\n\n{self.settings.disclaimer}"
 
             refs = extract_references(
                 *[
@@ -312,39 +357,6 @@ class Orchestrator:
             reset_tool_scope(scope_toks)
             reset_bound_client_id(bind_tok)
             reset_progress(token)
-
-    @staticmethod
-    def _emit_from_message(msg: BaseMessage) -> None:
-        """Push live events from streamed agent messages."""
-        if isinstance(msg, AIMessage):
-            text = _content_text(msg.content).strip()
-            tcalls = getattr(msg, "tool_calls", None) or []
-            if tcalls:
-                if text:
-                    emit("thinking", text[:300])
-                for tc in tcalls:
-                    name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "?")
-                    args = tc.get("args") if isinstance(tc, dict) else getattr(tc, "args", {})
-                    arg_s = ""
-                    if isinstance(args, dict):
-                        bits = []
-                        for k, v in list(args.items())[:4]:
-                            vs = str(v)
-                            if len(vs) > 60:
-                                vs = vs[:57] + "…"
-                            bits.append(f"{k}={vs}")
-                        arg_s = ", ".join(bits)
-                    emit("tool", f"{name}({arg_s})" if arg_s else str(name))
-                    emit("status", f"Calling {name}…")
-            elif text:
-                emit("status", "Composing answer…")
-        elif isinstance(msg, ToolMessage):
-            name = getattr(msg, "name", None) or "tool"
-            preview = _content_text(msg.content).replace("\n", " ").strip()
-            if len(preview) > 100:
-                preview = preview[:97] + "…"
-            emit("tool_result", f"{name} ✓ {preview}" if preview else f"{name} ✓")
-            emit("status", f"{name} done")
 
     def reset(self, session_id: str = "default") -> None:
         self.memory.clear(session_id)

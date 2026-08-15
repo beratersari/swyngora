@@ -76,6 +76,42 @@ select = [
   "TRY004",  # type-check-without-type-error
   "RUF013",  # implicit-optional
   "RUF034",  # useless-if-else
+  "N804",    # first arg of a classmethod should be named cls
+  "N805",    # first arg of a method should be named self
+  "PT008",   # pytest.raises() call with no expected exception
+  "PT009",   # unittest-style assert rather than plain assert
+  "PT010",   # set the expected exception in pytest.raises()
+  "PT011",   # pytest.raises(broad exception) is too coarse
+  "PT012",   # pytest.raises() block should be a single simple statement
+  "PT015",   # assertion always fails
+  "PT016",   # no message passed to pytest.fail()
+  "PT017",   # assertion on exception in except block
+  "PT018",   # composite assertion should be split
+  "PT027",   # use pytest.raises instead of unittest assertRaises
+  "LOG009",  # logging.WARN → logging.WARNING
+  "COM818",  # trailing comma on a bare tuple (typo hazard)
+  "SIM201",  # negate-equal-op: not x == y → x != y
+  "SIM202",  # negate-not-equal-op: not x != y → x == y
+  "SIM208",  # double-negation: not (not x) → x
+  "SIM101",  # duplicate-isinstance-call
+  "SIM102",  # collapsible-if
+  "SIM103",  # needless-bool
+  "BLE001",  # blind-except
+  "RUF018",  # assignment-in-assert
+  "RUF049",  # dataclass-enum
+  "RUF051",  # if-key-in-dict-del
+  "RUF061",  # legacy-form-pytest-raises
+  "RUF068",  # duplicate-entry-in-dunder-all
+  "RUF100",  # unused-noqa
+  "RUF102",  # invalid-rule-code
+  "RUF200",  # invalid-pyproject-toml
+  "C403",    # unnecessary-list-comprehension-set
+  "C404",    # unnecessary-list-comprehension-dict
+  "C413",    # unnecessary-call-around-sorted
+  "C416",    # unnecessary-comprehension
+  "B015",    # useless-comparison
+  "YTT101",  # sys-version-slice3
+  "YTT102",  # sys-version2
 ]
 ignore = [
   "E501",  # line length owned by the formatter; prompt/URL strings may exceed 100
@@ -111,3 +147,11 @@ exclude = [".venv", "dist"]
 [tool.ty.rules]
 # Default is ignore; require explicit type parameters on generics (list[str], not list).
 missing-type-argument = "error"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
+blanket-ignore-comment = "error"
+ignore-comment-unknown-rule = "error"
+invalid-ignore-comment = "error"
+pydantic-discarded-extra-argument = "error"
+deprecated = "error"
+unused-awaitable = "error"

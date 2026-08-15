@@ -43,7 +43,7 @@ class Handler(BaseHTTPRequestHandler):
             return None
         try:
             return json.loads(self.rfile.read(length).decode("utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
             return None
 
     def _json(self, code: int, body: dict[str, Any]) -> None:
@@ -54,14 +54,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path in ("/health", "/v1/health"):
             self._json(200, {"status": "ok", "service": "swyngora-ai"})
             return
         self._json(404, {"error": "not found"})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         path = urlparse(self.path).path
         payload = self._read_json()
         if payload is None:

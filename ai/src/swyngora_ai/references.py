@@ -33,7 +33,7 @@ def _norm_url(raw: str) -> str:
 def _host(url: str) -> str:
     try:
         return (urlparse(url).hostname or "").lower().removeprefix("www.")
-    except Exception:
+    except ValueError:
         return ""
 
 
@@ -44,12 +44,15 @@ def classify_source(url: str, hint: str = "") -> str:
         return "x"
     if "news.ycombinator.com" in h or "hacker news" in blob or blob.strip().startswith("hn"):
         return "hn"
-    if any(x in blob for x in ("web_news", "news")) and "hacker" not in blob:
-        if any(
+    if (
+        any(x in blob for x in ("web_news", "news"))
+        and "hacker" not in blob
+        and any(
             n in h
             for n in ("coindesk", "reuters", "bloomberg", "wsj", "ft.com", "theblock", "decrypt")
-        ):
-            return "news"
+        )
+    ):
+        return "news"
     if hint == "news" or "web_news" in blob:
         return "news"
     return "web"

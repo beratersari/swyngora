@@ -51,5 +51,5 @@ def emit(event_type: str, text: str = "", **extra: Any) -> None:
     payload.update(extra)
     try:
         cb(payload)
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass

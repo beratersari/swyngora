@@ -68,51 +68,57 @@ def _guess_symbols(query: str) -> list[str]:
             found.append(_ALIASES[w])
         elif re.fullmatch(r"[A-Z]{2,6}(USDT|USD)", w):
             found.append(re.sub(r"(USDT|USD)$", "", w))
-        elif re.fullmatch(r"[A-Z]{2,6}", w) and w not in {
-            "OR",
-            "AND",
-            "THE",
-            "FOR",
-            "WHAT",
-            "WILL",
-            "ABOUT",
-            "TWITTER",
-            "CRYPTO",
-            "PRICE",
-            "FROM",
-            "WITH",
-            "THIS",
-            "THAT",
-            "HAVE",
-            "BEEN",
-        }:
-            # short all-caps-looking tokens already uppercased from free text words
-            if raw.isupper() or raw.islower() and len(raw) <= 5:
-                # only keep well-known-ish 2–5 letter tickers from mixed query words
-                if len(w) <= 5 and w not in {"OLUR", "NE", "DIYOLAR", "HAKKINDA"}:
-                    # Turkish/common stopwords skipped above; still filter length
-                    if w in _ALIASES.values() or w in {
-                        "BTC",
-                        "ETH",
-                        "SOL",
-                        "XRP",
-                        "DOGE",
-                        "ADA",
-                        "JUV",
-                        "BNB",
-                        "AVAX",
-                        "DOT",
-                        "LINK",
-                        "MATIC",
-                        "PEPE",
-                        "SHIB",
-                        "TON",
-                        "SUI",
-                        "APT",
-                        "ARB",
-                        "OP",
-                    }:
-                        found.append(w)
+        elif (
+            re.fullmatch(r"[A-Z]{2,6}", w)
+            and w
+            not in {
+                "OR",
+                "AND",
+                "THE",
+                "FOR",
+                "WHAT",
+                "WILL",
+                "ABOUT",
+                "TWITTER",
+                "CRYPTO",
+                "PRICE",
+                "FROM",
+                "WITH",
+                "THIS",
+                "THAT",
+                "HAVE",
+                "BEEN",
+            }
+            and (raw.isupper() or (raw.islower() and len(raw) <= 5))
+            and len(w) <= 5
+            and w not in {"OLUR", "NE", "DIYOLAR", "HAKKINDA"}
+            and (
+                w in _ALIASES.values()
+                or w
+                in {
+                    "BTC",
+                    "ETH",
+                    "SOL",
+                    "XRP",
+                    "DOGE",
+                    "ADA",
+                    "JUV",
+                    "BNB",
+                    "AVAX",
+                    "DOT",
+                    "LINK",
+                    "MATIC",
+                    "PEPE",
+                    "SHIB",
+                    "TON",
+                    "SUI",
+                    "APT",
+                    "ARB",
+                    "OP",
+                }
+            )
+        ):
+            found.append(w)
 
     # preserve order, unique
     out: list[str] = []

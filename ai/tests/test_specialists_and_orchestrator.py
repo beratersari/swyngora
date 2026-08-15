@@ -68,7 +68,7 @@ def test_orchestrator_chat_with_scripted_model():
 
 
 def test_orchestrator_emits_live_process_events():
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     model = ScriptedModel(
         responses=[
             AIMessage(content="BTC is around 100 (scripted). Not financial advice."),
@@ -90,13 +90,16 @@ def test_orchestrator_emits_live_process_events():
 
 def test_run_agent_with_progress_streams_then_emits():
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
     from swyngora_ai.graph.orchestrator import run_agent_with_progress
     from swyngora_ai.progress import reset_progress, set_progress
 
     human = HumanMessage(content="q")
     think = AIMessage(
         content="I'll check market data",
-        tool_calls=[{"name": "market_agent", "args": {"task": "BTC"}, "id": "1", "type": "tool_call"}],
+        tool_calls=[
+            {"name": "market_agent", "args": {"task": "BTC"}, "id": "1", "type": "tool_call"}
+        ],
     )
     tool = ToolMessage(content='{"lastPrice":"1"}', name="market_agent", tool_call_id="1")
     final = AIMessage(content="done")
@@ -111,7 +114,7 @@ def test_run_agent_with_progress_streams_then_emits():
         def invoke(self, _input, config=None):
             raise AssertionError("invoke should not run when stream works")
 
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
     token = set_progress(events.append)
     try:
         out = run_agent_with_progress(FakeGraph(), [human], {"recursion_limit": 4})

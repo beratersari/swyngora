@@ -26,7 +26,9 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
-                    "windows": [{"window": "24h", "longNotional": "100", "shortNotional": "50", "count": 3}],
+                    "windows": [
+                        {"window": "24h", "longNotional": "100", "shortNotional": "50", "count": 3}
+                    ],
                 },
             )
         if request.url.path.endswith("/orderbook/liquidity"):
@@ -106,9 +108,7 @@ def test_market_tools_hit_api(monkeypatch):
     assert liqs["windows"][0]["window"] == "24h"
 
     assert "get_market_liquidity" in by_name
-    liq = json.loads(
-        by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"})
-    )
+    liq = json.loads(by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"}))
     assert liq["market"]["score"] == 72
 
     assert "estimate_market_impact" in by_name
@@ -153,13 +153,15 @@ def test_read_only_scope_blocks_mutations(monkeypatch):
                 "quantity": 1,
             }
         )
-        assert "403" in out and "read-only" in out
+        assert "403" in out
+        assert "read-only" in out
         assert posted == []
 
         keys = by_name["create_api_key"].invoke(
             {"client_id": "c1", "name": "x", "permission": "trade"}
         )
-        assert "403" in keys and "not available" in keys
+        assert "403" in keys
+        assert "not available" in keys
     finally:
         reset_tool_scope(toks)
 

@@ -43,7 +43,9 @@ def test_status_text_filters_noise_and_truncates() -> None:
     assert _status_text({"type": "status", "text": "Planning…"}) == "Planning…"
     long = "x" * 120
     out = _status_text({"type": "tool", "text": long})
-    assert out is not None and out.endswith("…") and len(out) == 88
+    assert out is not None
+    assert out.endswith("…")
+    assert len(out) == 88
 
 
 def test_help() -> None:

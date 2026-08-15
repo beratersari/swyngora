@@ -58,7 +58,7 @@ def _wrap_tools_with_progress(tools: Sequence[BaseTool], specialist: str) -> lis
                 emit("tool", f"{specialist} → {tool.name}({', '.join(arg_bits)})")
                 try:
                     out = tool.invoke(kwargs)
-                except Exception as e:  # noqa: BLE001
+                except Exception as e:
                     emit("tool_error", f"{tool.name} failed: {e}")
                     raise
                 preview = str(out).replace("\n", " ").strip()
@@ -70,10 +70,7 @@ def _wrap_tools_with_progress(tools: Sequence[BaseTool], specialist: str) -> lis
             return _fn
 
         # Rebuild StructuredTool with same name/description/schema
-        try:
-            schema = original.args_schema
-        except Exception:
-            schema = None
+        schema = getattr(original, "args_schema", None)
         wrapped.append(
             StructuredTool.from_function(
                 make_fn(original),
