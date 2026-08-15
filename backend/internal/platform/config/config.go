@@ -69,6 +69,9 @@ type Config struct {
 	AIWorkDir    string // cwd for auto-start (repo ai/ package)
 	AIListenHost string
 	AIListenPort int
+	// AIServiceToken, when set, is sent as Authorization: Bearer to the Python AI HTTP API.
+	// Empty = Python accepts unauthenticated localhost (dev).
+	AIServiceToken string
 
 	// WatchlistDBPath is the SQLite file for durable watchlists (survives restarts).
 	// Relative paths are resolved from the process working directory.
@@ -202,11 +205,12 @@ func Load() Config {
 		// Multi-agent /ask (market + web + X) often needs >2 minutes.
 		AITimeout: positiveDurationEnv("AI_TIMEOUT", 300*time.Second),
 		// Auto-start Python AI with the backend when true (default true if AI_PYTHON is set, else false).
-		AIAutoStart:  boolEnv("AI_AUTOSTART", false),
-		AIPython:     strings.TrimSpace(os.Getenv("AI_PYTHON")),
-		AIWorkDir:    strings.TrimSpace(getenv("AI_WORKDIR", "ai")),
-		AIListenHost: getenv("AI_LISTEN_HOST", "127.0.0.1"),
-		AIListenPort: positiveIntEnv("AI_LISTEN_PORT", 8090),
+		AIAutoStart:    boolEnv("AI_AUTOSTART", false),
+		AIPython:       strings.TrimSpace(os.Getenv("AI_PYTHON")),
+		AIWorkDir:      strings.TrimSpace(getenv("AI_WORKDIR", "ai")),
+		AIListenHost:   getenv("AI_LISTEN_HOST", "127.0.0.1"),
+		AIListenPort:   positiveIntEnv("AI_LISTEN_PORT", 8090),
+		AIServiceToken: strings.TrimSpace(os.Getenv("AI_SERVICE_TOKEN")),
 
 		// Durable watchlist storage (SQLite). Default relative to process cwd.
 		WatchlistDBPath: getenv("WATCHLIST_DB_PATH", "data/watchlist.db"),
@@ -247,7 +251,7 @@ func Load() Config {
 		AccountDBPath:        getenv("ACCOUNT_DB_PATH", "data/accounts.db"),
 		AccountPurgeInterval: positiveDurationEnv("ACCOUNT_PURGE_INTERVAL", 1*time.Hour),
 
-		APIAuthToken:        strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
+		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
 		// AllowOpenAuth permits empty API_AUTH_TOKEN when HTTP_ADDR is non-loopback.
 		// Default false: refuse to start open auth on 0.0.0.0 / LAN binds.
 		AllowOpenAuth:       boolEnv("ALLOW_OPEN_AUTH", false),

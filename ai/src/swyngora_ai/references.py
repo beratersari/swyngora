@@ -18,9 +18,10 @@ class Reference:
     url: str
     source: str
     snippet: str = ""
+    reliability: str = ""
 
     def as_dict(self) -> dict[str, str]:
-        return asdict(self)
+        return {k: v for k, v in asdict(self).items() if v != ""}
 
 
 def _norm_url(raw: str) -> str:
@@ -42,6 +43,8 @@ def classify_source(url: str, hint: str = "") -> str:
     blob = f"{hint} {h}".lower()
     if any(x in h for x in ("x.com", "twitter.com", "nitter.", "stocktwits.com")):
         return "x"
+    if any(x in h for x in ("sec.gov", "kap.org.tr")):
+        return "filing"
     if "news.ycombinator.com" in h or "hacker news" in blob or blob.strip().startswith("hn"):
         return "hn"
     if (

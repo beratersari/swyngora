@@ -101,6 +101,20 @@ func TestClient_Unreachable(t *testing.T) {
 	}
 }
 
+func TestClient_SendsServiceToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer desk-secret" {
+			t.Fatalf("Authorization=%q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"reply": "ok", "sessionId": "s"})
+	}))
+	defer srv.Close()
+	c := New(srv.URL, 5*time.Second).WithServiceToken("desk-secret")
+	if _, err := c.Chat(context.Background(), "hi", "s", "c", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClient_ChatForwardsScope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req ChatRequest

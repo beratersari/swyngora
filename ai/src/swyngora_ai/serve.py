@@ -19,9 +19,21 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
+from swyngora_ai.config import get_settings
 from swyngora_ai.graph.orchestrator import Orchestrator, build_orchestrator
 
 _orch: Orchestrator | None = None
+
+
+def is_service_authorized(headers: Any, token: str) -> bool:
+    """True when AI_SERVICE_TOKEN is empty or the request carries it."""
+    expected = (token or "").strip()
+    if not expected:
+        return True
+    auth = (headers.get("Authorization") or "").strip()
+    if auth == f"Bearer {expected}":
+        return True
+    return (headers.get("X-AI-Token") or "").strip() == expected
 
 
 def get_orch() -> Orchestrator:
@@ -54,6 +66,9 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _authorized(self) -> bool:
+        return is_service_authorized(self.headers, get_settings().service_token)
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path in ("/health", "/v1/health"):
@@ -62,6 +77,11 @@ class Handler(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:
+        if not self._authorized():
+            self._json(
+                401, {"error": "unauthorized", "message": "invalid or missing AI_SERVICE_TOKEN"}
+            )
+            return
         path = urlparse(self.path).path
         payload = self._read_json()
         if payload is None:
@@ -193,7 +213,6 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"failed to start orchestrator: {e}", file=sys.stderr)
         return 1
-    from swyngora_ai.config import get_settings
 
     cfg = get_settings()
     model = cfg.grok_model if cfg.llm_provider == "grok" else cfg.ollama_model

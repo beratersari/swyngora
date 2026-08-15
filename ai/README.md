@@ -8,11 +8,14 @@ Research-backed **supervisor / subagents-as-tools** pattern (LangChain multi-age
 
 ```text
 User
-  └─► Orchestrator (ReAct, plans & routes)
-        ├─ market_agent  → Swyngora MCP/HTTP tools (prices, candles, supply, RSI/EMA, watchlist)
-        ├─ web_agent     → free DuckDuckGo web + news search
-        ├─ x_agent       → free X/Twitter-indexed search (weak social signal)
-        └─ analyst_agent → synthesis + risk framing (no tools)
+  └─► Orchestrator (ReAct — calls a specialist only if the question needs it)
+        ├─ market_tape_agent   → ticker, candles, RSI/EMA, supply, FX, lists, delists
+        ├─ market_book_agent   → book, liqs, impact, pumps, swing
+        ├─ paper_desk_agent    → paper portfolios / OCO / bracket / amend / margin
+        ├─ account_agent       → watchlist, alerts, keys, export/import
+        ├─ web_agent           → allowlisted RSS + wiki + Gecko + EDGAR/KAP
+        ├─ x_agent             → StockTwits / HN (weak social)
+        └─ analyst_agent       → optional synthesis
 ```
 
 | Principle | How we apply it |
@@ -28,7 +31,7 @@ User
 1. Backend API running: `cd backend && go run ./cmd/server` (`:8080`)
 2. Optional MCP stdio server: `cd backend && go run ./cmd/mcp`
 3. LLM:
-   - **Ollama**: `ollama pull llama3.2` (or set `OLLAMA_MODEL`)
+   - **Ollama**: `ollama pull qwen2.5` (or set `OLLAMA_MODEL`; avoid llama3.2 — weak tool calling)
    - **Grok**: set `XAI_API_KEY` and `AI_LLM_PROVIDER=grok`
 
 ## Setup
@@ -70,7 +73,9 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 |----------|---------|---------|
 | `AI_LLM_PROVIDER` | `ollama` | `ollama` or `grok` |
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama host |
-| `OLLAMA_MODEL` | `llama3.2` | Local model name |
+| `OLLAMA_MODEL` | `qwen2.5` | Local model (needs tool calling) |
+| `AI_SERVICE_TOKEN` | empty | Shared secret with the Go proxy; empty = open localhost |
+| `AI_MEMORY_PATH` | empty | FinMem SQLite path (`data/ai-memory.db` or `:memory:`) |
 | `XAI_API_KEY` | — | **Required for Grok** (https://console.x.ai/) |
 | `GROK_MODEL` | `grok-3-mini` | xAI model id |
 | `SWYNGORA_API_URL` | `http://localhost:8080` | Backend API |

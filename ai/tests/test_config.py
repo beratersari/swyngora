@@ -8,3 +8,6 @@ def test_settings_defaults(monkeypatch):
     assert s.llm_provider == "ollama"
     assert "8080" in s.api_base_url
     assert s.default_client_id
+    assert s.ollama_model == "qwen2.5"
+    assert s.service_token == ""
+    assert s.memory_path == ""

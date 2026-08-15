@@ -407,7 +407,7 @@ func main() {
 		defer aiProc.Stop()
 	}
 
-	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout)
+	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout).WithServiceToken(cfg.AIServiceToken)
 
 	swingSvc := swing.New(marketSvc, watchSvc)
 

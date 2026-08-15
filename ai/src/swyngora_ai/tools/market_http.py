@@ -8,10 +8,12 @@ from contextvars import ContextVar
 from typing import Any
 
 import httpx
-from langchain_core.tools import StructuredTool
+from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
 from swyngora_ai.config import Settings, get_settings
+from swyngora_ai.constants import EXCHANGE_VENUES, EXCHANGE_VENUES_OR_ALL
+from swyngora_ai.tools.packs import filter_tools
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
 # Defaults True for CLI/local so tools work without an HTTP scope envelope.
@@ -178,10 +180,31 @@ class _HTTP:
             r = client.delete(f"{self.base}{path}", params=params, headers=self._headers())
             return self._body_text(r)
 
+    def post_bytes(
+        self,
+        path: str,
+        data: bytes,
+        content_type: str,
+        params: dict[str, Any] | None = None,
+    ) -> str:
+        if err := self._scope_error(path, mutating=True):
+            return err
+        params = dict(params or {})
+        self._apply_client_id(params, None)
+        headers = {**self._headers(), "Content-Type": content_type}
+        with httpx.Client(timeout=self.timeout) as client:
+            r = client.post(
+                f"{self.base}{path}",
+                content=data,
+                params=params,
+                headers=headers,
+            )
+            return self._body_text(r)
+
 
 class TickerInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
-    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
 
 
 class SwingScanInput(BaseModel):
@@ -192,7 +215,7 @@ class SwingScanInput(BaseModel):
 
 class OrderBookInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
-    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     group: str = Field(
         default="", description="Price bucket e.g. 0.1 or 0.01; empty = suggested default"
     )
@@ -207,7 +230,7 @@ class OrderBookInput(BaseModel):
 
 class OrderBookAnalysisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
-    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     range_pct: float = Field(
         default=2.0,
         ge=0.25,
@@ -238,7 +261,7 @@ class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
         default="all",
-        description="binance|coinbase|bybit|all (default all = per-venue + market-wide)",
+        description=f"{EXCHANGE_VENUES_OR_ALL} (default all = per-venue + market-wide)",
     )
 
 
@@ -255,7 +278,7 @@ class MarketImpactInput(BaseModel):
     )
     exchange: str = Field(
         default="all",
-        description="binance|coinbase|bybit|all (default all = cheapest-first merge)",
+        description=f"{EXCHANGE_VENUES_OR_ALL} (default all = cheapest-first merge)",
     )
 
 
@@ -420,7 +443,7 @@ class PortfolioGetInput(BaseModel):
 class PaperTradingCostsInput(BaseModel):
     exchange: str = Field(
         default="",
-        description="Optional venue binance|coinbase|bybit; omit to list all",
+        description=f"Optional venue {EXCHANGE_VENUES}; omit to list all",
     )
 
 
@@ -525,6 +548,69 @@ class PortfolioListOrdersInput(BaseModel):
 class PortfolioCancelOrderInput(BaseModel):
     client_id: str
     order_id: str
+
+
+class PortfolioOCOInput(BaseModel):
+    client_id: str
+    symbol: str
+    quantity: float = Field(gt=0)
+    take_profit_price: float = Field(gt=0)
+    stop_loss_price: float = Field(gt=0)
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+    expires_at: str = ""
+    idempotency_key: str = ""
+
+
+class PortfolioBracketInput(BaseModel):
+    client_id: str
+    symbol: str
+    quantity: float = Field(gt=0)
+    entry_price: float = Field(gt=0)
+    take_profit_price: float = Field(gt=0)
+    stop_loss_price: float = Field(gt=0)
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+    expires_at: str = ""
+    idempotency_key: str = ""
+
+
+class PortfolioAmendInput(BaseModel):
+    client_id: str
+    order_id: str
+    trigger_price: float = Field(default=0, description="New limit/stop; 0 = leave")
+    remaining_quantity: float = Field(default=0, description="New remaining size; 0 = leave")
+
+
+class PortfolioCancelAllInput(BaseModel):
+    client_id: str
+    symbol: str = ""
+    exchange: str = Field(default="", description=EXCHANGE_VENUES)
+
+
+class PortfolioOrderGetInput(BaseModel):
+    client_id: str
+    order_id: str
+
+
+class DelistInput(BaseModel):
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+
+
+class ImportPreviewInput(BaseModel):
+    client_id: str
+    content: str = Field(description="Full export file text (JSON preferred)")
+    format: str = Field(default="json", description="json or csv")
+    file_name: str = ""
+
+
+class ImportConfirmInput(BaseModel):
+    client_id: str
+    import_id: str
+    mode: str = Field(description="merge or replace")
+
+
+class ImportGetInput(BaseModel):
+    client_id: str
+    import_id: str
 
 
 class RecurringBuyCreateInput(BaseModel):
@@ -679,7 +765,7 @@ class AlertWebhookSetInput(BaseModel):
 
 class PumpDetectInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or JUVUSDT")
-    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     interval: str = Field(default="1h", description="Candle interval: 1m,5m,15m,1h,4h,1d…")
     lookback_hours: float = Field(default=48, description="Hours of history to scan")
     min_return_pct: float = Field(default=5, description="Threshold percent e.g. 5 = +5%")
@@ -712,7 +798,7 @@ class PumpScanInput(BaseModel):
     )
 
 
-def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]:
+def build_market_tools(settings: Settings | None = None, pack: str | None = None) -> list[BaseTool]:
     cfg = settings or get_settings()
     http = _HTTP(cfg.api_base_url, auth_token=cfg.api_auth_token)
 
@@ -724,6 +810,9 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
 
     def list_exchanges() -> str:
         return http.get("/api/v1/market/exchanges")
+
+    def list_delist_schedule(exchange: str = "binance") -> str:
+        return http.get("/api/v1/market/delist-schedule", {"exchange": exchange})
 
     def get_fx_rates() -> str:
         return http.get("/api/v1/market/fx")
@@ -1319,6 +1408,109 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             {"clientId": client_id},
         )
 
+    def get_portfolio_order(client_id: str, order_id: str) -> str:
+        return http.get(f"/api/v1/portfolio/orders/{order_id}", {"clientId": client_id})
+
+    def place_portfolio_oco_order(
+        client_id: str,
+        symbol: str,
+        quantity: float,
+        take_profit_price: float,
+        stop_loss_price: float,
+        exchange: str = "binance",
+        expires_at: str = "",
+        idempotency_key: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "type": "oco",
+            "quantity": quantity,
+            "takeProfitPrice": take_profit_price,
+            "stopLossPrice": stop_loss_price,
+            "exchange": exchange,
+        }
+        if expires_at:
+            body["expiresAt"] = expires_at
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
+        return http.post("/api/v1/portfolio/orders", body)
+
+    def place_portfolio_bracket_order(
+        client_id: str,
+        symbol: str,
+        quantity: float,
+        entry_price: float,
+        take_profit_price: float,
+        stop_loss_price: float,
+        exchange: str = "binance",
+        expires_at: str = "",
+        idempotency_key: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "type": "bracket",
+            "quantity": quantity,
+            "triggerPrice": entry_price,
+            "takeProfitPrice": take_profit_price,
+            "stopLossPrice": stop_loss_price,
+            "exchange": exchange,
+        }
+        if expires_at:
+            body["expiresAt"] = expires_at
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
+        return http.post("/api/v1/portfolio/orders", body)
+
+    def amend_portfolio_order(
+        client_id: str,
+        order_id: str,
+        trigger_price: float = 0,
+        remaining_quantity: float = 0,
+    ) -> str:
+        body: dict[str, Any] = {}
+        if trigger_price > 0:
+            body["triggerPrice"] = trigger_price
+        if remaining_quantity > 0:
+            body["remainingQuantity"] = remaining_quantity
+        return http.patch(f"/api/v1/portfolio/orders/{order_id}?clientId={client_id}", body)
+
+    def cancel_all_portfolio_orders(client_id: str, symbol: str = "", exchange: str = "") -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if symbol:
+            body["symbol"] = symbol
+        if exchange:
+            body["exchange"] = exchange
+        return http.post("/api/v1/portfolio/orders/cancel-all", body)
+
+    def preview_import(
+        client_id: str, content: str, format: str = "json", file_name: str = ""
+    ) -> str:
+        params: dict[str, Any] = {"clientId": client_id, "format": format or "json"}
+        if file_name:
+            params["fileName"] = file_name
+        ct = "text/csv" if (format or "").lower() == "csv" else "application/json"
+        return http.post_bytes("/api/v1/import/preview", content.encode("utf-8"), ct, params)
+
+    def confirm_import(client_id: str, import_id: str, mode: str) -> str:
+        return http.post(
+            f"/api/v1/import/{import_id}/confirm",
+            {"clientId": client_id, "mode": mode},
+        )
+
+    def get_import(client_id: str, import_id: str) -> str:
+        return http.get(f"/api/v1/import/{import_id}", {"clientId": client_id})
+
+    def list_imports(client_id: str, limit: int = 20, offset: int = 0) -> str:
+        return http.get(
+            "/api/v1/import",
+            {"clientId": client_id, "limit": limit, "offset": offset},
+        )
+
+    def cancel_import(client_id: str, import_id: str) -> str:
+        return http.post(f"/api/v1/import/{import_id}/cancel?clientId={client_id}", {})
+
     def list_portfolio_trades(client_id: str) -> str:
         return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
 
@@ -1700,7 +1892,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             params["minVolumeRatio"] = min_volume_ratio
         return http.get("/api/v1/market/pumps/scan", params)
 
-    return [
+    tools = [
         StructuredTool.from_function(
             health,
             name="health",
@@ -1715,6 +1907,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             list_exchanges,
             name="list_exchanges",
             description="List configured market venues.",
+        ),
+        StructuredTool.from_function(
+            list_delist_schedule,
+            name="list_delist_schedule",
+            description="Scheduled spot delistings (symbol + UTC time). Default exchange=binance.",
+            args_schema=DelistInput,
         ),
         StructuredTool.from_function(
             get_fx_rates,
@@ -1737,7 +1935,7 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Grouped live spot order book plus analysis: pressure, imbalance, and "
                 "walls from depth within ±range_pct of mid (default 2%). Each wall has "
                 "behavior short | persistent (resting) | suspicious (flicker). "
-                "Works on binance, coinbase, and bybit."
+                f"Works on {EXCHANGE_VENUES}."
             ),
             args_schema=OrderBookInput,
         ),
@@ -1926,6 +2124,36 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="cancel_export",
             description="Cancel a pending or running data export.",
             args_schema=ExportGetInput,
+        ),
+        StructuredTool.from_function(
+            preview_import,
+            name="preview_import",
+            description="Preview restoring an export (JSON/CSV text). Returns counts; then confirm_import.",
+            args_schema=ImportPreviewInput,
+        ),
+        StructuredTool.from_function(
+            confirm_import,
+            name="confirm_import",
+            description="Apply a previewed import (mode=merge or replace).",
+            args_schema=ImportConfirmInput,
+        ),
+        StructuredTool.from_function(
+            get_import,
+            name="get_import",
+            description="Import job status and section counts.",
+            args_schema=ImportGetInput,
+        ),
+        StructuredTool.from_function(
+            list_imports,
+            name="list_imports",
+            description="List recent import jobs.",
+            args_schema=WatchClientInput,
+        ),
+        StructuredTool.from_function(
+            cancel_import,
+            name="cancel_import",
+            description="Cancel a previewed or running import.",
+            args_schema=ImportGetInput,
         ),
         StructuredTool.from_function(
             list_price_alerts,
@@ -2146,6 +2374,36 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="cancel_portfolio_order",
             description="Cancel an open paper pending order. Canceled orders never fill.",
             args_schema=PortfolioCancelOrderInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio_order,
+            name="get_portfolio_order",
+            description="Get one paper pending order plus last price and amend hints.",
+            args_schema=PortfolioOrderGetInput,
+        ),
+        StructuredTool.from_function(
+            place_portfolio_oco_order,
+            name="place_portfolio_oco_order",
+            description="Paper OCO: take-profit limit + stop-loss for the same quantity.",
+            args_schema=PortfolioOCOInput,
+        ),
+        StructuredTool.from_function(
+            place_portfolio_bracket_order,
+            name="place_portfolio_bracket_order",
+            description="Paper bracket: limit-buy entry with pending take-profit + stop-loss.",
+            args_schema=PortfolioBracketInput,
+        ),
+        StructuredTool.from_function(
+            amend_portfolio_order,
+            name="amend_portfolio_order",
+            description="Amend open GTC limit/stop trigger price and/or remaining size.",
+            args_schema=PortfolioAmendInput,
+        ),
+        StructuredTool.from_function(
+            cancel_all_portfolio_orders,
+            name="cancel_all_portfolio_orders",
+            description="Cancel all open paper orders, or one market when symbol is set.",
+            args_schema=PortfolioCancelAllInput,
         ),
         StructuredTool.from_function(
             list_portfolio_trades,
@@ -2388,3 +2646,4 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             args_schema=PumpScanInput,
         ),
     ]
+    return filter_tools(tools, pack)

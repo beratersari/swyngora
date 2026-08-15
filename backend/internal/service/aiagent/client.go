@@ -15,8 +15,9 @@ import (
 
 // Client talks to the AI chat HTTP API (default http://127.0.0.1:8090).
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL      string
+	httpClient   *http.Client
+	serviceToken string
 }
 
 // New constructs a client. baseURL empty → http://127.0.0.1:8090
@@ -34,6 +35,22 @@ func New(baseURL string, timeout time.Duration) *Client {
 			Timeout: timeout,
 		},
 	}
+}
+
+// WithServiceToken sets the shared secret sent as Authorization: Bearer.
+func (c *Client) WithServiceToken(token string) *Client {
+	if c == nil {
+		return c
+	}
+	c.serviceToken = strings.TrimSpace(token)
+	return c
+}
+
+func (c *Client) applyAuth(req *http.Request) {
+	if c == nil || c.serviceToken == "" || req == nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+c.serviceToken)
 }
 
 // ChatRequest is the JSON body for POST /v1/chat.
@@ -109,6 +126,7 @@ func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string, 
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	c.applyAuth(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return zero, fmt.Errorf("AI service unreachable at %s: %w", c.baseURL, err)
@@ -180,6 +198,7 @@ func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID st
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/x-ndjson")
+	c.applyAuth(req)
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return zero, fmt.Errorf("AI service unreachable at %s: %w", c.baseURL, err)

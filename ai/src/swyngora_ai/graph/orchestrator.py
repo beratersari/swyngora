@@ -11,11 +11,15 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMe
 from langchain_core.runnables import RunnableConfig
 
 from swyngora_ai.agents.prompts import ORCHESTRATOR_SYSTEM
-from swyngora_ai.agents.specialists import build_specialist_tools
+from swyngora_ai.agents.specialists import SpecialistRunner
 from swyngora_ai.config import Settings, get_settings
+from swyngora_ai.graph.facts import extract_market_facts
+from swyngora_ai.graph.route import classify_route
+from swyngora_ai.grounding import apply_grounding, grounded_references
+from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
 from swyngora_ai.llm.factory import build_chat_model
+from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import emit, reset_progress, set_progress
-from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import (
     bind_client_id,
     bind_tool_scope,
@@ -35,31 +39,7 @@ class ChatResult:
     references: list[dict[str, str]] = field(default_factory=list)
 
 
-def memory_key(client_id: str, session_id: str) -> str:
-    """Namespace conversation memory by tenant so sessionId cannot cross clients."""
-    cid = (client_id or "").strip() or "_"
-    sid = (session_id or "default").strip() or "default"
-    return f"{cid}\n{sid}"
-
-
-@dataclass
-class SessionMemory:
-    """Simple per-session message buffer (not durable). Keys should be memory_key(...)."""
-
-    sessions: dict[str, list[BaseMessage]] = field(default_factory=dict)
-    max_messages: int = 40
-
-    def get(self, session_id: str) -> list[BaseMessage]:
-        return list(self.sessions.get(session_id, []))
-
-    def append(self, session_id: str, messages: list[BaseMessage]) -> None:
-        buf = self.sessions.setdefault(session_id, [])
-        buf.extend(messages)
-        if len(buf) > self.max_messages:
-            self.sessions[session_id] = buf[-self.max_messages :]
-
-    def clear(self, session_id: str) -> None:
-        self.sessions.pop(session_id, None)
+# SessionMemory + memory_key live in swyngora_ai.memory.finmem (re-exported here).
 
 
 def _content_text(content: Any) -> str:
@@ -235,7 +215,7 @@ def run_agent_with_progress(
 
 
 class Orchestrator:
-    """Top-level Swyngora AI orchestrator."""
+    """Top-level Swyngora AI orchestrator (LangGraph desk state machine)."""
 
     def __init__(
         self,
@@ -244,9 +224,13 @@ class Orchestrator:
         model: Any | None = None,
     ) -> None:
         self.settings = settings or get_settings()
-        self.memory = memory or SessionMemory()
+        if memory is not None:
+            self.memory = memory
+        else:
+            self.memory = FinMem(path=self.settings.memory_path)
         self.model = model or build_chat_model(self.settings)
-        tools = build_specialist_tools(self.model, self.settings)
+        self._runner = SpecialistRunner(self.model, self.settings)
+        tools = self._runner.as_orchestrator_tools()
         system = ORCHESTRATOR_SYSTEM.format(client_id=self.settings.default_client_id)
         self._graph = create_agent(self.model, tools, system_prompt=system)
 
@@ -293,19 +277,13 @@ class Orchestrator:
             }
 
             emit("status", "Orchestrator running…")
-            # Stream node updates so the web Process panel fills step-by-step.
-            # Falls back to invoke if the compiled graph has no usable stream.
             out_msgs = run_agent_with_progress(self._graph, messages, config)
             turn_slice = out_msgs[len(history) :] if history else out_msgs
             turn_msgs = turn_slice if turn_slice else out_msgs
             reply, tools_msg, thinking_msg = extract_trace(turn_msgs if turn_msgs else out_msgs)
             if not reply:
-                reply = (
-                    "I could not produce an answer. "
-                    "Try rephrasing or /ask with a clearer symbol (e.g. JUVUSDT)."
-                )
+                reply = empty_reply_for(user_message)
 
-            # Merge live + post-hoc traces
             for t in tools_msg:
                 if t not in tools_acc:
                     tools_acc.append(t)
@@ -313,38 +291,26 @@ class Orchestrator:
                 if t not in thinking_acc:
                     thinking_acc.append(t)
 
-            final_msg = AIMessage(content=reply)
-            self.memory.append(mem_key, [HumanMessage(content=user_message), final_msg])
+            blobs = [
+                _content_text(getattr(m, "content", ""))
+                for m in turn_msgs
+                if isinstance(m, ToolMessage)
+            ]
+            facts = extract_market_facts(*blobs)
+            if facts.last_price or facts.rsi:
+                reply = apply_grounding(reply, facts, blobs, user_message=user_message)
 
-            if (
-                any(
-                    k in user_message.lower()
-                    for k in (
-                        "price",
-                        "btc",
-                        "eth",
-                        "buy",
-                        "sell",
-                        "mcap",
-                        "rsi",
-                        "analysis",
-                        "juv",
-                    )
-                )
-                and "not financial advice" not in reply.lower()
-            ):
-                reply = f"{reply}\n\n{self.settings.disclaimer}"
+            route = classify_route(user_message)
+            if route.desk_note and not has_advice_disclaimer(reply):
+                reply = f"{reply}\n\n{disclaimer_for(user_message)}"
 
-            refs = extract_references(
-                *[
-                    _content_text(getattr(m, "content", ""))
-                    for m in turn_msgs
-                    if isinstance(m, ToolMessage)
-                ],
-                reply,
-            )
-            # Do not emit type=final here — the HTTP stream layer sends the
-            # structured final payload (full reply + tools + references).
+            self.memory.append(mem_key, as_human_ai(user_message, reply))
+            if isinstance(self.memory, FinMem):
+                if facts.symbol or facts.last_price:
+                    self.memory.note_tape(cid, facts.symbol, facts.exchange)
+                self.memory.persist_turn(cid, user_message, reply)
+
+            refs = grounded_references(*blobs, reply=reply)
             emit("status", "Composing answer…")
             return ChatResult(
                 reply=reply,
@@ -358,8 +324,10 @@ class Orchestrator:
             reset_bound_client_id(bind_tok)
             reset_progress(token)
 
-    def reset(self, session_id: str = "default") -> None:
-        self.memory.clear(session_id)
+    def reset(self, session_id: str = "default", client_id: str = "") -> None:
+        cid = (client_id or "").strip() or (self.settings.default_client_id or "").strip()
+        public_session = (session_id or "default").strip() or "default"
+        self.memory.clear(memory_key(cid, public_session))
 
 
 def build_orchestrator(settings: Settings | None = None) -> Orchestrator:

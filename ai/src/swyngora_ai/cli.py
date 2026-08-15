@@ -146,7 +146,9 @@ def _repl(orch: Orchestrator, session_id: str) -> int:
         if line.lower() in {"exit", "quit", "q"}:
             return 0
         if line.lower() == "reset":
-            orch.reset(session_id)
+            from swyngora_ai.config import get_settings
+
+            orch.reset(session_id, client_id=get_settings().default_client_id)
             _console.print("[dim]session cleared[/]")
             continue
         try:

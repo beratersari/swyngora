@@ -6,21 +6,27 @@ Users need explanations and multi-step market analysis, not only raw JSON from t
 
 ## Architecture
 
-Based on LangChain multi-agent research (supervisor / **subagents-as-tools**): centralized control, specialists for distinct domains, bounded ReAct loops.
+LangChain **ReAct orchestrator**: the model chooses specialists from the user prompt. **No tool is mandatory.** Greeting or a self-contained question → zero tools.
 
 ```text
-User → Orchestrator (LangGraph create_react_agent)
-         ├─ market_agent  → HTTP tools ≡ Go MCP tools
-         ├─ web_agent     → DuckDuckGo web + news (free)
-         ├─ x_agent       → X/Twitter-indexed search (weak signal)
-         └─ analyst_agent → synthesis (no tools)
+User → Orchestrator (create_agent)
+         optional, only if the question needs it:
+         ├─ market_tape_agent  → ticker, candles, indicators, FX, lists, delists
+         ├─ market_book_agent  → book, liquidations, impact, pumps, swing
+         ├─ paper_desk_agent   → paper books / orders / margin
+         ├─ account_agent      → watchlist, alerts, keys, export/import
+         ├─ web_agent          → allowlisted RSS + wiki + Gecko + SEC EDGAR / KAP
+         ├─ x_agent            → StockTwits / HN (weak)
+         └─ analyst_agent      → synthesis only after several specialists
 ```
 
 | Component | Path |
 |-----------|------|
-| Orchestrator | `ai/src/swyngora_ai/graph/orchestrator.py` |
+| Orchestrator / desk graph | `ai/src/swyngora_ai/graph/` |
 | Specialists | `ai/src/swyngora_ai/agents/` |
-| Market tools | `ai/src/swyngora_ai/tools/market_http.py` |
+| Market tools (packed) | `ai/src/swyngora_ai/tools/market_http.py`, `packs.py` |
+| Sources / grounding | `ai/src/swyngora_ai/sources/`, `grounding.py` |
+| FinMem | `ai/src/swyngora_ai/memory/` |
 | Go MCP server | `backend/cmd/mcp`, `backend/internal/transport/mcp` |
 | LLM factory | `ai/src/swyngora_ai/llm/factory.py` (Ollama \| Grok) |
 
@@ -32,7 +38,7 @@ User → Orchestrator (LangGraph create_react_agent)
 - Social/X results are labeled weak and incomplete.
 - Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
-- Session memory is in-process (not durable across restarts) and **namespaced by `clientId` + `sessionId`** so one tenant cannot load another’s history by reusing `sessionId`.
+- Session memory is **namespaced by `clientId` + `sessionId`**. Optional FinMem SQLite (`AI_MEMORY_PATH`) stores daily notes + last tape timestamp (TTL 5m). `reset` uses the same tenant key.
 - HTTP/Telegram pass `clientId`; Python tools bind that id (and send `SWYNGORA_API_TOKEN` / `X-Client-Id`) so the model cannot switch tenants. Reserved ids (`ai-assistant`, `http-default`, `anonymous`) are rejected by the backend.
 - The Go AI proxy also passes `canTrade` / `canManageKeys` from the authenticated identity. User **read** keys keep AI chat but mutating tools return 403; user keys never get key-admin tools even with trade permission.
 - Web `/ai` streams `POST /api/v1/ai/chat/stream` and shows a **Process** timeline (status / think / tools / results) as each step happens. The list stays open while working, then collapses to a one-line summary so the answer stays readable. Non-stream `POST /api/v1/ai/chat` remains as fallback.
@@ -47,8 +53,11 @@ cd backend && go run ./cmd/server
 # AI CLI (separate process — needs LLM)
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
+export OLLAMA_MODEL=qwen2.5     # default; llama3.2 skips tools
 export SWYNGORA_API_URL=http://localhost:8080
 # export SWYNGORA_API_TOKEN=...   # same as backend API_AUTH_TOKEN when set
+# export AI_SERVICE_TOKEN=...     # shared with Go proxy for :8090
+# export AI_MEMORY_PATH=data/ai-memory.db
 swyngora-ai "BTC RSI on binance 1h and recent news"
 ```
 
@@ -81,10 +90,10 @@ Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_dif
 
 ## Limitations / follow-ups
 
-- No durable conversation store or multi-user auth yet
-- X agent is not official X API
-- Web research prefers Wikipedia, Google News RSS, CoinGecko, and Hacker News (free). DuckDuckGo is optional and often times out.
-- X is StockTwits/HN proxies, not the official API
+- X agent is not the official X API (StockTwits + HN + optional DDG)
+- DuckDuckGo is last-resort and often times out; publisher RSS / EDGAR / KAP are preferred
+- Default CLI `client_id` `ai-assistant` is reserved by the backend — set a real id for watchlist/paper tools
+- `:8090` is open unless `AI_SERVICE_TOKEN` is set on both Python and Go
 
 ## Mobile client
 

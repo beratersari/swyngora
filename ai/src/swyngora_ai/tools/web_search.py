@@ -19,6 +19,11 @@ from typing import Any
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
+from swyngora_ai.sources.feeds import feed_catalog, format_feed_error, parse_rss_items
+from swyngora_ai.sources.filings import edgar_recent, kap_recent
+from swyngora_ai.sources.identity import resolve_topic
+from swyngora_ai.sources.identity import wiki_title as _identity_wiki_title
+
 _UA = "SwyngoraAI/0.1 (+https://github.com/beratersari/swyngora; research bot)"
 _DDG_TIMEOUT_SEC = 8.0
 
@@ -233,15 +238,37 @@ def _news(query: str, max_results: int = 5) -> str:
     return "No news results."
 
 
+def _allowlisted_rss(topic: str, max_results: int = 4) -> str:
+    """Publisher RSS first (direct URLs). Fail soft per feed."""
+    lines: list[str] = []
+    per = max(2, max_results // 2)
+    for source, url in feed_catalog():
+        try:
+            raw = _http_bytes(url, timeout=10)
+        except Exception as e:  # noqa: BLE001
+            lines.append(format_feed_error(source, e))
+            continue
+        items = parse_rss_items(raw, source, per)
+        real = [x for x in items if not x.startswith("(")]
+        if real:
+            # Keep items that mention the topic if we have enough; else keep all.
+            matched = [x for x in real if topic.lower() in x.lower()]
+            lines.extend(matched or real)
+    if not lines:
+        return ""
+    return "\n".join(lines[:max_results])
+
+
 def _research(topic: str, max_results: int = 8) -> str:
-    """Fan-out reliable free sources first; one timed DDG pass last."""
+    """Fan-out allowlisted sources first; one timed DDG pass last."""
     topic = (topic or "").strip()
     if not topic:
         return "ERROR web_research: empty topic"
 
+    ident = resolve_topic(topic)
     chunks: list[str] = [
         f"NOTE: Multi-source desk research for {topic!r} "
-        "(Wikipedia, Google News RSS, CoinGecko, Hacker News). Not live prices."
+        "(Wikipedia, allowlisted RSS, CoinGecko, HN, EDGAR/KAP). Not live prices."
     ]
 
     wiki = _wikipedia(_wiki_title(topic))
@@ -252,9 +279,24 @@ def _research(topic: str, max_results: int = 8) -> str:
     if gecko and not gecko.startswith("("):
         chunks.append(f"### market pages\n{gecko}")
 
-    news = _google_news_rss(topic, max_results=min(6, max_results))
+    rss = _allowlisted_rss(topic, max_results=min(6, max_results))
+    if rss and not rss.startswith("("):
+        chunks.append(f"### publisher rss\n{rss}")
+
+    news = _google_news_rss(topic, max_results=min(4, max_results))
     if news and not news.startswith("("):
         chunks.append(f"### news\n{news}")
+
+    if ident.venue_hint == "nasdaq" or ident.kind == "equity" and ident.venue_hint != "bist":
+        edgar = edgar_recent(ident.base or topic, limit=4)
+        if edgar and not edgar.startswith("("):
+            chunks.append(f"### sec edgar\n{edgar}")
+        elif edgar:
+            chunks.append(edgar)
+    if ident.venue_hint == "bist":
+        kap = kap_recent(ident.base or topic, limit=4)
+        if kap:
+            chunks.append(f"### kap\n{kap}")
 
     try:
         hn = _hn_news(topic, max_results=min(5, max_results))
@@ -273,27 +315,7 @@ def _research(topic: str, max_results: int = 8) -> str:
 
 
 def _wiki_title(topic: str) -> str:
-    t = topic.strip()
-    upper = t.upper().replace("-", "")
-    aliases = {
-        "BTC": "Bitcoin",
-        "BTCUSDT": "Bitcoin",
-        "BTCUSD": "Bitcoin",
-        "ETH": "Ethereum",
-        "ETHUSDT": "Ethereum",
-        "SOL": "Solana (blockchain platform)",
-        "SOLUSDT": "Solana (blockchain platform)",
-        "XRP": "XRP",
-        "DOGE": "Dogecoin",
-        "ADA": "Cardano (blockchain platform)",
-        "BNB": "BNB",
-    }
-    if upper in aliases:
-        return aliases[upper]
-    m = re.fullmatch(r"([A-Za-z]{2,10})(USDT|USD)", t, re.IGNORECASE)
-    if m and m.group(1).upper() in aliases:
-        return aliases[m.group(1).upper()]
-    return t
+    return _identity_wiki_title(topic)
 
 
 def build_web_tools() -> list[StructuredTool]:
@@ -314,8 +336,9 @@ def build_web_tools() -> list[StructuredTool]:
             _research,
             name="web_research",
             description=(
-                "Extensive research for a coin/project: Wikipedia, Google News, CoinGecko/CMC pages, "
-                "Hacker News. Use this first when the user asks about a coin."
+                "Allowlisted research for a coin/equity/project: Wikipedia, publisher RSS "
+                "(CoinDesk/The Block/Decrypt), CoinGecko pages, Hacker News, SEC EDGAR or KAP. "
+                "Use this first when the user asks about a name."
             ),
             args_schema=WebResearchInput,
         ),

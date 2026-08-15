@@ -72,6 +72,7 @@ def test_research_skips_ddg_when_rss_and_wiki_work():
             "_hn_news",
             return_value="1. [Hacker News] Thread\n   URL: https://news.ycombinator.com/item?id=1",
         ),
+        patch.object(ws, "_allowlisted_rss", return_value=""),
         patch.object(ws, "_search", return_value="ERROR web_search: timeout") as ddg,
     ):
         out = ws._research("BTC", 6)

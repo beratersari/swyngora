@@ -10,6 +10,6 @@
   "toolsUsed": "Araçlar",
   "unavailable": "Asistan kapalı. :8090 üzerinde AI servisini başlatın (ai/README; Ollama veya Grok), sonra yeniden deneyin.",
   "upstreamError": "Asistan LLM’e ulaşamıyor. :8090 AI servisi ve Ollama (yerel) veya XAI_API_KEY (Grok) yapılandırmasını kontrol edin.",
-  "llmNotReady": "LLM yok. Ollama kurun/başlatın (ollama pull llama3.2) veya AI_LLM_PROVIDER=grok ve XAI_API_KEY ayarlayın.",
+  "llmNotReady": "LLM yok. Ollama kurun/başlatın (ollama pull qwen2.5) veya AI_LLM_PROVIDER=grok ve XAI_API_KEY ayarlayın.",
   "disclaimer": "Yalnızca bilgilendirme amaçlıdır — yatırım tavsiyesi değildir. Piyasa rakamları araçlardan gelmelidir."
 }

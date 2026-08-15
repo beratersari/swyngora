@@ -31,7 +31,7 @@ class ScriptedModel(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         if self._i >= len(self.responses):
-            msg = AIMessage(content="done")
+            msg = self.responses[-1] if self.responses else AIMessage(content="done")
         else:
             msg = self.responses[self._i]
             self._i += 1
@@ -46,7 +46,15 @@ def test_build_specialist_tools_names():
     model = ScriptedModel(responses=[AIMessage(content="ok")])
     tools = build_specialist_tools(model, Settings(_env_file=None))
     names = {t.name for t in tools}
-    assert names == {"market_agent", "web_agent", "x_agent", "analyst_agent"}
+    assert names == {
+        "market_tape_agent",
+        "market_book_agent",
+        "paper_desk_agent",
+        "account_agent",
+        "web_agent",
+        "x_agent",
+        "analyst_agent",
+    }
 
 
 def test_orchestrator_chat_with_scripted_model():

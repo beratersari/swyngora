@@ -25,7 +25,7 @@ class _FakeOrch:
             references=[{"title": "Binance", "url": "https://example.com/btc", "source": "web"}],
         )
 
-    def reset(self, session_id: str) -> None:
+    def reset(self, session_id: str, client_id: str = "") -> None:
         self.resets.append(session_id)
 
 
