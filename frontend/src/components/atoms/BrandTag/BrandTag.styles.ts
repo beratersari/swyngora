@@ -33,8 +33,8 @@ const variants: Record<BrandTagVariant, ReturnType<typeof css>> = {
     color: ${({ theme }) => theme.semantic.status.warning} !important;
   `,
   up: css`
-    background: ${({ theme }) => theme.semantic.bg.accentSoft} !important;
-    border: 1px solid ${({ theme }) => theme.semantic.border.accent} !important;
+    background: ${({ theme }) => theme.semantic.bg.successSoft} !important;
+    border: 1px solid ${({ theme }) => theme.semantic.chart.up} !important;
     color: ${({ theme }) => theme.semantic.chart.up} !important;
     font-family: ${({ theme }) => theme.fontFamilies.mono};
     font-variant-numeric: tabular-nums;

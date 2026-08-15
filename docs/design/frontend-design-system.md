@@ -27,56 +27,40 @@ A single source of truth for **color**, **typography**, **loading**, and **core 
 
 ## 2. Color palette (brand)
 
-### Primary
+### Surfaces
 
 | Token | Hex | Role |
 |---|---|---|
-| **richBlack** | `#000F0F` | Deepest canvas / app chrome |
-| **darkGreen** | `#032221` | Page / muted card background |
-| **bangladeshGreen** | `#03624C` | Primary actions, table headers, strong borders |
-| **mountainMeadow** | `#4FD4A5` | Accents, links, success / chart up secondary |
-| **caribbeanGreen** | `#00FF81` | High-emphasis accent, focus, chart up, tab ink |
-| **antiFlashWhite** | `#F1F7F6` | Primary text on dark |
+| **ink** | `#07090D` | Deepest canvas |
+| **graphite** | `#0C1016` | Page field |
+| **slate** | `#141922` | Cards / tables |
+| **steel** | `#1B2130` | Chrome / table headers |
+| **pewter** | `#252C3A` | Elevated / popovers |
 
-### Secondary
-
-| Token | Hex | Role |
-|---|---|---|
-| **pine** | `#063028` | Deep elevated / tag bg |
-| **basil** | `#0B453A` | Elevated surfaces, Ant elevated |
-| **forest** | `#095544` | Mid elevation |
-| **frog** | `#17876D` | Hover primary, EMA slow |
-| **mint** | `#74F9BC` | Soft accent, link hover |
-
-### Neutral
+### Brand and market
 
 | Token | Hex | Role |
 |---|---|---|
-| **stone** | `#707D7D` | Secondary text, muted icons |
-| **pistachio** | `#AACBC4` | Soft borders / info / secondary labels |
+| **amber** | `#F0A202` | Brand, nav ink, primary actions, links |
+| **up** | `#2BB673` | Positive change only |
+| **down** | `#E5534B` | Negative change only |
+| **ivory / silver** | `#F3F5F8` / `#A3ABB8` | Primary / secondary text |
 
 ### Semantic mapping
 
 | Semantic | Maps to |
 |---|---|
-| `bg.canvas` | richBlack (deepest shell) |
-| `bg.page` | darkGreen (page field) |
-| `bg.chrome` | pine (header / toolbars) |
-| `bg.muted` | darkGreen (cards / tables) |
-| `bg.elevated` | basil (popovers) |
-| `bg.hover` | frog @ ~22% |
-| `bg.tableHeader` | pine (desk chrome, not a green band) |
-| `text.primary` | antiFlashWhite |
-| `text.secondary` | pistachio (readable secondary) |
-| `text.tertiary` | stone (muted meta) |
-| `text.link` / `accent` | mountainMeadow |
-| `action.primary` | bangladeshGreen |
-| `action.primaryHover` | frog |
-| `status.success` | mountainMeadow |
-| `chart.up` | caribbeanGreen (**charts + focus only**) |
-| `chart.down` | `#E07A7A` (readable red; not in brand set) |
-| `chart.neutral` | `#3D444C` (unchanged / heatmap dead band) |
-| `chart.mapBed` | `#111817` (heatmap well; charcoal in the page hue) |
+| `bg.canvas` | ink |
+| `bg.page` | graphite |
+| `bg.chrome` | steel |
+| `bg.muted` | slate |
+| `bg.elevated` | pewter |
+| `text.primary` | ivory |
+| `text.secondary` | silver |
+| `text.link` / `accent` | amber |
+| `action.primary` | amber |
+| `status.success` / `chart.up` | up |
+| `chart.down` | down |
 
 ## 2a. Breakpoints
 

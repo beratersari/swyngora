@@ -1,7 +1,7 @@
 import type { CandleChartMarker } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
 import type { PumpEventDto, ScannerResult } from '@/libs/api';
 import { ruleTypeShort } from '@/libs/utils';
-import { palette, semanticColors } from '@/styles/tokens';
+import { semanticColors } from '@/styles/tokens';
 
 /**
  * Merge pump events from live + history pages by openTime.
@@ -53,7 +53,7 @@ export function pumpEventsToChartMarkers(
     out.push({
       time: Math.floor(ms / 1000),
       position: up ? 'belowBar' : 'aboveBar',
-      color: up ? palette.mountainMeadow : semanticColors.chart.down,
+      color: up ? semanticColors.chart.up : semanticColors.chart.down,
       shape: up ? 'arrowUp' : 'arrowDown',
       text: up
         ? `↑${Number.isFinite(ret) ? ret.toFixed(1) : ''}`
@@ -97,7 +97,7 @@ export function scannerResultsToChartMarkers(
     out.push({
       time,
       position: 'aboveBar',
-      color: palette.caribbeanGreen,
+      color: semanticColors.chart.up,
       shape: 'circle',
       text: labels.join('·'),
     });

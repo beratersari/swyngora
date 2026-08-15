@@ -16,6 +16,7 @@ import {
   BrandCopy,
   BrandLink,
   BrandName,
+  BrandTagline,
   NavLink,
 } from '@/components/templates/AppShell';
 import { APP_NAME, DEFAULT_SPOT_POLL_MS } from '@/config/constants';
@@ -87,6 +88,7 @@ function DeskShell() {
           <BrandMark size={22} />
           <BrandCopy>
             <BrandName>{t('appName', { defaultValue: APP_NAME })}</BrandName>
+            <BrandTagline>{t('brand.tagline', { defaultValue: 'Markets' })}</BrandTagline>
           </BrandCopy>
         </BrandLink>
       }

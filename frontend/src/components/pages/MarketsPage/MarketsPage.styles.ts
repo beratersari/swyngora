@@ -38,23 +38,23 @@ export const MetaRight = styled.div`
   gap: ${({ theme }) => theme.spacing[2]}px;
 `;
 
-/** Match count — brand accent (mountain meadow), not chart neon */
+/** Match count — tabular, no chip. */
 export const ResultsBadge = styled.div`
   display: inline-flex;
   align-items: baseline;
   gap: ${({ theme }) => theme.spacing[2]}px;
-  padding: ${({ theme }) => theme.spacing[1]}px ${({ theme }) => theme.spacing[3]}px;
-  background: ${({ theme }) => theme.semantic.bg.accentSoft};
-  border: 1px solid ${({ theme }) => theme.semantic.border.accent};
-  border-radius: ${({ theme }) => theme.radii.pill}px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 `;
 
 export const ResultsCount = styled.span`
   font-family: ${({ theme }) => theme.fontFamilies.mono};
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
-  color: ${({ theme }) => theme.semantic.accent.default};
-  letter-spacing: -0.02em;
+  color: ${({ theme }) => theme.semantic.text.primary};
+  letter-spacing: 0;
 `;
 
 export const ResultsLabel = styled.span`

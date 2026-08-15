@@ -38,7 +38,7 @@ export const GlobalStyle = createGlobalStyle`
     font-family: ${({ theme }) => theme.fontFamilies.mono};
   }
 
-  /* Focus ring: caribbean green reserved for accessibility focus, not decoration */
+  /* Focus ring: amber brand, not market-direction green */
   :focus-visible {
     outline: 2px solid ${({ theme }) => theme.semantic.border.focus};
     outline-offset: 2px;
@@ -64,11 +64,11 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   .ant-btn:not(:disabled):hover {
-    transform: translateY(-1px);
+    transform: none;
   }
 
   .ant-btn:not(:disabled):active {
-    transform: translateY(0);
+    transform: none;
   }
 
   .ant-input,
@@ -198,7 +198,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   .ant-switch-checked {
-    background: ${({ theme }) => theme.palette.bangladeshGreen} !important;
+    background: ${({ theme }) => theme.semantic.action.primary} !important;
   }
 
   /*
@@ -217,8 +217,8 @@ export const GlobalStyle = createGlobalStyle`
   .ant-tag-green,
   .ant-tag-geekblue,
   .ant-tag-has-color {
-    background: ${({ theme }) => theme.palette.bangladeshGreen} !important;
-    border-color: ${({ theme }) => theme.palette.frog} !important;
-    color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
+    background: ${({ theme }) => theme.semantic.bg.chrome} !important;
+    border-color: ${({ theme }) => theme.semantic.border.default} !important;
+    color: ${({ theme }) => theme.semantic.text.secondary} !important;
   }
 `;

@@ -1,47 +1,58 @@
 /**
- * Swyngora brand color palette (source of truth).
+ * Swyngora market-desk palette.
  *
- * Primary / secondary / neutral from product design system.
- * Role aliases (`navy`, `indigo`, `steel`, `cream`) remain for existing
- * `theme.colors.*` call sites; prefer named palette keys in new code.
+ * Institutional charcoal + amber (Bloomberg / terminal), not neon green.
+ * Legacy key names (`bangladeshGreen`, `mountainMeadow`, …) stay as aliases
+ * so existing call sites pick up the new hex values.
  */
 
-/** Primary colors */
-export const primaryColors = {
-  /** Rich Black — deepest canvas / app chrome */
-  richBlack: '#000F0F',
-  /** Dark Green — primary surface / page background */
-  darkGreen: '#032221',
-  /** Bangladesh Green — primary actions, strong borders */
-  bangladeshGreen: '#03624C',
-  /** Mountain Meadow — accents, chart up, positive */
-  mountainMeadow: '#4FD4A5',
-  /** Caribbean Green — high-emphasis accent / focus */
-  caribbeanGreen: '#00FF81',
-  /** Anti-Flash White — primary text on dark */
-  antiFlashWhite: '#F1F7F6',
+export const financeColors = {
+  ink: '#07090D',
+  graphite: '#0C1016',
+  slate: '#141922',
+  steel: '#1B2130',
+  pewter: '#252C3A',
+  ivory: '#F3F5F8',
+  silver: '#A3ABB8',
+  mist: '#7A8393',
+  ash: '#5A6270',
+  amber: '#F0A202',
+  amberHover: '#FFC14A',
+  amberDeep: '#C4840C',
+  up: '#2BB673',
+  down: '#E5534B',
+  warning: '#E8B339',
+  cobalt: '#5B8DEF',
 } as const;
 
-/** Secondary greens (elevated surfaces, depth) */
+/** Primary colors (legacy names → finance hex). */
+export const primaryColors = {
+  richBlack: financeColors.ink,
+  darkGreen: financeColors.graphite,
+  bangladeshGreen: financeColors.amber,
+  mountainMeadow: financeColors.amber,
+  caribbeanGreen: financeColors.up,
+  antiFlashWhite: financeColors.ivory,
+} as const;
+
+/** Secondary surfaces / accent ramps (legacy names). */
 export const secondaryColors = {
-  pine: '#063028',
-  basil: '#0B453A',
-  forest: '#095544',
-  frog: '#17876D',
-  mint: '#74F9BC',
+  pine: financeColors.slate,
+  basil: financeColors.steel,
+  forest: financeColors.pewter,
+  frog: financeColors.amberDeep,
+  mint: financeColors.amberHover,
 } as const;
 
 /** Neutrals */
 export const neutralColors = {
-  /** Muted chrome / hairlines — not body text (fails WCAG on dark green). */
-  stone: '#707D7D',
-  /** Readable muted text on dark greens (~7:1 on page bg). */
-  sage: '#8FAEA8',
-  pistachio: '#AACBC4',
+  stone: financeColors.ash,
+  sage: financeColors.mist,
+  pistachio: financeColors.silver,
 } as const;
 
-/** Full named palette */
 export const palette = {
+  ...financeColors,
   ...primaryColors,
   ...secondaryColors,
   ...neutralColors,
@@ -49,21 +60,16 @@ export const palette = {
 
 export type PaletteColorName = keyof typeof palette;
 
-/**
- * Role aliases used by theme / legacy components.
- * Prefer `palette.*` or `semanticColors` in new code.
- */
 export const colors = {
   ...palette,
-
-  /** @deprecated Prefer `richBlack` / `darkGreen` — canvas chrome */
-  navy: primaryColors.richBlack,
-  /** @deprecated Prefer `bangladeshGreen` — primary action / elevated */
-  indigo: primaryColors.bangladeshGreen,
-  /** @deprecated Prefer `stone` — secondary text */
-  steel: neutralColors.stone,
-  /** @deprecated Prefer `antiFlashWhite` — primary text */
-  cream: primaryColors.antiFlashWhite,
+  /** @deprecated Prefer `ink` / `richBlack` */
+  navy: financeColors.ink,
+  /** @deprecated Prefer `amber` */
+  indigo: financeColors.amber,
+  /** @deprecated Prefer `ash` / `stone` */
+  steel: financeColors.ash,
+  /** @deprecated Prefer `ivory` */
+  cream: financeColors.ivory,
 } as const;
 
 export type BrandColorName = keyof typeof colors;
@@ -87,101 +93,75 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * Semantic aliases mapped from the brand palette.
- *
- * Role rules (professional dark UI):
- * - Surfaces: canvas (richest black) → muted cards (darkGreen) → elevated (basil) → chrome (pine)
- * - UI accents / links / active: mountainMeadow (not neon caribbean)
- * - caribbeanGreen: chart “up” + focus ring only
- * - Secondary text: pistachio (readable on dark greens)
- * - Tertiary text: sage (still ≥4.5:1) — never stone for copy
+ * Semantic roles. Amber is brand / chrome. Green/red are market direction only.
  */
 export const semanticColors = {
   bg: {
-    /** App shell / deepest canvas */
-    canvas: palette.richBlack,
-    /** Page background under content (slightly lifted from canvas) */
-    page: palette.darkGreen,
-    /** Cards, tables, panels */
-    muted: palette.darkGreen,
-    /** Header / chrome bars */
-    chrome: palette.pine,
-    /** Popovers, dropdowns, elevated panels */
-    elevated: palette.basil,
-    /** Inverse (light) surfaces */
-    inverse: palette.antiFlashWhite,
-    /** Row / control hover */
-    hover: withAlpha(palette.frog, 0.22),
-    /** Table header — lifted chrome, not a green band */
-    tableHeader: palette.pine,
-    /** Soft accent wash (badges, selected chips) */
-    accentSoft: withAlpha(palette.mountainMeadow, 0.12),
-    /** User chat bubble / selected surface */
-    accentMuted: palette.forest,
-    /** Error surface */
-    dangerSoft: withAlpha('#E07A7A', 0.16),
+    canvas: financeColors.ink,
+    page: financeColors.graphite,
+    muted: financeColors.slate,
+    chrome: financeColors.steel,
+    elevated: financeColors.pewter,
+    inverse: financeColors.ivory,
+    hover: withAlpha(financeColors.amber, 0.08),
+    tableHeader: financeColors.steel,
+    accentSoft: withAlpha(financeColors.amber, 0.12),
+    accentMuted: financeColors.pewter,
+    dangerSoft: withAlpha(financeColors.down, 0.14),
+    successSoft: withAlpha(financeColors.up, 0.14),
   },
   text: {
-    primary: palette.antiFlashWhite,
-    /** Labels, captions — pistachio for contrast on dark greens */
-    secondary: neutralColors.pistachio,
-    /** Meta / placeholders — sage, not stone (stone fails WCAG on page bg) */
-    tertiary: neutralColors.sage,
-    inverse: palette.richBlack,
-    link: palette.mountainMeadow,
-    linkHover: palette.mint,
-    disabled: withAlpha(neutralColors.sage, 0.55),
-    accent: palette.mountainMeadow,
+    primary: financeColors.ivory,
+    secondary: financeColors.silver,
+    tertiary: financeColors.mist,
+    inverse: financeColors.ink,
+    link: financeColors.amber,
+    linkHover: financeColors.amberHover,
+    disabled: withAlpha(financeColors.mist, 0.55),
+    accent: financeColors.amber,
   },
   border: {
-    default: withAlpha(neutralColors.pistachio, 0.28),
-    subtle: withAlpha(neutralColors.pistachio, 0.16),
-    strong: palette.bangladeshGreen,
-    /** High-emphasis focus only */
-    focus: palette.caribbeanGreen,
-    /** Soft accent outline (badges, selected) */
-    accent: withAlpha(palette.mountainMeadow, 0.55),
-    danger: withAlpha('#E07A7A', 0.65),
+    default: withAlpha(financeColors.ivory, 0.1),
+    subtle: withAlpha(financeColors.ivory, 0.06),
+    strong: withAlpha(financeColors.ivory, 0.18),
+    focus: financeColors.amber,
+    accent: withAlpha(financeColors.amber, 0.7),
+    danger: withAlpha(financeColors.down, 0.65),
   },
   action: {
-    primary: palette.bangladeshGreen,
-    primaryHover: palette.frog,
-    primaryActive: palette.forest,
-    primaryText: palette.antiFlashWhite,
-    /** Secondary / ghost button border */
-    secondaryBorder: withAlpha(neutralColors.pistachio, 0.4),
+    primary: financeColors.amber,
+    primaryHover: financeColors.amberHover,
+    primaryActive: financeColors.amberDeep,
+    primaryText: financeColors.ink,
+    secondaryBorder: withAlpha(financeColors.ivory, 0.16),
   },
-  /** UI accent (tabs, badges, active nav) — not neon chart green */
   accent: {
-    default: palette.mountainMeadow,
-    soft: withAlpha(palette.mountainMeadow, 0.14),
-    strong: palette.frog,
+    default: financeColors.amber,
+    soft: withAlpha(financeColors.amber, 0.14),
+    strong: financeColors.amberDeep,
   },
   status: {
-    success: palette.mountainMeadow,
-    warning: '#E0B86A', // readable warning (no brand yellow in set)
-    error: '#E07A7A', // readable error (no brand red in set)
-    info: neutralColors.pistachio,
+    success: financeColors.up,
+    warning: financeColors.warning,
+    error: financeColors.down,
+    info: financeColors.cobalt,
   },
   chart: {
-    /** Neon reserved for price direction / focus, not chrome */
-    up: palette.caribbeanGreen,
-    down: '#E07A7A',
-    /** Cool slate for unchanged / heatmap dead band — not green-gray stone */
-    neutral: '#3D444C',
-    /** Map well: charcoal in the page hue so the mosaic sits in the desk */
-    mapBed: '#111817',
-    grid: withAlpha(neutralColors.pistachio, 0.16),
-    background: palette.richBlack,
-    text: neutralColors.pistachio,
-    emaFast: palette.mountainMeadow,
-    emaSlow: palette.frog,
-    rsi: palette.antiFlashWhite,
+    up: financeColors.up,
+    down: financeColors.down,
+    neutral: '#3A4250',
+    mapBed: financeColors.ink,
+    grid: withAlpha(financeColors.ivory, 0.08),
+    background: financeColors.ink,
+    text: financeColors.silver,
+    emaFast: financeColors.amber,
+    emaSlow: financeColors.cobalt,
+    rsi: financeColors.ivory,
   },
   skeleton: {
-    base: withAlpha(palette.basil, 0.85),
-    mid: withAlpha(palette.forest, 0.9),
-    highlight: withAlpha(palette.mint, 0.18),
+    base: withAlpha(financeColors.steel, 0.9),
+    mid: withAlpha(financeColors.pewter, 0.9),
+    highlight: withAlpha(financeColors.amber, 0.14),
   },
 } as const;
 

@@ -1,13 +1,13 @@
 import { palette } from '@/styles/tokens';
 
 export const EMA_COLORS: Record<string, string> = {
-  '12': palette.mountainMeadow,
-  '26': palette.frog,
+  '12': palette.amber,
+  '26': palette.cobalt,
 };
 
 export const FALLBACK_EMA_COLORS = [
-  palette.mint,
-  palette.caribbeanGreen,
-  palette.pistachio,
-  palette.forest,
+  palette.up,
+  palette.amberHover,
+  palette.silver,
+  palette.warning,
 ];

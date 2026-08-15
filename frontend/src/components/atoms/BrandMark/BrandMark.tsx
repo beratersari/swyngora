@@ -12,12 +12,8 @@ export function BrandMark({ size = 28, title }: BrandMarkProps) {
       role={title ? 'img' : undefined}
     >
       {title ? <title>{title}</title> : null}
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor" opacity="0.12" />
-      <path
-        d="M8 21.5 14.2 9h3.7L24 21.5h-3.3l-1.1-2.5h-7.2l-1.1 2.5H8Zm5.4-5h5.1l-2.5-5.7-2.6 5.7Z"
-        fill="currentColor"
-      />
-      <path d="M7 23.5h18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+      <rect x="2" y="2" width="28" height="28" rx="2" fill="currentColor" opacity="0.1" />
+      <path d="M8 22V14h3v8H8Zm6.5 0V8h3v14h-3ZM21 22v-6h3v6h-3Z" fill="currentColor" />
     </Mark>
   );
 }

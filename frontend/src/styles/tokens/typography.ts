@@ -3,8 +3,8 @@
  * Font stacks are system-first for performance; brand feel comes from scale + color.
  */
 export const fontFamilies = {
-  sans: '"DM Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
-  mono: '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace',
+  sans: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
+  mono: '"IBM Plex Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace',
 } as const;
 
 export const fontWeights = {
@@ -20,25 +20,25 @@ export const fontWeights = {
  */
 export const typeScale = {
   display: {
-    fontSize: 36,
+    fontSize: 32,
     lineHeight: 1.15,
-    fontWeight: fontWeights.bold,
-    letterSpacing: '-0.02em',
+    fontWeight: fontWeights.semibold,
+    letterSpacing: '-0.025em',
   },
   h1: {
-    fontSize: 30,
+    fontSize: 26,
     lineHeight: 1.2,
-    fontWeight: fontWeights.bold,
+    fontWeight: fontWeights.semibold,
     letterSpacing: '-0.02em',
   },
   h2: {
-    fontSize: 24,
+    fontSize: 20,
     lineHeight: 1.25,
     fontWeight: fontWeights.semibold,
     letterSpacing: '-0.015em',
   },
   h3: {
-    fontSize: 20,
+    fontSize: 18,
     lineHeight: 1.3,
     fontWeight: fontWeights.semibold,
     letterSpacing: '-0.01em',

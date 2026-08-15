@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { palette, semanticColors, withAlpha } from './colors';
+import { financeColors, palette, semanticColors, withAlpha } from './colors';
 
 describe('withAlpha', () => {
   it('converts brand hex to rgba', () => {
-    expect(withAlpha(palette.mountainMeadow, 0.5)).toBe('rgba(79, 212, 165, 0.5)');
-    expect(withAlpha('#03624C', 1)).toBe('rgba(3, 98, 76, 1)');
+    expect(withAlpha(financeColors.amber, 0.5)).toBe('rgba(240, 162, 2, 0.5)');
+    expect(withAlpha('#F0A202', 1)).toBe('rgba(240, 162, 2, 1)');
   });
 
   it('clamps alpha', () => {
@@ -14,23 +14,32 @@ describe('withAlpha', () => {
 });
 
 describe('semanticColors role rules', () => {
-  it('keeps caribbean green off chrome accents', () => {
-    expect(semanticColors.accent.default).toBe(palette.mountainMeadow);
-    expect(semanticColors.chart.up).toBe(palette.caribbeanGreen);
-    expect(semanticColors.border.focus).toBe(palette.caribbeanGreen);
+  it('uses amber for chrome accents and teal/red only for market direction', () => {
+    expect(semanticColors.accent.default).toBe(financeColors.amber);
+    expect(semanticColors.action.primary).toBe(financeColors.amber);
+    expect(semanticColors.chart.up).toBe(financeColors.up);
+    expect(semanticColors.chart.down).toBe(financeColors.down);
+    expect(semanticColors.chart.up).not.toBe(semanticColors.accent.default);
+    expect(semanticColors.border.focus).toBe(financeColors.amber);
   });
 
-  it('uses pistachio/sage for readable muted text (not stone)', () => {
-    expect(semanticColors.text.secondary).toBe(palette.pistachio);
-    expect(semanticColors.text.tertiary).toBe(palette.sage);
-    expect(semanticColors.text.tertiary).not.toBe(palette.stone);
+  it('uses silver/mist for muted text (not ash)', () => {
+    expect(semanticColors.text.secondary).toBe(financeColors.silver);
+    expect(semanticColors.text.tertiary).toBe(financeColors.mist);
+    expect(semanticColors.text.tertiary).not.toBe(financeColors.ash);
   });
 
-  it('maps surface hierarchy', () => {
-    expect(semanticColors.bg.canvas).toBe(palette.richBlack);
-    expect(semanticColors.bg.page).toBe(palette.darkGreen);
-    expect(semanticColors.bg.chrome).toBe(palette.pine);
-    expect(semanticColors.bg.elevated).toBe(palette.basil);
-    expect(semanticColors.bg.tableHeader).toBe(palette.pine);
+  it('maps charcoal surface hierarchy', () => {
+    expect(semanticColors.bg.canvas).toBe(financeColors.ink);
+    expect(semanticColors.bg.page).toBe(financeColors.graphite);
+    expect(semanticColors.bg.chrome).toBe(financeColors.steel);
+    expect(semanticColors.bg.elevated).toBe(financeColors.pewter);
+    expect(semanticColors.bg.tableHeader).toBe(financeColors.steel);
+  });
+
+  it('keeps legacy palette keys pointed at the finance hexes', () => {
+    expect(palette.bangladeshGreen).toBe(financeColors.amber);
+    expect(palette.richBlack).toBe(financeColors.ink);
+    expect(palette.caribbeanGreen).toBe(financeColors.up);
   });
 });

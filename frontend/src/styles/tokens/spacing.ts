@@ -14,8 +14,8 @@ export const spacing = {
 } as const;
 
 export const radii = {
-  sm: 4,
-  md: 8,
-  lg: 12,
+  sm: 2,
+  md: 4,
+  lg: 6,
   pill: 999,
 } as const;

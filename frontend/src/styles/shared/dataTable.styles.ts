@@ -49,7 +49,7 @@ export const DataTable = styled(Table)`
   }
 
   .ant-table-tbody > tr:hover > td {
-    background: rgba(23, 135, 109, 0.28) !important;
+    background: ${({ theme }) => theme.semantic.bg.hover} !important;
   }
 
   .ant-table-tbody > tr.markets-row-clickable,

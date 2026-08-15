@@ -5,12 +5,13 @@ import { BrandTag } from '@/components/atoms/BrandTag';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { MarginPosition } from '@/libs/api';
 import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
+import { semanticColors } from '@/styles/tokens';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import type { PortfolioMarginPositionsTableProps } from './PortfolioMarginPositionsTable.types';
 
 function pnlColor(n: number | undefined): string | undefined {
   if (n == null || !Number.isFinite(n) || Math.abs(n) < 1e-12) return undefined;
-  return n > 0 ? '#4FD4A5' : '#ff6b6b';
+  return n > 0 ? semanticColors.chart.up : semanticColors.chart.down;
 }
 
 export function PortfolioMarginPositionsTable({

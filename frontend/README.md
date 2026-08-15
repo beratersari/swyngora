@@ -18,16 +18,14 @@ Production React application for Swyngora.
 Decision: `project-management/decisions/001-antd-and-lightweight-charts.md`  
 Design system: [`docs/design/frontend-design-system.md`](../docs/design/frontend-design-system.md)
 
-### Brand palette
+### Brand palette (market desk)
 
-| Primary | HEX | Secondary | HEX | Neutral | HEX |
-| --- | --- | --- | --- | --- | --- |
-| Rich Black | `#000F0F` | Pine | `#063028` | Stone | `#707D7D` |
-| Dark Green | `#032221` | Basil | `#0B453A` | Pistachio | `#AACBC4` |
-| Bangladesh Green | `#03624C` | Forest | `#095544` | | |
-| Mountain Meadow | `#4FD4A5` | Frog | `#17876D` | | |
-| Caribbean Green | `#00FF81` | Mint | `#74F9BC` | | |
-| Anti-Flash White | `#F1F7F6` | | | | |
+| Role | HEX | Use |
+| --- | --- | --- |
+| Ink / Graphite / Slate | `#07090D` / `#0C1016` / `#141922` | Canvas, page, cards |
+| Amber | `#F0A202` | Brand, nav, primary actions |
+| Up / Down | `#2BB673` / `#E5534B` | Price direction only |
+| Ivory / Silver | `#F3F5F8` / `#A3ABB8` | Primary / secondary text |
 
 Tokens: `src/styles/tokens/colors.ts` · Motion: `src/styles/tokens/motion.ts` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
 

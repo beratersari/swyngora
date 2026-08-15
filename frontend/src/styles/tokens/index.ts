@@ -1,6 +1,7 @@
 export {
   colors,
   palette,
+  financeColors,
   primaryColors,
   secondaryColors,
   neutralColors,

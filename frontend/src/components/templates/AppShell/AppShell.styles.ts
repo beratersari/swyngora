@@ -15,11 +15,9 @@ export const AppHeader = styled(Layout.Header)`
   height: auto;
   line-height: 1.2;
   padding: 0;
-  background: ${({ theme }) => theme.semantic.bg.canvas}ee;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: ${({ theme }) => theme.semantic.bg.canvas};
   border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  box-shadow: 0 1px 0 ${({ theme }) => theme.semantic.border.subtle};
+  border-top: 2px solid ${({ theme }) => theme.semantic.accent.default};
   position: sticky;
   top: 0;
   z-index: 40;
@@ -30,7 +28,7 @@ export const HeaderBar = styled.div`
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: ${({ theme }) => theme.spacing[3]}px;
-  min-height: 52px;
+  min-height: 48px;
   padding: 0 ${({ theme }) => theme.spacing[5]}px;
 
   ${({ theme }) => theme.media.tablet} {
@@ -104,52 +102,47 @@ export const BrandCopy = styled.span`
 `;
 
 export const BrandName = styled.span`
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.04em;
+  letter-spacing: 0.14em;
   line-height: 1.15;
+  text-transform: uppercase;
 `;
 
 export const BrandTagline = styled.span`
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.semantic.text.secondary};
+  color: ${({ theme }) => theme.semantic.text.tertiary};
 `;
 
 export const NavLink = styled(RouterNavLink)`
   text-decoration: none;
   color: ${({ theme }) => theme.semantic.text.secondary};
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 5px 10px;
-  border-radius: ${({ theme }) => theme.radii.pill}px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 14px 10px 12px;
+  border-radius: 0;
   white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
   transition:
     color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
-    background ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
-    box-shadow ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard},
-    transform ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard};
+    border-color ${({ theme }) => theme.motion.duration.fast} ${({ theme }) => theme.motion.ease.standard};
 
   &:hover {
     color: ${({ theme }) => theme.semantic.text.primary};
-    background: ${({ theme }) => theme.semantic.bg.hover};
-    transform: translateY(-1px);
+    background: transparent;
   }
 
   &.active {
     color: ${({ theme }) => theme.semantic.text.primary};
-    background: ${({ theme }) => theme.semantic.bg.accentSoft};
-    box-shadow: inset 0 0 0 1px ${({ theme }) => theme.semantic.border.accent};
-    transform: none;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    &:hover {
-      transform: none;
-    }
+    background: transparent;
+    border-bottom-color: ${({ theme }) => theme.semantic.accent.default};
+    box-shadow: none;
   }
 `;
 
@@ -185,8 +178,8 @@ export const HeaderTools = styled.div`
 
 export const AppContent = styled(Layout.Content)<{ $wide?: boolean }>`
   padding: ${({ theme }) => theme.spacing[4]}px ${({ theme }) => theme.spacing[5]}px
-    ${({ theme }) => theme.spacing[6]}px;
-  max-width: ${({ $wide }) => ($wide ? '1680px' : '1280px')};
+    ${({ theme }) => theme.spacing[8]}px;
+  max-width: ${({ $wide }) => ($wide ? '1600px' : '1200px')};
   width: 100%;
   min-width: 0;
   margin: 0 auto;
@@ -209,10 +202,11 @@ export const AppBanner = styled.div`
 export const AppFooter = styled(Layout.Footer)`
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing[1]}px;
-  text-align: center;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
   background: ${({ theme }) => theme.semantic.bg.canvas};
   border-top: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[5]}px;
+  padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[5]}px
+    ${({ theme }) => theme.spacing[4]}px;
 `;

@@ -2,9 +2,9 @@ import { palette } from '@/styles/tokens';
 
 export const DEFAULT_HEIGHT = 360;
 
-/** Compare overlays — brand greens only (no hard-coded off-palette hex). */
+/** Compare overlays — amber / cobalt / up (no off-palette hex). */
 export const SERIES_COLORS = [
-  palette.caribbeanGreen,
-  palette.mountainMeadow,
-  palette.mint,
+  palette.amber,
+  palette.cobalt,
+  palette.up,
 ] as const;

@@ -3,7 +3,7 @@ import { semanticColors, fontFamilies, radii } from '@/styles/tokens';
 
 /**
  * Ant Design theme derived from Swyngora brand tokens.
- * Custom dark green palette — do not use default darkAlgorithm (washes out brand).
+ * Institutional charcoal + amber — do not use default darkAlgorithm.
  */
 export const antdTheme: ThemeConfig = {
   token: {
@@ -37,8 +37,8 @@ export const antdTheme: ThemeConfig = {
     borderRadiusSM: radii.sm,
     fontFamily: fontFamilies.sans,
     fontFamilyCode: fontFamilies.mono,
-    fontSize: 14,
-    controlHeight: 36,
+    fontSize: 13,
+    controlHeight: 32,
     motion: true,
     motionUnit: 0.08,
     motionDurationFast: '0.12s',
@@ -99,7 +99,6 @@ export const antdTheme: ThemeConfig = {
       colorTextHeading: semanticColors.text.primary,
     },
     Tabs: {
-      // mountainMeadow — not caribbean neon for chrome
       inkBarColor: semanticColors.accent.default,
       itemSelectedColor: semanticColors.text.primary,
       itemColor: semanticColors.text.secondary,
