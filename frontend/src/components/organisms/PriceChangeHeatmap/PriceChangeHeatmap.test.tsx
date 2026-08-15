@@ -4,7 +4,7 @@ import { renderWithTheme } from '@/test/render';
 import { PriceChangeHeatmap } from './PriceChangeHeatmap';
 
 describe('PriceChangeHeatmap', () => {
-  it('renders tiles and opens a market on click', () => {
+  it('renders tiles and opens a market on click', async () => {
     const onOpen = vi.fn();
     renderWithTheme(
       <PriceChangeHeatmap
@@ -28,6 +28,11 @@ describe('PriceChangeHeatmap', () => {
       />,
     );
     expect(screen.getByRole('group', { name: /heatmap|ısı/i })).toBeInTheDocument();
+    expect(screen.queryByText(/selected|seçili/i)).not.toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /BTC/i }));
+    expect(await screen.findByText(/price|fiyat/i)).toBeInTheDocument();
+    expect(screen.getByText(/24h volume|24s hacim/i)).toBeInTheDocument();
+    expect(screen.getByText(/market cap|piyasa değeri/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /BTC/i }));
     expect(onOpen).toHaveBeenCalledWith('binance', 'BTCUSDT');
   });

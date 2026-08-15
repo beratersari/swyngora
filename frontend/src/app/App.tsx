@@ -73,7 +73,6 @@ function DeskShell() {
   return (
     <AppShell
       wide
-      flush={location.pathname.startsWith('/heatmap')}
       navAriaLabel={t('nav.main')}
       brand={
         <BrandLink to="/markets">

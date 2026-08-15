@@ -1,35 +1,45 @@
-import { semanticColors } from '@/styles/tokens';
-
 /** Cap tiles so the map stays readable (API spot max is 500). */
-export const HEATMAP_MAX_TILES = 80;
+export const HEATMAP_MAX_TILES = 120;
 
-/** Hairline seam; must match the map bed so it recedes. */
-export const HEATMAP_GUTTER = 1;
+/** Visible white street between tiles. 2px matches CoinMarketCap (1px inset each side). */
+export const HEATMAP_GUTTER = 2;
 
-/** |change %| at which the scale saturates. */
-export const HEATMAP_COLOR_CAP_PCT = 8;
+/** |change %| treated as unchanged (true dead band). Stables stay gray. */
+export const HEATMAP_DEAD_ZONE_PCT = 0.05;
 
-/** |change %| treated as unchanged (true dead band). */
-export const HEATMAP_DEAD_ZONE_PCT = 0.4;
+/** |change %| at which the scale saturates (legend labels). */
+export const HEATMAP_COLOR_CAP_PCT = 10;
 
-export const HEATMAP_BED = semanticColors.chart.mapBed;
-export const HEATMAP_NEUTRAL = semanticColors.chart.neutral;
+/** Neutral / flat tile — CMC slate gray. */
+export const HEATMAP_NEUTRAL = '#A1A7BB';
+
+/** Tile label ink. CMC uses white on every colored cell. */
+export const HEATMAP_TILE_INK = '#FFFFFF';
+
+export const HEATMAP_TILE_INK_ON_NEUTRAL = '#0D1421';
 
 /**
- * Opaque diverging scale. 0% is cool slate (not green).
- * Near-zero stops stay dark so the mosaic sits on the charcoal well.
+ * Discrete CoinMarketCap-style bands. First `upTo` that the change is ≤ wins.
+ * Saturated greens/reds so white labels stay readable.
  */
-export const HEATMAP_SCALE = [
-  { at: -8, fill: '#EA3943' },
-  { at: -4, fill: '#F37A81' },
-  { at: -1.5, fill: '#F8B4B8' },
-  { at: 0, fill: HEATMAP_NEUTRAL },
-  { at: 1.5, fill: '#9BE8C8' },
-  { at: 4, fill: '#3ED39A' },
-  { at: 8, fill: '#16C784' },
+export const HEATMAP_BANDS = [
+  { upTo: -10, fill: '#9B1B30' },
+  { upTo: -5, fill: '#EA3943' },
+  { upTo: -2, fill: '#F6465D' },
+  { upTo: -0.5, fill: '#F07B84' },
+  { upTo: -HEATMAP_DEAD_ZONE_PCT, fill: '#F5B4B8' },
+  { upTo: HEATMAP_DEAD_ZONE_PCT, fill: HEATMAP_NEUTRAL },
+  { upTo: 0.5, fill: '#8EE8C4' },
+  { upTo: 2, fill: '#3FD39A' },
+  { upTo: 5, fill: '#16C784' },
+  { upTo: 10, fill: '#0EA872' },
+  { upTo: Number.POSITIVE_INFINITY, fill: '#0B8F63' },
 ] as const;
 
-export const HEATMAP_LEGEND_GRADIENT = HEATMAP_SCALE.map((s, i, arr) => {
-  const pct = ((s.at + HEATMAP_COLOR_CAP_PCT) / (HEATMAP_COLOR_CAP_PCT * 2)) * 100;
-  return `${s.fill} ${pct.toFixed(1)}%${i === arr.length - 1 ? '' : ''}`;
+export const HEATMAP_LEGEND_GRADIENT = HEATMAP_BANDS.map((band, i, arr) => {
+  const start = i === 0 ? -HEATMAP_COLOR_CAP_PCT : arr[i - 1]!.upTo;
+  const end = Number.isFinite(band.upTo) ? band.upTo : HEATMAP_COLOR_CAP_PCT;
+  const pct = ((start + HEATMAP_COLOR_CAP_PCT) / (HEATMAP_COLOR_CAP_PCT * 2)) * 100;
+  const pctEnd = ((end + HEATMAP_COLOR_CAP_PCT) / (HEATMAP_COLOR_CAP_PCT * 2)) * 100;
+  return `${band.fill} ${Math.max(0, pct).toFixed(1)}% ${Math.min(100, pctEnd).toFixed(1)}%`;
 }).join(', ');

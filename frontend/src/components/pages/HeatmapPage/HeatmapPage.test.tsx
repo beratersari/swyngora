@@ -44,7 +44,8 @@ vi.mock('@/libs/realtime', () => ({
 describe('HeatmapPage', () => {
   it('renders title and heatmap tiles', async () => {
     renderWithProviders(<HeatmapPage />, { routerEntries: ['/heatmap'] });
-    expect(await screen.findByRole('heading', { name: /heatmap|ısı haritası|fiyat/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /heatmap|ısı haritası/i })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /heatmap|ısı/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /fullscreen|tam ekran/i })).toBeInTheDocument();
   });
 });

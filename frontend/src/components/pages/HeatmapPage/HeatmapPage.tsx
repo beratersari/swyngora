@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Select } from 'antd';
+import { CompressOutlined, ExpandOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { PageHeader } from '@/components/molecules/PageHeader';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import {
   PriceChangeHeatmap,
@@ -17,7 +19,7 @@ import {
 import { useDocumentVisible } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
 import { defaultQuoteForExchange, rtkCurrent } from '@/libs/utils';
-import { BoardWrap, Chrome, ChromeLeft, Field, PageStack, Title } from './HeatmapPage.styles';
+import { BoardWrap, Field, PageStack, Toolbar, ToolbarLeft, ToolbarRight } from './HeatmapPage.styles';
 
 const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
@@ -27,7 +29,9 @@ export function HeatmapPage() {
   const visible = useDocumentVisible();
   const [exchange, setExchange] = useState<MarketExchange>('binance');
   const [quote, setQuote] = useState(defaultQuoteForExchange('binance'));
-  const [metric, setMetric] = useState<HeatmapMetric>('quoteVolume');
+  const [metric, setMetric] = useState<HeatmapMetric>('marketCap');
+  const [fullscreen, setFullscreen] = useState(false);
+  const boardRef = useRef<HTMLDivElement>(null);
 
   const wsLive = useRealtimeConnected();
   const poll = !visible ? 0 : wsLive ? SPOT_LIST_WS_REST_POLL_MS : DEFAULT_SPOT_POLL_MS;
@@ -73,19 +77,36 @@ export function HeatmapPage() {
     setQuote(defaultQuoteForExchange(next));
   };
 
+  useEffect(() => {
+    const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    const el = boardRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void el.requestFullscreen?.();
+  };
+
   return (
     <PageStack>
-      <Chrome>
-        <ChromeLeft>
-          <Title>{t('heatmap:title')}</Title>
+      <PageHeader title={t('heatmap:title')} subtitle={t('heatmap:subtitle')} />
+
+      <Toolbar>
+        <ToolbarLeft>
           <ExchangeTabs exchanges={VENUES} value={exchange} onChange={setVenue} />
           <Field>
             <span id="heatmap-quote-label">{t('heatmap:quote')}</span>
             <Select
               aria-labelledby="heatmap-quote-label"
               value={quote}
-              size="small"
-              style={{ minWidth: 88 }}
+              size="middle"
+              style={{ minWidth: 96 }}
               options={
                 exchange === 'nasdaq'
                   ? [{ value: 'USD', label: 'USD' }]
@@ -104,22 +125,31 @@ export function HeatmapPage() {
               onChange={setQuote}
             />
           </Field>
+        </ToolbarLeft>
+        <ToolbarRight>
           <Field>
             <span id="heatmap-metric-label">{t('heatmap:sizeBy')}</span>
             <Select
               aria-labelledby="heatmap-metric-label"
               value={metric}
-              size="small"
-              style={{ minWidth: 132 }}
+              size="middle"
+              style={{ minWidth: 148 }}
               options={[
-                { value: 'quoteVolume', label: t('heatmap:metric.volume') },
                 { value: 'marketCap', label: t('heatmap:metric.marketCap') },
+                { value: 'quoteVolume', label: t('heatmap:metric.volume') },
               ]}
               onChange={(v) => setMetric(v as HeatmapMetric)}
             />
           </Field>
-        </ChromeLeft>
-      </Chrome>
+          <Button
+            type="default"
+            icon={fullscreen ? <CompressOutlined /> : <ExpandOutlined />}
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? t('heatmap:exitFullscreen') : t('heatmap:fullscreen')}
+          </Button>
+        </ToolbarRight>
+      </Toolbar>
 
       {listQuery.isError ? (
         <Alert
@@ -135,7 +165,7 @@ export function HeatmapPage() {
         />
       ) : null}
 
-      <BoardWrap>
+      <BoardWrap ref={boardRef}>
         <PriceChangeHeatmap
           items={items}
           metric={metric}

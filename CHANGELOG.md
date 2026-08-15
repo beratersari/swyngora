@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Web desk visual system:** charcoal + amber institutional palette (IBM Plex), underline nav, and sharper chrome — no more teal/neon green (`docs/design/frontend-design-system.md`)
-- **Web terminal chrome:** left venue rail, utility bar, full-bleed workspace; heatmap is a map + inspector board instead of a titled tile page
+- **Web terminal chrome:** left venue rail, utility bar, full-bleed workspace
 - **Web CoinMarketCap-style look:** light canvas, blue brand, Inter, global stats bar, consumer price table
+- **Web heatmap:** CoinMarketCap-style treemap — discrete green/red tiles, centered labels, hover tooltip, market-cap size by default, fullscreen (`/heatmap`)
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added

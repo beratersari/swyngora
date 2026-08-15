@@ -38,7 +38,7 @@ Expose first market-data APIs so clients can:
 
 ### Price heatmap (web)
 
-`/heatmap` is a full-bleed market map of `GET /api/v1/market/spot`. Opaque red / slate / green on a charcoal well (`chart.mapBed`); `|Δ| < 0.4%` is dead-band gray (`chart.neutral`). Cell size is volume or market cap. Hairline gutters match the well. Hover HUD (not a chip tooltip). Click opens coin detail.
+`/heatmap` is a CoinMarketCap-style treemap of `GET /api/v1/market/spot`. Red / slate / green tiles with a 2px white gap and 2px corner radius (CoinMarketCap spacing); `|Δ| < 0.05%` is dead-band gray. Cell size is circulating market cap (default) or 24h volume. Hover tooltip shows price, market cap, 24h volume, and venue; click opens coin detail. Fullscreen expands the map.
 
 ### Spot order book — `GET /api/v1/market/orderbook`
 

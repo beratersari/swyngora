@@ -4,40 +4,37 @@ import { Skeleton } from '@/components/atoms/Skeleton';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useDisplayCurrency } from '@/libs/hooks';
 import { formatChangePercent, marketCapQuote, venueQuote } from '@/libs/utils';
-import { HEATMAP_LEGEND_GRADIENT } from './PriceChangeHeatmap.constants';
+import { HEATMAP_COLOR_CAP_PCT, HEATMAP_LEGEND_GRADIENT } from './PriceChangeHeatmap.constants';
 import {
   baseSymbol,
   changeFill,
   formatTileChange,
+  hoverCardOrigin,
   tileDensity,
+  tileInk,
   toHeatmapTiles,
 } from './PriceChangeHeatmap.helpers';
 import {
-  Board,
-  Inspector,
-  InspectorChange,
-  InspectorDd,
-  InspectorDt,
-  InspectorHint,
-  InspectorKicker,
-  InspectorMeta,
-  InspectorPair,
-  InspectorRow,
+  HoverCard,
+  Legend,
+  LegendBar,
+  LegendTick,
   MapFrame,
-  Scale,
-  ScaleBar,
-  ScaleTick,
   Shell,
   TileButton,
   TileChange,
   TileHost,
-  TilePrice,
   TileSymbol,
+  TipChg,
+  TipHead,
+  TipRow,
+  TipSym,
 } from './PriceChangeHeatmap.styles';
 import type { HeatmapTile, PriceChangeHeatmapProps } from './PriceChangeHeatmap.types';
 
 /**
- * Full-viewport market map with a docked quote inspector.
+ * CoinMarketCap-style market treemap: tile size = volume or market cap,
+ * color = 24h change. Hover shows a quote card; click opens the pair.
  */
 export function PriceChangeHeatmap({
   items,
@@ -49,7 +46,7 @@ export function PriceChangeHeatmap({
   const { formatPrice, formatCompact } = useDisplayCurrency();
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
-  const [active, setActive] = useState<HeatmapTile | null>(null);
+  const [hover, setHover] = useState<{ tile: HeatmapTile; x: number; y: number } | null>(null);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -70,22 +67,12 @@ export function PriceChangeHeatmap({
     [items, metric, size.h, size.w],
   );
 
-  useEffect(() => {
-    if (!tiles.length) {
-      setActive(null);
-      return;
-    }
-    setActive((cur) => {
-      if (cur) {
-        const next = tiles.find((tile) => tile.symbol === cur.symbol && tile.exchange === cur.exchange);
-        if (next) return next;
-      }
-      return tiles[0] ?? null;
-    });
-  }, [tiles]);
-
-  const pick = useCallback((tile: HeatmapTile) => {
-    setActive(tile);
+  const moveTip = useCallback((tile: HeatmapTile, clientX: number, clientY: number) => {
+    const el = frameRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const origin = hoverCardOrigin(clientX - r.left, clientY - r.top, r.width, r.height);
+    setHover({ tile, x: origin.x, y: origin.y });
   }, []);
 
   if (isLoading && items.length === 0) {
@@ -95,92 +82,89 @@ export function PriceChangeHeatmap({
     return <DeskEmpty title={t('heatmap:empty')} />;
   }
 
-  const chg = active?.changePct ?? 0;
-  const flat = !Number.isFinite(chg) || Math.abs(chg) < 0.005;
+  const tip = hover?.tile;
+  const tipFlat = tip ? !Number.isFinite(tip.changePct) || Math.abs(tip.changePct) < 0.005 : true;
 
   return (
     <Shell>
-      <Board>
-        <Scale aria-hidden>
-          <ScaleTick>+8%</ScaleTick>
-          <ScaleBar style={{ background: `linear-gradient(180deg, ${HEATMAP_LEGEND_GRADIENT})` }} />
-          <ScaleTick>−8%</ScaleTick>
-        </Scale>
-        <MapFrame ref={frameRef} role="group" aria-label={t('heatmap:mapAria')}>
-          {tiles.map((tile) => {
-            const density = tileDensity(tile.w, tile.h);
-            const ticker = baseSymbol(tile.symbol);
-            const change = formatTileChange(tile.changePct);
-            const on = active?.symbol === tile.symbol && active.exchange === tile.exchange;
-            return (
-              <TileHost
-                key={`${tile.exchange}-${tile.symbol}`}
-                $x={(tile.x / size.w) * 100}
-                $y={(tile.y / size.h) * 100}
-                $w={(tile.w / size.w) * 100}
-                $h={(tile.h / size.h) * 100}
+      <MapFrame
+        ref={frameRef}
+        role="group"
+        aria-label={t('heatmap:mapAria')}
+        onMouseLeave={() => setHover(null)}
+      >
+        {tiles.map((tile) => {
+          const density = tileDensity(tile.w, tile.h);
+          const ticker = baseSymbol(tile.symbol);
+          const change = formatTileChange(tile.changePct);
+          const fill = changeFill(tile.changePct);
+          const ink = tileInk(fill);
+          return (
+            <TileHost
+              key={`${tile.exchange}-${tile.symbol}`}
+              $x={(tile.x / size.w) * 100}
+              $y={(tile.y / size.h) * 100}
+              $w={(tile.w / size.w) * 100}
+              $h={(tile.h / size.h) * 100}
+            >
+              <TileButton
+                type="button"
+                $fill={fill}
+                $ink={ink}
+                aria-label={`${tile.symbol} ${formatChangePercent(tile.changePct)}`}
+                onClick={() => onOpen?.(tile.exchange, tile.symbol)}
+                onMouseEnter={(e) => moveTip(tile, e.clientX, e.clientY)}
+                onMouseMove={(e) => moveTip(tile, e.clientX, e.clientY)}
+                onFocus={() =>
+                  setHover({
+                    tile,
+                    x: tile.x + Math.min(24, tile.w / 2),
+                    y: tile.y + Math.min(24, tile.h / 2),
+                  })
+                }
               >
-                <TileButton
-                  type="button"
-                  $fill={changeFill(tile.changePct)}
-                  $on={on}
-                  aria-label={`${tile.symbol} ${formatChangePercent(tile.changePct)}`}
-                  aria-pressed={on}
-                  onClick={() => {
-                    pick(tile);
-                    onOpen?.(tile.exchange, tile.symbol);
-                  }}
-                  onMouseEnter={() => pick(tile)}
-                  onFocus={() => pick(tile)}
-                >
-                  <TileSymbol $size={density}>
-                    {density === 'micro' && ticker.length > 5 ? ticker.slice(0, 4) : ticker}
-                  </TileSymbol>
-                  {density === 'full' || density === 'compact' ? <TileChange>{change}</TileChange> : null}
-                  {density === 'full' ? (
-                    <TilePrice>{formatPrice(tile.lastPrice, venueQuote(tile.exchange))}</TilePrice>
-                  ) : null}
-                </TileButton>
-              </TileHost>
-            );
-          })}
-        </MapFrame>
-      </Board>
-      <Inspector>
-        <InspectorKicker>{t('heatmap:inspector', { defaultValue: 'Selected' })}</InspectorKicker>
-        {active ? (
-          <>
-            <InspectorPair>{active.symbol}</InspectorPair>
-            <InspectorChange $up={chg >= 0} $flat={flat}>
-              {formatChangePercent(active.changePct)}
-            </InspectorChange>
-            <InspectorMeta>
-              <InspectorRow>
-                <InspectorDt>{t('heatmap:last', { defaultValue: 'Last' })}</InspectorDt>
-                <InspectorDd>{formatPrice(active.lastPrice, venueQuote(active.exchange))}</InspectorDd>
-              </InspectorRow>
-              <InspectorRow>
-                <InspectorDt>
-                  {metric === 'marketCap'
-                    ? t('heatmap:metric.marketCap')
-                    : t('heatmap:metric.volume')}
-                </InspectorDt>
-                <InspectorDd>
-                  {metric === 'marketCap'
-                    ? formatCompact(active.marketCapCirculating, marketCapQuote(active.exchange))
-                    : formatCompact(active.quoteVolume, venueQuote(active.exchange))}
-                </InspectorDd>
-              </InspectorRow>
-              <InspectorRow>
-                <InspectorDt>{t('heatmap:venue', { defaultValue: 'Venue' })}</InspectorDt>
-                <InspectorDd>{active.exchange}</InspectorDd>
-              </InspectorRow>
-            </InspectorMeta>
-          </>
-        ) : (
-          <InspectorHint>{t('heatmap:hoverHint', { defaultValue: 'Hover a tile.' })}</InspectorHint>
-        )}
-      </Inspector>
+                <TileSymbol $size={density}>
+                  {density === 'micro' && ticker.length > 5 ? ticker.slice(0, 4) : ticker}
+                </TileSymbol>
+                {density === 'full' || density === 'compact' ? (
+                  <TileChange $size={density}>{change}</TileChange>
+                ) : null}
+              </TileButton>
+            </TileHost>
+          );
+        })}
+        {tip && hover ? (
+          <HoverCard $x={hover.x} $y={hover.y} role="tooltip">
+            <TipHead>
+              <TipSym>{baseSymbol(tip.symbol)}</TipSym>
+              <TipChg $up={tip.changePct >= 0} $flat={tipFlat}>
+                {formatChangePercent(tip.changePct)}
+              </TipChg>
+            </TipHead>
+            <TipRow>
+              <span>{t('heatmap:last')}</span>
+              <span>{formatPrice(tip.lastPrice, venueQuote(tip.exchange))}</span>
+            </TipRow>
+            <TipRow>
+              <span>{t('heatmap:metric.marketCap')}</span>
+              <span>{formatCompact(tip.marketCapCirculating, marketCapQuote(tip.exchange))}</span>
+            </TipRow>
+            <TipRow>
+              <span>{t('heatmap:metric.volume')}</span>
+              <span>{formatCompact(tip.quoteVolume, venueQuote(tip.exchange))}</span>
+            </TipRow>
+            <TipRow>
+              <span>{t('heatmap:venue')}</span>
+              <span>{tip.exchange}</span>
+            </TipRow>
+          </HoverCard>
+        ) : null}
+      </MapFrame>
+      <Legend aria-hidden>
+        <LegendTick>−{HEATMAP_COLOR_CAP_PCT}%</LegendTick>
+        <LegendBar style={{ background: `linear-gradient(90deg, ${HEATMAP_LEGEND_GRADIENT})` }} />
+        <LegendTick>+{HEATMAP_COLOR_CAP_PCT}%</LegendTick>
+      </Legend>
     </Shell>
   );
 }

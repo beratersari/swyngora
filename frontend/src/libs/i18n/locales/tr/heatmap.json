@@ -1,11 +1,11 @@
 {
-  "eyebrow": "Piyasa haritası",
-  "title": "Fiyat ısı haritası",
-  "subtitle": "24 saatlik yüzde değişim. Kutu boyutu işlem hacmi veya dolaşımdaki piyasa değeridir. Çifte gitmek için kutuya tıklayın. Yalnızca bilgilendirme.",
+  "eyebrow": "Piyasalar",
+  "title": "Günün kripto ısı haritası",
+  "subtitle": "Kutu boyutu hacim veya piyasa değerini, renk 24 saatlik fiyat değişimini gösterir. Çifte gitmek için kutuya tıklayın. Yalnızca bilgilendirme.",
   "resource": "ısı haritası",
   "exchange": "Borsa",
   "quote": "Kotasyon",
-  "sizeBy": "Kutu boyutu",
+  "sizeBy": "Boyut",
   "metric": {
     "volume": "24s hacim",
     "marketCap": "Piyasa değeri"
@@ -13,5 +13,9 @@
   "sizeHint": "Kutu boyutu · {{metric}}  ·  24s değişim",
   "mapAria": "Fiyat değişim ısı haritası",
   "empty": "Bu borsa ve kotasyon için haritalanacak piyasa yok.",
-  "loadFailed": "Isı haritası yüklenemedi"
+  "loadFailed": "Isı haritası yüklenemedi",
+  "fullscreen": "Tam ekran",
+  "exitFullscreen": "Tam ekrandan çık",
+  "last": "Fiyat",
+  "venue": "Borsa"
 }

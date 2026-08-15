@@ -1,63 +1,35 @@
 import styled from 'styled-components';
-import { withAlpha } from '@/styles/tokens';
 
 export const Shell = styled.div`
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
   min-height: 0;
   flex: 1 1 auto;
   width: 100%;
   height: 100%;
-  background: ${({ theme }) => theme.semantic.bg.canvas};
-
-  ${({ theme }) => theme.media.tablet} {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(240px, 1fr) auto;
-  }
-`;
-
-export const Board = styled.div`
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-`;
-
-export const Scale = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: stretch;
-  gap: 6px;
-  padding: 10px 0;
-  border-right: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-`;
-
-export const ScaleBar = styled.div`
-  flex: 1;
-  width: 8px;
-  min-height: 80px;
-`;
-
-export const ScaleTick = styled.span`
-  font-family: ${({ theme }) => theme.fontFamilies.mono};
-  font-size: 9px;
-  letter-spacing: 0.04em;
-  color: ${({ theme }) => theme.semantic.text.tertiary};
-  writing-mode: horizontal-tb;
 `;
 
 export const MapFrame = styled.div`
   position: relative;
   width: 100%;
   min-width: 0;
-  min-height: 320px;
+  min-height: 420px;
   height: 100%;
-  background: ${({ theme }) => theme.semantic.chart.mapBed};
+  background: #ffffff;
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  border-radius: 8px;
   overflow: hidden;
+
+  &:fullscreen {
+    min-height: 100%;
+    height: 100%;
+    border: 0;
+    border-radius: 0;
+    background: ${({ theme }) => theme.semantic.bg.canvas};
+    padding: 12px;
+  }
 `;
 
 export const TileHost = styled.div<{ $x: number; $y: number; $w: number; $h: number }>`
@@ -66,40 +38,41 @@ export const TileHost = styled.div<{ $x: number; $y: number; $w: number; $h: num
   top: ${({ $y }) => $y}%;
   width: ${({ $w }) => $w}%;
   height: ${({ $h }) => $h}%;
-  padding: 1px;
+  padding: 0;
   box-sizing: border-box;
+
+  &:hover,
+  &:focus-within {
+    z-index: 2;
+  }
 `;
 
-export const TileButton = styled.button<{ $fill: string; $on?: boolean }>`
+export const TileButton = styled.button<{ $fill: string; $ink: string }>`
   width: 100%;
   height: 100%;
   margin: 0;
-  padding: 0 4px;
+  padding: 2px 4px;
   border: 0;
-  border-radius: 0;
+  border-radius: 2px;
   background: ${({ $fill }) => $fill};
-  color: ${({ theme }) => theme.semantic.text.primary};
-  text-shadow: none;
+  color: ${({ $ink }) => $ink};
+  text-shadow: 0 1px 1px rgba(13, 20, 33, 0.18);
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
   gap: 1px;
   overflow: hidden;
-  text-align: left;
+  text-align: center;
   box-sizing: border-box;
-  border-radius: 6px;
-  box-shadow: ${({ theme, $on }) =>
-    $on ? `inset 0 0 0 2px ${theme.semantic.accent.default}` : 'none'};
+  user-select: none;
 
   &:hover {
-    z-index: 2;
-    filter: brightness(1.08);
+    filter: brightness(1.06);
   }
 
   &:focus-visible {
-    z-index: 3;
     outline: 2px solid ${({ theme }) => theme.semantic.border.focus};
     outline-offset: -2px;
   }
@@ -107,10 +80,11 @@ export const TileButton = styled.button<{ $fill: string; $on?: boolean }>`
 
 export const TileSymbol = styled.span<{ $size: 'full' | 'compact' | 'ticker' | 'micro' }>`
   font-family: ${({ theme }) => theme.fontFamilies.sans};
-  font-weight: ${({ theme }) => theme.fontWeights.bold};
-  font-size: ${({ $size }) => ($size === 'full' ? 13 : $size === 'compact' ? 11 : 10)}px;
-  letter-spacing: 0.04em;
-  line-height: 1.1;
+  font-weight: 700;
+  font-size: ${({ $size }) =>
+    $size === 'full' ? 16 : $size === 'compact' ? 13 : $size === 'ticker' ? 11 : 9}px;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
   text-transform: uppercase;
   max-width: 100%;
   overflow: hidden;
@@ -118,105 +92,89 @@ export const TileSymbol = styled.span<{ $size: 'full' | 'compact' | 'ticker' | '
   white-space: nowrap;
 `;
 
-export const TileChange = styled.span`
-  font-family: ${({ theme }) => theme.fontFamilies.mono};
+export const TileChange = styled.span<{ $size: 'full' | 'compact' }>`
+  font-family: ${({ theme }) => theme.fontFamilies.sans};
   font-variant-numeric: tabular-nums;
-  font-weight: ${({ theme }) => theme.fontWeights.semibold};
-  font-size: 11px;
+  font-weight: 600;
+  font-size: ${({ $size }) => ($size === 'full' ? 13 : 11)}px;
   line-height: 1.15;
+  opacity: 0.96;
 `;
 
-export const TilePrice = styled.span`
-  font-family: ${({ theme }) => theme.fontFamilies.mono};
-  font-variant-numeric: tabular-nums;
-  font-size: 10px;
-  line-height: 1.15;
-  opacity: 0.72;
-`;
-
-export const Inspector = styled.aside`
+export const Legend = styled.div`
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-  padding: 16px;
-  border-left: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  background: ${({ theme }) => theme.semantic.bg.page};
-
-  ${({ theme }) => theme.media.tablet} {
-    border-left: 0;
-    border-top: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  }
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 2px;
 `;
 
-export const InspectorKicker = styled.p`
-  margin: 0;
-  font-size: 10px;
+export const LegendBar = styled.div`
+  width: 160px;
+  height: 8px;
+  border-radius: 99px;
+`;
+
+export const LegendTick = styled.span`
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
   color: ${({ theme }) => theme.semantic.text.tertiary};
+  font-variant-numeric: tabular-nums;
 `;
 
-export const InspectorPair = styled.h2`
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+export const HoverCard = styled.div<{ $x: number; $y: number }>`
+  position: absolute;
+  left: ${({ $x }) => $x}px;
+  top: ${({ $y }) => $y}px;
+  z-index: 6;
+  pointer-events: none;
+  min-width: 196px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  border: 1px solid ${({ theme }) => theme.semantic.border.strong};
+  box-shadow: 0 10px 28px rgba(13, 20, 33, 0.14);
+`;
+
+export const TipHead = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+`;
+
+export const TipSym = styled.span`
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.02em;
   color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
-export const InspectorChange = styled.p<{ $up?: boolean; $flat?: boolean }>`
-  margin: 0;
-  font-family: ${({ theme }) => theme.fontFamilies.mono};
+export const TipChg = styled.span<{ $up?: boolean; $flat?: boolean }>`
   font-variant-numeric: tabular-nums;
-  font-size: 28px;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
   color: ${({ theme, $up, $flat }) => {
     if ($flat) return theme.semantic.text.secondary;
     return $up ? theme.semantic.chart.up : theme.semantic.chart.down;
   }};
 `;
 
-export const InspectorMeta = styled.dl`
-  margin: 0;
-  display: grid;
-  gap: 8px;
-`;
-
-export const InspectorRow = styled.div`
+export const TipRow = styled.div`
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   font-size: 12px;
-  border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  padding-bottom: 6px;
-`;
+  padding: 2px 0;
 
-export const InspectorDt = styled.dt`
-  color: ${({ theme }) => theme.semantic.text.tertiary};
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 10px;
-`;
+  > span:first-child {
+    color: ${({ theme }) => theme.semantic.text.tertiary};
+  }
 
-export const InspectorDd = styled.dd`
-  margin: 0;
-  font-family: ${({ theme }) => theme.fontFamilies.mono};
-  font-variant-numeric: tabular-nums;
-  color: ${({ theme }) => theme.semantic.text.primary};
+  > span:last-child {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: ${({ theme }) => theme.semantic.text.primary};
+  }
 `;
-
-export const InspectorHint = styled.p`
-  margin: auto 0 0;
-  font-size: 12px;
-  color: ${({ theme }) => theme.semantic.text.tertiary};
-`;
-
-/** Unused HUD aliases — kept if any test imported them. */
-export const Hud = styled.div`
-  display: none;
-`;
-export const HudPair = styled.div``;
-export const HudChange = styled.div``;
-export const HudMeta = styled.div``;

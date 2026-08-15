@@ -9,7 +9,7 @@ export type AppShellProps = {
   navAriaLabel?: string;
   /** Kept for callers; workspace is always full-bleed. */
   wide?: boolean;
-  /** Drop workspace padding (heatmap / chart boards). */
+  /** Drop workspace padding (full-bleed boards). */
   flush?: boolean;
   /** Quote strip under the utility bar. */
   banner?: ReactNode;

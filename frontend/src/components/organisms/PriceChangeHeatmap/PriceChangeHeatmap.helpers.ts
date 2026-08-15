@@ -1,11 +1,11 @@
 import type { HeatmapMetric, HeatmapTile, PriceChangeHeatmapItem } from './PriceChangeHeatmap.types';
 import {
-  HEATMAP_COLOR_CAP_PCT,
-  HEATMAP_DEAD_ZONE_PCT,
+  HEATMAP_BANDS,
   HEATMAP_GUTTER,
   HEATMAP_MAX_TILES,
   HEATMAP_NEUTRAL,
-  HEATMAP_SCALE,
+  HEATMAP_TILE_INK,
+  HEATMAP_TILE_INK_ON_NEUTRAL,
 } from './PriceChangeHeatmap.constants';
 
 export type TileDensity = 'full' | 'compact' | 'ticker' | 'micro';
@@ -29,49 +29,53 @@ export function baseSymbol(symbol: string): string {
 }
 
 export function tileDensity(w: number, h: number): TileDensity {
-  if (w >= 88 && h >= 68) return 'full';
-  if (w >= 56 && h >= 40) return 'compact';
-  if (w >= 36 && h >= 22) return 'ticker';
+  if (w >= 72 && h >= 52) return 'full';
+  if (w >= 48 && h >= 32) return 'compact';
+  if (w >= 28 && h >= 20) return 'ticker';
   return 'micro';
 }
 
 export function formatTileChange(changePct: number): string {
-  if (!Number.isFinite(changePct)) return '0.0%';
+  if (!Number.isFinite(changePct)) return '0.00%';
   const sign = changePct > 0 ? '+' : '';
-  return `${sign}${changePct.toFixed(1)}%`;
+  return `${sign}${changePct.toFixed(2)}%`;
 }
 
-/** Opaque diverging fill. |Δ| inside the dead zone is true slate gray. */
+/** Discrete CoinMarketCap-style fill. Near-zero stays slate gray. */
 export function changeFill(changePct: number): string {
-  if (!Number.isFinite(changePct) || Math.abs(changePct) < HEATMAP_DEAD_ZONE_PCT) {
-    return HEATMAP_NEUTRAL;
+  if (!Number.isFinite(changePct)) return HEATMAP_NEUTRAL;
+  for (const band of HEATMAP_BANDS) {
+    if (changePct <= band.upTo) return band.fill;
   }
-  const clamped = Math.max(-HEATMAP_COLOR_CAP_PCT, Math.min(HEATMAP_COLOR_CAP_PCT, changePct));
-  for (let i = 0; i < HEATMAP_SCALE.length - 1; i++) {
-    const a = HEATMAP_SCALE[i]!;
-    const b = HEATMAP_SCALE[i + 1]!;
-    if (clamped <= b.at) {
-      const span = b.at - a.at || 1;
-      const t = (clamped - a.at) / span;
-      return mixHex(a.fill, b.fill, t);
-    }
-  }
-  return HEATMAP_SCALE[HEATMAP_SCALE.length - 1]!.fill;
+  return HEATMAP_BANDS[HEATMAP_BANDS.length - 1]!.fill;
 }
 
-function mixHex(a: string, b: string, t: number): string {
-  const pa = parseHex(a);
-  const pb = parseHex(b);
-  const u = Math.min(1, Math.max(0, t));
-  const r = Math.round(pa.r + (pb.r - pa.r) * u);
-  const g = Math.round(pa.g + (pb.g - pa.g) * u);
-  const bl = Math.round(pa.b + (pb.b - pa.b) * u);
-  return `#${[r, g, bl].map((n) => n.toString(16).padStart(2, '0')).join('')}`;
+export function hoverCardOrigin(
+  mouseX: number,
+  mouseY: number,
+  frameW: number,
+  frameH: number,
+  cardW = 210,
+  cardH = 148,
+): { x: number; y: number } {
+  const pad = 10;
+  let x = mouseX + 16;
+  let y = mouseY + 16;
+  if (x + cardW > frameW - pad) x = mouseX - cardW - 12;
+  if (y + cardH > frameH - pad) y = mouseY - cardH - 12;
+  return { x: Math.max(pad, x), y: Math.max(pad, y) };
+}
+
+export function tileInk(fill: string): string {
+  if (fill === HEATMAP_NEUTRAL) return HEATMAP_TILE_INK_ON_NEUTRAL;
+  const { r, g, b } = parseHex(fill);
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum > 0.72 ? HEATMAP_TILE_INK_ON_NEUTRAL : HEATMAP_TILE_INK;
 }
 
 function parseHex(s: string): { r: number; g: number; b: number } {
   const h = s.replace('#', '');
-  if (h.length !== 6) return { r: 61, g: 68, b: 76 };
+  if (h.length !== 6) return { r: 161, g: 167, b: 187 };
   const n = Number.parseInt(h, 16);
   return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
@@ -175,11 +179,17 @@ export function squarify(items: Seed[], rect: Rect): HeatmapTile[] {
 
 function insetTile(tile: HeatmapTile): HeatmapTile {
   const g = HEATMAP_GUTTER;
+  const x = tile.x + g / 2;
+  const y = tile.y + g / 2;
+  const w = Math.max(1, tile.w - g);
+  const h = Math.max(1, tile.h - g);
+  const left = Math.round(x);
+  const top = Math.round(y);
   return {
     ...tile,
-    x: tile.x + g / 2,
-    y: tile.y + g / 2,
-    w: Math.max(1, tile.w - g),
-    h: Math.max(1, tile.h - g),
+    x: left,
+    y: top,
+    w: Math.max(1, Math.round(x + w) - left),
+    h: Math.max(1, Math.round(y + h) - top),
   };
 }
