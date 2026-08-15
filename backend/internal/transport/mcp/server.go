@@ -40,6 +40,8 @@ type DataPort interface {
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
+	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -442,6 +444,38 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetVenueDivergence(ctx, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_taker_flow",
+		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M and Bybit linear for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. This is taker flow, not the account long/short ratio. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetTakerFlow(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_basis",
+		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance and Bybit: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. Says if both venues agree. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + agreement)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBasis(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

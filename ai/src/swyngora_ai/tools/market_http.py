@@ -198,6 +198,22 @@ class VenueDivergenceInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
 
 
+class TakerFlowInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+
+
+class BasisInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + agreement)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -779,6 +795,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/venue-divergence",
             {"symbol": symbol},
+        )
+
+    def get_taker_flow(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/taker-flow",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_basis(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/basis",
+            {"symbol": symbol, "exchange": exchange},
         )
 
     def get_futures_history(
@@ -1897,6 +1925,27 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "positioning differ and why that split can matter."
             ),
             args_schema=VenueDivergenceInput,
+        ),
+        StructuredTool.from_function(
+            get_taker_flow,
+            name="get_taker_flow",
+            description=(
+                "Aggressive futures buy vs sell volume (who is hitting the "
+                "book) for 5m, 1h, and 4h on Binance and Bybit, plus a "
+                "combined view and a short read with price, OI, and funding. "
+                "Not the account long/short ratio."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_basis,
+            name="get_basis",
+            description=(
+                "How far the perpetual is from spot/index: premium or discount, "
+                "dollar and percent, expanding or shrinking, with funding and "
+                "OI context. Binance and Bybit separately plus whether they agree."
+            ),
+            args_schema=BasisInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

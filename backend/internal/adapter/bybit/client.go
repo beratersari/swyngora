@@ -47,6 +47,10 @@ type Client struct {
 	fundingSF    singleflight.Group
 	lsCache      *cache.TTL[*domain.LongShortSeries]
 	lsSF         singleflight.Group
+	taker        *domain.TakerBook
+	takerWatch   func(string)
+	basisCache   *cache.TTL[*domain.BasisQuote]
+	basisSF      singleflight.Group
 }
 
 // Options configures the Bybit client.
@@ -98,6 +102,10 @@ func NewClient(opts Options) *Client {
 	}
 	if c.lsCache == nil {
 		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
+	}
+	c.taker = domain.NewTakerBook()
+	if c.basisCache == nil {
+		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
 	}
 	return c
 }

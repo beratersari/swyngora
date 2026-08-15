@@ -239,6 +239,60 @@ func TestGetFundingRate_OK(t *testing.T) {
 	}
 }
 
+func TestGetBasis_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/basis?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetBasis(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body basisResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBasis_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/basis", nil)
+	rr := httptest.NewRecorder()
+	h.GetBasis(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetTakerFlow_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetTakerFlow(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body takerFlowResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetTakerFlow_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow", nil)
+	rr := httptest.NewRecorder()
+	h.GetTakerFlow(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetVenueDivergence_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/venue-divergence?symbol=BTCUSDT", nil)

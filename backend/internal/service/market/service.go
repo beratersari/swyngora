@@ -40,6 +40,8 @@ type Service struct {
 	oi            map[domain.Exchange]domain.OpenInterestPort
 	funding       map[domain.Exchange]domain.FundingRatePort
 	longShort     map[domain.Exchange]domain.LongShortRatioPort
+	taker         map[domain.Exchange]domain.TakerFlowPort
+	basis         map[domain.Exchange]domain.BasisPort
 	onFuturesSym  func(string)
 	futHist       FuturesHistoryReader
 }
@@ -105,6 +107,36 @@ func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortR
 		}
 	}
 	s.longShort = cp
+	return s
+}
+
+// WithTakerFlow attaches Binance USD-M / Bybit linear taker-volume ports.
+func (s *Service) WithTakerFlow(ports map[domain.Exchange]domain.TakerFlowPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.TakerFlowPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.taker = cp
+	return s
+}
+
+// WithBasis attaches Binance USD-M / Bybit linear basis ports.
+func (s *Service) WithBasis(ports map[domain.Exchange]domain.BasisPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.BasisPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.basis = cp
 	return s
 }
 

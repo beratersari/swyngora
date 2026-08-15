@@ -808,6 +808,67 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/basis:
+    get:
+      summary: Futures vs spot basis (premium or discount)
+      description: |
+        How far the perpetual is from spot/index on Binance USD-M and Bybit
+        linear. Returns the dollar gap, percent gap, premium/discount, whether
+        the gap is expanding or shrinking (5m/1h/4h), a short read with funding
+        and open interest, and whether both venues agree.
+      operationId: getMarketBasis
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + agreement)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue basis plus optional agreement
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/taker-flow:
+    get:
+      summary: Futures taker buy vs sell volume
+      description: |
+        Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+        linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
+        notional, sell notional, delta, and a short read with price / OI /
+        funding. This is who is hitting the book now — not the account
+        long/short ratio. `exchange=all` adds a combined view.
+      operationId: getMarketTakerFlow
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined taker flow
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/venue-divergence:
     get:
       summary: Binance vs Bybit signal split

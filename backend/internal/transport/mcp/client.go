@@ -241,6 +241,26 @@ func (c *APIClient) GetVenueDivergence(ctx context.Context, symbol string) (json
 	return c.get(ctx, "/api/v1/market/venue-divergence", q)
 }
 
+// GetTakerFlow returns aggressive futures buy vs sell volume windows.
+func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/taker-flow", q)
+}
+
+// GetBasis returns futures-vs-spot premium/discount per venue.
+func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/basis", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

@@ -681,6 +681,99 @@ func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	}
 }
 
+type fakeBasis struct {
+	q   *domain.BasisQuote
+	err error
+}
+
+func (f *fakeBasis) GetBasisQuote(_ context.Context, symbol string) (*domain.BasisQuote, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.q
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetBasis_PerVenueAndAgreement(t *testing.T) {
+	bin := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeBinance, FuturesLast: 100.15, FuturesMark: 100.12, SpotIndex: 100,
+	}}
+	byb := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeBybit, FuturesLast: 100.12, FuturesMark: 100.10, SpotIndex: 100,
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithBasis(map[domain.Exchange]domain.BasisPort{
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+	})
+	got, err := svc.GetBasis(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Agreement == nil || got.Agreement.Alignment != domain.AlignSame {
+		t.Fatalf("%+v", got)
+	}
+	if got.Venues[0].Summary == "" {
+		t.Fatal("missing summary")
+	}
+}
+
+type fakeTaker struct {
+	flow *domain.TakerVenueFlow
+	err  error
+}
+
+func (f *fakeTaker) GetTakerFlow(_ context.Context, symbol string) (*domain.TakerVenueFlow, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.flow
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetTakerFlow_PerVenueAndCombined(t *testing.T) {
+	bin := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBinance,
+		Windows: []domain.TakerWindowFlow{
+			domain.SummarizeTakerWindow(300, 100, domain.TakerWindow5m, true),
+			domain.SummarizeTakerWindow(800, 400, domain.TakerWindow1h, true),
+			domain.SummarizeTakerWindow(2000, 1500, domain.TakerWindow4h, true),
+		},
+		Dominant: domain.TakerSideBuy,
+	}}
+	byb := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBybit,
+		Windows: []domain.TakerWindowFlow{
+			domain.SummarizeTakerWindow(50, 150, domain.TakerWindow5m, true),
+			domain.SummarizeTakerWindow(200, 200, domain.TakerWindow1h, true),
+			domain.SummarizeTakerWindow(400, 500, domain.TakerWindow4h, true),
+		},
+		Dominant: domain.TakerSideSell,
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+	})
+	got, err := svc.GetTakerFlow(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	if got.Combined.Windows[0].BuyNotional != 350 || got.Combined.Windows[0].SellNotional != 250 {
+		t.Fatalf("combined 5m %+v", got.Combined.Windows[0])
+	}
+	if got.Venues[0].Summary == "" {
+		t.Fatal("missing summary")
+	}
+}
+
 func TestGetVenueDivergence_Opposite(t *testing.T) {
 	now := time.Now().UTC()
 	binCandles := make([]domain.Candle, 0, 25)

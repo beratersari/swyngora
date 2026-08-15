@@ -236,6 +236,28 @@ func (b *Backend) GetVenueDivergence(ctx context.Context, symbol string) (json.R
 	return mustJSON(got)
 }
 
+func (b *Backend) GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetTakerFlow(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBasis(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

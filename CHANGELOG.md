@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Futures basis:** perp vs spot/index premium or discount on Binance and Bybit, dollar + percent, expanding/shrinking, plus funding/OI read and venue agreement (`GET /api/v1/market/basis`, MCP `get_basis`) (`docs/features/basis.md`)
+- **Taker flow:** aggressive futures buy vs sell volume for 5m / 1h / 4h on Binance USD-M and Bybit linear, with delta and a short read vs price, OI, and funding (`GET /api/v1/market/taker-flow`, MCP `get_taker_flow`) (`docs/features/taker-flow.md`)
 - **Venue divergence:** compare Binance vs Bybit on OI, funding, crowding, and positioning; flag same vs opposite with a short why (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`) (`docs/features/venue-divergence.md`)
 - **Positioning (price + OI):** long buildup / short buildup / long unwinding / short covering for Binance and Bybit, with short reasons and a combined market direction (`GET /api/v1/market/positioning`, MCP `get_positioning`) (`docs/features/positioning.md`)
 - **Squeeze risk:** long-squeeze and short-squeeze scores (0–100) for any coin on Binance USD-M and Bybit linear, with reasons and an OI-weighted combined view (`GET /api/v1/market/squeeze-risk`, MCP `get_squeeze_risk`) (`docs/features/squeeze-risk.md`)

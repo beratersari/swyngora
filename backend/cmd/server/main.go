@@ -200,7 +200,19 @@ func main() {
 	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithBasis(map[domain.Exchange]domain.BasisPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
 	})
+	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
+		WSURL: cfg.BybitLinearWSURL,
+		Book:  bybitClient.TakerBook(),
+	})
+	bybitClient.SetTakerWatch(bybitTrades.Watch)
+	defer bybitTrades.Close()
 	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
 	marketSvc.SetFuturesHistory(futuresHist)
 	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
@@ -358,6 +370,7 @@ func main() {
 		logger.Info("futures liquidations restored", "events", nLiq)
 	}
 	go liqSink.Start(ctx)
+	go bybitTrades.Start(ctx)
 	go (&futureshist.Worker{
 		Hist:     futuresHist,
 		Interval: cfg.FuturesHistoryInterval,

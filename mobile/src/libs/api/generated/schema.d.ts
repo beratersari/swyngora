@@ -508,6 +508,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/taker-flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures taker buy vs sell volume
+         * @description Aggressive buy/sell notional for 5m, 1h, 4h per venue + combined.
+         */
+        get: operations["getMarketTakerFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/basis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures vs spot basis (premium or discount)
+         * @description Dollar and percent gap, expanding/shrinking, funding/OI read, venue agreement.
+         */
+        get: operations["getMarketBasis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4302,6 +4342,69 @@ export interface operations {
                         summary?: string;
                         important?: boolean;
                         diffs?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketTakerFlow: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined taker flow */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBasis: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue basis plus optional agreement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        agreement?: Record<string, unknown>;
                         note?: string;
                     };
                 };

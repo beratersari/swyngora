@@ -47,6 +47,8 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/squeeze-risk` long/short squeeze risk scores per venue + combined. See [`squeeze-risk.md`](squeeze-risk.md).
 - `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).
 - `GET /api/v1/market/venue-divergence` Binance vs Bybit same/opposite split. See [`venue-divergence.md`](venue-divergence.md).
+- `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
+- `GET /api/v1/market/basis` perp vs spot/index premium or discount. See [`basis.md`](basis.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`
