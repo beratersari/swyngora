@@ -206,3 +206,90 @@ func TestRecurringBuy_CatchUpOnlyLatest(t *testing.T) {
 		t.Fatalf("want 1 run for latest missed only, got %d", len(runs))
 	}
 }
+
+func TestRecurringBuy_ExecutesOnBookAfterSecondPortfolioCreated(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	main, err := svc.Create(ctx, CreateInput{ClientID: "rb-multi", StartingBalance: 5000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-multi", Name: "Alts", StartingBalance: 3000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-multi", PortfolioID: main.ID, Symbol: "BTCUSDT",
+		Amount: 200, Frequency: "daily", StartAt: &past,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("processed=%d want 1", n)
+	}
+	runs, err := svc.ListRecurringBuyRuns(ctx, "rb-multi", plan.ID, 10, 0, main.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("run=%+v (DCA must fill Main after a second book exists)", runs)
+	}
+	if runs[0].TradeID == "" {
+		t.Fatal("succeeded run has no trade id")
+	}
+	view, err := svc.View(ctx, "rb-multi", main.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.CashBalance > 4801 || view.CashBalance < 4799 {
+		t.Fatalf("Main cash=%v want ~4800 after $200 recurring buy", view.CashBalance)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].Quantity < 1.9 {
+		t.Fatalf("Main positions=%+v want ~2 BTC", view.Positions)
+	}
+}
+
+func TestRecurringBuy_ExecutesOnNonPrimaryBook(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|ETHUSDT": "50"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-alt", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	alts, err := svc.Create(ctx, CreateInput{ClientID: "rb-alt", Name: "Alts", StartingBalance: 2000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-alt", PortfolioID: alts.ID, Symbol: "ETHUSDT",
+		Amount: 100, Frequency: "daily", StartAt: &past,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := svc.ListRecurringBuyRuns(ctx, "rb-alt", plan.ID, 10, 0, alts.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("run=%+v (DCA must fill the UUID book, not the owner id)", runs)
+	}
+	view, err := svc.View(ctx, "rb-alt", alts.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.CashBalance > 1901 || view.CashBalance < 1899 {
+		t.Fatalf("Alts cash=%v want ~1900", view.CashBalance)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].Quantity < 1.9 {
+		t.Fatalf("Alts positions=%+v want ~2 ETH", view.Positions)
+	}
+}

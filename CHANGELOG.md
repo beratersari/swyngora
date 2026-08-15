@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Web desk visual system:** charcoal + amber institutional palette (IBM Plex), underline nav, and sharper chrome — no more teal/neon green (`docs/design/frontend-design-system.md`)
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
@@ -37,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web desk chrome:** sticky two-row header, brand mark, jump-to-pair search, live/offline connection pill, volume ticker tape, 1600px desk canvas, shared page headers (`frontend/`)
 
 ### Fixed
+- **Paper recurring buys:** the worker now fills the book that owns the plan after a second paper portfolio exists (Main and named books); it no longer records `failed` and skips the period
 - **AI chat layout:** assistant reply renders as markdown; thinking is a collapsed step list; tool chips show names only (no JSON dumps)
 - **Dark UI contrast:** exchange/status chips no longer use Ant `Tag color="processing"` (unreadable green-on-green); BrandTag + global Tag overrides; tertiary text/placeholders raised off stone (`frontend/`)
 - **Paper cash races:** serialize portfolio cash/position mutations per `clientId` so concurrent multi-symbol fills and HTTP orders cannot last-write-wins balances (`docs/features/paper-trading.md`)

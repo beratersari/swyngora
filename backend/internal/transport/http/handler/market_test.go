@@ -363,6 +363,60 @@ func TestGetTicker24h_MissingSymbol(t *testing.T) {
 	}
 }
 
+type mixedQuoteMarket struct{ stubMarket }
+
+func (mixedQuoteMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
+	return []domain.SpotMarket{
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", LastPrice: "100000", QuoteVolume: "1"},
+		{Symbol: "ETHEUR", BaseAsset: "ETH", QuoteAsset: "EUR", Status: "TRADING", LastPrice: "3200", QuoteVolume: "1"},
+		{Symbol: "ETHBTC", BaseAsset: "ETH", QuoteAsset: "BTC", Status: "TRADING", LastPrice: "0.035", QuoteVolume: "1"},
+	}, nil
+}
+
+func TestListSpotMarkets_QuoteFilterReturnsRawPairLastAndOmitsQuoteAsset(t *testing.T) {
+	h := NewMarketHandler(market.New(mixedQuoteMarket{}, stubSupply{}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?quote=EUR", nil)
+	rr := httptest.NewRecorder()
+	h.ListSpotMarkets(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := raw["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("EUR filter items=%s", rr.Body.String())
+	}
+	item := items[0].(map[string]any)
+	if item["symbol"] != "ETHEUR" || item["lastPrice"] != "3200" {
+		t.Fatalf("EUR last must stay in pair units, got %v", item)
+	}
+	if _, ok := item["quoteAsset"]; ok {
+		t.Fatalf("public SpotMarket DTO must not include quoteAsset (OpenAPI): %v", item)
+	}
+	if _, ok := item["baseAsset"]; ok {
+		t.Fatalf("public SpotMarket DTO must not include baseAsset: %v", item)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?quote=BTC", nil)
+	rr = httptest.NewRecorder()
+	h.ListSpotMarkets(rr, req)
+	if err := json.Unmarshal(rr.Body.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = raw["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("BTC filter items=%s", rr.Body.String())
+	}
+	item = items[0].(map[string]any)
+	if item["symbol"] != "ETHBTC" || item["lastPrice"] != "0.035" {
+		t.Fatalf("BTC last must stay 0.035 (pair units), got %v", item)
+	}
+}
+
 func TestListSpotMarkets_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/spot?q=btc&sort=quoteVolume&order=desc&limit=10", nil)

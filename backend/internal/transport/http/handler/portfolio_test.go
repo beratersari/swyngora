@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -408,6 +409,118 @@ func TestPortfolioHTTP_CancelAllOrders(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
 	if int(got["canceled"].(float64)) != 0 {
 		t.Fatalf("second cancel-all %v", got)
+	}
+}
+
+func TestPortfolioHTTP_RecurringBuyExecutesAfterSecondBook(t *testing.T) {
+	st, err := portfoliostore.Open(filepath.Join(t.TempDir(), "pf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	svc := portfolio.New(st, pfPx{}).WithPaperCosts(domain.ZeroTradingCosts)
+	h := NewPortfolioHandler(svc)
+	ctx := context.Background()
+
+	postJSON := func(path string, payload map[string]any, fn func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
+		t.Helper()
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		fn(rr, req)
+		return rr
+	}
+	getJSON := func(path, id string, fn func(http.ResponseWriter, *http.Request)) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if id != "" {
+			req.SetPathValue("id", id)
+		}
+		rr := httptest.NewRecorder()
+		fn(rr, req)
+		return rr
+	}
+
+	rr := postJSON("/api/v1/portfolio", map[string]any{
+		"clientId": "http-rb-multi", "startingBalance": 5000,
+	}, h.Create)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("main %d %s", rr.Code, rr.Body.String())
+	}
+	var main map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &main)
+	mainID := main["id"].(string)
+
+	rr = postJSON("/api/v1/portfolio", map[string]any{
+		"clientId": "http-rb-multi", "name": "Alts", "startingBalance": 3000,
+	}, h.Create)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("alts %d %s", rr.Code, rr.Body.String())
+	}
+	var alts map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &alts)
+	altsID := alts["id"].(string)
+
+	past := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339Nano)
+	rr = postJSON("/api/v1/portfolio/recurring-buys", map[string]any{
+		"clientId": "http-rb-multi", "portfolioId": mainID, "symbol": "BTCUSDT",
+		"amount": 200, "frequency": "daily", "startAt": past,
+	}, h.CreateRecurringBuy)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("plan main %d %s", rr.Code, rr.Body.String())
+	}
+	var mainPlan map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &mainPlan)
+	mainPlanID := mainPlan["id"].(string)
+
+	rr = postJSON("/api/v1/portfolio/recurring-buys", map[string]any{
+		"clientId": "http-rb-multi", "portfolioId": altsID, "symbol": "ETHUSDT",
+		"amount": 100, "frequency": "daily", "startAt": past,
+	}, h.CreateRecurringBuy)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("plan alts %d %s", rr.Code, rr.Body.String())
+	}
+	var altsPlan map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &altsPlan)
+	altsPlanID := altsPlan["id"].(string)
+
+	n, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Fatalf("processed=%d want 2", n)
+	}
+
+	assertRunSucceeded := func(planID, bookID string) {
+		t.Helper()
+		rr := getJSON("/api/v1/portfolio/recurring-buys/"+planID+"/runs?clientId=http-rb-multi&portfolioId="+bookID, planID, h.ListRecurringBuyRuns)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("runs %s %d %s", planID, rr.Code, rr.Body.String())
+		}
+		var body map[string]any
+		_ = json.Unmarshal(rr.Body.Bytes(), &body)
+		runs, _ := body["runs"].([]any)
+		if len(runs) != 1 {
+			t.Fatalf("plan %s runs=%s", planID, rr.Body.String())
+		}
+		run := runs[0].(map[string]any)
+		if run["status"] != "succeeded" {
+			t.Fatalf("plan %s run not filled: %s", planID, rr.Body.String())
+		}
+	}
+	assertRunSucceeded(mainPlanID, mainID)
+	assertRunSucceeded(altsPlanID, altsID)
+
+	rr = getJSON("/api/v1/portfolio?clientId=http-rb-multi&portfolioId="+mainID, "", h.Get)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("view main %d %s", rr.Code, rr.Body.String())
+	}
+	var mainView map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &mainView)
+	if cash := mainView["cashBalance"].(float64); cash > 4801 || cash < 4799 {
+		t.Fatalf("main cash=%v want ~4800 after $200 DCA; body=%s", cash, rr.Body.String())
 	}
 }
 

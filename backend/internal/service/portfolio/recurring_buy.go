@@ -19,7 +19,7 @@ type RecurringBuyCreateInput struct {
 	OwnerClientID string
 	Exchange      string
 	Symbol        string
-	Name          string // optional label; default "<symbol> <frequency>"
+	Name          string  // optional label; default "<symbol> <frequency>"
 	Amount        float64 // cash notional per run
 	Frequency     string  // daily | weekly | monthly | interval
 	Weekday       string  // monday..sunday; weekly
@@ -336,8 +336,15 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 	if qty < domain.MinTradeQuantity {
 		return nil, "buy quantity too small for amount"
 	}
+	// Plans store ClientID = book id. PlaceOrder treats ClientID as the owner
+	// and requires portfolioId once more than one book exists.
+	book, err := s.store.GetPortfolio(ctx, plan.ClientID)
+	if err != nil || book == nil {
+		return nil, "order failed"
+	}
 	tr, _, err := s.PlaceOrder(ctx, OrderInput{
-		ClientID: plan.ClientID, Exchange: string(plan.Exchange), Symbol: plan.Symbol,
+		ClientID: book.ClientID, PortfolioID: book.ID,
+		Exchange: string(plan.Exchange), Symbol: plan.Symbol,
 		Side: "buy", Quantity: qty,
 	})
 	if err != nil {
