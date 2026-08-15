@@ -88,7 +88,7 @@ export const DataTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-item {
-    background: ${({ theme }) => theme.colors.pine};
+    background: ${({ theme }) => theme.semantic.bg.canvas};
     border-color: ${({ theme }) => theme.semantic.border.default};
   }
 
@@ -102,12 +102,12 @@ export const DataTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-item-active a {
-    color: ${({ theme }) => theme.colors.antiFlashWhite};
+    color: ${({ theme }) => theme.semantic.action.primaryText};
   }
 
   .ant-pagination .ant-pagination-prev .ant-pagination-item-link,
   .ant-pagination .ant-pagination-next .ant-pagination-item-link {
-    background: ${({ theme }) => theme.colors.pine};
+    background: ${({ theme }) => theme.semantic.bg.canvas};
     border-color: ${({ theme }) => theme.semantic.border.default};
     color: ${({ theme }) => theme.semantic.text.primary};
   }
@@ -117,7 +117,7 @@ export const DataTable = styled(Table)`
   }
 
   .ant-pagination .ant-pagination-options .ant-select-selector {
-    background: ${({ theme }) => theme.colors.pine} !important;
+    background: ${({ theme }) => theme.semantic.bg.canvas} !important;
     border-color: ${({ theme }) => theme.semantic.border.default} !important;
     color: ${({ theme }) => theme.semantic.text.primary} !important;
   }

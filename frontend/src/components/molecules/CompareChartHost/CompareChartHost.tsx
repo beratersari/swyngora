@@ -8,7 +8,7 @@ import {
 } from 'lightweight-charts';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
-import { palette, semanticColors } from '@/styles/tokens';
+import { semanticColors } from '@/styles/tokens';
 import { DEFAULT_HEIGHT } from './CompareChartHost.constants';
 import {
   ChartContainer,
@@ -38,7 +38,7 @@ export function CompareChartHost({
       height,
       autoSize: true,
       layout: {
-        background: { color: palette.richBlack },
+        background: { color: semanticColors.chart.background },
         textColor: semanticColors.text.secondary,
       },
       grid: {

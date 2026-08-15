@@ -1,12 +1,12 @@
 import styled, { css, keyframes } from 'styled-components';
 
 const flashUp = keyframes`
-  from { background-color: rgba(0, 255, 129, 0.28); }
+  from { background-color: rgba(22, 199, 132, 0.22); }
   to { background-color: transparent; }
 `;
 
 const flashDown = keyframes`
-  from { background-color: rgba(224, 122, 122, 0.32); }
+  from { background-color: rgba(234, 57, 67, 0.2); }
   to { background-color: transparent; }
 `;
 

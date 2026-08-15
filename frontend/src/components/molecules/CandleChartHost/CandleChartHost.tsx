@@ -14,7 +14,7 @@ import {
 } from 'lightweight-charts';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
-import { palette, semanticColors } from '@/styles/tokens';
+import { semanticColors } from '@/styles/tokens';
 import type { CandleChartHostProps } from './CandleChartHost.types';
 import { DEFAULT_HEIGHT, HISTORY_LOAD_THRESHOLD } from './CandleChartHost.constants';
 import {
@@ -82,7 +82,7 @@ export function CandleChartHost({
       height,
       autoSize: true,
       layout: {
-        background: { color: palette.richBlack },
+        background: { color: semanticColors.chart.background },
         textColor: semanticColors.text.secondary,
       },
       grid: {

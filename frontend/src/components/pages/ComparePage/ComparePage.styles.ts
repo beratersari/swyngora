@@ -54,7 +54,7 @@ export const EmptyHint = styled.div`
   background: ${({ theme }) => theme.semantic.bg.muted};
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
-  border-left: 3px solid ${({ theme }) => theme.palette.mountainMeadow};
+  border-left: 3px solid ${({ theme }) => theme.semantic.accent.default};
 `;
 
 /** Error surface using semantic status (not Ant Design default red chrome). */

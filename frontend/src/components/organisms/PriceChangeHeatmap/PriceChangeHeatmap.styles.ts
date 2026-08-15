@@ -78,8 +78,8 @@ export const TileButton = styled.button<{ $fill: string; $on?: boolean }>`
   border: 0;
   border-radius: 0;
   background: ${({ $fill }) => $fill};
-  color: #fff;
-  text-shadow: 0 1px 1px rgba(13, 20, 33, 0.28);
+  color: ${({ theme }) => theme.semantic.text.primary};
+  text-shadow: none;
   cursor: pointer;
   display: flex;
   flex-direction: column;

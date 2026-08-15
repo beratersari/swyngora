@@ -1,8 +1,8 @@
 import styled from 'styled-components';
 
 /**
- * AI chat surfaces use solid palette colors (not translucent washes).
- * Goal: ≥7:1 body contrast — anti-flash white on rich black / forest.
+ * AI chat — light consumer palette (same as the rest of the site).
+ * Surfaces: paper / mist. Text: ink. Accent: brand blue.
  */
 
 export const PageStack = styled.div`
@@ -40,8 +40,8 @@ export const Thread = styled.div`
   overflow-y: auto;
   padding: ${({ theme }) => theme.spacing[3]}px;
   border-radius: ${({ theme }) => theme.radii.lg}px;
-  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
-  background: ${({ theme }) => theme.palette.richBlack};
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  background: ${({ theme }) => theme.semantic.bg.canvas};
 `;
 
 export const BubbleRow = styled.div<{ $role: 'user' | 'assistant' | 'system' }>`
@@ -58,34 +58,33 @@ export const Bubble = styled.div<{ $role: 'user' | 'assistant' | 'system'; $erro
   border: 1px solid
     ${({ theme, $error, $role }) =>
       $error
-        ? '#E07A7A'
+        ? theme.semantic.border.danger
         : $role === 'user'
-          ? theme.palette.mountainMeadow
-          : theme.palette.bangladeshGreen};
+          ? theme.semantic.border.accent
+          : theme.semantic.border.default};
   background: ${({ theme, $role, $error }) =>
     $error
-      ? '#2A1212'
+      ? theme.semantic.bg.dangerSoft
       : $role === 'user'
-        ? theme.palette.forest
-        : theme.palette.darkGreen};
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+        ? theme.semantic.bg.accentSoft
+        : theme.semantic.bg.page};
+  color: ${({ theme }) => theme.semantic.text.primary};
 
-  /* Message body only — do not override MetaChip colors */
   & [data-text-role='body'] {
-    color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
+    color: ${({ theme }) => theme.semantic.text.primary} !important;
   }
 `;
 
 export const UserBody = styled.div`
   white-space: pre-wrap;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
 export const MdStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: 0.65em;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
 export const MdP = styled.p`
@@ -107,17 +106,18 @@ export const MdPre = styled.pre`
   padding: 8px 10px;
   overflow-x: auto;
   border-radius: ${({ theme }) => theme.radii.sm}px;
-  background: ${({ theme }) => theme.palette.richBlack};
-  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  background: ${({ theme }) => theme.semantic.bg.page};
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
   font-family: ${({ theme }) => theme.fontFamilies.mono};
   font-size: 12px;
   line-height: 1.45;
   white-space: pre-wrap;
+  color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
 export const MdStrong = styled.strong`
   font-weight: 700;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
 export const MdCode = styled.code`
@@ -125,13 +125,14 @@ export const MdCode = styled.code`
   font-size: 0.92em;
   padding: 0 4px;
   border-radius: 4px;
-  background: ${({ theme }) => theme.palette.pine};
+  background: ${({ theme }) => theme.semantic.bg.accentMuted};
+  color: ${({ theme }) => theme.semantic.text.primary};
 `;
 
 export const TraceDetails = styled.details`
   margin-top: ${({ theme }) => theme.spacing[3]}px;
   padding-top: ${({ theme }) => theme.spacing[2]}px;
-  border-top: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  border-top: 1px solid ${({ theme }) => theme.semantic.border.default};
 
   summary {
     cursor: pointer;
@@ -139,7 +140,7 @@ export const TraceDetails = styled.details`
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: ${({ theme }) => theme.palette.pistachio};
+    color: ${({ theme }) => theme.semantic.text.secondary};
     list-style: none;
   }
 
@@ -149,7 +150,7 @@ export const TraceDetails = styled.details`
 
   summary::before {
     content: '▸ ';
-    color: ${({ theme }) => theme.palette.mountainMeadow};
+    color: ${({ theme }) => theme.semantic.accent.default};
   }
 
   &[open] summary::before {
@@ -160,7 +161,7 @@ export const TraceDetails = styled.details`
 export const TraceList = styled.ol`
   margin: ${({ theme }) => theme.spacing[2]}px 0 0;
   padding-left: 1.2em;
-  color: ${({ theme }) => theme.palette.pistachio};
+  color: ${({ theme }) => theme.semantic.text.secondary};
   font-size: 12px;
   line-height: 1.45;
 `;
@@ -169,8 +170,8 @@ export const ProcessPanel = styled.details`
   margin: ${({ theme }) => theme.spacing[2]}px 0 ${({ theme }) => theme.spacing[3]}px;
   padding: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[3]}px;
   border-radius: ${({ theme }) => theme.radii.sm}px;
-  border: 1px dashed ${({ theme }) => theme.palette.frog};
-  background: ${({ theme }) => theme.palette.richBlack};
+  border: 1px dashed ${({ theme }) => theme.semantic.border.strong};
+  background: ${({ theme }) => theme.semantic.bg.page};
 `;
 
 export const ProcessTitle = styled.summary`
@@ -183,7 +184,7 @@ export const ProcessTitle = styled.summary`
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.palette.pistachio};
+  color: ${({ theme }) => theme.semantic.text.secondary};
   user-select: none;
 
   &::-webkit-details-marker {
@@ -192,7 +193,7 @@ export const ProcessTitle = styled.summary`
 
   &::before {
     content: '▸ ';
-    color: ${({ theme }) => theme.palette.mountainMeadow};
+    color: ${({ theme }) => theme.semantic.accent.default};
   }
 
   ${ProcessPanel}[open] &::before {
@@ -212,8 +213,7 @@ export const ProcessPreview = styled.span`
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
-  opacity: 0.82;
+  color: ${({ theme }) => theme.semantic.text.primary};
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,17 +241,17 @@ export const ProcessItem = styled.li<{ $kind: string; $active?: boolean }>`
   align-items: start;
   font-size: 12px;
   line-height: 1.45;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
   opacity: ${({ $active }) => ($active ? 1 : 0.88)};
   padding-left: 6px;
   border-left: 2px solid
-    ${({ theme, $active }) => ($active ? theme.palette.mountainMeadow : 'transparent')};
+    ${({ theme, $active }) => ($active ? theme.semantic.accent.default : 'transparent')};
 `;
 
 export const ProcessIndex = styled.span`
   font-family: ${({ theme }) => theme.fontFamilies.mono};
   font-size: 11px;
-  color: ${({ theme }) => theme.palette.mountainMeadow};
+  color: ${({ theme }) => theme.semantic.accent.default};
   padding-top: 1px;
 `;
 
@@ -267,15 +267,15 @@ export const ProcessKind = styled.span<{ $kind: string }>`
   padding-top: 2px;
   color: ${({ theme, $kind }) =>
     $kind === 'tool' || $kind === 'tool_result'
-      ? theme.palette.mint
+      ? theme.semantic.accent.default
       : $kind === 'tool_error'
-        ? '#E07A7A'
-        : theme.palette.pistachio};
+        ? theme.semantic.status.error
+        : theme.semantic.text.secondary};
 `;
 
 export const ProcessText = styled.span`
   min-width: 0;
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
   word-break: break-word;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -290,7 +290,7 @@ export const MetaRow = styled.div`
   gap: ${({ theme }) => theme.spacing[2]}px;
   margin-top: ${({ theme }) => theme.spacing[3]}px;
   padding-top: ${({ theme }) => theme.spacing[2]}px;
-  border-top: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
+  border-top: 1px solid ${({ theme }) => theme.semantic.border.default};
 `;
 
 export const Composer = styled.form`
@@ -336,20 +336,16 @@ export const ToolbarRow = styled.div`
   align-items: center;
 `;
 
-/**
- * Info / disclaimer panel — solid rich black + anti-flash white (not translucent green).
- * Previous chrome + soft accent looked like “same green family” and was hard to read.
- */
 export const DisclaimerBanner = styled.aside`
   display: flex;
   align-items: flex-start;
   gap: ${({ theme }) => theme.spacing[3]}px;
   padding: ${({ theme }) => theme.spacing[3]}px ${({ theme }) => theme.spacing[4]}px;
   border-radius: ${({ theme }) => theme.radii.md}px;
-  border: 1px solid ${({ theme }) => theme.palette.mountainMeadow};
-  background: ${({ theme }) => theme.palette.richBlack};
-  color: ${({ theme }) => theme.palette.antiFlashWhite};
-  box-shadow: inset 3px 0 0 ${({ theme }) => theme.palette.mountainMeadow};
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  background: ${({ theme }) => theme.semantic.bg.page};
+  color: ${({ theme }) => theme.semantic.text.primary};
+  box-shadow: inset 3px 0 0 ${({ theme }) => theme.semantic.accent.default};
 `;
 
 export const DisclaimerIcon = styled.span`
@@ -358,22 +354,18 @@ export const DisclaimerIcon = styled.span`
   height: 10px;
   margin-top: 5px;
   border-radius: 50%;
-  background: ${({ theme }) => theme.palette.mountainMeadow};
+  background: ${({ theme }) => theme.semantic.accent.default};
 `;
 
 export const DisclaimerBody = styled.div`
   flex: 1;
   min-width: 0;
-  color: ${({ theme }) => theme.palette.antiFlashWhite} !important;
+  color: ${({ theme }) => theme.semantic.text.primary} !important;
   font-size: 14px;
   line-height: 1.5;
   font-weight: 500;
 `;
 
-/**
- * Tool chips: solid basil fill + white text + meadow border (readable on dark bubbles).
- * Thinking chips: solid pine + pistachio text.
- */
 export const MetaChip = styled.span<{ $kind?: 'tool' | 'thinking' }>`
   display: inline-flex;
   align-items: center;
@@ -387,13 +379,12 @@ export const MetaChip = styled.span<{ $kind?: 'tool' | 'thinking' }>`
   font-size: 12px;
   font-weight: 600;
   line-height: 1.45;
-  color: ${({ theme, $kind }) =>
-    $kind === 'thinking' ? theme.palette.pistachio : theme.palette.antiFlashWhite};
+  color: ${({ theme }) => theme.semantic.text.primary};
   background: ${({ theme, $kind }) =>
-    $kind === 'thinking' ? theme.palette.pine : theme.palette.basil};
+    $kind === 'thinking' ? theme.semantic.bg.page : theme.semantic.bg.accentSoft};
   border: 1px solid
     ${({ theme, $kind }) =>
-      $kind === 'thinking' ? theme.palette.frog : theme.palette.mountainMeadow};
+      $kind === 'thinking' ? theme.semantic.border.default : theme.semantic.border.accent};
 `;
 
 export const RefList = styled.ol`
@@ -412,18 +403,18 @@ export const RefItem = styled.li`
   gap: 2px;
   padding: 8px 10px;
   border-radius: ${({ theme }) => theme.radii.sm}px;
-  border: 1px solid ${({ theme }) => theme.palette.bangladeshGreen};
-  background: ${({ theme }) => theme.palette.richBlack};
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+  background: ${({ theme }) => theme.semantic.bg.page};
 `;
 
 export const RefLink = styled.a`
-  color: ${({ theme }) => theme.palette.mint} !important;
+  color: ${({ theme }) => theme.semantic.text.link} !important;
   font-weight: 600;
   text-decoration: none;
   word-break: break-word;
 
   &:hover {
-    color: ${({ theme }) => theme.palette.caribbeanGreen} !important;
+    color: ${({ theme }) => theme.semantic.text.linkHover} !important;
     text-decoration: underline;
   }
 `;
@@ -431,7 +422,7 @@ export const RefLink = styled.a`
 export const RefUrl = styled.span`
   font-family: ${({ theme }) => theme.fontFamilies.mono};
   font-size: 11px;
-  color: ${({ theme }) => theme.palette.pistachio};
+  color: ${({ theme }) => theme.semantic.text.tertiary};
   word-break: break-all;
 `;
 
@@ -443,5 +434,5 @@ export const MetaLabel = styled.span`
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: ${({ theme }) => theme.palette.pistachio};
+  color: ${({ theme }) => theme.semantic.text.tertiary};
 `;

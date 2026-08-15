@@ -121,7 +121,7 @@ export const antdTheme: ThemeConfig = {
     },
     Alert: {
       // Fully dark-theme Alert — without color*Text Ant falls back to light surfaces
-      // which yields white-on-white with colorTextBase = antiFlashWhite.
+      // which yields unreadable contrast when colorTextBase is ink.
       colorInfoBg: semanticColors.bg.chrome,
       colorInfoBorder: semanticColors.border.accent,
       colorSuccessBg: semanticColors.bg.chrome,
