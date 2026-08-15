@@ -2,28 +2,26 @@ import styled from 'styled-components';
 
 export const Wrap = styled.header`
   display: flex;
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
   gap: ${({ theme }) => theme.spacing[3]}px;
-  min-height: 28px;
-  margin-bottom: ${({ theme }) => theme.spacing[2]}px;
+  margin-bottom: ${({ theme }) => theme.spacing[4]}px;
 `;
 
 export const Copy = styled.div`
   display: flex;
-  flex-direction: row;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px ${({ theme }) => theme.spacing[2]}px;
+  flex-direction: column;
+  gap: 6px;
   min-width: 0;
 
   h1 {
     margin: 0;
-    font-size: 13px !important;
+    font-size: 28px !important;
     line-height: 1.2 !important;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    letter-spacing: -0.03em;
+    text-transform: none;
+    font-weight: 800 !important;
   }
 `;
 

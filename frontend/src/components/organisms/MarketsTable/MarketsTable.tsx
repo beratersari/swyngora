@@ -26,6 +26,7 @@ import {
 } from './MarketsTable.helpers';
 import {
   EmptyWrap,
+  NameCell,
   SkeletonRow,
   StyledTable,
   TableCard,
@@ -138,9 +139,11 @@ export function MarketsTable({
         sortDirections: [...SORT_DIRECTIONS],
         sortOrder: toAntdSortOrder(order, sort === 'symbol'),
         render: (symbol: string | undefined) => (
-          <Text variant="label" color="primary" mono>
-            {formatSymbolDisplay(symbol)}
-          </Text>
+          <NameCell>
+            <Text variant="label" color="primary">
+              {formatSymbolDisplay(symbol)}
+            </Text>
+          </NameCell>
         ),
       },
       ...metricCols,

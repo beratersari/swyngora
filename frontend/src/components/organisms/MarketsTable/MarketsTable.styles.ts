@@ -4,6 +4,13 @@ import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 export const TableCard = DataTableCard;
 export const StyledTable = DataTable;
 
+export const NameCell = styled.span`
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.2;
+`;
+
 export const TagList = styled.div`
   display: flex;
   flex-wrap: wrap;

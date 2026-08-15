@@ -22,7 +22,7 @@ React SPA that talks to the Go backend via **OpenAPI-described HTTP**. Not `simp
 | Bundle             | Vite + React + TypeScript                                                                                                       |
 | Design system      | Tokens + Text + Skeleton + motion — `docs/design/frontend-design-system.md`                                                     |
 | Styling            | **styled-components only** — colocate `*.styles.ts` (no CSS/CSS modules)                                                        |
-| Brand colors       | Institutional charcoal + amber: ink `#07090D` / amber `#F0A202` / up `#2BB673` / down `#E5534B` — see `styles/tokens/colors.ts` |
+| Brand colors       | Light CoinMarketCap-like: paper `#FFFFFF` / blue `#3861FB` / up `#16C784` / down `#EA3943` — see `styles/tokens/colors.ts` |
 | Loading            | All content components support `isLoading` → Skeleton                                                                           |
 | Localization       | **i18next** + **react-i18next** under `src/libs/i18n/` — locale JSON catalogs; no hard-coded UI copy                          |
 

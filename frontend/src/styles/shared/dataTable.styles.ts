@@ -8,10 +8,11 @@ import { Table } from 'antd';
 export const DataTableCard = styled.div`
   background: ${({ theme }) => theme.semantic.bg.muted};
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
-  border-radius: ${({ theme }) => theme.radii.md}px;
+  border-radius: 12px;
   overflow: hidden;
   max-width: 100%;
   min-width: 0;
+  box-shadow: 0 1px 2px rgba(13, 20, 33, 0.04);
 
   /* Let Ant table horizontal scroll stay inside the card on narrow viewports */
   .ant-table-wrapper,
@@ -33,9 +34,9 @@ export const DataTable = styled(Table)`
     color: ${({ theme }) => theme.semantic.text.secondary} !important;
     border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle} !important;
     font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: none;
     padding: 8px 12px !important;
   }
 

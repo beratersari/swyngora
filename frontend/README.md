@@ -18,14 +18,14 @@ Production React application for Swyngora.
 Decision: `project-management/decisions/001-antd-and-lightweight-charts.md`  
 Design system: [`docs/design/frontend-design-system.md`](../docs/design/frontend-design-system.md)
 
-### Brand palette (market desk)
+### Brand palette (CoinMarketCap-like)
 
 | Role | HEX | Use |
 | --- | --- | --- |
-| Ink / Graphite / Slate | `#07090D` / `#0C1016` / `#141922` | Canvas, page, cards |
-| Amber | `#F0A202` | Brand, nav, primary actions |
-| Up / Down | `#2BB673` / `#E5534B` | Price direction only |
-| Ivory / Silver | `#F3F5F8` / `#A3ABB8` | Primary / secondary text |
+| Paper / page | `#FFFFFF` / `#F8FAFD` | Canvas and page field |
+| Brand blue | `#3861FB` | Logo, links, primary actions |
+| Up / Down | `#16C784` / `#EA3943` | Price direction only |
+| Ink / muted | `#0D1421` / `#616E85` | Primary / secondary text |
 
 Tokens: `src/styles/tokens/colors.ts` · Motion: `src/styles/tokens/motion.ts` · Theme: `src/styles/theme.ts` · Atoms: `Text`, `Skeleton`, `Button` (`isLoading` supported).
 

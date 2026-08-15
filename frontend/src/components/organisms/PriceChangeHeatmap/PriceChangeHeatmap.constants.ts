@@ -20,13 +20,13 @@ export const HEATMAP_NEUTRAL = semanticColors.chart.neutral;
  * Near-zero stops stay dark so the mosaic sits on the charcoal well.
  */
 export const HEATMAP_SCALE = [
-  { at: -8, fill: '#9B2C38' },
-  { at: -4, fill: '#7A353C' },
-  { at: -1.5, fill: '#4A3A3C' },
+  { at: -8, fill: '#EA3943' },
+  { at: -4, fill: '#F37A81' },
+  { at: -1.5, fill: '#F8B4B8' },
   { at: 0, fill: HEATMAP_NEUTRAL },
-  { at: 1.5, fill: '#2A4A40' },
-  { at: 4, fill: '#1F7A58' },
-  { at: 8, fill: '#18956A' },
+  { at: 1.5, fill: '#9BE8C8' },
+  { at: 4, fill: '#3ED39A' },
+  { at: 8, fill: '#16C784' },
 ] as const;
 
 export const HEATMAP_LEGEND_GRADIENT = HEATMAP_SCALE.map((s, i, arr) => {

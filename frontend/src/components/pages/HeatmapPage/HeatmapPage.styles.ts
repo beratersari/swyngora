@@ -47,7 +47,7 @@ export const Field = styled.label`
 export const BoardWrap = styled.div`
   flex: 1 1 auto;
   min-height: 0;
-  height: calc(100dvh - 168px);
+  height: calc(100dvh - 180px);
   display: flex;
   flex-direction: column;
 `;

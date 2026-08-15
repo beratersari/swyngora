@@ -1,8 +1,6 @@
 import {
   AppBanner,
   AppLayout,
-  AppSidebar,
-  AppStage,
   AppStatus,
   AppTopbar,
   AppWorkspace,
@@ -13,7 +11,7 @@ import {
 import type { AppShellProps } from './AppShell.types';
 
 /**
- * Terminal chrome: venue rail + utility bar + workspace.
+ * Consumer market chrome: logo + text nav + search (CoinMarketCap-like).
  */
 export function AppShell({
   brand,
@@ -28,18 +26,16 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <AppLayout>
-      <AppSidebar>
+      <AppTopbar>
         <HeaderBrand>{brand}</HeaderBrand>
         <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
-      </AppSidebar>
-      <AppStage>
-        <AppTopbar>{tools ? <HeaderTools>{tools}</HeaderTools> : null}</AppTopbar>
-        {banner ? <AppBanner>{banner}</AppBanner> : null}
-        <AppWorkspace $wide={wide} $flush={flush}>
-          {children}
-        </AppWorkspace>
-        {footer ? <AppStatus>{footer}</AppStatus> : null}
-      </AppStage>
+        {tools ? <HeaderTools>{tools}</HeaderTools> : null}
+      </AppTopbar>
+      {banner ? <AppBanner>{banner}</AppBanner> : null}
+      <AppWorkspace $wide={wide} $flush={flush}>
+        {children}
+      </AppWorkspace>
+      {footer ? <AppStatus>{footer}</AppStatus> : null}
     </AppLayout>
   );
 }

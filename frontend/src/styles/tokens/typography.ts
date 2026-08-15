@@ -3,8 +3,8 @@
  * Font stacks are system-first for performance; brand feel comes from scale + color.
  */
 export const fontFamilies = {
-  sans: '"IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif',
-  mono: '"IBM Plex Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace',
+  sans: 'Inter, "Segoe UI", system-ui, -apple-system, sans-serif',
+  mono: 'Inter, "Segoe UI", system-ui, -apple-system, sans-serif',
 } as const;
 
 export const fontWeights = {

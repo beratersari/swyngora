@@ -194,7 +194,7 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   .ant-switch {
-    background: ${({ theme }) => theme.palette.stone} !important;
+    background: ${({ theme }) => theme.semantic.border.strong} !important;
   }
 
   .ant-switch-checked {

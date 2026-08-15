@@ -78,7 +78,8 @@ export const TileButton = styled.button<{ $fill: string; $on?: boolean }>`
   border: 0;
   border-radius: 0;
   background: ${({ $fill }) => $fill};
-  color: ${({ theme }) => theme.semantic.text.primary};
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(13, 20, 33, 0.28);
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -88,8 +89,9 @@ export const TileButton = styled.button<{ $fill: string; $on?: boolean }>`
   overflow: hidden;
   text-align: left;
   box-sizing: border-box;
+  border-radius: 6px;
   box-shadow: ${({ theme, $on }) =>
-    $on ? `inset 0 0 0 2px ${theme.semantic.accent.default}` : 'inset 0 0 0 1px rgba(0,0,0,0.35)'};
+    $on ? `inset 0 0 0 2px ${theme.semantic.accent.default}` : 'none'};
 
   &:hover {
     z-index: 2;

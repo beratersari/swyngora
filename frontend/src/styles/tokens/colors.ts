@@ -1,50 +1,49 @@
 /**
- * Swyngora market-desk palette.
- *
- * Institutional charcoal + amber (Bloomberg / terminal), not neon green.
- * Legacy key names (`bangladeshGreen`, `mountainMeadow`, …) stay as aliases
- * so existing call sites pick up the new hex values.
+ * Consumer market-site palette (CoinMarketCap-like).
+ * Light canvas, blue brand, green/red only for price direction.
+ * Legacy key names stay as aliases so older call sites keep compiling.
  */
 
 export const financeColors = {
-  ink: '#07090D',
-  graphite: '#0C1016',
-  slate: '#141922',
-  steel: '#1B2130',
-  pewter: '#252C3A',
-  ivory: '#F3F5F8',
-  silver: '#A3ABB8',
-  mist: '#7A8393',
-  ash: '#5A6270',
-  amber: '#F0A202',
-  amberHover: '#FFC14A',
-  amberDeep: '#C4840C',
-  up: '#2BB673',
-  down: '#E5534B',
-  warning: '#E8B339',
-  cobalt: '#5B8DEF',
+  ink: '#0D1421',
+  paper: '#FFFFFF',
+  mistBg: '#F8FAFD',
+  chip: '#EFF2F5',
+  line: '#CFD6E4',
+  ivory: '#0D1421',
+  silver: '#616E85',
+  mist: '#8B95A7',
+  ash: '#A1A7BB',
+  amber: '#3861FB',
+  amberHover: '#6188FF',
+  amberDeep: '#1E53E5',
+  up: '#16C784',
+  down: '#EA3943',
+  warning: '#F5B544',
+  cobalt: '#3861FB',
+  graphite: '#F8FAFD',
+  slate: '#FFFFFF',
+  steel: '#FFFFFF',
+  pewter: '#FFFFFF',
 } as const;
 
-/** Primary colors (legacy names → finance hex). */
 export const primaryColors = {
   richBlack: financeColors.ink,
-  darkGreen: financeColors.graphite,
+  darkGreen: financeColors.mistBg,
   bangladeshGreen: financeColors.amber,
   mountainMeadow: financeColors.amber,
   caribbeanGreen: financeColors.up,
-  antiFlashWhite: financeColors.ivory,
+  antiFlashWhite: financeColors.ink,
 } as const;
 
-/** Secondary surfaces / accent ramps (legacy names). */
 export const secondaryColors = {
-  pine: financeColors.slate,
-  basil: financeColors.steel,
-  forest: financeColors.pewter,
+  pine: financeColors.chip,
+  basil: financeColors.paper,
+  forest: financeColors.chip,
   frog: financeColors.amberDeep,
   mint: financeColors.amberHover,
 } as const;
 
-/** Neutrals */
 export const neutralColors = {
   stone: financeColors.ash,
   sage: financeColors.mist,
@@ -62,19 +61,14 @@ export type PaletteColorName = keyof typeof palette;
 
 export const colors = {
   ...palette,
-  /** @deprecated Prefer `ink` / `richBlack` */
   navy: financeColors.ink,
-  /** @deprecated Prefer `amber` */
   indigo: financeColors.amber,
-  /** @deprecated Prefer `ash` / `stone` */
-  steel: financeColors.ash,
-  /** @deprecated Prefer `ivory` */
-  cream: financeColors.ivory,
+  steel: financeColors.silver,
+  cream: financeColors.ink,
 } as const;
 
 export type BrandColorName = keyof typeof colors;
 
-/** Hex → rgba helper for token-only alpha variants (no ad-hoc hex in components). */
 export function withAlpha(hex: string, alpha: number): string {
   const h = hex.replace('#', '');
   const full =
@@ -92,76 +86,73 @@ export function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-/**
- * Semantic roles. Amber is brand / chrome. Green/red are market direction only.
- */
 export const semanticColors = {
   bg: {
-    canvas: financeColors.ink,
-    page: financeColors.graphite,
-    muted: financeColors.slate,
-    chrome: financeColors.steel,
-    elevated: financeColors.pewter,
-    inverse: financeColors.ivory,
-    hover: withAlpha(financeColors.amber, 0.08),
-    tableHeader: financeColors.steel,
-    accentSoft: withAlpha(financeColors.amber, 0.12),
-    accentMuted: financeColors.pewter,
-    dangerSoft: withAlpha(financeColors.down, 0.14),
-    successSoft: withAlpha(financeColors.up, 0.14),
+    canvas: financeColors.paper,
+    page: financeColors.mistBg,
+    muted: financeColors.paper,
+    chrome: financeColors.paper,
+    elevated: financeColors.paper,
+    inverse: financeColors.ink,
+    hover: withAlpha(financeColors.amber, 0.06),
+    tableHeader: financeColors.mistBg,
+    accentSoft: withAlpha(financeColors.amber, 0.1),
+    accentMuted: financeColors.chip,
+    dangerSoft: withAlpha(financeColors.down, 0.1),
+    successSoft: withAlpha(financeColors.up, 0.1),
   },
   text: {
-    primary: financeColors.ivory,
+    primary: financeColors.ink,
     secondary: financeColors.silver,
     tertiary: financeColors.mist,
-    inverse: financeColors.ink,
+    inverse: financeColors.paper,
     link: financeColors.amber,
-    linkHover: financeColors.amberHover,
+    linkHover: financeColors.amberDeep,
     disabled: withAlpha(financeColors.mist, 0.55),
     accent: financeColors.amber,
   },
   border: {
-    default: withAlpha(financeColors.ivory, 0.1),
-    subtle: withAlpha(financeColors.ivory, 0.06),
-    strong: withAlpha(financeColors.ivory, 0.18),
+    default: financeColors.chip,
+    subtle: financeColors.chip,
+    strong: financeColors.line,
     focus: financeColors.amber,
-    accent: withAlpha(financeColors.amber, 0.7),
-    danger: withAlpha(financeColors.down, 0.65),
+    accent: withAlpha(financeColors.amber, 0.45),
+    danger: withAlpha(financeColors.down, 0.45),
   },
   action: {
     primary: financeColors.amber,
     primaryHover: financeColors.amberHover,
     primaryActive: financeColors.amberDeep,
-    primaryText: financeColors.ink,
-    secondaryBorder: withAlpha(financeColors.ivory, 0.16),
+    primaryText: financeColors.paper,
+    secondaryBorder: financeColors.line,
   },
   accent: {
     default: financeColors.amber,
-    soft: withAlpha(financeColors.amber, 0.14),
+    soft: withAlpha(financeColors.amber, 0.1),
     strong: financeColors.amberDeep,
   },
   status: {
     success: financeColors.up,
     warning: financeColors.warning,
     error: financeColors.down,
-    info: financeColors.cobalt,
+    info: financeColors.amber,
   },
   chart: {
     up: financeColors.up,
     down: financeColors.down,
-    neutral: '#3A4250',
-    mapBed: financeColors.ink,
-    grid: withAlpha(financeColors.ivory, 0.08),
-    background: financeColors.ink,
+    neutral: '#C7CDD8',
+    mapBed: '#E9EEF5',
+    grid: withAlpha(financeColors.ink, 0.08),
+    background: financeColors.paper,
     text: financeColors.silver,
     emaFast: financeColors.amber,
-    emaSlow: financeColors.cobalt,
-    rsi: financeColors.ivory,
+    emaSlow: '#16C784',
+    rsi: financeColors.ink,
   },
   skeleton: {
-    base: withAlpha(financeColors.steel, 0.9),
-    mid: withAlpha(financeColors.pewter, 0.9),
-    highlight: withAlpha(financeColors.amber, 0.14),
+    base: financeColors.chip,
+    mid: financeColors.line,
+    highlight: withAlpha(financeColors.amber, 0.16),
   },
 } as const;
 

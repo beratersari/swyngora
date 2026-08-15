@@ -20,6 +20,6 @@ describe('App shell navigation', () => {
     expect(links.some((a) => a.getAttribute('href') === '/compare')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/heatmap')).toBe(true);
     expect(screen.getByTestId('routes')).toBeInTheDocument();
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /snapshot|market/i })).toBeInTheDocument();
   });
 });

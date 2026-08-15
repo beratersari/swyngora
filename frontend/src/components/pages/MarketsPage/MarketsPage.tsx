@@ -209,7 +209,7 @@ export function MarketsPage() {
 
   return (
     <PageStack>
-      <PageHeader title={t('markets:title')} />
+      <PageHeader title={t('markets:title')} subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })} />
 
       <ExchangeTabs
         exchanges={exchanges}

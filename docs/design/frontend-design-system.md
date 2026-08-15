@@ -11,7 +11,7 @@
 
 A single source of truth for **color**, **typography**, **loading**, and **core atoms** so features (markets, detail, watchlist) stay visually consistent.
 
-Product chrome is a **finance terminal**: left venue rail, thin utility bar, quote strip, full-bleed workspace. Heatmap is a map + docked inspector, not a marketing page.
+Product chrome follows a **CoinMarketCap-like consumer market site**: light page, blue brand, top text nav, global stats strip, large price table.
 
 | Concern | Location |
 |---|---|
