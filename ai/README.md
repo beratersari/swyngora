@@ -78,6 +78,7 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 | `AI_MEMORY_PATH` | empty | FinMem SQLite path (`data/ai-memory.db` or `:memory:`) |
 | `XAI_API_KEY` | — | **Required for Grok** (https://console.x.ai/) |
 | `GROK_MODEL` | `grok-4.3` | xAI model id (cheapest general chat) |
+| `GROK_REASONING_EFFORT` | `low` | Grok only: `none` \| `low` \| `medium` \| `high` |
 | `SWYNGORA_API_URL` | `http://localhost:8080` | Backend API |
 | `AI_DEFAULT_CLIENT_ID` | `ai-assistant` | Watchlist client id |
 | `AI_MAX_ITERATIONS` | `8` | Specialist ReAct depth hint |

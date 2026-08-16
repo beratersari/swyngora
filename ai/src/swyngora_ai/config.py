@@ -5,10 +5,16 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from swyngora_ai.constants import DEFAULT_GROK_MODEL, DEFAULT_OLLAMA_MODEL
+from swyngora_ai.constants import (
+    DEFAULT_GROK_MODEL,
+    DEFAULT_GROK_REASONING_EFFORT,
+    DEFAULT_OLLAMA_MODEL,
+)
+
+GrokReasoningEffort = Literal["none", "low", "medium", "high"]
 
 
 class Settings(BaseSettings):
@@ -24,6 +30,10 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default=DEFAULT_OLLAMA_MODEL, alias="OLLAMA_MODEL")
     xai_api_key: str = Field(default="", alias="XAI_API_KEY")
     grok_model: str = Field(default=DEFAULT_GROK_MODEL, alias="GROK_MODEL")
+    grok_reasoning_effort: GrokReasoningEffort = Field(
+        default=DEFAULT_GROK_REASONING_EFFORT,
+        alias="GROK_REASONING_EFFORT",
+    )
     # Shared secret with the Go AI proxy. Empty = open localhost (dev).
     service_token: str = Field(default="", alias="AI_SERVICE_TOKEN")
     # FinMem SQLite path. Empty = RAM only. Use data/ai-memory.db or :memory:.
@@ -47,6 +57,13 @@ class Settings(BaseSettings):
         "Informational analysis only — not financial advice. "
         "Crypto markets are volatile; verify critical numbers via tools."
     )
+
+    @field_validator("grok_reasoning_effort", mode="before")
+    @classmethod
+    def _normalize_grok_reasoning_effort(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
 
 
 @lru_cache

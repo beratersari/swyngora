@@ -54,6 +54,7 @@ cd backend && go run ./cmd/server
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
 export OLLAMA_MODEL=qwen2.5     # default; llama3.2 skips tools
+# export GROK_REASONING_EFFORT=low   # Grok only: none|low|medium|high
 export SWYNGORA_API_URL=http://localhost:8080
 # export SWYNGORA_API_TOKEN=...   # same as backend API_AUTH_TOKEN when set
 # export AI_SERVICE_TOKEN=...     # shared with Go proxy for :8090

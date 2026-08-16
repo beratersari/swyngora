@@ -11,6 +11,8 @@ DEFAULT_OLLAMA_MODEL = "qwen2.5"
 # Cheapest current general-purpose xAI chat model (docs.x.ai/developers/pricing).
 # grok-3-mini is retired. grok-build-0.1 is cheaper but coding-only.
 DEFAULT_GROK_MODEL = "grok-4.3"
+# Native xAI reasoning on Grok only. low is the cheapest effort that stays on.
+DEFAULT_GROK_REASONING_EFFORT = "low"
 
 TAPE_TTL_SECONDS = 300
 
