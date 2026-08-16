@@ -11,6 +11,7 @@ import {
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useGetSupplyQuery,
+  useGetHoldersQuery,
   useGetTicker24hQuery,
   useLazyGetCandlesQuery,
   useListIntervalsQuery,
@@ -166,6 +167,15 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     },
   );
 
+  const isEquity = exchange === 'nasdaq' || exchange === 'bist';
+  const holdersQuery = useGetHoldersQuery(
+    { symbol },
+    {
+      skip: skip || isEquity,
+      refetchOnFocus: false,
+    },
+  );
+
   const candlesQuery = useGetCandlesQuery(
     {
       exchange,
@@ -317,6 +327,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
   const ticker = tickerQuery.data;
   const supply = supplyQuery.data;
+  const holders = holdersQuery.data;
 
   const statsItems = useMemo(
     () => [
@@ -345,8 +356,19 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
             : null,
         ),
       },
+      {
+        label: t('detail:stats.holders'),
+        value: formatSupplyNum(holders?.holderCount),
+      },
+      {
+        label: t('detail:stats.topTenHolders'),
+        value:
+          holders?.topTenSharePct != null && Number.isFinite(holders.topTenSharePct)
+            ? `${holders.topTenSharePct.toFixed(2)}%`
+            : '—',
+      },
     ],
-    [ticker, supply, exchange, t],
+    [ticker, supply, holders, exchange, t],
   );
 
   const supplyError =
@@ -451,6 +473,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   const onRetry = useCallback(() => {
     void tickerQuery.refetch();
     void supplyQuery.refetch();
+    void holdersQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
     void intervalsQuery.refetch();
@@ -458,6 +481,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   }, [
     tickerQuery,
     supplyQuery,
+    holdersQuery,
     candlesQuery,
     indicatorsQuery,
     intervalsQuery,

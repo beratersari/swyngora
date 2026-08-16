@@ -5,6 +5,10 @@ import {
   type SupportedExchange,
 } from '@/config/constants';
 
+export const DETAIL_TABS = ['overview', 'orderbook', 'holders', 'indicators', 'trade'] as const;
+export type DetailTab = (typeof DETAIL_TABS)[number];
+export const DEFAULT_DETAIL_TAB: DetailTab = 'overview';
+
 export type DetailUrlState = {
   interval: string;
   /**
@@ -12,12 +16,19 @@ export type DetailUrlState = {
    * Still parsed if present for old links, then ignored by the page.
    */
   limit: number;
+  tab: DetailTab;
 };
 
 export const DEFAULT_DETAIL_STATE: DetailUrlState = {
   interval: DEFAULT_DETAIL_INTERVAL,
   limit: DEFAULT_DETAIL_CANDLE_LIMIT,
+  tab: DEFAULT_DETAIL_TAB,
 };
+
+export function parseDetailTab(raw: string | null | undefined): DetailTab {
+  const v = (raw ?? '').trim().toLowerCase();
+  return (DETAIL_TABS as readonly string[]).includes(v) ? (v as DetailTab) : DEFAULT_DETAIL_TAB;
+}
 
 const LIMIT_MIN = 20;
 /** Legacy URL limit clamp only (chart history is no longer URL-driven). */
@@ -141,16 +152,20 @@ export function parseDetailSearchParams(params: URLSearchParams): DetailUrlState
       limit = floored;
     }
   }
-  return { interval, limit };
+  return { interval, limit, tab: parseDetailTab(params.get('tab')) };
 }
 
 /** Serialize detail URL state. Limit is not written (scroll-loads history in-app). */
 export function detailStateToSearchParams(
-  state: Pick<DetailUrlState, 'interval'> & Partial<Pick<DetailUrlState, 'limit'>>,
+  state: Pick<DetailUrlState, 'interval'> &
+    Partial<Pick<DetailUrlState, 'limit' | 'tab'>>,
 ): URLSearchParams {
   const p = new URLSearchParams();
   if (state.interval && state.interval !== DEFAULT_DETAIL_STATE.interval) {
     p.set('interval', state.interval);
+  }
+  if (state.tab && state.tab !== DEFAULT_DETAIL_TAB) {
+    p.set('tab', state.tab);
   }
   return p;
 }

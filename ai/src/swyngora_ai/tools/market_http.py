@@ -996,6 +996,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def get_supply(asset: str) -> str:
         return http.get("/api/v1/market/supply", {"asset": asset})
 
+    def get_holders(asset: str) -> str:
+        return http.get("/api/v1/market/holders", {"asset": asset})
+
     def list_spot_markets(
         exchange: str = "binance",
         q: str = "",
@@ -2082,6 +2085,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_supply,
             name="get_supply",
             description="Circulating/total/max supply for a base asset.",
+            args_schema=SupplyInput,
+        ),
+        StructuredTool.from_function(
+            get_holders,
+            name="get_holders",
+            description=(
+                "On-chain holder count, top 10/50/100 concentration, and top wallets "
+                "for a crypto asset (BTC or BTCUSDT). 404 if unpublished. Informational only."
+            ),
             args_schema=SupplyInput,
         ),
         StructuredTool.from_function(

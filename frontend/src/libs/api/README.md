@@ -30,6 +30,7 @@ import {
   useGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
+  useGetHoldersQuery,
   useListIntervalsQuery,
   useGetIndicatorsQuery,
 } from '@/libs/api';

@@ -1,4 +1,5 @@
 import styled from 'styled-components';
+import { Tabs } from 'antd';
 
 export const PageStack = styled.div`
   display: flex;
@@ -41,6 +42,37 @@ export const SideStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[3]}px;
+  min-width: 0;
+`;
+
+export const DeskTabs = styled(Tabs)`
+  min-width: 0;
+  max-width: 100%;
+
+  .ant-tabs-nav {
+    margin-bottom: ${({ theme }) => theme.spacing[3]}px;
+  }
+
+  .ant-tabs-nav::before {
+    border-bottom-color: ${({ theme }) => theme.semantic.border.subtle};
+  }
+
+  .ant-tabs-tab {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .ant-tabs-content-holder,
+  .ant-tabs-tabpane {
+    min-width: 0;
+    max-width: 100%;
+  }
+`;
+
+export const TabStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[4]}px;
   min-width: 0;
 `;
 

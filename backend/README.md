@@ -37,6 +37,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time (pre-warmed for all live crypto pairs; `window` seconds) |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC public data-api) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -211,6 +212,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `DELIST_REFRESH_EVERY` | `1h` | Delist schedule poll interval |
 | `DELIST_REFRESH_ON_STARTUP` | `true` | Fetch delist schedule once on start |
 | `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
+| `CMC_BASE_URL` | `https://api.coinmarketcap.com` | Public data-api host for holder snapshots |
+| `HOLDERS_CACHE_TTL` | `1h` | Per-asset holder snapshot TTL |
 | `COINBASE_BASE_URL` | `https://api.coinbase.com` | Coinbase public market products |
 | `COINBASE_EXCHANGE_URL` | `https://api.exchange.coinbase.com` | Coinbase public candles |
 | `BYBIT_BASE_URL` | `https://api.bybit.com` | Bybit v5 public market API |

@@ -12,6 +12,7 @@ import type {
 import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
+import { HolderPanel } from '@/components/organisms/HolderPanel';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
   OrderBookPanel,
@@ -32,6 +33,7 @@ import {
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useGetSupplyQuery,
+  useGetHoldersQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
@@ -54,6 +56,7 @@ import { formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } fr
 import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
+  DEFAULT_DETAIL_TAB,
   detailStateToSearchParams,
   filterValidApiCandles,
   indicatorPointsToEmaLine,
@@ -71,6 +74,7 @@ import {
   toSupplyAsset,
   trimCandlesToMax,
   type ApiCandle,
+  type DetailTab,
 } from '@/libs/utils';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
@@ -90,9 +94,11 @@ import {
   ChartAndBook,
   ChartCard,
   ChartTitleRow,
+  DeskTabs,
   PageStack,
   PaperTradeCard,
   SideStack,
+  TabStack,
 } from './CoinDetailPage.styles';
 import {
   mergeChartMarkers,
@@ -102,8 +108,8 @@ import {
 } from './CoinDetailPage.helpers';
 
 /**
- * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis,
- * a backend-grouped spot order book, and a resting-size order heatmap.
+ * Coin detail: header + 24h/supply strip, then CoinMarketCap-style tabs
+ * (overview chart, order book, holders, indicators, paper trade).
 
  * Live candles poll a short window; pan-left pages older bars via endTime.
  * Pump/dump markers: live window is polled; each history page fetches pumps for
@@ -190,8 +196,10 @@ export function CoinDetailPage() {
     if (!supportedIntervals?.length) return;
     if (supportedIntervals.includes(urlState.interval)) return;
     const next = resolveInterval(urlState.interval, supportedIntervals);
-    setSearchParams(detailStateToSearchParams({ interval: next }), { replace: true });
-  }, [supportedIntervals, urlState.interval, setSearchParams]);
+    setSearchParams(detailStateToSearchParams({ interval: next, tab: urlState.tab }), {
+      replace: true,
+    });
+  }, [supportedIntervals, urlState.interval, urlState.tab, setSearchParams]);
 
   const skipSeries = skip || waitingForIntervals;
   const supplyAsset = toSupplyAsset(symbol);
@@ -294,6 +302,14 @@ export function CoinDetailPage() {
     {
       skip: skip || !supplyAsset || isEquity,
       pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+
+  const holdersQuery = useGetHoldersQuery(
+    { asset: supplyAsset },
+    {
+      skip: skip || !supplyAsset || isEquity,
       refetchOnFocus: true,
     },
   );
@@ -514,10 +530,18 @@ export function CoinDetailPage() {
     interval,
   ]);
 
-  const patchUrl = (patch: Partial<{ interval: string }>) => {
+  const tab: DetailTab = useMemo(() => {
+    if (isEquity && (urlState.tab === 'orderbook' || urlState.tab === 'holders')) {
+      return DEFAULT_DETAIL_TAB;
+    }
+    return urlState.tab;
+  }, [isEquity, urlState.tab]);
+
+  const patchUrl = (patch: Partial<{ interval: string; tab: DetailTab }>) => {
     setSearchParams(
       detailStateToSearchParams({
         interval: patch.interval ?? interval,
+        tab: patch.tab ?? tab,
       }),
       { replace: true },
     );
@@ -529,6 +553,7 @@ export function CoinDetailPage() {
     void orderBookQuery.refetch();
     void orderHeatmapQuery.refetch();
     void supplyQuery.refetch();
+    void holdersQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
     if (showPumpMarkers) {
@@ -633,7 +658,15 @@ export function CoinDetailPage() {
         }
       />
 
-      <ChartAndBook>
+      <DeskTabs
+        activeKey={tab}
+        onChange={(key) => patchUrl({ tab: key as DetailTab })}
+        destroyOnHidden
+        items={[
+          {
+            key: 'overview',
+            label: t('detail:tabs.overview'),
+            children: (
       <ChartCard>
         <ChartTitleRow>
           <Text variant="h4" color="primary">
@@ -720,22 +753,115 @@ export function CoinDetailPage() {
           </>
         )}
       </ChartCard>
-
-      <SideStack>
-      <OrderBookPanel
-        book={rtkCurrent(orderBookQuery)}
-        group={orderBookGroup || rtkCurrent(orderBookQuery)?.groupSize || ''}
-        onGroupChange={setOrderBookGroup}
-        isLoading={rtkCurrentPending(orderBookQuery)}
-        isFetching={orderBookQuery.isFetching}
-        errorMessage={
-          orderBookQuery.isError
-            ? rtkErrorMessage(orderBookQuery.error, {
-                resource: t('detail:resource.orderBook'),
-              })
-            : null
-        }
-      />
+            ),
+          },
+          ...(!isEquity
+            ? [
+                {
+                  key: 'orderbook',
+                  label: t('detail:tabs.orderbook'),
+                  children: (
+                    <TabStack>
+                      <ChartAndBook>
+                        <OrderDepthChart
+                          book={rtkCurrent(orderBookQuery)}
+                          isLoading={rtkCurrentPending(orderBookQuery)}
+                          isFetching={orderBookQuery.isFetching}
+                          errorMessage={
+                            orderBookQuery.isError
+                              ? rtkErrorMessage(orderBookQuery.error, {
+                                  resource: t('detail:resource.orderBook'),
+                                })
+                              : null
+                          }
+                        />
+                        <SideStack>
+                          <OrderBookPanel
+                            book={rtkCurrent(orderBookQuery)}
+                            group={orderBookGroup || rtkCurrent(orderBookQuery)?.groupSize || ''}
+                            onGroupChange={setOrderBookGroup}
+                            isLoading={rtkCurrentPending(orderBookQuery)}
+                            isFetching={orderBookQuery.isFetching}
+                            errorMessage={
+                              orderBookQuery.isError
+                                ? rtkErrorMessage(orderBookQuery.error, {
+                                    resource: t('detail:resource.orderBook'),
+                                  })
+                                : null
+                            }
+                          />
+                        </SideStack>
+                      </ChartAndBook>
+                      <OrderHeatmap
+                        data={rtkCurrent(orderHeatmapQuery)}
+                        windowSeconds={orderHeatmapWindow}
+                        onWindowChange={setOrderHeatmapWindow}
+                        isLoading={rtkCurrentPending(orderHeatmapQuery)}
+                        isFetching={orderHeatmapQuery.isFetching}
+                        errorMessage={
+                          orderHeatmapQuery.isError
+                            ? rtkErrorMessage(orderHeatmapQuery.error, {
+                                resource: t('detail:resource.orderBook'),
+                              })
+                            : null
+                        }
+                      />
+                    </TabStack>
+                  ),
+                },
+                {
+                  key: 'holders',
+                  label: t('detail:tabs.holders'),
+                  children: (
+                    <HolderPanel
+                      holders={rtkCurrent(holdersQuery)}
+                      circulatingSupply={rtkCurrent(supplyQuery)?.circulatingSupply}
+                      priceUsd={
+                        rtkCurrent(supplyQuery)?.currentPriceUsd ??
+                        (Number.isFinite(Number(rtkCurrent(tickerQuery)?.lastPrice))
+                          ? Number(rtkCurrent(tickerQuery)?.lastPrice)
+                          : null)
+                      }
+                      isLoading={rtkCurrentPending(holdersQuery)}
+                      error={
+                        holdersQuery.isError
+                          ? rtkErrorMessage(holdersQuery.error, {
+                              resource: t('detail:resource.holders'),
+                              statusMessages: {
+                                404: t('detail:errors.holders404'),
+                              },
+                            })
+                          : null
+                      }
+                    />
+                  ),
+                },
+              ]
+            : []),
+          {
+            key: 'indicators',
+            label: t('detail:tabs.indicators'),
+            children: (
+              <IndicatorPanel
+                data={liveIndicators}
+                priceQuote={pairQuote(symbol, exchange)}
+                isLoading={rtkCurrentPending(indicatorsQuery)}
+                errorMessage={
+                  indicatorsQuery.isError
+                    ? rtkErrorMessage(indicatorsQuery.error, {
+                        resource: t('detail:resource.indicators'),
+                      })
+                    : null
+                }
+                showEmaOnChart={showEma}
+                onToggleEma={setShowEma}
+              />
+            ),
+          },
+          {
+            key: 'trade',
+            label: t('detail:tabs.trade'),
+            children: (
       <PaperTradeCard>
         <Text variant="h4" color="primary">
           {t('detail:paperTrade.title')}
@@ -825,54 +951,9 @@ export function CoinDetailPage() {
           </>
         )}
       </PaperTradeCard>
-      </SideStack>
-      </ChartAndBook>
-
-      {!isEquity ? (
-        <OrderDepthChart
-          book={rtkCurrent(orderBookQuery)}
-          isLoading={rtkCurrentPending(orderBookQuery)}
-          isFetching={orderBookQuery.isFetching}
-          errorMessage={
-            orderBookQuery.isError
-              ? rtkErrorMessage(orderBookQuery.error, {
-                  resource: t('detail:resource.orderBook'),
-                })
-              : null
-          }
-        />
-      ) : null}
-
-      {!isEquity ? (
-        <OrderHeatmap
-          data={rtkCurrent(orderHeatmapQuery)}
-          windowSeconds={orderHeatmapWindow}
-          onWindowChange={setOrderHeatmapWindow}
-          isLoading={rtkCurrentPending(orderHeatmapQuery)}
-          isFetching={orderHeatmapQuery.isFetching}
-          errorMessage={
-            orderHeatmapQuery.isError
-              ? rtkErrorMessage(orderHeatmapQuery.error, {
-                  resource: t('detail:resource.orderBook'),
-                })
-              : null
-          }
-        />
-      ) : null}
-
-      <IndicatorPanel
-        data={liveIndicators}
-        priceQuote={pairQuote(symbol, exchange)}
-        isLoading={rtkCurrentPending(indicatorsQuery)}
-        errorMessage={
-          indicatorsQuery.isError
-            ? rtkErrorMessage(indicatorsQuery.error, {
-                resource: t('detail:resource.indicators'),
-              })
-            : null
-        }
-        showEmaOnChart={showEma}
-        onToggleEma={setShowEma}
+            ),
+          },
+        ]}
       />
 
       {!visible ? (

@@ -64,6 +64,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.SupplyCacheTTL != 48*time.Hour {
 		t.Fatalf("supply ttl default want 48h safety TTL, got %v", cfg.SupplyCacheTTL)
 	}
+	if cfg.HoldersCacheTTL != time.Hour {
+		t.Fatalf("holders ttl=%v", cfg.HoldersCacheTTL)
+	}
+	if cfg.CMCBaseURL != "https://api.coinmarketcap.com" {
+		t.Fatalf("cmc base=%q", cfg.CMCBaseURL)
+	}
 	if cfg.CandleCacheMaxEntries != 512 {
 		t.Fatalf("candle max entries=%d", cfg.CandleCacheMaxEntries)
 	}

@@ -179,6 +179,32 @@ func TestAPIClient_GetPortfolioPerformance(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetHolders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/holders" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("asset") != "BTC" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"asset": "BTC", "holderCount": 9})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetHolders(context.Background(), "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["asset"] != "BTC" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_ErrorStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

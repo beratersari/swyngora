@@ -72,13 +72,15 @@ export {
   parseSymbolParam,
   parseDetailSearchParams,
   detailStateToSearchParams,
+  parseDetailTab,
   resolveInterval,
   toSupplyAsset,
   marketsBackPath,
   intervalToSeconds,
   analyticsBarLimit,
 } from './detailQuery';
-export type { DetailUrlState } from './detailQuery';
+export type { DetailUrlState, DetailTab } from './detailQuery';
+export { DETAIL_TABS, DEFAULT_DETAIL_TAB } from './detailQuery';
 export {
   SPOT_METRICS,
   getSpotMetric,

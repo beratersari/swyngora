@@ -28,3 +28,16 @@ type SupplyPort interface {
 	// Refresh loads a bulk snapshot into cache. Returns number of assets stored.
 	Refresh(ctx context.Context) (int, error)
 }
+
+// AssetCatalogPort resolves a base ticker (or pair) to a CoinMarketCap id.
+// Implementations MUST serve from the Binance marketing snapshot (cache-only).
+type AssetCatalogPort interface {
+	LookupAsset(ctx context.Context, asset string) (*AssetCatalogEntry, error)
+}
+
+// HoldersPort serves on-chain holder snapshots for crypto assets.
+// Implementations may fetch upstream on a cache miss; user requests still go
+// through this port (never from the HTTP handler).
+type HoldersPort interface {
+	GetHolders(ctx context.Context, asset string) (*AssetHolders, error)
+}

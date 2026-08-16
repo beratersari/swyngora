@@ -86,8 +86,23 @@ func (stubSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSuppl
 	}, nil
 }
 
+type stubHolders struct{}
+
+func (stubHolders) GetHolders(_ context.Context, asset string) (*domain.AssetHolders, error) {
+	top10 := 5.4
+	return &domain.AssetHolders{
+		Asset:          asset,
+		Name:           "Bitcoin",
+		HolderCount:    50_000_000,
+		TopTenSharePct: &top10,
+		TopHolders:     []domain.AssetHolder{{Address: "34xp4vRo", Balance: 1, SharePct: 1.18}},
+		AsOf:           time.Unix(0, 0).UTC(),
+		Source:         "coinmarketcap",
+	}, nil
+}
+
 func newTestHandler() *MarketHandler {
-	return NewMarketHandler(market.New(stubMarket{}, stubSupply{}))
+	return NewMarketHandler(market.New(stubMarket{}, stubSupply{}).WithHolders(stubHolders{}))
 }
 
 func TestGetCandles_OK(t *testing.T) {
@@ -370,6 +385,33 @@ func TestGetSupply_ViaSymbolParam(t *testing.T) {
 	h.GetSupply(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetHolders_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/holders?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetHolders(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body holdersResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.HolderCount != 50_000_000 || body.Asset != "BTCUSDT" || len(body.TopHolders) != 1 {
+		t.Fatalf("body=%+v", body)
+	}
+}
+
+func TestGetHolders_MissingAsset(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/holders", nil)
+	rr := httptest.NewRecorder()
+	h.GetHolders(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
 	}
 }
 

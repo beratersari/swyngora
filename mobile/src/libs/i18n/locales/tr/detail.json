@@ -33,7 +33,9 @@
     "trades": "İşlem",
     "circSupply": "Dolaşımdaki arz",
     "totalSupply": "Toplam arz",
-    "circMcap": "Dolaşım piyasa değeri"
+    "circMcap": "Dolaşım piyasa değeri",
+    "holders": "Tutucular",
+    "topTenHolders": "İlk 10 pay"
   },
   "askAi": "Bu çift hakkında AI’ya sor"
 }

@@ -11,7 +11,7 @@ LangChain **ReAct orchestrator**: the model chooses specialists from the user pr
 ```text
 User → Orchestrator (create_agent)
          optional, only if the question needs it:
-         ├─ market_tape_agent  → ticker, candles, indicators, FX, lists, delists
+         ├─ market_tape_agent  → ticker, candles, indicators, FX, lists, delists, holders
          ├─ market_book_agent  → book, liquidations, impact, pumps, swing
          ├─ paper_desk_agent   → paper books / orders / margin
          ├─ account_agent      → watchlist, alerts, keys, export/import
@@ -32,7 +32,7 @@ User → Orchestrator (create_agent)
 
 ## Behavior
 
-- Market numbers must come from tools (ticker, candles, supply, indicators, spot).
+- Market numbers must come from tools (ticker, candles, supply, holders, indicators, spot).
 - Paper sell realized PnL uses tax lots (`list_portfolio_lots`, `lotMethod` fifo|lifo) after the sell fee; buy lot cost includes the buy fee. Per-exchange rates: `get_paper_trading_costs`.
 - Live UI updates use the backend WebSocket (`realtime_stream_info` / `GET /api/v1/realtime`); tools remain request/response.
 - Social/X results are labeled weak and incomplete.

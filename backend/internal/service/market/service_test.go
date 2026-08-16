@@ -13,12 +13,12 @@ import (
 )
 
 type fakeMarket struct {
-	candles   []domain.Candle
-	ticker    *domain.Ticker24h
-	spot      []domain.SpotMarket
-	err       error
-	lastQ     domain.CandleQuery
-	lastSym   string
+	candles      []domain.Candle
+	ticker       *domain.Ticker24h
+	spot         []domain.SpotMarket
+	err          error
+	lastQ        domain.CandleQuery
+	lastSym      string
 	lastBookQ    domain.OrderBookQuery
 	snapshotN    int
 	failSnapshot bool
@@ -198,6 +198,35 @@ func TestGetSupply(t *testing.T) {
 	sup, err := svc.GetSupply(context.Background(), "BTC")
 	if err != nil || sup.Asset != "BTC" {
 		t.Fatalf("sup=%+v err=%v", sup, err)
+	}
+}
+
+type fakeHolders struct {
+	snap *domain.AssetHolders
+	err  error
+}
+
+func (f *fakeHolders) GetHolders(context.Context, string) (*domain.AssetHolders, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.snap, nil
+}
+
+func TestGetHolders(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetHolders(context.Background(), "BTC")
+	if !errors.Is(err, domain.ErrUpstream) {
+		t.Fatalf("nil port: %v", err)
+	}
+	svc = svc.WithHolders(&fakeHolders{snap: &domain.AssetHolders{Asset: "BTC", HolderCount: 9}})
+	_, err = svc.GetHolders(context.Background(), "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("empty: %v", err)
+	}
+	got, err := svc.GetHolders(context.Background(), "BTC")
+	if err != nil || got.HolderCount != 9 {
+		t.Fatalf("got=%+v err=%v", got, err)
 	}
 }
 

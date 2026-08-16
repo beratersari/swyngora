@@ -46,3 +46,5 @@ Swyngora needs candlesticks, 24h volume, spot listings, and supply metrics align
 **Spot market data** (candles, 24h ticker, listings) may now come from **Binance**, **Coinbase**, or **Bybit** public free endpoints, selected via `exchange` query parameter.
 
 **Supply / circulating metrics** remain **Binance marketing symbol list only** (daily snapshot), applied as asset-level enrichment across venues. No CoinGecko; no paid API tiers.
+
+**Holder snapshots** are a separate feed (CoinMarketCap public data-api, mapped via marketing `cmcUniqueId`). See [0003](0003-coinmarketcap-holder-source.md).

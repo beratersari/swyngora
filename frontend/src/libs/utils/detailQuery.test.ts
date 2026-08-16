@@ -41,7 +41,9 @@ describe('parseSymbolParam', () => {
 describe('detail search params', () => {
   it('parses interval and limit with bounds', () => {
     const s = parseDetailSearchParams(new URLSearchParams('interval=4h&limit=200'));
-    expect(s).toEqual({ interval: '4h', limit: 200 });
+    expect(s).toEqual({ interval: '4h', limit: 200, tab: 'overview' });
+    expect(parseDetailSearchParams(new URLSearchParams('tab=holders')).tab).toBe('holders');
+    expect(parseDetailSearchParams(new URLSearchParams('tab=nope')).tab).toBe('overview');
     expect(parseDetailSearchParams(new URLSearchParams('limit=5')).limit).toBe(
       DEFAULT_DETAIL_STATE.limit,
     );
@@ -67,6 +69,9 @@ describe('detail search params', () => {
     const p2 = detailStateToSearchParams({ interval: '4h', limit: 200 });
     expect(p2.get('interval')).toBe('4h');
     expect(p2.get('limit')).toBeNull();
+    const p3 = detailStateToSearchParams({ interval: '1h', tab: 'holders' });
+    expect(p3.get('tab')).toBe('holders');
+    expect(p3.get('interval')).toBeNull();
   });
 });
 

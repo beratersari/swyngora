@@ -96,6 +96,13 @@ Metrics: last, session change %, day high/low (Yahoo/spark on detail), share vol
 - **Params:** `exchange`, `symbol` (required)
 - **Returns:** last/open/high/low, base `volume`, quote `quoteVolume`, change %, trade count
 
+### Holders — `GET /api/v1/market/holders`
+
+- **Source:** CoinMarketCap public `data-api` detail, mapped by Binance marketing `cmcUniqueId`
+- **Params:** `asset` or `symbol` (e.g. `BTC` or `BTCUSDT`)
+- **Returns:** holder count, optional daily-active, top 10/20/50/100 share %, up to 20 wallets
+- Cached 1h; 404 when unpublished. See [`holders.md`](holders.md).
+
 ### Supply — `GET /api/v1/market/supply`
 
 - **Source:** Binance marketing symbol list (`circulatingSupply`, `totalSupply`, `maxSupply`); not Spot REST kline/ticker APIs

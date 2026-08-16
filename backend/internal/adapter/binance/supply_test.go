@@ -50,6 +50,7 @@ func TestRefresh_PopulatesAllSupplyFields(t *testing.T) {
 					"tags": []string{"Payments"},
 					"circulatingSupply": 19_800_000, "totalSupply": 19_800_000, "maxSupply": 21_000_000,
 					"price": 64000.5, "infiniteSupply": false,
+					"cmcUniqueId": 1, "slug": "bitcoin",
 				},
 				{
 					"name": "ETH", "fullName": "Ethereum", "symbol": "ETHUSDT",
@@ -124,6 +125,11 @@ func TestRefresh_PopulatesAllSupplyFields(t *testing.T) {
 	}
 	if btc.CurrentPriceUSD == nil || *btc.CurrentPriceUSD != 64000.5 {
 		t.Fatalf("usd=%v", btc.CurrentPriceUSD)
+	}
+
+	cat, err := c.LookupAsset(context.Background(), "BTCUSDT")
+	if err != nil || cat.CMCID != 1 || cat.Asset != "BTC" || cat.Slug != "bitcoin" {
+		t.Fatalf("catalog=%+v err=%v", cat, err)
 	}
 
 	eth, err := c.GetSupply(context.Background(), "ETH")

@@ -131,6 +131,7 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 	}
 
 	next := make(map[string]*domain.AssetSupply, len(best))
+	catalog := make(map[string]*domain.AssetCatalogEntry, len(best))
 	for base, rs := range best {
 		row := rs.row
 		circ, hasCirc := parseOptionalFloat(row.CirculatingSupply)
@@ -171,6 +172,14 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 			sup.CurrentPriceUSD = usd
 		}
 		next[base] = sup
+		if id, ok := parseOptionalInt(row.CMCUniqueID); ok && id > 0 {
+			catalog[base] = &domain.AssetCatalogEntry{
+				Asset: base,
+				Name:  name,
+				CMCID: id,
+				Slug:  strings.TrimSpace(row.Slug),
+			}
+		}
 	}
 	if len(next) == 0 {
 		return 0, fmt.Errorf("%w: no supply rows stored from marketing symbol list", domain.ErrUpstream)
@@ -179,7 +188,41 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 	// Atomic swap: only replace previous snapshot after a full successful build.
 	// defaultTTL for supply is configured long; entries also never vanish on failed refresh.
 	c.supply.ReplaceAll(next)
+	if c.catalog != nil {
+		c.catalog.ReplaceAll(catalog)
+	}
 	return len(next), nil
+}
+
+// LookupAsset resolves a base ticker or pair to the CoinMarketCap id stored
+// with the daily marketing snapshot. Cache-only — same lookup rules as GetSupply.
+func (c *Client) LookupAsset(ctx context.Context, asset string) (*domain.AssetCatalogEntry, error) {
+	_ = ctx
+	key := strings.ToUpper(strings.TrimSpace(asset))
+	if key == "" {
+		return nil, fmt.Errorf("%w: asset is required", domain.ErrInvalidArgument)
+	}
+	if c.catalog == nil {
+		return nil, fmt.Errorf("%w: asset catalog not configured", domain.ErrUpstream)
+	}
+	if hit, ok := c.catalog.Get(key); ok {
+		return cloneCatalog(hit), nil
+	}
+	if base := stripStableQuoteSuffix(key); base != key {
+		if hit, ok := c.catalog.Get(base); ok {
+			return cloneCatalog(hit), nil
+		}
+		key = base
+	}
+	return nil, fmt.Errorf("%w: catalog for %q not in Binance marketing snapshot", domain.ErrNotFound, key)
+}
+
+func cloneCatalog(hit *domain.AssetCatalogEntry) *domain.AssetCatalogEntry {
+	if hit == nil {
+		return nil
+	}
+	cp := *hit
+	return &cp
 }
 
 // pairQuoteScore ranks a marketing pair symbol by preferred USD-stable quote.
@@ -280,6 +323,32 @@ type marketingSymbolRow struct {
 	MaxSupply         json.RawMessage `json:"maxSupply"`
 	Price             json.RawMessage `json:"price"`
 	InfiniteSupply    bool            `json:"infiniteSupply"`
+	CMCUniqueID       json.RawMessage `json:"cmcUniqueId"`
+	Slug              string          `json:"slug"`
+}
+
+// parseOptionalInt decodes a JSON number or numeric string as int64.
+func parseOptionalInt(raw json.RawMessage) (int64, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, false
+	}
+	var n int64
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return n, true
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err == nil {
+		return int64(f), true
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	}
+	return 0, false
 }
 
 // parseOptionalFloat decodes a JSON number or numeric string; false if null/missing/invalid.

@@ -353,6 +353,35 @@ func (b *Backend) GetSupply(ctx context.Context, asset string) (json.RawMessage,
 	})
 }
 
+func (b *Backend) GetHolders(ctx context.Context, asset string) (json.RawMessage, error) {
+	got, err := b.Market.GetHolders(ctx, asset)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]map[string]any, 0, len(got.TopHolders))
+	for _, row := range got.TopHolders {
+		rows = append(rows, map[string]any{
+			"address":  row.Address,
+			"balance":  row.Balance,
+			"sharePct": row.SharePct,
+		})
+	}
+	return mustJSON(map[string]any{
+		"asset":              got.Asset,
+		"name":               got.Name,
+		"providerId":         got.ProviderID,
+		"holderCount":        got.HolderCount,
+		"dailyActive":        got.DailyActive,
+		"topTenSharePct":     got.TopTenSharePct,
+		"topTwentySharePct":  got.TopTwentySharePct,
+		"topFiftySharePct":   got.TopFiftySharePct,
+		"topHundredSharePct": got.TopHundredSharePct,
+		"topHolders":         rows,
+		"asOf":               got.AsOf.UTC().Format(time.RFC3339Nano),
+		"source":             got.Source,
+	})
+}
+
 func (b *Backend) ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error) {
 	var tags []string
 	if tag != "" {

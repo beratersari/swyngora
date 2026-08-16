@@ -113,6 +113,10 @@ export function supplyTagId(arg: { asset?: string; symbol?: string } | void): st
   return (arg && (arg.asset || arg.symbol)) || 'unknown';
 }
 
+export function holdersTagId(arg: { asset?: string; symbol?: string } | void): string {
+  return (arg && (arg.asset || arg.symbol)) || 'unknown';
+}
+
 export function indicatorTagId(arg: {
   exchange?: string;
   symbol: string;

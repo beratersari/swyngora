@@ -33,7 +33,9 @@
     "trades": "Trades",
     "circSupply": "Circ. supply",
     "totalSupply": "Total supply",
-    "circMcap": "Circ. mcap"
+    "circMcap": "Circ. mcap",
+    "holders": "Holders",
+    "topTenHolders": "Top 10 share"
   },
   "askAi": "Ask AI about this pair"
 }

@@ -14,6 +14,7 @@ import { CoinDetailPage } from './CoinDetailPage';
 const mockIntervals = vi.fn();
 const mockTicker = vi.fn();
 const mockSupply = vi.fn();
+const mockHolders = vi.fn();
 const mockCandles = vi.fn();
 const mockIndicators = vi.fn();
 const mockOrderBook = vi.fn();
@@ -26,6 +27,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useListIntervalsQuery: () => mockIntervals(),
     useGetTicker24hQuery: () => mockTicker(),
     useGetSupplyQuery: () => mockSupply(),
+    useGetHoldersQuery: () => mockHolders(),
     useGetCandlesQuery: () => mockCandles(),
     useGetIndicatorsQuery: () => mockIndicators(),
     useGetSpotOrderBookQuery: () => mockOrderBook(),
@@ -80,6 +82,24 @@ describe('CoinDetailPage', () => {
     mockSupply.mockReturnValue({
       data: { asset: 'BTC', name: 'Bitcoin', circulatingSupply: 19e6 },
       currentData: { asset: 'BTC', name: 'Bitcoin', circulatingSupply: 19e6 },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockHolders.mockReturnValue({
+      data: {
+        asset: 'BTC',
+        holderCount: 50_000_000,
+        topTenSharePct: 5.4,
+        topHolders: [{ address: '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo', balance: 1, sharePct: 1.18 }],
+      },
+      currentData: {
+        asset: 'BTC',
+        holderCount: 50_000_000,
+        topTenSharePct: 5.4,
+        topHolders: [{ address: '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo', balance: 1, sharePct: 1.18 }],
+      },
       isLoading: false,
       isError: false,
       isFetching: false,
@@ -165,8 +185,21 @@ describe('CoinDetailPage', () => {
   it('renders symbol header and chart host', async () => {
     renderDetail('/markets/binance/BTCUSDT');
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Holders' })).toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
-    expect(screen.getByTestId('order-book')).toBeInTheDocument();
+    expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
+  });
+
+  it('opens holders tab from the URL', async () => {
+    renderDetail('/markets/binance/BTCUSDT?tab=holders');
+    expect(await screen.findByText('On-chain wallet count and top addresses. Informational only — not financial advice.')).toBeInTheDocument();
+    expect(screen.queryByTestId('candle-chart')).not.toBeInTheDocument();
+  });
+
+  it('opens order book tab from the URL', async () => {
+    renderDetail('/markets/binance/BTCUSDT?tab=orderbook');
+    expect(await screen.findByTestId('order-book')).toBeInTheDocument();
     expect(screen.getByTestId('order-depth-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
   });
@@ -279,7 +312,7 @@ describe('CoinDetailPage', () => {
       error: { status: 500, data: {} },
       refetch: vi.fn(),
     });
-    renderDetail('/markets/binance/BTCUSDT');
+    renderDetail('/markets/binance/BTCUSDT?tab=indicators');
     // IndicatorPanel error title from i18n
     expect(await screen.findByText(/indicators? unavailable|gösterge/i)).toBeInTheDocument();
   });

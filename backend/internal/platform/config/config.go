@@ -15,6 +15,7 @@ type Config struct {
 	HTTPAddr               string
 	BinanceBaseURL         string
 	BinanceProductBaseURL  string
+	CMCBaseURL             string
 	BinanceAPIKey          string
 	BinanceWSURL           string
 	BinanceFuturesWSURL    string
@@ -34,6 +35,7 @@ type Config struct {
 	TickerCacheTTL         time.Duration
 	OrderBookCacheTTL      time.Duration
 	SupplyCacheTTL         time.Duration
+	HoldersCacheTTL        time.Duration
 	CacheCleanupEvery      time.Duration
 	SpotMarketCacheTTL     time.Duration
 
@@ -160,6 +162,7 @@ func Load() Config {
 		HTTPAddr:               getenv("HTTP_ADDR", "127.0.0.1:8080"),
 		BinanceBaseURL:         getenv("BINANCE_BASE_URL", "https://api.binance.com"),
 		BinanceProductBaseURL:  getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
+		CMCBaseURL:             getenv("CMC_BASE_URL", "https://api.coinmarketcap.com"),
 		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
 		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
 		BinanceFuturesWSURL:    getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
@@ -181,6 +184,7 @@ func Load() Config {
 		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
 		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
 		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
+		HoldersCacheTTL:    positiveDurationEnv("HOLDERS_CACHE_TTL", time.Hour),
 		CacheCleanupEvery:  positiveDurationEnv("CACHE_CLEANUP_EVERY", 1*time.Minute),
 		SpotMarketCacheTTL: positiveDurationEnv("SPOT_MARKET_CACHE_TTL", 5*time.Second),
 

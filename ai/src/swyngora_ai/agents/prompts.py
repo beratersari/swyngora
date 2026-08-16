@@ -152,7 +152,8 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   Exhausted if the order did not fully fill. Use `quantity` (e.g. 5 BTC)
   **or** `notional` (e.g. 1e9 USDT). `exchange=all` (default) merges three venues cheapest-first;
   `get_candles` → structure; `get_indicators` → RSI/EMA;
-  `get_supply` → supply; `list_spot_markets` → rankings/filters; watchlist tools only if asked.
+  `get_supply` → supply; `get_holders` → holder count / top wallets (crypto only);
+  `list_spot_markets` → rankings/filters; watchlist tools only if asked.
 - **Pumps / vertical moves (1–2 day relevant):**
   - `detect_pump_events` — one symbol: set `min_return_pct` (e.g. 5, 8, 15), `lookback_hours`
     (e.g. 24–48 for tactical), `interval` (15m/1h for 1–2 day; 5m for intraday),

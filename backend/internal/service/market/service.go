@@ -42,11 +42,20 @@ type Service struct {
 	liqWatch      LiquidationWatch
 	fx            FxSource
 	fxCache       *cache.TTL[*domain.FxRates]
+	holders       domain.HoldersPort
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.
 type LiquidationWatch interface {
 	Watch(symbol string)
+}
+
+// WithHolders attaches the crypto holder snapshot port.
+func (s *Service) WithHolders(h domain.HoldersPort) *Service {
+	if s != nil {
+		s.holders = h
+	}
+	return s
 }
 
 // WithLiquidations attaches the rolling futures liquidation book.
@@ -550,6 +559,18 @@ func (s *Service) GetSupply(ctx context.Context, asset string) (*domain.AssetSup
 		return nil, fmt.Errorf("%w: supply port not configured", domain.ErrUpstream)
 	}
 	return s.supply.GetSupply(ctx, asset)
+}
+
+// GetHolders returns an on-chain holder snapshot for a crypto base asset or pair.
+func (s *Service) GetHolders(ctx context.Context, asset string) (*domain.AssetHolders, error) {
+	asset = strings.TrimSpace(asset)
+	if asset == "" {
+		return nil, fmt.Errorf("%w: asset is required", domain.ErrInvalidArgument)
+	}
+	if s.holders == nil {
+		return nil, fmt.Errorf("%w: holders port not configured", domain.ErrUpstream)
+	}
+	return s.holders.GetHolders(ctx, asset)
 }
 
 // ListIntervals returns supported candle intervals for an exchange.

@@ -16,6 +16,7 @@ def test_pack_filter_splits_tools():
     assert "preview_import" in account
     assert "place_portfolio_oco_order" in paper
     assert "list_delist_schedule" in tape
+    assert "get_holders" in tape
     assert "amend_portfolio_order" in paper
     assert paper == set(PAPER_TOOLS)
     assert account == set(ACCOUNT_TOOLS)

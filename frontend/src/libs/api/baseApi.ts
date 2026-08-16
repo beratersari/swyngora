@@ -23,6 +23,7 @@ export const baseApi = createApi({
     'OrderBook',
     'OrderHeatmap',
     'Supply',
+    'Holders',
     'Interval',
     'Indicator',
     'Pump',

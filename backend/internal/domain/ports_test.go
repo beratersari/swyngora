@@ -52,6 +52,31 @@ func TestMarketDataPort_Assignable(t *testing.T) {
 	}
 }
 
+type stubCatalogPort struct{}
+
+func (stubCatalogPort) LookupAsset(context.Context, string) (*AssetCatalogEntry, error) {
+	return &AssetCatalogEntry{Asset: "BTC", CMCID: 1}, nil
+}
+
+type stubHoldersPort struct{}
+
+func (stubHoldersPort) GetHolders(context.Context, string) (*AssetHolders, error) {
+	return &AssetHolders{Asset: "BTC", HolderCount: 1}, nil
+}
+
+func TestCatalogAndHoldersPorts_Assignable(t *testing.T) {
+	var _ AssetCatalogPort = stubCatalogPort{}
+	var _ HoldersPort = stubHoldersPort{}
+	cat, err := stubCatalogPort{}.LookupAsset(context.Background(), "BTC")
+	if err != nil || cat.CMCID != 1 {
+		t.Fatalf("catalog=%+v err=%v", cat, err)
+	}
+	h, err := stubHoldersPort{}.GetHolders(context.Background(), "BTC")
+	if err != nil || h.HolderCount != 1 {
+		t.Fatalf("holders=%+v err=%v", h, err)
+	}
+}
+
 func TestSupplyPort_Assignable(t *testing.T) {
 	var _ SupplyPort = stubSupplyPort{}
 	var p SupplyPort = stubSupplyPort{}

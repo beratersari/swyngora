@@ -250,6 +250,13 @@ func (c *APIClient) GetSupply(ctx context.Context, asset string) (json.RawMessag
 	return c.get(ctx, "/api/v1/market/supply", q)
 }
 
+// GetHolders returns an on-chain holder snapshot for a crypto asset.
+func (c *APIClient) GetHolders(ctx context.Context, asset string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("asset", asset)
+	return c.get(ctx, "/api/v1/market/holders", q)
+}
+
 // ListSpot returns spot markets page.
 func (c *APIClient) ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

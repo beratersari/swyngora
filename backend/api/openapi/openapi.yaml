@@ -744,6 +744,46 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/holders:
+    get:
+      summary: Crypto holder count and top wallets
+      description: |
+        On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
+        Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
+        data-api (not a paid plan). Cache TTL default 1h; 429 may serve last-good.
+        Equities and unmapped tickers return 404. Informational only.
+      operationId: getHolders
+      tags: [Market]
+      parameters:
+        - name: asset
+          in: query
+          required: false
+          description: Base asset ticker (preferred). Provide asset or symbol (at least one required).
+          schema:
+            type: string
+            example: BTC
+        - name: symbol
+          in: query
+          required: false
+          description: Alias for asset; may be a pair like BTCUSDT. Provide asset or symbol (at least one required).
+          schema:
+            type: string
+            example: BTCUSDT
+      responses:
+        '200':
+          description: Holder snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetHolders'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/swing:
     get:
       summary: Analyze one symbol with the swing engine
@@ -4826,6 +4866,57 @@ components:
         currentPriceUsd:
           type: number
           nullable: true
+        asOf:
+          type: string
+          format: date-time
+        source:
+          type: string
+        note:
+          type: string
+
+    HolderWallet:
+      type: object
+      properties:
+        address:
+          type: string
+        balance:
+          type: number
+        sharePct:
+          type: number
+          description: Percent of supply held by this address
+    AssetHolders:
+      type: object
+      properties:
+        asset:
+          type: string
+        name:
+          type: string
+        providerId:
+          type: string
+          description: CoinMarketCap numeric id
+        holderCount:
+          type: integer
+          format: int64
+        dailyActive:
+          type: integer
+          format: int64
+          nullable: true
+        topTenSharePct:
+          type: number
+          nullable: true
+        topTwentySharePct:
+          type: number
+          nullable: true
+        topFiftySharePct:
+          type: number
+          nullable: true
+        topHundredSharePct:
+          type: number
+          nullable: true
+        topHolders:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolderWallet'
         asOf:
           type: string
           format: date-time

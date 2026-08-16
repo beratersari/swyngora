@@ -33,6 +33,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Interval dropdown | `GET` | `/api/v1/market/intervals` | DET-A §5 |
 | Header + 24h stats | `GET` | `/api/v1/market/ticker/24h` | DET-A §6 |
 | Supply stats | `GET` | `/api/v1/market/supply` | DET-A §7 |
+| Holder snapshot | `GET` | `/api/v1/market/holders` | [`holders.md`](holders.md) |
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
 | Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |
@@ -47,7 +48,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 ### Page (DET-A)
 
 - Route `/markets/:exchange/:symbol`; query `interval` + `limit` (defaults `1h` / `100`)
-- Layout: Header → stats → chart + book → market depth → order heatmap → indicators
+- Layout: Header → stats → tabs (Overview chart · Order book · Holders · Indicators · Trade)
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Partial errors per section; supply 404 is soft
 
@@ -77,6 +78,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 
 - Indicators = RSI + EMA only  
 - Supply = Binance marketing-list coverage  
+- Holders = CoinMarketCap public snapshot when published; 404 otherwise  
 - Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules)  
 - Header links to alerts, compare, and the Signals desk; watchlist star on the pair
 

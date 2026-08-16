@@ -45,6 +45,7 @@ type Client struct {
 	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
 	productMeta *cache.TTL[*productMetaSnapshot]
 	supply      *cache.TTL[*domain.AssetSupply]
+	catalog     *cache.TTL[*domain.AssetCatalogEntry]
 	spotSF      singleflight.Group
 	supplySF    singleflight.Group
 	metaSF      singleflight.Group
@@ -70,6 +71,7 @@ type Options struct {
 	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
 	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
 	SupplyCache     *cache.TTL[*domain.AssetSupply]
+	CatalogCache    *cache.TTL[*domain.AssetCatalogEntry]
 	WSURL           string
 	WSDial          wsDialer
 	DepthIdle       time.Duration
@@ -94,6 +96,10 @@ func NewClient(opts Options) *Client {
 	if wait <= 0 {
 		wait = 8 * time.Second
 	}
+	catalog := opts.CatalogCache
+	if catalog == nil {
+		catalog = cache.New[*domain.AssetCatalogEntry](48 * time.Hour)
+	}
 	c := &Client{
 		baseURL:        base,
 		productBaseURL: productBase,
@@ -106,6 +112,7 @@ func NewClient(opts Options) *Client {
 		exchangeSpot:   cache.New[[]spotSymbolMeta](exchangeInfoCacheTTL),
 		productMeta:    cache.New[*productMetaSnapshot](nonCryptoBasesTTL),
 		supply:         opts.SupplyCache,
+		catalog:        catalog,
 		depthWait:      wait,
 		wsURL:          opts.WSURL,
 		wsDial:         opts.WSDial,

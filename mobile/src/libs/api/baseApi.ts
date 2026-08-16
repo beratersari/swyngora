@@ -25,6 +25,7 @@ export const baseApi = createApi({
     'Candle',
     'Ticker',
     'Supply',
+    'Holders',
     'Indicator',
     'Pump',
     'AiChat',

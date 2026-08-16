@@ -9,7 +9,7 @@ Research-backed **supervisor / subagents-as-tools** pattern (LangChain multi-age
 ```text
 User
   └─► Orchestrator (ReAct — calls a specialist only if the question needs it)
-        ├─ market_tape_agent   → ticker, candles, RSI/EMA, supply, FX, lists, delists
+        ├─ market_tape_agent   → ticker, candles, RSI/EMA, supply, holders, FX, lists, delists
         ├─ market_book_agent   → book, liqs, impact, pumps, swing
         ├─ paper_desk_agent    → paper portfolios / OCO / bracket / amend / margin
         ├─ account_agent       → watchlist, alerts, keys, export/import

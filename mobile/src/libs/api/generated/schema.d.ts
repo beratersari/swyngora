@@ -410,6 +410,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Crypto holder count and top wallets
+         * @description On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
+         *     Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
+         *     data-api (not a paid plan). Cache TTL default 1h; 429 may serve last-good.
+         *     Equities and unmapped tickers return 404. Informational only.
+         */
+        get: operations["getHolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/swing": {
         parameters: {
             query?: never;
@@ -2514,6 +2537,31 @@ export interface components {
             source?: string;
             note?: string;
         };
+        HolderWallet: {
+            address?: string;
+            balance?: number;
+            /** @description Percent of supply held by this address */
+            sharePct?: number;
+        };
+        AssetHolders: {
+            asset?: string;
+            name?: string;
+            /** @description CoinMarketCap numeric id */
+            providerId?: string;
+            /** Format: int64 */
+            holderCount?: number;
+            /** Format: int64 */
+            dailyActive?: number | null;
+            topTenSharePct?: number | null;
+            topTwentySharePct?: number | null;
+            topFiftySharePct?: number | null;
+            topHundredSharePct?: number | null;
+            topHolders?: components["schemas"]["HolderWallet"][];
+            /** Format: date-time */
+            asOf?: string;
+            source?: string;
+            note?: string;
+        };
         SpotListResponse: {
             exchange?: string;
             query?: string;
@@ -3929,6 +3977,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Supply"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getHolders: {
+        parameters: {
+            query?: {
+                /** @description Base asset ticker (preferred). Provide asset or symbol (at least one required). */
+                asset?: string;
+                /** @description Alias for asset; may be a pair like BTCUSDT. Provide asset or symbol (at least one required). */
+                symbol?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Holder snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetHolders"];
                 };
             };
             400: components["responses"]["Error"];

@@ -14,6 +14,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cmc"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
@@ -78,6 +79,8 @@ func main() {
 
 	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
+	catalogCache := cache.New[*domain.AssetCatalogEntry](cfg.SupplyCacheTTL)
+	holdersCache := cache.NewWithOptions[*domain.AssetHolders](cfg.HoldersCacheTTL, cache.Options{MaxEntries: 512})
 
 	stopCleanup := make(chan struct{})
 	go func() {
@@ -99,6 +102,8 @@ func main() {
 				bybitBooks.Cleanup()
 				bybitSpot.Cleanup()
 				supplyCache.Cleanup()
+				catalogCache.Cleanup()
+				holdersCache.Cleanup()
 			case <-stopCleanup:
 				return
 			}
@@ -115,6 +120,7 @@ func main() {
 		OrderBookCache:  binanceBooks,
 		SpotMarketCache: binanceSpot,
 		SupplyCache:     supplyCache,
+		CatalogCache:    catalogCache,
 		WSURL:           cfg.BinanceWSURL,
 		DepthIdle:       cfg.OrderBookIdleTTL,
 		DepthWait:       cfg.OrderBookSyncTimeout,
@@ -168,7 +174,12 @@ func main() {
 		domain.ExchangeBybit:    bybitClient,
 		domain.ExchangeNasdaq:   equities.NewNasdaq(equities.Options{HTTPClient: httpClient}),
 		domain.ExchangeBist:     equities.NewBist(equities.Options{HTTPClient: httpClient}),
-	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
+	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
+		BaseURL:    cfg.CMCBaseURL,
+		HTTPClient: httpClient,
+		Catalog:    binanceClient,
+		Cache:      holdersCache,
+	}))
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {

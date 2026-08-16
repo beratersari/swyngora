@@ -7,6 +7,13 @@
   "invalidExchangeTitle": "Bilinmeyen borsa",
   "invalidExchangeBody": "Desteklenen borsalar: binance, coinbase, bybit, nasdaq, bist.",
   "watchFailed": "İzleme listesi güncellenemedi",
+  "tabs": {
+    "overview": "Genel bakış",
+    "orderbook": "Emir defteri",
+    "holders": "Tutucular",
+    "indicators": "Göstergeler",
+    "trade": "İşlem"
+  },
   "chart": {
     "title": "Fiyat grafiği",
     "meta": "{{interval}} · {{bars}} bar yüklü · sola kaydırın (1000+ geçmiş sayfalı)",
@@ -41,6 +48,20 @@
     "supplySource": "Arz kaynağı: {{source}}",
     "asOf": "{{date}} itibarıyla"
   },
+  "holders": {
+    "title": "Tutucular",
+    "subtitle": "Zincir üstü cüzdan sayısı ve en büyük adresler. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "count": "Adres sayısı",
+    "dailyActive": "Günlük aktif",
+    "topTen": "İlk 10 pay",
+    "topFifty": "İlk 50 pay",
+    "topHundred": "İlk 100 pay",
+    "address": "Adres",
+    "balance": "Bakiye",
+    "valueUsd": "Değer",
+    "share": "Pay",
+    "source": "Tutucu kaynağı: {{source}}"
+  },
   "indicators": {
     "title": "Teknik göstergeler",
     "subtitle": "RSI({{rsiPeriod}}) · EMA({{emaPeriods}}) · grafik ile aynı aralık · yalnızca bilgilendirme — yatırım tavsiyesi değildir",
@@ -61,12 +82,14 @@
     }
   },
   "errors": {
-    "supply404": "Bu varlık için arz anlık görüntüsü yok (Binance pazarlama listesi kapsamı)."
+    "supply404": "Bu varlık için arz anlık görüntüsü yok (Binance pazarlama listesi kapsamı).",
+    "holders404": "Bu varlık için tutucu anlık görüntüsü yok."
   },
   "pollingPaused": "Sekme gizliyken canlı yenileme duraklatıldı.",
   "resource": {
     "ticker": "24s ticker",
     "supply": "arz",
+    "holders": "tutucular",
     "candles": "mumlar",
     "indicators": "göstergeler",
     "intervals": "aralıklar",

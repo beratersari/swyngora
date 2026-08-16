@@ -7,6 +7,7 @@ import {
   productTagId,
   spotListTagId,
   supplyTagId,
+  holdersTagId,
   tickerTagId,
   orderBookTagId,
   orderHeatmapTagId,
@@ -33,6 +34,8 @@ import type {
   SpotListResponse,
   Supply,
   SupplyQuery,
+  AssetHolders,
+  HoldersQuery,
   Ticker24h,
   Ticker24hQuery,
   SpotOrderBook,
@@ -53,6 +56,8 @@ export type {
   Candle,
   Ticker24h,
   Supply,
+  AssetHolders,
+  HoldersQuery,
   CandlesQuery,
   Ticker24hQuery,
   SpotOrderBook,
@@ -89,6 +94,7 @@ export {
   tickerTagId,
   orderBookTagId,
   supplyTagId,
+  holdersTagId,
   indicatorTagId,
 } from './marketApi.helpers';
 
@@ -185,6 +191,14 @@ export const marketApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, arg) => [{ type: 'Supply' as const, id: supplyTagId(arg) }],
     }),
 
+    getHolders: build.query<AssetHolders, HoldersQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/holders',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      providesTags: (_r, _e, arg) => [{ type: 'Holders' as const, id: holdersTagId(arg) }],
+    }),
+
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/indicators',
@@ -275,6 +289,7 @@ export const {
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
   useGetSupplyQuery,
+  useGetHoldersQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,

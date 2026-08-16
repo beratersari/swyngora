@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Signal trigger time:** each swing setup, scanner hit, and lab signal shows the exact UTC bar time (seconds + timezone), not a rounded local stamp
+- **Coin detail tabs:** header and 24h/supply stay put; chart, order book, holders, indicators, and paper trade each get their own tab (`?tab=`) so the desk is not one long stack
 - **Grok default model:** `GROK_MODEL` is now `grok-4.3` (`grok-3-mini` is retired) (`docs/features/ai-assistant.md`)
 - **Web desk visual system:** charcoal + amber institutional palette (IBM Plex), underline nav, and sharper chrome — no more teal/neon green (`docs/design/frontend-design-system.md`)
 - **Web terminal chrome:** left venue rail, utility bar, full-bleed workspace
@@ -15,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web heatmap:** CoinMarketCap-style treemap — discrete green/red tiles, centered labels, hover tooltip, market-cap size by default, fullscreen (`/heatmap`)
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
+### Fixed
+- **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
+
 ### Added
+- **Crypto holders:** coin detail shows on-chain wallet count, top 10/50/100 concentration, and top addresses from `GET /api/v1/market/holders` / MCP `get_holders` (`docs/features/holders.md`)
 - **Grok reasoning:** `GROK_REASONING_EFFORT` (`none` | `low` | `medium` | `high`), default `low`; Grok calls only, Ollama unchanged (`docs/features/ai-assistant.md`)
 - **Order heatmap:** coin detail paints a Bookmap-style liquidity map (thermal size, wide current-book column, history to the left) from `GET /api/v1/market/orderbook/heatmap` / MCP `get_orderbook_heatmap`. Not executed volume.
 - **Futures liquidations:** rolling 5m / 1h / 4h / 24h long vs short notional, count, and biggest hit from Binance USD-M and Bybit linear perpetual streams; `complete` / `coverageSeconds` count only live websocket time per coin and venue (`GET /api/v1/market/liquidations`, MCP `get_liquidations`) (`docs/features/liquidations.md`)

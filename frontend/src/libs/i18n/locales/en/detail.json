@@ -7,6 +7,13 @@
   "invalidExchangeTitle": "Unknown exchange",
   "invalidExchangeBody": "Supported venues: binance, coinbase, bybit, nasdaq, bist.",
   "watchFailed": "Could not update watchlist",
+  "tabs": {
+    "overview": "Overview",
+    "orderbook": "Order book",
+    "holders": "Holders",
+    "indicators": "Indicators",
+    "trade": "Trade"
+  },
   "chart": {
     "title": "Price chart",
     "meta": "{{interval}} · {{bars}} bars loaded · pan left for older history (pages beyond 1000)",
@@ -41,6 +48,20 @@
     "supplySource": "Supply source: {{source}}",
     "asOf": "as of {{date}}"
   },
+  "holders": {
+    "title": "Holders",
+    "subtitle": "On-chain wallet count and top addresses. Informational only — not financial advice.",
+    "count": "Addresses",
+    "dailyActive": "Daily active",
+    "topTen": "Top 10 share",
+    "topFifty": "Top 50 share",
+    "topHundred": "Top 100 share",
+    "address": "Address",
+    "balance": "Balance",
+    "valueUsd": "Value",
+    "share": "Share",
+    "source": "Holder source: {{source}}"
+  },
   "indicators": {
     "title": "Technical indicators",
     "subtitle": "RSI({{rsiPeriod}}) · EMA({{emaPeriods}}) · same interval as chart · informational only — not financial advice",
@@ -61,12 +82,14 @@
     }
   },
   "errors": {
-    "supply404": "Supply snapshot not available for this asset (Binance marketing list coverage)."
+    "supply404": "Supply snapshot not available for this asset (Binance marketing list coverage).",
+    "holders404": "Holder snapshot not published for this asset."
   },
   "pollingPaused": "Live refresh paused while this tab is hidden.",
   "resource": {
     "ticker": "24h ticker",
     "supply": "supply",
+    "holders": "holders",
     "candles": "candles",
     "indicators": "indicators",
     "intervals": "intervals",

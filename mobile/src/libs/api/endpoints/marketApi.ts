@@ -12,6 +12,8 @@ export type CandlesResponse = components['schemas']['CandlesResponse'];
 export type Candle = components['schemas']['Candle'];
 export type Ticker24h = components['schemas']['Ticker24h'];
 export type Supply = components['schemas']['Supply'];
+export type AssetHolders = components['schemas']['AssetHolders'];
+export type HoldersQuery = NonNullable<operations['getHolders']['parameters']['query']>;
 
 export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;
@@ -218,6 +220,19 @@ export const marketApi = baseApi.injectEndpoints({
       ],
     }),
 
+    getHolders: build.query<AssetHolders, HoldersQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/holders',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        {
+          type: 'Holders' as const,
+          id: (arg && (arg.asset || arg.symbol)) || 'unknown',
+        },
+      ],
+    }),
+
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/indicators',
@@ -280,6 +295,7 @@ export const {
   useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSupplyQuery,
+  useGetHoldersQuery,
   useGetIndicatorsQuery,
   usePostIndicatorsBatchQuery,
   useLazyPostIndicatorsBatchQuery,

@@ -56,8 +56,14 @@ func (routerSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSup
 	return &domain.AssetSupply{Asset: asset, Source: "test", AsOf: time.Unix(0, 0).UTC()}, nil
 }
 
+type routerHolders struct{}
+
+func (routerHolders) GetHolders(_ context.Context, asset string) (*domain.AssetHolders, error) {
+	return &domain.AssetHolders{Asset: asset, HolderCount: 1, Source: "test", AsOf: time.Unix(0, 0).UTC()}, nil
+}
+
 func TestNewRouter_RoutesAndCORS(t *testing.T) {
-	svc := market.New(routerMarket{}, routerSupply{})
+	svc := market.New(routerMarket{}, routerSupply{}).WithHolders(routerHolders{})
 	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
 
 	paths := []struct {
@@ -99,6 +105,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/orderbook/heatmap?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
+		{"/api/v1/market/holders?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/tags", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any
 			if err := json.Unmarshal(body, &m); err != nil {

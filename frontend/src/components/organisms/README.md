@@ -27,6 +27,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `MarketsTable` | MarketsPage |
 | `DetailHeader` | CoinDetailPage |
 | `DetailStats` | CoinDetailPage |
+| `HolderPanel` | CoinDetailPage |
 | `DetailChartToolbar` | CoinDetailPage |
 | `IndicatorPanel` | CoinDetailPage |
 | `OrderBookPanel` | CoinDetailPage |

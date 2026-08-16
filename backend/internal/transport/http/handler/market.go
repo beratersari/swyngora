@@ -797,6 +797,64 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type holderRowDTO struct {
+	Address  string  `json:"address"`
+	Balance  float64 `json:"balance"`
+	SharePct float64 `json:"sharePct"`
+}
+
+type holdersResponse struct {
+	Asset              string         `json:"asset"`
+	Name               string         `json:"name"`
+	ProviderID         string         `json:"providerId"`
+	HolderCount        int64          `json:"holderCount"`
+	DailyActive        *int64         `json:"dailyActive"`
+	TopTenSharePct     *float64       `json:"topTenSharePct"`
+	TopTwentySharePct  *float64       `json:"topTwentySharePct"`
+	TopFiftySharePct   *float64       `json:"topFiftySharePct"`
+	TopHundredSharePct *float64       `json:"topHundredSharePct"`
+	TopHolders         []holderRowDTO `json:"topHolders"`
+	AsOf               string         `json:"asOf"`
+	Source             string         `json:"source"`
+	Note               string         `json:"note"`
+}
+
+// GetHolders handles GET /api/v1/market/holders
+func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
+	asset := r.URL.Query().Get("asset")
+	if asset == "" {
+		asset = r.URL.Query().Get("symbol")
+	}
+	got, err := h.svc.GetHolders(r.Context(), asset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows := make([]holderRowDTO, 0, len(got.TopHolders))
+	for _, row := range got.TopHolders {
+		rows = append(rows, holderRowDTO{
+			Address:  row.Address,
+			Balance:  row.Balance,
+			SharePct: row.SharePct,
+		})
+	}
+	writeJSON(w, http.StatusOK, holdersResponse{
+		Asset:              got.Asset,
+		Name:               got.Name,
+		ProviderID:         got.ProviderID,
+		HolderCount:        got.HolderCount,
+		DailyActive:        domain.CloneInt64Ptr(got.DailyActive),
+		TopTenSharePct:     domain.CloneFloatPtr(got.TopTenSharePct),
+		TopTwentySharePct:  domain.CloneFloatPtr(got.TopTwentySharePct),
+		TopFiftySharePct:   domain.CloneFloatPtr(got.TopFiftySharePct),
+		TopHundredSharePct: domain.CloneFloatPtr(got.TopHundredSharePct),
+		TopHolders:         rows,
+		AsOf:               got.AsOf.UTC().Format(time.RFC3339Nano),
+		Source:             got.Source,
+		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api. Mapped via Binance marketing cmcUniqueId. Crypto only; coverage varies by asset. Informational only.",
+	})
+}
+
 type intervalsResponse struct {
 	Intervals []string `json:"intervals"`
 	Exchange  string   `json:"exchange"`
