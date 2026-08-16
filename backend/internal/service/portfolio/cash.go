@@ -205,6 +205,9 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 	if from.ClientID != to.ClientID {
 		return nil, nil, nil, nil, fmt.Errorf("%w: can only transfer between your own portfolios", domain.ErrForbidden)
 	}
+	if domain.AliasFxCode(from.Currency) != domain.AliasFxCode(to.Currency) {
+		return nil, nil, nil, nil, fmt.Errorf("%w: cannot transfer %s to a %s book", domain.ErrInvalidArgument, from.Currency, to.Currency)
+	}
 	// Ordered locks avoid deadlock when two transfers reverse the book pair.
 	idA, idB := from.BookID(), to.BookID()
 	if idA > idB {
@@ -240,6 +243,9 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 	avail := domain.AvailableCash(from.CashBalance, reservedCash+reservedMargin)
 	if in.Amount > avail+1e-9 {
 		return nil, nil, nil, nil, fmt.Errorf("%w: insufficient available cash (have %g)", domain.ErrInvalidArgument, avail)
+	}
+	if err := s.guardCrossWithdrawMaint(ctx, from, in.Amount); err != nil {
+		return nil, nil, nil, nil, err
 	}
 	if to.CashBalance+in.Amount > domain.MaxCashBalance {
 		return nil, nil, nil, nil, fmt.Errorf("%w: destination cash balance would exceed %g", domain.ErrInvalidArgument, domain.MaxCashBalance)

@@ -30,6 +30,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `DetailChartToolbar` | CoinDetailPage |
 | `IndicatorPanel` | CoinDetailPage |
 | `OrderBookPanel` | CoinDetailPage |
+| `OrderDepthChart` | CoinDetailPage |
 | `OrderHeatmap` | CoinDetailPage |
 | `PriceChangeHeatmap` | HeatmapPage |
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |

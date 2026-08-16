@@ -12,12 +12,20 @@ import (
 
 // GetOrderBook returns the live local Binance book (WebSocket + snapshot).
 // It never serves a book after a gap or disconnect; those states wait for resync.
+// SnapshotOnly skips the hub and uses REST depth so many pairs can be sampled.
 func (c *Client) GetOrderBook(ctx context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	symbol := normalizeSymbol(q.Symbol)
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
 	limit := domain.ClampOrderBookRawLimit(q.Limit)
+	if q.SnapshotOnly {
+		lastID, bids, asks, err := c.fetchDepthSnapshot(ctx, symbol, limit)
+		if err != nil {
+			return nil, err
+		}
+		return domain.RawBookFromDepthLevels(symbol, lastID, bids, asks), nil
+	}
 	c.ensureDepth()
 	if c.depth == nil {
 		return nil, fmt.Errorf("%w: binance depth hub not configured", domain.ErrUpstream)

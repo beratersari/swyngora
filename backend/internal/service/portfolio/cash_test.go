@@ -142,6 +142,28 @@ func TestCash_TransferBetweenOwnBooks(t *testing.T) {
 	}
 }
 
+func TestCash_TransferAllowsUSDTUSDAlias(t *testing.T) {
+	svc := newSvc(t, nil)
+	ctx := context.Background()
+	usdt, err := svc.Create(ctx, CreateInput{ClientID: "xfer-usd", Name: "USDT", StartingBalance: 5000, Currency: "USDT"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	usd, err := svc.Create(ctx, CreateInput{ClientID: "xfer-usd", Name: "USD", StartingBalance: 100, Currency: "USD"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, fromV, toV, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer-usd", FromPortfolioID: usdt.ID, ToPortfolioID: usd.ID, Amount: 400,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(fromV.CashBalance-4600) > 1e-9 || math.Abs(toV.CashBalance-500) > 1e-9 {
+		t.Fatalf("usdt=%v usd=%v", fromV.CashBalance, toV.CashBalance)
+	}
+}
+
 func TestCash_TransferOwnerOnlyAndNotOtherClient(t *testing.T) {
 	svc := newSvc(t, nil)
 	ctx := context.Background()

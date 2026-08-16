@@ -37,6 +37,7 @@ type Service struct {
 	heat          *domain.HeatmapTape
 	watchMu       sync.Mutex
 	wallWatch     map[string]wallWatch
+	heatUniverse  map[domain.Exchange][]string
 	liq           *domain.LiquidationBook
 	liqWatch      LiquidationWatch
 	fx            FxSource
@@ -80,11 +81,12 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 		}
 	}
 	return &Service{
-		markets:   cp,
-		supply:    supply,
-		walls:     domain.NewWallMemory(),
-		heat:      domain.NewHeatmapTape(),
-		wallWatch: map[string]wallWatch{},
+		markets:      cp,
+		supply:       supply,
+		walls:        domain.NewWallMemory(),
+		heat:         domain.NewHeatmapTape(),
+		wallWatch:    map[string]wallWatch{},
+		heatUniverse: map[domain.Exchange][]string{},
 	}
 }
 
@@ -269,25 +271,39 @@ func (s *Service) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, gro
 	if err != nil {
 		return nil, err
 	}
-	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
-	if err != nil {
-		return nil, err
+	// Prefer a REST snapshot so we do not wait on a websocket. Coinbase's
+	// public REST book often 502s, so fall back to the live local book
+	// (same path as the ladder). If both fail, still serve any tape we have.
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{
+		Symbol: symbol, Limit: domain.MaxOrderBookRawLimit, SnapshotOnly: true,
+	})
+	if err != nil || raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
+		raw, err = p.GetOrderBook(ctx, domain.OrderBookQuery{
+			Symbol: symbol, Limit: domain.MaxOrderBookRawLimit,
+		})
 	}
-	if raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
-		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
+	if err == nil && raw != nil && (len(raw.Bids) > 0 || len(raw.Asks) > 0) {
+		s.noteWallWatch(ex, symbol)
+		s.recordHeatFromRaw(ex, symbol, raw, groupSize)
 	}
-	s.noteWallWatch(ex, symbol)
-	s.recordHeatFromRaw(ex, symbol, raw, groupSize)
 	if s.heat == nil {
 		s.heat = domain.NewHeatmapTape()
 	}
 	view := s.heat.View(string(ex), symbol, time.Duration(windowSec)*time.Second)
-	view.Live = raw.Live
+	if raw != nil {
+		view.Live = raw.Live
+	}
 	if view.Exchange == "" {
 		view.Exchange = ex
 	}
 	if view.Symbol == "" {
 		view.Symbol = symbol
+	}
+	if len(view.Columns) == 0 {
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
 	}
 	return &view, nil
 }

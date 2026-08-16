@@ -1,4 +1,4 @@
-import { formatChangePercent, formatConvertedPrice, formatSymbolDisplay, venueQuote } from '@/libs/utils';
+import { formatChangePercent, formatConvertedPrice, formatSymbolDisplay, pairQuote } from '@/libs/utils';
 import type { DisplayCurrency, FxRatesMap } from '@/libs/utils';
 import type { TickerTapeItem } from './TickerTape.types';
 
@@ -24,7 +24,7 @@ export function toTickerTapeItem(
   return {
     exchange,
     symbol,
-    lastPrice: formatConvertedPrice(row.lastPrice, venueQuote(exchange), pref, display?.rates),
+    lastPrice: formatConvertedPrice(row.lastPrice, pairQuote(symbol, exchange), pref, display?.rates),
     changePercent: formatChangePercent(row.priceChangePercent),
     changeValue: parseChange(row.priceChangePercent),
     href: `/markets/${exchange}/${encodeURIComponent(symbol)}`,

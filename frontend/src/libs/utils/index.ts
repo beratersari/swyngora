@@ -9,6 +9,7 @@ export {
   isDisplayCurrency,
   loadDisplayCurrency,
   marketCapQuote,
+  pairQuote,
   resolveDisplayCode,
   saveDisplayCurrency,
   scalePriceSeries,

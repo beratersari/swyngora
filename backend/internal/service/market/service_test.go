@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,12 +13,15 @@ import (
 )
 
 type fakeMarket struct {
-	candles []domain.Candle
-	ticker  *domain.Ticker24h
-	spot    []domain.SpotMarket
-	err     error
-	lastQ   domain.CandleQuery
-	lastSym string
+	candles   []domain.Candle
+	ticker    *domain.Ticker24h
+	spot      []domain.SpotMarket
+	err       error
+	lastQ     domain.CandleQuery
+	lastSym   string
+	lastBookQ    domain.OrderBookQuery
+	snapshotN    int
+	failSnapshot bool
 }
 
 func sampleRawBook(symbol string) *domain.RawOrderBook {
@@ -57,6 +61,13 @@ func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tic
 }
 
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	f.lastBookQ = q
+	if q.SnapshotOnly {
+		f.snapshotN++
+		if f.failSnapshot {
+			return nil, fmt.Errorf("%w: snapshot down", domain.ErrUpstream)
+		}
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -486,7 +497,8 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 }
 
 func TestGetOrderBookHeatmap_SeedsTape(t *testing.T) {
-	svc := New(&fakeMarket{}, &fakeSupply{})
+	fx := &fakeMarket{}
+	svc := New(fx, &fakeSupply{})
 	got, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "btcusdt", "0.1", 600)
 	if err != nil {
 		t.Fatal(err)
@@ -505,6 +517,27 @@ func TestGetOrderBookHeatmap_SeedsTape(t *testing.T) {
 	}
 	if _, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "", "", 0); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("missing symbol: %v", err)
+	}
+	if !fx.lastBookQ.SnapshotOnly {
+		t.Fatal("heatmap GET must try REST snapshot first")
+	}
+}
+
+func TestGetOrderBookHeatmap_FallsBackToLiveBook(t *testing.T) {
+	fx := &fakeMarket{failSnapshot: true}
+	svc := New(fx, &fakeSupply{})
+	got, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "BTCUSDT", "", 600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Columns) != 1 {
+		t.Fatalf("expected live fallback column, got %d", len(got.Columns))
+	}
+	if fx.lastBookQ.SnapshotOnly {
+		t.Fatal("after REST failure, last fetch should be the live book")
+	}
+	if fx.snapshotN != 1 {
+		t.Fatalf("should attempt snapshot once, got %d", fx.snapshotN)
 	}
 }
 

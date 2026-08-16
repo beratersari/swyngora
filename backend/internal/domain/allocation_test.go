@@ -87,6 +87,41 @@ func TestPlanRebalance_NotInBasketSold(t *testing.T) {
 	}
 }
 
+// Finding 3: two venue legs of the same asset must not collapse to one holding.
+func TestPlanRebalance_MultiVenueSameAssetNotDropped(t *testing.T) {
+	holdings := []AllocationHolding{
+		{Asset: "BTC", Exchange: ExchangeBinance, Symbol: "BTCUSDT", MarkPrice: 100, Quantity: 10, AvailableQty: 10, MarketValue: 1000},
+		{Asset: "BTC", Exchange: ExchangeBybit, Symbol: "BTCUSDT", MarkPrice: 100, Quantity: 10, AvailableQty: 10, MarketValue: 1000},
+	}
+	targets := []AllocationTarget{
+		{Asset: "BTC", WeightPct: 50},
+		{Asset: "USDT", WeightPct: 50},
+	}
+	// Equity 5000 = 2000 BTC + 3000 cash. Actual BTC = 40%. Target 50% → buy ~500, not ~1500.
+	plan, err := PlanRebalance("USDT", 5000, 3000, 3000, holdings, targets)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var btc AllocationLine
+	for _, ln := range plan.Lines {
+		if ln.Asset == "BTC" {
+			btc = ln
+		}
+	}
+	var buy float64
+	for _, l := range plan.Legs {
+		if l.Asset == "BTC" && l.Side == TradeSideBuy {
+			buy += l.Notional
+		}
+	}
+	if btc.CurrentValue < 1500 || buy > 800 {
+		t.Errorf("CONFIRMED F3 domain: BTC currentValue=%g actualPct=%g buyNotional=%g (want ~2000 value and ~500 buy)",
+			btc.CurrentValue, btc.ActualPct, buy)
+		return
+	}
+	t.Logf("FALSE POSITIVE / NOT REPRODUCED F3 domain: currentValue=%g buy=%g", btc.CurrentValue, buy)
+}
+
 func TestSplitBaseQuoteAndPair(t *testing.T) {
 	b, q := SplitBaseQuote(ExchangeBinance, "btcusdt")
 	if b != "BTC" || q != "USDT" {

@@ -298,3 +298,47 @@ func TestSQLite_PortfolioRoundTrip(t *testing.T) {
 		t.Fatalf("%+v %v", tr, err)
 	}
 }
+
+// Finding 5: user cancel of one OCO leg must cancel the peer while the store is healthy.
+func TestSQLite_CancelOCOLegCancelsPeer(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "oco-cxl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := s.CreatePortfolio(ctx, domain.Portfolio{
+		ClientID: "c", Currency: "USDT", StartingBalance: 10000, CashBalance: 10000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePendingOrder(ctx, domain.PendingOrder{
+		ID: "tp", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Type: domain.PendingLimitSell, Side: domain.TradeSideSell, Quantity: 1, RemainingQuantity: 1,
+		TriggerPrice: 120, Status: domain.PendingStatusOpen, OCOGroupID: "g1", OCOPeerID: "sl",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePendingOrder(ctx, domain.PendingOrder{
+		ID: "sl", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Type: domain.PendingStopLoss, Side: domain.TradeSideSell, Quantity: 1, RemainingQuantity: 1,
+		TriggerPrice: 90, Status: domain.PendingStatusOpen, OCOGroupID: "g1", OCOPeerID: "tp",
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CancelPendingOrder(ctx, "c", "tp", now, domain.CancelReasonUser); err != nil {
+		t.Fatal(err)
+	}
+	peer, err := s.GetPendingOrder(ctx, "c", "sl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peer.Status == domain.PendingStatusOpen {
+		t.Errorf("CONFIRMED F5: OCO peer still open after cancel of TP")
+		return
+	}
+	t.Logf("FALSE POSITIVE / NOT REPRODUCED F5 happy-path: peer=%s reason=%s", peer.Status, peer.CancelReason)
+}

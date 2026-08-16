@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -29,7 +30,7 @@ func TestCORS_PassesThroughGET(t *testing.T) {
 	if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, PUT, POST, PATCH, DELETE, OPTIONS" {
 		t.Fatalf("ACA-Methods=%q", got)
 	}
-	if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Accept, Content-Type, X-Client-Id, X-Portfolio-Id, Authorization, X-API-Key" {
+	if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Accept, Content-Type, X-Client-Id, X-Portfolio-Id, Authorization, X-API-Key, Idempotency-Key, X-Idempotency-Key" {
 		t.Fatalf("ACA-Headers=%q", got)
 	}
 }
@@ -77,4 +78,24 @@ func TestCORS_Allowlist(t *testing.T) {
 	if got := rr2.Header().Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("evil origin should not be allowed, got %q", got)
 	}
+}
+
+// Finding 9: browser paper orders send Idempotency-Key; CORS must allow it.
+func TestCORS_AllowHeadersIncludeIdempotencyKey(t *testing.T) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	h := CORS(inner)
+	req := httptest.NewRequest(http.MethodOptions, "/api/v1/portfolio/orders", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	req.Header.Set("Access-Control-Request-Headers", "content-type,x-client-id,idempotency-key")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	got := rr.Header().Get("Access-Control-Allow-Headers")
+	if !strings.Contains(strings.ToLower(got), "idempotency-key") {
+		t.Errorf("CONFIRMED F9: CORS Allow-Headers missing Idempotency-Key: %q", got)
+		return
+	}
+	t.Logf("FALSE POSITIVE / NOT REPRODUCED F9: Allow-Headers=%q", got)
 }

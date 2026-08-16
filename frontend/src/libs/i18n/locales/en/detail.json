@@ -87,6 +87,17 @@
     "askHeavy": "More asks",
     "balanced": "Balanced"
   },
+  "orderDepth": {
+    "title": "Market depth",
+    "subtitle": "Cumulative resting size by price. Green is bids left of mid, red is asks to the right. Same live book as the ladder.",
+    "metric": "Show",
+    "base": "Size",
+    "notional": "Notional",
+    "bids": "Bids",
+    "asks": "Asks",
+    "cumulative": "Cumulative",
+    "empty": "No depth for this pair."
+  },
   "orderHeatmap": {
     "title": "Liquidity heatmap",
     "subtitle": "Resting limit-order depth. Green is bids, red is asks, brighter is more size. The wide right column is the current book; history fills to the left. Not executed volume.",

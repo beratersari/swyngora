@@ -152,3 +152,25 @@ func TestParseChartTrimsLimit(t *testing.T) {
 		t.Fatalf("bars=%+v", bars)
 	}
 }
+
+// Finding 6: Yahoo bars with a close but null open/high/low must not become $0 OHLC.
+func TestParseChart_NullOHLCNotCoercedToZero(t *testing.T) {
+	body := []byte(`{"chart":{"result":[{"timestamp":[1,2],"indicators":{"quote":[{
+		"open":[null,10],"high":[null,11],"low":[null,9],"close":[5,10],"volume":[null,1]
+	}]}}]}}`)
+	bars, err := parseChart(body, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range bars {
+		if b.Close == "5" && (b.Open == "0" || b.High == "0" || b.Low == "0") {
+			t.Errorf("CONFIRMED F6: incomplete Yahoo bar emitted as OHLC 0 close=5 (%+v)", b)
+			return
+		}
+	}
+	if len(bars) == 1 && bars[0].Close == "10" && bars[0].Open == "10" {
+		t.Log("FALSE POSITIVE / NOT REPRODUCED F6: incomplete bar dropped")
+		return
+	}
+	t.Logf("F6 result bars=%+v", bars)
+}

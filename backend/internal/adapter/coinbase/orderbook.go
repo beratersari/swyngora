@@ -11,10 +11,26 @@ import (
 )
 
 // GetOrderBook returns the live local Coinbase book (level2 websocket).
+// SnapshotOnly uses the public REST book and does not attach a stream.
 func (c *Client) GetOrderBook(ctx context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	symbol := normalizeProductID(q.Symbol)
 	if symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	if q.SnapshotOnly {
+		book, err := c.fetchRESTBook(ctx, symbol)
+		if err != nil {
+			return nil, err
+		}
+		if limit := domain.ClampOrderBookRawLimit(q.Limit); limit > 0 {
+			if len(book.Bids) > limit {
+				book.Bids = book.Bids[:limit]
+			}
+			if len(book.Asks) > limit {
+				book.Asks = book.Asks[:limit]
+			}
+		}
+		return book, nil
 	}
 	limit := domain.ClampOrderBookRawLimit(q.Limit)
 	c.ensureDepth()

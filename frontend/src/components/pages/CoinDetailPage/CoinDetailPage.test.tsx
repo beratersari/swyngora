@@ -113,16 +113,16 @@ describe('CoinDetailPage', () => {
         lastPrice: '100',
         groupSize: '0.1',
         suggestedGroupSizes: ['0.01', '0.1'],
-        bids: [{ price: '99.9', quantity: '1', isWall: false }],
-        asks: [{ price: '100.1', quantity: '1', isWall: false }],
+        bids: [{ price: '99.9', quantity: '1', cumulative: '1', isWall: false }],
+        asks: [{ price: '100.1', quantity: '1', cumulative: '1', isWall: false }],
         spread: '0.2',
       },
       currentData: {
         lastPrice: '100',
         groupSize: '0.1',
         suggestedGroupSizes: ['0.01', '0.1'],
-        bids: [{ price: '99.9', quantity: '1', isWall: false }],
-        asks: [{ price: '100.1', quantity: '1', isWall: false }],
+        bids: [{ price: '99.9', quantity: '1', cumulative: '1', isWall: false }],
+        asks: [{ price: '100.1', quantity: '1', cumulative: '1', isWall: false }],
         spread: '0.2',
       },
       isLoading: false,
@@ -167,6 +167,7 @@ describe('CoinDetailPage', () => {
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-book')).toBeInTheDocument();
+    expect(screen.getByTestId('order-depth-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
   });
 

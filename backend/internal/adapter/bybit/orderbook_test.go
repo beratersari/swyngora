@@ -98,6 +98,37 @@ func TestParseBybitBook(t *testing.T) {
 	}
 }
 
+func TestGetOrderBook_SnapshotOnlyREST(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v5/market/orderbook" {
+			t.Fatalf("path %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"retCode": 0,
+			"result": map[string]any{
+				"u": 11,
+				"b": [][]string{{"100", "2"}},
+				"a": [][]string{{"101", "3"}},
+			},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	defer c.Close()
+	got, err := c.GetOrderBook(context.Background(), domain.OrderBookQuery{
+		Symbol: "BTCUSDT", Limit: 50, SnapshotOnly: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Live || got.Source != domain.OrderBookSourceREST {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Bids) != 1 || got.Bids[0].Quantity != 2 || got.Asks[0].Quantity != 3 {
+		t.Fatalf("book %+v", got)
+	}
+}
+
 func mustJSON(v any) []byte {
 	b, _ := json.Marshal(v)
 	return b

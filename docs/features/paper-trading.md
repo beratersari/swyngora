@@ -118,7 +118,7 @@ MCP: `list_portfolio_lots`; `place_portfolio_order` / pending sell tools accept 
 
 Users can add or remove virtual cash after create (`POST /deposits`, `POST /withdrawals`). Withdrawals use **available** cash only (not reserved for open orders). Each action is stored on `GET /cash-movements` (amount, kind, cash after, optional note, timestamp). Creating a portfolio writes an opening `deposit` row (`note=Opening balance`).
 
-**Internal transfer:** `POST /transfers` moves available cash from one of **your** books to another. Owner only (shared traders/viewers cannot). Both ledgers get a row: `transfer_out` / `transfer_in` with `counterpartyPortfolioId`, `counterpartyPortfolioName`, and `peerMovementId` — not a deposit or withdrawal. Contributed capital moves with the cash so neither book's trading P&L changes.
+**Internal transfer:** `POST /transfers` moves available cash from one of **your** books to another. Owner only (shared traders/viewers cannot). Books must share a settlement currency (USDT/USDC/USD are treated as the same). Cross-margin books cannot transfer cash that would leave equity under maintenance (same brake as withdraw). Both ledgers get a row: `transfer_out` / `transfer_in` with `counterpartyPortfolioId`, `counterpartyPortfolioName`, and `peerMovementId` — not a deposit or withdrawal. Contributed capital moves with the cash so neither book's trading P&L changes.
 
 **P&L:** `totalPnL = equity − startingBalance − netDeposits`. Depositing or withdrawing is not trading profit/loss. `contributedCapital` is starting + net deposits.
 

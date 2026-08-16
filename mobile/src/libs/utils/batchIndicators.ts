@@ -58,8 +58,10 @@ export function groupPairsByExchange(
     binance: [],
     coinbase: [],
     bybit: [],
+    nasdaq: [],
+    bist: [],
   };
-  const seen: Record<MarketExchange, Set<string>> = {
+  const seen: Partial<Record<MarketExchange, Set<string>>> = {
     binance: new Set(),
     coinbase: new Set(),
     bybit: new Set(),
@@ -67,12 +69,14 @@ export function groupPairsByExchange(
 
   for (const p of pairs) {
     const ex = normalizeExchange(p.exchange);
+    const bucket = seen[ex];
+    if (!bucket) continue;
     const sym = String(p.symbol ?? '')
       .trim()
       .toUpperCase();
     if (!sym) continue;
-    if (seen[ex].has(sym)) continue;
-    seen[ex].add(sym);
+    if (bucket.has(sym)) continue;
+    bucket.add(sym);
     maps[ex].push(sym);
   }
 

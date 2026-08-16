@@ -10,7 +10,7 @@ import {
   formatDelistDate,
   formatTradeCount,
   marketCapQuote,
-  venueQuote,
+  pairQuote,
 } from '@/libs/utils';
 import { TagsWrap } from './SpotMetricValue.styles';
 import type { SpotMetricValueProps } from './SpotMetricValue.types';
@@ -29,7 +29,7 @@ export function SpotMetricValue({
   const { formatPrice: formatMoney, formatCompact } = useDisplayCurrency();
   const locale = localeProp ?? i18n.language;
   const raw = spot?.[metric.field];
-  const quote = venueQuote(exchange);
+  const quote = pairQuote(spot?.symbol, exchange);
   const mcapQuote = marketCapQuote(exchange);
 
   if (metric.format === 'tags') {

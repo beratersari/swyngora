@@ -18,6 +18,7 @@ import {
   ORDER_BOOK_LEVELS,
   ORDER_BOOK_POLL_MS,
 } from '@/components/organisms/OrderBookPanel';
+import { OrderDepthChart } from '@/components/organisms/OrderDepthChart';
 import {
   DEFAULT_ORDER_HEATMAP_WINDOW,
   ORDER_HEATMAP_POLL_MS,
@@ -65,7 +66,7 @@ import {
   parseSymbolParam,
   resolveInterval,
   scalePriceSeries,
-  venueQuote,
+  pairQuote,
   sortedEmaKeys,
   toSupplyAsset,
   trimCandlesToMax,
@@ -325,7 +326,7 @@ export function CoinDetailPage() {
   const chartData = useMemo(() => {
     const raw = apiCandlesToChart(allCandles);
     if (displayCurrency === 'native') return raw;
-    const q = venueQuote(exchange);
+    const q = pairQuote(symbol, exchange);
     return raw.map((bar) => ({
       ...bar,
       open: convert(bar.open, q) ?? bar.open,
@@ -333,7 +334,7 @@ export function CoinDetailPage() {
       low: convert(bar.low, q) ?? bar.low,
       close: convert(bar.close, q) ?? bar.close,
     }));
-  }, [allCandles, convert, displayCurrency, exchange]);
+  }, [allCandles, convert, displayCurrency, exchange, symbol]);
 
   // Live pump window matches the polled candle head (API max 1000).
   const pumpsQuery = useGetPumpEventsQuery(
@@ -469,7 +470,7 @@ export function CoinDetailPage() {
   const overlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
     const keys = sortedEmaKeys(latestEma);
-    const quote = venueQuote(exchange);
+    const quote = pairQuote(symbol, exchange);
     return keys.map((key, i) => ({
       id: `ema-${key}`,
       title: t('detail:indicators.emaLabel', { period: key }),
@@ -481,7 +482,7 @@ export function CoinDetailPage() {
         fxRates,
       ),
     }));
-  }, [showEma, latestEma, indicatorPoints, t, exchange, displayCurrency, fxRates]);
+  }, [showEma, latestEma, indicatorPoints, t, exchange, symbol, displayCurrency, fxRates]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
@@ -828,6 +829,21 @@ export function CoinDetailPage() {
       </ChartAndBook>
 
       {!isEquity ? (
+        <OrderDepthChart
+          book={rtkCurrent(orderBookQuery)}
+          isLoading={rtkCurrentPending(orderBookQuery)}
+          isFetching={orderBookQuery.isFetching}
+          errorMessage={
+            orderBookQuery.isError
+              ? rtkErrorMessage(orderBookQuery.error, {
+                  resource: t('detail:resource.orderBook'),
+                })
+              : null
+          }
+        />
+      ) : null}
+
+      {!isEquity ? (
         <OrderHeatmap
           data={rtkCurrent(orderHeatmapQuery)}
           windowSeconds={orderHeatmapWindow}
@@ -846,7 +862,7 @@ export function CoinDetailPage() {
 
       <IndicatorPanel
         data={liveIndicators}
-        priceQuote={venueQuote(exchange)}
+        priceQuote={pairQuote(symbol, exchange)}
         isLoading={rtkCurrentPending(indicatorsQuery)}
         errorMessage={
           indicatorsQuery.isError

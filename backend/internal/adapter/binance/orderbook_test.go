@@ -38,6 +38,43 @@ func TestFetchDepthSnapshot(t *testing.T) {
 	}
 }
 
+func TestGetOrderBook_SnapshotOnlySkipsHub(t *testing.T) {
+	var wsHits atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v3/depth", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"lastUpdateId": 7,
+			"bids":         [][]string{{"100.00", "2"}},
+			"asks":         [][]string{{"100.10", "1"}},
+		})
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "stream") || r.Header.Get("Upgrade") != "" {
+			wsHits.Add(1)
+		}
+		http.NotFound(w, r)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	defer c.Close()
+	got, err := c.GetOrderBook(context.Background(), domain.OrderBookQuery{
+		Symbol: "BTCUSDT", Limit: 20, SnapshotOnly: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Live || got.Source != domain.OrderBookSourceREST {
+		t.Fatalf("want REST snapshot, got %+v", got)
+	}
+	if len(got.Bids) != 1 || got.Bids[0].Quantity != 2 {
+		t.Fatalf("bids %+v", got.Bids)
+	}
+	if wsHits.Load() != 0 {
+		t.Fatalf("snapshot must not open a websocket (%d)", wsHits.Load())
+	}
+}
+
 func TestDepthHub_LiveThenGapResync(t *testing.T) {
 	var snapID atomic.Int64
 	snapID.Store(10)

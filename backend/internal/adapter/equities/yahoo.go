@@ -146,16 +146,11 @@ func parseChart(body []byte, limit int) ([]domain.Candle, error) {
 		if i >= len(q.Close) || q.Close[i] == nil {
 			continue
 		}
-		open, high, low, vol := 0.0, 0.0, 0.0, 0.0
-		if i < len(q.Open) && q.Open[i] != nil {
-			open = *q.Open[i]
+		if i >= len(q.Open) || q.Open[i] == nil || i >= len(q.High) || q.High[i] == nil || i >= len(q.Low) || q.Low[i] == nil {
+			continue
 		}
-		if i < len(q.High) && q.High[i] != nil {
-			high = *q.High[i]
-		}
-		if i < len(q.Low) && q.Low[i] != nil {
-			low = *q.Low[i]
-		}
+		open, high, low := *q.Open[i], *q.High[i], *q.Low[i]
+		vol := 0.0
 		if i < len(q.Volume) && q.Volume[i] != nil {
 			vol = *q.Volume[i]
 		}

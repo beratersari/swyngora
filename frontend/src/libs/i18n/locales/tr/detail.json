@@ -87,6 +87,17 @@
     "askHeavy": "Satış ağır",
     "balanced": "Dengeli"
   },
+  "orderDepth": {
+    "title": "Piyasa derinliği",
+    "subtitle": "Fiyata göre birikimli bekleyen miktar. Yeşil orta fiyatın solunda alış, kırmızı sağında satış. Merdivenle aynı canlı defter.",
+    "metric": "Göster",
+    "base": "Miktar",
+    "notional": "Nominal",
+    "bids": "Alış",
+    "asks": "Satış",
+    "cumulative": "Birikimli",
+    "empty": "Bu çift için derinlik yok."
+  },
   "orderHeatmap": {
     "title": "Likidite ısı haritası",
     "subtitle": "Bekleyen emir derinliği. Yeşil alış, kırmızı satış; daha parlak daha büyük. Sağdaki geniş sütun güncel defterdir; sol taraf geçmiştir. İşlem hacmi değildir.",

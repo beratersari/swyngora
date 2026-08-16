@@ -172,13 +172,7 @@ func PlanRebalance(currency string, equity, cash, availCash float64, holdings []
 		targetBy[a] = t
 	}
 
-	holdBy := map[string]AllocationHolding{}
-	for _, h := range holdings {
-		a := NormalizeAllocationAsset(h.Asset)
-		h.Asset = a
-		h.IsCash = a == currency
-		holdBy[a] = h
-	}
+	holdBy, venuesBy := mergeAllocationHoldings(holdings, currency)
 	if _, ok := holdBy[currency]; !ok {
 		holdBy[currency] = AllocationHolding{Asset: currency, IsCash: true, MarketValue: cash, Quantity: cash, AvailableQty: availCash, MarkPrice: 1}
 	} else {
@@ -250,26 +244,11 @@ func PlanRebalance(currency string, equity, cash, availCash float64, holdings []
 			continue
 		}
 		if ln.DeltaValue <= -MinRebalanceNotional {
-			h := holdBy[ln.Asset]
-			qty := math.Abs(ln.DeltaValue) / ln.MarkPrice
-			if h.AvailableQty > 0 && qty > h.AvailableQty {
-				qty = h.AvailableQty
-			}
-			if qty < MinTradeQuantity {
-				continue
-			}
-			notional := qty * ln.MarkPrice
-			if notional < MinRebalanceNotional {
-				continue
-			}
 			reason := "overweight"
 			if _, in := targetBy[ln.Asset]; !in {
 				reason = "not_in_basket"
 			}
-			sells = append(sells, RebalanceLeg{
-				Side: TradeSideSell, Asset: ln.Asset, Exchange: ln.Exchange, Symbol: ln.Symbol,
-				Quantity: qty, Price: ln.MarkPrice, Notional: notional, Reason: reason,
-			})
+			sells = append(sells, splitSellLegs(ln, venuesBy[ln.Asset], reason)...)
 		} else if ln.DeltaValue >= MinRebalanceNotional {
 			if _, in := targetBy[ln.Asset]; !in {
 				continue
@@ -314,4 +293,92 @@ func PlanRebalance(currency string, equity, cash, availCash float64, holdings []
 		Currency: currency, Equity: equity, Cash: cash, AvailableCash: availCash,
 		Lines: lines, Legs: legs,
 	}, nil
+}
+
+// mergeAllocationHoldings sums same-asset positions across venues so a second
+// BTC book does not overwrite the first. Default exchange/symbol/mark come from
+// the largest venue (used for buys and the drift line).
+func mergeAllocationHoldings(holdings []AllocationHolding, currency string) (map[string]AllocationHolding, map[string][]AllocationHolding) {
+	holdBy := map[string]AllocationHolding{}
+	venuesBy := map[string][]AllocationHolding{}
+	for _, h := range holdings {
+		a := NormalizeAllocationAsset(h.Asset)
+		h.Asset = a
+		h.IsCash = a == currency
+		venuesBy[a] = append(venuesBy[a], h)
+		cur, ok := holdBy[a]
+		if !ok {
+			holdBy[a] = h
+			continue
+		}
+		cur.Quantity += h.Quantity
+		cur.AvailableQty += h.AvailableQty
+		cur.MarketValue += h.MarketValue
+		if h.MarketValue > (cur.MarketValue - h.MarketValue) {
+			cur.Exchange = h.Exchange
+			cur.Symbol = h.Symbol
+			cur.MarkPrice = h.MarkPrice
+		}
+		holdBy[a] = cur
+	}
+	return holdBy, venuesBy
+}
+
+func splitSellLegs(ln AllocationLine, venues []AllocationHolding, reason string) []RebalanceLeg {
+	remaining := math.Abs(ln.DeltaValue)
+	if remaining < MinRebalanceNotional {
+		return nil
+	}
+	if len(venues) == 0 {
+		qty := remaining / ln.MarkPrice
+		if qty < MinTradeQuantity || ln.MarkPrice <= 0 {
+			return nil
+		}
+		return []RebalanceLeg{{
+			Side: TradeSideSell, Asset: ln.Asset, Exchange: ln.Exchange, Symbol: ln.Symbol,
+			Quantity: qty, Price: ln.MarkPrice, Notional: remaining, Reason: reason,
+		}}
+	}
+	sorted := append([]AllocationHolding(nil), venues...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].AvailableQty*sorted[i].MarkPrice > sorted[j].AvailableQty*sorted[j].MarkPrice
+	})
+	var out []RebalanceLeg
+	for _, v := range sorted {
+		if remaining < MinRebalanceNotional {
+			break
+		}
+		px := v.MarkPrice
+		if px <= 0 || math.IsNaN(px) {
+			px = ln.MarkPrice
+		}
+		if px <= 0 {
+			continue
+		}
+		availNotional := v.AvailableQty * px
+		if availNotional <= 0 {
+			continue
+		}
+		take := remaining
+		if take > availNotional {
+			take = availNotional
+		}
+		qty := take / px
+		if qty < MinTradeQuantity || take < MinRebalanceNotional {
+			continue
+		}
+		ex, sym := v.Exchange, v.Symbol
+		if ex == "" {
+			ex = ln.Exchange
+		}
+		if sym == "" {
+			sym = ln.Symbol
+		}
+		out = append(out, RebalanceLeg{
+			Side: TradeSideSell, Asset: ln.Asset, Exchange: ex, Symbol: sym,
+			Quantity: qty, Price: px, Notional: take, Reason: reason,
+		})
+		remaining -= take
+	}
+	return out
 }

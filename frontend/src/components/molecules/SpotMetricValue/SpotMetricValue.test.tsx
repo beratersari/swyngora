@@ -89,6 +89,20 @@ describe('SpotMetricValue', () => {
     expect(screen.getByText('Meme')).toBeInTheDocument();
   });
 
+  it('labels ETHBTC last with BTC, not venue USDT', () => {
+    renderWithProviders(
+      <SpotMetricValue
+        metric={priceMetric}
+        exchange="binance"
+        spot={{ symbol: 'ETHBTC', lastPrice: '0.035' }}
+        locale="en-US"
+      />,
+    );
+    const text = screen.getByText(/0\.035/).textContent ?? '';
+    expect(text).toMatch(/BTC/);
+    expect(text).not.toMatch(/USDT/);
+  });
+
   it('renders delist tag alone when product tags are empty', () => {
     renderWithProviders(
       <SpotMetricValue

@@ -33,6 +33,37 @@ type PriceLevel struct {
 type OrderBookQuery struct {
 	Symbol string
 	Limit  int // raw levels per side
+	// SnapshotOnly uses a REST depth call and must not attach a live websocket.
+	// Used to pre-sample heatmaps for many pairs without burning the 32-book hub cap.
+	SnapshotOnly bool
+}
+
+// RawBookFromDepthLevels maps venue depth rows onto a REST snapshot book.
+func RawBookFromDepthLevels(symbol string, updateID int64, bids, asks []DepthLevel) *RawOrderBook {
+	out := &RawOrderBook{
+		Symbol:    strings.ToUpper(strings.TrimSpace(symbol)),
+		UpdateID:  updateID,
+		FetchedAt: time.Now().UTC(),
+		Source:    OrderBookSourceREST,
+		Live:      false,
+		Bids:      make([]PriceLevel, 0, len(bids)),
+		Asks:      make([]PriceLevel, 0, len(asks)),
+	}
+	for _, d := range bids {
+		px, err := strconv.ParseFloat(strings.TrimSpace(d.Price), 64)
+		if err != nil || px <= 0 || d.Quantity <= 0 {
+			continue
+		}
+		out.Bids = append(out.Bids, PriceLevel{Price: px, Quantity: d.Quantity})
+	}
+	for _, d := range asks {
+		px, err := strconv.ParseFloat(strings.TrimSpace(d.Price), 64)
+		if err != nil || px <= 0 || d.Quantity <= 0 {
+			continue
+		}
+		out.Asks = append(out.Asks, PriceLevel{Price: px, Quantity: d.Quantity})
+	}
+	return out
 }
 
 // RawOrderBook is the ungrouped venue snapshot. Bids are best-first (high→low);

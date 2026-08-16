@@ -10,7 +10,7 @@ import {
   formatChangePercent,
   formatDelistDate,
   formatSymbolDisplay,
-  venueQuote,
+  pairQuote,
 } from '@/libs/utils';
 import { useDisplayCurrency } from '@/libs/hooks';
 import {
@@ -92,7 +92,7 @@ export function DetailHeader({
         <PriceBlock>
           <FlashValue value={lastPrice}>
             <Text variant="h3" color="primary" mono isLoading={isLoading} skeletonWidth={120}>
-              {formatPrice(lastPrice, venueQuote(exchange))}
+              {formatPrice(lastPrice, pairQuote(symbol, exchange))}
             </Text>
           </FlashValue>
           <FlashValue value={priceChangePercent}>

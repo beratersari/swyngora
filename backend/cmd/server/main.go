@@ -471,6 +471,8 @@ func main() {
 	go binanceLiq.Start(ctx)
 	go bybitLiq.Start(ctx)
 	go marketSvc.StartWallSampler(ctx)
+	go marketSvc.StartHeatmapWarmer(ctx)
+	logger.Info("order heatmap warmer started", "venues", []string{"binance", "coinbase", "bybit"})
 
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,

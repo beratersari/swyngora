@@ -5,8 +5,8 @@ import { useDisplayCurrency } from '@/libs/hooks';
 import {
   formatCompactAsset,
   formatTradeCount,
+  pairQuote,
   parseTradingPair,
-  venueQuote,
 } from '@/libs/utils';
 import { formatMaxSupply } from './DetailStats.helpers';
 import { StatCard, StatsGrid, StatsSection } from './DetailStats.styles';
@@ -55,7 +55,7 @@ export function DetailStats({
   const { t, i18n } = useTranslation('detail');
   const { formatPrice, formatCompact } = useDisplayCurrency();
   const pair = parseTradingPair(ticker?.symbol ?? '');
-  const quote = venueQuote(exchange);
+  const quote = pairQuote(ticker?.symbol, exchange);
 
   return (
     <StatsSection>

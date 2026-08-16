@@ -1,5 +1,6 @@
 import { formatCompactAmount } from './formatMarket';
 import { formatPrice } from './formatPrice';
+import { parseTradingPair } from './formatSymbol';
 
 export const DISPLAY_CURRENCY_STORAGE_KEY = 'swyngora.displayCurrency';
 
@@ -41,6 +42,12 @@ export function venueQuote(exchange?: string | null): string {
     default:
       return 'USDT';
   }
+}
+
+/** Pair quote when the symbol splits; otherwise the venue default. */
+export function pairQuote(symbol?: string | null, exchange?: string | null): string {
+  const q = parseTradingPair(symbol).quote;
+  return q || venueQuote(exchange);
 }
 
 /** Market-cap fields: BIST is TRY; crypto and Nasdaq are USD. */

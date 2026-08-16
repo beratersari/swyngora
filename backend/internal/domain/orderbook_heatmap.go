@@ -16,7 +16,8 @@ const (
 	HeatmapMinInterval = 1 * time.Second
 	// Enough 1s samples to cover MaxHeatmapWindow (15m / 30m chips).
 	HeatmapMaxColumns = int(MaxHeatmapWindow / HeatmapMinInterval)
-	HeatmapMaxTapes   = 64
+	// Enough tapes for every live crypto pair on the three venues.
+	HeatmapMaxTapes = 4096
 	// HeatmapRecordLevels is grouped rows per side stored on each column
 	// (deeper than the 16-row ladder so the map shows more than the touch).
 	HeatmapRecordLevels = 80

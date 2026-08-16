@@ -214,7 +214,7 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 		}
 		book.UpdatedAt = now
 		_ = s.accruePositionInterest(ctx, pos, now)
-		liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, newMargin, pos.DebtPrincipal, pos.DebtInterest)
+		liq, err := s.liqFromStoredEntry(pos, pos.Quantity, newMargin, pos.DebtPrincipal, pos.DebtInterest)
 		if err != nil {
 			return nil, err
 		}
@@ -309,7 +309,7 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 		}
 		pp, ip, np, ni := domain.AllocateRepayment(pos.DebtPrincipal, pos.DebtInterest, pay)
 		pos.DebtPrincipal, pos.DebtInterest = np, ni
-		liq, err := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
+		liq, err := s.liqFromStoredEntry(pos, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -343,6 +343,17 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 
 func (s *Service) liqPriceFor(side domain.MarginSide, entry, qty, margin, debtP, debtI float64) (float64, error) {
 	return domain.LiquidationPriceWithDebt(side, entry, qty, margin, debtP, debtI, domain.DefaultMaintenanceMarginRate)
+}
+
+// liqFromStoredEntry computes liq from a persisted position. EntryPrice may bake
+// the open fee; invert it so liq matches the raw fill used at open / on the UI.
+func (s *Service) liqFromStoredEntry(pos *domain.MarginPosition, qty, margin, debtP, debtI float64) (float64, error) {
+	if pos == nil {
+		return 0, fmt.Errorf("%w: position is required", domain.ErrInvalidArgument)
+	}
+	cost := s.paperCost(pos.Exchange)
+	raw := domain.RawFillFromEffectiveEntry(pos.Side, pos.EntryPrice, cost.FeeRate)
+	return s.liqPriceFor(pos.Side, raw, qty, margin, debtP, debtI)
 }
 
 // totalDebtNotionalQuote sums all open position debt in quote currency.
@@ -440,7 +451,7 @@ func (s *Service) accrueInterestCAS(ctx context.Context, pos *domain.MarginPosit
 		if !pos.OpenedAt.IsZero() {
 			seed = pos.OpenedAt.UTC()
 		}
-		liq, _ := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
+		liq, _ := s.liqFromStoredEntry(pos, pos.Quantity, pos.Margin, pos.DebtPrincipal, pos.DebtInterest)
 		claimed, cerr := s.store.AccrueInterestCAS(ctx, pos.ID, snap, pos.DebtInterest, seed, liq, now)
 		if cerr != nil {
 			return false, cerr
@@ -455,7 +466,7 @@ func (s *Service) accrueInterestCAS(ctx context.Context, pos *domain.MarginPosit
 	if hours <= 0 {
 		return false, nil
 	}
-	liq, lerr := s.liqPriceFor(pos.Side, pos.EntryPrice, pos.Quantity, pos.Margin, pos.DebtPrincipal, ni)
+	liq, lerr := s.liqFromStoredEntry(pos, pos.Quantity, pos.Margin, pos.DebtPrincipal, ni)
 	if lerr != nil {
 		return false, lerr
 	}
@@ -528,8 +539,9 @@ func (s *Service) tryLiquidateIfBreached(ctx context.Context, clientID, position
 		return false, nil
 	}
 	// Recompute liq from current debt (may have been partially repaid after interest).
+	// Use the raw fill, not fee-baked EntryPrice, so liq matches the open/displayed price.
 	liq := cur.LiquidationPrice
-	if fresh, lerr := s.liqPriceFor(cur.Side, cur.EntryPrice, cur.Quantity, cur.Margin, cur.DebtPrincipal, cur.DebtInterest); lerr == nil {
+	if fresh, lerr := s.liqFromStoredEntry(cur, cur.Quantity, cur.Margin, cur.DebtPrincipal, cur.DebtInterest); lerr == nil {
 		liq = fresh
 	}
 	if !domain.ShouldLiquidate(cur.Side, mark, liq) {
@@ -1467,7 +1479,7 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 			if updated.DebtInterest < 0 {
 				updated.DebtInterest = 0
 			}
-			liq, lerr := s.liqPriceFor(cur.Side, cur.EntryPrice, updated.Quantity, updated.Margin, updated.DebtPrincipal, updated.DebtInterest)
+			liq, lerr := s.liqFromStoredEntry(cur, updated.Quantity, updated.Margin, updated.DebtPrincipal, updated.DebtInterest)
 			if lerr == nil {
 				updated.LiquidationPrice = liq
 			}

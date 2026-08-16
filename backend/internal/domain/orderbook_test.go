@@ -130,6 +130,23 @@ func TestSuggestedGroupSizes_PIVXLike(t *testing.T) {
 	}
 }
 
+func TestRawBookFromDepthLevels(t *testing.T) {
+	got := RawBookFromDepthLevels("btcusdt", 9, []DepthLevel{
+		{Price: "100.5", Quantity: 2},
+		{Price: "bad", Quantity: 1},
+		{Price: "99", Quantity: 0},
+	}, []DepthLevel{{Price: "101", Quantity: 3}})
+	if got.Symbol != "BTCUSDT" || got.UpdateID != 9 || got.Live || got.Source != OrderBookSourceREST {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Bids) != 1 || got.Bids[0].Price != 100.5 || got.Bids[0].Quantity != 2 {
+		t.Fatalf("bids %+v", got.Bids)
+	}
+	if len(got.Asks) != 1 || got.Asks[0].Price != 101 {
+		t.Fatalf("asks %+v", got.Asks)
+	}
+}
+
 func TestGroupOrderBook_Empty(t *testing.T) {
 	book := GroupOrderBook(RawOrderBook{Symbol: "X"}, 0.01, 20)
 	if len(book.Bids) != 0 || len(book.Asks) != 0 {

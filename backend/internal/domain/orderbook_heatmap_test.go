@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -102,6 +103,26 @@ func TestHeatmapTape_KeepsFifteenMinutes(t *testing.T) {
 	span := got.To.Sub(got.From)
 	if span < 14*time.Minute+50*time.Second || span > 15*time.Minute {
 		t.Fatalf("15m view span %s from=%s to=%s cols=%d", span, got.From, got.To, len(got.Columns))
+	}
+}
+
+func TestHeatmapTape_HoldsManyPairs(t *testing.T) {
+	if HeatmapMaxTapes < 2000 {
+		t.Fatalf("max tapes %d cannot keep a full-venue universe", HeatmapMaxTapes)
+	}
+	tape := NewHeatmapTape()
+	now := time.Now().UTC()
+	bid := []OrderBookLevel{{Price: "1", Notional: "10"}}
+	const n = 200
+	for i := 0; i < n; i++ {
+		sym := "PAIR" + strconv.Itoa(i) + "USDT"
+		tape.Record(now, testHeatBook(ExchangeBinance, sym, "1", bid, nil))
+	}
+	if got := tape.View("binance", "PAIR0USDT", time.Minute); len(got.Columns) != 1 {
+		t.Fatalf("first pair evicted: cols=%d", len(got.Columns))
+	}
+	if got := tape.View("binance", "PAIR199USDT", time.Minute); len(got.Columns) != 1 {
+		t.Fatalf("last pair missing: cols=%d", len(got.Columns))
 	}
 }
 

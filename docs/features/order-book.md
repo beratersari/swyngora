@@ -18,6 +18,8 @@ Futures / other markets are out of scope for now version.
   - `isWall` when a bucket is unusually large vs the median on that side
   - `suggestedGroupSizes` for the step control
   - `spread`, `spreadPct`, `imbalance` (positive = more resting bids on the **visible ladder**)
+  - Coin detail draws a **market depth graph** from the same book: cumulative
+    size (or notional) vs price, bids left of mid / asks right. No extra endpoint.
   - `analysis` — buy/sell **pressure**, notional **imbalance**, and large **walls** from every
     live level within ±`rangePct` of mid (not only the first few orders). Nested `bands`
     (0.5 / 1 / 2 / 5%) show near vs farther depth. Same logic on Binance, Coinbase, and Bybit.
@@ -49,12 +51,16 @@ Futures / other markets are out of scope for now version.
     much thinner than a real $1B print; `exhausted=true` is the honest answer then.
 - `GET /api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=600`
   - Recent **resting** bid/ask notional over time (Bookmap-style tape). Each
-    column is a live local-book snapshot, not executed volume. First response
-    seeds one column; the wall sampler keeps filling while the pair is watched.
-    `window` is lookback seconds (60–1800, default 600). Coin detail renders
-    a Bookmap-style liquidity map: thermal size by price, history on the left,
-    a wide current-book column on the right. One snapshot still fills the plot.
-    The tape keeps up to 30 minutes of 1s samples so a 15m window can fill.
+    column is a book snapshot, not executed volume. A background warmer
+    REST-samples **every live crypto pair** on Binance / Coinbase / Bybit so
+    opening a coin already has history (does not wait on a websocket). Opening
+    the desk then keeps 1s samples on the watched pair. `window` is lookback
+    seconds (60–1800, default 600). Coin detail renders a Bookmap-style
+    liquidity map: thermal size by price, history on the left, a wide
+    current-book column on the right. The tape keeps up to 30 minutes of
+    1s samples so a 15m window can fill. Heatmap GET tries a REST snapshot
+    first, then the same live websocket book as the ladder (Coinbase REST
+    book often 502s).
 - `GET /api/v1/market/orderbook/liquidity?symbol=BTCUSDT`
   - Scores how easy the pair is to trade from resting bid/ask **notional**.
     Only **±0.1% / ±0.5% / ±1%** bands the book **actually reaches on both sides**
@@ -81,7 +87,7 @@ Futures / other markets are out of scope for now version.
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
 | HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap` |
 | MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `create_orderbook_alert` |
-| UI | `frontend` coin detail `OrderBookPanel` + `OrderHeatmap` |
+| UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap` |
 
 ## How to verify
 

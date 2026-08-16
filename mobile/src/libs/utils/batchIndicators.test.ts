@@ -32,6 +32,17 @@ describe('groupPairsByExchange', () => {
     expect(g.coinbase).toEqual(['ETH-USD']);
     expect(g.bybit).toEqual(['SOLUSDT']);
   });
+
+  it('skips nasdaq/bist without throwing', () => {
+    const g = groupPairsByExchange([
+      { exchange: 'nasdaq', symbol: 'AAPL' },
+      { exchange: 'bist', symbol: 'THYAO' },
+      { exchange: 'binance', symbol: 'BTCUSDT' },
+    ]);
+    expect(g.binance).toEqual(['BTCUSDT']);
+    expect(g.nasdaq).toEqual([]);
+    expect(g.bist).toEqual([]);
+  });
 });
 
 describe('buildBatchIndicatorsArg', () => {

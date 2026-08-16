@@ -4,6 +4,7 @@ import {
   convertAmount,
   formatConvertedPrice,
   marketCapQuote,
+  pairQuote,
   scalePriceSeries,
   venueQuote,
 } from './displayCurrency';
@@ -45,5 +46,14 @@ describe('displayCurrency', () => {
       { time: 1, value: 10 },
       { time: 2, value: 20 },
     ]);
+  });
+
+  it('pairQuote uses the symbol quote, not the venue default', () => {
+    expect(pairQuote('ETHBTC', 'binance')).toBe('BTC');
+    expect(pairQuote('BTCEUR', 'binance')).toBe('EUR');
+    expect(pairQuote('BTCUSDT', 'binance')).toBe('USDT');
+    expect(pairQuote('AAPL', 'nasdaq')).toBe('USD');
+    expect(formatConvertedPrice(0.035, pairQuote('ETHBTC', 'binance'), 'native', rates)).toMatch(/BTC/);
+    expect(formatConvertedPrice(0.035, pairQuote('ETHBTC', 'binance'), 'USD', rates)).toBe('—');
   });
 });

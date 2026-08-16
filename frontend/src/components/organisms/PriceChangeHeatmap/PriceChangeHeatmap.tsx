@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useDisplayCurrency } from '@/libs/hooks';
-import { formatChangePercent, marketCapQuote, venueQuote } from '@/libs/utils';
+import { formatChangePercent, marketCapQuote, pairQuote } from '@/libs/utils';
 import { HEATMAP_COLOR_CAP_PCT, HEATMAP_LEGEND_GRADIENT } from './PriceChangeHeatmap.constants';
 import {
   baseSymbol,
@@ -143,7 +143,7 @@ export function PriceChangeHeatmap({
             </TipHead>
             <TipRow>
               <span>{t('heatmap:last')}</span>
-              <span>{formatPrice(tip.lastPrice, venueQuote(tip.exchange))}</span>
+              <span>{formatPrice(tip.lastPrice, pairQuote(tip.symbol, tip.exchange))}</span>
             </TipRow>
             <TipRow>
               <span>{t('heatmap:metric.marketCap')}</span>
@@ -151,7 +151,7 @@ export function PriceChangeHeatmap({
             </TipRow>
             <TipRow>
               <span>{t('heatmap:metric.volume')}</span>
-              <span>{formatCompact(tip.quoteVolume, venueQuote(tip.exchange))}</span>
+              <span>{formatCompact(tip.quoteVolume, pairQuote(tip.symbol, tip.exchange))}</span>
             </TipRow>
             <TipRow>
               <span>{t('heatmap:venue')}</span>
