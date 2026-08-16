@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Grok default model:** `GROK_MODEL` is now `grok-4.3` (`grok-3-mini` is retired) (`docs/features/ai-assistant.md`)
 - **Web desk visual system:** charcoal + amber institutional palette (IBM Plex), underline nav, and sharper chrome — no more teal/neon green (`docs/design/frontend-design-system.md`)
 - **Web terminal chrome:** left venue rail, utility bar, full-bleed workspace
 - **Web CoinMarketCap-style look:** light canvas, blue brand, Inter, global stats bar, consumer price table
@@ -15,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Grok reasoning:** `GROK_REASONING_EFFORT` (`none` | `low` | `medium` | `high`), default `low`; Grok calls only, Ollama unchanged (`docs/features/ai-assistant.md`)
 - **Order heatmap:** coin detail paints a Bookmap-style liquidity map (thermal size, wide current-book column, history to the left) from `GET /api/v1/market/orderbook/heatmap` / MCP `get_orderbook_heatmap`. Not executed volume.
 - **Futures liquidations:** rolling 5m / 1h / 4h / 24h long vs short notional, count, and biggest hit from Binance USD-M and Bybit linear perpetual streams; `complete` / `coverageSeconds` count only live websocket time per coin and venue (`GET /api/v1/market/liquidations`, MCP `get_liquidations`) (`docs/features/liquidations.md`)
 - **Liquidity score:** 0–100 grade from live bid/ask notional only in ±0.1 / ±0.5 / ±1% bands the book actually reaches; market-wide uses the common venue range (`GET /api/v1/market/orderbook/liquidity`, MCP `get_market_liquidity`) (`docs/features/order-book.md`)
