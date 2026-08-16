@@ -13,17 +13,13 @@ Results are always weak signals, not market truth.
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any
 
+import httpx
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
-
-_UA = "SwyngoraAI/0.1 (+https://github.com/beratersari/swyngora; research bot)"
 
 # Common crypto aliases → StockTwits-style base ticker.
 _ALIASES: dict[str, str] = {
@@ -46,15 +42,20 @@ _ALIASES: dict[str, str] = {
 }
 
 
+_UA = "SwyngoraAI/0.1 (+https://github.com/beratersari/swyngora; research bot)"
+
+
 class XSearchInput(BaseModel):
     query: str = Field(description="Topic, ticker, or cashtag e.g. BTC OR bitcoin")
     max_results: int = Field(default=8, ge=1, le=15)
 
 
 def _http_json(url: str, timeout: float = 12.0) -> dict[str, Any]:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
+    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+        r = client.get(url, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        data = r.json()
+    return data if isinstance(data, dict) else {}
 
 
 def _guess_symbols(query: str) -> list[str]:
@@ -142,10 +143,10 @@ def _fetch_stocktwits(symbol: str, limit: int) -> list[str]:
     url = f"https://api.stocktwits.com/api/2/streams/symbol/{urllib.parse.quote(symbol)}.json"
     try:
         data = _http_json(url)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
             return []
-        return [f"(StockTwits {symbol}: HTTP {e.code})"]
+        return [f"(StockTwits {symbol}: HTTP {e.response.status_code})"]
     except Exception as e:  # noqa: BLE001
         return [f"(StockTwits {symbol}: {e})"]
 

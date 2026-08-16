@@ -68,7 +68,6 @@ class _Transport(httpx.BaseTransport):
 
 
 def test_market_tools_hit_api(monkeypatch):
-    # Patch httpx.Client to use mock transport
     real_client = httpx.Client
 
     def fake_client(*args, **kwargs):
@@ -122,6 +121,25 @@ def test_market_tools_hit_api(monkeypatch):
 
     health = by_name["health"].invoke({})
     assert "ok" in health
+
+
+def test_market_http_reuses_one_client(monkeypatch):
+    created: list[httpx.Client] = []
+    real_client = httpx.Client
+
+    def fake_client(*args, **kwargs):
+        kwargs["transport"] = _Transport()
+        kwargs.pop("timeout", None)
+        client = real_client(*args, timeout=5.0, transport=_Transport())
+        created.append(client)
+        return client
+
+    monkeypatch.setattr(httpx, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {t.name: t for t in tools}
+    by_name["get_ticker"].invoke({"symbol": "BTCUSDT", "exchange": "binance"})
+    by_name["health"].invoke({})
+    assert len(created) == 1
 
 
 def test_read_only_scope_blocks_mutations(monkeypatch):

@@ -2,29 +2,27 @@
 
 from __future__ import annotations
 
-import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from datetime import UTC, datetime, timedelta
 from typing import Any
+
+import httpx
 
 _UA = "SwyngoraAI/0.1 (research; +https://github.com/beratersari/swyngora)"
 
 
 def _http_json(url: str, timeout: float = 12.0) -> Any:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": _UA, "Accept": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
+    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+        r = client.get(url, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        return r.json()
 
 
 def _http_bytes(url: str, timeout: float = 12.0) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+        r = client.get(url, headers={"Accept": "*/*"})
+        r.raise_for_status()
+        return r.content
 
 
 def edgar_recent(ticker: str, limit: int = 5) -> str:
@@ -87,8 +85,8 @@ def kap_recent(query: str, limit: int = 5) -> str:
     url = f"https://www.kap.org.tr/en/api/disclosureList?fromDate={since}&search={encoded}"
     try:
         data = _http_json(url, timeout=12)
-    except urllib.error.HTTPError as e:
-        return f"(KAP: HTTP {e.code})"
+    except httpx.HTTPStatusError as e:
+        return f"(KAP: HTTP {e.response.status_code})"
     except Exception as e:  # noqa: BLE001
         # Fallback: KAP search landing (still a primary host for the desk to open).
         return (

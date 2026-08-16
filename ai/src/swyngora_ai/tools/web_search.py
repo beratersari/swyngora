@@ -6,16 +6,14 @@ Wikipedia REST, Google News RSS, CoinGecko search, Hacker News Algolia.
 
 from __future__ import annotations
 
-import json
 import re
-import urllib.error
 import urllib.parse
-import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutTimeout
 from typing import Any
 
+import httpx
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
@@ -50,18 +48,17 @@ def _ddgs():
 
 
 def _http_bytes(url: str, timeout: float = 12.0) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": _UA, "Accept": "*/*"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
+    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+        r = client.get(url, headers={"Accept": "*/*"})
+        r.raise_for_status()
+        return r.content
 
 
 def _http_json(url: str, timeout: float = 12.0) -> Any:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": _UA, "Accept": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
+    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+        r = client.get(url, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        return r.json()
 
 
 def _ddgs_text_once(query: str, max_results: int, backend: str) -> list[dict[str, Any]]:
@@ -130,9 +127,9 @@ def _wikipedia(topic: str) -> str:
     slug = urllib.parse.quote(topic.replace(" ", "_"))
     try:
         data = _http_json(f"https://en.wikipedia.org/api/rest_v1/page/summary/{slug}", timeout=10)
-    except urllib.error.HTTPError as e:
-        if e.code != 404:
-            return f"(Wikipedia: HTTP {e.code})"
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code != 404:
+            return f"(Wikipedia: HTTP {e.response.status_code})"
         try:
             opensearch = _http_json(
                 "https://en.wikipedia.org/w/api.php?action=opensearch"

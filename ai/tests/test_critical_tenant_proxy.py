@@ -58,7 +58,6 @@ def test_create_api_key_tool_redacts_secret(monkeypatch):
     monkeypatch.setattr(httpx, "Client", fake_client)
     monkeypatch.setenv("SWYNGORA_API_URL", "http://backend.test")
     monkeypatch.setenv("SWYNGORA_API_TOKEN", "master-token")
-
     tools = build_market_tools(Settings())
     by_name = {t.name: t for t in tools}
     tok = bind_client_id("victim-client")

@@ -101,6 +101,7 @@ class _HTTP:
         self.base = base_url.rstrip("/")
         self.timeout = timeout
         self.auth_token = (auth_token or "").strip()
+        self._client = httpx.Client(timeout=timeout)
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
@@ -135,50 +136,51 @@ class _HTTP:
         except (ValueError, TypeError):
             return _SWY_SECRET_RE.sub("[redacted]", r.text)
 
+    def _request(self, method: str, url: str, **kwargs: Any) -> str:
+        try:
+            r = self._client.request(method, url, **kwargs)
+        except httpx.TimeoutException as e:
+            return f"ERROR timeout: {e}"[:500]
+        except httpx.ConnectError as e:
+            return f"ERROR connect: {e}"[:500]
+        except httpx.HTTPError as e:
+            return f"ERROR {type(e).__name__}: {e}"[:500]
+        return self._body_text(r)
+
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
         if err := self._scope_error(path, mutating=False):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.get(f"{self.base}{path}", params=params, headers=self._headers())
-            return self._body_text(r)
+        return self._request("GET", f"{self.base}{path}", params=params, headers=self._headers())
 
     def post(self, path: str, body: dict[str, Any]) -> str:
         if err := self._scope_error(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.post(f"{self.base}{path}", json=body, headers=self._headers())
-            return self._body_text(r)
+        return self._request("POST", f"{self.base}{path}", json=body, headers=self._headers())
 
     def put(self, path: str, body: dict[str, Any]) -> str:
         if err := self._scope_error(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.put(f"{self.base}{path}", json=body, headers=self._headers())
-            return self._body_text(r)
+        return self._request("PUT", f"{self.base}{path}", json=body, headers=self._headers())
 
     def patch(self, path: str, body: dict[str, Any]) -> str:
         if err := self._scope_error(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.patch(f"{self.base}{path}", json=body, headers=self._headers())
-            return self._body_text(r)
+        return self._request("PATCH", f"{self.base}{path}", json=body, headers=self._headers())
 
     def delete(self, path: str, params: dict[str, Any]) -> str:
         if err := self._scope_error(path, mutating=True):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.delete(f"{self.base}{path}", params=params, headers=self._headers())
-            return self._body_text(r)
+        return self._request("DELETE", f"{self.base}{path}", params=params, headers=self._headers())
 
     def post_bytes(
         self,
@@ -192,14 +194,9 @@ class _HTTP:
         params = dict(params or {})
         self._apply_client_id(params, None)
         headers = {**self._headers(), "Content-Type": content_type}
-        with httpx.Client(timeout=self.timeout) as client:
-            r = client.post(
-                f"{self.base}{path}",
-                content=data,
-                params=params,
-                headers=headers,
-            )
-            return self._body_text(r)
+        return self._request(
+            "POST", f"{self.base}{path}", content=data, params=params, headers=headers
+        )
 
 
 class TickerInput(BaseModel):
