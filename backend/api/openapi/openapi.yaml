@@ -838,6 +838,36 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/correlation:
+    get:
+      summary: Price correlation vs BTC and ETH
+      description: |
+        How similarly a coin has been moving with **BTC** and **ETH** over the
+        last **1 hour, 4 hours, and 24 hours**. Returns Pearson correlation of
+        bar returns, beta, same-direction share, and a short note if the coin
+        has been following with a delay. Default venue is Binance spot.
+      operationId: getMarketCorrelation
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Per-window correlation vs BTC and ETH
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

@@ -266,6 +266,33 @@ func TestGetBasis_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetCorrelation_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/correlation?symbol=SOLUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetCorrelation(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body corrResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "SOLUSDT" || len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetCorrelation_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/correlation", nil)
+	rr := httptest.NewRecorder()
+	h.GetCorrelation(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetTakerFlow_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow?symbol=BTCUSDT", nil)

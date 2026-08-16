@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Price correlation vs BTC/ETH:** how similarly a coin has been moving with Bitcoin and Ethereum over 1h / 4h / 24h (correlation, beta, same-direction share, lead/lag) (`GET /api/v1/market/correlation`, MCP `get_price_correlation`) (`docs/features/correlation.md`)
 - **Futures basis:** perp vs spot/index premium or discount on Binance and Bybit, dollar + percent, expanding/shrinking, plus funding/OI read and venue agreement (`GET /api/v1/market/basis`, MCP `get_basis`) (`docs/features/basis.md`)
 - **Taker flow:** aggressive futures buy vs sell volume for 5m / 1h / 4h on Binance USD-M and Bybit linear, with delta and a short read vs price, OI, and funding (`GET /api/v1/market/taker-flow`, MCP `get_taker_flow`) (`docs/features/taker-flow.md`)
 - **Venue divergence:** compare Binance vs Bybit on OI, funding, crowding, and positioning; flag same vs opposite with a short why (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`) (`docs/features/venue-divergence.md`)

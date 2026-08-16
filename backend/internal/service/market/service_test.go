@@ -720,6 +720,99 @@ func TestGetBasis_PerVenueAndAgreement(t *testing.T) {
 	}
 }
 
+type intervalSeriesMarket struct {
+	fakeMarket
+	by map[string]map[domain.CandleInterval][]domain.Candle
+}
+
+func (m *intervalSeriesMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	if rows, ok := m.by[q.Symbol]; ok {
+		if c, ok := rows[q.Interval]; ok {
+			return c, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
+func synthCloses(start time.Time, n int, step time.Duration, px func(i int) float64) []domain.Candle {
+	out := make([]domain.Candle, n)
+	for i := 0; i < n; i++ {
+		p := px(i)
+		s := strconv.FormatFloat(p, 'f', 6, 64)
+		t0 := start.Add(time.Duration(i) * step)
+		out[i] = domain.Candle{
+			OpenTime: t0, CloseTime: t0.Add(step),
+			Open: s, High: s, Low: s, Close: s, Volume: "1", QuoteVolume: "1",
+		}
+	}
+	return out
+}
+
+func TestGetCorrelation_FollowsBTCAndETH(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	n1m, n5m := 80, 300
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"SOLUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 20 + float64(i)*0.05 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 20 + float64(i)*0.06 }),
+		},
+		"BTCUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 100 + float64(i)*0.2 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 100 + float64(i)*0.3 }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 50 + float64(i)*0.08 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.1 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetCorrelation(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary == "" || len(got.Windows) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	for _, w := range got.Windows {
+		if !w.BTC.Complete || w.BTC.Relation != domain.CorrRelationFollows {
+			t.Fatalf("window %s btc %+v", w.Window, w.BTC)
+		}
+		if !w.ETH.Complete || w.ETH.Relation != domain.CorrRelationFollows {
+			t.Fatalf("window %s eth %+v", w.Window, w.ETH)
+		}
+	}
+}
+
+func TestGetCorrelation_BTCIsSelf(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"BTCUSDT": {
+			"1m": synthCloses(start, 80, time.Minute, func(i int) float64 { return 100 + float64(i) }),
+			"5m": synthCloses(start, 300, 5*time.Minute, func(i int) float64 { return 100 + float64(i) }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, 80, time.Minute, func(i int) float64 { return 50 + float64(i)*0.4 }),
+			"5m": synthCloses(start, 300, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.4 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetCorrelation(context.Background(), "", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Windows[0].BTC.Self {
+		t.Fatalf("%+v", got.Windows[0].BTC)
+	}
+}
+
+func TestGetCorrelation_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetCorrelation(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 type fakeTaker struct {
 	flow *domain.TakerVenueFlow
 	err  error

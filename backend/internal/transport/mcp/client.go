@@ -261,6 +261,16 @@ func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json
 	return c.get(ctx, "/api/v1/market/basis", q)
 }
 
+// GetCorrelation returns how similarly a coin has been moving with BTC and ETH.
+func (c *APIClient) GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/correlation", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

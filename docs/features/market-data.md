@@ -49,6 +49,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/venue-divergence` Binance vs Bybit same/opposite split. See [`venue-divergence.md`](venue-divergence.md).
 - `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
 - `GET /api/v1/market/basis` perp vs spot/index premium or discount. See [`basis.md`](basis.md).
+- `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

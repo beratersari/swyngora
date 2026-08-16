@@ -214,6 +214,14 @@ class BasisInput(BaseModel):
     )
 
 
+class CorrelationInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -806,6 +814,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_basis(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/basis",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_price_correlation(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/correlation",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1946,6 +1960,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "OI context. Binance and Bybit separately plus whether they agree."
             ),
             args_schema=BasisInput,
+        ),
+        StructuredTool.from_function(
+            get_price_correlation,
+            name="get_price_correlation",
+            description=(
+                "How similarly a coin has been moving with BTC and ETH over "
+                "the last 1 hour, 4 hours, and 24 hours: correlation, beta, "
+                "same-direction share, and whether it follows with a delay."
+            ),
+            args_schema=CorrelationInput,
         ),
         StructuredTool.from_function(
             get_futures_history,
