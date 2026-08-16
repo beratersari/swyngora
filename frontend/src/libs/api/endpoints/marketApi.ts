@@ -9,6 +9,7 @@ import {
   supplyTagId,
   tickerTagId,
   orderBookTagId,
+  orderHeatmapTagId,
   transformExchangesResponse,
   transformIntervalsResponse,
   transformProductTagsResponse,
@@ -36,6 +37,8 @@ import type {
   Ticker24hQuery,
   SpotOrderBook,
   OrderBookQuery,
+  OrderBookHeatmap,
+  OrderBookHeatmapQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -55,6 +58,8 @@ export type {
   SpotOrderBook,
   OrderBookLevel,
   OrderBookQuery,
+  OrderBookHeatmap,
+  OrderBookHeatmapQuery,
   SupplyQuery,
   IntervalsQuery,
   IndicatorsQuery,
@@ -162,6 +167,16 @@ export const marketApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, arg) => [{ type: 'OrderBook' as const, id: orderBookTagId(arg) }],
     }),
 
+    getSpotOrderBookHeatmap: build.query<OrderBookHeatmap, OrderBookHeatmapQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/heatmap',
+        params: compactParams({ ...arg }),
+      }),
+      providesTags: (_r, _e, arg) => [
+        { type: 'OrderHeatmap' as const, id: orderHeatmapTagId(arg) },
+      ],
+    }),
+
     getSupply: build.query<Supply, SupplyQuery>({
       query: (arg) => ({
         url: '/api/v1/market/supply',
@@ -258,6 +273,7 @@ export const {
   useLazyGetCandlesQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
+  useGetSpotOrderBookHeatmapQuery,
   useGetSupplyQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,

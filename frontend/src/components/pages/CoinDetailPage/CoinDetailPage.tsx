@@ -18,6 +18,11 @@ import {
   ORDER_BOOK_LEVELS,
   ORDER_BOOK_POLL_MS,
 } from '@/components/organisms/OrderBookPanel';
+import {
+  DEFAULT_ORDER_HEATMAP_WINDOW,
+  ORDER_HEATMAP_POLL_MS,
+  OrderHeatmap,
+} from '@/components/organisms/OrderHeatmap';
 import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
 import {
   rtkErrorMessage,
@@ -28,6 +33,7 @@ import {
   useGetSupplyQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
+  useGetSpotOrderBookHeatmapQuery,
   useListDelistScheduleQuery,
   useGetWatchlistQuery,
   useLazyGetCandlesQuery,
@@ -96,7 +102,8 @@ import {
 
 /**
  * Coin detail: 24h ticker, supply, OHLCV chart (EMA overlays), RSI/EMA analysis,
- * and a backend-grouped spot order book (price steps + walls).
+ * a backend-grouped spot order book, and a resting-size order heatmap.
+
  * Live candles poll a short window; pan-left pages older bars via endTime.
  * Pump/dump markers: live window is polled; each history page fetches pumps for
  * the same endTime range so markers exist on older candles, not only the right edge.
@@ -128,6 +135,7 @@ export function CoinDetailPage() {
   const [showPumpMarkers, setShowPumpMarkers] = useState(true);
   /** Backend group size; empty until the first book returns a default. */
   const [orderBookGroup, setOrderBookGroup] = useState('');
+  const [orderHeatmapWindow, setOrderHeatmapWindow] = useState(DEFAULT_ORDER_HEATMAP_WINDOW);
   const [showSignalMarkers, setShowSignalMarkers] = useState(true);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
@@ -247,6 +255,19 @@ export function CoinDetailPage() {
     {
       skip: skip || isEquity,
       pollingInterval: visible ? ORDER_BOOK_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const orderHeatmapQuery = useGetSpotOrderBookHeatmapQuery(
+    {
+      exchange: exchangeArg,
+      symbol,
+      group: orderBookGroup || undefined,
+      window: orderHeatmapWindow,
+    },
+    {
+      skip: skip || isEquity,
+      pollingInterval: visible ? ORDER_HEATMAP_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );
@@ -505,6 +526,7 @@ export function CoinDetailPage() {
     void intervalsQuery.refetch();
     void tickerQuery.refetch();
     void orderBookQuery.refetch();
+    void orderHeatmapQuery.refetch();
     void supplyQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
@@ -804,6 +826,23 @@ export function CoinDetailPage() {
       </PaperTradeCard>
       </SideStack>
       </ChartAndBook>
+
+      {!isEquity ? (
+        <OrderHeatmap
+          data={rtkCurrent(orderHeatmapQuery)}
+          windowSeconds={orderHeatmapWindow}
+          onWindowChange={setOrderHeatmapWindow}
+          isLoading={rtkCurrentPending(orderHeatmapQuery)}
+          isFetching={orderHeatmapQuery.isFetching}
+          errorMessage={
+            orderHeatmapQuery.isError
+              ? rtkErrorMessage(orderHeatmapQuery.error, {
+                  resource: t('detail:resource.orderBook'),
+                })
+              : null
+          }
+        />
+      ) : null}
 
       <IndicatorPanel
         data={liveIndicators}

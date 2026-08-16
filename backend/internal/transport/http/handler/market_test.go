@@ -205,6 +205,36 @@ func TestGetLiquidations_OK(t *testing.T) {
 	}
 }
 
+func TestGetOrderBookHeatmap_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=300", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBookHeatmap(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body orderBookHeatmapResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.WindowSeconds != 300 || len(body.Columns) == 0 {
+		t.Fatalf("%+v", body)
+	}
+	if body.Columns[0].T == "" || body.Columns[0].Mid == "" {
+		t.Fatalf("column %+v", body.Columns[0])
+	}
+}
+
+func TestGetOrderBookHeatmap_BadWindow(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetOrderBookHeatmap(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetMarketLiquidity_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", nil)

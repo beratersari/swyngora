@@ -485,6 +485,29 @@ func TestGetSpotOrderBook_Groups(t *testing.T) {
 	}
 }
 
+func TestGetOrderBookHeatmap_SeedsTape(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "btcusdt", "0.1", 600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Exchange != domain.ExchangeBinance || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", got)
+	}
+	if got.WindowSeconds != 600 || got.GroupSize != "0.1" {
+		t.Fatalf("meta %+v", got)
+	}
+	if len(got.Columns) != 1 {
+		t.Fatalf("expected seeded column, got %d", len(got.Columns))
+	}
+	if got.Columns[0].Mid == "" || (len(got.Columns[0].Bids) == 0 && len(got.Columns[0].Asks) == 0) {
+		t.Fatalf("empty column %+v", got.Columns[0])
+	}
+	if _, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "", "", 0); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("missing symbol: %v", err)
+	}
+}
+
 func TestWallWatchIdleOutlastsPersistentMin(t *testing.T) {
 	idle := wallWatchIdle()
 	need := domain.WallPersistentMin + wallSampleEvery

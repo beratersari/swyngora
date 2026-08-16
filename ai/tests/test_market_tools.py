@@ -31,6 +31,15 @@ class _Transport(httpx.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/orderbook/heatmap"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "windowSeconds": int(request.url.params.get("window") or 600),
+                    "columns": [{"t": "2026-08-16T12:00:00Z", "mid": "100"}],
+                },
+            )
         if request.url.path.endswith("/orderbook/liquidity"):
             return httpx.Response(
                 200,
@@ -105,6 +114,11 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_liquidations" in by_name
     liqs = json.loads(by_name["get_liquidations"].invoke({"symbol": "BTCUSDT"}))
     assert liqs["windows"][0]["window"] == "24h"
+
+    assert "get_orderbook_heatmap" in by_name
+    heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))
+    assert heat["symbol"] == "BTCUSDT"
+    assert heat["windowSeconds"] == 600
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"}))

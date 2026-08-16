@@ -584,6 +584,46 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/heatmap:
+    get:
+      summary: Resting order-book heatmap over time
+      description: |
+        Recent **resting** bid/ask notional at each grouped price, sampled from
+        the live local book (not executed volume / footprint). Each column is
+        one snapshot. The tape fills while the pair is watched (detail page or
+        this endpoint) and is kept by the wall sampler. First response seeds
+        one column. Informational only.
+      operationId: getSpotOrderBookHeatmap
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
+        - name: group
+          in: query
+          description: Price bucket size (e.g. 0.1). Omit for a suggested default.
+          schema: { type: string, example: "0.1" }
+        - name: window
+          in: query
+          description: Lookback in seconds (60–1800, default 600)
+          schema: { type: integer, default: 600, minimum: 60, maximum: 1800, example: 600 }
+      responses:
+        '200':
+          description: Heatmap tape
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderBookHeatmap'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/impact:
     get:
       summary: Simulate market-order impact and slippage
@@ -4459,6 +4499,38 @@ components:
         cumulativeNotional: { type: string }
         rawCount: { type: integer, description: Raw venue levels merged into this bucket }
         isWall: { type: boolean, description: Unusually large rest size on this side }
+    OrderBookHeatmapLevel:
+      type: object
+      properties:
+        price: { type: string }
+        notional: { type: string, description: Quote notional resting at this price }
+        isWall: { type: boolean }
+    OrderBookHeatmapColumn:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        mid: { type: string }
+        bids:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookHeatmapLevel' }
+        asks:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookHeatmapLevel' }
+    OrderBookHeatmap:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        groupSize: { type: string }
+        windowSeconds: { type: integer }
+        sampleEveryMs: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        columns:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookHeatmapColumn' }
+        live: { type: boolean }
+        note: { type: string }
     SpotOrderBook:
       type: object
       properties:

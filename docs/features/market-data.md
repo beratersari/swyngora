@@ -40,6 +40,8 @@ Expose first market-data APIs so clients can:
 
 `/heatmap` is a CoinMarketCap-style treemap of `GET /api/v1/market/spot`. Red / slate / green tiles with a 2px white gap and 2px corner radius (CoinMarketCap spacing); `|Δ| < 0.05%` is dead-band gray. Cell size is circulating market cap (default) or 24h volume. Hover tooltip shows price, market cap, 24h volume, and venue; click opens coin detail. Fullscreen expands the map.
 
+Coin detail also has an **order heatmap** (resting bid/ask size over time) from `GET /api/v1/market/orderbook/heatmap`. That is not the market-cap treemap — see [`order-book.md`](order-book.md).
+
 ### Spot order book — `GET /api/v1/market/orderbook`
 
 - Grouped bid/ask depth (spot only). `group` is the price step (e.g. `0.1`); omit for a suggested default.

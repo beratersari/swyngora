@@ -168,6 +168,22 @@ func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/liquidations", q)
 }
 
+// GetOrderBookHeatmap returns recent resting bid/ask size over time.
+func (c *APIClient) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if group != "" {
+		q.Set("group", group)
+	}
+	if windowSec > 0 {
+		q.Set("window", strconv.Itoa(windowSec))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/heatmap", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

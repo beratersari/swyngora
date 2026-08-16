@@ -34,6 +34,7 @@ type Service struct {
 	delist        domain.SpotDelistStore
 	delistEnabled bool
 	walls         *domain.WallMemory
+	heat          *domain.HeatmapTape
 	watchMu       sync.Mutex
 	wallWatch     map[string]wallWatch
 	liq           *domain.LiquidationBook
@@ -78,7 +79,13 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 			cp[k] = v
 		}
 	}
-	return &Service{markets: cp, supply: supply, walls: domain.NewWallMemory(), wallWatch: map[string]wallWatch{}}
+	return &Service{
+		markets:   cp,
+		supply:    supply,
+		walls:     domain.NewWallMemory(),
+		heat:      domain.NewHeatmapTape(),
+		wallWatch: map[string]wallWatch{},
+	}
 }
 
 // WithDelistStore attaches optional delist schedule for spot enrichment.
@@ -238,7 +245,51 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		book.Symbol = symbol
 	}
 	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
+	s.recordHeatFromRaw(ex, book.Symbol, raw, groupSize)
 	return &book, nil
+}
+
+// GetOrderBookHeatmap returns recent resting bid/ask size over time.
+// It also samples the live book so the first column exists and the tape keeps filling.
+func (s *Service) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (*domain.OrderBookHeatmap, error) {
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	symbol = normalizeSymbolForExchange(ex, symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	groupSize, err := domain.ParseGroupSize(group)
+	if err != nil {
+		return nil, err
+	}
+	windowSec = domain.ClampHeatmapWindowSeconds(windowSec)
+	p, err := s.port(ex)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
+		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
+	}
+	s.noteWallWatch(ex, symbol)
+	s.recordHeatFromRaw(ex, symbol, raw, groupSize)
+	if s.heat == nil {
+		s.heat = domain.NewHeatmapTape()
+	}
+	view := s.heat.View(string(ex), symbol, time.Duration(windowSec)*time.Second)
+	view.Live = raw.Live
+	if view.Exchange == "" {
+		view.Exchange = ex
+	}
+	if view.Symbol == "" {
+		view.Symbol = symbol
+	}
+	return &view, nil
 }
 
 // GetCombinedOrderBookAnalysis sums live depth from every configured venue
@@ -607,7 +658,23 @@ func (s *Service) sampleWatchedWalls(ctx context.Context) {
 		}
 		an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
 		s.observeWalls(w.exchange, w.symbol, an.Walls)
+		s.recordHeatFromRaw(w.exchange, w.symbol, raw, 0)
 	}
+}
+
+func (s *Service) recordHeatFromRaw(ex domain.Exchange, symbol string, raw *domain.RawOrderBook, groupSize float64) {
+	if s == nil || raw == nil {
+		return
+	}
+	if s.heat == nil {
+		s.heat = domain.NewHeatmapTape()
+	}
+	book := domain.GroupOrderBook(*raw, groupSize, domain.HeatmapRecordLevels)
+	book.Exchange = ex
+	if book.Symbol == "" {
+		book.Symbol = symbol
+	}
+	s.heat.Record(time.Now().UTC(), book)
 }
 
 const (

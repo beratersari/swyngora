@@ -33,6 +33,7 @@ type DataPort interface {
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
@@ -327,6 +328,24 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AnalyzeCombinedOrderBook(ctx, symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_orderbook_heatmap",
+		mcp.WithDescription("Recent resting bid/ask size over time (order heatmap / bookmap-style tape). Each column is a live book snapshot, not executed volume. Use for 'where has size been sitting' or 'did that wall persist'. window is lookback seconds (60–1800, default 600). Spot only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
+		mcp.WithNumber("window", mcp.Description("Lookback seconds 60–1800 (default 600)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetOrderBookHeatmap(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("group", ""), req.GetInt("window", 600))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

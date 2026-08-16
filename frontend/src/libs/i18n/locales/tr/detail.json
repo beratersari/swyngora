@@ -87,6 +87,21 @@
     "askHeavy": "Satış ağır",
     "balanced": "Dengeli"
   },
+  "orderHeatmap": {
+    "title": "Likidite ısı haritası",
+    "subtitle": "Bekleyen emir derinliği. Yeşil alış, kırmızı satış; daha parlak daha büyük. Sağdaki geniş sütun güncel defterdir; sol taraf geçmiştir. İşlem hacmi değildir.",
+    "window": "Pencere",
+    "collected": "{{span}} birikti",
+    "now": "Şimdi",
+    "size": "Büyüklük",
+    "low": "İnce",
+    "high": "Yoğun",
+    "bids": "Alış",
+    "asks": "Satış",
+    "bidSize": "Alış büyüklüğü",
+    "askSize": "Satış büyüklüğü",
+    "empty": "Bu çift için henüz canlı defter yok."
+  },
   "paperTrade": {
     "title": "Kağıt işlem",
     "hint": "Seçili kağıt defterde simüle piyasa emri. Gerçek para değildir.",

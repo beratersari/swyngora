@@ -300,6 +300,20 @@ class MarketLiquidityInput(BaseModel):
     )
 
 
+class OrderBookHeatmapInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+    group: str = Field(
+        default="", description="Price bucket e.g. 0.1; empty = suggested default"
+    )
+    window: int = Field(
+        default=600,
+        ge=60,
+        le=1800,
+        description="Lookback seconds (60–1800, default 600)",
+    )
+
+
 class MarketImpactInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     side: str = Field(default="buy", description="buy (default) or sell")
@@ -892,6 +906,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/orderbook/liquidity",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_orderbook_heatmap(
+        symbol: str,
+        exchange: str = "binance",
+        group: str = "",
+        window: int = 600,
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "exchange": exchange,
+            "window": window,
+        }
+        if group:
+            params["group"] = group
+        return http.get("/api/v1/market/orderbook/heatmap", params)
 
     def estimate_market_impact(
         symbol: str,
@@ -2006,6 +2035,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "coverage does not grow if the stream never connects or drops."
             ),
             args_schema=LiquidationsInput,
+        ),
+        StructuredTool.from_function(
+            get_orderbook_heatmap,
+            name="get_orderbook_heatmap",
+            description=(
+                "Resting bid/ask size over time (order heatmap). Each column is a live "
+                "book snapshot, not executed volume. Use for where size has been sitting "
+                "and whether a wall persisted. window is lookback seconds (default 600)."
+            ),
+            args_schema=OrderBookHeatmapInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

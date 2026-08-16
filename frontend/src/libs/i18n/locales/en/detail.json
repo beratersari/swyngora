@@ -87,6 +87,21 @@
     "askHeavy": "More asks",
     "balanced": "Balanced"
   },
+  "orderHeatmap": {
+    "title": "Liquidity heatmap",
+    "subtitle": "Resting limit-order depth. Green is bids, red is asks, brighter is more size. The wide right column is the current book; history fills to the left. Not executed volume.",
+    "window": "Window",
+    "collected": "{{span}} collected",
+    "now": "Now",
+    "size": "Size",
+    "low": "Thin",
+    "high": "Heavy",
+    "bids": "Bids",
+    "asks": "Asks",
+    "bidSize": "Bid size",
+    "askSize": "Ask size",
+    "empty": "No live book for this pair yet."
+  },
   "paperTrade": {
     "title": "Paper trade",
     "hint": "Simulated market fill on your selected paper book. Not real money.",

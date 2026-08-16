@@ -152,6 +152,43 @@ func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	})
 }
 
+func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOrderBookHeatmap(ctx, exchange, symbol, group, windowSec)
+	if err != nil {
+		return nil, err
+	}
+	cols := make([]map[string]any, 0, len(got.Columns))
+	mapLevels := func(in []domain.HeatmapLevel) []map[string]any {
+		out := make([]map[string]any, 0, len(in))
+		for _, lv := range in {
+			out = append(out, map[string]any{"price": lv.Price, "notional": lv.Notional, "isWall": lv.IsWall})
+		}
+		return out
+	}
+	for _, c := range got.Columns {
+		cols = append(cols, map[string]any{
+			"t": c.Time.UTC().Format(time.RFC3339Nano), "mid": c.Mid,
+			"bids": mapLevels(c.Bids), "asks": mapLevels(c.Asks),
+		})
+	}
+	from, to := "", ""
+	if !got.From.IsZero() {
+		from = got.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !got.To.IsZero() {
+		to = got.To.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"exchange": string(got.Exchange), "symbol": got.Symbol, "groupSize": got.GroupSize,
+		"windowSeconds": got.WindowSeconds, "sampleEveryMs": got.SampleEveryMs,
+		"from": from, "to": to, "columns": cols, "live": got.Live,
+		"note": "Resting bid/ask notional over time. Not executed volume.",
+	})
+}
+
 func (b *Backend) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

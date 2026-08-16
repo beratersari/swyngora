@@ -306,6 +306,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resting order-book heatmap over time
+         * @description Recent **resting** bid/ask notional at each grouped price, sampled from
+         *     the live local book (not executed volume / footprint). Each column is
+         *     one snapshot. The tape fills while the pair is watched (detail page or
+         *     this endpoint) and is kept by the wall sampler. First response seeds
+         *     one column. Informational only.
+         */
+        get: operations["getSpotOrderBookHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/impact": {
         parameters: {
             query?: never;
@@ -2164,6 +2188,33 @@ export interface components {
             /** @description Unusually large rest size on this side */
             isWall?: boolean;
         };
+        OrderBookHeatmapLevel: {
+            price?: string;
+            /** @description Quote notional resting at this price */
+            notional?: string;
+            isWall?: boolean;
+        };
+        OrderBookHeatmapColumn: {
+            /** Format: date-time */
+            t?: string;
+            mid?: string;
+            bids?: components["schemas"]["OrderBookHeatmapLevel"][];
+            asks?: components["schemas"]["OrderBookHeatmapLevel"][];
+        };
+        OrderBookHeatmap: {
+            exchange?: string;
+            symbol?: string;
+            groupSize?: string;
+            windowSeconds?: number;
+            sampleEveryMs?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            columns?: components["schemas"]["OrderBookHeatmapColumn"][];
+            live?: boolean;
+            note?: string;
+        };
         SpotOrderBook: {
             exchange?: string;
             symbol?: string;
@@ -3768,6 +3819,36 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getSpotOrderBookHeatmap: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                /** @description Price bucket size (e.g. 0.1). Omit for a suggested default. */
+                group?: string;
+                /** @description Lookback in seconds (60–1800, default 600) */
+                window?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Heatmap tape */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderBookHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

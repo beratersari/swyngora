@@ -100,6 +100,15 @@ export function orderBookTagId(arg: {
   return `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.group ?? ''}:${arg.limit ?? 20}`;
 }
 
+export function orderHeatmapTagId(arg: {
+  exchange?: string;
+  symbol: string;
+  group?: string;
+  window?: number;
+}): string {
+  return `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.group ?? ''}:${arg.window ?? 600}`;
+}
+
 export function supplyTagId(arg: { asset?: string; symbol?: string } | void): string {
   return (arg && (arg.asset || arg.symbol)) || 'unknown';
 }

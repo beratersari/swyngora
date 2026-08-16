@@ -252,6 +252,26 @@ func (h *MarketHandler) GetLiquidations(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, liquidationsToDTO(got))
 }
 
+// GetOrderBookHeatmap handles GET /api/v1/market/orderbook/heatmap.
+func (h *MarketHandler) GetOrderBookHeatmap(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	windowSec := 0
+	if raw := strings.TrimSpace(q.Get("window")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: window must be an integer number of seconds", domain.ErrInvalidArgument))
+			return
+		}
+		windowSec = n
+	}
+	got, err := h.svc.GetOrderBookHeatmap(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("group"), windowSec)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, heatmapToDTO(got))
+}
+
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
 func (h *MarketHandler) GetMarketLiquidity(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -584,6 +604,70 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
 		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. A dropped or never-connected stream does not grow coverage. Notional is quote (USDT). Informational only.",
+	}
+}
+
+type heatmapLevelDTO struct {
+	Price    string `json:"price"`
+	Notional string `json:"notional"`
+	IsWall   bool   `json:"isWall,omitempty"`
+}
+
+type heatmapColumnDTO struct {
+	T    string            `json:"t"`
+	Mid  string            `json:"mid"`
+	Bids []heatmapLevelDTO `json:"bids,omitempty"`
+	Asks []heatmapLevelDTO `json:"asks,omitempty"`
+}
+
+type orderBookHeatmapResponse struct {
+	Exchange      string             `json:"exchange"`
+	Symbol        string             `json:"symbol"`
+	GroupSize     string             `json:"groupSize"`
+	WindowSeconds int                `json:"windowSeconds"`
+	SampleEveryMs int                `json:"sampleEveryMs"`
+	From          string             `json:"from,omitempty"`
+	To            string             `json:"to,omitempty"`
+	Columns       []heatmapColumnDTO `json:"columns"`
+	Live          bool               `json:"live"`
+	Note          string             `json:"note"`
+}
+
+func heatmapToDTO(h *domain.OrderBookHeatmap) orderBookHeatmapResponse {
+	if h == nil {
+		return orderBookHeatmapResponse{Columns: []heatmapColumnDTO{}}
+	}
+	cols := make([]heatmapColumnDTO, 0, len(h.Columns))
+	mapLevels := func(in []domain.HeatmapLevel) []heatmapLevelDTO {
+		if len(in) == 0 {
+			return nil
+		}
+		out := make([]heatmapLevelDTO, 0, len(in))
+		for _, lv := range in {
+			out = append(out, heatmapLevelDTO{Price: lv.Price, Notional: lv.Notional, IsWall: lv.IsWall})
+		}
+		return out
+	}
+	for _, c := range h.Columns {
+		cols = append(cols, heatmapColumnDTO{
+			T:    c.Time.UTC().Format(time.RFC3339Nano),
+			Mid:  c.Mid,
+			Bids: mapLevels(c.Bids),
+			Asks: mapLevels(c.Asks),
+		})
+	}
+	from, to := "", ""
+	if !h.From.IsZero() {
+		from = h.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !h.To.IsZero() {
+		to = h.To.UTC().Format(time.RFC3339Nano)
+	}
+	return orderBookHeatmapResponse{
+		Exchange: string(h.Exchange), Symbol: h.Symbol, GroupSize: h.GroupSize,
+		WindowSeconds: h.WindowSeconds, SampleEveryMs: h.SampleEveryMs,
+		From: from, To: to, Columns: cols, Live: h.Live,
+		Note: "Resting bid/ask notional over time from the live local book. Informational only — not a footprint or executed volume.",
 	}
 }
 

@@ -47,6 +47,14 @@ Futures / other markets are out of scope for now version.
     `exhausted` is true if the order did not fully fill. First 30 fill rows are included.
   - Simulation only — not a quote, fill, or financial advice. Visible depth is often
     much thinner than a real $1B print; `exhausted=true` is the honest answer then.
+- `GET /api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=600`
+  - Recent **resting** bid/ask notional over time (Bookmap-style tape). Each
+    column is a live local-book snapshot, not executed volume. First response
+    seeds one column; the wall sampler keeps filling while the pair is watched.
+    `window` is lookback seconds (60–1800, default 600). Coin detail renders
+    a Bookmap-style liquidity map: thermal size by price, history on the left,
+    a wide current-book column on the right. One snapshot still fills the plot.
+    The tape keeps up to 30 minutes of 1s samples so a 15m window can fill.
 - `GET /api/v1/market/orderbook/liquidity?symbol=BTCUSDT`
   - Scores how easy the pair is to trade from resting bid/ask **notional**.
     Only **±0.1% / ±0.5% / ±1%** bands the book **actually reaches on both sides**
@@ -68,12 +76,12 @@ Futures / other markets are out of scope for now version.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `orderbook_liquidity.go`, `wall_track.go`, `depthbook.go` |
+| Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `orderbook_liquidity.go`, `orderbook_heatmap.go`, `wall_track.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
-| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `create_orderbook_alert` |
-| UI | `frontend` coin detail `OrderBookPanel` |
+| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `create_orderbook_alert` |
+| UI | `frontend` coin detail `OrderBookPanel` + `OrderHeatmap` |
 
 ## How to verify
 
@@ -87,6 +95,7 @@ curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&quanti
 curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notional=1000000000&exchange=all"
 curl "http://localhost:8080/api/v1/market/orderbook/liquidity?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/orderbook/liquidity?symbol=BTCUSDT&exchange=binance"
+curl "http://localhost:8080/api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=600"
 ```
 
 `live=true` and `source=websocket` when the local book is synced. Read `analysis.pressure`, `analysis.imbalance`, and `analysis.walls`. For impact, read `averagePrice`, `newBestPrice`, `impactAvailable`, and `impactPct` (only when a new best is known).

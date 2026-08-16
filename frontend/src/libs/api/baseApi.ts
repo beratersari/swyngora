@@ -21,6 +21,7 @@ export const baseApi = createApi({
     'Candle',
     'Ticker',
     'OrderBook',
+    'OrderHeatmap',
     'Supply',
     'Interval',
     'Indicator',

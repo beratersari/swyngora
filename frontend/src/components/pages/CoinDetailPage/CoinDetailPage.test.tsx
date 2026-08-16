@@ -1,4 +1,10 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, beforeAll } from 'vitest';
+
+beforeAll(() => {
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    value: () => null,
+  });
+});
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
@@ -11,6 +17,7 @@ const mockSupply = vi.fn();
 const mockCandles = vi.fn();
 const mockIndicators = vi.fn();
 const mockOrderBook = vi.fn();
+const mockOrderHeatmap = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -22,6 +29,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetCandlesQuery: () => mockCandles(),
     useGetIndicatorsQuery: () => mockIndicators(),
     useGetSpotOrderBookQuery: () => mockOrderBook(),
+    useGetSpotOrderBookHeatmapQuery: () => mockOrderHeatmap(),
   };
 });
 
@@ -122,6 +130,36 @@ describe('CoinDetailPage', () => {
       isFetching: false,
       refetch: vi.fn(),
     });
+    mockOrderHeatmap.mockReturnValue({
+      data: {
+        symbol: 'BTCUSDT',
+        windowSeconds: 600,
+        columns: [
+          {
+            t: '2026-08-16T12:00:00.000Z',
+            mid: '100',
+            bids: [{ price: '99', notional: '1000' }],
+            asks: [{ price: '101', notional: '800' }],
+          },
+        ],
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        windowSeconds: 600,
+        columns: [
+          {
+            t: '2026-08-16T12:00:00.000Z',
+            mid: '100',
+            bids: [{ price: '99', notional: '1000' }],
+            asks: [{ price: '101', notional: '800' }],
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
   });
 
   it('renders symbol header and chart host', async () => {
@@ -129,6 +167,7 @@ describe('CoinDetailPage', () => {
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-book')).toBeInTheDocument();
+    expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
   });
 
   it('rejects unknown exchange path segments', async () => {

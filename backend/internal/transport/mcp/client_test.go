@@ -65,6 +65,34 @@ func TestAPIClient_GetLiquidations(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetOrderBookHeatmap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/orderbook/heatmap" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" || r.URL.Query().Get("window") != "300" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "windowSeconds": 300, "columns": []any{map[string]any{"t": "2026-08-16T12:00:00Z", "mid": "100"}},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetOrderBookHeatmap(context.Background(), "binance", "BTCUSDT", "", 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["windowSeconds"] != float64(300) {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/liquidity" {

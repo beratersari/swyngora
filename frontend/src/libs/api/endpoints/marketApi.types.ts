@@ -14,6 +14,10 @@ export type Supply = components['schemas']['Supply'];
 export type SpotOrderBook = components['schemas']['SpotOrderBook'];
 export type OrderBookLevel = components['schemas']['OrderBookLevel'];
 export type OrderBookQuery = NonNullable<operations['getSpotOrderBook']['parameters']['query']>;
+export type OrderBookHeatmap = components['schemas']['OrderBookHeatmap'];
+export type OrderBookHeatmapQuery = NonNullable<
+  operations['getSpotOrderBookHeatmap']['parameters']['query']
+>;
 
 export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;

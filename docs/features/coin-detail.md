@@ -36,6 +36,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
 | Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |
+| Order heatmap | `GET` | `/api/v1/market/orderbook/heatmap` | [`order-book.md`](order-book.md) |
 | Batch (not detail) | `POST` | `/api/v1/market/indicators/batch` | DET-B §6 |
 
 ---
@@ -45,7 +46,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 ### Page (DET-A)
 
 - Route `/markets/:exchange/:symbol`; query `interval` + `limit` (defaults `1h` / `100`)
-- Layout: Header → stats → chart → indicators
+- Layout: Header → stats → chart + book → order heatmap → indicators
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Partial errors per section; supply 404 is soft
 

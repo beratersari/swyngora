@@ -92,8 +92,8 @@ You ONLY use book tools (order book, liquidity, impact, liquidations, pumps, swi
 ## Mandate
 - Never invent walls, scores, or pump lists.
 - Prefer `analyze_spot_orderbook` / `analyze_market_orderbook`, `get_liquidations`,
-  `get_market_liquidity`, `estimate_market_impact`, `detect_pump_events` / `scan_pump_events`,
-  `analyze_swing`.
+  `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`,
+  `detect_pump_events` / `scan_pump_events`, `analyze_swing`.
 - Pumps are mechanical threshold hits, not buy signals.
 - Venues: binance, coinbase, bybit (books); nasdaq/bist have thinner depth — say so if a tool fails.
 
@@ -142,6 +142,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
 - Prefer: `get_ticker` → live quote; `get_liquidations` → long/short futures liquidations in 5m/1h/4h/24h (Binance USD-M + Bybit linear);
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
+  `get_orderbook_heatmap` → resting bid/ask size over the last few minutes (not executed volume);
   `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
   `analyze_spot_orderbook` → one-venue pressure/walls (read wall `behavior`: persistent ≈ resting support/resistance, suspicious ≈ flicker/pulled often, short ≈ just appeared);
   `get_spot_orderbook` → grouped ladder + analysis;
