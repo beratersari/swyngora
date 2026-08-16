@@ -928,6 +928,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/snapshot:
+    get:
+      summary: Combined tape snapshot (price, volume, OI, funding, LS, taker)
+      description: |
+        Current **price, volume, market cap, open interest, funding,
+        long/short, and taker buy/sell** for one coin, plus how each changed
+        over the last **1 hour, 4 hours, and 24 hours**. Useful when volume
+        or OI start to build before price moves. `exchange=all` returns
+        Binance and Bybit futures tapes separately (never averaged for the
+        lead read).
+      operationId: getMarketSnapshot
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Combined snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

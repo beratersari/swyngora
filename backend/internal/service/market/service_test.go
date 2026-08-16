@@ -851,6 +851,47 @@ func TestGetVolatility_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetSnapshot_PriceAndOITogether(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	start := now.Add(-48 * time.Hour)
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{ticker: &domain.Ticker24h{Symbol: "SOLUSDT", LastPrice: "100", QuoteVolume: "5000"}},
+		by: map[string]map[domain.CandleInterval][]domain.Candle{
+			"SOLUSDT": {"1h": synthCloses(start, 50, time.Hour, func(i int) float64 { return 100 + float64(i%3)*0.1 })},
+		},
+	}
+	oi := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 120, Value: 12000},
+		History:  []domain.OpenInterestPoint{{Time: now.Add(-time.Hour), Contracts: 100, Value: 10000}},
+	}}
+	tk := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBinance,
+		Windows:  []domain.TakerWindowFlow{domain.SummarizeTakerWindow(80, 20, domain.TakerWindow1h, true)},
+	}}
+	svc := New(m, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi}).
+		WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{domain.ExchangeBinance: tk})
+	got, err := svc.GetSnapshot(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Spot.Price != 100 || len(got.Venues) != 1 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+	if got.Venues[0].OIValue != 12000 {
+		t.Fatalf("oi %+v", got.Venues[0])
+	}
+}
+
+func TestGetSnapshot_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetSnapshot(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 type fakeWindows struct {
 	byWindow map[string][]domain.WindowChange
 }

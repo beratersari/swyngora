@@ -52,6 +52,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
 - `GET /api/v1/market/breadth` how many followed coins are up vs down (1h / 4h / 24h). See [`breadth.md`](breadth.md).
 - `GET /api/v1/market/volatility` how much a coin moved (range, vs normal, vs BTC/ETH). See [`volatility.md`](volatility.md).
+- `GET /api/v1/market/snapshot` price, volume, mcap, OI, funding, LS, and taker flow together. See [`snapshot.md`](snapshot.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

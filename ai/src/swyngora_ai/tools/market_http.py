@@ -230,6 +230,14 @@ class VolatilityInput(BaseModel):
     )
 
 
+class SnapshotInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
 class BreadthInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -845,6 +853,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_price_volatility(symbol: str, exchange: str = "binance") -> str:
         return http.get(
             "/api/v1/market/volatility",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_market_snapshot(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/snapshot",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -2022,6 +2036,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "expanding, and whether it is jumpy or calm versus BTC and ETH."
             ),
             args_schema=VolatilityInput,
+        ),
+        StructuredTool.from_function(
+            get_market_snapshot,
+            name="get_market_snapshot",
+            description=(
+                "Price, volume, market cap, open interest, funding, "
+                "long/short, and taker buy/sell together for one coin, "
+                "with current values and 1h / 4h / 24h changes. Use when "
+                "volume or OI may be building before price moves."
+            ),
+            args_schema=SnapshotInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

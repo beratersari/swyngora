@@ -293,6 +293,16 @@ func (c *APIClient) GetVolatility(ctx context.Context, exchange, symbol string) 
 	return c.get(ctx, "/api/v1/market/volatility", q)
 }
 
+// GetSnapshot returns price, volume, mcap, OI, funding, long/short, and taker flow together.
+func (c *APIClient) GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/snapshot", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

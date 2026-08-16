@@ -37,11 +37,12 @@ const (
 
 // OHLCBar is one candle used for range and realized-vol math.
 type OHLCBar struct {
-	Time  time.Time
-	Open  float64
-	High  float64
-	Low   float64
-	Close float64
+	Time     time.Time
+	Open     float64
+	High     float64
+	Low      float64
+	Close    float64
+	QuoteVol float64
 }
 
 // VolMeasure is how much price moved in one slice of bars.
@@ -123,7 +124,11 @@ func BarsFromCandles(candles []Candle) []OHLCBar {
 		if t.IsZero() {
 			continue
 		}
-		out = append(out, OHLCBar{Time: t, Open: op, High: hi, Low: lo, Close: cl})
+		qv, _ := parseClose(c.QuoteVolume)
+		if qv < 0 || math.IsNaN(qv) {
+			qv = 0
+		}
+		out = append(out, OHLCBar{Time: t, Open: op, High: hi, Low: lo, Close: cl, QuoteVol: qv})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
 	return out

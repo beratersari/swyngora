@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Market snapshot:** price, volume, market cap, open interest, funding, long/short, and taker buy/sell together for one coin, with 1h / 4h / 24h changes (`GET /api/v1/market/snapshot`, MCP `get_market_snapshot`) (`docs/features/snapshot.md`)
 - **Price volatility:** how much a coin moved over 1h / 4h / 24h (net + high–low range), whether that range is higher or lower than normal and expanding or shrinking, and whether the coin is jumpy or calm versus BTC/ETH (`GET /api/v1/market/volatility`, MCP `get_price_volatility`) (`docs/features/volatility.md`)
 - **Market breadth:** how many of the liquid coins we follow are up vs down over 1h / 4h / 24h (count and percent), plus whether BTC/ETH are moving with the pack or a few large coins are carrying (`GET /api/v1/market/breadth`, MCP `get_market_breadth`) (`docs/features/breadth.md`)
 - **Price correlation vs BTC/ETH:** how similarly a coin has been moving with Bitcoin and Ethereum over 1h / 4h / 24h (correlation, beta, same-direction share, lead/lag) (`GET /api/v1/market/correlation`, MCP `get_price_correlation`) (`docs/features/correlation.md`)

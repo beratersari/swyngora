@@ -608,6 +608,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combined tape snapshot
+         * @description Price, volume, mcap, OI, funding, LS, and taker flow with 1h/4h/24h changes.
+         */
+        get: operations["getMarketSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4561,6 +4581,40 @@ export interface operations {
                         exchange?: string;
                         asOf?: string;
                         windows?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketSnapshot: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        spot?: Record<string, unknown>;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
                         summary?: string;
                         note?: string;
                     };
