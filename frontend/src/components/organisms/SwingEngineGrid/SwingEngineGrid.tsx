@@ -3,7 +3,7 @@ import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
-import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
+import { formatExactDateTime, formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import {
   Card,
   CardFooter,
@@ -30,7 +30,7 @@ export function SwingEngineGrid({
   emptyText,
   onOpen,
 }: SwingEngineGridProps) {
-  const { t } = useTranslation('signals');
+  const { t, i18n } = useTranslation('signals');
 
   if (loading && items.length === 0) {
     return (
@@ -95,6 +95,9 @@ export function SwingEngineGrid({
             <CardFooter>
               <Text variant="caption" color="secondary">
                 {s.interval} · RSI {s.rsi != null ? s.rsi.toFixed(1) : '—'}
+                {s.barTime
+                  ? ` · ${t('engine.triggered', { date: formatExactDateTime(s.barTime, i18n.language) })}`
+                  : ''}
               </Text>
               {onOpen && s.exchange && s.symbol ? (
                 <Button size="small" type="link" onClick={() => onOpen(s.exchange!, s.symbol!)}>

@@ -108,3 +108,34 @@ export function formatDateTime(
     minute: '2-digit',
   });
 }
+
+/** Full UTC stamp for signal trigger bars (seconds + timezone). */
+export function formatExactDateTime(
+  value: string | number | Date | null | undefined,
+  locale?: string,
+): string {
+  if (value === null || value === undefined || value === '') return '—';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(locale || 'en-GB', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  });
+}
+
+/** Prefer the candle open that fired the rule; fall back to when it was recorded. */
+export function signalTriggerAt(hit: {
+  marketDataKey?: string | null;
+  matchedAt?: string | null;
+}): string {
+  const bar = (hit.marketDataKey ?? '').trim();
+  if (bar && !Number.isNaN(Date.parse(bar))) return bar;
+  return (hit.matchedAt ?? '').trim();
+}

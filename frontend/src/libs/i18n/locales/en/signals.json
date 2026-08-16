@@ -12,6 +12,7 @@
   "factor": "Factor",
   "summary": "Summary",
   "matchedAt": "Matched",
+  "triggeredAt": "Triggered",
   "actions": "Actions",
   "watchlistEmptyTitle": "Watchlist is empty",
   "watchlistEmptyBody": "The scanner only evaluates coins on your watchlist. Add pairs first:",
@@ -36,7 +37,8 @@
     "entry": "Entry",
     "stop": "Stop",
     "target": "Target",
-    "rr": "R:R {{rr}} · risk {{risk}}%"
+    "rr": "R:R {{rr}} · risk {{risk}}%",
+    "triggered": "triggered {{date}}"
   },
   "setups": {
     "empty": "No confluence yet. Add the 4h swing stack and wait for the next closed bars.",

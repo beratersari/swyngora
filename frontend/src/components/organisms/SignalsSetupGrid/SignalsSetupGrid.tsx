@@ -3,7 +3,7 @@ import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
-import { formatDateTime, formatSymbolDisplay, ruleTypeShort } from '@/libs/utils';
+import { formatExactDateTime, formatSymbolDisplay, ruleTypeShort } from '@/libs/utils';
 import {
   Card,
   CardFooter,
@@ -21,7 +21,7 @@ export function SignalsSetupGrid({
   emptyText,
   onOpen,
 }: SignalsSetupGridProps) {
-  const { t } = useTranslation('signals');
+  const { t, i18n } = useTranslation('signals');
 
   if (loading && setups.length === 0) {
     return (
@@ -78,7 +78,7 @@ export function SignalsSetupGrid({
           </SummaryList>
           <CardFooter>
             <Text variant="caption" color="secondary">
-              {formatDateTime(s.latestAt)}
+              {formatExactDateTime(s.latestAt, i18n.language)}
             </Text>
             {onOpen ? (
               <Button size="small" type="link" onClick={() => onOpen(s.exchange, s.symbol)}>

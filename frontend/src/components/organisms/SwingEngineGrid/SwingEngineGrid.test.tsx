@@ -20,15 +20,17 @@ describe('SwingEngineGrid', () => {
             fresh: true,
             btcRegime: 'bull',
             rsi: 42,
+            barTime: '2026-08-01T04:00:00.000Z',
             levels: { entry: 100, stopLoss: 95, takeProfit: 110, rr: 2, riskPct: 5 },
           },
         ]}
       />,
     );
     expect(screen.getByText(/ETH\/USDT|ETHUSDT/)).toBeInTheDocument();
-    expect(screen.getByText(/trigger/i)).toBeInTheDocument();
+    expect(screen.getByText('trigger')).toBeInTheDocument();
     expect(screen.getByText('100')).toBeInTheDocument();
     expect(screen.getByText('95')).toBeInTheDocument();
     expect(screen.getByText('110')).toBeInTheDocument();
+    expect(screen.getByText(/04:00:00/)).toBeInTheDocument();
   });
 });

@@ -5,12 +5,12 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import type { ScannerResult } from '@/libs/api';
-import { formatDateTime, formatSymbolDisplay, ruleTypeShort } from '@/libs/utils';
+import { formatExactDateTime, formatSymbolDisplay, ruleTypeShort, signalTriggerAt } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import type { SignalsHitsTableProps } from './SignalsHitsTable.types';
 
 export function SignalsHitsTable({ items, loading, onOpen }: SignalsHitsTableProps) {
-  const { t } = useTranslation(['signals', 'common']);
+  const { t, i18n } = useTranslation(['signals', 'common']);
 
   const columns: ColumnsType<ScannerResult> = [
     {
@@ -51,12 +51,11 @@ export function SignalsHitsTable({ items, loading, onOpen }: SignalsHitsTablePro
       render: (s: string) => <Text variant="body">{s}</Text>,
     },
     {
-      title: t('signals:matchedAt'),
-      dataIndex: 'matchedAt',
-      key: 'matchedAt',
-      render: (v: string) => (
-        <Text variant="caption" color="secondary">
-          {formatDateTime(v)}
+      title: t('signals:triggeredAt'),
+      key: 'triggeredAt',
+      render: (_, row) => (
+        <Text variant="caption" color="secondary" mono>
+          {formatExactDateTime(signalTriggerAt(row), i18n.language)}
         </Text>
       ),
     },

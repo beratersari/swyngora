@@ -12,6 +12,7 @@
   "factor": "Faktör",
   "summary": "Özet",
   "matchedAt": "Eşleşme",
+  "triggeredAt": "Tetik",
   "actions": "İşlemler",
   "watchlistEmptyTitle": "İzleme listesi boş",
   "watchlistEmptyBody": "Tarayıcı yalnızca izleme listenizdeki coinleri değerlendirir. Önce çift ekleyin:",
@@ -36,7 +37,8 @@
     "entry": "Giriş",
     "stop": "Stop",
     "target": "Hedef",
-    "rr": "R:R {{rr}} · risk {{risk}}%"
+    "rr": "R:R {{rr}} · risk {{risk}}%",
+    "triggered": "tetik {{date}}"
   },
   "setups": {
     "empty": "Henüz birleşim yok. 4s salınım paketini ekleyip kapanan mumları bekleyin.",

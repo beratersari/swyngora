@@ -5,7 +5,9 @@ import {
   formatCompactAsset,
   formatCompactUsd,
   formatMarketCapMax,
+  formatExactDateTime,
   formatTradeCount,
+  signalTriggerAt,
 } from './formatMarket';
 
 describe('formatMarket', () => {
@@ -61,5 +63,28 @@ describe('formatMarket', () => {
     expect(formatCompactAsset(10_000, 'btc')).toBe('10.00K BTC');
     expect(formatCompactAsset(42, 'USDT')).toBe(`${formatCompactUsd(42)} USDT`);
     expect(formatCompactAsset(null, 'BTC')).toBe('—');
+  });
+
+  it('formats exact UTC trigger stamps with seconds', () => {
+    expect(formatExactDateTime('2026-08-01T00:00:00.000Z')).toMatch(/2026/);
+    expect(formatExactDateTime('2026-08-01T00:00:00.000Z')).toMatch(/00:00:00/);
+    expect(formatExactDateTime('2026-08-01T00:00:00.000Z')).toMatch(/UTC|GMT/i);
+    expect(formatExactDateTime(null)).toBe('—');
+    expect(formatExactDateTime('nope')).toBe('—');
+  });
+
+  it('prefers the bar open as the signal trigger', () => {
+    expect(
+      signalTriggerAt({
+        marketDataKey: '2026-08-01T00:00:00Z',
+        matchedAt: '2026-08-01T00:01:00Z',
+      }),
+    ).toBe('2026-08-01T00:00:00Z');
+    expect(signalTriggerAt({ matchedAt: '2026-08-01T00:01:00Z' })).toBe(
+      '2026-08-01T00:01:00Z',
+    );
+    expect(signalTriggerAt({ marketDataKey: 'not-a-date', matchedAt: '2026-08-01T00:01:00Z' })).toBe(
+      '2026-08-01T00:01:00Z',
+    );
   });
 });

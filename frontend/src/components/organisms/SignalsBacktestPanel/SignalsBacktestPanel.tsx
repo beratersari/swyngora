@@ -15,7 +15,7 @@ import {
   changeTone,
   describeRule,
   formatChangePercent,
-  formatDateTime,
+  formatExactDateTime,
   formatSymbolDisplay,
 } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
@@ -45,7 +45,7 @@ export function SignalsBacktestPanel({
   onSelect,
   onCancel,
 }: SignalsBacktestPanelProps) {
-  const { t } = useTranslation(['signals', 'common']);
+  const { t, i18n } = useTranslation(['signals', 'common']);
   const [ruleId, setRuleId] = useState(rules[0]?.id ?? '');
   const [exchange, setExchange] = useState<string>('binance');
   const [symbol, setSymbol] = useState('BTCUSDT');
@@ -118,7 +118,11 @@ export function SignalsBacktestPanel({
     {
       title: t('signals:lab.signalAt'),
       dataIndex: 'signalAt',
-      render: (v: string) => <Text variant="caption">{formatDateTime(v)}</Text>,
+      render: (v: string) => (
+        <Text variant="caption" mono>
+          {formatExactDateTime(v, i18n.language)}
+        </Text>
+      ),
     },
     {
       title: t('signals:lab.close'),

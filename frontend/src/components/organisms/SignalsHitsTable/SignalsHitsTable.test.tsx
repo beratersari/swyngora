@@ -24,5 +24,7 @@ describe('SignalsHitsTable', () => {
     );
     expect(screen.getByText('ETH/USDT')).toBeInTheDocument();
     expect(screen.getByText(/RSI\(14\)=32/)).toBeInTheDocument();
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(screen.getByText(/00:00:00/)).toBeInTheDocument();
   });
 });
