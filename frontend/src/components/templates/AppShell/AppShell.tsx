@@ -7,6 +7,7 @@ import {
   HeaderBrand,
   HeaderNav,
   HeaderTools,
+  StickyChrome,
 } from './AppShell.styles';
 import type { AppShellProps } from './AppShell.types';
 
@@ -23,14 +24,18 @@ export function AppShell({
   wide = false,
   flush = false,
   banner,
+  tape,
 }: AppShellProps) {
   return (
     <AppLayout>
-      <AppTopbar>
-        <HeaderBrand>{brand}</HeaderBrand>
-        <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
-        {tools ? <HeaderTools>{tools}</HeaderTools> : null}
-      </AppTopbar>
+      <StickyChrome>
+        {tape}
+        <AppTopbar>
+          <HeaderBrand>{brand}</HeaderBrand>
+          <HeaderNav aria-label={navAriaLabel}>{nav}</HeaderNav>
+          {tools ? <HeaderTools>{tools}</HeaderTools> : null}
+        </AppTopbar>
+      </StickyChrome>
       {banner ? <AppBanner>{banner}</AppBanner> : null}
       <AppWorkspace $wide={wide} $flush={flush}>
         {children}

@@ -27,7 +27,10 @@
     "bist": "BIST"
   },
   "tape": {
-    "aria": "Top USDT pairs by volume"
+    "aria": "Live market prices",
+    "sourceAria": "Price tape source",
+    "empty": "No prices yet",
+    "watchlistEmpty": "Add symbols to your watchlist"
   },
   "footer": {
     "venues": "Binance · Coinbase · Bybit · Nasdaq · BIST",

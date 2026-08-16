@@ -10,6 +10,7 @@ Examples (init / markets epics):
 | `useDebouncedValue`  | Debounce search `q`           |
 | `useMediaQuery`      | Match CSS breakpoints (chart height, etc.) |
 | `useDisplayCurrency` | Header FX preference + convert/format helpers |
+| `useDeskPriceTape` | Sticky header tape source + live last prices |
 
 Feature-specific composition hooks may live next to the feature **only if** they are not reusable; prefer promoting shared ones here.
 

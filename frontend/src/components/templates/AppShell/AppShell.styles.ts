@@ -20,10 +20,16 @@ export const AppStage = styled.div`
   flex: 1;
 `;
 
-export const AppTopbar = styled.header`
+export const StickyChrome = styled.div`
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 50;
+  background: ${({ theme }) => theme.semantic.bg.canvas};
+  box-shadow: 0 8px 24px rgba(13, 20, 33, 0.06);
+`;
+
+export const AppTopbar = styled.header`
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

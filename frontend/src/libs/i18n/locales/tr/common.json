@@ -27,7 +27,10 @@
     "bist": "BIST"
   },
   "tape": {
-    "aria": "Hacme göre önde gelen USDT çiftleri"
+    "aria": "Canlı piyasa fiyatları",
+    "sourceAria": "Fiyat şeridi kaynağı",
+    "empty": "Henüz fiyat yok",
+    "watchlistEmpty": "İzleme listesine sembol ekleyin"
   },
   "footer": {
     "venues": "Binance · Coinbase · Bybit · Nasdaq · BIST",

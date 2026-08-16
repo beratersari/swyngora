@@ -6,12 +6,24 @@ const scroll = keyframes`
   to { transform: translate3d(-50%, 0, 0); }
 `;
 
-export const Track = styled.div`
+export const Track = styled.div<{ $scroll?: boolean }>`
   display: flex;
-  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+  overflow: ${({ $scroll }) => ($scroll ? 'auto hidden' : 'hidden')};
   contain: content;
-  border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  background: ${({ theme }) => theme.semantic.bg.canvas};
+  background: transparent;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+export const StaticRow = styled.div`
+  display: flex;
+  width: max-content;
+  min-width: 100%;
 `;
 
 export const Strip = styled.div<{ $paused?: boolean }>`

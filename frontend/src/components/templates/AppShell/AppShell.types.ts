@@ -13,4 +13,6 @@ export type AppShellProps = {
   flush?: boolean;
   /** Quote strip under the utility bar. */
   banner?: ReactNode;
+  /** Floating last-price tape above the nav (stays visible while scrolling). */
+  tape?: ReactNode;
 };

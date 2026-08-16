@@ -91,6 +91,8 @@ python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 ```
 
 Open http://localhost:5174 (from Linux) or **http://&lt;wsl-ip&gt;:5174** from Windows.  
+The sticky top tape shows live last prices; switch source with **Binance / Coinbase / BIST / Watchlist**.  
+
 AI chat route: **http://localhost:5174/ai** (streams `POST /api/v1/ai/chat/stream` → Go → Python `:8090`, with `POST /api/v1/ai/chat` as fallback). A **Process** panel lists status / think / tool steps live, then collapses so the answer stays readable. Coin questions gather public web/X URLs into a **Sources** list under the reply.
 
 ### WSL / Windows browser
