@@ -51,6 +51,8 @@ type Client struct {
 	takerWatch   func(string)
 	basisCache   *cache.TTL[*domain.BasisQuote]
 	basisSF      singleflight.Group
+	printCache   *cache.TTL[[]domain.TakerPrint]
+	printSF      singleflight.Group
 }
 
 // Options configures the Bybit client.
@@ -106,6 +108,9 @@ func NewClient(opts Options) *Client {
 	c.taker = domain.NewTakerBook()
 	if c.basisCache == nil {
 		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
+	}
+	if c.printCache == nil {
+		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)
 	}
 	return c
 }

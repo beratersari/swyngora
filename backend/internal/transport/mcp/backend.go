@@ -313,6 +313,17 @@ func (b *Backend) GetLevels(ctx context.Context, exchange, symbol string) (json.
 	return mustJSON(got)
 }
 
+func (b *Backend) GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetWhales(ctx, exchange, symbol, minNotional, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

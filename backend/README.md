@@ -50,6 +50,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |
 | `GET` | `/api/v1/market/snapshot` | Price, volume, mcap, OI, funding, LS, and taker flow together |
 | `GET` | `/api/v1/market/levels` | Support and resistance areas plus breakout strength |
+| `GET` | `/api/v1/market/whales` | Large trades and liquidations, biggest first |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

@@ -70,6 +70,8 @@ type Client struct {
 	basisSF      singleflight.Group
 	windowCache  *cache.TTL[[]domain.WindowChange]
 	windowSF     singleflight.Group
+	printCache   *cache.TTL[[]domain.TakerPrint]
+	printSF      singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -148,6 +150,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.windowCache == nil {
 		c.windowCache = cache.New[[]domain.WindowChange](20 * time.Second)
+	}
+	if c.printCache == nil {
+		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)
 	}
 	return c
 }

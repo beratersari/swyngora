@@ -648,6 +648,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/whales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Large trades and liquidations
+         * @description Clustered aggressive buys/sells and liquidations, biggest first.
+         */
+        get: operations["getMarketWhales"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4669,6 +4689,45 @@ export interface operations {
                         supports?: Record<string, unknown>[];
                         resistances?: Record<string, unknown>[];
                         active?: Record<string, unknown>;
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketWhales: {
+        parameters: {
+            query?: {
+                /** @description Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins. */
+                symbol?: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Minimum USD size (default 100000) */
+                minNotional?: number;
+                /** @description Max events (default 30, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whale prints and liquidations, biggest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        minNotional?: string;
+                        events?: Record<string, unknown>[];
                         summary?: string;
                         note?: string;
                     };

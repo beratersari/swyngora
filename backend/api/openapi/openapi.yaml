@@ -992,6 +992,48 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/whales:
+    get:
+      summary: Large trades and liquidations
+      description: |
+        Clusters recent aggressive futures **buys** and **sells** (taker long /
+        short) and large **liquidations**, then sorts them biggest first.
+        Each event includes average price, first/last trade time, total size,
+        and whether the notional is large versus circulating market cap
+        (small-cap coins with huge prints are flagged). Omit `symbol` to scan
+        the top liquid USDT pairs. Tape is the newest ~1000 prints per coin
+        (minutes, not 24h). Informational only.
+      operationId: getMarketWhales
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: false
+          description: Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins.
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: minNotional
+          in: query
+          description: Minimum USD size (default 100000, clamp 10000–10000000)
+          schema: { type: number, default: 100000 }
+        - name: limit
+          in: query
+          description: Max events (default 30, max 100)
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Whale prints and liquidations, biggest first
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

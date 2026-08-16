@@ -313,6 +313,24 @@ func (c *APIClient) GetLevels(ctx context.Context, exchange, symbol string) (jso
 	return c.get(ctx, "/api/v1/market/levels", q)
 }
 
+// GetWhales returns the largest recent aggressive trades and liquidations.
+func (c *APIClient) GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if minNotional > 0 {
+		q.Set("minNotional", strconv.FormatFloat(minNotional, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/whales", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

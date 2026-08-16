@@ -30,6 +30,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_price_volatility` | How much a coin moved over 1h / 4h / 24h vs its normal range and vs BTC/ETH |
 | `get_market_snapshot` | Price, volume, mcap, OI, funding, LS, and taker buy/sell together (1h / 4h / 24h) |
 | `get_support_resistance` | Support/resistance from price, volume, and the order book, plus breakout score |
+| `get_whale_trades` | Largest recent aggressive buys/sells and liquidations, biggest first |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

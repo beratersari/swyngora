@@ -74,6 +74,27 @@ func TestLiquidationBook_WindowsAndBiggest(t *testing.T) {
 	}
 }
 
+func TestLiquidationBook_RecentLarge(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 16, 15, 0, 0, 0, time.UTC)
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong,
+		Price: 64000, Quantity: 2, Notional: 128000, Time: now.Add(-2 * time.Minute),
+	})
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: LiquidationSideShort,
+		Price: 3000, Quantity: 1, Notional: 3000, Time: now.Add(-time.Minute),
+	})
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBybit, Symbol: "SOLUSDT", Side: LiquidationSideLong,
+		Price: 150, Quantity: 1000, Notional: 150000, Time: now.Add(-2 * time.Hour),
+	})
+	got := b.RecentLarge(now.Add(-10*time.Minute), 100_000)
+	if len(got) != 1 || got[0].Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestLiquidationBook_CoverageIsPerCoinAndVenue(t *testing.T) {
 	b := NewLiquidationBook()
 	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)

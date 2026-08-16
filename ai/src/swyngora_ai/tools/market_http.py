@@ -246,6 +246,25 @@ class LevelsInput(BaseModel):
     )
 
 
+class WhalesInput(BaseModel):
+    symbol: str = Field(
+        default="",
+        description="Pair e.g. BTCUSDT. Empty scans top liquid USDT coins.",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+    min_notional: float = Field(
+        default=0,
+        description="Minimum USD size (default 100000)",
+    )
+    limit: int = Field(
+        default=0,
+        description="Max events (default 30, max 100)",
+    )
+
+
 class BreadthInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -875,6 +894,21 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             "/api/v1/market/levels",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_whale_trades(
+        symbol: str = "",
+        exchange: str = "all",
+        min_notional: float = 0,
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange}
+        if symbol:
+            params["symbol"] = symbol
+        if min_notional:
+            params["minNotional"] = min_notional
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/whales", params)
 
     def get_market_breadth(exchange: str = "binance", limit: int = 80) -> str:
         return http.get(
@@ -2072,6 +2106,18 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "is close to or through a level (volume, book, taker flow)."
             ),
             args_schema=LevelsInput,
+        ),
+        StructuredTool.from_function(
+            get_whale_trades,
+            name="get_whale_trades",
+            description=(
+                "Largest recent aggressive futures buys/sells (taker long/"
+                "short) and large liquidations, sorted biggest first. Each "
+                "row has average price, first/last time, total size, and "
+                "whether the print is large versus that coin's market cap. "
+                "Omit symbol to scan the top liquid USDT coins."
+            ),
+            args_schema=WhalesInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

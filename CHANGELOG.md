@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live spot order books:** Binance, Coinbase, and Bybit keep a local book over each venue’s depth websocket; a gap or drop invalidates and resyncs instead of serving stale data (`docs/features/order-book.md`)
 
 ### Added
+- **Whale trades:** clustered large futures buys/sells (aggressive long/short) and liquidations, sorted biggest first, with average price, first/last time, total size, and a flag when the print is large versus circulating market cap (`GET /api/v1/market/whales`, MCP `get_whale_trades`) (`docs/features/whales.md`)
 - **Support and resistance:** price-history + volume zones checked against the live order book; distance, test count, nearby bid/ask liquidity, and a breakout score from volume, book thickness, and taker flow (`GET /api/v1/market/levels`, MCP `get_support_resistance`) (`docs/features/levels.md`)
 - **Market snapshot:** price, volume, market cap, open interest, funding, long/short, and taker buy/sell together for one coin, with 1h / 4h / 24h changes (`GET /api/v1/market/snapshot`, MCP `get_market_snapshot`) (`docs/features/snapshot.md`)
 - **Price volatility:** how much a coin moved over 1h / 4h / 24h (net + high–low range), whether that range is higher or lower than normal and expanding or shrinking, and whether the coin is jumpy or calm versus BTC/ETH (`GET /api/v1/market/volatility`, MCP `get_price_volatility`) (`docs/features/volatility.md`)

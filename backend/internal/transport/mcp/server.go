@@ -47,6 +47,7 @@ type DataPort interface {
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -557,6 +558,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLevels(ctx, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_whale_trades",
+		mcp.WithDescription("Largest recent aggressive futures buys/sells (taker long/short) and large liquidations, sorted biggest first. Each row has average price, first/last trade time, total size, and whether the print is large versus that coin's market cap (small-cap + huge trade). Omit symbol to scan the top liquid USDT coins. Tape is the newest ~1000 prints per coin, not 24h. Not financial advice."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins.")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("minNotional", mcp.Description("Minimum USD size (default 100000)")),
+		mcp.WithNumber("limit", mcp.Description("Max events (default 30, max 100)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetWhales(ctx, req.GetString("exchange", "all"), req.GetString("symbol", ""), req.GetFloat("minNotional", 0), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

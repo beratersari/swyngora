@@ -57,6 +57,14 @@ func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker
 	}, nil
 }
 
+func (stubMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain.TakerPrint, error) {
+	t0 := time.Unix(1_700_000_000, 0).UTC()
+	return []domain.TakerPrint{{
+		Exchange: domain.ExchangeBinance, Symbol: symbol, Side: domain.TakerSideBuy,
+		Price: 100, Quantity: 2000, Notional: 200_000, Time: t0,
+	}}, nil
+}
+
 func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	return &domain.RawOrderBook{
 		Symbol: q.Symbol,
@@ -332,6 +340,43 @@ func TestGetSnapshot_BadSymbol(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/snapshot", nil)
 	rr := httptest.NewRecorder()
 	h.GetSnapshot(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetWhales_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body whalesResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Exchange != "all" || len(body.Events) == 0 || body.Events[0].AvgPrice == "" || body.Events[0].FirstTime.IsZero() {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetWhales_ScanOK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetWhales_BadExchange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales?exchange=coinbase", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
 	}

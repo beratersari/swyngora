@@ -12,12 +12,15 @@ import (
 )
 
 type fakeMarket struct {
-	candles []domain.Candle
-	ticker  *domain.Ticker24h
-	spot    []domain.SpotMarket
-	err     error
-	lastQ   domain.CandleQuery
-	lastSym string
+	candles   []domain.Candle
+	ticker    *domain.Ticker24h
+	tickers   map[string]*domain.Ticker24h
+	spot      []domain.SpotMarket
+	prints    map[string][]domain.TakerPrint
+	printSyms []string
+	err       error
+	lastQ     domain.CandleQuery
+	lastSym   string
 }
 
 func sampleRawBook(symbol string) *domain.RawOrderBook {
@@ -53,7 +56,23 @@ func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tic
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.tickers != nil {
+		if t, ok := f.tickers[strings.ToUpper(symbol)]; ok {
+			return t, nil
+		}
+	}
 	return f.ticker, nil
+}
+
+func (f *fakeMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain.TakerPrint, error) {
+	f.printSyms = append(f.printSyms, symbol)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.prints != nil {
+		return append([]domain.TakerPrint(nil), f.prints[strings.ToUpper(symbol)]...), nil
+	}
+	return nil, nil
 }
 
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
@@ -921,6 +940,83 @@ func TestGetLevels_ReturnsReport(t *testing.T) {
 func TestGetLevels_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	_, err := svc.GetLevels(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetWhales_SortsBiggestAndFlagsSmallCap(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	fm := &fakeMarket{
+		ticker: &domain.Ticker24h{LastPrice: "100"},
+		tickers: map[string]*domain.Ticker24h{
+			"PEPEUSDT": {Symbol: "PEPEUSDT", LastPrice: "0.000001"},
+			"BTCUSDT":  {Symbol: "BTCUSDT", LastPrice: "60000"},
+		},
+		spot: []domain.SpotMarket{
+			{Symbol: "PEPEUSDT", BaseAsset: "PEPE", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "9000", LastPrice: "0.000001"},
+			{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "8000", LastPrice: "60000"},
+		},
+		prints: map[string][]domain.TakerPrint{
+			"PEPEUSDT": {{
+				Exchange: domain.ExchangeBinance, Symbol: "PEPEUSDT", Side: domain.TakerSideBuy,
+				Price: 0.000001, Quantity: 5e11, Notional: 500_000, Time: t0,
+			}},
+			"BTCUSDT": {{
+				Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.TakerSideSell,
+				Price: 60000, Quantity: 2, Notional: 120_000, Time: t0,
+			}},
+		},
+	}
+	pepeCirc := 10_000_000_000.0
+	btcCirc := 19_000_000.0
+	svc := New(fm, &fakeSupply{byAsset: map[string]*domain.AssetSupply{
+		"PEPE": {Asset: "PEPE", CirculatingSupply: &pepeCirc},
+		"BTC":  {Asset: "BTC", CirculatingSupply: &btcCirc},
+	}})
+	got, err := svc.GetWhales(context.Background(), "binance", "PEPEUSDT", 50_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Events) != 1 || !got.Events[0].Unusual || got.Events[0].Notional != 500_000 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Events[0].AvgPrice <= 0 || got.Events[0].FirstTime.IsZero() {
+		t.Fatalf("avg/time %+v", got.Events[0])
+	}
+
+	scan, err := svc.GetWhales(context.Background(), "binance", "", 50_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Events) < 2 || scan.Events[0].Symbol != "PEPEUSDT" || scan.Events[1].Symbol != "BTCUSDT" {
+		t.Fatalf("scan %+v", scan.Events)
+	}
+	if !scan.Events[0].Unusual {
+		t.Fatalf("pepe should be unusual vs tiny mcap %+v", scan.Events[0])
+	}
+}
+
+func TestGetWhales_IncludesLiquidation(t *testing.T) {
+	now := time.Now().UTC()
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 63000, Quantity: 4, Notional: 252_000, Time: now.Add(-time.Minute),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetWhales(context.Background(), "binance", "BTCUSDT", 100_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Events) != 1 || got.Events[0].Kind != domain.WhaleKindLiquidation || got.Events[0].Side != domain.WhaleSideLong {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetWhales_BadExchange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetWhales(context.Background(), "coinbase", "BTCUSDT", 0, 0)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}

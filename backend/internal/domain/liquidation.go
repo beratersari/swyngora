@@ -459,3 +459,25 @@ func (b *LiquidationBook) Events(exchange, symbol string, since time.Time) []Liq
 	}
 	return out
 }
+
+// RecentLarge returns liquidations since cutoff that meet a notional floor.
+func (b *LiquidationBook) RecentLarge(since time.Time, minNotional float64) []LiquidationEvent {
+	if b == nil {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]LiquidationEvent, 0, 32)
+	for _, list := range b.bySym {
+		for _, e := range list {
+			if e.Notional < minNotional {
+				continue
+			}
+			if !since.IsZero() && e.Time.Before(since) {
+				continue
+			}
+			out = append(out, e)
+		}
+	}
+	return out
+}
