@@ -45,6 +45,21 @@ func New(store domain.PriceDiffPort, market TickerFetcher) *Service {
 	}
 }
 
+// PurgeClient deletes watches (and their opportunities via store FK/delete) for a tenant.
+func (s *Service) PurgeClient(ctx context.Context, clientID string) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	list, err := s.store.ListWatches(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	for i := range list {
+		_ = s.store.DeleteWatch(ctx, clientID, list[i].ID)
+	}
+	return nil
+}
+
 // CreateWatch validates and stores an active watch.
 func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.PriceDiffWatch, error) {
 	if s.store == nil {

@@ -67,10 +67,10 @@ func (s *Service) FileDir() string { return s.fileDir }
 
 // PreviewInput is an uploaded export file for validation.
 type PreviewInput struct {
-	ClientID    string
-	FileName    string
-	FileBytes   []byte
-	FormatHint  string // optional json|csv
+	ClientID   string
+	FileName   string
+	FileBytes  []byte
+	FormatHint string // optional json|csv
 }
 
 // Preview parses the file, computes valid/invalid/willAdd counts (merge-oriented),
@@ -534,7 +534,7 @@ func sanitizePathPart(s string) string {
 		}
 	}
 	out := b.String()
-	if out == "" {
+	if out == "" || out == "." || out == ".." {
 		return "_empty"
 	}
 	return out

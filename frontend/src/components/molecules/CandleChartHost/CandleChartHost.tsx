@@ -16,7 +16,12 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { semanticColors } from '@/styles/tokens';
 import type { CandleChartHostProps } from './CandleChartHost.types';
-import { DEFAULT_HEIGHT, HISTORY_LOAD_THRESHOLD } from './CandleChartHost.constants';
+import {
+  DEFAULT_HEIGHT,
+  HISTORY_LOAD_THRESHOLD,
+  INITIAL_RIGHT_PADDING,
+  INITIAL_VISIBLE_BARS,
+} from './CandleChartHost.constants';
 import {
   ChartContainer,
   ChartShell,
@@ -26,6 +31,7 @@ import { snapMarkersToCandleTimes } from './CandleChartHost.markers';
 import {
   candleDataSignature,
   chartPriceFormatFromCandles,
+  initialVisibleLogicalRange,
   overlaysSignature,
   toCandlestickData,
   toLineData,
@@ -61,6 +67,7 @@ export function CandleChartHost({
   const lastOverlaySigRef = useRef<string>('');
   const lastMarkersSigRef = useRef<string>('');
   const hasFittedRef = useRef(false);
+  const suppressHistoryLoadRef = useRef(true);
   const lastPriceFormatKeyRef = useRef<string>('');
   const prevLenRef = useRef(0);
   const prevFirstTimeRef = useRef<number | null>(null);
@@ -139,6 +146,7 @@ export function CandleChartHost({
 
     const onVisibleRange = (range: LogicalRange | null) => {
       if (!range) return;
+      if (suppressHistoryLoadRef.current) return;
       if (!hasMoreHistoryRef.current) return;
       if (isLoadingMoreRef.current) return;
       if (!onNeedMoreHistoryRef.current) return;
@@ -165,6 +173,7 @@ export function CandleChartHost({
       lastOverlaySigRef.current = '';
       lastMarkersSigRef.current = '';
       hasFittedRef.current = false;
+      suppressHistoryLoadRef.current = true;
       lastPriceFormatKeyRef.current = '';
       prevLenRef.current = 0;
       prevFirstTimeRef.current = null;
@@ -183,6 +192,7 @@ export function CandleChartHost({
     if (seriesKeyRef.current === seriesKey) return;
     seriesKeyRef.current = seriesKey;
     hasFittedRef.current = false;
+    suppressHistoryLoadRef.current = true;
     prevLenRef.current = 0;
     prevFirstTimeRef.current = null;
     lastCandleSigRef.current = '';
@@ -201,6 +211,7 @@ export function CandleChartHost({
     if (seriesKeyRef.current !== seriesKey) {
       seriesKeyRef.current = seriesKey;
       hasFittedRef.current = false;
+      suppressHistoryLoadRef.current = true;
       prevLenRef.current = 0;
       prevFirstTimeRef.current = null;
       lastCandleSigRef.current = '';
@@ -221,6 +232,15 @@ export function CandleChartHost({
     const priceFormat = chartPriceFormatFromCandles(data);
     const priceFormatKey = `${priceFormat.precision}:${priceFormat.minMove}`;
     const priceFormatChanged = priceFormatKey !== lastPriceFormatKeyRef.current;
+
+    if (candlesChanged || priceFormatChanged) {
+      candleSeries.applyOptions({ priceFormat });
+      const labelWidth = Math.min(140, Math.max(72, 48 + priceFormat.precision * 7));
+      chart.applyOptions({
+        rightPriceScale: { minimumWidth: labelWidth },
+      });
+      lastPriceFormatKeyRef.current = priceFormatKey;
+    }
 
     if (candlesChanged) {
       const prevLen = prevLenRef.current;
@@ -252,18 +272,20 @@ export function CandleChartHost({
           to: logicalRange.to + added,
         });
       } else if (data.length > 0 && !hasFittedRef.current) {
-        chart.timeScale().fitContent();
+        const range = initialVisibleLogicalRange(
+          data.length,
+          INITIAL_VISIBLE_BARS,
+          INITIAL_RIGHT_PADDING,
+        );
+        if (range) {
+          chart.timeScale().setVisibleLogicalRange(range);
+        }
         hasFittedRef.current = true;
+        suppressHistoryLoadRef.current = true;
+        requestAnimationFrame(() => {
+          suppressHistoryLoadRef.current = false;
+        });
       }
-    }
-
-    if (candlesChanged || priceFormatChanged) {
-      candleSeries.applyOptions({ priceFormat });
-      const labelWidth = Math.min(140, Math.max(72, 48 + priceFormat.precision * 7));
-      chart.applyOptions({
-        rightPriceScale: { minimumWidth: labelWidth },
-      });
-      lastPriceFormatKeyRef.current = priceFormatKey;
     }
 
     if (overlaysChanged || priceFormatChanged) {
@@ -348,7 +370,7 @@ export function CandleChartHost({
 
     markersPluginRef.current = createSeriesMarkers(candleSeries, seriesMarkers, {
       zOrder: 'top',
-      autoScale: true,
+      autoScale: false,
     });
     lastMarkersSigRef.current = markersSig;
   }, [data, markers]);

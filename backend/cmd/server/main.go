@@ -311,8 +311,11 @@ func main() {
 		Exports:   exportStore,
 		Imports:   importStore,
 		APIKeys:   accountStore,
+		Paper:     portfolioSvc,
+		PriceDiff: priceDiffSvc,
 	})
 	watchSvc.SetAccountChecker(accountSvc)
+	portfolioSvc.SetAccountChecker(accountSvc)
 	logger.Info("account store ready", "driver", "sqlite", "path", accountStore.Path(), "grace", domain.AccountCloseGrace.String())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

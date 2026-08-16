@@ -36,6 +36,9 @@ func NormalizeClientID(id string) (string, error) {
 	if isEnumerableTelegramClientID(id) {
 		return "", fmt.Errorf("%w: clientId must not be an enumerable telegram user id", ErrInvalidArgument)
 	}
+	if id == "." || id == ".." || strings.Contains(id, "..") {
+		return "", fmt.Errorf("%w: clientId must not be a path segment", ErrInvalidArgument)
+	}
 	for _, r := range id {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.' {
 			continue

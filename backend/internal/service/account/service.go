@@ -10,6 +10,17 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// PaperBooks freezes and deletes paper trading state for a tenant.
+type PaperBooks interface {
+	FreezeOnClose(ctx context.Context, clientID string) error
+	PurgeClient(ctx context.Context, clientID string) error
+}
+
+// ClientPurge deletes all rows for a tenant (price-diff watches, etc.).
+type ClientPurge interface {
+	PurgeClient(ctx context.Context, clientID string) error
+}
+
 // DataPurgeDeps holds stores that own client-scoped data.
 type DataPurgeDeps struct {
 	Watchlist domain.WatchlistPort
@@ -18,6 +29,8 @@ type DataPurgeDeps struct {
 	Exports   domain.ExportPort
 	Imports   domain.ImportPort
 	APIKeys   domain.APIKeyPort
+	Paper     PaperBooks
+	PriceDiff ClientPurge
 }
 
 // Service manages account close, reopen, and grace purges.
@@ -107,6 +120,9 @@ func (s *Service) Close(ctx context.Context, clientID string) (*domain.Account, 
 	}
 	// Cancel active export/import jobs so they stop running while closed.
 	s.cancelJobs(ctx, clientID)
+	if s.data.Paper != nil {
+		_ = s.data.Paper.FreezeOnClose(ctx, clientID)
+	}
 	purgeAt := now.Add(s.grace)
 	return s.store.Close(ctx, clientID, now, purgeAt)
 }
@@ -232,6 +248,16 @@ func (s *Service) purgeOne(ctx context.Context, clientID string) error {
 	}
 	if s.data.APIKeys != nil {
 		if err := s.data.APIKeys.DeleteAPIKeysByClient(ctx, clientID); err != nil {
+			return err
+		}
+	}
+	if s.data.Paper != nil {
+		if err := s.data.Paper.PurgeClient(ctx, clientID); err != nil {
+			return err
+		}
+	}
+	if s.data.PriceDiff != nil {
+		if err := s.data.PriceDiff.PurgeClient(ctx, clientID); err != nil {
 			return err
 		}
 	}

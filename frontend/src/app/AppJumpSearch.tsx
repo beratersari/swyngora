@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { parseExchangeParamOrDefault } from '@/libs/utils';
@@ -9,12 +9,19 @@ export function AppJumpSearch() {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
   const [symbol, setSymbol] = useState('');
 
   const exchange = useMemo(() => {
     const match = pathname.match(/^\/markets\/([^/]+)/);
-    return parseExchangeParamOrDefault(match?.[1]);
-  }, [pathname]);
+    if (match?.[1]) {
+      return parseExchangeParamOrDefault(match[1]);
+    }
+    if (pathname === '/markets' || pathname === '/heatmap') {
+      return parseExchangeParamOrDefault(searchParams.get('exchange') ?? undefined);
+    }
+    return parseExchangeParamOrDefault(undefined);
+  }, [pathname, searchParams]);
 
   return (
     <SymbolSuggest

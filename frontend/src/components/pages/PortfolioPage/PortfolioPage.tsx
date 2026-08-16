@@ -365,7 +365,11 @@ export function PortfolioPage() {
                       void cancelOrder({ id, portfolioId: bookId })
                         .unwrap()
                         .then(() => message.success(t('portfolio:orders.cancelSuccess')))
-                        .catch(() => undefined);
+                        .catch((err: unknown) => {
+                          void message.error(
+                            rtkErrorMessage(err, { resource: t('portfolio:orders.title') }),
+                          );
+                        });
                     }}
                   />
                 ),

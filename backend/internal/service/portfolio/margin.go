@@ -392,6 +392,9 @@ func (s *Service) ProcessMarginInterest(ctx context.Context, now time.Time) (acc
 		return 0, 0, err
 	}
 	for i := range list {
+		if s.ownerClosed(ctx, list[i].ClientID) {
+			continue
+		}
 		did, liq, e := s.accrueInterestAndMaybeLiquidate(ctx, &list[i], now)
 		if e != nil {
 			continue
@@ -583,6 +586,11 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	}
 	unlock := s.lockClient(clientID)
 	defer unlock()
+	fresh, ferr := s.store.GetPortfolio(ctx, clientID)
+	if ferr != nil {
+		return nil, nil, ferr
+	}
+	p = fresh
 	side, err := domain.NormalizeMarginSide(in.Side)
 	if err != nil {
 		return nil, nil, err
@@ -997,6 +1005,9 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 		return 0, 0, 0, err
 	}
 	for i := range orders {
+		if s.ownerClosed(ctx, orders[i].ClientID) {
+			continue
+		}
 		if s.tryFillMarginLimit(ctx, &orders[i], now) {
 			filled++
 		}
@@ -1020,6 +1031,9 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 	}
 	for i := range positions {
 		pos := positions[i]
+		if s.ownerClosed(ctx, pos.ClientID) {
+			continue
+		}
 		mark, merr := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
 		if merr != nil || mark <= 0 {
 			continue
@@ -1056,6 +1070,9 @@ func (s *Service) ProcessMarginMaintenance(ctx context.Context, now time.Time) (
 	}
 	// Cross account-level: if equity < total maint, liquidate worst-first with re-eval after each.
 	for clientID := range byClient {
+		if s.ownerClosed(ctx, clientID) {
+			continue
+		}
 		n, _ := s.liquidateCrossIfUnderMaint(ctx, clientID, now)
 		liquidated += n
 	}

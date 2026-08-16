@@ -23,11 +23,17 @@ type PriceFetcher interface {
 	GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error)
 }
 
+// AccountChecker reports whether a tenant account is closed (optional).
+type AccountChecker interface {
+	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
 // Service orchestrates paper-trading portfolios.
 type Service struct {
 	store    domain.PortfolioPort
 	market   PriceFetcher
 	sink     domain.PortfolioChangeSink
+	account  AccountChecker
 	costFor  func(domain.Exchange) domain.TradingCost
 	clientMu sync.Map // clientID → *sync.Mutex; serializes RMW per client
 }
@@ -43,6 +49,13 @@ func (s *Service) WithPaperCosts(fn func(domain.Exchange) domain.TradingCost) *S
 		s.costFor = fn
 	}
 	return s
+}
+
+// SetAccountChecker skips worker ticks for closed tenants (optional).
+func (s *Service) SetAccountChecker(a AccountChecker) {
+	if s != nil {
+		s.account = a
+	}
 }
 
 func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
@@ -646,6 +659,11 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	clientID := p.BookID()
 	unlock := s.lockClient(clientID)
 	defer unlock()
+	fresh, ferr := s.store.GetPortfolio(ctx, clientID)
+	if ferr != nil {
+		return nil, nil, nil, ferr
+	}
+	p = fresh
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -766,6 +784,9 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	clientID := p.BookID()
 	unlock := s.lockClient(clientID)
 	defer unlock()
+	if _, ferr := s.store.GetPortfolio(ctx, clientID); ferr != nil {
+		return nil, nil, ferr
+	}
 	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
@@ -876,6 +897,11 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	clientID := p.BookID()
 	unlock := s.lockClient(clientID)
 	defer unlock()
+	fresh, ferr := s.store.GetPortfolio(ctx, clientID)
+	if ferr != nil {
+		return nil, ferr
+	}
+	p = fresh
 	typ := domain.PendingOrderType(strings.ToLower(strings.TrimSpace(in.Type)))
 	if !domain.IsValidPendingOrderType(string(typ)) {
 		return nil, fmt.Errorf("%w: type must be limit_buy, limit_sell, stop_loss, or trailing_stop", domain.ErrInvalidArgument)
@@ -1576,6 +1602,9 @@ func (s *Service) TryFillPendingOrder(ctx context.Context, o domain.PendingOrder
 }
 
 func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.PendingOrder, lastPrice, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	if s.ownerClosed(ctx, o.ClientID) {
+		return nil, false, nil
+	}
 	// Always re-read under the book lock so concurrent workers never fill from a stale snapshot.
 	fresh, ferr := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
 	if ferr != nil {

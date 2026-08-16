@@ -267,6 +267,9 @@ func (s *Service) ProcessDueRecurringBuys(ctx context.Context, now time.Time) (i
 	}
 	n := 0
 	for i := range due {
+		if s.ownerClosed(ctx, due[i].ClientID) {
+			continue
+		}
 		if err := s.processOneRecurringBuy(ctx, &due[i], now); err == nil {
 			n++
 		}

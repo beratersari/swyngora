@@ -19,7 +19,7 @@ export function useRealtimeConnection(): { connected: boolean } {
       if (msg.type === REALTIME_TYPE.price) {
         applyPriceTick(dispatch, store.getState, msg as RealtimePriceTick);
       } else if (msg.type === REALTIME_TYPE.portfolio) {
-        applyPortfolioEvent(dispatch, msg as RealtimePortfolioEvent);
+        applyPortfolioEvent(dispatch, msg as RealtimePortfolioEvent, store.getState);
       }
     });
     return () => {

@@ -9,7 +9,7 @@ Python multi-agent assistant (LangGraph orchestrator + specialists). LLM provide
 ## Rules
 
 1. Do not add OpenAI/Anthropic/Gemini SDKs as defaults.
-2. Market numbers come from Swyngora tools (HTTP/MCP), never hallucinated. Desk graph extracts `MarketFacts` and flags unverified figures.
+2. Market numbers come from Swyngora tools (HTTP/MCP), never hallucinated. `Orchestrator.chat` collects tool JSON from the turn (including nested specialist HTTP calls) into `MarketFacts` and flags unverified figures.
 3. Web research uses the allowlist in `sources/allowlist.py` (no paid search). New publishers need a reliability tier.
 4. New backend capabilities that AI should use must ship with MCP tools in the same change (`backend/internal/transport/mcp`).
 5. Tests required for new tools, routing helpers, and prompts that change behaviour.

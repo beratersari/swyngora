@@ -3,6 +3,7 @@ import {
   candleDataSignature,
   chartPriceFormatFromCandles,
   decimalsForMagnitude,
+  initialVisibleLogicalRange,
   overlaysSignature,
   toCandlestickData,
   toLineData,
@@ -20,6 +21,12 @@ function bar(close: number, opts?: Partial<ChartCandle>): ChartCandle {
 }
 
 describe('CandleChartHost helpers', () => {
+  it('right-aligns the first viewport to the latest bars', () => {
+    expect(initialVisibleLogicalRange(300, 80, 6)).toEqual({ from: 220, to: 306 });
+    expect(initialVisibleLogicalRange(40, 80, 6)).toEqual({ from: 0, to: 46 });
+    expect(initialVisibleLogicalRange(0, 80, 6)).toBeNull();
+  });
+
   it('maps candles to chart series points', () => {
     expect(
       toCandlestickData([{ time: 100, open: 1, high: 2, low: 0.5, close: 1.5 }]),

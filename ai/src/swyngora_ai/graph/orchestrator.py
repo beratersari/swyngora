@@ -21,9 +21,12 @@ from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import emit, reset_progress, set_progress
 from swyngora_ai.tools.market_http import (
+    begin_tool_json_turn,
     bind_client_id,
     bind_tool_scope,
+    collected_tool_json,
     reset_bound_client_id,
+    reset_tool_json_turn,
     reset_tool_scope,
 )
 
@@ -268,6 +271,7 @@ class Orchestrator:
         mem_key = memory_key(cid, public_session)
         bind_tok = bind_client_id(cid)
         scope_toks = bind_tool_scope(can_trade=can_trade, can_manage_keys=can_manage_keys)
+        json_tok = begin_tool_json_turn()
         try:
             emit("status", "Planning…")
             history = self.memory.get(mem_key)
@@ -291,11 +295,13 @@ class Orchestrator:
                 if t not in thinking_acc:
                     thinking_acc.append(t)
 
-            blobs = [
-                _content_text(getattr(m, "content", ""))
-                for m in turn_msgs
-                if isinstance(m, ToolMessage)
-            ]
+            blobs = collected_tool_json()
+            if not blobs:
+                blobs = [
+                    _content_text(getattr(m, "content", ""))
+                    for m in turn_msgs
+                    if isinstance(m, ToolMessage)
+                ]
             facts = extract_market_facts(*blobs)
             if facts.last_price or facts.rsi:
                 reply = apply_grounding(reply, facts, blobs, user_message=user_message)
@@ -320,6 +326,7 @@ class Orchestrator:
                 references=[r.as_dict() for r in refs],
             )
         finally:
+            reset_tool_json_turn(json_tok)
             reset_tool_scope(scope_toks)
             reset_bound_client_id(bind_tok)
             reset_progress(token)

@@ -7,7 +7,7 @@ func TestNormalizeClientID(t *testing.T) {
 	if err != nil || ok != "user-1_abc.2" {
 		t.Fatalf("got %q err=%v", ok, err)
 	}
-	for _, bad := range []string{"", "default", "DEFAULT", "anonymous", "http-default", "ai-assistant", "tg-12345", "tg-1", "has space", "bad!"} {
+	for _, bad := range []string{"", "default", "DEFAULT", "anonymous", "http-default", "ai-assistant", "tg-12345", "tg-1", "has space", "bad!", ".", "..", "foo..bar"} {
 		if _, err := NormalizeClientID(bad); err == nil {
 			t.Fatalf("expected error for %q", bad)
 		}

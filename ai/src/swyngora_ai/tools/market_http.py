@@ -19,6 +19,7 @@ bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
 # Defaults True for CLI/local so tools work without an HTTP scope envelope.
 bound_can_trade: ContextVar[bool] = ContextVar("bound_can_trade", default=True)
 bound_can_manage_keys: ContextVar[bool] = ContextVar("bound_can_manage_keys", default=True)
+_turn_tool_json: ContextVar[list[str] | None] = ContextVar("turn_tool_json", default=None)
 
 _READ_ONLY_DENY = (
     "ERROR 403: this AI session is read-only; a trade-permission API key is required "
@@ -88,6 +89,27 @@ def reset_tool_scope(tokens: tuple[Any, Any]) -> None:
     bound_can_manage_keys.reset(keys_tok)
 
 
+def begin_tool_json_turn() -> Any:
+    """Start collecting successful tool JSON for this chat turn (grounding)."""
+    return _turn_tool_json.set([])
+
+
+def reset_tool_json_turn(token: Any) -> None:
+    _turn_tool_json.reset(token)
+
+
+def collected_tool_json() -> list[str]:
+    acc = _turn_tool_json.get()
+    return list(acc) if acc else []
+
+
+def record_tool_json(text: str) -> None:
+    acc = _turn_tool_json.get()
+    if acc is None or not text or text.startswith("ERROR"):
+        return
+    acc.append(text)
+
+
 def _is_key_or_account_admin_path(path: str) -> bool:
     p = (path or "").split("?", 1)[0]
     return "/api/v1/account/api-keys" in p or p in (
@@ -128,13 +150,29 @@ class _HTTP:
             return _READ_ONLY_DENY
         return None
 
+    def _gate(self, path: str, *, mutating: bool) -> str | None:
+        """Reject path-id traversal and apply scope to the normalized URL path."""
+        raw = path or ""
+        head = raw.split("?", 1)[0]
+        if ".." in head or "\\" in head:
+            return "ERROR 400: invalid path id"
+        try:
+            norm = httpx.URL(raw if "://" in raw else f"http://local{raw}").path
+        except (httpx.InvalidURL, ValueError, TypeError):
+            return "ERROR 400: invalid path"
+        if err := self._scope_error(raw, mutating=mutating):
+            return err
+        return self._scope_error(norm, mutating=mutating)
+
     def _body_text(self, r: httpx.Response) -> str:
         if r.status_code >= 400:
             return f"ERROR {r.status_code}: {r.text[:500]}"
         try:
-            return format_tool_json(r.json())
+            text = format_tool_json(r.json())
         except (ValueError, TypeError):
-            return _SWY_SECRET_RE.sub("[redacted]", r.text)
+            text = _SWY_SECRET_RE.sub("[redacted]", r.text)
+        record_tool_json(text)
+        return text
 
     def _request(self, method: str, url: str, **kwargs: Any) -> str:
         try:
@@ -148,35 +186,35 @@ class _HTTP:
         return self._body_text(r)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
-        if err := self._scope_error(path, mutating=False):
+        if err := self._gate(path, mutating=False):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)
         return self._request("GET", f"{self.base}{path}", params=params, headers=self._headers())
 
     def post(self, path: str, body: dict[str, Any]) -> str:
-        if err := self._scope_error(path, mutating=True):
+        if err := self._gate(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         return self._request("POST", f"{self.base}{path}", json=body, headers=self._headers())
 
     def put(self, path: str, body: dict[str, Any]) -> str:
-        if err := self._scope_error(path, mutating=True):
+        if err := self._gate(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         return self._request("PUT", f"{self.base}{path}", json=body, headers=self._headers())
 
     def patch(self, path: str, body: dict[str, Any]) -> str:
-        if err := self._scope_error(path, mutating=True):
+        if err := self._gate(path, mutating=True):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
         return self._request("PATCH", f"{self.base}{path}", json=body, headers=self._headers())
 
     def delete(self, path: str, params: dict[str, Any]) -> str:
-        if err := self._scope_error(path, mutating=True):
+        if err := self._gate(path, mutating=True):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)
@@ -189,7 +227,7 @@ class _HTTP:
         content_type: str,
         params: dict[str, Any] | None = None,
     ) -> str:
-        if err := self._scope_error(path, mutating=True):
+        if err := self._gate(path, mutating=True):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)

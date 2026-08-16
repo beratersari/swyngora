@@ -143,7 +143,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe (portfolios: merge skips existing id/name; replace recreates owned books). See `docs/features/user-data-import.md`.
 
-**Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; after grace, watchlists/shares/alerts/backtests/import-export files and jobs are purged. See `docs/features/account-close.md`.
+**Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; paper recurring plans are paused and open paper/margin orders canceled; workers skip the tenant. After grace, watchlists/shares/alerts/backtests/import-export files, paper books, and price-diff watches are purged. See `docs/features/account-close.md`.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`** (service mutex + store write lock); optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); closed `clientId`s are blocked on tenant REST and on MCP tools that send `clientId`; **`MCP_ENABLED=false`** unmounts MCP.
 

@@ -118,7 +118,11 @@ export function applyPriceTick(dispatch: AppDispatch, getState: () => RootState,
   }
 }
 
-export function applyPortfolioEvent(dispatch: AppDispatch, ev: RealtimePortfolioEvent): void {
+export function applyPortfolioEvent(
+  dispatch: AppDispatch,
+  ev: RealtimePortfolioEvent,
+  getState?: () => RootState,
+): void {
   const view = ev.portfolio;
   if (!view) {
     dispatch(portfolioApi.util.invalidateTags(['Portfolio']));
@@ -135,4 +139,41 @@ export function applyPortfolioEvent(dispatch: AppDispatch, ev: RealtimePortfolio
       return view;
     }),
   );
+
+  const state = getState?.();
+  if (state) {
+    for (const q of Object.values(state.api.queries)) {
+      if (!q) continue;
+      const args = q.originalArgs as { portfolioId?: string } | void;
+      const pid = args && typeof args === 'object' ? args.portfolioId : undefined;
+      if (id && pid && pid !== id) continue;
+      if (q.endpointName === 'listPortfolioOrders' && ev.orders) {
+        dispatch(
+          portfolioApi.util.updateQueryData('listPortfolioOrders', q.originalArgs as never, (draft) => {
+            if (!draft) return;
+            draft.orders = ev.orders as typeof draft.orders;
+            draft.count = ev.orders?.length;
+          }),
+        );
+      }
+      if (q.endpointName === 'listMarginPositions') {
+        const rows = view.marginPositions;
+        if (rows) {
+          dispatch(
+            portfolioApi.util.updateQueryData(
+              'listMarginPositions',
+              q.originalArgs as never,
+              (draft) => {
+                if (!draft) return;
+                (draft as { positions?: unknown }).positions = rows;
+              },
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Refetch orders/trades/margin so polling caches cannot stay on a stale snapshot.
+  dispatch(portfolioApi.util.invalidateTags(['Portfolio']));
 }

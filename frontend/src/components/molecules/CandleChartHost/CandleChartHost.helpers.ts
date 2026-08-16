@@ -178,6 +178,20 @@ function seriesFingerprint(
 /**
  * Stable signature for candle data so we only setData/fitContent when bars change.
  */
+/** Right-aligned first viewport so fitContent does not squeeze every loaded bar. */
+export function initialVisibleLogicalRange(
+  barCount: number,
+  visibleBars: number,
+  rightPadding: number,
+): { from: number; to: number } | null {
+  if (barCount <= 0) return null;
+  const visible = Math.min(barCount, Math.max(1, visibleBars));
+  return {
+    from: barCount - visible,
+    to: barCount + Math.max(0, rightPadding),
+  };
+}
+
 export function candleDataSignature(data: ChartCandle[]): string {
   return seriesFingerprint(
     data.length,

@@ -303,7 +303,7 @@ func sanitizePathPart(s string) string {
 		}
 	}
 	out := b.String()
-	if out == "" {
+	if out == "" || out == "." || out == ".." {
 		return "_empty"
 	}
 	return out

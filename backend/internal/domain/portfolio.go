@@ -11,15 +11,15 @@ import (
 
 // Paper trading limits and defaults (informational / simulation only).
 const (
-	MaxPortfoliosPerClient     = 20
-	MaxPortfolioSharesPerBook  = 50
-	DefaultPortfolioName       = "Main"
-	MaxPortfolioNameLen        = 64
-	DefaultPaperCurrency   = "USDT"
-	MinStartingBalance     = 1.0
-	MaxStartingBalance     = 10_000_000.0
-	MinTradeQuantity       = 1e-8
-	MaxTradeQuantity       = 1e9
+	MaxPortfoliosPerClient    = 20
+	MaxPortfolioSharesPerBook = 50
+	DefaultPortfolioName      = "Main"
+	MaxPortfolioNameLen       = 64
+	DefaultPaperCurrency      = "USDT"
+	MinStartingBalance        = 1.0
+	MaxStartingBalance        = 10_000_000.0
+	MinTradeQuantity          = 1e-8
+	MaxTradeQuantity          = 1e9
 	// Position qty below this is treated as flat (closed).
 	PositionEpsilon = 1e-12
 	// Max open pending orders per client.
@@ -100,8 +100,8 @@ type Trade struct {
 	PendingOrderID string  // set when fill belongs to a pending order
 	LotMethod      LotMethod
 	LotFills       []TaxLotFill // sell allocations; not required on list
-	Fee            float64 // quote-currency taker fee
-	LastPrice      float64 // last/mark before slippage (0 = not stored)
+	Fee            float64      // quote-currency taker fee
+	LastPrice      float64      // last/mark before slippage (0 = not stored)
 	CreatedAt      time.Time
 }
 
@@ -109,9 +109,9 @@ type Trade struct {
 type PendingOrderType string
 
 const (
-	PendingLimitBuy      PendingOrderType = "limit_buy"
-	PendingLimitSell     PendingOrderType = "limit_sell"
-	PendingStopLoss      PendingOrderType = "stop_loss"
+	PendingLimitBuy  PendingOrderType = "limit_buy"
+	PendingLimitSell PendingOrderType = "limit_sell"
+	PendingStopLoss  PendingOrderType = "stop_loss"
 	// PendingTrailingStop sells when price falls from a ratcheting peak by a trail distance.
 	PendingTrailingStop PendingOrderType = "trailing_stop"
 )
@@ -155,11 +155,12 @@ const (
 
 // Cancel reason codes (stored on canceled orders).
 const (
-	CancelReasonUser         = "user"
-	CancelReasonExpired      = "expired"
-	CancelReasonIOCRemainder = "ioc_remainder"
-	CancelReasonIOCNoFill    = "ioc_no_fill"
-	CancelReasonFOKUnfilled  = "fok_unfilled"
+	CancelReasonUser          = "user"
+	CancelReasonAccountClosed = "account_closed"
+	CancelReasonExpired       = "expired"
+	CancelReasonIOCRemainder  = "ioc_remainder"
+	CancelReasonIOCNoFill     = "ioc_no_fill"
+	CancelReasonFOKUnfilled   = "fok_unfilled"
 	// CancelReasonOCOPeerFilled: this leg was canceled because the OCO peer fully filled.
 	CancelReasonOCOPeerFilled = "oco_peer_filled"
 	// CancelReasonOCOGroup: user canceled one OCO leg (or group); peer is canceled too.
@@ -201,13 +202,13 @@ type PendingOrder struct {
 	// BracketID links entry + take-profit + stop-loss of a bracket order.
 	BracketID string
 	// BracketRole is entry | take_profit | stop_loss when BracketID is set.
-	BracketRole string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	FilledAt    *time.Time
-	CanceledAt  *time.Time
-	FillTradeID string  // latest fill trade id
-	FillPrice   float64 // latest fill price
+	BracketRole  string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	FilledAt     *time.Time
+	CanceledAt   *time.Time
+	FillTradeID  string  // latest fill trade id
+	FillPrice    float64 // latest fill price
 	RejectReason string
 	CancelReason string
 	// LotMethod is fifo|lifo for sell fills (ignored on buys). Empty = fifo.
@@ -247,12 +248,12 @@ type PositionView struct {
 
 // PortfolioView is the full paper-trading snapshot for a client.
 type PortfolioView struct {
-	ID               string
-	ClientID         string
-	Name             string
-	Currency         string
-	StartingBalance  float64
-	CashBalance      float64
+	ID              string
+	ClientID        string
+	Name            string
+	Currency        string
+	StartingBalance float64
+	CashBalance     float64
 	// NetDeposits is subsequent deposits minus withdrawals (not the opening balance).
 	NetDeposits float64
 	// ContributedCapital is StartingBalance + NetDeposits (money the user put in).
@@ -260,7 +261,7 @@ type PortfolioView struct {
 	ReservedCash       float64 // spot pending buy reservations
 	ReservedMargin     float64 // margin limit-order reservations
 	AvailableCash      float64
-	PositionsValue   float64
+	PositionsValue     float64
 	// MarginMode is isolated or cross for this account.
 	MarginMode MarginMode
 	// MarginLocked is margin held in open margin positions (already deducted from cash).
@@ -277,9 +278,9 @@ type PortfolioView struct {
 	MarginPositions  []MarginPosition // open margin positions (with marks when listed via View)
 	Note             string
 	// Role is owner | trader | viewer for the calling client.
-	Role             PortfolioShareRole
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	Role      PortfolioShareRole
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // PortfolioShareRole is viewer (read), trader (trade), or owner.
