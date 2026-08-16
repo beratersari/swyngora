@@ -868,6 +868,36 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/breadth:
+    get:
+      summary: Market breadth (how many coins are up or down)
+      description: |
+        Counts how many of the liquid spot coins we follow are **up** vs
+        **down** over the last **1 hour, 4 hours, and 24 hours** (number and
+        percent). Also says whether BTC and ETH are moving with the rest of
+        the market or a few large coins are carrying it.
+      operationId: getMarketBreadth
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+        - name: limit
+          in: query
+          description: How many liquid coins to include (default 80, max 150)
+          schema: { type: integer, default: 80 }
+      responses:
+        '200':
+          description: Per-window up/down counts plus BTC/ETH read
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

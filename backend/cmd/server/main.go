@@ -206,6 +206,8 @@ func main() {
 	}).WithBasis(map[domain.Exchange]domain.BasisPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+	}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
+		domain.ExchangeBinance: binanceClient,
 	})
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,

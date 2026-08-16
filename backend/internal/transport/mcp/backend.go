@@ -269,6 +269,17 @@ func (b *Backend) GetCorrelation(ctx context.Context, exchange, symbol string) (
 	return mustJSON(got)
 }
 
+func (b *Backend) GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBreadth(ctx, exchange, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

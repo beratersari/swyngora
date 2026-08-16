@@ -222,6 +222,17 @@ class CorrelationInput(BaseModel):
     )
 
 
+class BreadthInput(BaseModel):
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+    limit: int = Field(
+        default=80,
+        description="How many liquid coins to include (default 80, max 150)",
+    )
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -821,6 +832,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         return http.get(
             "/api/v1/market/correlation",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_market_breadth(exchange: str = "binance", limit: int = 80) -> str:
+        return http.get(
+            "/api/v1/market/breadth",
+            {"exchange": exchange, "limit": limit},
         )
 
     def get_futures_history(
@@ -1970,6 +1987,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "same-direction share, and whether it follows with a delay."
             ),
             args_schema=CorrelationInput,
+        ),
+        StructuredTool.from_function(
+            get_market_breadth,
+            name="get_market_breadth",
+            description=(
+                "How many of the liquid coins we follow are up vs down over "
+                "1h, 4h, and 24h (count and percent). Says whether BTC and "
+                "ETH are moving with the rest of the market or a few large "
+                "coins are carrying it."
+            ),
+            args_schema=BreadthInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

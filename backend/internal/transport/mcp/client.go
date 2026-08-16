@@ -271,6 +271,18 @@ func (c *APIClient) GetCorrelation(ctx context.Context, exchange, symbol string)
 	return c.get(ctx, "/api/v1/market/correlation", q)
 }
 
+// GetBreadth returns how many followed coins are up or down over 1h / 4h / 24h.
+func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/breadth", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

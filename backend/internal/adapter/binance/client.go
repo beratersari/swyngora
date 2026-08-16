@@ -68,6 +68,8 @@ type Client struct {
 	takerSF      singleflight.Group
 	basisCache   *cache.TTL[*domain.BasisQuote]
 	basisSF      singleflight.Group
+	windowCache  *cache.TTL[[]domain.WindowChange]
+	windowSF     singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -143,6 +145,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.basisCache == nil {
 		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
+	}
+	if c.windowCache == nil {
+		c.windowCache = cache.New[[]domain.WindowChange](20 * time.Second)
 	}
 	return c
 }

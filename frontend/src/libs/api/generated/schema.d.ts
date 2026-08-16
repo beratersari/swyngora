@@ -568,6 +568,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/breadth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market breadth (how many coins are up or down)
+         * @description Up/down counts for 1h, 4h, and 24h plus BTC/ETH vs the pack.
+         */
+        get: operations["getMarketBreadth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4454,6 +4474,39 @@ export interface operations {
                     "application/json": {
                         symbol?: string;
                         exchange?: string;
+                        asOf?: string;
+                        windows?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBreadth: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-window up/down counts plus BTC/ETH read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        exchange?: string;
+                        quote?: string;
+                        universe?: number;
                         asOf?: string;
                         windows?: Record<string, unknown>[];
                         summary?: string;

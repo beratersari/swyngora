@@ -42,6 +42,7 @@ type Service struct {
 	longShort     map[domain.Exchange]domain.LongShortRatioPort
 	taker         map[domain.Exchange]domain.TakerFlowPort
 	basis         map[domain.Exchange]domain.BasisPort
+	windows       map[domain.Exchange]domain.WindowChangePort
 	onFuturesSym  func(string)
 	futHist       FuturesHistoryReader
 }
@@ -137,6 +138,21 @@ func (s *Service) WithBasis(ports map[domain.Exchange]domain.BasisPort) *Service
 		}
 	}
 	s.basis = cp
+	return s
+}
+
+// WithWindowChanges attaches rolling window ticker ports (1h / 4h / 24h).
+func (s *Service) WithWindowChanges(ports map[domain.Exchange]domain.WindowChangePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.WindowChangePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.windows = cp
 	return s
 }
 

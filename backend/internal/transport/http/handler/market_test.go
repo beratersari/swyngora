@@ -283,6 +283,33 @@ func TestGetCorrelation_OK(t *testing.T) {
 	}
 }
 
+func TestGetBreadth_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/breadth", nil)
+	rr := httptest.NewRecorder()
+	h.GetBreadth(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body breadthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBreadth_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/breadth?limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetBreadth(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetCorrelation_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/correlation", nil)

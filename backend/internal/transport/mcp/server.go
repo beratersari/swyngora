@@ -43,6 +43,7 @@ type DataPort interface {
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -493,6 +494,18 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetCorrelation(ctx, req.GetString("exchange", ""), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_market_breadth",
+		mcp.WithDescription("How much of the market is going up or down among the liquid spot coins we follow. Counts and percents for 1h, 4h, and 24h, plus whether BTC and ETH are moving with the rest of the market or a few large coins are carrying it. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid coins to include (default 80, max 150)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetBreadth(ctx, req.GetString("exchange", ""), req.GetInt("limit", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

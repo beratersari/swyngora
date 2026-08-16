@@ -813,6 +813,57 @@ func TestGetCorrelation_BadSymbol(t *testing.T) {
 	}
 }
 
+type fakeWindows struct {
+	byWindow map[string][]domain.WindowChange
+}
+
+func (f *fakeWindows) GetWindowChanges(_ context.Context, window string, _ []string) ([]domain.WindowChange, error) {
+	return f.byWindow[window], nil
+}
+
+func TestGetBreadth_CountsAndCarrying(t *testing.T) {
+	names := []string{"BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT", "UNI", "ATOM", "NEAR"}
+	spot := make([]domain.SpotMarket, 0, len(names))
+	chg1h := make([]domain.WindowChange, 0, len(names))
+	for i, b := range names {
+		pct24 := "-1"
+		if b == "BTC" || b == "ETH" {
+			pct24 = "2"
+		}
+		spot = append(spot, domain.SpotMarket{
+			Symbol: b + "USDT", BaseAsset: b, QuoteAsset: "USDT", Status: "TRADING",
+			PriceChangePercent: pct24, QuoteVolume: strconv.Itoa(100 - i),
+		})
+		ch := -0.8
+		if b == "BTC" || b == "ETH" {
+			ch = 1.5
+		}
+		chg1h = append(chg1h, domain.WindowChange{Symbol: b + "USDT", ChangePct: ch})
+	}
+	svc := New(&fakeMarket{spot: spot}, &fakeSupply{}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
+		domain.ExchangeBinance: &fakeWindows{byWindow: map[string][]domain.WindowChange{
+			domain.BreadthWindow1h: chg1h,
+			domain.BreadthWindow4h: chg1h,
+		}},
+	})
+	got, err := svc.GetBreadth(context.Background(), "binance", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Universe < 10 || len(got.Windows) != 3 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+	var h1 domain.BreadthWindow
+	for _, w := range got.Windows {
+		if w.Window == domain.BreadthWindow1h {
+			h1 = w
+		}
+	}
+	if h1.Alignment != domain.BreadthAlignCarrying {
+		t.Fatalf("1h %+v", h1)
+	}
+}
+
 type fakeTaker struct {
 	flow *domain.TakerVenueFlow
 	err  error
