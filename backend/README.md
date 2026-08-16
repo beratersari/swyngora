@@ -47,6 +47,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read |
 | `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
+| `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |

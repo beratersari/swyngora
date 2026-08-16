@@ -283,6 +283,33 @@ func TestGetCorrelation_OK(t *testing.T) {
 	}
 }
 
+func TestGetVolatility_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volatility?symbol=SOLUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolatility(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "SOLUSDT" || len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetVolatility_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volatility", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolatility(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetBreadth_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/breadth", nil)

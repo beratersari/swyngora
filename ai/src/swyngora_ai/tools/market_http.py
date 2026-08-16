@@ -222,6 +222,14 @@ class CorrelationInput(BaseModel):
     )
 
 
+class VolatilityInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
 class BreadthInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -831,6 +839,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_price_correlation(symbol: str, exchange: str = "binance") -> str:
         return http.get(
             "/api/v1/market/correlation",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_price_volatility(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/volatility",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -1998,6 +2012,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "coins are carrying it."
             ),
             args_schema=BreadthInput,
+        ),
+        StructuredTool.from_function(
+            get_price_volatility,
+            name="get_price_volatility",
+            description=(
+                "How volatile a coin has been over 1h, 4h, and 24h: net move, "
+                "high-low range, whether the range is bigger than normal or "
+                "expanding, and whether it is jumpy or calm versus BTC and ETH."
+            ),
+            args_schema=VolatilityInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

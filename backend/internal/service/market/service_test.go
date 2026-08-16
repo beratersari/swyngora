@@ -813,6 +813,44 @@ func TestGetCorrelation_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetVolatility_MoreJumpyThanBTC(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	n1m, n5m := 400, 400
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"SOLUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 20 + float64(i%5)*0.8 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 20 + float64(i%5)*1.2 }),
+		},
+		"BTCUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 100 + float64(i)*0.001 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 100 + float64(i)*0.002 }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 50 + float64(i)*0.0005 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.001 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetVolatility(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary == "" || len(got.Windows) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	if !got.Windows[0].Coin.Complete || got.Windows[0].VsMarket != domain.VolVsMore {
+		t.Fatalf("1h %+v", got.Windows[0])
+	}
+}
+
+func TestGetVolatility_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetVolatility(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 type fakeWindows struct {
 	byWindow map[string][]domain.WindowChange
 }

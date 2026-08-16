@@ -898,6 +898,36 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/volatility:
+    get:
+      summary: Price volatility vs recent history and BTC/ETH
+      description: |
+        How much a coin moved over the last **1 hour, 4 hours, and 24 hours**:
+        net change, high–low range (even if price came back), whether that
+        range is higher or lower than normal and expanding or shrinking, and
+        whether the coin is more volatile or calmer than BTC and ETH.
+      operationId: getMarketVolatility
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Per-window volatility vs history and BTC/ETH
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

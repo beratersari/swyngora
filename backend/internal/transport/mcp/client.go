@@ -283,6 +283,16 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 	return c.get(ctx, "/api/v1/market/breadth", q)
 }
 
+// GetVolatility returns how much a coin has been moving vs its history and vs BTC/ETH.
+func (c *APIClient) GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/volatility", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

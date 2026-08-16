@@ -44,6 +44,7 @@ type DataPort interface {
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
+	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -506,6 +507,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid coins to include (default 80, max 150)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetBreadth(ctx, req.GetString("exchange", ""), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_price_volatility",
+		mcp.WithDescription("How volatile a coin has been over the last 1 hour, 4 hours, and 24 hours: net move, high-low range, whether the range is bigger or smaller than normal and than the previous window, and whether the coin is jumpy or calm versus BTC and ETH. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. SOLUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVolatility(ctx, req.GetString("exchange", ""), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
