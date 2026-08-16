@@ -8,6 +8,10 @@ EXCHANGE_VENUES_OR_ALL = f"{EXCHANGE_VENUES}|all"
 # Default Ollama model that can actually call tools (llama3.2 often skips them).
 DEFAULT_OLLAMA_MODEL = "qwen2.5"
 
+# Cheapest current general-purpose xAI chat model (docs.x.ai/developers/pricing).
+# grok-3-mini is retired. grok-build-0.1 is cheaper but coding-only.
+DEFAULT_GROK_MODEL = "grok-4.3"
+
 TAPE_TTL_SECONDS = 300
 
 SPECIALIST_TAPE = "market_tape_agent"

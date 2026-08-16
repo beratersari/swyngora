@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from swyngora_ai.constants import DEFAULT_OLLAMA_MODEL
+from swyngora_ai.constants import DEFAULT_GROK_MODEL, DEFAULT_OLLAMA_MODEL
 
 
 class Settings(BaseSettings):
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = Field(default="http://127.0.0.1:11434", alias="OLLAMA_BASE_URL")
     ollama_model: str = Field(default=DEFAULT_OLLAMA_MODEL, alias="OLLAMA_MODEL")
     xai_api_key: str = Field(default="", alias="XAI_API_KEY")
-    grok_model: str = Field(default="grok-3-mini", alias="GROK_MODEL")
+    grok_model: str = Field(default=DEFAULT_GROK_MODEL, alias="GROK_MODEL")
     # Shared secret with the Go AI proxy. Empty = open localhost (dev).
     service_token: str = Field(default="", alias="AI_SERVICE_TOKEN")
     # FinMem SQLite path. Empty = RAM only. Use data/ai-memory.db or :memory:.
