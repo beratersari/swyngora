@@ -892,6 +892,40 @@ func TestGetSnapshot_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetLevels_ReturnsReport(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	// Bounce off ~100 several times, finish higher.
+	px := func(i int) float64 {
+		cycle := i % 7
+		if cycle == 3 || cycle == 4 {
+			return 100
+		}
+		return 100 + float64(cycle)*1.5
+	}
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "110"}},
+		by: map[string]map[domain.CandleInterval][]domain.Candle{
+			"BTCUSDT": {"1h": synthCloses(start, 80, time.Hour, px)},
+		},
+	}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetLevels(context.Background(), "binance", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Price != 110 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetLevels_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLevels(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 type fakeWindows struct {
 	byWindow map[string][]domain.WindowChange
 }

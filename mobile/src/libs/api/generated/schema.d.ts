@@ -628,6 +628,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Support and resistance areas
+         * @description Zones from price, volume, and the order book plus breakout score.
+         */
+        get: operations["getMarketLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -4615,6 +4635,40 @@ export interface operations {
                         spot?: Record<string, unknown>;
                         venues?: Record<string, unknown>[];
                         combined?: Record<string, unknown>;
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLevels: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Support and resistance zones plus optional breakout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        price?: string;
+                        supports?: Record<string, unknown>[];
+                        resistances?: Record<string, unknown>[];
+                        active?: Record<string, unknown>;
                         summary?: string;
                         note?: string;
                     };

@@ -960,6 +960,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/levels:
+    get:
+      summary: Support and resistance areas
+      description: |
+        Finds **support** and **resistance** from recent price swings and
+        volume, then checks the live order book for buy/sell liquidity around
+        each area. Each zone includes distance from last price, how many times
+        it was tested, and nearby bid/ask notional. When price is close to or
+        through a zone, a **breakout score** uses volume, book thickness, and
+        taker buy/sell.
+      operationId: getMarketLevels
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Support and resistance zones plus optional breakout
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume

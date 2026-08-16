@@ -46,6 +46,7 @@ type DataPort interface {
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -540,6 +541,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetSnapshot(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_support_resistance",
+		mcp.WithDescription("Support and resistance areas from price history, volume, and the live order book. Each area has distance from last price, how many times it was tested, and nearby bid/ask liquidity. When price is close to or through a level, a breakout score uses volume, book thickness, and taker buy/sell. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLevels(ctx, req.GetString("exchange", "binance"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

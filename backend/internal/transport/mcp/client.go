@@ -303,6 +303,16 @@ func (c *APIClient) GetSnapshot(ctx context.Context, exchange, symbol string) (j
 	return c.get(ctx, "/api/v1/market/snapshot", q)
 }
 
+// GetLevels returns support/resistance areas and breakout strength.
+func (c *APIClient) GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/levels", q)
+}
+
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
 func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

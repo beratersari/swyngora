@@ -238,6 +238,14 @@ class SnapshotInput(BaseModel):
     )
 
 
+class LevelsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
 class BreadthInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -859,6 +867,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
     def get_market_snapshot(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/snapshot",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_support_resistance(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/levels",
             {"symbol": symbol, "exchange": exchange},
         )
 
@@ -2047,6 +2061,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "volume or OI may be building before price moves."
             ),
             args_schema=SnapshotInput,
+        ),
+        StructuredTool.from_function(
+            get_support_resistance,
+            name="get_support_resistance",
+            description=(
+                "Support and resistance areas from price history, volume, "
+                "and the live order book. Distance from last, test count, "
+                "nearby bid/ask liquidity, and a breakout score when price "
+                "is close to or through a level (volume, book, taker flow)."
+            ),
+            args_schema=LevelsInput,
         ),
         StructuredTool.from_function(
             get_futures_history,

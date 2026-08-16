@@ -101,6 +101,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/breadth", http.StatusOK, nil},
 		{"/api/v1/market/volatility?symbol=SOLUSDT", http.StatusOK, nil},
 		{"/api/v1/market/snapshot?symbol=SOLUSDT", http.StatusOK, nil},
+		{"/api/v1/market/levels?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/supply?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/tags", http.StatusOK, func(t *testing.T, body []byte) {
 			var m map[string]any
