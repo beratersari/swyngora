@@ -5,12 +5,11 @@ description = "Swyngora multi-agent AI assistant (LangGraph + MCP tools)"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "langchain>=0.3.14",
-  "langchain-core>=0.3.28",
-  "langgraph>=0.2.60",
-  "langchain-ollama>=0.2.2",
-  "langchain-xai>=0.2.0",
-  "langchain-community>=0.3.14",
+  "langchain>=1.0",
+  "langchain-core>=1.0",
+  "langgraph>=1.0",
+  "langchain-ollama>=1.0",
+  "langchain-xai>=1.0",
   "duckduckgo-search>=7.0.0",
   "httpx>=0.28.0",
   "pydantic>=2.10.0",

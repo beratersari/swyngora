@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import httpx
+from langchain_core.messages import AIMessage
 
-from swyngora_ai.config import Settings
 from swyngora_ai.agents.specialists import build_specialist_tools
+from swyngora_ai.config import Settings
 from swyngora_ai.serve import is_service_authorized
 from swyngora_ai.tools.market_http import (
     bind_tool_scope,
     build_market_tools,
     reset_tool_scope,
 )
-
 from test_specialists_and_orchestrator import ScriptedModel
-from langchain_core.messages import AIMessage
 
 
 def test_finding11_empty_service_token_is_explicit_default():

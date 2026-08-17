@@ -303,9 +303,7 @@ class MarketLiquidityInput(BaseModel):
 class OrderBookHeatmapInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
-    group: str = Field(
-        default="", description="Price bucket e.g. 0.1; empty = suggested default"
-    )
+    group: str = Field(default="", description="Price bucket e.g. 0.1; empty = suggested default")
     window: int = Field(
         default=600,
         ge=60,
