@@ -6,9 +6,12 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import wrap_tool_call
+from langchain.tools.tool_node import ToolCallRequest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from swyngora_ai.agents.prompts import (
@@ -53,44 +56,44 @@ def _last_text(result: dict[str, Any]) -> str:
     return str(content)
 
 
-def _wrap_tools_with_progress(tools: Sequence[BaseTool], specialist: str) -> list[BaseTool]:
-    """Emit live tool events when leaf tools run."""
-    wrapped: list[BaseTool] = []
-    for t in tools:
-        original = t
+def _fmt_tool_args(args: dict[str, Any]) -> str:
+    bits: list[str] = []
+    for key, value in list(args.items())[:5]:
+        text = str(value)
+        if len(text) > 60:
+            text = text[:57] + "…"
+        bits.append(f"{key}={text}")
+    return ", ".join(bits)
 
-        def make_fn(tool: BaseTool):
-            def _fn(**kwargs: Any) -> str:
-                arg_bits = []
-                for k, v in list(kwargs.items())[:5]:
-                    vs = str(v)
-                    if len(vs) > 60:
-                        vs = vs[:57] + "…"
-                    arg_bits.append(f"{k}={vs}")
-                emit("tool", f"{specialist} → {tool.name}({', '.join(arg_bits)})")
-                try:
-                    out = tool.invoke(kwargs)
-                except Exception as e:
-                    emit("tool_error", f"{tool.name} failed: {e}")
-                    raise
-                preview = str(out).replace("\n", " ").strip()
-                if len(preview) > 100:
-                    preview = preview[:97] + "…"
-                emit("tool_result", f"{tool.name} ✓ {preview}")
-                return out if isinstance(out, str) else str(out)
 
-            return _fn
+def _preview_tool_result(result: object) -> str:
+    content = getattr(result, "content", result)
+    preview = str(content).replace("\n", " ").strip()
+    if len(preview) > 100:
+        preview = preview[:97] + "…"
+    return preview
 
-        schema = getattr(original, "args_schema", None)
-        wrapped.append(
-            StructuredTool.from_function(
-                make_fn(original),
-                name=original.name,
-                description=original.description or original.name,
-                args_schema=schema,
-            )
-        )
-    return wrapped
+
+def progress_on_tools(specialist: str):
+    """create_agent middleware: emit Process events around each leaf tool call."""
+
+    @wrap_tool_call
+    def emit_progress(
+        request: ToolCallRequest,
+        handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
+    ) -> ToolMessage | Command[Any]:
+        name = str(request.tool_call.get("name") or "unnamed_tool")
+        args = request.tool_call.get("args") or {}
+        emit("tool", f"{specialist} → {name}({_fmt_tool_args(args)})")
+        try:
+            result = handler(request)
+        except Exception as e:
+            emit("tool_error", f"{name} failed: {e}")
+            raise
+        emit("tool_result", f"{name} ✓ {_preview_tool_result(result)}")
+        return result
+
+    return emit_progress
 
 
 def _content_text_local(content: Any) -> str:
@@ -116,8 +119,12 @@ def _run_react(
     emit("thinking", f"{specialist}: {task[:200]}")
     agent = compiled
     if agent is None:
-        tools = _wrap_tools_with_progress(tools, specialist)
-        agent = create_agent(model, list(tools), system_prompt=system)
+        agent = create_agent(
+            model,
+            list(tools),
+            system_prompt=system,
+            middleware=[progress_on_tools(specialist)],
+        )
     msgs = run_agent_with_progress(
         agent,
         [HumanMessage(content=task)],
@@ -180,10 +187,15 @@ class SpecialistRunner:
             (SPECIALIST_X, X_SYSTEM, build_x_tools()),
         ]
         for name, system, tools in packs:
-            wrapped = _wrap_tools_with_progress(tools, name)
-            self._tools[name] = wrapped
+            leaf = list(tools)
+            self._tools[name] = leaf
             self._systems[name] = system
-            self._compiled[name] = create_agent(self.model, wrapped, system_prompt=system)
+            self._compiled[name] = create_agent(
+                self.model,
+                leaf,
+                system_prompt=system,
+                middleware=[progress_on_tools(name)],
+            )
 
     def run(self, name: str, task: str) -> str:
         limit = self.settings.max_agent_iterations + 4

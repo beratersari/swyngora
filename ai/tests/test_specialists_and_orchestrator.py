@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -166,3 +167,67 @@ def test_session_memory():
     mem.append("s", [HumanMessage(content="c"), AIMessage(content="d")])
     mem.append("s", [HumanMessage(content="e"), AIMessage(content="f")])
     assert len(mem.get("s")) == 4  # capped
+
+
+def _progress_request(name: str, args: dict[str, Any]) -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        tool_call={"name": name, "args": args, "id": "call-1", "type": "tool_call"},
+    )
+
+
+def test_progress_on_tools_emits_tool_and_result():
+    from langchain_core.messages import ToolMessage
+
+    from swyngora_ai.agents.specialists import progress_on_tools
+    from swyngora_ai.progress import reset_progress, set_progress
+
+    events: list[dict[str, Any]] = []
+    token = set_progress(events.append)
+    mw = progress_on_tools("market_tape_agent")
+    result = ToolMessage(content='{"lastPrice":"100"}', name="get_ticker", tool_call_id="call-1")
+    try:
+        out = mw.wrap_tool_call(
+            _progress_request("get_ticker", {"symbol": "BTCUSDT"}), lambda _req: result
+        )
+    finally:
+        reset_progress(token)
+    assert out is result
+    types = [e.get("type") for e in events]
+    assert types == ["tool", "tool_result"]
+    assert "market_tape_agent → get_ticker" in (events[0].get("text") or "")
+    assert "symbol=BTCUSDT" in (events[0].get("text") or "")
+    assert "get_ticker ✓" in (events[1].get("text") or "")
+
+
+def test_progress_on_tools_emits_tool_error():
+    from swyngora_ai.agents.specialists import progress_on_tools
+    from swyngora_ai.progress import reset_progress, set_progress
+
+    events: list[dict[str, Any]] = []
+    token = set_progress(events.append)
+    mw = progress_on_tools("market_book_agent")
+
+    def boom(_req):
+        raise RuntimeError("backend down")
+
+    try:
+        with pytest.raises(RuntimeError, match="backend down"):
+            mw.wrap_tool_call(_progress_request("get_spot_orderbook", {}), boom)
+    finally:
+        reset_progress(token)
+    types = [e.get("type") for e in events]
+    assert types == ["tool", "tool_error"]
+    assert "get_spot_orderbook failed" in (events[1].get("text") or "")
+
+
+def test_specialist_runner_keeps_original_leaf_tools():
+    from swyngora_ai.agents.specialists import SpecialistRunner
+    from swyngora_ai.tools.market_http import build_market_tools
+
+    model = ScriptedModel(responses=[AIMessage(content="ok")])
+    settings = Settings(_env_file=None)
+    runner = SpecialistRunner(model, settings)
+    expected = {t.name for t in build_market_tools(settings, pack="tape")}
+    assert {t.name for t in runner._tools["market_tape_agent"]} == expected
