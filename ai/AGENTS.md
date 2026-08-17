@@ -30,4 +30,4 @@ swyngora-ai "your question"
 
 Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, `ty`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.
 
-Ruff and ty config live in `pyproject.toml`. `SLF001` is ignored only under `tests/`. Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
+Ruff and ty config live in `pyproject.toml`. Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
