@@ -19,7 +19,13 @@ from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
-from swyngora_ai.progress import emit, reset_progress, set_progress
+from swyngora_ai.progress import (
+    emit,
+    emit_tool_outcome,
+    is_tool_error_text,
+    reset_progress,
+    set_progress,
+)
 from swyngora_ai.tools.market_http import (
     begin_tool_json_turn,
     bind_client_id,
@@ -176,8 +182,8 @@ def _emit_from_message(msg: BaseMessage) -> None:
         preview = _content_text(msg.content).replace("\n", " ").strip()
         if len(preview) > 100:
             preview = preview[:97] + "…"
-        emit("tool_result", f"{name} ✓ {preview}" if preview else f"{name} ✓")
-        emit("status", f"{name} done")
+        emit_tool_outcome(name, preview)
+        emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
 
 
 def run_agent_with_progress(

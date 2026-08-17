@@ -39,6 +39,19 @@ def reset_progress(token) -> None:
     _progress_cb.reset(token)
 
 
+def is_tool_error_text(text: str) -> bool:
+    """True when a tool returned our fail-soft ERROR string (not a raised exception)."""
+    return (text or "").lstrip().startswith("ERROR")
+
+
+def emit_tool_outcome(name: str, preview: str) -> None:
+    """Emit tool_result (✓) or tool_error when the body is an ERROR … string."""
+    if is_tool_error_text(preview):
+        emit("tool_error", f"{name} failed: {preview}" if preview else f"{name} failed")
+        return
+    emit("tool_result", f"{name} ✓ {preview}" if preview else f"{name} ✓")
+
+
 def emit(event_type: str, text: str = "", **extra: Any) -> None:
     cb = _progress_cb.get()
     if cb is None:

@@ -33,7 +33,7 @@ from swyngora_ai.constants import (
     SPECIALIST_WEB,
     SPECIALIST_X,
 )
-from swyngora_ai.progress import emit
+from swyngora_ai.progress import emit, emit_tool_outcome
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
 from swyngora_ai.tools.web_search import build_web_tools
@@ -90,7 +90,7 @@ def progress_on_tools(specialist: str):
         except Exception as e:
             emit("tool_error", f"{name} failed: {e}")
             raise
-        emit("tool_result", f"{name} ✓ {_preview_tool_result(result)}")
+        emit_tool_outcome(name, _preview_tool_result(result))
         return result
 
     return emit_progress

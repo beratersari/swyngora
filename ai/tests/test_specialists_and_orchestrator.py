@@ -201,6 +201,73 @@ def test_progress_on_tools_emits_tool_and_result():
     assert "get_ticker ✓" in (events[1].get("text") or "")
 
 
+def test_progress_on_tools_treats_error_string_as_failure():
+    from langchain_core.messages import ToolMessage
+
+    from swyngora_ai.agents.specialists import progress_on_tools
+    from swyngora_ai.progress import reset_progress, set_progress
+
+    events: list[dict[str, Any]] = []
+    token = set_progress(events.append)
+    mw = progress_on_tools("market_tape_agent")
+    result = ToolMessage(
+        content="ERROR connect: [Errno 111] Connection refused",
+        name="get_ticker",
+        tool_call_id="call-1",
+    )
+    try:
+        out = mw.wrap_tool_call(
+            _progress_request("get_ticker", {"symbol": "BTCUSDT"}), lambda _req: result
+        )
+    finally:
+        reset_progress(token)
+    assert out is result
+    assert [e.get("type") for e in events] == ["tool", "tool_error"]
+    text = events[1].get("text") or ""
+    assert "get_ticker failed:" in text
+    assert "ERROR connect" in text
+    assert "✓" not in text
+
+
+def test_stream_treats_error_tool_message_as_failure():
+    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+
+    from swyngora_ai.graph.orchestrator import run_agent_with_progress
+    from swyngora_ai.progress import reset_progress, set_progress
+
+    human = HumanMessage(content="q")
+    think = AIMessage(
+        content="check",
+        tool_calls=[
+            {"name": "get_ticker", "args": {"symbol": "BTC"}, "id": "1", "type": "tool_call"}
+        ],
+    )
+    tool = ToolMessage(
+        content="ERROR connect: [Errno 111] Connection refused",
+        name="get_ticker",
+        tool_call_id="1",
+    )
+    final = AIMessage(content="down")
+
+    class FakeGraph:
+        def stream(self, _input, config=None, stream_mode=None):
+            yield {"messages": [human, think, tool, final]}
+
+        def invoke(self, _input, config=None):
+            raise AssertionError("invoke should not run")
+
+    events: list[dict[str, Any]] = []
+    token = set_progress(events.append)
+    try:
+        run_agent_with_progress(FakeGraph(), [human], {"recursion_limit": 4})
+    finally:
+        reset_progress(token)
+    texts = [e.get("text") or "" for e in events]
+    assert any("get_ticker failed:" in t for t in texts)
+    assert any(t == "get_ticker failed" for t in texts)
+    assert not any("get_ticker ✓" in t for t in texts)
+
+
 def test_progress_on_tools_emits_tool_error():
     from swyngora_ai.agents.specialists import progress_on_tools
     from swyngora_ai.progress import reset_progress, set_progress
