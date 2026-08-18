@@ -345,6 +345,86 @@ func TestGetSnapshot_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetBookHistory_NotConfigured(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetBookHistory(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+type stubBookHistHTTP struct{}
+
+func (stubBookHistHTTP) SnapshotAt(_ context.Context, _, symbol string, at time.Time) (*domain.BookHistorySnapshot, error) {
+	return &domain.BookHistorySnapshot{
+		Exchange: domain.ExchangeBinance, Symbol: symbol, SampledAt: at,
+		Mid: 100, Spread: 0.2, BidNotional: 500, AskNotional: 400,
+		Bids: []domain.BookHistoryLevel{{Price: 99.9, Quantity: 1, Notional: 99.9}},
+	}, nil
+}
+func (stubBookHistHTTP) List(_ context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	return []domain.BookHistorySnapshot{{
+		Exchange: domain.ExchangeBinance, Symbol: q.Symbol,
+		SampledAt: time.Unix(1_700_000_000, 0).UTC(), Mid: 100, BidNotional: 500, AskNotional: 400,
+	}}, nil
+}
+func (stubBookHistHTTP) Compare(_ context.Context, _, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
+	fromS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: from, Mid: 100, BidNotional: 500, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 2, Notional: 198}}}
+	toS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: to, Mid: 102, BidNotional: 200, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 1, Notional: 99}}}
+	d := domain.CompareBookHistory(fromS, toS)
+	return &d, nil
+}
+func (stubBookHistHTTP) Note(string, string) {}
+
+func TestGetBookHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history?symbol=BTCUSDT&at=2026-08-16T12:00:00Z", nil)
+	rr := httptest.NewRecorder()
+	h.GetBookHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body bookHistoryResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Snapshot == nil || body.Snapshot.Mid == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestCompareBookHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history/compare?symbol=BTCUSDT&from=2026-08-16T12:00:00Z&to=2026-08-16T12:05:00Z", nil)
+	rr := httptest.NewRecorder()
+	h.CompareBookHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body bookDiffResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Summary == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestCompareBookHistory_MissingTimes(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history/compare?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.CompareBookHistory(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetWhales_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales?symbol=BTCUSDT", nil)

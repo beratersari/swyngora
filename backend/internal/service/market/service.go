@@ -45,6 +45,7 @@ type Service struct {
 	windows       map[domain.Exchange]domain.WindowChangePort
 	onFuturesSym  func(string)
 	futHist       FuturesHistoryReader
+	bookHist      BookHistoryReader
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -374,6 +375,7 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		book.Symbol = symbol
 	}
 	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
+	s.noteBook(ex, book.Symbol)
 	return &book, nil
 }
 

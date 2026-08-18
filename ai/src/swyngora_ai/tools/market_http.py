@@ -133,6 +133,22 @@ class OrderBookInput(BaseModel):
     )
 
 
+class OrderBookHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    at: str = Field(default="", description="Point in time RFC3339 or unix ms")
+    from_time: str = Field(default="", description="List window start")
+    to_time: str = Field(default="", description="List window end")
+    limit: int = Field(default=0, description="Max list rows (default 60)")
+
+
+class OrderBookCompareInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    from_time: str = Field(description="Earlier time RFC3339 or unix ms")
+    to_time: str = Field(description="Later time RFC3339 or unix ms")
+
+
 class OrderBookAnalysisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
@@ -816,6 +832,36 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         if group:
             params["group"] = group
         return http.get("/api/v1/market/orderbook", params)
+
+    def get_orderbook_history(
+        symbol: str,
+        exchange: str = "binance",
+        at: str = "",
+        from_time: str = "",
+        to_time: str = "",
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if at:
+            params["at"] = at
+        if from_time:
+            params["from"] = from_time
+        if to_time:
+            params["to"] = to_time
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/history", params)
+
+    def compare_orderbook_history(
+        symbol: str,
+        exchange: str = "binance",
+        from_time: str = "",
+        to_time: str = "",
+    ) -> str:
+        return http.get(
+            "/api/v1/market/orderbook/history/compare",
+            {"symbol": symbol, "exchange": exchange, "from": from_time, "to": to_time},
+        )
 
     def analyze_market_orderbook(symbol: str, range_pct: float = 2.0) -> str:
         return http.get(
@@ -1919,6 +1965,26 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Works on binance, coinbase, and bybit."
             ),
             args_schema=OrderBookInput,
+        ),
+        StructuredTool.from_function(
+            get_orderbook_history,
+            name="get_orderbook_history",
+            description=(
+                "Stored spot order-book snapshots: bid/ask levels, spread, "
+                "total liquidity, imbalance, and large walls. Pass at for the "
+                "book nearest that time. Omit at to list recent samples."
+            ),
+            args_schema=OrderBookHistoryInput,
+        ),
+        StructuredTool.from_function(
+            compare_orderbook_history,
+            name="compare_orderbook_history",
+            description=(
+                "Compare two stored spot order books and show which price "
+                "levels gained or lost liquidity, plus mid/spread/imbalance "
+                "change and walls that appeared or were pulled."
+            ),
+            args_schema=OrderBookCompareInput,
         ),
         StructuredTool.from_function(
             analyze_spot_orderbook,

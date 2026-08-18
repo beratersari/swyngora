@@ -88,6 +88,58 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 	})
 }
 
+func (b *Backend) GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var atPtr, fromPtr, toPtr *time.Time
+	if strings.TrimSpace(at) != "" {
+		t, err := parseMCPTime(at)
+		if err != nil {
+			return nil, err
+		}
+		atPtr = &t
+	}
+	if strings.TrimSpace(from) != "" {
+		t, err := parseMCPTime(from)
+		if err != nil {
+			return nil, err
+		}
+		fromPtr = &t
+	}
+	if strings.TrimSpace(to) != "" {
+		t, err := parseMCPTime(to)
+		if err != nil {
+			return nil, err
+		}
+		toPtr = &t
+	}
+	got, err := b.Market.GetBookHistory(ctx, exchange, symbol, atPtr, fromPtr, toPtr, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	fromT, err := parseMCPTime(from)
+	if err != nil {
+		return nil, err
+	}
+	toT, err := parseMCPTime(to)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.CompareBookHistory(ctx, exchange, symbol, fromT, toT)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

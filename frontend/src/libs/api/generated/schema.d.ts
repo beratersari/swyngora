@@ -233,6 +233,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored order-book snapshots
+         * @description Bid/ask levels, spread, liquidity, imbalance, and walls at a time.
+         */
+        get: operations["getOrderBookHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/history/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare two stored order books
+         * @description Which price levels gained or lost liquidity between two times.
+         */
+        get: operations["compareOrderBookHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/combined": {
         parameters: {
             query?: never;
@@ -4104,6 +4144,87 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getOrderBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Point in time (RFC3339 or unix ms) */
+                at?: string;
+                /** @description List window start (RFC3339 or unix ms) */
+                from?: string;
+                /** @description List window end (RFC3339 or unix ms) */
+                to?: string;
+                /** @description Max list rows (default 60, max 500) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One snapshot or a newest-first list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        at?: string;
+                        snapshot?: Record<string, unknown>;
+                        snapshots?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    compareOrderBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Earlier time (RFC3339 or unix ms) */
+                from: string;
+                /** @description Later time (RFC3339 or unix ms) */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Before/after liquidity diff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        from?: Record<string, unknown>;
+                        to?: Record<string, unknown>;
+                        gained?: Record<string, unknown>[];
+                        lost?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

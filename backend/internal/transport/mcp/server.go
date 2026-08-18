@@ -48,6 +48,8 @@ type DataPort interface {
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error)
+	GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error)
+	CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -245,6 +247,52 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetTicker(ctx, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_orderbook_history",
+		mcp.WithDescription("Stored spot order-book snapshots: bid/ask levels, spread, total liquidity, imbalance, and large walls. Pass at for the book nearest that time (RFC3339 or unix ms). Omit at to list recent samples (from/to optional). 1-minute samples of the live book, not a 24h tape. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("at", mcp.Description("Point in time (RFC3339 or unix ms)")),
+		mcp.WithString("from", mcp.Description("List window start")),
+		mcp.WithString("to", mcp.Description("List window end")),
+		mcp.WithNumber("limit", mcp.Description("Max list rows (default 60, max 500)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBookHistory(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("at", ""), req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_orderbook_history",
+		mcp.WithDescription("Compare two stored spot order books. Shows which price levels gained or lost liquidity, mid/spread/imbalance change, and walls that appeared or were pulled. Use after a strong price move. from and to are RFC3339 or unix ms. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("from", mcp.Required(), mcp.Description("Earlier time (RFC3339 or unix ms)")),
+		mcp.WithString("to", mcp.Required(), mcp.Description("Later time (RFC3339 or unix ms)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		from, err := req.RequireString("from")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		to, err := req.RequireString("to")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CompareBookHistory(ctx, req.GetString("exchange", "binance"), symbol, from, to)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

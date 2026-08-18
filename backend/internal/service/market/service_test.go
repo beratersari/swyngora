@@ -1014,6 +1014,72 @@ func TestGetWhales_IncludesLiquidation(t *testing.T) {
 	}
 }
 
+func TestGetBookHistory_NotConfigured(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", nil, nil, nil, 0)
+	if !errors.Is(err, domain.ErrUpstream) {
+		t.Fatalf("%v", err)
+	}
+}
+
+type stubBookHist struct {
+	snap domain.BookHistorySnapshot
+}
+
+func (s stubBookHist) SnapshotAt(_ context.Context, exchange, symbol string, at time.Time) (*domain.BookHistorySnapshot, error) {
+	out := s.snap
+	out.Exchange = domain.Exchange(exchange)
+	out.Symbol = symbol
+	if out.SampledAt.IsZero() {
+		out.SampledAt = at
+	}
+	return &out, nil
+}
+func (s stubBookHist) List(_ context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	out := s.snap
+	out.Symbol = q.Symbol
+	return []domain.BookHistorySnapshot{out}, nil
+}
+func (s stubBookHist) Compare(_ context.Context, exchange, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
+	a := s.snap
+	a.SampledAt, a.Symbol, a.Exchange = from, symbol, domain.Exchange(exchange)
+	b := s.snap
+	b.SampledAt, b.Symbol, b.BidNotional = to, symbol, s.snap.BidNotional+1000
+	b.Bids = []domain.BookHistoryLevel{{Price: 100, Quantity: 2, Notional: 200}}
+	diff := domain.CompareBookHistory(a, b)
+	return &diff, nil
+}
+func (stubBookHist) Note(string, string) {}
+
+func TestGetBookHistory_AtAndList(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithBookHistory(stubBookHist{snap: domain.BookHistorySnapshot{
+		Mid: 100, Spread: 0.2, BidNotional: 500, AskNotional: 400, SampledAt: t0,
+	}})
+	at := t0
+	got, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", &at, nil, nil, 0)
+	if err != nil || got.Snapshot == nil || got.Snapshot.Mid != 100 || got.Summary == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	list, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", nil, nil, nil, 10)
+	if err != nil || len(list.Snapshots) != 1 {
+		t.Fatalf("%+v %v", list, err)
+	}
+}
+
+func TestCompareBookHistory_RequiresTimes(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithBookHistory(stubBookHist{})
+	_, err := svc.CompareBookHistory(context.Background(), "binance", "BTCUSDT", time.Time{}, time.Now())
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	got, err := svc.CompareBookHistory(context.Background(), "binance", "btcusdt", t0, t0.Add(5*time.Minute))
+	if err != nil || got.Summary == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestGetWhales_BadExchange(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	_, err := svc.GetWhales(context.Background(), "coinbase", "BTCUSDT", 0, 0)

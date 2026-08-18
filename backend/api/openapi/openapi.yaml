@@ -500,6 +500,94 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/history:
+    get:
+      summary: Stored order-book snapshots
+      description: |
+        Regular samples of the live spot book: grouped **bid/ask levels**,
+        **spread**, **total liquidity**, **imbalance**, and **large walls**.
+        Pass `at` for the snapshot nearest that time. Omit `at` to list
+        recent samples (`from` / `to` optional). 1-minute samples, not a
+        24h tape. Informational only.
+      operationId: getOrderBookHistory
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: at
+          in: query
+          description: Point in time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:00:00Z" }
+        - name: from
+          in: query
+          description: List window start (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: to
+          in: query
+          description: List window end (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Max list rows (default 60, max 500)
+          schema: { type: integer, default: 60 }
+      responses:
+        '200':
+          description: One snapshot or a newest-first list
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/history/compare:
+    get:
+      summary: Compare two stored order books
+      description: |
+        Loads the stored books nearest to `from` and `to` and shows which
+        **price levels gained or lost liquidity**, plus mid / spread /
+        imbalance change and walls that appeared or were pulled.
+        Use this to see what changed before and after a price move.
+        Informational only.
+      operationId: compareOrderBookHistory
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: from
+          in: query
+          required: true
+          description: Earlier time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:00:00Z" }
+        - name: to
+          in: query
+          required: true
+          description: Later time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:15:00Z" }
+      responses:
+        '200':
+          description: Before/after liquidity diff
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/combined:
     get:
       summary: Market-wide spot order book analysis

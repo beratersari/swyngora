@@ -139,6 +139,40 @@ func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group st
 	return c.get(ctx, "/api/v1/market/orderbook", q)
 }
 
+// GetBookHistory returns a stored book at a time, or a newest-first list.
+func (c *APIClient) GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if at != "" {
+		q.Set("at", at)
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/history", q)
+}
+
+// CompareBookHistory diffs stored books nearest to two times.
+func (c *APIClient) CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("from", from)
+	q.Set("to", to)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/history/compare", q)
+}
+
 // EstimateOrderBookImpact walks live depth for a simulated market order.
 func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	q := url.Values{}

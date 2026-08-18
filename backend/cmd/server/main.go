@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bookhiststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
@@ -29,6 +30,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/bookhist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
@@ -219,6 +221,27 @@ func main() {
 	marketSvc.SetFuturesHistory(futuresHist)
 	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
 
+	bookStore, err := bookhiststore.Open(cfg.OrderBookHistoryDBPath)
+	if err != nil {
+		logger.Error("order book history sqlite open failed", "path", cfg.OrderBookHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := bookStore.Close(); err != nil {
+			logger.Error("order book history sqlite close", "err", err)
+		}
+	}()
+	bookSeeds := append([]string{}, domain.DefaultBookHistorySymbols...)
+	bookSeeds = append(bookSeeds, cfg.OrderBookHistorySymbols...)
+	bookHist := &bookhist.Service{
+		Store:  bookStore,
+		Books:  map[domain.Exchange]domain.MarketDataPort{domain.ExchangeBinance: binanceClient, domain.ExchangeCoinbase: coinbaseClient, domain.ExchangeBybit: bybitClient},
+		Logger: logger,
+		Seeds:  bookSeeds,
+	}
+	marketSvc.WithBookHistory(bookHist)
+	logger.Info("order book history store ready", "driver", "sqlite", "path", bookStore.Path())
+
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
 		logger.Error("watchlist sqlite open failed", "path", cfg.WatchlistDBPath, "err", err)
@@ -377,6 +400,12 @@ func main() {
 		Hist:     futuresHist,
 		Interval: cfg.FuturesHistoryInterval,
 		Retain:   cfg.FuturesHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
+	go (&bookhist.Worker{
+		Hist:     bookHist,
+		Interval: cfg.OrderBookHistoryInterval,
+		Retain:   cfg.OrderBookHistoryRetention,
 		Logger:   logger,
 	}).Start(ctx)
 

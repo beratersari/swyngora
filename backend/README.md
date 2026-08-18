@@ -31,6 +31,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
+| `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list |
+| `GET` | `/api/v1/market/orderbook/history/compare` | Which price levels gained or lost liquidity between two times |
 | `GET` | `/api/v1/market/orderbook/combined` | Market-wide pressure from all three venues in one price band |
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
@@ -283,6 +285,10 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
 | `FUTURES_HISTORY_RETENTION` | `720h` | How long stored futures rows are kept |
 | `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
+| `ORDERBOOK_HISTORY_DB_PATH` | `data/orderbook.db` | SQLite archive for spot book samples |
+| `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |
+| `ORDERBOOK_HISTORY_RETENTION` | `168h` | How long stored books are kept |
+| `ORDERBOOK_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
