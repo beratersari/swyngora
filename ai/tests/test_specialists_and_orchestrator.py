@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -97,44 +96,61 @@ def test_orchestrator_emits_live_process_events():
     assert "Planning" in texts or "Orchestrator" in texts or "Composing" in texts
 
 
-def test_run_agent_with_progress_streams_then_emits():
-    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+def _scripted_ticker_agent(result: str, *, final: str = "done"):
+    from langchain.agents import create_agent
+    from langchain_core.messages import HumanMessage
+    from langchain_core.tools import StructuredTool
 
     from swyngora_ai.graph.orchestrator import run_agent_with_progress
     from swyngora_ai.progress import reset_progress, set_progress
 
-    human = HumanMessage(content="q")
-    think = AIMessage(
-        content="I'll check market data",
-        tool_calls=[
-            {"name": "market_agent", "args": {"task": "BTC"}, "id": "1", "type": "tool_call"}
-        ],
+    def get_ticker(symbol: str = "BTCUSDT") -> str:
+        return result
+
+    model = ScriptedModel(
+        responses=[
+            AIMessage(
+                content="",
+                tool_calls=[
+                    {
+                        "name": "get_ticker",
+                        "args": {"symbol": "BTCUSDT"},
+                        "id": "1",
+                        "type": "tool_call",
+                    }
+                ],
+            ),
+            AIMessage(content=final),
+        ]
     )
-    tool = ToolMessage(content='{"lastPrice":"1"}', name="market_agent", tool_call_id="1")
-    final = AIMessage(content="done")
-
-    class FakeGraph:
-        def stream(self, _input, config=None, stream_mode=None):
-            assert stream_mode == "values"
-            yield {"messages": [human]}
-            yield {"messages": [human, think]}
-            yield {"messages": [human, think, tool, final]}
-
-        def invoke(self, _input, config=None):
-            raise AssertionError("invoke should not run when stream works")
-
+    graph = create_agent(
+        model,
+        [StructuredTool.from_function(get_ticker, name="get_ticker", description="ticker")],
+        system_prompt="tape",
+    )
     events: list[dict[str, Any]] = []
     token = set_progress(events.append)
     try:
-        out = run_agent_with_progress(FakeGraph(), [human], {"recursion_limit": 4})
+        out = run_agent_with_progress(
+            graph,
+            [HumanMessage(content="btc")],
+            {"recursion_limit": 8},
+            specialist="market_tape_agent",
+        )
     finally:
         reset_progress(token)
-    assert out[-1].content == "done"
-    types = [e.get("type") for e in events]
-    assert "thinking" in types
-    assert "tool" in types
-    assert "tool_result" in types
-    assert "status" in types
+    return out, events
+
+
+def test_content_text_skips_reasoning_blocks():
+    from swyngora_ai.graph.orchestrator import _content_text
+
+    raw = [
+        {"type": "reasoning", "reasoning": "The user asked…", "index": 0},
+        {"type": "tool_call", "name": "market_tape_agent", "args": {"task": "BTC"}},
+        {"type": "text", "text": "BTCUSDT last is 100."},
+    ]
+    assert _content_text(raw) == "BTCUSDT last is 100."
 
 
 def test_extract_trace_tools():
@@ -169,124 +185,32 @@ def test_session_memory():
     assert len(mem.get("s")) == 4  # capped
 
 
-def _progress_request(name: str, args: dict[str, Any]) -> Any:
-    from types import SimpleNamespace
+def test_run_agent_emits_one_prefixed_tool_result():
+    out, events = _scripted_ticker_agent('{"lastPrice":"100"}')
+    assert out
+    assert out[-1].content == "done"
+    tool_lines = [e.get("text") or "" for e in events if e.get("type") == "tool"]
+    result_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_result"]
+    assert tool_lines == ["market_tape_agent → get_ticker(symbol=BTCUSDT)"]
+    assert len(result_lines) == 1
+    assert "get_ticker ✓" in result_lines[0]
+    assert any(e.get("type") == "status" for e in events)
 
-    return SimpleNamespace(
-        tool_call={"name": name, "args": args, "id": "call-1", "type": "tool_call"},
+
+def test_run_agent_treats_error_string_as_failure():
+    _out, events = _scripted_ticker_agent(
+        "ERROR connect: [Errno 111] Connection refused",
+        final="down",
     )
-
-
-def test_progress_on_tools_emits_tool_and_result():
-    from langchain_core.messages import ToolMessage
-
-    from swyngora_ai.agents.specialists import progress_on_tools
-    from swyngora_ai.progress import reset_progress, set_progress
-
-    events: list[dict[str, Any]] = []
-    token = set_progress(events.append)
-    mw = progress_on_tools("market_tape_agent")
-    result = ToolMessage(content='{"lastPrice":"100"}', name="get_ticker", tool_call_id="call-1")
-    try:
-        out = mw.wrap_tool_call(
-            _progress_request("get_ticker", {"symbol": "BTCUSDT"}), lambda _req: result
-        )
-    finally:
-        reset_progress(token)
-    assert out is result
-    types = [e.get("type") for e in events]
-    assert types == ["tool", "tool_result"]
-    assert "market_tape_agent → get_ticker" in (events[0].get("text") or "")
-    assert "symbol=BTCUSDT" in (events[0].get("text") or "")
-    assert "get_ticker ✓" in (events[1].get("text") or "")
-
-
-def test_progress_on_tools_treats_error_string_as_failure():
-    from langchain_core.messages import ToolMessage
-
-    from swyngora_ai.agents.specialists import progress_on_tools
-    from swyngora_ai.progress import reset_progress, set_progress
-
-    events: list[dict[str, Any]] = []
-    token = set_progress(events.append)
-    mw = progress_on_tools("market_tape_agent")
-    result = ToolMessage(
-        content="ERROR connect: [Errno 111] Connection refused",
-        name="get_ticker",
-        tool_call_id="call-1",
-    )
-    try:
-        out = mw.wrap_tool_call(
-            _progress_request("get_ticker", {"symbol": "BTCUSDT"}), lambda _req: result
-        )
-    finally:
-        reset_progress(token)
-    assert out is result
-    assert [e.get("type") for e in events] == ["tool", "tool_error"]
-    text = events[1].get("text") or ""
-    assert "get_ticker failed:" in text
-    assert "ERROR connect" in text
-    assert "✓" not in text
-
-
-def test_stream_treats_error_tool_message_as_failure():
-    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-    from swyngora_ai.graph.orchestrator import run_agent_with_progress
-    from swyngora_ai.progress import reset_progress, set_progress
-
-    human = HumanMessage(content="q")
-    think = AIMessage(
-        content="check",
-        tool_calls=[
-            {"name": "get_ticker", "args": {"symbol": "BTC"}, "id": "1", "type": "tool_call"}
-        ],
-    )
-    tool = ToolMessage(
-        content="ERROR connect: [Errno 111] Connection refused",
-        name="get_ticker",
-        tool_call_id="1",
-    )
-    final = AIMessage(content="down")
-
-    class FakeGraph:
-        def stream(self, _input, config=None, stream_mode=None):
-            yield {"messages": [human, think, tool, final]}
-
-        def invoke(self, _input, config=None):
-            raise AssertionError("invoke should not run")
-
-    events: list[dict[str, Any]] = []
-    token = set_progress(events.append)
-    try:
-        run_agent_with_progress(FakeGraph(), [human], {"recursion_limit": 4})
-    finally:
-        reset_progress(token)
-    texts = [e.get("text") or "" for e in events]
-    assert any("get_ticker failed:" in t for t in texts)
-    assert any(t == "get_ticker failed" for t in texts)
-    assert not any("get_ticker ✓" in t for t in texts)
-
-
-def test_progress_on_tools_emits_tool_error():
-    from swyngora_ai.agents.specialists import progress_on_tools
-    from swyngora_ai.progress import reset_progress, set_progress
-
-    events: list[dict[str, Any]] = []
-    token = set_progress(events.append)
-    mw = progress_on_tools("market_book_agent")
-
-    def boom(_req):
-        raise RuntimeError("backend down")
-
-    try:
-        with pytest.raises(RuntimeError, match="backend down"):
-            mw.wrap_tool_call(_progress_request("get_spot_orderbook", {}), boom)
-    finally:
-        reset_progress(token)
-    types = [e.get("type") for e in events]
-    assert types == ["tool", "tool_error"]
-    assert "get_spot_orderbook failed" in (events[1].get("text") or "")
+    tool_lines = [e.get("text") or "" for e in events if e.get("type") == "tool"]
+    assert tool_lines == ["market_tape_agent → get_ticker(symbol=BTCUSDT)"]
+    err_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_error"]
+    assert len(err_lines) == 1
+    assert "get_ticker failed:" in err_lines[0]
+    assert "ERROR connect" in err_lines[0]
+    assert "✓" not in err_lines[0]
+    assert any((e.get("text") or "") == "get_ticker failed" for e in events)
+    assert not any("get_ticker ✓" in (e.get("text") or "") for e in events)
 
 
 def test_specialist_runner_keeps_original_leaf_tools():

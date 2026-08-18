@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -59,12 +60,15 @@ def _content_text(content: Any) -> str:
     if isinstance(content, list):
         parts: list[str] = []
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                parts.append(str(block.get("text", "")))
-            elif isinstance(block, str):
+            if isinstance(block, str):
                 parts.append(block)
-            else:
-                parts.append(str(block))
+            elif isinstance(block, dict):
+                btype = block.get("type")
+                if btype in {"reasoning", "tool_call", "tool_use"}:
+                    continue
+                text = block.get("text")
+                if btype == "text" or text:
+                    parts.append(str(text or ""))
         return "\n".join(p for p in parts if p)
     return str(content)
 
@@ -133,94 +137,63 @@ def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list
     return final, uniq_tools, uniq_think[:12]
 
 
-def _chunk_messages(chunk: Any) -> list[BaseMessage]:
-    """Best-effort extract of messages from a LangGraph stream chunk."""
-    if chunk is None:
-        return []
-    if isinstance(chunk, dict):
-        msgs = chunk.get("messages")
-        if isinstance(msgs, list):
-            return list(msgs)
-        out: list[BaseMessage] = []
-        for v in chunk.values():
-            if isinstance(v, dict) and isinstance(v.get("messages"), list):
-                out.extend(v["messages"])
-            elif isinstance(v, list) and v and isinstance(v[0], BaseMessage):
-                out.extend(v)
-        return out
-    if isinstance(chunk, tuple) and chunk:
-        return _chunk_messages(chunk[0])
-    return []
+def _fmt_tool_args(args: dict[str, Any]) -> str:
+    bits: list[str] = []
+    for key, value in list(args.items())[:5]:
+        text = str(value)
+        if len(text) > 60:
+            text = text[:57] + "…"
+        bits.append(f"{key}={text}")
+    return ", ".join(bits)
 
 
-def _emit_from_message(msg: BaseMessage) -> None:
-    """Push live events from streamed agent messages."""
-    if isinstance(msg, AIMessage):
-        text = _content_text(msg.content).strip()
-        tcalls = getattr(msg, "tool_calls", None) or []
-        if tcalls:
-            if text:
-                emit("thinking", text[:300])
-            for tc in tcalls:
-                name = tc.get("name") if isinstance(tc, dict) else getattr(tc, "name", "?")
-                args = tc.get("args") if isinstance(tc, dict) else getattr(tc, "args", {})
-                arg_s = ""
-                if isinstance(args, dict):
-                    bits = []
-                    for k, v in list(args.items())[:4]:
-                        vs = str(v)
-                        if len(vs) > 60:
-                            vs = vs[:57] + "…"
-                        bits.append(f"{k}={vs}")
-                    arg_s = ", ".join(bits)
-                emit("tool", f"{name}({arg_s})" if arg_s else str(name))
-                emit("status", f"Calling {name}…")
-        elif text:
-            emit("status", "Composing answer…")
-    elif isinstance(msg, ToolMessage):
-        name = getattr(msg, "name", None) or "tool"
-        preview = _content_text(msg.content).replace("\n", " ").strip()
-        if len(preview) > 100:
-            preview = preview[:97] + "…"
-        emit_tool_outcome(name, preview)
-        emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
+def _preview_output(result: object) -> str:
+    content = getattr(result, "content", result)
+    preview = _content_text(content).replace("\n", " ").strip()
+    if len(preview) > 100:
+        preview = preview[:97] + "…"
+    return preview
+
+
+def _emit_tool_call(item: Any, specialist: str | None) -> None:
+    name = str(getattr(item, "tool_name", None) or "unnamed_tool")
+    raw_args = getattr(item, "input", None) or {}
+    args = raw_args if isinstance(raw_args, dict) else {}
+    label = f"{specialist} → {name}" if specialist else name
+    emit("tool", f"{label}({_fmt_tool_args(args)})" if args else label)
+    emit("status", f"Calling {name}…")
+    # v3 is pull-based: item.output stays None until output_deltas is consumed.
+    # Our tools return one complete string, so discard chunks and just wait.
+    for _ in getattr(item, "output_deltas", ()) or ():
+        pass
+    preview = _preview_output(getattr(item, "output", None))
+    emit_tool_outcome(name, preview)
+    emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
 
 
 def run_agent_with_progress(
     graph: Any,
     messages: list[BaseMessage],
     config: RunnableConfig,
+    *,
+    specialist: str | None = None,
 ) -> list[BaseMessage]:
-    """Run a LangGraph agent, emitting thinking/tool steps as messages appear.
-
-    Prefers ``stream`` so UIs can show the process live; falls back to ``invoke``.
-    """
-    stream_fn = getattr(graph, "stream", None)
-    if callable(stream_fn):
-        for extra in ({"stream_mode": "values"}, {}):
-            try:
-                last: list[BaseMessage] = []
-                seen = 0
-                for chunk in stream_fn({"messages": messages}, config=config, **extra):
-                    msgs = _chunk_messages(chunk)
-                    if not msgs:
-                        continue
-                    last = msgs
-                    for msg in msgs[seen:]:
-                        _emit_from_message(msg)
-                    seen = len(msgs)
-                if last:
-                    return last
-            except TypeError:
-                continue
-            except Exception:  # noqa: BLE001
-                break
-    result = graph.invoke({"messages": messages}, config=config)
-    out_msgs = list((result or {}).get("messages") or [])
-    start = min(len(messages), len(out_msgs))
-    for msg in out_msgs[start:]:
-        _emit_from_message(msg)
-    return out_msgs
+    """Run a create_agent graph via stream_events v3 and emit Process events."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="The v3 streaming protocol on Pregel is experimental.",
+        )
+        stream = graph.stream_events({"messages": messages}, config, version="v3")
+        for kind, item in stream.interleave("tool_calls", "messages"):
+            if kind == "tool_calls":
+                _emit_tool_call(item, specialist)
+            elif kind == "messages":
+                text = str(getattr(item, "text", None) or "").strip()
+                if text:
+                    emit("status", "Composing answer…")
+        out = stream.output or {}
+    return list(out.get("messages") or [])
 
 
 class Orchestrator:
@@ -294,9 +267,8 @@ class Orchestrator:
             if not reply:
                 reply = empty_reply_for(user_message)
 
-            for t in tools_msg:
-                if t not in tools_acc:
-                    tools_acc.append(t)
+            if not tools_acc:
+                tools_acc.extend(tools_msg)
             for t in thinking_msg:
                 if t not in thinking_acc:
                     thinking_acc.append(t)

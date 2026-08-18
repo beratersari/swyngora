@@ -6,12 +6,9 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import wrap_tool_call
-from langchain.tools.tool_node import ToolCallRequest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import BaseTool, StructuredTool
-from langgraph.types import Command
 from pydantic import BaseModel, Field
 
 from swyngora_ai.agents.prompts import (
@@ -33,7 +30,7 @@ from swyngora_ai.constants import (
     SPECIALIST_WEB,
     SPECIALIST_X,
 )
-from swyngora_ai.progress import emit, emit_tool_outcome
+from swyngora_ai.progress import emit
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
 from swyngora_ai.tools.web_search import build_web_tools
@@ -56,51 +53,25 @@ def _last_text(result: dict[str, Any]) -> str:
     return str(content)
 
 
-def _fmt_tool_args(args: dict[str, Any]) -> str:
-    bits: list[str] = []
-    for key, value in list(args.items())[:5]:
-        text = str(value)
-        if len(text) > 60:
-            text = text[:57] + "…"
-        bits.append(f"{key}={text}")
-    return ", ".join(bits)
-
-
-def _preview_tool_result(result: object) -> str:
-    content = getattr(result, "content", result)
-    preview = str(content).replace("\n", " ").strip()
-    if len(preview) > 100:
-        preview = preview[:97] + "…"
-    return preview
-
-
-def progress_on_tools(specialist: str):
-    """create_agent middleware: emit Process events around each leaf tool call."""
-
-    @wrap_tool_call
-    def emit_progress(
-        request: ToolCallRequest,
-        handler: Callable[[ToolCallRequest], ToolMessage | Command[Any]],
-    ) -> ToolMessage | Command[Any]:
-        name = str(request.tool_call.get("name") or "unnamed_tool")
-        args = request.tool_call.get("args") or {}
-        emit("tool", f"{specialist} → {name}({_fmt_tool_args(args)})")
-        try:
-            result = handler(request)
-        except Exception as e:
-            emit("tool_error", f"{name} failed: {e}")
-            raise
-        emit_tool_outcome(name, _preview_tool_result(result))
-        return result
-
-    return emit_progress
-
-
 def _content_text_local(content: Any) -> str:
     if content is None:
         return ""
     if isinstance(content, str):
         return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") not in {
+                "reasoning",
+                "tool_call",
+                "tool_use",
+            }:
+                text = block.get("text")
+                if text:
+                    parts.append(str(text))
+        return "\n".join(p for p in parts if p)
     return str(content)
 
 
@@ -119,16 +90,12 @@ def _run_react(
     emit("thinking", f"{specialist}: {task[:200]}")
     agent = compiled
     if agent is None:
-        agent = create_agent(
-            model,
-            list(tools),
-            system_prompt=system,
-            middleware=[progress_on_tools(specialist)],
-        )
+        agent = create_agent(model, list(tools), system_prompt=system)
     msgs = run_agent_with_progress(
         agent,
         [HumanMessage(content=task)],
         {"recursion_limit": recursion_limit},
+        specialist=specialist,
     )
     reply, _nested_tools, _thinking = extract_trace(msgs)
     if not reply:
@@ -190,12 +157,7 @@ class SpecialistRunner:
             leaf = list(tools)
             self._tools[name] = leaf
             self._systems[name] = system
-            self._compiled[name] = create_agent(
-                self.model,
-                leaf,
-                system_prompt=system,
-                middleware=[progress_on_tools(name)],
-            )
+            self._compiled[name] = create_agent(self.model, leaf, system_prompt=system)
 
     def run(self, name: str, task: str) -> str:
         limit = self.settings.max_agent_iterations + 4
@@ -204,7 +166,6 @@ class SpecialistRunner:
         compiled = self._compiled.get(name)
         tools = self._tools.get(name) or []
         system = self._systems.get(name) or ""
-        emit("tool", f"{name}(task={task[:80]})")
         return _run_react(
             self.model,
             tools,
@@ -216,17 +177,13 @@ class SpecialistRunner:
         )
 
     def analyze(self, task: str) -> str:
-        emit("tool", f"{SPECIALIST_ANALYST}(synthesize)")
         emit("thinking", "Synthesizing findings…")
         msgs = [
             SystemMessage(content=ANALYST_SYSTEM),
             HumanMessage(content=task),
         ]
         resp = self.model.invoke(msgs)
-        content = resp.content
-        if isinstance(content, list):
-            return " ".join(str(c) for c in content)
-        return str(content)
+        return _content_text_local(resp.content)
 
     def as_orchestrator_tools(self) -> list[StructuredTool]:
         """Legacy subagents-as-tools surface (tests + fallback)."""

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **AI streaming:** Process/CLI progress uses LangChain `stream_events` v3 (`tool_calls` / `messages`); leaf tools emit once (no wrap + stream pair)
 - **AI tool progress:** specialist leaf tools emit Process events via LangChain `@wrap_tool_call` middleware instead of cloning each tool
 - **AI LangChain deps:** drop unused `langchain-community`; require 1.x LTS floors (`langchain>=1.0`, `langchain-core>=1.0`, `langgraph>=1.0`, `langchain-ollama>=1.0`, `langchain-xai>=1.0`)
 - **Signal trigger time:** each swing setup, scanner hit, and lab signal shows the exact UTC bar time (seconds + timezone), not a rounded local stamp
