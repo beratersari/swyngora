@@ -121,6 +121,17 @@ func (b *Backend) GetBookHistory(ctx context.Context, exchange, symbol, at, from
 	return mustJSON(got)
 }
 
+func (b *Backend) GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetIcebergs(ctx, exchange, symbol, minNotional)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
@@ -696,6 +707,7 @@ func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, r
 			"notional": w.Notional, "distancePct": w.DistancePct, "share": w.Share,
 			"behavior": w.Behavior, "ageSeconds": w.AgeSeconds, "presentForSeconds": w.PresentForSeconds,
 			"visibleSeconds": w.VisibleSeconds, "appearCount": w.AppearCount,
+			"iceberg": w.Iceberg, "icebergRefills": w.IcebergRefills, "icebergClip": w.IcebergClip,
 		})
 	}
 	return mustJSON(map[string]any{

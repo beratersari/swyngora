@@ -133,6 +133,18 @@ class OrderBookInput(BaseModel):
     )
 
 
+class IcebergsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all)",
+    )
+    min_notional: float = Field(
+        default=0,
+        description="Minimum visible clip in USD (default 25000)",
+    )
+
+
 class OrderBookHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
@@ -832,6 +844,16 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
         if group:
             params["group"] = group
         return http.get("/api/v1/market/orderbook", params)
+
+    def get_orderbook_icebergs(
+        symbol: str,
+        exchange: str = "all",
+        min_notional: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if min_notional:
+            params["minNotional"] = min_notional
+        return http.get("/api/v1/market/orderbook/icebergs", params)
 
     def get_orderbook_history(
         symbol: str,
@@ -1965,6 +1987,17 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
                 "Works on binance, coinbase, and bybit."
             ),
             args_schema=OrderBookInput,
+        ),
+        StructuredTool.from_function(
+            get_orderbook_icebergs,
+            name="get_orderbook_icebergs",
+            description=(
+                "Detect iceberg-style refill: a visible buy or sell clip is "
+                "eaten at the same price, then a similar size comes back, "
+                "repeatedly. Both sides. Clip size, refill count, executed "
+                "notional. Book pattern only, not proof of a hidden order."
+            ),
+            args_schema=IcebergsInput,
         ),
         StructuredTool.from_function(
             get_orderbook_history,

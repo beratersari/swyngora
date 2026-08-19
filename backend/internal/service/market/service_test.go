@@ -1014,6 +1014,58 @@ func TestGetWhales_IncludesLiquidation(t *testing.T) {
 	}
 }
 
+type seqBookMarket struct {
+	fakeMarket
+	books []*domain.RawOrderBook
+	i     int
+}
+
+func (s *seqBookMarket) GetOrderBook(_ context.Context, _ domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	if len(s.books) == 0 {
+		return sampleRawBook("BTCUSDT"), nil
+	}
+	b := s.books[s.i]
+	if s.i < len(s.books)-1 {
+		s.i++
+	}
+	return b, nil
+}
+
+func TestGetIcebergs_DetectsAskRefill(t *testing.T) {
+	ask := func(qty float64) *domain.RawOrderBook {
+		return &domain.RawOrderBook{
+			Symbol: "BTCUSDT",
+			Bids:   []domain.PriceLevel{{Price: 63900, Quantity: 1}},
+			Asks:   []domain.PriceLevel{{Price: 64000, Quantity: qty}, {Price: 64100, Quantity: 1}},
+			Live:   true,
+		}
+	}
+	m := &seqBookMarket{books: []*domain.RawOrderBook{
+		ask(10), ask(1), ask(10), ask(0.8), ask(10),
+	}}
+	svc := New(m, &fakeSupply{})
+	for i := 0; i < 5; i++ {
+		if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "", 20, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := svc.GetIcebergs(context.Background(), "binance", "BTCUSDT", 25_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Asks) == 0 || got.Asks[0].Refills < 2 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetIcebergs_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetIcebergs(context.Background(), "binance", "  ", 0)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestGetBookHistory_NotConfigured(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	_, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", nil, nil, nil, 0)

@@ -50,6 +50,7 @@ type DataPort interface {
 	GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error)
 	GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error)
 	CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error)
+	GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
@@ -247,6 +248,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetTicker(ctx, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_orderbook_icebergs",
+		mcp.WithDescription("Detect iceberg-style refill at the same price: a visible buy or sell clip is eaten at the touch, then a similar size comes back, repeatedly. Both bid and ask. Returns clip size, refill count, executed notional, and likely vs possible. Not proof of a hidden exchange order. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithNumber("minNotional", mcp.Description("Minimum visible clip in USD (default 25000)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetIcebergs(ctx, req.GetString("exchange", "all"), symbol, req.GetFloat("minNotional", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

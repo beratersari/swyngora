@@ -27,6 +27,9 @@ type CombinedWall struct {
 	PresentForSeconds float64
 	VisibleSeconds    float64
 	AppearCount       int
+	Iceberg           bool
+	IcebergRefills    int
+	IcebergClip       string
 }
 
 // CombinedVenueSlice is one venue's contribution inside the shared price band.

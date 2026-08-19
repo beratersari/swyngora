@@ -173,6 +173,19 @@ func (c *APIClient) CompareBookHistory(ctx context.Context, exchange, symbol, fr
 	return c.get(ctx, "/api/v1/market/orderbook/history/compare", q)
 }
 
+// GetIcebergs returns prices where visible size was eaten and then refilled.
+func (c *APIClient) GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if minNotional > 0 {
+		q.Set("minNotional", strconv.FormatFloat(minNotional, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/icebergs", q)
+}
+
 // EstimateOrderBookImpact walks live depth for a simulated market order.
 func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	q := url.Values{}

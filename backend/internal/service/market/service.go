@@ -33,6 +33,7 @@ type Service struct {
 	delist        domain.SpotDelistStore
 	delistEnabled bool
 	walls         *domain.WallMemory
+	icebergs      *domain.IcebergMemory
 	watchMu       sync.Mutex
 	wallWatch     map[string]wallWatch
 	liq           *domain.LiquidationBook
@@ -215,7 +216,7 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 			cp[k] = v
 		}
 	}
-	return &Service{markets: cp, supply: supply, walls: domain.NewWallMemory(), wallWatch: map[string]wallWatch{}}
+	return &Service{markets: cp, supply: supply, walls: domain.NewWallMemory(), icebergs: domain.NewIcebergMemory(), wallWatch: map[string]wallWatch{}}
 }
 
 // WithDelistStore attaches optional delist schedule for spot enrichment.
@@ -375,6 +376,10 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		book.Symbol = symbol
 	}
 	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
+	s.observeIcebergs(ctx, ex, book.Symbol, raw)
+	if s.icebergs != nil {
+		s.icebergs.AnnotateWalls(string(ex), book.Symbol, book.Analysis.Walls)
+	}
 	s.noteBook(ex, book.Symbol)
 	return &book, nil
 }
@@ -407,9 +412,14 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 		}
 		an := domain.AnalyzeOrderBookAt(vb.Book, mid, combined.UsedRangePct)
 		s.recordWalls(vb.Exchange, vb.Symbol, an.Walls)
+		book := vb.Book
+		s.observeIcebergs(ctx, vb.Exchange, vb.Symbol, &book)
 	}
 	if s.walls != nil {
 		s.walls.ApplyCombined(now, combined.Walls)
+	}
+	if s.icebergs != nil {
+		s.icebergs.AnnotateCombinedWalls(combined.Walls)
 	}
 	return &combined, nil
 }
@@ -964,6 +974,7 @@ func (s *Service) sampleWatchedWalls(ctx context.Context) {
 		}
 		an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
 		s.observeWalls(w.exchange, w.symbol, an.Walls)
+		s.observeIcebergs(ctx, w.exchange, w.symbol, raw)
 	}
 }
 

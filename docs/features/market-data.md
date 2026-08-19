@@ -57,6 +57,7 @@ Expose first market-data APIs so clients can:
 - `GET /api/v1/market/whales` large trades and liquidations, biggest first. See [`whales.md`](whales.md).
 - `GET /api/v1/market/orderbook/history` stored book at a time (or a list). See [`book-history.md`](book-history.md).
 - `GET /api/v1/market/orderbook/history/compare` which levels gained or lost liquidity. See [`book-history.md`](book-history.md).
+- `GET /api/v1/market/orderbook/icebergs` same-price clip eaten then refilled. See [`icebergs.md`](icebergs.md).
 - See [`order-book.md`](order-book.md).
 
 ### Spot markets — `GET /api/v1/market/spot`

@@ -170,6 +170,9 @@ type orderBookWallDTO struct {
 	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
 	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
 	AppearCount       int     `json:"appearCount,omitempty"`
+	Iceberg           bool    `json:"iceberg,omitempty"`
+	IcebergRefills    int     `json:"icebergRefills,omitempty"`
+	IcebergClip       string  `json:"icebergClip,omitempty"`
 }
 
 type orderBookBandDTO struct {
@@ -458,6 +461,9 @@ type combinedWallDTO struct {
 	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
 	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
 	AppearCount       int     `json:"appearCount,omitempty"`
+	Iceberg           bool    `json:"iceberg,omitempty"`
+	IcebergRefills    int     `json:"icebergRefills,omitempty"`
+	IcebergClip       string  `json:"icebergClip,omitempty"`
 }
 
 type combinedVenueDTO struct {
@@ -512,6 +518,7 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 			Notional: w.Notional, DistancePct: w.DistancePct, Share: w.Share,
 			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
 			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
+			Iceberg: w.Iceberg, IcebergRefills: w.IcebergRefills, IcebergClip: w.IcebergClip,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))
@@ -1047,6 +1054,7 @@ func analysisToDTO(a domain.OrderBookAnalysis) orderBookAnalysisDTO {
 			DistancePct: w.DistancePct, Share: w.Share,
 			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
 			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
+			Iceberg: w.Iceberg, IcebergRefills: w.IcebergRefills, IcebergClip: w.IcebergClip,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))

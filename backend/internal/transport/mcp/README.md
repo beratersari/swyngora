@@ -33,6 +33,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_whale_trades` | Largest recent aggressive buys/sells and liquidations, biggest first |
 | `get_orderbook_history` | Stored spot book at a time (levels, spread, liquidity, walls) |
 | `compare_orderbook_history` | Which price levels gained or lost liquidity between two times |
+| `get_orderbook_icebergs` | Same-price clip eaten then refilled (bid and ask) |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

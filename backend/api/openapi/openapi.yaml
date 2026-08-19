@@ -588,6 +588,42 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/icebergs:
+    get:
+      summary: Iceberg-style refill at the same price
+      description: |
+        Detects when visible **buy or sell** size at one price is eaten
+        (hit at the touch or confirmed by trades) and then a similar clip
+        comes back, repeatedly. This is the “10k sells, gets filled, 10k
+        appears again” pattern — not a one-shot wall. Both sides.
+        Walls on the live book also get `iceberg` / `behavior=iceberg`
+        when this pattern is seen. Informational only — not proof of a
+        hidden exchange order.
+      operationId: getOrderBookIcebergs
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: minNotional
+          in: query
+          description: Minimum visible clip in USD (default 25000)
+          schema: { type: number, default: 25000 }
+      responses:
+        '200':
+          description: Bid and ask icebergs, biggest clip first
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/combined:
     get:
       summary: Market-wide spot order book analysis
