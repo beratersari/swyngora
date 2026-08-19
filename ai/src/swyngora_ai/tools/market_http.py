@@ -933,6 +933,12 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_cvd(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/cvd",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_basis(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/basis",
@@ -2137,9 +2143,19 @@ def build_market_tools(settings: Settings | None = None) -> list[StructuredTool]
             name="get_taker_flow",
             description=(
                 "Aggressive futures buy vs sell volume (who is hitting the "
-                "book) for 5m, 1h, and 4h on Binance and Bybit, plus a "
-                "combined view and a short read with price, OI, and funding. "
-                "Not the account long/short ratio."
+                "book) for 5m, 1h, and 4h on Binance and Bybit, plus combined."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_cvd,
+            name="get_cvd",
+            description=(
+                "Cumulative Volume Delta: running sum of market-buy minus "
+                "market-sell notional over time, with price. 1h / 4h / 24h "
+                "reads say if flow confirms price, disagrees, or is absorbed "
+                "(lots of market buys, price barely moves). Binance and Bybit "
+                "separately plus combined."
             ),
             args_schema=TakerFlowInput,
         ),

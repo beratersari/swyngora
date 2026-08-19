@@ -168,12 +168,14 @@ func main() {
 	histSeeds := append([]string{}, domain.DefaultFuturesHistorySymbols...)
 	histSeeds = append(histSeeds, cfg.FuturesHistorySymbols...)
 	futuresHist := &futureshist.Service{
-		Store:   futuresStore,
-		OI:      map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		Funding: map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		LS:      map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		Logger:  logger,
-		Seeds:   histSeeds,
+		Store:      futuresStore,
+		TakerStore: futuresStore,
+		OI:         map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Funding:    map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		LS:         map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Taker:      map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Logger:     logger,
+		Seeds:      histSeeds,
 	}
 	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
 	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
@@ -205,7 +207,7 @@ func main() {
 	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
-	}).WithBasis(map[domain.Exchange]domain.BasisPort{
+	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 	}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
@@ -393,6 +395,19 @@ func main() {
 	nLiq := futureshist.RestoreBook(ctx, liqBook, futuresHist, time.Now().UTC())
 	if nLiq > 0 {
 		logger.Info("futures liquidations restored", "events", nLiq)
+	}
+	nTaker := 0
+	fromTaker := time.Now().UTC().Add(-4 * time.Hour)
+	for _, sym := range histSeeds {
+		recs, err := futuresStore.ListTakerBuckets(ctx, string(domain.ExchangeBybit), sym, fromTaker, time.Now().UTC())
+		if err != nil || len(recs) == 0 {
+			continue
+		}
+		bybitClient.TakerBook().LoadBuckets(recs)
+		nTaker += len(recs)
+	}
+	if nTaker > 0 {
+		logger.Info("bybit taker buckets restored", "bars", nTaker)
 	}
 	go liqSink.Start(ctx)
 	go bybitTrades.Start(ctx)

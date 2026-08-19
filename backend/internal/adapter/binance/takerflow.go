@@ -41,14 +41,38 @@ func (c *Client) GetTakerFlow(ctx context.Context, symbol string) (*domain.Taker
 	return got, nil
 }
 
+// GetTakerBuckets returns Binance USD-M 5m taker buy/sell bars for CVD.
+func (c *Client) GetTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	return c.fetchTakerBuckets(ctx, symbol)
+}
+
 func (c *Client) fetchTakerFlow(ctx context.Context, symbol string) (*domain.TakerVenueFlow, error) {
+	buckets, oldest, px, err := c.fetchTakerBucketsWithMeta(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	out := domain.BuildTakerVenueFlowBucket(domain.ExchangeBinance, symbol, buckets, time.Now().UTC(), oldest, 5*time.Minute)
+	out.Price = px
+	return &out, nil
+}
+
+func (c *Client) fetchTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
+	buckets, _, _, err := c.fetchTakerBucketsWithMeta(ctx, symbol)
+	return buckets, err
+}
+
+func (c *Client) fetchTakerBucketsWithMeta(ctx context.Context, symbol string) ([]domain.TakerBucket, time.Time, float64, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("period", "5m")
-	q.Set("limit", "50") // 50*5m = ~4h
+	q.Set("limit", "500") // 500*5m ≈ 41h
 	body, err := c.getFutures(ctx, "/futures/data/takerlongshortRatio", q)
 	if err != nil {
-		return nil, err
+		return nil, time.Time{}, 0, err
 	}
 	var rows []struct {
 		BuyVol    string `json:"buyVol"`
@@ -56,10 +80,9 @@ func (c *Client) fetchTakerFlow(ctx context.Context, symbol string) (*domain.Tak
 		Timestamp int64  `json:"timestamp"`
 	}
 	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, fmt.Errorf("%w: taker flow decode: %v", domain.ErrUpstream, err)
+		return nil, time.Time{}, 0, fmt.Errorf("%w: taker flow decode: %v", domain.ErrUpstream, err)
 	}
 	px := c.futuresMarkPrice(ctx, symbol)
-	now := time.Now().UTC()
 	buckets := make([]domain.TakerBucket, 0, len(rows))
 	var oldest time.Time
 	for _, r := range rows {
@@ -82,11 +105,9 @@ func (c *Client) fetchTakerFlow(ctx context.Context, symbol string) (*domain.Tak
 		}
 	}
 	if len(buckets) == 0 {
-		return nil, fmt.Errorf("%w: taker buy/sell volume", domain.ErrNotFound)
+		return nil, time.Time{}, px, fmt.Errorf("%w: taker buy/sell volume", domain.ErrNotFound)
 	}
-	out := domain.BuildTakerVenueFlowBucket(domain.ExchangeBinance, symbol, buckets, now, oldest, 5*time.Minute)
-	out.Price = px
-	return &out, nil
+	return buckets, oldest, px, nil
 }
 
 func (c *Client) futuresMarkPrice(ctx context.Context, symbol string) float64 {

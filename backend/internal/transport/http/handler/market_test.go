@@ -345,6 +345,33 @@ func TestGetSnapshot_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetCVD_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cvdResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetCVD_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetIcebergs_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", nil)

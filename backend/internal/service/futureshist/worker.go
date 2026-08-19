@@ -79,6 +79,13 @@ func (w *Worker) RunOnce(ctx context.Context) {
 			w.Logger.Info("futures history purge", "snapshots", n1, "liquidations", n2)
 		}
 	}
+	if w.Retain > 0 && w.Hist != nil && w.Hist.TakerStore != nil {
+		if n, err := w.Hist.TakerStore.PurgeTakerBuckets(ctx, now.Add(-w.Retain)); err != nil {
+			w.Logger.Error("taker bucket purge", "err", err)
+		} else if n > 0 {
+			w.Logger.Info("taker bucket purge", "buckets", n)
+		}
+	}
 	if inserted > 0 || failed > 0 {
 		w.Logger.Info("futures history tick", "inserted", inserted, "venue_errors", failed, "symbols", len(w.Hist.Symbols()))
 	}

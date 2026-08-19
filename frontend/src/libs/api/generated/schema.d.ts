@@ -588,6 +588,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/cvd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cumulative volume delta versus price
+         * @description Running buy−sell notional with price, per venue + combined.
+         */
+        get: operations["getMarketCVD"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/basis": {
         parameters: {
             query?: never;
@@ -4638,6 +4658,39 @@ export interface operations {
                         summary?: string;
                         important?: boolean;
                         diffs?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketCVD: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined CVD vs price */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        summary?: string;
                         note?: string;
                     };
                 };

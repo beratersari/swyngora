@@ -1189,6 +1189,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/cvd:
+    get:
+      summary: Cumulative volume delta versus price
+      description: |
+        **CVD** is the running sum of aggressive futures **market-buy**
+        notional minus **market-sell** notional. Each 5-minute point includes
+        price so you can see when price is flat but buyers are hitting, or
+        price rises while sells are stronger. **1h / 4h / 24h** reads label
+        `confirms`, `opposite`, or `absorption`. `exchange=all` (default)
+        returns Binance and Bybit separately plus a combined series (deltas
+        added, never averaged). Informational only.
+      operationId: getMarketCVD
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined CVD vs price
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/venue-divergence:
     get:
       summary: Binance vs Bybit signal split

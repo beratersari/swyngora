@@ -13,12 +13,14 @@ const snapshotBucket = 5 * time.Minute
 
 // Service writes and reads durable futures history.
 type Service struct {
-	Store   domain.FuturesHistoryStore
-	OI      map[domain.Exchange]domain.OpenInterestPort
-	Funding map[domain.Exchange]domain.FundingRatePort
-	LS      map[domain.Exchange]domain.LongShortRatioPort
-	Logger  *slog.Logger
-	Seeds   []string
+	Store      domain.FuturesHistoryStore
+	TakerStore domain.TakerBucketStore
+	OI         map[domain.Exchange]domain.OpenInterestPort
+	Funding    map[domain.Exchange]domain.FundingRatePort
+	LS         map[domain.Exchange]domain.LongShortRatioPort
+	Taker      map[domain.Exchange]domain.TakerBucketPort
+	Logger     *slog.Logger
+	Seeds      []string
 
 	mu   sync.Mutex
 	seen map[string]time.Time
@@ -108,6 +110,15 @@ func (s *Service) SaveSymbol(ctx context.Context, exchange domain.Exchange, symb
 			err = e
 		} else if ser != nil {
 			n += s.saveFunding(ctx, exchange, symbol, ser, now)
+		}
+	}
+	if p := s.Taker[exchange]; p != nil && s.TakerStore != nil {
+		if b, e := p.GetTakerBuckets(ctx, symbol); e != nil {
+			err = e
+		} else if len(b) > 0 {
+			if _, e := s.TakerStore.UpsertTakerBuckets(ctx, b); e == nil {
+				n++
+			}
 		}
 	}
 	if p := s.LS[exchange]; p != nil {

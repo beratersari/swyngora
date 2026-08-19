@@ -60,6 +60,35 @@ func TestInsertSnapshot_VenuesIndependent(t *testing.T) {
 	}
 }
 
+func TestTakerBuckets_UpsertListPurge(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	n, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: t0, BuyNotional: 10, SellNotional: 2},
+	})
+	if err != nil || n != 1 {
+		t.Fatalf("%d %v", n, err)
+	}
+	_, err = s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: t0, BuyNotional: 12, SellNotional: 3},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListTakerBuckets(context.Background(), "binance", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(got) != 1 || got[0].BuyNotional != 12 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	purged, err := s.PurgeTakerBuckets(context.Background(), t0.Add(time.Second))
+	if err != nil || purged != 1 {
+		t.Fatalf("purge %d %v", purged, err)
+	}
+}
+
 func TestInsertLiquidation_NoDuplicatesAndPurge(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
 	if err != nil {

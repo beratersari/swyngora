@@ -105,7 +105,37 @@ CREATE INDEX IF NOT EXISTS idx_futures_liq_lookup
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("futures schema: %w", err)
 	}
-	return sqliteutil.SetUserVersion(s.db, 1)
+	v, err := sqliteutil.UserVersion(s.db)
+	if err != nil {
+		return err
+	}
+	if v < 1 {
+		if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+			return err
+		}
+		v = 1
+	}
+	if v < 2 {
+		const taker = `
+CREATE TABLE IF NOT EXISTS taker_buckets (
+	exchange      TEXT NOT NULL,
+	symbol        TEXT NOT NULL,
+	start_ms      INTEGER NOT NULL,
+	buy_notional  REAL NOT NULL DEFAULT 0,
+	sell_notional REAL NOT NULL DEFAULT 0,
+	PRIMARY KEY (exchange, symbol, start_ms)
+);
+CREATE INDEX IF NOT EXISTS idx_taker_buckets_lookup
+	ON taker_buckets(exchange, symbol, start_ms);
+`
+		if _, err := s.db.Exec(taker); err != nil {
+			return fmt.Errorf("taker bucket schema: %w", err)
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // InsertSnapshot stores one sample. Duplicate keys are ignored.
@@ -331,4 +361,103 @@ func (s *SQLite) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, int
 	n1, _ := r1.RowsAffected()
 	n2, _ := r2.RowsAffected()
 	return int(n1), int(n2), nil
+}
+
+// UpsertTakerBuckets inserts or replaces buy/sell bars.
+func (s *SQLite) UpsertTakerBuckets(ctx context.Context, recs []domain.TakerBucket) (int, error) {
+	if s == nil || s.db == nil || len(recs) == 0 {
+		return 0, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	stmt, err := tx.PrepareContext(ctx, `
+INSERT INTO taker_buckets (exchange, symbol, start_ms, buy_notional, sell_notional)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(exchange, symbol, start_ms) DO UPDATE SET
+	buy_notional = excluded.buy_notional,
+	sell_notional = excluded.sell_notional`)
+	if err != nil {
+		_ = tx.Rollback()
+		return 0, err
+	}
+	defer stmt.Close()
+	n := 0
+	for _, rec := range recs {
+		rec.Symbol = domain.NormalizeLiquidationSymbol(rec.Symbol)
+		if rec.Symbol == "" || rec.Exchange == "" || rec.Start.IsZero() {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, string(rec.Exchange), rec.Symbol, rec.Start.UTC().UnixMilli(), rec.BuyNotional, rec.SellNotional); err != nil {
+			_ = tx.Rollback()
+			return n, err
+		}
+		n++
+	}
+	if err := tx.Commit(); err != nil {
+		return n, err
+	}
+	return n, nil
+}
+
+// ListTakerBuckets returns bars oldest first.
+func (s *SQLite) ListTakerBuckets(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.TakerBucket, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("futures store is nil")
+	}
+	ex := domain.ParseExchange(exchange)
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if symbol == "" || ex == "" {
+		return nil, fmt.Errorf("%w: exchange and symbol are required", domain.ErrInvalidArgument)
+	}
+	args := []any{string(ex), symbol}
+	q := `SELECT exchange, symbol, start_ms, buy_notional, sell_notional
+		FROM taker_buckets WHERE exchange = ? AND symbol = ?`
+	if !from.IsZero() {
+		q += ` AND start_ms >= ?`
+		args = append(args, from.UTC().UnixMilli())
+	}
+	if !to.IsZero() {
+		q += ` AND start_ms <= ?`
+		args = append(args, to.UTC().UnixMilli())
+	}
+	q += ` ORDER BY start_ms ASC`
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.TakerBucket
+	for rows.Next() {
+		var rec domain.TakerBucket
+		var exs string
+		var ms int64
+		if err := rows.Scan(&exs, &rec.Symbol, &ms, &rec.BuyNotional, &rec.SellNotional); err != nil {
+			return nil, err
+		}
+		rec.Exchange = domain.Exchange(exs)
+		rec.Start = time.UnixMilli(ms).UTC()
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
+// PurgeTakerBuckets deletes bars older than cutoff.
+func (s *SQLite) PurgeTakerBuckets(ctx context.Context, cutoff time.Time) (int, error) {
+	if s == nil || s.db == nil || cutoff.IsZero() {
+		return 0, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `DELETE FROM taker_buckets WHERE start_ms < ?`, cutoff.UTC().UnixMilli())
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }

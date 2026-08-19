@@ -120,6 +120,22 @@ func (b *TakerBook) Snapshot(ex Exchange, symbol string) TakerVenueFlow {
 	return BuildTakerVenueFlow(ex, symbol, buckets, now, b.started[k])
 }
 
+// Buckets returns a copy of stored 1-minute bars for one venue+symbol.
+func (b *TakerBook) Buckets(ex Exchange, symbol string) []TakerBucket {
+	symbol = NormalizeLiquidationSymbol(symbol)
+	if b == nil || symbol == "" {
+		return nil
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	m := b.byKey[takerKey(ex, symbol)]
+	out := make([]TakerBucket, 0, len(m))
+	for _, rec := range m {
+		out = append(out, rec)
+	}
+	return out
+}
+
 // StartedAt is when we first saw flow for this pair (zero if never).
 func (b *TakerBook) StartedAt(ex Exchange, symbol string) time.Time {
 	if b == nil {

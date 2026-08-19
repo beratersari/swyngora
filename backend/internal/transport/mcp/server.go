@@ -41,6 +41,7 @@ type DataPort interface {
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
@@ -532,6 +533,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetTakerFlow(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_cvd",
+		mcp.WithDescription("Cumulative Volume Delta: running sum of aggressive market-buy minus market-sell notional over time, plotted with price. 1h / 4h / 24h reads say if flow confirms price, disagrees (price up but more selling), or is absorbed (lots of market buys, price barely moves). Binance and Bybit separately plus combined. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

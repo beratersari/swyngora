@@ -24,6 +24,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |
 | `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
+| `get_cvd` | Cumulative buy−sell (CVD) versus price, 1h/4h/24h, per venue + combined |
 | `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |

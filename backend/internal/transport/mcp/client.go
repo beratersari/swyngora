@@ -298,6 +298,16 @@ func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (
 	return c.get(ctx, "/api/v1/market/taker-flow", q)
 }
 
+// GetCVD returns cumulative taker buy−sell versus price.
+func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/cvd", q)
+}
+
 // GetBasis returns futures-vs-spot premium/discount per venue.
 func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

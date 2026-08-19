@@ -1192,8 +1192,9 @@ func TestGetBreadth_CountsAndCarrying(t *testing.T) {
 }
 
 type fakeTaker struct {
-	flow *domain.TakerVenueFlow
-	err  error
+	flow    *domain.TakerVenueFlow
+	buckets []domain.TakerBucket
+	err     error
 }
 
 func (f *fakeTaker) GetTakerFlow(_ context.Context, symbol string) (*domain.TakerVenueFlow, error) {
@@ -1203,6 +1204,53 @@ func (f *fakeTaker) GetTakerFlow(_ context.Context, symbol string) (*domain.Take
 	cp := *f.flow
 	cp.Symbol = symbol
 	return &cp, nil
+}
+
+func (f *fakeTaker) GetTakerBuckets(_ context.Context, symbol string) ([]domain.TakerBucket, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return append([]domain.TakerBucket(nil), f.buckets...), nil
+}
+
+func TestGetCVD_PerVenueAndCombined(t *testing.T) {
+	t0 := time.Now().UTC().Add(-55 * time.Minute).Truncate(5 * time.Minute)
+	var bn, by []domain.TakerBucket
+	var candles []domain.Candle
+	for i := 0; i < 12; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		bn = append(bn, domain.TakerBucket{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: at, BuyNotional: 100, SellNotional: 20})
+		by = append(by, domain.TakerBucket{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Start: at, BuyNotional: 10, SellNotional: 40})
+		candles = append(candles, domain.Candle{OpenTime: at, Close: "64000"})
+	}
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{},
+		by:         map[string]map[domain.CandleInterval][]domain.Candle{"BTCUSDT": {"5m": candles}},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: m, domain.ExchangeBybit: m,
+	}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: &fakeTaker{buckets: bn, flow: &domain.TakerVenueFlow{}},
+		domain.ExchangeBybit:   &fakeTaker{buckets: by, flow: &domain.TakerVenueFlow{}},
+	})
+	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil || len(got.Combined.Points) == 0 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Summary == "" {
+		t.Fatal("summary")
+	}
+}
+
+func TestGetCVD_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetCVD(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
 }
 
 func TestGetTakerFlow_PerVenueAndCombined(t *testing.T) {

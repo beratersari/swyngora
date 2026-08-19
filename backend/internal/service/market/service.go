@@ -42,6 +42,7 @@ type Service struct {
 	funding       map[domain.Exchange]domain.FundingRatePort
 	longShort     map[domain.Exchange]domain.LongShortRatioPort
 	taker         map[domain.Exchange]domain.TakerFlowPort
+	takerStore    domain.TakerBucketStore
 	basis         map[domain.Exchange]domain.BasisPort
 	windows       map[domain.Exchange]domain.WindowChangePort
 	onFuturesSym  func(string)

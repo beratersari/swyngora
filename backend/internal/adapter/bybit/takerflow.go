@@ -44,6 +44,22 @@ func (c *Client) GetTakerFlow(ctx context.Context, symbol string) (*domain.Taker
 	return &out, nil
 }
 
+// GetTakerBuckets returns collected Bybit 1-minute taker bars (seeded from recent trades).
+func (c *Client) GetTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil || c.taker == nil {
+		return nil, fmt.Errorf("%w: bybit taker book", domain.ErrUpstream)
+	}
+	if c.takerWatch != nil {
+		c.takerWatch(symbol)
+	}
+	_ = c.seedRecentTrades(ctx, symbol)
+	return c.taker.Buckets(domain.ExchangeBybit, symbol), nil
+}
+
 func (c *Client) seedRecentTrades(ctx context.Context, symbol string) error {
 	q := url.Values{}
 	q.Set("category", "linear")
