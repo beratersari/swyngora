@@ -343,6 +343,81 @@ func TestBuildCVDSeries_DivergenceDurationAndMove(t *testing.T) {
 	}
 }
 
+func TestCurrentCVDDivergenceRun_DoesNotBridgeGap(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 10, 0, 0, 0, time.UTC)
+	var buckets []TakerBucket
+	var prices []CVDPrice
+	// Episode 1: price up, CVD down
+	for i := 0; i < 3; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		buckets = append(buckets, TakerBucket{Start: at, SellNotional: 50})
+		prices = append(prices, CVDPrice{Time: at, Close: 100 + float64(i)})
+	}
+	// Quiet gap (price and CVD flat-ish: tiny price move, zero delta)
+	for i := 3; i < 8; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		buckets = append(buckets, TakerBucket{Start: at, BuyNotional: 1, SellNotional: 1})
+		prices = append(prices, CVDPrice{Time: at, Close: 102})
+	}
+	// Episode 2: same kind again
+	for i := 8; i < 11; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		buckets = append(buckets, TakerBucket{Start: at, SellNotional: 50})
+		prices = append(prices, CVDPrice{Time: at, Close: 102 + float64(i-7)})
+	}
+	got := BuildCVDSeries(ExchangeBinance, "BTCUSDT", buckets, prices, t0.Add(55*time.Minute), t0)
+	d := got.Divergence
+	if d.Kind != CVDDivPriceUpCVDDown {
+		t.Fatalf("kind %s", d.Kind)
+	}
+	if d.DurationSeconds > 20*60 {
+		t.Fatalf("bridged the gap: duration %d %s since %s last %s", d.DurationSeconds, d.Duration, d.Since, d.LastAt)
+	}
+	if d.Since.Before(t0.Add(35 * time.Minute)) {
+		t.Fatalf("run started too early %s", d.Since)
+	}
+}
+
+func TestTakerBucketsFromCandles(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	got := TakerBucketsFromCandles(ExchangeBinance, "BTCUSDT", []Candle{
+		{OpenTime: t0, QuoteVolume: "200", TakerBuyQuote: "150"},
+		{OpenTime: t0.Add(5 * time.Minute), QuoteVolume: "100", TakerBuyQuote: "20"},
+	})
+	if len(got) != 2 || got[0].BuyNotional != 150 || got[0].SellNotional != 50 {
+		t.Fatalf("%+v", got)
+	}
+	if got[1].BuyNotional != 20 || got[1].SellNotional != 80 {
+		t.Fatalf("bar1 %+v", got[1])
+	}
+}
+
+func TestCompareSpotFutures_Opposite(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	now := t0.Add(20 * time.Minute)
+	var spotB, futB []TakerBucket
+	var prices []CVDPrice
+	for i := 0; i < 4; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		spotB = append(spotB, TakerBucket{Start: at, BuyNotional: 100})
+		futB = append(futB, TakerBucket{Start: at, SellNotional: 80})
+		prices = append(prices, CVDPrice{Time: at, Close: 100})
+	}
+	spot := BuildCVDSeries(ExchangeBinance, "BTCUSDT", spotB, prices, now, t0)
+	spot.Market = CVDMarketSpot
+	fut := BuildCVDSeries(ExchangeBinance, "BTCUSDT", futB, prices, now, t0)
+	got := CompareSpotFutures(&spot, &fut)
+	if got == nil || got.Alignment != AlignOpposite {
+		t.Fatalf("%+v", got)
+	}
+	if got.Spot != CVDDirUp || got.Futures != CVDDirDown {
+		t.Fatalf("dirs %+v", got)
+	}
+	if !strings.Contains(got.Summary, "Spot CVD") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
 func TestResampleTakerBuckets_1mTo5m(t *testing.T) {
 	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
 	in := []TakerBucket{

@@ -1360,7 +1360,7 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 		at := t0.Add(time.Duration(i) * 5 * time.Minute)
 		bn = append(bn, domain.TakerBucket{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: at, BuyNotional: 100, SellNotional: 20})
 		by = append(by, domain.TakerBucket{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Start: at, BuyNotional: 10, SellNotional: 40})
-		candles = append(candles, domain.Candle{OpenTime: at, Close: "64000"})
+		candles = append(candles, domain.Candle{OpenTime: at, Close: "64000", QuoteVolume: "200", TakerBuyQuote: "150"})
 	}
 	m := &intervalSeriesMarket{
 		fakeMarket: fakeMarket{},
@@ -1387,6 +1387,12 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 	}
 	if len(got.Combined.Contributions) != 2 {
 		t.Fatalf("contributions %+v", got.Combined.Contributions)
+	}
+	if len(got.SpotVenues) == 0 {
+		t.Fatal("spot venues")
+	}
+	if got.SpotFutures == nil {
+		t.Fatal("spot vs futures")
 	}
 }
 

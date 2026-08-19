@@ -45,6 +45,9 @@ func TestGetCandles_OK(t *testing.T) {
 	if candles[0].Open != "100" || candles[0].Close != "105" || candles[0].TradeCount != 42 {
 		t.Fatalf("candle=%+v", candles[0])
 	}
+	if candles[0].TakerBuyQuote != "0" {
+		t.Fatalf("takerBuyQuote=%s", candles[0].TakerBuyQuote)
+	}
 }
 
 func TestGetCandles_InvalidInterval(t *testing.T) {

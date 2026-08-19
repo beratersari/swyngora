@@ -34,6 +34,14 @@ Useful when:
 - Combined points and `contributions` show how much **Binance** and
   **Bybit** each added. `venueSplit` flags when one venue’s CVD rose
   while the other fell (`alignment=opposite`)
+- **Spot vs futures:** `venues` / `combined` are **futures**; `spotVenues`
+  / `spotCombined` are **spot**. `spotFutures` flags when spot CVD and
+  futures CVD go different ways (spot buying while perps sell, or the
+  reverse) on 15m / 1h / 4h / 24h. Spot Binance uses 5m kline taker-buy
+  volume (~24h immediately); Bybit spot uses live trades (fills in over
+  time). Works for BTC and any other USDT pair.
+- A divergence **run** is only consecutive 5m bars of the same kind. If
+  it stops and the same split appears later, that is a new episode.
 
 Binance uses the public 5m taker series (~24h+ immediately). Bybit uses
 live trades; 24h `complete` after this process has been collecting. Bars

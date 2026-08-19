@@ -1264,7 +1264,9 @@ paths:
         series. Combined uses the overlapping **time range** (a missing
         5m slot is 0) and is `complete` when both venues are. Combined
         `venueSplit` flags Binance CVD up / Bybit down (or the reverse).
-        Informational only.
+        `venues` / `combined` are futures; `spotVenues` / `spotCombined`
+        are spot. `spotFutures` flags when spot CVD and futures CVD
+        disagree. Informational only.
       operationId: getMarketCVD
       tags: [Market]
       parameters:

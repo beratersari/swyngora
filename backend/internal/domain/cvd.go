@@ -28,6 +28,9 @@ const (
 	CVDDirDown = "down"
 	CVDDirFlat = "flat"
 
+	CVDMarketSpot    = "spot"
+	CVDMarketFutures = "futures"
+
 	CVDBar             = 5 * time.Minute
 	DefaultCVDLookback = 24 * time.Hour
 	cvdPriceFlatPct    = 0.20
@@ -113,10 +116,24 @@ type CVDWindowStat struct {
 	VenueSplit     *CVDVenueSplit
 }
 
+// CVDSpotFutures is when spot CVD and futures CVD move the same or opposite ways.
+type CVDSpotFutures struct {
+	Alignment     string // same | opposite | mixed
+	Spot          string // up | down | flat
+	Futures       string
+	SpotChange    float64
+	FuturesChange float64
+	Window        string
+	Title         string
+	Summary       string
+	Windows       []CVDSpotFutures
+}
+
 // CVDVenueSeries is one venue's CVD path plus window reads.
 type CVDVenueSeries struct {
 	Exchange       Exchange
 	Symbol         string
+	Market         string // spot | futures
 	Points         []CVDPoint
 	Windows        []CVDWindowStat
 	LastCVD        float64
@@ -133,18 +150,26 @@ type CVDVenueSeries struct {
 
 // CVDReport is the API result.
 type CVDReport struct {
-	Symbol   string
-	Exchange string
-	AsOf     time.Time
-	Venues   []CVDVenueSeries
-	Combined *CVDVenueSeries
-	Summary  string
-	Note     string
+	Symbol        string
+	Exchange      string
+	AsOf          time.Time
+	Venues        []CVDVenueSeries // futures
+	Combined      *CVDVenueSeries  // futures combined
+	SpotVenues    []CVDVenueSeries
+	SpotCombined  *CVDVenueSeries
+	SpotFutures   *CVDSpotFutures
+	Summary       string
+	Note          string
 }
 
 // TakerBucketPort loads raw buy/sell bars for CVD.
 type TakerBucketPort interface {
 	GetTakerBuckets(ctx context.Context, symbol string) ([]TakerBucket, error)
+}
+
+// SpotTakerBucketPort loads spot aggressive buy/sell bars (Bybit recent trades).
+type SpotTakerBucketPort interface {
+	GetSpotTakerBuckets(ctx context.Context, symbol string) ([]TakerBucket, error)
 }
 
 // TakerBucketStore persists taker minutes/bars so Bybit CVD can grow past the live book.
@@ -220,7 +245,7 @@ func BuildCVDSeries(ex Exchange, symbol string, buckets []TakerBucket, prices []
 	now = now.UTC()
 	cut := now.Add(-DefaultCVDLookback)
 	bars := ResampleTakerBuckets(buckets, CVDBar)
-	out := CVDVenueSeries{Exchange: ex, Symbol: symbol, Points: []CVDPoint{}, Windows: []CVDWindowStat{}}
+	out := CVDVenueSeries{Exchange: ex, Symbol: symbol, Market: CVDMarketFutures, Points: []CVDPoint{}, Windows: []CVDWindowStat{}}
 	var cvd float64
 	for _, b := range bars {
 		if b.Start.Before(cut) {
@@ -259,7 +284,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	symbol = NormalizeLiquidationSymbol(symbol)
 	now = now.UTC()
 	out := &CVDVenueSeries{
-		Exchange: "all", Symbol: symbol,
+		Exchange: "all", Symbol: symbol, Market: CVDMarketFutures,
 		Points: []CVDPoint{}, Windows: []CVDWindowStat{},
 	}
 	var usable []CVDVenueSeries
@@ -277,6 +302,9 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	sort.Slice(usable, func(i, j int) bool {
 		return string(usable[i].Exchange) < string(usable[j].Exchange)
 	})
+	if usable[0].Market != "" {
+		out.Market = usable[0].Market
+	}
 
 	from, to, ok := overlapCVDRange(usable)
 	if !ok {
@@ -436,13 +464,28 @@ func ExplainCVDVenue(v CVDVenueSeries) string {
 
 // ExplainCVDReport picks a combined or first-venue line.
 func ExplainCVDReport(r CVDReport) string {
+	head := ""
 	if r.Combined != nil && r.Combined.Summary != "" {
-		return "Combined " + r.Combined.Summary
-	}
-	for _, v := range r.Venues {
-		if v.Summary != "" && v.Error == "" {
-			return string(v.Exchange) + ": " + v.Summary
+		head = "Futures " + r.Combined.Summary
+	} else {
+		for _, v := range r.Venues {
+			if v.Summary != "" && v.Error == "" {
+				head = "Futures " + string(v.Exchange) + ": " + v.Summary
+				break
+			}
 		}
+	}
+	if r.SpotFutures != nil && r.SpotFutures.Alignment == AlignOpposite && r.SpotFutures.Summary != "" {
+		if head != "" {
+			return head + " " + r.SpotFutures.Summary
+		}
+		return r.SpotFutures.Summary
+	}
+	if r.SpotCombined != nil && r.SpotCombined.Summary != "" && head != "" {
+		return head + " Spot " + r.SpotCombined.Summary
+	}
+	if head != "" {
+		return head
 	}
 	return "No CVD yet."
 }
@@ -766,16 +809,12 @@ func currentCVDDivergenceRun(points []CVDPoint) (kind string, start, end int) {
 		return "", -1, -1
 	}
 	start = end
+	// A quiet bar ends the run. The same kind later is a new episode.
 	for i := end - 1; i >= 0; i-- {
-		d := points[i].Divergence
-		if d == kind {
-			start = i
-			continue
+		if points[i].Divergence != kind {
+			break
 		}
-		if d == "" {
-			continue // quiet bar inside the same run
-		}
-		break
+		start = i
 	}
 	return kind, start, end
 }
@@ -923,4 +962,98 @@ func signFloat(v float64) int {
 
 func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
+}
+
+// TakerBucketsFromCandles turns spot klines with taker-buy quote volume into CVD bars.
+// buy = takerBuyQuote; sell = quoteVolume − takerBuyQuote.
+func TakerBucketsFromCandles(ex Exchange, symbol string, candles []Candle) []TakerBucket {
+	symbol = NormalizeLiquidationSymbol(symbol)
+	out := make([]TakerBucket, 0, len(candles))
+	for _, c := range candles {
+		if c.OpenTime.IsZero() {
+			continue
+		}
+		quote, err1 := parseFloat(c.QuoteVolume)
+		buy, err2 := parseFloat(c.TakerBuyQuote)
+		if err1 != nil || err2 != nil || quote <= 0 || buy < 0 {
+			continue
+		}
+		if buy > quote {
+			buy = quote
+		}
+		out = append(out, TakerBucket{
+			Exchange: ex, Symbol: symbol, Start: c.OpenTime.UTC(),
+			BuyNotional: buy, SellNotional: quote - buy,
+		})
+	}
+	return out
+}
+
+// SpotStoreExchange is the durable taker-bucket key for spot (avoids colliding with futures).
+func SpotStoreExchange(ex Exchange) string {
+	return string(ex) + "-spot"
+}
+
+// CompareSpotFutures says whether spot and futures CVD moved the same way.
+func CompareSpotFutures(spot, fut *CVDVenueSeries) *CVDSpotFutures {
+	if spot == nil || fut == nil || len(spot.Windows) == 0 || len(fut.Windows) == 0 {
+		return nil
+	}
+	byWin := map[string]CVDWindowStat{}
+	for _, w := range fut.Windows {
+		byWin[w.Window] = w
+	}
+	out := &CVDSpotFutures{Windows: make([]CVDSpotFutures, 0, len(spot.Windows))}
+	var primary *CVDSpotFutures
+	for _, sw := range spot.Windows {
+		fw, ok := byWin[sw.Window]
+		if !ok {
+			continue
+		}
+		row := spotFuturesWindow(sw, fw)
+		out.Windows = append(out.Windows, row)
+		if primary == nil || (primary.Alignment != AlignOpposite && row.Alignment == AlignOpposite) {
+			cp := row
+			primary = &cp
+		}
+	}
+	if primary == nil {
+		return nil
+	}
+	out.Alignment = primary.Alignment
+	out.Spot = primary.Spot
+	out.Futures = primary.Futures
+	out.SpotChange = primary.SpotChange
+	out.FuturesChange = primary.FuturesChange
+	out.Window = primary.Window
+	out.Title = primary.Title
+	out.Summary = primary.Summary
+	return out
+}
+
+func spotFuturesWindow(spot, fut CVDWindowStat) CVDSpotFutures {
+	row := CVDSpotFutures{
+		Spot:          cvdDir(spot.CVDChange),
+		Futures:       cvdDir(fut.CVDChange),
+		SpotChange:    spot.CVDChange,
+		FuturesChange: fut.CVDChange,
+		Window:        spot.Window,
+	}
+	switch {
+	case row.Spot == CVDDirFlat || row.Futures == CVDDirFlat:
+		row.Alignment = AlignMixed
+		row.Title = "spot vs futures mixed"
+		row.Summary = fmt.Sprintf("Spot CVD %s (%s) over %s, futures %s (%s).",
+			row.Spot, FormatSignedQty(row.SpotChange), row.Window, row.Futures, FormatSignedQty(row.FuturesChange))
+	case row.Spot == row.Futures:
+		row.Alignment = AlignSame
+		row.Title = "spot and futures agree"
+		row.Summary = fmt.Sprintf("Spot and futures CVD both %s over %s.", row.Spot, row.Window)
+	default:
+		row.Alignment = AlignOpposite
+		row.Title = "spot vs futures split"
+		row.Summary = fmt.Sprintf("Spot CVD %s (%s) while futures %s (%s) over %s.",
+			row.Spot, FormatSignedQty(row.SpotChange), row.Futures, FormatSignedQty(row.FuturesChange), row.Window)
+	}
+	return row
 }

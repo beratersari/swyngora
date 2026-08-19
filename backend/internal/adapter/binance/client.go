@@ -826,16 +826,23 @@ func parseKline(row []json.RawMessage) (domain.Candle, error) {
 	if err != nil {
 		return domain.Candle{}, err
 	}
+	takerBuy := ""
+	if len(row) > 10 {
+		if s, e := unmarshalString(row[10]); e == nil {
+			takerBuy = s
+		}
+	}
 	return domain.Candle{
-		OpenTime:    time.UnixMilli(openTime),
-		Open:        open,
-		High:        high,
-		Low:         low,
-		Close:       closePx,
-		Volume:      vol,
-		CloseTime:   time.UnixMilli(closeTime),
-		QuoteVolume: quoteVol,
-		TradeCount:  trades,
+		OpenTime:      time.UnixMilli(openTime),
+		Open:          open,
+		High:          high,
+		Low:           low,
+		Close:         closePx,
+		Volume:        vol,
+		CloseTime:     time.UnixMilli(closeTime),
+		QuoteVolume:   quoteVol,
+		TradeCount:    trades,
+		TakerBuyQuote: takerBuy,
 	}, nil
 }
 

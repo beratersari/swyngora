@@ -79,9 +79,22 @@ type cvdWindowDTO struct {
 	VenueSplit     *cvdVenueSplitDTO `json:"venueSplit,omitempty"`
 }
 
+type cvdSpotFuturesDTO struct {
+	Alignment     string              `json:"alignment"`
+	Spot          string              `json:"spot"`
+	Futures       string              `json:"futures"`
+	SpotChange    string              `json:"spotChange"`
+	FuturesChange string              `json:"futuresChange"`
+	Window        string              `json:"window"`
+	Title         string              `json:"title,omitempty"`
+	Summary       string              `json:"summary,omitempty"`
+	Windows       []cvdSpotFuturesDTO `json:"windows,omitempty"`
+}
+
 type cvdVenueDTO struct {
 	Exchange      string             `json:"exchange"`
 	Symbol        string             `json:"symbol"`
+	Market        string             `json:"market,omitempty"`
 	Points        []cvdPointDTO      `json:"points"`
 	Windows       []cvdWindowDTO     `json:"windows"`
 	LastCVD       string             `json:"lastCvd"`
@@ -97,13 +110,16 @@ type cvdVenueDTO struct {
 }
 
 type cvdResponse struct {
-	Symbol   string        `json:"symbol"`
-	Exchange string        `json:"exchange"`
-	AsOf     time.Time     `json:"asOf"`
-	Venues   []cvdVenueDTO `json:"venues"`
-	Combined *cvdVenueDTO  `json:"combined,omitempty"`
-	Summary  string        `json:"summary"`
-	Note     string        `json:"note"`
+	Symbol       string              `json:"symbol"`
+	Exchange     string              `json:"exchange"`
+	AsOf         time.Time           `json:"asOf"`
+	Venues       []cvdVenueDTO       `json:"venues"`
+	Combined     *cvdVenueDTO        `json:"combined,omitempty"`
+	SpotVenues   []cvdVenueDTO       `json:"spotVenues,omitempty"`
+	SpotCombined *cvdVenueDTO        `json:"spotCombined,omitempty"`
+	SpotFutures  *cvdSpotFuturesDTO  `json:"spotFutures,omitempty"`
+	Summary      string              `json:"summary"`
+	Note         string              `json:"note"`
 }
 
 func cvdToDTO(a *domain.CVDReport) cvdResponse {
@@ -122,6 +138,18 @@ func cvdToDTO(a *domain.CVDReport) cvdResponse {
 		c := cvdVenueToDTO(*a.Combined)
 		out.Combined = &c
 	}
+	if len(a.SpotVenues) > 0 {
+		sv := make([]cvdVenueDTO, 0, len(a.SpotVenues))
+		for _, v := range a.SpotVenues {
+			sv = append(sv, cvdVenueToDTO(v))
+		}
+		out.SpotVenues = sv
+	}
+	if a.SpotCombined != nil {
+		c := cvdVenueToDTO(*a.SpotCombined)
+		out.SpotCombined = &c
+	}
+	out.SpotFutures = cvdSpotFuturesToDTO(a.SpotFutures)
 	return out
 }
 
@@ -165,7 +193,7 @@ func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 		div.Since = v.Divergence.Since.UTC()
 	}
 	out := cvdVenueDTO{
-		Exchange: string(v.Exchange), Symbol: v.Symbol, Points: pts, Windows: wins,
+		Exchange: string(v.Exchange), Symbol: v.Symbol, Market: v.Market, Points: pts, Windows: wins,
 		LastCVD: domain.FormatSignedQty(v.LastCVD), LastPrice: formatHistQty(v.LastPrice),
 		Contributions: cvdSharesToDTO(v.Contributions),
 		Divergence:    div,
@@ -179,6 +207,30 @@ func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 	if v.OverlapTo != nil && !v.OverlapTo.IsZero() {
 		t := v.OverlapTo.UTC()
 		out.OverlapTo = &t
+	}
+	return out
+}
+
+func cvdSpotFuturesToDTO(in *domain.CVDSpotFutures) *cvdSpotFuturesDTO {
+	if in == nil {
+		return nil
+	}
+	out := &cvdSpotFuturesDTO{
+		Alignment: in.Alignment, Spot: in.Spot, Futures: in.Futures,
+		SpotChange: domain.FormatSignedQty(in.SpotChange),
+		FuturesChange: domain.FormatSignedQty(in.FuturesChange),
+		Window: in.Window, Title: in.Title, Summary: in.Summary,
+	}
+	if len(in.Windows) > 0 {
+		out.Windows = make([]cvdSpotFuturesDTO, 0, len(in.Windows))
+		for _, w := range in.Windows {
+			out.Windows = append(out.Windows, cvdSpotFuturesDTO{
+				Alignment: w.Alignment, Spot: w.Spot, Futures: w.Futures,
+				SpotChange: domain.FormatSignedQty(w.SpotChange),
+				FuturesChange: domain.FormatSignedQty(w.FuturesChange),
+				Window: w.Window, Title: w.Title, Summary: w.Summary,
+			})
+		}
 	}
 	return out
 }

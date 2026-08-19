@@ -52,6 +52,9 @@ type Candle struct {
 	// QuoteVolume is volume in quote asset (e.g. USDT for BTCUSDT).
 	QuoteVolume string
 	TradeCount  int64
+	// TakerBuyQuote is aggressive buy volume in quote asset when the venue
+	// publishes it (Binance klines). Empty when unknown.
+	TakerBuyQuote string
 }
 
 // CandleQuery is the input for fetching historical candles.

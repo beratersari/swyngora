@@ -60,14 +60,47 @@ func (c *Client) GetTakerBuckets(ctx context.Context, symbol string) ([]domain.T
 	return c.taker.Buckets(domain.ExchangeBybit, symbol), nil
 }
 
+// GetSpotTakerBuckets returns recent Bybit spot aggressive buy/sell bars.
+func (c *Client) GetSpotTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	prints, err := c.fetchRecentTrades(ctx, symbol, "spot")
+	if err != nil {
+		return nil, err
+	}
+	book := domain.NewTakerBook()
+	for _, p := range prints {
+		book.Record(p)
+	}
+	return book.Buckets(domain.ExchangeBybit, symbol), nil
+}
+
 func (c *Client) seedRecentTrades(ctx context.Context, symbol string) error {
+	prints, err := c.fetchRecentTrades(ctx, symbol, "linear")
+	if err != nil {
+		return err
+	}
+	for _, p := range prints {
+		if p.Notional > 0 {
+			c.taker.Record(p)
+		}
+	}
+	return nil
+}
+
+func (c *Client) fetchRecentTrades(ctx context.Context, symbol, category string) ([]domain.TakerPrint, error) {
+	if c == nil {
+		return nil, fmt.Errorf("%w: bybit client", domain.ErrUpstream)
+	}
 	q := url.Values{}
-	q.Set("category", "linear")
+	q.Set("category", category)
 	q.Set("symbol", symbol)
 	q.Set("limit", "1000")
 	body, err := c.get(ctx, "/v5/market/recent-trade", q)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var raw struct {
 		RetCode int    `json:"retCode"`
@@ -82,18 +115,19 @@ func (c *Client) seedRecentTrades(ctx context.Context, symbol string) error {
 		} `json:"result"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
-		return err
+		return nil, err
 	}
 	if raw.RetCode != 0 {
-		return mapBybitError(raw.RetCode, raw.RetMsg)
+		return nil, mapBybitError(raw.RetCode, raw.RetMsg)
 	}
+	out := make([]domain.TakerPrint, 0, len(raw.Result.List))
 	for _, row := range raw.Result.List {
 		p := parseBybitTaker(domain.ExchangeBybit, symbol, row.Side, row.Price, row.Size, row.Time)
 		if p.Notional > 0 {
-			c.taker.Record(p)
+			out = append(out, p)
 		}
 	}
-	return nil
+	return out, nil
 }
 
 func parseBybitTaker(ex domain.Exchange, symbol, side, price, size, ts string) domain.TakerPrint {

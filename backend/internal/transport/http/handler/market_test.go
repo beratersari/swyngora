@@ -449,6 +449,14 @@ func TestCVDToDTO_SharesAndDivergence(t *testing.T) {
 	if len(got.Combined.Points[0].Shares) != 2 || got.Combined.Points[0].Shares[0].Exchange != "binance" {
 		t.Fatalf("shares %+v", got.Combined.Points[0].Shares)
 	}
+	rep.SpotFutures = &domain.CVDSpotFutures{
+		Alignment: domain.AlignOpposite, Spot: domain.CVDDirUp, Futures: domain.CVDDirDown,
+		SpotChange: 10, FuturesChange: -8, Window: domain.CVDWindow1h, Summary: "split",
+	}
+	got = cvdToDTO(rep)
+	if got.SpotFutures == nil || got.SpotFutures.Alignment != domain.AlignOpposite {
+		t.Fatalf("spotFutures %+v", got.SpotFutures)
+	}
 }
 
 func TestGetCVD_BadSymbol(t *testing.T) {
