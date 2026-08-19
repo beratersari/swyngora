@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -87,6 +88,69 @@ func (b *Backend) GetOrderBook(ctx context.Context, exchange, symbol, group stri
 	})
 }
 
+func (b *Backend) GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var atPtr, fromPtr, toPtr *time.Time
+	if strings.TrimSpace(at) != "" {
+		t, err := parseMCPTime(at)
+		if err != nil {
+			return nil, err
+		}
+		atPtr = &t
+	}
+	if strings.TrimSpace(from) != "" {
+		t, err := parseMCPTime(from)
+		if err != nil {
+			return nil, err
+		}
+		fromPtr = &t
+	}
+	if strings.TrimSpace(to) != "" {
+		t, err := parseMCPTime(to)
+		if err != nil {
+			return nil, err
+		}
+		toPtr = &t
+	}
+	got, err := b.Market.GetBookHistory(ctx, exchange, symbol, atPtr, fromPtr, toPtr, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetIcebergs(ctx, exchange, symbol, minNotional)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	fromT, err := parseMCPTime(from)
+	if err != nil {
+		return nil, err
+	}
+	toT, err := parseMCPTime(to)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.CompareBookHistory(ctx, exchange, symbol, fromT, toT)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
@@ -116,6 +180,443 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 		"fills": fills,
 		"note":  "Simulated market order walking live resting depth. Not a quote, fill, or financial advice. Visible book may be thinner than the real market.",
 	})
+}
+
+func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOpenInterest(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
+			"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
+			"direction": w.Direction, "complete": w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		wins = append(wins, row)
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		vw := make([]map[string]any, 0, len(v.Windows))
+		for _, w := range v.Windows {
+			row := map[string]any{
+				"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
+				"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
+				"direction": w.Direction, "complete": w.Complete,
+			}
+			if !w.SampleTime.IsZero() {
+				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+			}
+			vw = append(vw, row)
+		}
+		cur := map[string]any{"contracts": v.Current.Contracts, "value": v.Current.Value}
+		if !v.Current.Time.IsZero() {
+			cur["time"] = v.Current.Time.UTC().Format(time.RFC3339Nano)
+		}
+		venues = append(venues, map[string]any{"exchange": v.Exchange, "current": cur, "windows": vw})
+	}
+	cur := map[string]any{"contracts": got.Current.Contracts, "value": got.Current.Value}
+	if !got.Current.Time.IsZero() {
+		cur["time"] = got.Current.Time.UTC().Format(time.RFC3339Nano)
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "unit": got.Unit,
+		"current": cur, "windows": wins, "venues": venues, "asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Binance USD-M and Bybit linear perpetual open interest. contracts is base-asset size (Bybit is single-sided). value is USDT notional. Change is current minus ~window ago. funding is predicted next rate plus recent settlements. Informational only.",
+	}
+	if got.Funding != nil {
+		out["funding"] = fundingSnapshotMap(got.Funding)
+	}
+	if got.LongShort != nil {
+		out["longShort"] = longShortSnapshotMap(got.LongShort)
+	}
+	return mustJSON(out)
+}
+
+func (b *Backend) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLongShortRatio(ctx, exchange, symbol, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(longShortSnapshotMap(got))
+}
+
+func (b *Backend) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationHunt(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetSqueezeRisk(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetPositioning(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetVenueDivergence(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetTakerFlow(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetCVD(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBasis(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetCorrelation(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBreadth(ctx, exchange, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetVolatility(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetSnapshot(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLevels(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetWhales(ctx, exchange, symbol, minNotional, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var fromPtr, toPtr *time.Time
+	if strings.TrimSpace(from) != "" {
+		t, err := parseMCPTime(from)
+		if err != nil {
+			return nil, err
+		}
+		fromPtr = &t
+	}
+	if strings.TrimSpace(to) != "" {
+		t, err := parseMCPTime(to)
+		if err != nil {
+			return nil, err
+		}
+		toPtr = &t
+	}
+	got, err := b.Market.GetFuturesHistory(ctx, metric, exchange, symbol, fromPtr, toPtr, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(futuresHistoryMap(metric, exchange, symbol, got))
+}
+
+func futuresHistoryMap(metric, exchange, symbol string, raw any) map[string]any {
+	metric, _ = domain.ParseFuturesMetric(metric)
+	exchange, _ = domain.ParseOpenInterestExchange(exchange)
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	out := map[string]any{
+		"metric": metric, "exchange": exchange, "symbol": symbol,
+		"note": "Durable SQLite history. Duplicates are ignored. One venue failing does not drop the other. Informational only.",
+	}
+	switch rows := raw.(type) {
+	case []domain.FuturesSnapshot:
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			item := map[string]any{
+				"exchange":  string(r.Exchange),
+				"sampledAt": r.SampledAt.UTC().Format(time.RFC3339Nano),
+			}
+			switch r.Metric {
+			case domain.FuturesMetricOpenInterest:
+				item["contracts"] = formatHistQty(r.Contracts)
+				item["value"] = formatHistQty(r.Value)
+			case domain.FuturesMetricFunding:
+				dec, pct := domain.FormatFundingRate(r.FundingRate)
+				item["rate"] = dec
+				item["ratePct"] = pct
+				item["predicted"] = r.Predicted
+				if r.IntervalHours > 0 {
+					item["intervalHours"] = r.IntervalHours
+				}
+			case domain.FuturesMetricLongShort:
+				item["longPct"] = formatHistQty(r.LongShare * 100)
+				item["shortPct"] = formatHistQty(r.ShortShare * 100)
+				item["ratio"] = formatHistQty(r.Ratio)
+				item["bias"] = domain.LongShortBias(r.Ratio)
+			}
+			items = append(items, item)
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	case []domain.LiquidationEvent:
+		items := make([]map[string]any, 0, len(rows))
+		for _, e := range rows {
+			items = append(items, map[string]any{
+				"exchange": string(e.Exchange), "side": e.Side,
+				"price": formatHistQty(e.Price), "quantity": formatHistQty(e.Quantity),
+				"notional": formatHistQty(e.Notional),
+				"time":     e.Time.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	default:
+		out["items"] = []any{}
+		out["count"] = 0
+	}
+	return out
+}
+
+func formatHistQty(v float64) string {
+	s := domain.FormatSignedQty(v)
+	return strings.TrimPrefix(s, "+")
+}
+
+func parseMCPTime(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if ms > 1e12 {
+			return time.UnixMilli(ms).UTC(), nil
+		}
+		return time.Unix(ms, 0).UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("%w: time must be RFC3339 or unix ms", domain.ErrInvalidArgument)
+}
+
+func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, map[string]any{
+			"exchange": v.Exchange, "kind": v.Kind, "period": v.Period,
+			"current": longShortLevelMap(v.Current), "change": v.Change,
+			"history": longShortLevelsMap(v.History),
+		})
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "kind": got.Kind, "period": got.Period,
+		"venues": venues, "history": longShortLevelsMap(got.History),
+		"asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Share of accounts that are long vs short (not position size). ratio is long/short. Combined all does not average venues.",
+	}
+	if got.Current != nil {
+		out["current"] = longShortLevelMap(*got.Current)
+	}
+	return out
+}
+
+func longShortLevelMap(p domain.LongShortLevel) map[string]any {
+	out := map[string]any{"longPct": p.LongPct, "shortPct": p.ShortPct, "ratio": p.Ratio, "bias": p.Bias, "longShare": p.LongShare}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortLevelsMap(in []domain.LongShortLevel) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		out = append(out, longShortLevelMap(p))
+	}
+	return out
+}
+
+func (b *Backend) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetFundingRate(ctx, exchange, symbol, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingSnapshotMap(got))
+}
+
+func fundingSnapshotMap(got *domain.FundingSnapshot) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		row := map[string]any{
+			"exchange": v.Exchange, "current": fundingCurrentMap(v.Current),
+			"avgLast3": v.AvgLast3, "avgLast3Pct": v.AvgLast3Pct,
+			"history": fundingPrintsMap(v.History),
+		}
+		if v.LastSettled != nil {
+			row["lastSettled"] = fundingPrintMap(*v.LastSettled)
+		}
+		venues = append(venues, row)
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "venues": venues,
+		"history": fundingPrintsMap(got.History), "asOf": asOf, "venueCount": got.VenueCount,
+		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Combined all does not average venues.",
+	}
+	if got.Current != nil {
+		out["current"] = fundingCurrentMap(*got.Current)
+	}
+	return out
+}
+
+func fundingCurrentMap(c domain.FundingCurrent) map[string]any {
+	out := map[string]any{"rate": c.Rate, "ratePct": c.RatePct, "payer": c.Payer, "intervalHours": c.IntervalHours}
+	if !c.NextFundingTime.IsZero() {
+		out["nextFundingTime"] = c.NextFundingTime.UTC().Format(time.RFC3339Nano)
+	}
+	if !c.Time.IsZero() {
+		out["time"] = c.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingPrintMap(p domain.FundingPrint) map[string]any {
+	out := map[string]any{"rate": p.Rate, "ratePct": p.RatePct, "payer": p.Payer, "predicted": p.Predicted}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	if p.MarkPrice != "" {
+		out["markPrice"] = p.MarkPrice
+	}
+	return out
+}
+
+func fundingPrintsMap(in []domain.FundingPrint) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		out = append(out, fundingPrintMap(p))
+	}
+	return out
 }
 
 func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -254,6 +755,7 @@ func (b *Backend) AnalyzeCombinedOrderBook(ctx context.Context, symbol string, r
 			"notional": w.Notional, "distancePct": w.DistancePct, "share": w.Share,
 			"behavior": w.Behavior, "ageSeconds": w.AgeSeconds, "presentForSeconds": w.PresentForSeconds,
 			"visibleSeconds": w.VisibleSeconds, "appearCount": w.AppearCount,
+			"iceberg": w.Iceberg, "icebergRefills": w.IcebergRefills, "icebergClip": w.IcebergClip,
 		})
 	}
 	return mustJSON(map[string]any{

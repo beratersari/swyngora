@@ -33,11 +33,14 @@ type OrderBookWall struct {
 	Notional          string  `json:"notional"`
 	DistancePct       string  `json:"distancePct"`
 	Share             float64 `json:"share"`              // fraction of that side's band notional
-	Behavior          string  `json:"behavior,omitempty"` // short | persistent | suspicious
+	Behavior          string  `json:"behavior,omitempty"` // short | persistent | suspicious | iceberg
 	AgeSeconds        float64 `json:"ageSeconds,omitempty"`
 	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
 	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
 	AppearCount       int     `json:"appearCount,omitempty"`
+	Iceberg           bool    `json:"iceberg,omitempty"`
+	IcebergRefills    int     `json:"icebergRefills,omitempty"`
+	IcebergClip       string  `json:"icebergClip,omitempty"`
 }
 
 // OrderBookBand is bid/ask notional inside ±RangePct of mid.

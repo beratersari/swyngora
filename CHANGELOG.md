@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Bybit open interest double-count:** current and historical Bybit figures now use `singleOpenInterest` / `singleOpenInterestValue` (one side). The older `openInterest` field is still both sides and was ~2× the UI value; if the single field is missing we halve the bilateral figure (`docs/features/open-interest.md`)
+
 ### Changed
 - **AI streaming:** Process/CLI progress uses LangChain `stream_events` v3 (`tool_calls` / `messages`); leaf tools emit once (no wrap + stream pair)
 - **AI tool progress:** specialist leaf tools emit Process events via LangChain `@wrap_tool_call` middleware instead of cloning each tool
@@ -24,6 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **CVD:** cumulative market-buy minus market-sell notional over time versus price (1h / 4h / 24h confirms, opposite, or absorption) for Binance, Bybit, and combined (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
+- **Iceberg refill:** detect when visible buy or sell size at one price is eaten and a similar clip comes back, repeatedly — both sides (`GET /api/v1/market/orderbook/icebergs`, MCP `get_orderbook_icebergs`; live walls get `behavior=iceberg`) (`docs/features/icebergs.md`)
+- **Order-book history:** 1-minute samples of bid/ask levels, spread, liquidity, imbalance, and walls; look up a time and compare two times to see which price levels gained or lost liquidity (`GET /api/v1/market/orderbook/history`, `.../history/compare`, MCP `get_orderbook_history` / `compare_orderbook_history`) (`docs/features/book-history.md`)
+- **Whale trades:** clustered large futures buys/sells (aggressive long/short) and liquidations, sorted biggest first, with average price, first/last time, total size, and a flag when the print is large versus circulating market cap (`GET /api/v1/market/whales`, MCP `get_whale_trades`) (`docs/features/whales.md`)
+- **Support and resistance:** price-history + volume zones checked against the live order book; distance, test count, nearby bid/ask liquidity, and a breakout score from volume, book thickness, and taker flow (`GET /api/v1/market/levels`, MCP `get_support_resistance`) (`docs/features/levels.md`)
+- **Market snapshot:** price, volume, market cap, open interest, funding, long/short, and taker buy/sell together for one coin, with 1h / 4h / 24h changes (`GET /api/v1/market/snapshot`, MCP `get_market_snapshot`) (`docs/features/snapshot.md`)
+- **Price volatility:** how much a coin moved over 1h / 4h / 24h (net + high–low range), whether that range is higher or lower than normal and expanding or shrinking, and whether the coin is jumpy or calm versus BTC/ETH (`GET /api/v1/market/volatility`, MCP `get_price_volatility`) (`docs/features/volatility.md`)
+- **Market breadth:** how many of the liquid coins we follow are up vs down over 1h / 4h / 24h (count and percent), plus whether BTC/ETH are moving with the pack or a few large coins are carrying (`GET /api/v1/market/breadth`, MCP `get_market_breadth`) (`docs/features/breadth.md`)
+- **Price correlation vs BTC/ETH:** how similarly a coin has been moving with Bitcoin and Ethereum over 1h / 4h / 24h (correlation, beta, same-direction share, lead/lag) (`GET /api/v1/market/correlation`, MCP `get_price_correlation`) (`docs/features/correlation.md`)
+- **Futures basis:** perp vs spot/index premium or discount on Binance and Bybit, dollar + percent, expanding/shrinking, plus funding/OI read and venue agreement (`GET /api/v1/market/basis`, MCP `get_basis`) (`docs/features/basis.md`)
+- **Taker flow:** aggressive futures buy vs sell volume for 5m / 1h / 4h on Binance USD-M and Bybit linear, with delta and a short read vs price, OI, and funding (`GET /api/v1/market/taker-flow`, MCP `get_taker_flow`) (`docs/features/taker-flow.md`)
+- **Venue divergence:** compare Binance vs Bybit on OI, funding, crowding, and positioning; flag same vs opposite with a short why (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`) (`docs/features/venue-divergence.md`)
+- **Positioning (price + OI):** long buildup / short buildup / long unwinding / short covering for Binance and Bybit, with short reasons and a combined market direction (`GET /api/v1/market/positioning`, MCP `get_positioning`) (`docs/features/positioning.md`)
+- **Squeeze risk:** long-squeeze and short-squeeze scores (0–100) for any coin on Binance USD-M and Bybit linear, with reasons and an OI-weighted combined view (`GET /api/v1/market/squeeze-risk`, MCP `get_squeeze_risk`) (`docs/features/squeeze-risk.md`)
+- **Liquidation hunt (hypothetical):** per-venue model of where long/short pressure sits if spot is walked up or down, how much visible spot size that takes, and a rough desk result (book-only unwind vs cascade exit). Not evidence of exchange behavior (`GET /api/v1/market/liquidation-hunt`, MCP `estimate_liquidation_hunt`) (`docs/features/liquidation-hunt.md`)
+- **Durable futures history:** SQLite archive of open interest, funding, long/short, and liquidations for Binance USD-M and Bybit linear; 5m sampler, restart-safe, no duplicate rows, per-venue fail-soft (`GET /api/v1/market/futures-history`, MCP `get_futures_history`) (`docs/features/futures-history.md`)
+- **Futures long/short ratio:** share of accounts that are long vs short plus recent 5m history for Binance USD-M and Bybit linear; also attached on the open-interest payload (`GET /api/v1/market/long-short-ratio`, MCP `get_long_short_ratio`, Telegram `/ls`) (`docs/features/long-short-ratio.md`)
+- **Futures funding rate:** predicted next perpetual funding plus recent settlements for Binance USD-M and Bybit linear; also attached on the open-interest payload (`GET /api/v1/market/funding-rate`, MCP `get_funding_rate`, Telegram `/funding`) (`docs/features/funding-rate.md`)
+- **Futures open interest:** current outstanding size plus 5m / 1h / 4h / 24h change (contracts and USDT notional) from Binance USD-M and Bybit linear perpetual; `exchange=all` sums both (`GET /api/v1/market/open-interest`, MCP `get_open_interest`, Telegram `/oi`) (`docs/features/open-interest.md`)
 - **Crypto holders:** coin detail shows on-chain wallet count, top 10/50/100 concentration, and top addresses from `GET /api/v1/market/holders` / MCP `get_holders` (`docs/features/holders.md`)
 - **Grok reasoning:** `GROK_REASONING_EFFORT` (`none` | `low` | `medium` | `high`), default `low`; Grok calls only, Ollama unchanged (`docs/features/ai-assistant.md`)
 - **Order heatmap:** coin detail paints a Bookmap-style liquidity map (thermal size, wide current-book column, history to the left) from `GET /api/v1/market/orderbook/heatmap` / MCP `get_orderbook_heatmap`. Not executed volume.

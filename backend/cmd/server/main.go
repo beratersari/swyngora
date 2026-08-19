@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/binance"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bookhiststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/bybit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cmc"
@@ -20,6 +21,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
@@ -31,9 +33,11 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/aiagent"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/bookhist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/futureshist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -68,6 +72,7 @@ func main() {
 	binanceTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	binanceBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	binanceSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	binanceOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
 	coinbaseCandles := cache.NewWithOptions[[]domain.Candle](cfg.CandleCacheTTL, cache.Options{MaxEntries: cfg.CandleCacheMaxEntries})
 	coinbaseTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	coinbaseBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
@@ -76,6 +81,7 @@ func main() {
 	bybitTickers := cache.New[*domain.Ticker24h](cfg.TickerCacheTTL)
 	bybitBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	bybitSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
+	bybitOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
 
 	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
@@ -101,6 +107,8 @@ func main() {
 				bybitTickers.Cleanup()
 				bybitBooks.Cleanup()
 				bybitSpot.Cleanup()
+				binanceOI.Cleanup()
+				bybitOI.Cleanup()
 				supplyCache.Cleanup()
 				catalogCache.Cleanup()
 				holdersCache.Cleanup()
@@ -111,19 +119,21 @@ func main() {
 	}()
 
 	binanceClient := binance.NewClient(binance.Options{
-		BaseURL:         cfg.BinanceBaseURL,
-		ProductBaseURL:  cfg.BinanceProductBaseURL,
-		APIKey:          cfg.BinanceAPIKey,
-		HTTPClient:      httpClient,
-		CandleCache:     binanceCandles,
-		TickerCache:     binanceTickers,
-		OrderBookCache:  binanceBooks,
-		SpotMarketCache: binanceSpot,
-		SupplyCache:     supplyCache,
-		CatalogCache:    catalogCache,
-		WSURL:           cfg.BinanceWSURL,
-		DepthIdle:       cfg.OrderBookIdleTTL,
-		DepthWait:       cfg.OrderBookSyncTimeout,
+		BaseURL:           cfg.BinanceBaseURL,
+		ProductBaseURL:    cfg.BinanceProductBaseURL,
+		APIKey:            cfg.BinanceAPIKey,
+		HTTPClient:        httpClient,
+		CandleCache:       binanceCandles,
+		TickerCache:       binanceTickers,
+		OrderBookCache:    binanceBooks,
+		SpotMarketCache:   binanceSpot,
+		SupplyCache:       supplyCache,
+		CatalogCache:      catalogCache,
+		WSURL:             cfg.BinanceWSURL,
+		DepthIdle:         cfg.OrderBookIdleTTL,
+		DepthWait:         cfg.OrderBookSyncTimeout,
+		FuturesBaseURL:    cfg.BinanceFuturesBaseURL,
+		OpenInterestCache: binanceOI,
 	})
 	defer binanceClient.Close()
 	coinbaseClient := coinbase.NewClient(coinbase.Options{
@@ -140,30 +150,55 @@ func main() {
 	})
 	defer coinbaseClient.Close()
 	bybitClient := bybit.NewClient(bybit.Options{
-		BaseURL:         cfg.BybitBaseURL,
-		HTTPClient:      httpClient,
-		CandleCache:     bybitCandles,
-		TickerCache:     bybitTickers,
-		OrderBookCache:  bybitBooks,
-		SpotMarketCache: bybitSpot,
-		WSURL:           cfg.BybitWSURL,
-		DepthIdle:       cfg.OrderBookIdleTTL,
-		DepthWait:       cfg.OrderBookSyncTimeout,
+		BaseURL:           cfg.BybitBaseURL,
+		HTTPClient:        httpClient,
+		CandleCache:       bybitCandles,
+		TickerCache:       bybitTickers,
+		OrderBookCache:    bybitBooks,
+		SpotMarketCache:   bybitSpot,
+		WSURL:             cfg.BybitWSURL,
+		DepthIdle:         cfg.OrderBookIdleTTL,
+		DepthWait:         cfg.OrderBookSyncTimeout,
+		OpenInterestCache: bybitOI,
 	})
 	defer bybitClient.Close()
 
 	delistStore := deliststore.NewMemory()
 	delistEnabled := cfg.BinanceAPIKey != ""
 	liqBook := domain.NewLiquidationBook()
+
+	futuresStore, err := futuresstore.Open(cfg.FuturesHistoryDBPath)
+	if err != nil {
+		logger.Error("futures history sqlite open failed", "path", cfg.FuturesHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := futuresStore.Close(); err != nil {
+			logger.Error("futures history sqlite close", "err", err)
+		}
+	}()
+	histSeeds := append([]string{}, domain.DefaultFuturesHistorySymbols...)
+	histSeeds = append(histSeeds, cfg.FuturesHistorySymbols...)
+	futuresHist := &futureshist.Service{
+		Store:      futuresStore,
+		TakerStore: futuresStore,
+		OI:         map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Funding:    map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		LS:         map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Taker:      map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Logger:     logger,
+		Seeds:      histSeeds,
+	}
+	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
 	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
 		WSURL: cfg.BinanceFuturesWSURL,
-		Sink:  liqBook,
+		Sink:  liqSink,
 	})
 	bybitLiq := bybit.NewLiquidationHub(bybit.LiquidationOptions{
 		WSURL:   cfg.BybitLinearWSURL,
 		BaseURL: cfg.BybitBaseURL,
 		HTTP:    httpClient,
-		Sink:    liqBook,
+		Sink:    liqSink,
 	})
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
@@ -179,7 +214,54 @@ func main() {
 		HTTPClient: httpClient,
 		Catalog:    binanceClient,
 		Cache:      holdersCache,
-	}))
+	})).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+	}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
+		domain.ExchangeBinance: binanceClient,
+	})
+	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
+		WSURL: cfg.BybitLinearWSURL,
+		Book:  bybitClient.TakerBook(),
+	})
+	bybitClient.SetTakerWatch(bybitTrades.Watch)
+	defer bybitTrades.Close()
+	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
+	marketSvc.SetFuturesHistory(futuresHist)
+	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
+
+	bookStore, err := bookhiststore.Open(cfg.OrderBookHistoryDBPath)
+	if err != nil {
+		logger.Error("order book history sqlite open failed", "path", cfg.OrderBookHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := bookStore.Close(); err != nil {
+			logger.Error("order book history sqlite close", "err", err)
+		}
+	}()
+	bookSeeds := append([]string{}, domain.DefaultBookHistorySymbols...)
+	bookSeeds = append(bookSeeds, cfg.OrderBookHistorySymbols...)
+	bookHist := &bookhist.Service{
+		Store:  bookStore,
+		Books:  map[domain.Exchange]domain.MarketDataPort{domain.ExchangeBinance: binanceClient, domain.ExchangeCoinbase: coinbaseClient, domain.ExchangeBybit: bybitClient},
+		Logger: logger,
+		Seeds:  bookSeeds,
+	}
+	marketSvc.WithBookHistory(bookHist)
+	logger.Info("order book history store ready", "driver", "sqlite", "path", bookStore.Path())
 
 	watchStore, err := watchliststore.OpenSQLite(cfg.WatchlistDBPath)
 	if err != nil {
@@ -331,6 +413,38 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	nLiq := futureshist.RestoreBook(ctx, liqBook, futuresHist, time.Now().UTC())
+	if nLiq > 0 {
+		logger.Info("futures liquidations restored", "events", nLiq)
+	}
+	nTaker := 0
+	fromTaker := time.Now().UTC().Add(-4 * time.Hour)
+	for _, sym := range histSeeds {
+		recs, err := futuresStore.ListTakerBuckets(ctx, string(domain.ExchangeBybit), sym, fromTaker, time.Now().UTC())
+		if err != nil || len(recs) == 0 {
+			continue
+		}
+		bybitClient.TakerBook().LoadBuckets(recs)
+		nTaker += len(recs)
+	}
+	if nTaker > 0 {
+		logger.Info("bybit taker buckets restored", "bars", nTaker)
+	}
+	go liqSink.Start(ctx)
+	go bybitTrades.Start(ctx)
+	go (&futureshist.Worker{
+		Hist:     futuresHist,
+		Interval: cfg.FuturesHistoryInterval,
+		Retain:   cfg.FuturesHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
+	go (&bookhist.Worker{
+		Hist:     bookHist,
+		Interval: cfg.OrderBookHistoryInterval,
+		Retain:   cfg.OrderBookHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
 
 	go realtimeHub.Start(ctx)
 

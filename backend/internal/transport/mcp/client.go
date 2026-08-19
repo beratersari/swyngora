@@ -139,6 +139,53 @@ func (c *APIClient) GetOrderBook(ctx context.Context, exchange, symbol, group st
 	return c.get(ctx, "/api/v1/market/orderbook", q)
 }
 
+// GetBookHistory returns a stored book at a time, or a newest-first list.
+func (c *APIClient) GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if at != "" {
+		q.Set("at", at)
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/history", q)
+}
+
+// CompareBookHistory diffs stored books nearest to two times.
+func (c *APIClient) CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("from", from)
+	q.Set("to", to)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/history/compare", q)
+}
+
+// GetIcebergs returns prices where visible size was eaten and then refilled.
+func (c *APIClient) GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if minNotional > 0 {
+		q.Set("minNotional", strconv.FormatFloat(minNotional, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/icebergs", q)
+}
+
 // EstimateOrderBookImpact walks live depth for a simulated market order.
 func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	q := url.Values{}
@@ -182,6 +229,199 @@ func (c *APIClient) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, g
 		q.Set("window", strconv.Itoa(windowSec))
 	}
 	return c.get(ctx, "/api/v1/market/orderbook/heatmap", q)
+}
+
+// GetOpenInterest returns current futures open interest and windowed change.
+func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/open-interest", q)
+}
+
+// GetFundingRate returns the predicted next funding rate plus recent settlements.
+func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/funding-rate", q)
+}
+
+// GetLongShortRatio returns the latest account long/short ratio plus recent history.
+func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/long-short-ratio", q)
+}
+
+// GetLiquidationHunt returns the hypothetical per-venue liquidation-hunt model.
+func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
+}
+
+// GetSqueezeRisk returns long/short squeeze risk scores per venue and combined.
+func (c *APIClient) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/squeeze-risk", q)
+}
+
+// GetPositioning returns price+OI buildup/unwinding regimes per venue and combined.
+func (c *APIClient) GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/positioning", q)
+}
+
+// GetVenueDivergence compares Binance vs Bybit signals for one coin.
+func (c *APIClient) GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	return c.get(ctx, "/api/v1/market/venue-divergence", q)
+}
+
+// GetTakerFlow returns aggressive futures buy vs sell volume windows.
+func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/taker-flow", q)
+}
+
+// GetCVD returns cumulative taker buy−sell versus price.
+func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/cvd", q)
+}
+
+// GetBasis returns futures-vs-spot premium/discount per venue.
+func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/basis", q)
+}
+
+// GetCorrelation returns how similarly a coin has been moving with BTC and ETH.
+func (c *APIClient) GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/correlation", q)
+}
+
+// GetBreadth returns how many followed coins are up or down over 1h / 4h / 24h.
+func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/breadth", q)
+}
+
+// GetVolatility returns how much a coin has been moving vs its history and vs BTC/ETH.
+func (c *APIClient) GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/volatility", q)
+}
+
+// GetSnapshot returns price, volume, mcap, OI, funding, long/short, and taker flow together.
+func (c *APIClient) GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/snapshot", q)
+}
+
+// GetLevels returns support/resistance areas and breakout strength.
+func (c *APIClient) GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/levels", q)
+}
+
+// GetWhales returns the largest recent aggressive trades and liquidations.
+func (c *APIClient) GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if minNotional > 0 {
+		q.Set("minNotional", strconv.FormatFloat(minNotional, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/whales", q)
+}
+
+// GetFuturesHistory returns durable stored futures samples or liquidation events.
+func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("metric", metric)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/futures-history", q)
 }
 
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.

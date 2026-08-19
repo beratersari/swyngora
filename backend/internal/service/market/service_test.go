@@ -15,7 +15,10 @@ import (
 type fakeMarket struct {
 	candles      []domain.Candle
 	ticker       *domain.Ticker24h
+	tickers      map[string]*domain.Ticker24h
 	spot         []domain.SpotMarket
+	prints       map[string][]domain.TakerPrint
+	printSyms    []string
 	err          error
 	lastQ        domain.CandleQuery
 	lastSym      string
@@ -57,7 +60,23 @@ func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Tic
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.tickers != nil {
+		if t, ok := f.tickers[strings.ToUpper(symbol)]; ok {
+			return t, nil
+		}
+	}
 	return f.ticker, nil
+}
+
+func (f *fakeMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain.TakerPrint, error) {
+	f.printSyms = append(f.printSyms, symbol)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.prints != nil {
+		return append([]domain.TakerPrint(nil), f.prints[strings.ToUpper(symbol)]...), nil
+	}
+	return nil, nil
 }
 
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
@@ -642,6 +661,1003 @@ func TestGetLiquidations_FromBook(t *testing.T) {
 	}
 	if got.Windows[0].Count != 1 {
 		t.Fatalf("%+v", got)
+	}
+}
+
+type fakeOI struct {
+	ser *domain.OpenInterestSeries
+	err error
+}
+
+func (f *fakeOI) GetOpenInterestSeries(_ context.Context, symbol string) (*domain.OpenInterestSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetOpenInterest_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 10000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 90, Value: 9000},
+			{Time: now.Add(-time.Hour), Contracts: 80, Value: 8000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 70, Value: 7000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 50, Value: 5000},
+		},
+	}}
+	byb := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBybit,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 50, Value: 5000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 40, Value: 4000},
+			{Time: now.Add(-time.Hour), Contracts: 40, Value: 4000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 30, Value: 3000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 20, Value: 2000},
+		},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "btc-usd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Symbol != "BTCUSDT" || got.Unit != "BTC" || got.VenueCount != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Current.Contracts != "150" {
+		t.Fatalf("current %s", got.Current.Contracts)
+	}
+	one, err := svc.GetOpenInterest(context.Background(), "binance", "BTCUSDT")
+	if err != nil || one.VenueCount != 1 || one.Current.Contracts != "100" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+func TestGetOpenInterest_BadExchange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetOpenInterest(context.Background(), "coinbase", "BTCUSDT")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetOpenInterest_EmptyPorts(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "BTCUSDT")
+	if err != nil || got.VenueCount != 0 || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+type fakeFunding struct {
+	ser *domain.FundingSeries
+	err error
+}
+
+func (f *fakeFunding) GetFundingSeries(_ context.Context, symbol string, _ int) (*domain.FundingSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetFundingRate_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBinance,
+		Current:         domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+		NextFundingTime: now.Add(time.Hour),
+		IntervalHours:   8,
+		History:         []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.00008}},
+	}}
+	byb := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBybit,
+		Current:         domain.FundingPoint{Time: now, Rate: 0.00005, Predicted: true},
+		NextFundingTime: now.Add(time.Hour),
+		IntervalHours:   8,
+		History:         []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.00003}},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetFundingRate(context.Background(), "all", "btc-usd", 12)
+	if err != nil || got.VenueCount != 2 || got.Current != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	one, err := svc.GetFundingRate(context.Background(), "binance", "BTCUSDT", 0)
+	if err != nil || one.Current == nil || one.Current.Payer != "long" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+type fakeLS struct {
+	ser *domain.LongShortSeries
+	err error
+}
+
+func (f *fakeLS) GetLongShortSeries(_ context.Context, symbol string, _ int) (*domain.LongShortSeries, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.ser
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetLongShortRatio_Combined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.63, ShortShare: 0.37, Ratio: 1.70},
+	}}
+	byb := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBybit,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.58, ShortShare: 0.42, Ratio: 1.38},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetLongShortRatio(context.Background(), "all", "btc-usd", 24)
+	if err != nil || got.VenueCount != 2 || got.Current != nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	one, err := svc.GetLongShortRatio(context.Background(), "binance", "BTCUSDT", 0)
+	if err != nil || one.Current == nil || one.Current.Bias != "long" {
+		t.Fatalf("%+v %v", one, err)
+	}
+}
+
+func TestGetOpenInterest_AttachesFunding(t *testing.T) {
+	now := time.Now().UTC()
+	oi := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 10000},
+		History:  []domain.OpenInterestPoint{{Time: now.Add(-5 * time.Minute), Contracts: 90, Value: 9000}},
+	}}
+	fund := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:      domain.ExchangeBinance,
+		Current:       domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+		IntervalHours: 8,
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: fund})
+	got, err := svc.GetOpenInterest(context.Background(), "binance", "BTCUSDT")
+	if err != nil || got.Funding == nil || got.Funding.Current == nil {
+		t.Fatalf("funding missing %+v %v", got, err)
+	}
+}
+
+type fakeBasis struct {
+	q   *domain.BasisQuote
+	err error
+}
+
+func (f *fakeBasis) GetBasisQuote(_ context.Context, symbol string) (*domain.BasisQuote, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.q
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func TestGetBasis_PerVenueAndAgreement(t *testing.T) {
+	bin := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeBinance, FuturesLast: 100.15, FuturesMark: 100.12, SpotIndex: 100,
+	}}
+	byb := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeBybit, FuturesLast: 100.12, FuturesMark: 100.10, SpotIndex: 100,
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithBasis(map[domain.Exchange]domain.BasisPort{
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+	})
+	got, err := svc.GetBasis(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Agreement == nil || got.Agreement.Alignment != domain.AlignSame {
+		t.Fatalf("%+v", got)
+	}
+	if got.Venues[0].Summary == "" {
+		t.Fatal("missing summary")
+	}
+}
+
+type intervalSeriesMarket struct {
+	fakeMarket
+	by map[string]map[domain.CandleInterval][]domain.Candle
+}
+
+func (m *intervalSeriesMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	if rows, ok := m.by[q.Symbol]; ok {
+		if c, ok := rows[q.Interval]; ok {
+			return c, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
+func synthCloses(start time.Time, n int, step time.Duration, px func(i int) float64) []domain.Candle {
+	out := make([]domain.Candle, n)
+	for i := 0; i < n; i++ {
+		p := px(i)
+		s := strconv.FormatFloat(p, 'f', 6, 64)
+		t0 := start.Add(time.Duration(i) * step)
+		out[i] = domain.Candle{
+			OpenTime: t0, CloseTime: t0.Add(step),
+			Open: s, High: s, Low: s, Close: s, Volume: "1", QuoteVolume: "1",
+		}
+	}
+	return out
+}
+
+func TestGetCorrelation_FollowsBTCAndETH(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	n1m, n5m := 80, 300
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"SOLUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 20 + float64(i)*0.05 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 20 + float64(i)*0.06 }),
+		},
+		"BTCUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 100 + float64(i)*0.2 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 100 + float64(i)*0.3 }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 50 + float64(i)*0.08 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.1 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetCorrelation(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary == "" || len(got.Windows) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	for _, w := range got.Windows {
+		if !w.BTC.Complete || w.BTC.Relation != domain.CorrRelationFollows {
+			t.Fatalf("window %s btc %+v", w.Window, w.BTC)
+		}
+		if !w.ETH.Complete || w.ETH.Relation != domain.CorrRelationFollows {
+			t.Fatalf("window %s eth %+v", w.Window, w.ETH)
+		}
+	}
+}
+
+func TestGetCorrelation_BTCIsSelf(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"BTCUSDT": {
+			"1m": synthCloses(start, 80, time.Minute, func(i int) float64 { return 100 + float64(i) }),
+			"5m": synthCloses(start, 300, 5*time.Minute, func(i int) float64 { return 100 + float64(i) }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, 80, time.Minute, func(i int) float64 { return 50 + float64(i)*0.4 }),
+			"5m": synthCloses(start, 300, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.4 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetCorrelation(context.Background(), "", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Windows[0].BTC.Self {
+		t.Fatalf("%+v", got.Windows[0].BTC)
+	}
+}
+
+func TestGetCorrelation_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetCorrelation(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetVolatility_MoreJumpyThanBTC(t *testing.T) {
+	start := time.Date(2026, 8, 14, 12, 0, 0, 0, time.UTC)
+	n1m, n5m := 400, 400
+	m := &intervalSeriesMarket{by: map[string]map[domain.CandleInterval][]domain.Candle{
+		"SOLUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 20 + float64(i%5)*0.8 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 20 + float64(i%5)*1.2 }),
+		},
+		"BTCUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 100 + float64(i)*0.001 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 100 + float64(i)*0.002 }),
+		},
+		"ETHUSDT": {
+			"1m": synthCloses(start, n1m, time.Minute, func(i int) float64 { return 50 + float64(i)*0.0005 }),
+			"5m": synthCloses(start, n5m, 5*time.Minute, func(i int) float64 { return 50 + float64(i)*0.001 }),
+		},
+	}}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetVolatility(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Summary == "" || len(got.Windows) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	if !got.Windows[0].Coin.Complete || got.Windows[0].VsMarket != domain.VolVsMore {
+		t.Fatalf("1h %+v", got.Windows[0])
+	}
+}
+
+func TestGetVolatility_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetVolatility(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetSnapshot_PriceAndOITogether(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	start := now.Add(-48 * time.Hour)
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{ticker: &domain.Ticker24h{Symbol: "SOLUSDT", LastPrice: "100", QuoteVolume: "5000"}},
+		by: map[string]map[domain.CandleInterval][]domain.Candle{
+			"SOLUSDT": {"1h": synthCloses(start, 50, time.Hour, func(i int) float64 { return 100 + float64(i%3)*0.1 })},
+		},
+	}
+	oi := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 120, Value: 12000},
+		History:  []domain.OpenInterestPoint{{Time: now.Add(-time.Hour), Contracts: 100, Value: 10000}},
+	}}
+	tk := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBinance,
+		Windows:  []domain.TakerWindowFlow{domain.SummarizeTakerWindow(80, 20, domain.TakerWindow1h, true)},
+	}}
+	svc := New(m, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi}).
+		WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{domain.ExchangeBinance: tk})
+	got, err := svc.GetSnapshot(context.Background(), "binance", "SOLUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Spot.Price != 100 || len(got.Venues) != 1 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+	if got.Venues[0].OIValue != 12000 {
+		t.Fatalf("oi %+v", got.Venues[0])
+	}
+}
+
+func TestGetSnapshot_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetSnapshot(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetLevels_ReturnsReport(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	// Bounce off ~100 several times, finish higher.
+	px := func(i int) float64 {
+		cycle := i % 7
+		if cycle == 3 || cycle == 4 {
+			return 100
+		}
+		return 100 + float64(cycle)*1.5
+	}
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "110"}},
+		by: map[string]map[domain.CandleInterval][]domain.Candle{
+			"BTCUSDT": {"1h": synthCloses(start, 80, time.Hour, px)},
+		},
+	}
+	svc := New(m, &fakeSupply{})
+	got, err := svc.GetLevels(context.Background(), "binance", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Price != 110 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetLevels_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLevels(context.Background(), "binance", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetWhales_SortsBiggestAndFlagsSmallCap(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	fm := &fakeMarket{
+		ticker: &domain.Ticker24h{LastPrice: "100"},
+		tickers: map[string]*domain.Ticker24h{
+			"PEPEUSDT": {Symbol: "PEPEUSDT", LastPrice: "0.000001"},
+			"BTCUSDT":  {Symbol: "BTCUSDT", LastPrice: "60000"},
+		},
+		spot: []domain.SpotMarket{
+			{Symbol: "PEPEUSDT", BaseAsset: "PEPE", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "9000", LastPrice: "0.000001"},
+			{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "8000", LastPrice: "60000"},
+		},
+		prints: map[string][]domain.TakerPrint{
+			"PEPEUSDT": {{
+				Exchange: domain.ExchangeBinance, Symbol: "PEPEUSDT", Side: domain.TakerSideBuy,
+				Price: 0.000001, Quantity: 5e11, Notional: 500_000, Time: t0,
+			}},
+			"BTCUSDT": {{
+				Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.TakerSideSell,
+				Price: 60000, Quantity: 2, Notional: 120_000, Time: t0,
+			}},
+		},
+	}
+	pepeCirc := 10_000_000_000.0
+	btcCirc := 19_000_000.0
+	svc := New(fm, &fakeSupply{byAsset: map[string]*domain.AssetSupply{
+		"PEPE": {Asset: "PEPE", CirculatingSupply: &pepeCirc},
+		"BTC":  {Asset: "BTC", CirculatingSupply: &btcCirc},
+	}})
+	got, err := svc.GetWhales(context.Background(), "binance", "PEPEUSDT", 50_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Events) != 1 || !got.Events[0].Unusual || got.Events[0].Notional != 500_000 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Events[0].AvgPrice <= 0 || got.Events[0].FirstTime.IsZero() {
+		t.Fatalf("avg/time %+v", got.Events[0])
+	}
+
+	scan, err := svc.GetWhales(context.Background(), "binance", "", 50_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scan.Events) < 2 || scan.Events[0].Symbol != "PEPEUSDT" || scan.Events[1].Symbol != "BTCUSDT" {
+		t.Fatalf("scan %+v", scan.Events)
+	}
+	if !scan.Events[0].Unusual {
+		t.Fatalf("pepe should be unusual vs tiny mcap %+v", scan.Events[0])
+	}
+}
+
+func TestGetWhales_IncludesLiquidation(t *testing.T) {
+	now := time.Now().UTC()
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 63000, Quantity: 4, Notional: 252_000, Time: now.Add(-time.Minute),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetWhales(context.Background(), "binance", "BTCUSDT", 100_000, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Events) != 1 || got.Events[0].Kind != domain.WhaleKindLiquidation || got.Events[0].Side != domain.WhaleSideLong {
+		t.Fatalf("%+v", got)
+	}
+}
+
+type seqBookMarket struct {
+	fakeMarket
+	books []*domain.RawOrderBook
+	i     int
+}
+
+func (s *seqBookMarket) GetOrderBook(_ context.Context, _ domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	if len(s.books) == 0 {
+		return sampleRawBook("BTCUSDT"), nil
+	}
+	b := s.books[s.i]
+	if s.i < len(s.books)-1 {
+		s.i++
+	}
+	return b, nil
+}
+
+func TestGetIcebergs_DetectsAskRefill(t *testing.T) {
+	ask := func(qty float64) *domain.RawOrderBook {
+		return &domain.RawOrderBook{
+			Symbol: "BTCUSDT",
+			Bids:   []domain.PriceLevel{{Price: 63900, Quantity: 1}},
+			Asks:   []domain.PriceLevel{{Price: 64000, Quantity: qty}, {Price: 64100, Quantity: 1}},
+			Live:   true,
+		}
+	}
+	m := &seqBookMarket{books: []*domain.RawOrderBook{
+		ask(10), ask(1), ask(10), ask(0.8), ask(10),
+	}}
+	svc := New(m, &fakeSupply{})
+	for i := 0; i < 5; i++ {
+		if _, err := svc.GetSpotOrderBook(context.Background(), "binance", "BTCUSDT", "", 20, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := svc.GetIcebergs(context.Background(), "binance", "BTCUSDT", 25_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Asks) == 0 || got.Asks[0].Refills < 2 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetIcebergs_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetIcebergs(context.Background(), "binance", "  ", 0)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetBookHistory_NotConfigured(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", nil, nil, nil, 0)
+	if !errors.Is(err, domain.ErrUpstream) {
+		t.Fatalf("%v", err)
+	}
+}
+
+type stubBookHist struct {
+	snap domain.BookHistorySnapshot
+}
+
+func (s stubBookHist) SnapshotAt(_ context.Context, exchange, symbol string, at time.Time) (*domain.BookHistorySnapshot, error) {
+	out := s.snap
+	out.Exchange = domain.Exchange(exchange)
+	out.Symbol = symbol
+	if out.SampledAt.IsZero() {
+		out.SampledAt = at
+	}
+	return &out, nil
+}
+func (s stubBookHist) List(_ context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	out := s.snap
+	out.Symbol = q.Symbol
+	return []domain.BookHistorySnapshot{out}, nil
+}
+func (s stubBookHist) Compare(_ context.Context, exchange, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
+	a := s.snap
+	a.SampledAt, a.Symbol, a.Exchange = from, symbol, domain.Exchange(exchange)
+	b := s.snap
+	b.SampledAt, b.Symbol, b.BidNotional = to, symbol, s.snap.BidNotional+1000
+	b.Bids = []domain.BookHistoryLevel{{Price: 100, Quantity: 2, Notional: 200}}
+	diff := domain.CompareBookHistory(a, b)
+	return &diff, nil
+}
+func (stubBookHist) Note(string, string) {}
+
+func TestGetBookHistory_AtAndList(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithBookHistory(stubBookHist{snap: domain.BookHistorySnapshot{
+		Mid: 100, Spread: 0.2, BidNotional: 500, AskNotional: 400, SampledAt: t0,
+	}})
+	at := t0
+	got, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", &at, nil, nil, 0)
+	if err != nil || got.Snapshot == nil || got.Snapshot.Mid != 100 || got.Summary == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	list, err := svc.GetBookHistory(context.Background(), "binance", "BTCUSDT", nil, nil, nil, 10)
+	if err != nil || len(list.Snapshots) != 1 {
+		t.Fatalf("%+v %v", list, err)
+	}
+}
+
+func TestCompareBookHistory_RequiresTimes(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithBookHistory(stubBookHist{})
+	_, err := svc.CompareBookHistory(context.Background(), "binance", "BTCUSDT", time.Time{}, time.Now())
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	got, err := svc.CompareBookHistory(context.Background(), "binance", "btcusdt", t0, t0.Add(5*time.Minute))
+	if err != nil || got.Summary == "" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestGetWhales_BadExchange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetWhales(context.Background(), "coinbase", "BTCUSDT", 0, 0)
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+type fakeWindows struct {
+	byWindow map[string][]domain.WindowChange
+}
+
+func (f *fakeWindows) GetWindowChanges(_ context.Context, window string, _ []string) ([]domain.WindowChange, error) {
+	return f.byWindow[window], nil
+}
+
+func TestGetBreadth_CountsAndCarrying(t *testing.T) {
+	names := []string{"BTC", "ETH", "SOL", "XRP", "DOGE", "ADA", "AVAX", "LINK", "DOT", "UNI", "ATOM", "NEAR"}
+	spot := make([]domain.SpotMarket, 0, len(names))
+	chg1h := make([]domain.WindowChange, 0, len(names))
+	for i, b := range names {
+		pct24 := "-1"
+		if b == "BTC" || b == "ETH" {
+			pct24 = "2"
+		}
+		spot = append(spot, domain.SpotMarket{
+			Symbol: b + "USDT", BaseAsset: b, QuoteAsset: "USDT", Status: "TRADING",
+			PriceChangePercent: pct24, QuoteVolume: strconv.Itoa(100 - i),
+		})
+		ch := -0.8
+		if b == "BTC" || b == "ETH" {
+			ch = 1.5
+		}
+		chg1h = append(chg1h, domain.WindowChange{Symbol: b + "USDT", ChangePct: ch})
+	}
+	svc := New(&fakeMarket{spot: spot}, &fakeSupply{}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
+		domain.ExchangeBinance: &fakeWindows{byWindow: map[string][]domain.WindowChange{
+			domain.BreadthWindow1h: chg1h,
+			domain.BreadthWindow4h: chg1h,
+		}},
+	})
+	got, err := svc.GetBreadth(context.Background(), "binance", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Universe < 10 || len(got.Windows) != 3 || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+	var h1 domain.BreadthWindow
+	for _, w := range got.Windows {
+		if w.Window == domain.BreadthWindow1h {
+			h1 = w
+		}
+	}
+	if h1.Alignment != domain.BreadthAlignCarrying {
+		t.Fatalf("1h %+v", h1)
+	}
+}
+
+type fakeTaker struct {
+	flow    *domain.TakerVenueFlow
+	buckets []domain.TakerBucket
+	err     error
+}
+
+func (f *fakeTaker) GetTakerFlow(_ context.Context, symbol string) (*domain.TakerVenueFlow, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	cp := *f.flow
+	cp.Symbol = symbol
+	return &cp, nil
+}
+
+func (f *fakeTaker) GetTakerBuckets(_ context.Context, symbol string) ([]domain.TakerBucket, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return append([]domain.TakerBucket(nil), f.buckets...), nil
+}
+
+func TestGetCVD_PerVenueAndCombined(t *testing.T) {
+	t0 := time.Now().UTC().Add(-55 * time.Minute).Truncate(5 * time.Minute)
+	var bn, by []domain.TakerBucket
+	var candles []domain.Candle
+	for i := 0; i < 12; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		bn = append(bn, domain.TakerBucket{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: at, BuyNotional: 100, SellNotional: 20})
+		by = append(by, domain.TakerBucket{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Start: at, BuyNotional: 10, SellNotional: 40})
+		candles = append(candles, domain.Candle{OpenTime: at, Close: "64000"})
+	}
+	m := &intervalSeriesMarket{
+		fakeMarket: fakeMarket{},
+		by:         map[string]map[domain.CandleInterval][]domain.Candle{"BTCUSDT": {"5m": candles}},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: m, domain.ExchangeBybit: m,
+	}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: &fakeTaker{buckets: bn, flow: &domain.TakerVenueFlow{}},
+		domain.ExchangeBybit:   &fakeTaker{buckets: by, flow: &domain.TakerVenueFlow{}},
+	})
+	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil || len(got.Combined.Points) == 0 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Summary == "" {
+		t.Fatal("summary")
+	}
+}
+
+func TestGetCVD_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetCVD(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetTakerFlow_PerVenueAndCombined(t *testing.T) {
+	bin := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBinance,
+		Windows: []domain.TakerWindowFlow{
+			domain.SummarizeTakerWindow(300, 100, domain.TakerWindow5m, true),
+			domain.SummarizeTakerWindow(800, 400, domain.TakerWindow1h, true),
+			domain.SummarizeTakerWindow(2000, 1500, domain.TakerWindow4h, true),
+		},
+		Dominant: domain.TakerSideBuy,
+	}}
+	byb := &fakeTaker{flow: &domain.TakerVenueFlow{
+		Exchange: domain.ExchangeBybit,
+		Windows: []domain.TakerWindowFlow{
+			domain.SummarizeTakerWindow(50, 150, domain.TakerWindow5m, true),
+			domain.SummarizeTakerWindow(200, 200, domain.TakerWindow1h, true),
+			domain.SummarizeTakerWindow(400, 500, domain.TakerWindow4h, true),
+		},
+		Dominant: domain.TakerSideSell,
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+	})
+	got, err := svc.GetTakerFlow(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	if got.Combined.Windows[0].BuyNotional != 350 || got.Combined.Windows[0].SellNotional != 250 {
+		t.Fatalf("combined 5m %+v", got.Combined.Windows[0])
+	}
+	if got.Venues[0].Summary == "" {
+		t.Fatal("missing summary")
+	}
+}
+
+func TestGetVenueDivergence_Opposite(t *testing.T) {
+	now := time.Now().UTC()
+	binCandles := make([]domain.Candle, 0, 25)
+	bybCandles := make([]domain.Candle, 0, 25)
+	for i := 0; i < 25; i++ {
+		t0 := now.Add(-time.Duration(24-i) * time.Hour)
+		binCandles = append(binCandles, domain.Candle{OpenTime: t0, Close: strconv.FormatFloat(100+float64(i)*0.3, 'f', 2, 64)})
+		bybCandles = append(bybCandles, domain.Candle{OpenTime: t0, Close: strconv.FormatFloat(107-float64(i)*0.2, 'f', 2, 64)})
+	}
+	binM := &fakeMarket{candles: binCandles, ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "107", PriceChangePercent: "4"}}
+	bybM := &fakeMarket{candles: bybCandles, ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "102", PriceChangePercent: "-4"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: binM, domain.ExchangeBybit: bybM,
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: &fakeOI{ser: &domain.OpenInterestSeries{
+				Current: domain.OpenInterestPoint{Time: now, Contracts: 120, Value: 12e6},
+				History: []domain.OpenInterestPoint{{Time: now.Add(-4 * time.Hour), Contracts: 100, Value: 10e6}},
+			}},
+			domain.ExchangeBybit: &fakeOI{ser: &domain.OpenInterestSeries{
+				Current: domain.OpenInterestPoint{Time: now, Contracts: 80, Value: 8e6},
+				History: []domain.OpenInterestPoint{{Time: now.Add(-4 * time.Hour), Contracts: 70, Value: 7e6}},
+			}},
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.66, ShortShare: 0.34, Ratio: 1.9},
+			}},
+			domain.ExchangeBybit: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.34, ShortShare: 0.66, Ratio: 0.5},
+			}},
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: 0.0002, Predicted: true},
+			}},
+			domain.ExchangeBybit: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: -0.0002, Predicted: true},
+			}},
+		})
+	got, err := svc.GetVenueDivergence(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Alignment == domain.AlignUnknown {
+		t.Fatalf("%+v", got)
+	}
+	if got.Summary == "" || len(got.Diffs) < 3 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetPositioning_PerVenueAndCombined(t *testing.T) {
+	now := time.Now().UTC()
+	// Build candles via fakeMarket defaults if any; set ticker for price.
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 110, Value: 11_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 100, Value: 10_000_000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 90, Value: 9_000_000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 80, Value: 8_000_000},
+		},
+	}}
+	bybOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 55, Value: 5_500_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-4 * time.Hour), Contracts: 50, Value: 5_000_000},
+		},
+	}}
+	// Rising prices over 24h candles so price↑ OI↑ → long buildup when candles exist.
+	candles := make([]domain.Candle, 0, 25)
+	for i := 0; i < 25; i++ {
+		candles = append(candles, domain.Candle{
+			OpenTime: now.Add(-time.Duration(24-i) * time.Hour),
+			Close:    strconv.FormatFloat(100+float64(i)*0.2, 'f', 2, 64),
+		})
+	}
+	fm := &fakeMarket{
+		candles: candles,
+		ticker:  &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "105", PriceChangePercent: "4.5"},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+		domain.ExchangeBybit:   fm,
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI, domain.ExchangeBybit: bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.6, ShortShare: 0.4, Ratio: 1.5},
+			}},
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: &fakeFunding{ser: &domain.FundingSeries{
+				Current: domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+			}},
+		})
+	got, err := svc.GetPositioning(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	// OI is rising; price candles rise → expect long buildup on at least one venue or combined.
+	if got.Combined.Regime == "" {
+		t.Fatalf("empty combined %+v", got.Combined)
+	}
+}
+
+func TestGetPositioning_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetPositioning(context.Background(), "all", " ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetSqueezeRisk_PerVenueAndCombined(t *testing.T) {
+	now := time.Now().UTC()
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 9_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 90, Value: 8_100_000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 80, Value: 7_200_000},
+		},
+	}}
+	bybOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 20, Value: 1_000_000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 18, Value: 900_000},
+		},
+	}}
+	binLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.68, ShortShare: 0.32, Ratio: 2.125},
+	}}
+	bybLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45, Ratio: 1.22},
+	}}
+	binFund := &fakeFunding{ser: &domain.FundingSeries{
+		Current: domain.FundingPoint{Time: now, Rate: 0.00025, Predicted: true},
+		History: []domain.FundingPoint{{Time: now.Add(-8 * time.Hour), Rate: 0.0002}},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "100", PriceChangePercent: "1.5"}},
+		domain.ExchangeBybit:   &fakeMarket{ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "100", PriceChangePercent: "1.2"}},
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI, domain.ExchangeBybit: bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: binLS, domain.ExchangeBybit: bybLS,
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: binFund,
+		})
+	got, err := svc.GetSqueezeRisk(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 || got.Combined == nil {
+		t.Fatalf("%+v", got)
+	}
+	if got.Combined.DominantVenue != "binance" {
+		t.Fatalf("dom %s", got.Combined.DominantVenue)
+	}
+	if got.Combined.LongSqueeze.Score <= 0 {
+		t.Fatalf("combined long score %+v", got.Combined)
+	}
+}
+
+func TestGetSqueezeRisk_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetSqueezeRisk(context.Background(), "all", "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetLiquidationHunt_PerVenueFailSoft(t *testing.T) {
+	now := time.Now().UTC()
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 10, Value: 1_000_000},
+	}}
+	bybOI := &fakeOI{err: errors.New("bybit down")}
+	binLS := &fakeLS{ser: &domain.LongShortSeries{
+		Current: domain.LongShortPoint{Time: now, LongShare: 0.4, ShortShare: 0.6, Ratio: 0.67},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI,
+			domain.ExchangeBybit:   bybOI,
+		}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: binLS,
+		})
+	got, err := svc.GetLiquidationHunt(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 2 {
+		t.Fatalf("venues %+v", got.Venues)
+	}
+	var bin *domain.HuntVenueReport
+	for i := range got.Venues {
+		if got.Venues[i].Exchange == domain.ExchangeBinance {
+			bin = &got.Venues[i]
+		}
+	}
+	if bin == nil || bin.OpenInterestValue != 1_000_000 || bin.Price <= 0 {
+		t.Fatalf("binance %+v", bin)
+	}
+	if bin.UpHunt.Thesis == "" || bin.DownHunt.Thesis == "" {
+		t.Fatalf("missing scenarios %+v", bin)
+	}
+}
+
+func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationHunt(context.Background(), "all", "  ")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
 	}
 }
 

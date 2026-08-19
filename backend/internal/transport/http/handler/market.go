@@ -170,6 +170,9 @@ type orderBookWallDTO struct {
 	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
 	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
 	AppearCount       int     `json:"appearCount,omitempty"`
+	Iceberg           bool    `json:"iceberg,omitempty"`
+	IcebergRefills    int     `json:"icebergRefills,omitempty"`
+	IcebergClip       string  `json:"icebergClip,omitempty"`
 }
 
 type orderBookBandDTO struct {
@@ -270,6 +273,94 @@ func (h *MarketHandler) GetOrderBookHeatmap(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, heatmapToDTO(got))
+}
+
+// GetOpenInterest handles GET /api/v1/market/open-interest.
+func (h *MarketHandler) GetOpenInterest(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetOpenInterest(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, openInterestToDTO(got))
+}
+
+// GetFundingRate handles GET /api/v1/market/funding-rate.
+func (h *MarketHandler) GetFundingRate(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetFundingRate(r.Context(), q.Get("exchange"), q.Get("symbol"), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, fundingToDTO(got))
+}
+
+// GetLongShortRatio handles GET /api/v1/market/long-short-ratio.
+func (h *MarketHandler) GetLongShortRatio(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetLongShortRatio(r.Context(), q.Get("exchange"), q.Get("symbol"), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, longShortToDTO(got))
+}
+
+// GetFuturesHistory handles GET /api/v1/market/futures-history.
+func (h *MarketHandler) GetFuturesHistory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	var fromPtr, toPtr *time.Time
+	if raw := q.Get("from"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		fromPtr = &t
+	}
+	if raw := q.Get("to"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		toPtr = &t
+	}
+	got, err := h.svc.GetFuturesHistory(r.Context(), q.Get("metric"), q.Get("exchange"), q.Get("symbol"), fromPtr, toPtr, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, futuresHistoryToDTO(q.Get("metric"), q.Get("exchange"), q.Get("symbol"), got))
 }
 
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.
@@ -390,6 +481,9 @@ type combinedWallDTO struct {
 	PresentForSeconds float64 `json:"presentForSeconds,omitempty"`
 	VisibleSeconds    float64 `json:"visibleSeconds,omitempty"`
 	AppearCount       int     `json:"appearCount,omitempty"`
+	Iceberg           bool    `json:"iceberg,omitempty"`
+	IcebergRefills    int     `json:"icebergRefills,omitempty"`
+	IcebergClip       string  `json:"icebergClip,omitempty"`
 }
 
 type combinedVenueDTO struct {
@@ -444,6 +538,7 @@ func combinedBookToDTO(a *domain.CombinedOrderBookAnalysis) combinedOrderBookRes
 			Notional: w.Notional, DistancePct: w.DistancePct, Share: w.Share,
 			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
 			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
+			Iceberg: w.Iceberg, IcebergRefills: w.IcebergRefills, IcebergClip: w.IcebergClip,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))
@@ -671,6 +766,340 @@ func heatmapToDTO(h *domain.OrderBookHeatmap) orderBookHeatmapResponse {
 	}
 }
 
+type openInterestLevelDTO struct {
+	Contracts string `json:"contracts"`
+	Value     string `json:"value"`
+	Time      string `json:"time,omitempty"`
+}
+
+type openInterestWindowDTO struct {
+	Window            string `json:"window"`
+	OpenInterest      string `json:"openInterest"`
+	OpenInterestValue string `json:"openInterestValue"`
+	Change            string `json:"change"`
+	ChangePct         string `json:"changePct"`
+	ChangeValue       string `json:"changeValue"`
+	ChangeValuePct    string `json:"changeValuePct"`
+	Direction         string `json:"direction"`
+	Complete          bool   `json:"complete"`
+	SampleTime        string `json:"sampleTime,omitempty"`
+}
+
+type openInterestVenueDTO struct {
+	Exchange string                  `json:"exchange"`
+	Current  openInterestLevelDTO    `json:"current"`
+	Windows  []openInterestWindowDTO `json:"windows"`
+}
+
+type openInterestResponse struct {
+	Symbol     string                  `json:"symbol"`
+	Exchange   string                  `json:"exchange"`
+	Unit       string                  `json:"unit"`
+	Current    openInterestLevelDTO    `json:"current"`
+	Windows    []openInterestWindowDTO `json:"windows"`
+	Venues     []openInterestVenueDTO  `json:"venues"`
+	Funding    *fundingRateResponse    `json:"funding,omitempty"`
+	LongShort  *longShortResponse      `json:"longShort,omitempty"`
+	AsOf       string                  `json:"asOf,omitempty"`
+	VenueCount int                     `json:"venueCount"`
+	Note       string                  `json:"note"`
+}
+
+type fundingPrintDTO struct {
+	Time      string `json:"time,omitempty"`
+	Rate      string `json:"rate"`
+	RatePct   string `json:"ratePct"`
+	Payer     string `json:"payer"`
+	MarkPrice string `json:"markPrice,omitempty"`
+	Predicted bool   `json:"predicted,omitempty"`
+}
+
+type fundingCurrentDTO struct {
+	Rate            string `json:"rate"`
+	RatePct         string `json:"ratePct"`
+	Payer           string `json:"payer"`
+	NextFundingTime string `json:"nextFundingTime,omitempty"`
+	IntervalHours   int    `json:"intervalHours"`
+	Time            string `json:"time,omitempty"`
+}
+
+type fundingVenueDTO struct {
+	Exchange    string            `json:"exchange"`
+	Current     fundingCurrentDTO `json:"current"`
+	LastSettled *fundingPrintDTO  `json:"lastSettled,omitempty"`
+	AvgLast3    string            `json:"avgLast3,omitempty"`
+	AvgLast3Pct string            `json:"avgLast3Pct,omitempty"`
+	History     []fundingPrintDTO `json:"history"`
+}
+
+type fundingRateResponse struct {
+	Symbol     string             `json:"symbol"`
+	Exchange   string             `json:"exchange"`
+	Current    *fundingCurrentDTO `json:"current,omitempty"`
+	Venues     []fundingVenueDTO  `json:"venues"`
+	History    []fundingPrintDTO  `json:"history,omitempty"`
+	AsOf       string             `json:"asOf,omitempty"`
+	VenueCount int                `json:"venueCount"`
+	Note       string             `json:"note"`
+}
+
+type longShortLevelDTO struct {
+	Time      string `json:"time,omitempty"`
+	LongPct   string `json:"longPct"`
+	ShortPct  string `json:"shortPct"`
+	Ratio     string `json:"ratio"`
+	Bias      string `json:"bias"`
+	LongShare string `json:"longShare"`
+}
+
+type longShortVenueDTO struct {
+	Exchange string              `json:"exchange"`
+	Kind     string              `json:"kind"`
+	Period   string              `json:"period"`
+	Current  longShortLevelDTO   `json:"current"`
+	Change   string              `json:"change,omitempty"`
+	History  []longShortLevelDTO `json:"history"`
+}
+
+type longShortResponse struct {
+	Symbol     string              `json:"symbol"`
+	Exchange   string              `json:"exchange"`
+	Kind       string              `json:"kind"`
+	Period     string              `json:"period"`
+	Current    *longShortLevelDTO  `json:"current,omitempty"`
+	Venues     []longShortVenueDTO `json:"venues"`
+	History    []longShortLevelDTO `json:"history,omitempty"`
+	AsOf       string              `json:"asOf,omitempty"`
+	VenueCount int                 `json:"venueCount"`
+	Note       string              `json:"note"`
+}
+
+func oiLevelDTO(l domain.OpenInterestLevel) openInterestLevelDTO {
+	t := ""
+	if !l.Time.IsZero() {
+		t = l.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return openInterestLevelDTO{Contracts: l.Contracts, Value: l.Value, Time: t}
+}
+
+func oiWindowsDTO(in []domain.OpenInterestWindow) []openInterestWindowDTO {
+	out := make([]openInterestWindowDTO, 0, len(in))
+	for _, w := range in {
+		row := openInterestWindowDTO{
+			Window: w.Window, OpenInterest: w.OpenInterest, OpenInterestValue: w.OpenInterestValue,
+			Change: w.Change, ChangePct: w.ChangePct, ChangeValue: w.ChangeValue, ChangeValuePct: w.ChangeValuePct,
+			Direction: w.Direction, Complete: w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
+	if a == nil {
+		return openInterestResponse{}
+	}
+	venues := make([]openInterestVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		venues = append(venues, openInterestVenueDTO{
+			Exchange: v.Exchange, Current: oiLevelDTO(v.Current), Windows: oiWindowsDTO(v.Windows),
+		})
+	}
+	asOf := ""
+	if !a.AsOf.IsZero() {
+		asOf = a.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := openInterestResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
+		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
+		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements. longShort is the share of accounts that are long vs short. Combined all sums OI across venues; funding and long/short stay per venue. Informational only.",
+	}
+	if a.Funding != nil {
+		f := fundingToDTO(a.Funding)
+		out.Funding = &f
+	}
+	if a.LongShort != nil {
+		ls := longShortToDTO(a.LongShort)
+		out.LongShort = &ls
+	}
+	return out
+}
+
+func fundingPrintDTOFrom(p domain.FundingPrint) fundingPrintDTO {
+	t := ""
+	if !p.Time.IsZero() {
+		t = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return fundingPrintDTO{
+		Time: t, Rate: p.Rate, RatePct: p.RatePct, Payer: p.Payer,
+		MarkPrice: p.MarkPrice, Predicted: p.Predicted,
+	}
+}
+
+func fundingCurrentDTOFrom(c domain.FundingCurrent) fundingCurrentDTO {
+	out := fundingCurrentDTO{
+		Rate: c.Rate, RatePct: c.RatePct, Payer: c.Payer, IntervalHours: c.IntervalHours,
+	}
+	if !c.NextFundingTime.IsZero() {
+		out.NextFundingTime = c.NextFundingTime.UTC().Format(time.RFC3339Nano)
+	}
+	if !c.Time.IsZero() {
+		out.Time = c.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingToDTO(a *domain.FundingSnapshot) fundingRateResponse {
+	if a == nil {
+		return fundingRateResponse{}
+	}
+	venues := make([]fundingVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		row := fundingVenueDTO{
+			Exchange: v.Exchange, Current: fundingCurrentDTOFrom(v.Current),
+			AvgLast3: v.AvgLast3, AvgLast3Pct: v.AvgLast3Pct,
+			History: make([]fundingPrintDTO, 0, len(v.History)),
+		}
+		if v.LastSettled != nil {
+			p := fundingPrintDTOFrom(*v.LastSettled)
+			row.LastSettled = &p
+		}
+		for _, h := range v.History {
+			row.History = append(row.History, fundingPrintDTOFrom(h))
+		}
+		venues = append(venues, row)
+	}
+	hist := make([]fundingPrintDTO, 0, len(a.History))
+	for _, h := range a.History {
+		hist = append(hist, fundingPrintDTOFrom(h))
+	}
+	asOf := ""
+	if !a.AsOf.IsZero() {
+		asOf = a.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := fundingRateResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Venues: venues, History: hist,
+		AsOf: asOf, VenueCount: a.VenueCount,
+		Note: "Binance USD-M and Bybit linear perpetual funding. rate is decimal (0.0001 = 0.01%). ratePct is percent. payer is who pays at settlement (positive rate → longs pay shorts). current is the predicted next payment, not yet settled. history is recent settlements, newest first. Combined all does not average venues. Informational only.",
+	}
+	if a.Current != nil {
+		cur := fundingCurrentDTOFrom(*a.Current)
+		out.Current = &cur
+	}
+	return out
+}
+
+func longShortLevelDTOFrom(p domain.LongShortLevel) longShortLevelDTO {
+	t := ""
+	if !p.Time.IsZero() {
+		t = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return longShortLevelDTO{
+		Time: t, LongPct: p.LongPct, ShortPct: p.ShortPct,
+		Ratio: p.Ratio, Bias: p.Bias, LongShare: p.LongShare,
+	}
+}
+
+func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
+	if a == nil {
+		return longShortResponse{}
+	}
+	venues := make([]longShortVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		hist := make([]longShortLevelDTO, 0, len(v.History))
+		for _, h := range v.History {
+			hist = append(hist, longShortLevelDTOFrom(h))
+		}
+		venues = append(venues, longShortVenueDTO{
+			Exchange: v.Exchange, Kind: v.Kind, Period: v.Period,
+			Current: longShortLevelDTOFrom(v.Current), Change: v.Change, History: hist,
+		})
+	}
+	hist := make([]longShortLevelDTO, 0, len(a.History))
+	for _, h := range a.History {
+		hist = append(hist, longShortLevelDTOFrom(h))
+	}
+	asOf := ""
+	if !a.AsOf.IsZero() {
+		asOf = a.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	out := longShortResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Kind: a.Kind, Period: a.Period,
+		Venues: venues, History: hist, AsOf: asOf, VenueCount: a.VenueCount,
+		Note: "Share of accounts that are long vs short (not position size). ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
+	}
+	if a.Current != nil {
+		cur := longShortLevelDTOFrom(*a.Current)
+		out.Current = &cur
+	}
+	return out
+}
+
+func futuresHistoryToDTO(metric, exchange, symbol string, raw any) map[string]any {
+	metric, _ = domain.ParseFuturesMetric(metric)
+	exchange, _ = domain.ParseOpenInterestExchange(exchange)
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	out := map[string]any{
+		"metric": metric, "exchange": exchange, "symbol": symbol,
+		"note": "Durable SQLite history. Duplicates are ignored. One venue failing does not drop the other. Informational only.",
+	}
+	switch rows := raw.(type) {
+	case []domain.FuturesSnapshot:
+		items := make([]map[string]any, 0, len(rows))
+		for _, r := range rows {
+			item := map[string]any{
+				"exchange": string(r.Exchange), "sampledAt": r.SampledAt.UTC().Format(time.RFC3339Nano),
+			}
+			switch r.Metric {
+			case domain.FuturesMetricOpenInterest:
+				item["contracts"] = formatHistQty(r.Contracts)
+				item["value"] = formatHistQty(r.Value)
+			case domain.FuturesMetricFunding:
+				dec, pct := domain.FormatFundingRate(r.FundingRate)
+				item["rate"] = dec
+				item["ratePct"] = pct
+				item["predicted"] = r.Predicted
+				if r.IntervalHours > 0 {
+					item["intervalHours"] = r.IntervalHours
+				}
+			case domain.FuturesMetricLongShort:
+				item["longPct"] = formatHistQty(r.LongShare * 100)
+				item["shortPct"] = formatHistQty(r.ShortShare * 100)
+				item["ratio"] = formatHistQty(r.Ratio)
+				item["bias"] = domain.LongShortBias(r.Ratio)
+			}
+			items = append(items, item)
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	case []domain.LiquidationEvent:
+		items := make([]map[string]any, 0, len(rows))
+		for _, e := range rows {
+			items = append(items, map[string]any{
+				"exchange": string(e.Exchange), "side": e.Side,
+				"price": formatHistQty(e.Price), "quantity": formatHistQty(e.Quantity),
+				"notional": formatHistQty(e.Notional),
+				"time":     e.Time.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		out["items"] = items
+		out["count"] = len(items)
+	default:
+		out["items"] = []any{}
+		out["count"] = 0
+	}
+	return out
+}
+
+func formatHistQty(v float64) string {
+	s := domain.FormatSignedQty(v)
+	return strings.TrimPrefix(s, "+")
+}
+
 func orderBookToDTO(book *domain.OrderBook) orderBookResponse {
 	if book == nil {
 		return orderBookResponse{}
@@ -709,6 +1138,7 @@ func analysisToDTO(a domain.OrderBookAnalysis) orderBookAnalysisDTO {
 			DistancePct: w.DistancePct, Share: w.Share,
 			Behavior: w.Behavior, AgeSeconds: w.AgeSeconds, PresentForSeconds: w.PresentForSeconds,
 			VisibleSeconds: w.VisibleSeconds, AppearCount: w.AppearCount,
+			Iceberg: w.Iceberg, IcebergRefills: w.IcebergRefills, IcebergClip: w.IcebergClip,
 		})
 	}
 	bands := make([]orderBookBandDTO, 0, len(a.Bands))

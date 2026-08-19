@@ -263,6 +263,34 @@ class OrderBookInput(BaseModel):
     )
 
 
+class IcebergsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all)",
+    )
+    min_notional: float = Field(
+        default=0,
+        description="Minimum visible clip in USD (default 25000)",
+    )
+
+
+class OrderBookHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    at: str = Field(default="", description="Point in time RFC3339 or unix ms")
+    from_time: str = Field(default="", description="List window start")
+    to_time: str = Field(default="", description="List window end")
+    limit: int = Field(default=0, description="Max list rows (default 60)")
+
+
+class OrderBookCompareInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance|coinbase|bybit")
+    from_time: str = Field(description="Earlier time RFC3339 or unix ms")
+    to_time: str = Field(description="Later time RFC3339 or unix ms")
+
+
 class OrderBookAnalysisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
@@ -290,6 +318,147 @@ class LiquidationsInput(BaseModel):
         default="all",
         description="binance|bybit|all (default all = both venues)",
     )
+
+
+class OpenInterestInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues)",
+    )
+
+
+class LiquidationHuntInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, never averaged)",
+    )
+
+
+class SqueezeRiskInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+
+
+class PositioningInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined market direction)",
+    )
+
+
+class VenueDivergenceInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+
+
+class TakerFlowInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+
+
+class BasisInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + agreement)",
+    )
+
+
+class CorrelationInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
+class VolatilityInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
+class SnapshotInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. SOLUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
+class LevelsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+
+
+class WhalesInput(BaseModel):
+    symbol: str = Field(
+        default="",
+        description="Pair e.g. BTCUSDT. Empty scans top liquid USDT coins.",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+    min_notional: float = Field(
+        default=0,
+        description="Minimum USD size (default 100000)",
+    )
+    limit: int = Field(
+        default=0,
+        description="Max events (default 30, max 100)",
+    )
+
+
+class BreadthInput(BaseModel):
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|coinbase (default binance)",
+    )
+    limit: int = Field(
+        default=80,
+        description="How many liquid coins to include (default 80, max 150)",
+    )
+
+
+class FuturesHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    metric: str = Field(description="open_interest | funding | long_short | liquidations")
+    exchange: str = Field(default="all", description="binance|bybit|all")
+    limit: int = Field(default=200, ge=1, le=1000)
+    start: str = Field(default="", description="RFC3339 or unix ms")
+    end: str = Field(default="", description="RFC3339 or unix ms")
+
+
+class LongShortInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, not averaged)",
+    )
+    limit: int = Field(default=24, ge=1, le=100, description="5m history size")
+
+
+class FundingRateInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues, not averaged)",
+    )
+    limit: int = Field(default=12, ge=1, le=30, description="Settled history size")
 
 
 class MarketLiquidityInput(BaseModel):
@@ -887,6 +1056,46 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["group"] = group
         return http.get("/api/v1/market/orderbook", params)
 
+    def get_orderbook_icebergs(
+        symbol: str,
+        exchange: str = "all",
+        min_notional: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if min_notional:
+            params["minNotional"] = min_notional
+        return http.get("/api/v1/market/orderbook/icebergs", params)
+
+    def get_orderbook_history(
+        symbol: str,
+        exchange: str = "binance",
+        at: str = "",
+        from_time: str = "",
+        to_time: str = "",
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if at:
+            params["at"] = at
+        if from_time:
+            params["from"] = from_time
+        if to_time:
+            params["to"] = to_time
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/history", params)
+
+    def compare_orderbook_history(
+        symbol: str,
+        exchange: str = "binance",
+        from_time: str = "",
+        to_time: str = "",
+    ) -> str:
+        return http.get(
+            "/api/v1/market/orderbook/history/compare",
+            {"symbol": symbol, "exchange": exchange, "from": from_time, "to": to_time},
+        )
+
     def analyze_market_orderbook(symbol: str, range_pct: float = 2.0) -> str:
         return http.get(
             "/api/v1/market/orderbook/combined",
@@ -897,6 +1106,131 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidations",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_open_interest(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/open-interest",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def estimate_liquidation_hunt(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-hunt",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/squeeze-risk",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_positioning(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/positioning",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_venue_divergence(symbol: str) -> str:
+        return http.get(
+            "/api/v1/market/venue-divergence",
+            {"symbol": symbol},
+        )
+
+    def get_taker_flow(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/taker-flow",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_cvd(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/cvd",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_basis(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/basis",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_price_correlation(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/correlation",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_price_volatility(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/volatility",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_market_snapshot(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/snapshot",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_support_resistance(symbol: str, exchange: str = "binance") -> str:
+        return http.get(
+            "/api/v1/market/levels",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_whale_trades(
+        symbol: str = "",
+        exchange: str = "all",
+        min_notional: float = 0,
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange}
+        if symbol:
+            params["symbol"] = symbol
+        if min_notional:
+            params["minNotional"] = min_notional
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/whales", params)
+
+    def get_market_breadth(exchange: str = "binance", limit: int = 80) -> str:
+        return http.get(
+            "/api/v1/market/breadth",
+            {"exchange": exchange, "limit": limit},
+        )
+
+    def get_futures_history(
+        symbol: str,
+        metric: str,
+        exchange: str = "all",
+        limit: int = 200,
+        start: str = "",
+        end: str = "",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "metric": metric,
+            "exchange": exchange,
+            "limit": limit,
+        }
+        if start:
+            params["from"] = start
+        if end:
+            params["to"] = end
+        return http.get("/api/v1/market/futures-history", params)
+
+    def get_long_short_ratio(symbol: str, exchange: str = "all", limit: int = 24) -> str:
+        return http.get(
+            "/api/v1/market/long-short-ratio",
+            {"symbol": symbol, "exchange": exchange, "limit": limit},
+        )
+
+    def get_funding_rate(symbol: str, exchange: str = "all", limit: int = 12) -> str:
+        return http.get(
+            "/api/v1/market/funding-rate",
+            {"symbol": symbol, "exchange": exchange, "limit": limit},
         )
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
@@ -2005,6 +2339,37 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=OrderBookInput,
         ),
         StructuredTool.from_function(
+            get_orderbook_icebergs,
+            name="get_orderbook_icebergs",
+            description=(
+                "Detect iceberg-style refill: a visible buy or sell clip is "
+                "eaten at the same price, then a similar size comes back, "
+                "repeatedly. Both sides. Clip size, refill count, executed "
+                "notional. Book pattern only, not proof of a hidden order."
+            ),
+            args_schema=IcebergsInput,
+        ),
+        StructuredTool.from_function(
+            get_orderbook_history,
+            name="get_orderbook_history",
+            description=(
+                "Stored spot order-book snapshots: bid/ask levels, spread, "
+                "total liquidity, imbalance, and large walls. Pass at for the "
+                "book nearest that time. Omit at to list recent samples."
+            ),
+            args_schema=OrderBookHistoryInput,
+        ),
+        StructuredTool.from_function(
+            compare_orderbook_history,
+            name="compare_orderbook_history",
+            description=(
+                "Compare two stored spot order books and show which price "
+                "levels gained or lost liquidity, plus mid/spread/imbalance "
+                "change and walls that appeared or were pulled."
+            ),
+            args_schema=OrderBookCompareInput,
+        ),
+        StructuredTool.from_function(
             analyze_spot_orderbook,
             name="analyze_spot_orderbook",
             description=(
@@ -2046,6 +2411,192 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "and whether a wall persisted. window is lookback seconds (default 600)."
             ),
             args_schema=OrderBookHeatmapInput,
+        ),
+        StructuredTool.from_function(
+            get_open_interest,
+            name="get_open_interest",
+            description=(
+                "Futures open interest for a coin: current outstanding size plus "
+                "how much it increased or decreased in the last 5 minutes, 1 hour, "
+                "4 hours, and 24 hours. contracts is base-asset size; value is USDT "
+                "notional. Binance USD-M + Bybit linear. exchange=all sums both. "
+                "Use for 'is OI rising or falling'."
+            ),
+            args_schema=OpenInterestInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_rate,
+            name="get_funding_rate",
+            description=(
+                "Perpetual futures funding rate: predicted next payment plus recent "
+                "settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. "
+                "payer=long means longs pay shorts. Binance USD-M + Bybit linear. "
+                "exchange=all returns each venue separately (not averaged)."
+            ),
+            args_schema=FundingRateInput,
+        ),
+        StructuredTool.from_function(
+            get_long_short_ratio,
+            name="get_long_short_ratio",
+            description=(
+                "Futures long/short account ratio: share of accounts that are long "
+                "vs short (not position size). ratio is long/short (1 = even). "
+                "bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. "
+                "Binance USD-M + Bybit linear. exchange=all is per venue, not averaged."
+            ),
+            args_schema=LongShortInput,
+        ),
+        StructuredTool.from_function(
+            estimate_liquidation_hunt,
+            name="estimate_liquidation_hunt",
+            description=(
+                "Hypothetical only: if Binance or Bybit walked their own spot "
+                "book to push price and force futures liquidations, where is "
+                "the main long/short pressure, how much spot buy/sell the "
+                "visible book needs, and a rough desk result (book-only vs "
+                "with cascade exit). Venues are never averaged. Not evidence "
+                "of exchange behavior. Not financial advice."
+            ),
+            args_schema=LiquidationHuntInput,
+        ),
+        StructuredTool.from_function(
+            get_squeeze_risk,
+            name="get_squeeze_risk",
+            description=(
+                "Long-squeeze and short-squeeze risk scores (0–100) for a coin "
+                "on Binance and Bybit, plus an OI-weighted combined view. "
+                "Explains which side is crowded and why risk is high or low. "
+                "Uses OI change, funding, long/short accounts, liquidations. "
+                "Not a prediction or financial advice."
+            ),
+            args_schema=SqueezeRiskInput,
+        ),
+        StructuredTool.from_function(
+            get_positioning,
+            name="get_positioning",
+            description=(
+                "Price + open interest positioning: long_buildup, short_buildup, "
+                "long_unwinding, or short_covering for Binance and Bybit, plus "
+                "a general market (combined) direction. Short summary and why. "
+                "Not a prediction or financial advice."
+            ),
+            args_schema=PositioningInput,
+        ),
+        StructuredTool.from_function(
+            get_venue_divergence,
+            name="get_venue_divergence",
+            description=(
+                "Compare Binance vs Bybit for one coin: same or opposite "
+                "direction. Lists which of OI, funding, crowding, and "
+                "positioning differ and why that split can matter."
+            ),
+            args_schema=VenueDivergenceInput,
+        ),
+        StructuredTool.from_function(
+            get_taker_flow,
+            name="get_taker_flow",
+            description=(
+                "Aggressive futures buy vs sell volume (who is hitting the "
+                "book) for 5m, 1h, and 4h on Binance and Bybit, plus combined."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_cvd,
+            name="get_cvd",
+            description=(
+                "Cumulative Volume Delta: running sum of market-buy minus "
+                "market-sell notional over time, with price. 1h / 4h / 24h "
+                "reads say if flow confirms price, disagrees, or is absorbed "
+                "(lots of market buys, price barely moves). Binance and Bybit "
+                "separately plus combined."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_basis,
+            name="get_basis",
+            description=(
+                "How far the perpetual is from spot/index: premium or discount, "
+                "dollar and percent, expanding or shrinking, with funding and "
+                "OI context. Binance and Bybit separately plus whether they agree."
+            ),
+            args_schema=BasisInput,
+        ),
+        StructuredTool.from_function(
+            get_price_correlation,
+            name="get_price_correlation",
+            description=(
+                "How similarly a coin has been moving with BTC and ETH over "
+                "the last 1 hour, 4 hours, and 24 hours: correlation, beta, "
+                "same-direction share, and whether it follows with a delay."
+            ),
+            args_schema=CorrelationInput,
+        ),
+        StructuredTool.from_function(
+            get_market_breadth,
+            name="get_market_breadth",
+            description=(
+                "How many of the liquid coins we follow are up vs down over "
+                "1h, 4h, and 24h (count and percent). Says whether BTC and "
+                "ETH are moving with the rest of the market or a few large "
+                "coins are carrying it."
+            ),
+            args_schema=BreadthInput,
+        ),
+        StructuredTool.from_function(
+            get_price_volatility,
+            name="get_price_volatility",
+            description=(
+                "How volatile a coin has been over 1h, 4h, and 24h: net move, "
+                "high-low range, whether the range is bigger than normal or "
+                "expanding, and whether it is jumpy or calm versus BTC and ETH."
+            ),
+            args_schema=VolatilityInput,
+        ),
+        StructuredTool.from_function(
+            get_market_snapshot,
+            name="get_market_snapshot",
+            description=(
+                "Price, volume, market cap, open interest, funding, "
+                "long/short, and taker buy/sell together for one coin, "
+                "with current values and 1h / 4h / 24h changes. Use when "
+                "volume or OI may be building before price moves."
+            ),
+            args_schema=SnapshotInput,
+        ),
+        StructuredTool.from_function(
+            get_support_resistance,
+            name="get_support_resistance",
+            description=(
+                "Support and resistance areas from price history, volume, "
+                "and the live order book. Distance from last, test count, "
+                "nearby bid/ask liquidity, and a breakout score when price "
+                "is close to or through a level (volume, book, taker flow)."
+            ),
+            args_schema=LevelsInput,
+        ),
+        StructuredTool.from_function(
+            get_whale_trades,
+            name="get_whale_trades",
+            description=(
+                "Largest recent aggressive futures buys/sells (taker long/"
+                "short) and large liquidations, sorted biggest first. Each "
+                "row has average price, first/last time, total size, and "
+                "whether the print is large versus that coin's market cap. "
+                "Omit symbol to scan the top liquid USDT coins."
+            ),
+            args_schema=WhalesInput,
+        ),
+        StructuredTool.from_function(
+            get_futures_history,
+            name="get_futures_history",
+            description=(
+                "Durable stored history of futures open interest, funding, "
+                "long/short ratio, or liquidations. Survives restarts. "
+                "metric=open_interest|funding|long_short|liquidations."
+            ),
+            args_schema=FuturesHistoryInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

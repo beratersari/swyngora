@@ -17,6 +17,26 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_market_liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `get_orderbook_heatmap` | Resting bid/ask size over time (pre-warmed for live crypto pairs; not executed volume) |
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations (Binance USD-M + Bybit linear) |
+| `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
+| `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
+| `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
+| `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
+| `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
+| `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
+| `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |
+| `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
+| `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
+| `get_cvd` | Cumulative buy−sell (CVD) versus price, 1h/4h/24h, per venue + combined |
+| `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
+| `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
+| `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |
+| `get_price_volatility` | How much a coin moved over 1h / 4h / 24h vs its normal range and vs BTC/ETH |
+| `get_market_snapshot` | Price, volume, mcap, OI, funding, LS, and taker buy/sell together (1h / 4h / 24h) |
+| `get_support_resistance` | Support/resistance from price, volume, and the order book, plus breakout score |
+| `get_whale_trades` | Largest recent aggressive buys/sells and liquidations, biggest first |
+| `get_orderbook_history` | Stored spot book at a time (levels, spread, liquidity, walls) |
+| `compare_orderbook_history` | Which price levels gained or lost liquidity between two times |
+| `get_orderbook_icebergs` | Same-price clip eaten then refilled (bid and ask) |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |

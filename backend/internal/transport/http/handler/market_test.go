@@ -57,6 +57,14 @@ func (stubMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker
 	}, nil
 }
 
+func (stubMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain.TakerPrint, error) {
+	t0 := time.Unix(1_700_000_000, 0).UTC()
+	return []domain.TakerPrint{{
+		Exchange: domain.ExchangeBinance, Symbol: symbol, Side: domain.TakerSideBuy,
+		Price: 100, Quantity: 2000, Notional: 200_000, Time: t0,
+	}}, nil
+}
+
 func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	return &domain.RawOrderBook{
 		Symbol: q.Symbol,
@@ -247,6 +255,588 @@ func TestGetOrderBookHeatmap_BadWindow(t *testing.T) {
 	h.GetOrderBookHeatmap(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetOpenInterest_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/open-interest?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetOpenInterest(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body openInterestResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Unit != "BTC" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetFundingRate_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-rate?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingRate(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body fundingRateResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBasis_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/basis?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetBasis(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body basisResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBasis_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/basis", nil)
+	rr := httptest.NewRecorder()
+	h.GetBasis(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetCorrelation_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/correlation?symbol=SOLUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetCorrelation(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body corrResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "SOLUSDT" || len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLevels_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/levels?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLevels(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body levelsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLevels_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/levels", nil)
+	rr := httptest.NewRecorder()
+	h.GetLevels(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetSnapshot_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/snapshot?symbol=SOLUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetSnapshot(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body snapshotResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "SOLUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetSnapshot_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/snapshot", nil)
+	rr := httptest.NewRecorder()
+	h.GetSnapshot(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetCVD_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cvdResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetCVD_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetIcebergs_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetIcebergs(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body icebergsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Summary == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetIcebergs_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs", nil)
+	rr := httptest.NewRecorder()
+	h.GetIcebergs(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetBookHistory_NotConfigured(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetBookHistory(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+type stubBookHistHTTP struct{}
+
+func (stubBookHistHTTP) SnapshotAt(_ context.Context, _, symbol string, at time.Time) (*domain.BookHistorySnapshot, error) {
+	return &domain.BookHistorySnapshot{
+		Exchange: domain.ExchangeBinance, Symbol: symbol, SampledAt: at,
+		Mid: 100, Spread: 0.2, BidNotional: 500, AskNotional: 400,
+		Bids: []domain.BookHistoryLevel{{Price: 99.9, Quantity: 1, Notional: 99.9}},
+	}, nil
+}
+func (stubBookHistHTTP) List(_ context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	return []domain.BookHistorySnapshot{{
+		Exchange: domain.ExchangeBinance, Symbol: q.Symbol,
+		SampledAt: time.Unix(1_700_000_000, 0).UTC(), Mid: 100, BidNotional: 500, AskNotional: 400,
+	}}, nil
+}
+func (stubBookHistHTTP) Compare(_ context.Context, _, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
+	fromS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: from, Mid: 100, BidNotional: 500, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 2, Notional: 198}}}
+	toS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: to, Mid: 102, BidNotional: 200, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 1, Notional: 99}}}
+	d := domain.CompareBookHistory(fromS, toS)
+	return &d, nil
+}
+func (stubBookHistHTTP) Note(string, string) {}
+
+func TestGetBookHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history?symbol=BTCUSDT&at=2026-08-16T12:00:00Z", nil)
+	rr := httptest.NewRecorder()
+	h.GetBookHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body bookHistoryResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Snapshot == nil || body.Snapshot.Mid == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestCompareBookHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history/compare?symbol=BTCUSDT&from=2026-08-16T12:00:00Z&to=2026-08-16T12:05:00Z", nil)
+	rr := httptest.NewRecorder()
+	h.CompareBookHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body bookDiffResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Summary == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestCompareBookHistory_MissingTimes(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/history/compare?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.CompareBookHistory(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetWhales_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body whalesResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Exchange != "all" || len(body.Events) == 0 || body.Events[0].AvgPrice == "" || body.Events[0].FirstTime.IsZero() {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetWhales_ScanOK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetWhales_BadExchange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/whales?exchange=coinbase", nil)
+	rr := httptest.NewRecorder()
+	h.GetWhales(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetVolatility_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volatility?symbol=SOLUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolatility(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "SOLUSDT" || len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetVolatility_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volatility", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolatility(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetBreadth_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/breadth", nil)
+	rr := httptest.NewRecorder()
+	h.GetBreadth(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body breadthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Windows) != 3 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBreadth_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/breadth?limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetBreadth(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetCorrelation_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/correlation", nil)
+	rr := httptest.NewRecorder()
+	h.GetCorrelation(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetTakerFlow_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetTakerFlow(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body takerFlowResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetTakerFlow_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow", nil)
+	rr := httptest.NewRecorder()
+	h.GetTakerFlow(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetVenueDivergence_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/venue-divergence?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetVenueDivergence(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body venueDivergenceResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetVenueDivergence_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/venue-divergence", nil)
+	rr := httptest.NewRecorder()
+	h.GetVenueDivergence(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetPositioning_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/positioning?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetPositioning(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body positioningResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetPositioning_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/positioning", nil)
+	rr := httptest.NewRecorder()
+	h.GetPositioning(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetSqueezeRisk_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/squeeze-risk?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetSqueezeRisk(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body squeezeResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetSqueezeRisk_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/squeeze-risk", nil)
+	rr := httptest.NewRecorder()
+	h.GetSqueezeRisk(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetLiquidationHunt_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHunt(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body huntResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHunt(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetFuturesHistory_NotConfigured(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+type stubFutHist struct{}
+
+func (stubFutHist) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	return []domain.FuturesSnapshot{{
+		Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance,
+		Symbol: q.Symbol, SampledAt: time.Unix(1_700_000_000, 0).UTC(),
+		Contracts: 100, Value: 6_400_000,
+	}}, nil
+}
+
+func TestGetFuturesHistory_OK(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{})
+	svc.SetFuturesHistory(stubFutHist{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["metric"] != "open_interest" || body["symbol"] != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+	items, ok := body["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items=%v", body["items"])
+	}
+}
+
+func TestGetLongShortRatio_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/long-short-ratio?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLongShortRatio(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body longShortResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetFundingRate_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-rate?symbol=BTCUSDT&limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingRate(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetOpenInterest_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/open-interest", nil)
+	rr := httptest.NewRecorder()
+	h.GetOpenInterest(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

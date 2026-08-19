@@ -32,12 +32,32 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
+| `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list |
+| `GET` | `/api/v1/market/orderbook/history/compare` | Which price levels gained or lost liquidity between two times |
+| `GET` | `/api/v1/market/orderbook/icebergs` | Same-price clip eaten then refilled (bid and ask) |
 | `GET` | `/api/v1/market/orderbook/combined` | Market-wide pressure from all three venues in one price band |
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time (pre-warmed for all live crypto pairs; `window` seconds) |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC public data-api) |
+| `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
+| `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
+| `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
+| `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |
+| `GET` | `/api/v1/market/positioning` | Price+OI regime (buildup / unwinding / covering) per venue + combined market |
+| `GET` | `/api/v1/market/venue-divergence` | Binance vs Bybit: same or opposite, which signals differ and why |
+| `GET` | `/api/v1/market/taker-flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
+| `GET` | `/api/v1/market/cvd` | Cumulative buy−sell (CVD) versus price, per venue + combined |
+| `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read |
+| `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
+| `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
+| `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |
+| `GET` | `/api/v1/market/snapshot` | Price, volume, mcap, OI, funding, LS, and taker flow together |
+| `GET` | `/api/v1/market/levels` | Support and resistance areas plus breakout strength |
+| `GET` | `/api/v1/market/whales` | Large trades and liquidations, biggest first |
 | `GET` | `/api/v1/market/pumps` | Mechanical pump/dump events for one symbol |
 | `GET` | `/api/v1/market/pumps/scan` | Ranked pump hits across top-volume symbols |
 | `GET` | `/api/v1/watchlist` | Get watchlist + `version` (`clientId` / optional `ownerClientId`) |
@@ -181,6 +201,9 @@ Enabled when `TELEGRAM_BOT_TOKEN` is non-empty. Calls **market**, **watchlist**,
 | `/lowmcap [exchange\|all] [n]` | Lowest circulating market cap |
 | `/mcap <asset\|pair>` | Supply snapshot |
 | `/rsi <symbol> [interval] [exchange]` | RSI + EMA |
+| `/oi <symbol> [binance\|bybit\|all]` | Futures open interest + change + funding |
+| `/funding <symbol> [binance\|bybit\|all]` | Current funding rate + recent history |
+| `/ls <symbol> [binance\|bybit\|all]` | Long/short account ratio + recent history |
 | `/exchanges` | Venues |
 | `/watch` · `add` · `del` · `top` | Per-user watchlist (`tg-<user_id>`) |
 | `/portfolio` · `/portfolio create [balance]` | Paper portfolio (`tg-<user_id>`) |
@@ -223,7 +246,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `TICKER_CACHE_TTL` | `15s` | Ticker response TTL |
 | `ORDERBOOK_CACHE_TTL` | `2s` | Reserved TTL for any leftover REST book cache (live books are not cached) |
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Binance spot stream host for the live local book |
+| `BINANCE_FUTURES_BASE_URL` | `https://fapi.binance.com` | Binance USD-M REST (open interest) |
 | `BINANCE_FUTURES_WS_URL` | `wss://fstream.binance.com` | Binance USD-M stream for liquidations |
+| `OPEN_INTEREST_CACHE_TTL` | `30s` | Futures open-interest snapshot TTL |
 | `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |
 | `BYBIT_WS_URL` | `wss://stream.bybit.com/v5/public/spot` | Bybit spot stream for the live local book |
 | `BYBIT_LINEAR_WS_URL` | `wss://stream.bybit.com/v5/public/linear` | Bybit linear stream for liquidations |
@@ -264,6 +289,14 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `IMPORT_WORKER_INTERVAL` | `2s` | How often pending imports are claimed |
 | `ACCOUNT_DB_PATH` | `data/accounts.db` | SQLite for account close/reopen state |
 | `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
+| `FUTURES_HISTORY_DB_PATH` | `data/futures.db` | SQLite archive for OI, funding, long/short, liquidations |
+| `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
+| `FUTURES_HISTORY_RETENTION` | `720h` | How long stored futures rows are kept |
+| `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
+| `ORDERBOOK_HISTORY_DB_PATH` | `data/orderbook.db` | SQLite archive for spot book samples |
+| `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |
+| `ORDERBOOK_HISTORY_RETENTION` | `168h` | How long stored books are kept |
+| `ORDERBOOK_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
@@ -300,9 +333,9 @@ Unit tests mock upstream HTTP; they do not call live Binance.
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go` |
 | Application | `internal/service/market` | `service_test.go` (fakes for ports) |
-| Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go` (`httptest`) |
+| Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go`, `openinterest_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
 | Infrastructure | `internal/adapter/alertstore` | `sqlite_test.go` (CRUD, one-shot trigger, reopen) |

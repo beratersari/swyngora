@@ -27,7 +27,15 @@ Futures / other markets are out of scope for now version.
     - `short` — seen recently, not yet long enough to call support/resistance
     - `persistent` — stayed near the same price for about 2+ minutes (more like real rest)
     - `suspicious` — added and pulled many times in a short window (more like a tease / flicker)
-    Also `ageSeconds`, `presentForSeconds`, `visibleSeconds`, `appearCount`.
+    - `iceberg` — visible size at this price was eaten at the touch, then a
+      similar clip came back at least twice (slow hidden selling/buying)
+    Also `ageSeconds`, `presentForSeconds`, `visibleSeconds`, `appearCount`,
+    and `iceberg` / `icebergRefills` / `icebergClip`.
+- `GET /api/v1/market/orderbook/icebergs?symbol=BTCUSDT`
+  - Same refill pattern as a dedicated list, both **bid** and **ask**.
+    Clip size, how many times it came back, executed notional, `likely` vs
+    `possible`. Needs a few live book samples (looking at the book starts
+    the 3s sampler). See [`icebergs.md`](icebergs.md).
 - `GET /api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2`
   - Sums live bid/ask **notional** from Binance + Coinbase + Bybit only in a
     **symmetric ±%** every venue can reach on both sides (the smaller of common
@@ -85,8 +93,8 @@ Futures / other markets are out of scope for now version.
 | Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `orderbook_liquidity.go`, `orderbook_heatmap.go`, `wall_track.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
-| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `create_orderbook_alert` |
+| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap` |
 
 ## How to verify

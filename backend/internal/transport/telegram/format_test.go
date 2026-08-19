@@ -27,6 +27,35 @@ func TestFormatTicker(t *testing.T) {
 	}
 }
 
+func TestFormatFunding(t *testing.T) {
+	s := &domain.FundingSnapshot{
+		Symbol: "BTCUSDT", Exchange: "binance", VenueCount: 1,
+		Current: &domain.FundingCurrent{Rate: "0.0001", RatePct: "0.01", Payer: "long", IntervalHours: 8},
+		Venues: []domain.FundingVenueSnap{{
+			Exchange: "binance",
+			Current:  domain.FundingCurrent{Rate: "0.0001", RatePct: "0.01", Payer: "long", IntervalHours: 8},
+		}},
+	}
+	got := FormatFunding(s)
+	if !strings.Contains(got, "BTCUSDT") || !strings.Contains(got, "0.01") {
+		t.Fatalf("%s", got)
+	}
+}
+
+func TestFormatOpenInterest(t *testing.T) {
+	s := &domain.OpenInterestSnapshot{
+		Symbol: "BTCUSDT", Exchange: "all", Unit: "BTC", VenueCount: 2,
+		Current: domain.OpenInterestLevel{Contracts: "150", Value: "15000000000"},
+		Windows: []domain.OpenInterestWindow{
+			{Window: "5m", Change: "+20", ChangePct: "+0.15", ChangeValue: "+2000000", Direction: "up", Complete: true},
+		},
+	}
+	got := FormatOpenInterest(s)
+	if !strings.Contains(got, "BTCUSDT") || !strings.Contains(got, "+20") || !strings.Contains(got, "$15.00B") {
+		t.Fatalf("%s", got)
+	}
+}
+
 func TestHelpHasLowmcap(t *testing.T) {
 	help := HelpText()
 	if !strings.Contains(help, "/lowmcap") || !strings.Contains(help, "<code>") {
@@ -34,6 +63,15 @@ func TestHelpHasLowmcap(t *testing.T) {
 	}
 	if !strings.Contains(help, "/ask") {
 		t.Fatal("help must document /ask AI command")
+	}
+	if !strings.Contains(help, "/oi") {
+		t.Fatal("help must document /oi open interest")
+	}
+	if !strings.Contains(help, "/funding") {
+		t.Fatal("help must document /funding")
+	}
+	if !strings.Contains(help, "/ls") {
+		t.Fatal("help must document /ls long/short")
 	}
 	if !strings.Contains(help, "/portfolio") || !strings.Contains(help, "/buy") || !strings.Contains(help, "/sell") {
 		t.Fatal("help must document paper portfolio commands")

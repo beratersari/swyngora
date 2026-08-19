@@ -34,6 +34,7 @@ type Service struct {
 	delist        domain.SpotDelistStore
 	delistEnabled bool
 	walls         *domain.WallMemory
+	icebergs      *domain.IcebergMemory
 	heat          *domain.HeatmapTape
 	watchMu       sync.Mutex
 	wallWatch     map[string]wallWatch
@@ -43,6 +44,21 @@ type Service struct {
 	fx            FxSource
 	fxCache       *cache.TTL[*domain.FxRates]
 	holders       domain.HoldersPort
+	oi            map[domain.Exchange]domain.OpenInterestPort
+	funding       map[domain.Exchange]domain.FundingRatePort
+	longShort     map[domain.Exchange]domain.LongShortRatioPort
+	taker         map[domain.Exchange]domain.TakerFlowPort
+	takerStore    domain.TakerBucketStore
+	basis         map[domain.Exchange]domain.BasisPort
+	windows       map[domain.Exchange]domain.WindowChangePort
+	onFuturesSym  func(string)
+	futHist       FuturesHistoryReader
+	bookHist      BookHistoryReader
+}
+
+// FuturesHistoryReader is the durable futures archive (optional).
+type FuturesHistoryReader interface {
+	History(ctx context.Context, q domain.FuturesHistoryQuery) (any, error)
 }
 
 // LiquidationWatch asks a venue hub to subscribe a linear symbol.
@@ -65,6 +81,132 @@ func (s *Service) WithLiquidations(book *domain.LiquidationBook, watch Liquidati
 		s.liqWatch = watch
 	}
 	return s
+}
+
+// WithOpenInterest attaches Binance USD-M / Bybit linear open-interest ports.
+func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterestPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.OpenInterestPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.oi = cp
+	return s
+}
+
+// WithFundingRate attaches Binance USD-M / Bybit linear funding ports.
+func (s *Service) WithFundingRate(ports map[domain.Exchange]domain.FundingRatePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.FundingRatePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.funding = cp
+	return s
+}
+
+// WithLongShortRatio attaches Binance USD-M / Bybit linear long/short ports.
+func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortRatioPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.LongShortRatioPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.longShort = cp
+	return s
+}
+
+// WithTakerFlow attaches Binance USD-M / Bybit linear taker-volume ports.
+func (s *Service) WithTakerFlow(ports map[domain.Exchange]domain.TakerFlowPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.TakerFlowPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.taker = cp
+	return s
+}
+
+// WithBasis attaches Binance USD-M / Bybit linear basis ports.
+func (s *Service) WithBasis(ports map[domain.Exchange]domain.BasisPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.BasisPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.basis = cp
+	return s
+}
+
+// WithWindowChanges attaches rolling window ticker ports (1h / 4h / 24h).
+func (s *Service) WithWindowChanges(ports map[domain.Exchange]domain.WindowChangePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.WindowChangePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.windows = cp
+	return s
+}
+
+// SetOnFuturesSymbol records pairs the history worker should keep sampling.
+func (s *Service) SetOnFuturesSymbol(fn func(string)) {
+	if s != nil {
+		s.onFuturesSym = fn
+	}
+}
+
+func (s *Service) noteFutures(symbol string) {
+	if s != nil && s.onFuturesSym != nil {
+		s.onFuturesSym(symbol)
+	}
+}
+
+// SetFuturesHistory attaches the durable archive used by GetFuturesHistory.
+func (s *Service) SetFuturesHistory(r FuturesHistoryReader) {
+	if s != nil {
+		s.futHist = r
+	}
+}
+
+// GetFuturesHistory returns persisted OI, funding, long/short, or liquidation rows.
+func (s *Service) GetFuturesHistory(ctx context.Context, metric, exchange, symbol string, from, to *time.Time, limit int) (any, error) {
+	if s == nil || s.futHist == nil {
+		return nil, fmt.Errorf("%w: futures history not configured", domain.ErrUpstream)
+	}
+	q := domain.FuturesHistoryQuery{Metric: metric, Exchange: exchange, Symbol: symbol, Limit: limit}
+	if from != nil {
+		q.From = *from
+	}
+	if to != nil {
+		q.To = *to
+	}
+	s.noteFutures(symbol)
+	return s.futHist.History(ctx, q)
 }
 
 type wallWatch struct {
@@ -93,6 +235,7 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 		markets:      cp,
 		supply:       supply,
 		walls:        domain.NewWallMemory(),
+		icebergs:     domain.NewIcebergMemory(),
 		heat:         domain.NewHeatmapTape(),
 		wallWatch:    map[string]wallWatch{},
 		heatUniverse: map[domain.Exchange][]string{},
@@ -257,6 +400,11 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 	}
 	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
 	s.recordHeatFromRaw(ex, book.Symbol, raw, groupSize)
+	s.observeIcebergs(ctx, ex, book.Symbol, raw)
+	if s.icebergs != nil {
+		s.icebergs.AnnotateWalls(string(ex), book.Symbol, book.Analysis.Walls)
+	}
+	s.noteBook(ex, book.Symbol)
 	return &book, nil
 }
 
@@ -345,9 +493,14 @@ func (s *Service) GetCombinedOrderBookAnalysis(ctx context.Context, symbol strin
 		}
 		an := domain.AnalyzeOrderBookAt(vb.Book, mid, combined.UsedRangePct)
 		s.recordWalls(vb.Exchange, vb.Symbol, an.Walls)
+		book := vb.Book
+		s.observeIcebergs(ctx, vb.Exchange, vb.Symbol, &book)
 	}
 	if s.walls != nil {
 		s.walls.ApplyCombined(now, combined.Walls)
+	}
+	if s.icebergs != nil {
+		s.icebergs.AnnotateCombinedWalls(combined.Walls)
 	}
 	return &combined, nil
 }
@@ -468,6 +621,7 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	if err != nil {
 		return nil, err
 	}
+	s.noteFutures(symbol)
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
@@ -479,6 +633,228 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 		}, nil
 	}
 	return s.liq.Snapshot(ex, symbol), nil
+}
+
+// GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.
+func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	s.noteFutures(symbol)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.OpenInterestPort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.oiPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildOpenInterestSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.OpenInterestSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetOpenInterestSeries(ctx, symbol)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.OpenInterestSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	snap := domain.BuildOpenInterestSnapshot(ex, symbol, series, time.Now().UTC())
+	var fund *domain.FundingSnapshot
+	var ls *domain.LongShortSnapshot
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		fund, _ = s.GetFundingRate(ctx, exchange, symbol, domain.DefaultFundingHistoryLimit)
+	}()
+	go func() {
+		defer wg.Done()
+		ls, _ = s.GetLongShortRatio(ctx, exchange, symbol, domain.DefaultLongShortHistoryLimit)
+	}()
+	wg.Wait()
+	snap.Funding = fund
+	snap.LongShort = ls
+	return snap, nil
+}
+
+// GetLongShortRatio returns the latest account long/short ratio plus recent 5m history.
+func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (*domain.LongShortSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	limit = domain.ClampLongShortHistoryLimit(limit)
+	s.noteFutures(symbol)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.LongShortRatioPort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.longShortPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildLongShortSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.LongShortSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetLongShortSeries(ctx, symbol, limit)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.LongShortSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildLongShortSnapshot(ex, symbol, series, time.Now().UTC()), nil
+}
+
+func (s *Service) longShortPort(ex domain.Exchange) domain.LongShortRatioPort {
+	if s == nil || s.longShort == nil {
+		return nil
+	}
+	return s.longShort[ex]
+}
+
+// GetFundingRate returns the predicted next funding rate plus recent settlements.
+func (s *Service) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (*domain.FundingSnapshot, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseOpenInterestExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	limit = domain.ClampFundingHistoryLimit(limit)
+	s.noteFutures(symbol)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	type job struct {
+		ex domain.Exchange
+		p  domain.FundingRatePort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.fundingPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return domain.BuildFundingSnapshot(ex, symbol, nil, time.Now().UTC()), nil
+	}
+	type result struct {
+		ser *domain.FundingSeries
+		err error
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetFundingSeries(ctx, symbol, limit)
+			if ser != nil {
+				ser.Exchange = j.ex
+				ser.Symbol = symbol
+			}
+			ch <- result{ser: ser, err: err}
+		}(j)
+	}
+	var series []*domain.FundingSeries
+	var lastErr error
+	for range jobs {
+		r := <-ch
+		if r.err != nil {
+			lastErr = r.err
+			continue
+		}
+		if r.ser != nil {
+			series = append(series, r.ser)
+		}
+	}
+	if len(series) == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildFundingSnapshot(ex, symbol, series, time.Now().UTC()), nil
+}
+
+func (s *Service) fundingPort(ex domain.Exchange) domain.FundingRatePort {
+	if s == nil || s.funding == nil {
+		return nil
+	}
+	return s.funding[ex]
+}
+
+func (s *Service) oiPort(ex domain.Exchange) domain.OpenInterestPort {
+	if s == nil || s.oi == nil {
+		return nil
+	}
+	return s.oi[ex]
 }
 
 // EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.
@@ -696,6 +1072,7 @@ func (s *Service) sampleWatchedWalls(ctx context.Context) {
 		an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
 		s.observeWalls(w.exchange, w.symbol, an.Walls)
 		s.recordHeatFromRaw(w.exchange, w.symbol, raw, 0)
+		s.observeIcebergs(ctx, w.exchange, w.symbol, raw)
 	}
 }
 

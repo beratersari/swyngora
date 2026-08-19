@@ -52,6 +52,26 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated.
 - `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional that the book actually covers; market-wide uses the common venue range.
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
+- `GET /api/v1/market/open-interest` current futures open interest plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear). Includes `funding`. See [`open-interest.md`](open-interest.md).
+- `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).
+- `GET /api/v1/market/long-short-ratio` account long/short ratio plus recent 5m history. See [`long-short-ratio.md`](long-short-ratio.md).
+- `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
+- `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + rough desk result). See [`liquidation-hunt.md`](liquidation-hunt.md).
+- `GET /api/v1/market/squeeze-risk` long/short squeeze risk scores per venue + combined. See [`squeeze-risk.md`](squeeze-risk.md).
+- `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).
+- `GET /api/v1/market/venue-divergence` Binance vs Bybit same/opposite split. See [`venue-divergence.md`](venue-divergence.md).
+- `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
+- `GET /api/v1/market/cvd` cumulative buy−sell versus price (1h / 4h / 24h). See [`cvd.md`](cvd.md).
+- `GET /api/v1/market/basis` perp vs spot/index premium or discount. See [`basis.md`](basis.md).
+- `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
+- `GET /api/v1/market/breadth` how many followed coins are up vs down (1h / 4h / 24h). See [`breadth.md`](breadth.md).
+- `GET /api/v1/market/volatility` how much a coin moved (range, vs normal, vs BTC/ETH). See [`volatility.md`](volatility.md).
+- `GET /api/v1/market/snapshot` price, volume, mcap, OI, funding, LS, and taker flow together. See [`snapshot.md`](snapshot.md).
+- `GET /api/v1/market/levels` support and resistance plus breakout strength. See [`levels.md`](levels.md).
+- `GET /api/v1/market/whales` large trades and liquidations, biggest first. See [`whales.md`](whales.md).
+- `GET /api/v1/market/orderbook/history` stored book at a time (or a list). See [`book-history.md`](book-history.md).
+- `GET /api/v1/market/orderbook/history/compare` which levels gained or lost liquidity. See [`book-history.md`](book-history.md).
+- `GET /api/v1/market/orderbook/icebergs` same-price clip eaten then refilled. See [`icebergs.md`](icebergs.md).
 - See [`order-book.md`](order-book.md).
 
 ### Equities — `nasdaq` / `bist`

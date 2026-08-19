@@ -519,6 +519,130 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/history:
+    get:
+      summary: Stored order-book snapshots
+      description: |
+        Regular samples of the live spot book: grouped **bid/ask levels**,
+        **spread**, **total liquidity**, **imbalance**, and **large walls**.
+        Pass `at` for the snapshot nearest that time. Omit `at` to list
+        recent samples (`from` / `to` optional). 1-minute samples, not a
+        24h tape. Informational only.
+      operationId: getOrderBookHistory
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: at
+          in: query
+          description: Point in time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:00:00Z" }
+        - name: from
+          in: query
+          description: List window start (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: to
+          in: query
+          description: List window end (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Max list rows (default 60, max 500)
+          schema: { type: integer, default: 60 }
+      responses:
+        '200':
+          description: One snapshot or a newest-first list
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/history/compare:
+    get:
+      summary: Compare two stored order books
+      description: |
+        Loads the stored books nearest to `from` and `to` and shows which
+        **price levels gained or lost liquidity**, plus mid / spread /
+        imbalance change and walls that appeared or were pulled.
+        Use this to see what changed before and after a price move.
+        Informational only.
+      operationId: compareOrderBookHistory
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit], default: binance }
+        - name: from
+          in: query
+          required: true
+          description: Earlier time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:00:00Z" }
+        - name: to
+          in: query
+          required: true
+          description: Later time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-16T12:15:00Z" }
+      responses:
+        '200':
+          description: Before/after liquidity diff
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/icebergs:
+    get:
+      summary: Iceberg-style refill at the same price
+      description: |
+        Detects when visible **buy or sell** size at one price is eaten
+        (hit at the touch or confirmed by trades) and then a similar clip
+        comes back, repeatedly. This is the “10k sells, gets filled, 10k
+        appears again” pattern — not a one-shot wall. Both sides.
+        Walls on the live book also get `iceberg` / `behavior=iceberg`
+        when this pattern is seen. Informational only — not proof of a
+        hidden exchange order.
+      operationId: getOrderBookIcebergs
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: minNotional
+          in: query
+          description: Minimum visible clip in USD (default 25000)
+          schema: { type: number, default: 25000 }
+      responses:
+        '200':
+          description: Bid and ask icebergs, biggest clip first
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/combined:
     get:
       summary: Market-wide spot order book analysis
@@ -703,6 +827,586 @@ paths:
               schema:
                 $ref: '#/components/schemas/MarketLiquidations'
         '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/open-interest:
+    get:
+      summary: Futures open interest and windowed change
+      description: |
+        Current outstanding futures size plus how much it increased or decreased
+        over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
+        Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist) and
+        **Bybit linear perpetual** (`/v5/market/tickers` + `/v5/market/open-interest`).
+        `contracts` is venue-published size in the base asset; `value` is USDT
+        notional. `exchange=all` (default) sums both venues. `complete` is false
+        when the historical sample is missing or older than the window slack.
+        The `funding` object is the predicted next funding rate plus recent
+        settlements (same payload as `/funding-rate`). `longShort` is the
+        account long/short ratio (same payload as `/long-short-ratio`).
+        Results are cached ~30s. Informational only.
+      operationId: getMarketOpenInterest
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Current open interest and windowed change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketOpenInterest'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/funding-rate:
+    get:
+      summary: Perpetual funding rate and recent history
+      description: |
+        Predicted **next** funding rate plus recent **settled** payments for
+        **Binance USD-M** and **Bybit linear perpetual**. `rate` is decimal
+        (`0.0001` = 0.01%); `ratePct` is percent. `payer` is who pays at
+        settlement (`long` = longs pay shorts). Combined `exchange=all` returns
+        each venue separately — rates are not averaged. `limit` is settled
+        history size (default 12, max 30). Cached ~30s. Informational only.
+      operationId: getMarketFundingRate
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: limit
+          in: query
+          description: Settled history size (1–30, default 12)
+          schema: { type: integer, default: 12, minimum: 1, maximum: 30 }
+      responses:
+        '200':
+          description: Current funding and recent settlements
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketFundingRate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/long-short-ratio:
+    get:
+      summary: Long/short account ratio and recent history
+      description: |
+        Share of **accounts** that are long vs short (not position size) on
+        **Binance USD-M** (`globalLongShortAccountRatio`) and **Bybit linear**
+        (`/v5/market/account-ratio`). 5-minute samples. `ratio` is long/short
+        (1 = even). `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95.
+        Combined `exchange=all` does not average venues. `limit` default 24
+        (~2 hours). Cached ~30s. Informational only.
+      operationId: getMarketLongShortRatio
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: limit
+          in: query
+          description: History size (1–100, default 24)
+          schema: { type: integer, default: 24, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Current long/short ratio and recent 5m history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLongShortRatio'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/futures-history:
+    get:
+      summary: Durable futures history
+      description: |
+        Stored open interest, funding, long/short, or liquidation rows for
+        Binance USD-M and Bybit linear. Written on a background interval and
+        (for liquidations) as events arrive. Duplicates are ignored. One venue
+        failing does not drop the other. Survives process restarts.
+      operationId: getMarketFuturesHistory
+      tags: [Market]
+      parameters:
+        - name: metric
+          in: query
+          required: true
+          schema: { type: string, enum: [open_interest, funding, long_short, liquidations] }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 200, maximum: 1000 }
+      responses:
+        '200':
+          description: Stored rows newest first
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/basis:
+    get:
+      summary: Futures vs spot basis (premium or discount)
+      description: |
+        How far the perpetual is from spot/index on Binance USD-M and Bybit
+        linear. Returns the dollar gap, percent gap, premium/discount, whether
+        the gap is expanding or shrinking (5m/1h/4h), a short read with funding
+        and open interest, and whether both venues agree.
+      operationId: getMarketBasis
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + agreement)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue basis plus optional agreement
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/correlation:
+    get:
+      summary: Price correlation vs BTC and ETH
+      description: |
+        How similarly a coin has been moving with **BTC** and **ETH** over the
+        last **1 hour, 4 hours, and 24 hours**. Returns Pearson correlation of
+        bar returns, beta, same-direction share, and a short note if the coin
+        has been following with a delay. Default venue is Binance spot.
+      operationId: getMarketCorrelation
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Per-window correlation vs BTC and ETH
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/breadth:
+    get:
+      summary: Market breadth (how many coins are up or down)
+      description: |
+        Counts how many of the liquid spot coins we follow are **up** vs
+        **down** over the last **1 hour, 4 hours, and 24 hours** (number and
+        percent). Also says whether BTC and ETH are moving with the rest of
+        the market or a few large coins are carrying it.
+      operationId: getMarketBreadth
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+        - name: limit
+          in: query
+          description: How many liquid coins to include (default 80, max 150)
+          schema: { type: integer, default: 80 }
+      responses:
+        '200':
+          description: Per-window up/down counts plus BTC/ETH read
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/volatility:
+    get:
+      summary: Price volatility vs recent history and BTC/ETH
+      description: |
+        How much a coin moved over the last **1 hour, 4 hours, and 24 hours**:
+        net change, high–low range (even if price came back), whether that
+        range is higher or lower than normal and expanding or shrinking, and
+        whether the coin is more volatile or calmer than BTC and ETH.
+      operationId: getMarketVolatility
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Per-window volatility vs history and BTC/ETH
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/snapshot:
+    get:
+      summary: Combined tape snapshot (price, volume, OI, funding, LS, taker)
+      description: |
+        Current **price, volume, market cap, open interest, funding,
+        long/short, and taker buy/sell** for one coin, plus how each changed
+        over the last **1 hour, 4 hours, and 24 hours**. Useful when volume
+        or OI start to build before price moves. `exchange=all` returns
+        Binance and Bybit futures tapes separately (never averaged for the
+        lead read).
+      operationId: getMarketSnapshot
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: SOLUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Combined snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/levels:
+    get:
+      summary: Support and resistance areas
+      description: |
+        Finds **support** and **resistance** from recent price swings and
+        volume, then checks the live order book for buy/sell liquidity around
+        each area. Each zone includes distance from last price, how many times
+        it was tested, and nearby bid/ask notional. When price is close to or
+        through a zone, a **breakout score** uses volume, book thickness, and
+        taker buy/sell.
+      operationId: getMarketLevels
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | coinbase (default binance)
+          schema: { type: string, default: binance }
+      responses:
+        '200':
+          description: Support and resistance zones plus optional breakout
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/whales:
+    get:
+      summary: Large trades and liquidations
+      description: |
+        Clusters recent aggressive futures **buys** and **sells** (taker long /
+        short) and large **liquidations**, then sorts them biggest first.
+        Each event includes average price, first/last trade time, total size,
+        and whether the notional is large versus circulating market cap
+        (small-cap coins with huge prints are flagged). Omit `symbol` to scan
+        the top liquid USDT pairs. Tape is the newest ~1000 prints per coin
+        (minutes, not 24h). Informational only.
+      operationId: getMarketWhales
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: false
+          description: Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins.
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: minNotional
+          in: query
+          description: Minimum USD size (default 100000, clamp 10000–10000000)
+          schema: { type: number, default: 100000 }
+        - name: limit
+          in: query
+          description: Max events (default 30, max 100)
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Whale prints and liquidations, biggest first
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/taker-flow:
+    get:
+      summary: Futures taker buy vs sell volume
+      description: |
+        Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+        linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
+        notional, sell notional, delta, and a short read with price / OI /
+        funding. This is who is hitting the book now — not the account
+        long/short ratio. `exchange=all` adds a combined view.
+      operationId: getMarketTakerFlow
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined taker flow
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/cvd:
+    get:
+      summary: Cumulative volume delta versus price
+      description: |
+        **CVD** is the running sum of aggressive futures **market-buy**
+        notional minus **market-sell** notional. Each 5-minute point includes
+        price so you can see when price is flat but buyers are hitting, or
+        price rises while sells are stronger. **1h / 4h / 24h** reads label
+        `confirms`, `opposite`, or `absorption`. `exchange=all` (default)
+        returns Binance and Bybit separately plus a combined series (deltas
+        added, never averaged). Informational only.
+      operationId: getMarketCVD
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined CVD vs price
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/venue-divergence:
+    get:
+      summary: Binance vs Bybit signal split
+      description: |
+        Compares **Binance USD-M** and **Bybit linear** for one coin using
+        open-interest change, funding payer, account long/short crowding, and
+        price+OI positioning. Returns `same`, `opposite`, or `mixed`, lists
+        which metrics differ, and a short note on why a split can matter.
+        Informational only.
+      operationId: getMarketVenueDivergence
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+      responses:
+        '200':
+          description: Venue comparison
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/positioning:
+    get:
+      summary: Price and open-interest positioning
+      description: |
+        Classifies **long buildup**, **short buildup**, **long unwinding**, or
+        **short covering** from price change vs open-interest change (classic
+        futures matrix) on Binance USD-M and Bybit linear. Short summary and
+        reasons use funding and account long/short as corroboration. When
+        `exchange=all`, also returns a **combined** general market direction
+        (OI-weighted). Informational only — not financial advice.
+      operationId: getMarketPositioning
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined positioning
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/squeeze-risk:
+    get:
+      summary: Long and short squeeze risk
+      description: |
+        Scores **long-squeeze** and **short-squeeze** risk (0–100) for a coin
+        on **Binance USD-M** and **Bybit linear** separately, and (when
+        `exchange=all`) an **OI-weighted combined** view. Drivers: account
+        long/short crowding, funding, open-interest build, recent liquidation
+        heat, and nearby high-leverage pockets. Explains which side is crowded
+        and why risk is high or low. Model only — not a prediction or financial
+        advice.
+      operationId: getMarketSqueezeRisk
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined squeeze risk
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-hunt:
+    get:
+      summary: Hypothetical liquidation hunt (per venue)
+      description: |
+        **Hypothetical model only** — not evidence that any exchange moves
+        price, and not financial advice.
+
+        For Binance USD-M and Bybit linear separately: estimate where long/short
+        liquidation pressure sits if price moves up or down, how much **spot**
+        buying or selling the visible book needs to reach those areas, and a
+        rough desk result (unwind on the current opposite side vs assuming
+        part of estimated liquidations become exit flow). Uses live spot book,
+        open interest, account long/short (blended toward 50/50), funding, and
+        recent liquidation prints. Leverage mix is assumed.
+      operationId: getMarketLiquidationHunt
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both, never averaged)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue hunt report
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
           $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
@@ -4802,6 +5506,135 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        note: { type: string }
+    OpenInterestLevel:
+      type: object
+      properties:
+        contracts: { type: string, description: Outstanding size in the base asset }
+        value: { type: string, description: USDT notional }
+        time: { type: string, format: date-time }
+    OpenInterestWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [5m, 1h, 4h, 24h] }
+        openInterest: { type: string, description: Contracts at the past sample }
+        openInterestValue: { type: string, description: USDT notional at the past sample }
+        change: { type: string, description: Signed contract change vs now }
+        changePct: { type: string, description: Signed percent change in contracts }
+        changeValue: { type: string, description: Signed USDT notional change }
+        changeValuePct: { type: string, description: Signed percent change in USDT notional }
+        direction: { type: string, enum: [up, down, flat] }
+        complete: { type: boolean, description: False when the historical sample is missing or too old }
+        sampleTime: { type: string, format: date-time }
+    OpenInterestVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/OpenInterestLevel' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestWindow' }
+    MarketOpenInterest:
+      type: object
+      description: Current futures open interest plus 5m/1h/4h/24h change
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        unit: { type: string, description: Base asset, e.g. BTC }
+        current: { $ref: '#/components/schemas/OpenInterestLevel' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestWindow' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/OpenInterestVenue' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
+        funding: { $ref: '#/components/schemas/MarketFundingRate' }
+        longShort: { $ref: '#/components/schemas/MarketLongShortRatio' }
+        note: { type: string }
+    FundingPrint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        rate: { type: string, description: Decimal rate (0.0001 = 0.01%) }
+        ratePct: { type: string, description: Percent }
+        payer: { type: string, enum: [long, short, none], description: Who pays at settlement }
+        markPrice: { type: string }
+        predicted: { type: boolean }
+    FundingCurrent:
+      type: object
+      properties:
+        rate: { type: string }
+        ratePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        nextFundingTime: { type: string, format: date-time }
+        intervalHours: { type: integer }
+        time: { type: string, format: date-time }
+    FundingVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/FundingCurrent' }
+        lastSettled: { $ref: '#/components/schemas/FundingPrint' }
+        avgLast3: { type: string, description: Average of the last 3 settlements }
+        avgLast3Pct: { type: string }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPrint' }
+    MarketFundingRate:
+      type: object
+      description: Predicted next funding plus recent settlements
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        current: { $ref: '#/components/schemas/FundingCurrent' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/FundingVenue' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPrint' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
+        note: { type: string }
+    LongShortLevel:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        longPct: { type: string, description: Percent of accounts that are long }
+        shortPct: { type: string }
+        ratio: { type: string, description: long/short (1 = even) }
+        bias: { type: string, enum: [long, short, balanced] }
+        longShare: { type: string, description: 0–1 share }
+    LongShortVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        kind: { type: string, description: accounts }
+        period: { type: string, description: 5m }
+        current: { $ref: '#/components/schemas/LongShortLevel' }
+        change: { type: string, description: Signed ratio change vs previous 5m print }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortLevel' }
+    MarketLongShortRatio:
+      type: object
+      description: Account long/short ratio plus recent 5m history
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        kind: { type: string }
+        period: { type: string }
+        current: { $ref: '#/components/schemas/LongShortLevel' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortVenue' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortLevel' }
+        asOf: { type: string, format: date-time }
+        venueCount: { type: integer }
         note: { type: string }
     OrderBookImpactFill:
       type: object

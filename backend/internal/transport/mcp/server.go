@@ -35,6 +35,26 @@ type DataPort interface {
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
+	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
+	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
+	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
+	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
+	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error)
+	GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error)
+	CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error)
+	GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	GetHolders(ctx context.Context, asset string) (json.RawMessage, error)
@@ -283,6 +303,69 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("get_orderbook_icebergs",
+		mcp.WithDescription("Detect iceberg-style refill at the same price: a visible buy or sell clip is eaten at the touch, then a similar size comes back, repeatedly. Both bid and ask. Returns clip size, refill count, executed notional, and likely vs possible. Not proof of a hidden exchange order. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithNumber("minNotional", mcp.Description("Minimum visible clip in USD (default 25000)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetIcebergs(ctx, req.GetString("exchange", "all"), symbol, req.GetFloat("minNotional", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_orderbook_history",
+		mcp.WithDescription("Stored spot order-book snapshots: bid/ask levels, spread, total liquidity, imbalance, and large walls. Pass at for the book nearest that time (RFC3339 or unix ms). Omit at to list recent samples (from/to optional). 1-minute samples of the live book, not a 24h tape. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("at", mcp.Description("Point in time (RFC3339 or unix ms)")),
+		mcp.WithString("from", mcp.Description("List window start")),
+		mcp.WithString("to", mcp.Description("List window end")),
+		mcp.WithNumber("limit", mcp.Description("Max list rows (default 60, max 500)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBookHistory(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("at", ""), req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_orderbook_history",
+		mcp.WithDescription("Compare two stored spot order books. Shows which price levels gained or lost liquidity, mid/spread/imbalance change, and walls that appeared or were pulled. Use after a strong price move. from and to are RFC3339 or unix ms. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
+		mcp.WithString("from", mcp.Required(), mcp.Description("Earlier time (RFC3339 or unix ms)")),
+		mcp.WithString("to", mcp.Required(), mcp.Description("Later time (RFC3339 or unix ms)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		from, err := req.RequireString("from")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		to, err := req.RequireString("to")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CompareBookHistory(ctx, req.GetString("exchange", "binance"), symbol, from, to)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("get_spot_orderbook",
 		mcp.WithDescription("Grouped live spot order book (bids/asks) with price steps like 0.1 or 0.01. Includes wall flags, spread, and analysis.pressure / analysis.walls from depth within ±rangePct of mid (default 2%). Each wall has behavior: short, persistent (stayed near the same price), or suspicious (added/removed many times). Binance/Coinbase/Bybit. Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
@@ -363,6 +446,281 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidations(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_open_interest",
+		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. Also includes funding (predicted next rate + recent settlements) on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear perpetual. exchange=all (default) sums OI. Prefer this for 'is OI rising or falling'."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetOpenInterest(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_funding_rate",
+		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear. exchange=all (default) returns each venue separately (rates are not averaged). Prefer this for 'what is the funding rate' or carry analysis."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("limit", mcp.Description("Settled history size 1–30 (default 12)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFundingRate(ctx, req.GetString("exchange", "all"), symbol, int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_long_short_ratio",
+		mcp.WithDescription("Futures long/short account ratio: share of accounts that are long vs short (not position size). ratio is long/short (1 = even). bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. exchange=all returns each venue separately (not averaged). Prefer this for 'are more traders long or short'."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("limit", mcp.Description("History size 1–100 (default 24, ~2 hours of 5m prints)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLongShortRatio(ctx, req.GetString("exchange", "all"), symbol, int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_futures_history",
+		mcp.WithDescription("Durable stored history of futures open interest, funding, long/short ratio, or liquidations (Binance USD-M + Bybit linear). Survives restarts. metric=open_interest|funding|long_short|liquidations. Prefer this for past values, not the live snapshot tools."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("metric", mcp.Required(), mcp.Description("open_interest | funding | long_short | liquidations")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("from", mcp.Description("RFC3339 or unix ms start")),
+		mcp.WithString("to", mcp.Description("RFC3339 or unix ms end")),
+		mcp.WithNumber("limit", mcp.Description("Max rows, default 200")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		metric, err := req.RequireString("metric")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("estimate_liquidation_hunt",
+		mcp.WithDescription("Hypothetical only: if Binance or Bybit walked their own spot book to push price and force futures liquidations, where is the main long/short pressure, how much spot buy/sell the visible book needs, and a rough desk result (book-only unwind vs assuming part of estimated liquidations become exit flow). Venues are never averaged. Not evidence of exchange behavior. Not financial advice. Long/short is account count; leverage mix is assumed; mark price is multi-venue."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both, separately)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_squeeze_risk",
+		mcp.WithDescription("Long-squeeze and short-squeeze risk scores (0–100) for a coin on Binance USD-M and Bybit linear, plus an OI-weighted combined view. Uses open interest change, funding, account long/short crowding, recent liquidations, and nearby liquidation-pocket estimates. Explains which side is crowded and why risk is high or low. Not a prediction or financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetSqueezeRisk(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_positioning",
+		mcp.WithDescription("Price + open interest positioning for a coin: long_buildup, short_buildup, long_unwinding, or short_covering on Binance and Bybit, plus a general market (combined) read. Short summary and reasons (funding / long-short corroboration). Not a prediction or financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPositioning(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_venue_divergence",
+		mcp.WithDescription("Compare Binance vs Bybit for one coin: same direction or opposite. Shows which of OI change, funding, account crowding, and price+OI regime differ, plus a short why it matters. Use when the user asks if the two exchanges agree. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVenueDivergence(ctx, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_taker_flow",
+		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M and Bybit linear for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. This is taker flow, not the account long/short ratio. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetTakerFlow(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_cvd",
+		mcp.WithDescription("Cumulative Volume Delta: running sum of aggressive market-buy minus market-sell notional over time, plotted with price. 1h / 4h / 24h reads say if flow confirms price, disagrees (price up but more selling), or is absorbed (lots of market buys, price barely moves). Binance and Bybit separately plus combined. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_basis",
+		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance and Bybit: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. Says if both venues agree. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + agreement)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBasis(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_price_correlation",
+		mcp.WithDescription("How similarly a coin has been moving with BTC and ETH over the last 1 hour, 4 hours, and 24 hours. Returns Pearson correlation, beta, same-direction share, and whether the coin is following with a delay or moving independently. Default venue is Binance spot. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. SOLUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetCorrelation(ctx, req.GetString("exchange", ""), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_market_breadth",
+		mcp.WithDescription("How much of the market is going up or down among the liquid spot coins we follow. Counts and percents for 1h, 4h, and 24h, plus whether BTC and ETH are moving with the rest of the market or a few large coins are carrying it. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid coins to include (default 80, max 150)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetBreadth(ctx, req.GetString("exchange", ""), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_price_volatility",
+		mcp.WithDescription("How volatile a coin has been over the last 1 hour, 4 hours, and 24 hours: net move, high-low range, whether the range is bigger or smaller than normal and than the previous window, and whether the coin is jumpy or calm versus BTC and ETH. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. SOLUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVolatility(ctx, req.GetString("exchange", ""), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_market_snapshot",
+		mcp.WithDescription("Price, volume, market cap, open interest, funding, long/short, and taker buy/sell together for one coin. Current values plus 1h / 4h / 24h changes. Useful when volume or OI start to build before price moves. Binance and Bybit separately when exchange=all. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. SOLUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetSnapshot(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_support_resistance",
+		mcp.WithDescription("Support and resistance areas from price history, volume, and the live order book. Each area has distance from last price, how many times it was tested, and nearby bid/ask liquidity. When price is close to or through a level, a breakout score uses volume, book thickness, and taker buy/sell. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | coinbase (default binance)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLevels(ctx, req.GetString("exchange", "binance"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_whale_trades",
+		mcp.WithDescription("Largest recent aggressive futures buys/sells (taker long/short) and large liquidations, sorted biggest first. Each row has average price, first/last trade time, total size, and whether the print is large versus that coin's market cap (small-cap + huge trade). Omit symbol to scan the top liquid USDT coins. Tape is the newest ~1000 prints per coin, not 24h. Not financial advice."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins.")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("minNotional", mcp.Description("Minimum USD size (default 100000)")),
+		mcp.WithNumber("limit", mcp.Description("Max events (default 30, max 100)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetWhales(ctx, req.GetString("exchange", "all"), req.GetString("symbol", ""), req.GetFloat("minNotional", 0), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

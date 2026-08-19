@@ -43,39 +43,56 @@ type Client struct {
 	// (those were the main reason the UI saw ~30–40s between real updates).
 	exchangeSpot *cache.TTL[[]spotSymbolMeta]
 	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
-	productMeta *cache.TTL[*productMetaSnapshot]
-	supply      *cache.TTL[*domain.AssetSupply]
-	catalog     *cache.TTL[*domain.AssetCatalogEntry]
-	spotSF      singleflight.Group
-	supplySF    singleflight.Group
-	metaSF      singleflight.Group
-	candleSF    singleflight.Group
-	tickerSF    singleflight.Group
-	orderBookSF singleflight.Group
-	depth       *DepthHub
-	depthOnce   sync.Once
-	depthWait   time.Duration
-	wsURL       string
-	wsDial      wsDialer
-	depthIdle   time.Duration
+	productMeta  *cache.TTL[*productMetaSnapshot]
+	supply       *cache.TTL[*domain.AssetSupply]
+	catalog      *cache.TTL[*domain.AssetCatalogEntry]
+	spotSF       singleflight.Group
+	supplySF     singleflight.Group
+	metaSF       singleflight.Group
+	candleSF     singleflight.Group
+	tickerSF     singleflight.Group
+	orderBookSF  singleflight.Group
+	depth        *DepthHub
+	depthOnce    sync.Once
+	depthWait    time.Duration
+	wsURL        string
+	wsDial       wsDialer
+	depthIdle    time.Duration
+	futuresBase  string // USD-M REST (fapi.binance.com)
+	oiCache      *cache.TTL[*domain.OpenInterestSeries]
+	oiSF         singleflight.Group
+	fundingCache *cache.TTL[*domain.FundingSeries]
+	fundingSF    singleflight.Group
+	lsCache      *cache.TTL[*domain.LongShortSeries]
+	lsSF         singleflight.Group
+	takerCache   *cache.TTL[*domain.TakerVenueFlow]
+	takerSF      singleflight.Group
+	basisCache   *cache.TTL[*domain.BasisQuote]
+	basisSF      singleflight.Group
+	windowCache  *cache.TTL[[]domain.WindowChange]
+	windowSF     singleflight.Group
+	printCache   *cache.TTL[[]domain.TakerPrint]
+	printSF      singleflight.Group
 }
 
 // Options configures the Binance client.
 type Options struct {
-	BaseURL         string
-	ProductBaseURL  string // default https://www.binance.com — product catalog with circulating supply
-	APIKey          string // optional BINANCE_API_KEY for delist schedule
-	HTTPClient      *http.Client
-	CandleCache     *cache.TTL[[]domain.Candle]
-	TickerCache     *cache.TTL[*domain.Ticker24h]
-	OrderBookCache  *cache.TTL[*domain.RawOrderBook]
-	SpotMarketCache *cache.TTL[[]domain.SpotMarket]
-	SupplyCache     *cache.TTL[*domain.AssetSupply]
-	CatalogCache    *cache.TTL[*domain.AssetCatalogEntry]
-	WSURL           string
-	WSDial          wsDialer
-	DepthIdle       time.Duration
-	DepthWait       time.Duration
+	BaseURL           string
+	ProductBaseURL    string // default https://www.binance.com — product catalog with circulating supply
+	APIKey            string // optional BINANCE_API_KEY for delist schedule
+	HTTPClient        *http.Client
+	CandleCache       *cache.TTL[[]domain.Candle]
+	TickerCache       *cache.TTL[*domain.Ticker24h]
+	OrderBookCache    *cache.TTL[*domain.RawOrderBook]
+	SpotMarketCache   *cache.TTL[[]domain.SpotMarket]
+	SupplyCache       *cache.TTL[*domain.AssetSupply]
+	CatalogCache      *cache.TTL[*domain.AssetCatalogEntry]
+	WSURL             string
+	WSDial            wsDialer
+	DepthIdle         time.Duration
+	DepthWait         time.Duration
+	FuturesBaseURL    string // default https://fapi.binance.com
+	OpenInterestCache *cache.TTL[*domain.OpenInterestSeries]
 }
 
 // NewClient constructs a Binance market-data + supply client.
@@ -117,6 +134,32 @@ func NewClient(opts Options) *Client {
 		wsURL:          opts.WSURL,
 		wsDial:         opts.WSDial,
 		depthIdle:      opts.DepthIdle,
+		futuresBase:    strings.TrimRight(opts.FuturesBaseURL, "/"),
+		oiCache:        opts.OpenInterestCache,
+	}
+	if c.futuresBase == "" {
+		c.futuresBase = "https://fapi.binance.com"
+	}
+	if c.oiCache == nil {
+		c.oiCache = cache.New[*domain.OpenInterestSeries](30 * time.Second)
+	}
+	if c.fundingCache == nil {
+		c.fundingCache = cache.New[*domain.FundingSeries](30 * time.Second)
+	}
+	if c.lsCache == nil {
+		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
+	}
+	if c.takerCache == nil {
+		c.takerCache = cache.New[*domain.TakerVenueFlow](20 * time.Second)
+	}
+	if c.basisCache == nil {
+		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
+	}
+	if c.windowCache == nil {
+		c.windowCache = cache.New[[]domain.WindowChange](20 * time.Second)
+	}
+	if c.printCache == nil {
+		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)
 	}
 	return c
 }

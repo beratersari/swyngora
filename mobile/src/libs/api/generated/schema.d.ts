@@ -256,6 +256,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored order-book snapshots
+         * @description Bid/ask levels, spread, liquidity, imbalance, and walls at a time.
+         */
+        get: operations["getOrderBookHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/icebergs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Iceberg-style refill at the same price
+         * @description Visible clip eaten then refilled at the same price, bid and ask.
+         */
+        get: operations["getOrderBookIcebergs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/history/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare two stored order books
+         * @description Which price levels gained or lost liquidity between two times.
+         */
+        get: operations["compareOrderBookHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/combined": {
         parameters: {
             query?: never;
@@ -379,6 +439,354 @@ export interface paths {
          *     both venues. Informational only.
          */
         get: operations["getMarketLiquidations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/open-interest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures open interest and windowed change
+         * @description Current outstanding futures size plus how much it increased or decreased
+         *     over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
+         *     Sources: **Binance USD-M** and **Bybit linear perpetual**.
+         *     `contracts` is venue-published size in the base asset; `value` is USDT
+         *     notional. `exchange=all` (default) sums both venues.
+         */
+        get: operations["getMarketOpenInterest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/funding-rate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Perpetual funding rate and recent history
+         * @description Predicted next funding rate plus recent settled payments for
+         *     Binance USD-M and Bybit linear perpetual.
+         */
+        get: operations["getMarketFundingRate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/long-short-ratio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Long/short account ratio and recent history */
+        get: operations["getMarketLongShortRatio"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/futures-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Durable futures history
+         * @description Stored open interest, funding, long/short, or liquidation rows for
+         *     Binance USD-M and Bybit linear. Written on a background interval and
+         *     (for liquidations) as events arrive. Duplicates are ignored. One venue
+         *     failing does not drop the other. Survives process restarts.
+         */
+        get: operations["getMarketFuturesHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-hunt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hypothetical liquidation hunt (per venue)
+         * @description Hypothetical model only. Per-venue estimate of liquidation
+         *     pressure, spot size to reach those areas, and a rough desk result.
+         */
+        get: operations["getMarketLiquidationHunt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/squeeze-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Long and short squeeze risk
+         * @description Scores long-squeeze and short-squeeze risk (0–100) for Binance
+         *     and Bybit separately, plus an OI-weighted combined view.
+         */
+        get: operations["getMarketSqueezeRisk"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/positioning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price and open-interest positioning
+         * @description long_buildup / short_buildup / long_unwinding / short_covering
+         *     per venue plus combined market direction.
+         */
+        get: operations["getMarketPositioning"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/venue-divergence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Binance vs Bybit signal split
+         * @description same / opposite / mixed on OI, funding, crowding, positioning.
+         */
+        get: operations["getMarketVenueDivergence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/taker-flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures taker buy vs sell volume
+         * @description Aggressive buy/sell notional for 5m, 1h, 4h per venue + combined.
+         */
+        get: operations["getMarketTakerFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/cvd": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cumulative volume delta versus price
+         * @description Running buy−sell notional with price, per venue + combined.
+         */
+        get: operations["getMarketCVD"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/basis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures vs spot basis (premium or discount)
+         * @description Dollar and percent gap, expanding/shrinking, funding/OI read, venue agreement.
+         */
+        get: operations["getMarketBasis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/correlation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price correlation vs BTC and ETH
+         * @description Similarity of movement vs BTC and ETH for 1h, 4h, and 24h.
+         */
+        get: operations["getMarketCorrelation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/breadth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market breadth (how many coins are up or down)
+         * @description Up/down counts for 1h, 4h, and 24h plus BTC/ETH vs the pack.
+         */
+        get: operations["getMarketBreadth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/volatility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Price volatility vs recent history and BTC/ETH
+         * @description Range, vs normal, expanding/shrinking, and vs BTC/ETH.
+         */
+        get: operations["getMarketVolatility"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combined tape snapshot
+         * @description Price, volume, mcap, OI, funding, LS, and taker flow with 1h/4h/24h changes.
+         */
+        get: operations["getMarketSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Support and resistance areas
+         * @description Zones from price, volume, and the order book plus breakout score.
+         */
+        get: operations["getMarketLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/whales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Large trades and liquidations
+         * @description Clustered aggressive buys/sells and liquidations, biggest first.
+         */
+        get: operations["getMarketWhales"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2477,6 +2885,130 @@ export interface components {
             windows?: components["schemas"]["LiquidationWindow"][];
             note?: string;
         };
+        OpenInterestLevel: {
+            /** @description Outstanding size in the base asset */
+            contracts?: string;
+            /** @description USDT notional */
+            value?: string;
+            /** Format: date-time */
+            time?: string;
+        };
+        OpenInterestWindow: {
+            /** @enum {string} */
+            window?: "5m" | "1h" | "4h" | "24h";
+            /** @description Contracts at the past sample */
+            openInterest?: string;
+            /** @description USDT notional at the past sample */
+            openInterestValue?: string;
+            /** @description Signed contract change vs now */
+            change?: string;
+            /** @description Signed percent change in contracts */
+            changePct?: string;
+            /** @description Signed USDT notional change */
+            changeValue?: string;
+            /** @description Signed percent change in USDT notional */
+            changeValuePct?: string;
+            /** @enum {string} */
+            direction?: "up" | "down" | "flat";
+            /** @description False when the historical sample is missing or too old */
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        OpenInterestVenue: {
+            exchange?: string;
+            current?: components["schemas"]["OpenInterestLevel"];
+            windows?: components["schemas"]["OpenInterestWindow"][];
+        };
+        /** @description Current futures open interest plus 5m/1h/4h/24h change */
+        MarketOpenInterest: {
+            symbol?: string;
+            exchange?: string;
+            /** @description Base asset, e.g. BTC */
+            unit?: string;
+            current?: components["schemas"]["OpenInterestLevel"];
+            windows?: components["schemas"]["OpenInterestWindow"][];
+            venues?: components["schemas"]["OpenInterestVenue"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
+            funding?: components["schemas"]["MarketFundingRate"];
+            longShort?: components["schemas"]["MarketLongShortRatio"];
+            note?: string;
+        };
+        FundingPrint: {
+            /** Format: date-time */
+            time?: string;
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            markPrice?: string;
+            predicted?: boolean;
+        };
+        FundingCurrent: {
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            /** Format: date-time */
+            nextFundingTime?: string;
+            intervalHours?: number;
+            /** Format: date-time */
+            time?: string;
+        };
+        FundingVenue: {
+            exchange?: string;
+            current?: components["schemas"]["FundingCurrent"];
+            lastSettled?: components["schemas"]["FundingPrint"];
+            avgLast3?: string;
+            avgLast3Pct?: string;
+            history?: components["schemas"]["FundingPrint"][];
+        };
+        /** @description Predicted next funding plus recent settlements */
+        MarketFundingRate: {
+            symbol?: string;
+            exchange?: string;
+            current?: components["schemas"]["FundingCurrent"];
+            venues?: components["schemas"]["FundingVenue"][];
+            history?: components["schemas"]["FundingPrint"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
+            note?: string;
+        };
+        LongShortLevel: {
+            /** Format: date-time */
+            time?: string;
+            longPct?: string;
+            shortPct?: string;
+            ratio?: string;
+            /** @enum {string} */
+            bias?: "long" | "short" | "balanced";
+            longShare?: string;
+        };
+        LongShortVenue: {
+            exchange?: string;
+            kind?: string;
+            period?: string;
+            current?: components["schemas"]["LongShortLevel"];
+            change?: string;
+            history?: components["schemas"]["LongShortLevel"][];
+        };
+        /** @description Account long/short ratio plus recent 5m history */
+        MarketLongShortRatio: {
+            symbol?: string;
+            exchange?: string;
+            kind?: string;
+            period?: string;
+            current?: components["schemas"]["LongShortLevel"];
+            venues?: components["schemas"]["LongShortVenue"][];
+            history?: components["schemas"]["LongShortLevel"][];
+            /** Format: date-time */
+            asOf?: string;
+            venueCount?: number;
+            note?: string;
+        };
         OrderBookImpactFill: {
             exchange?: string;
             price?: string;
@@ -3817,6 +4349,122 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getOrderBookIcebergs: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                /** @description Minimum visible clip in USD (default 25000) */
+                minNotional?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bid and ask icebergs, biggest clip first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asks?: Record<string, unknown>[];
+                        bids?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getOrderBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Point in time (RFC3339 or unix ms) */
+                at?: string;
+                /** @description List window start (RFC3339 or unix ms) */
+                from?: string;
+                /** @description List window end (RFC3339 or unix ms) */
+                to?: string;
+                /** @description Max list rows (default 60, max 500) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One snapshot or a newest-first list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        at?: string;
+                        snapshot?: Record<string, unknown>;
+                        snapshots?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    compareOrderBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "coinbase" | "bybit";
+                /** @description Earlier time (RFC3339 or unix ms) */
+                from: string;
+                /** @description Later time (RFC3339 or unix ms) */
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Before/after liquidity diff */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        from?: Record<string, unknown>;
+                        to?: Record<string, unknown>;
+                        gained?: Record<string, unknown>[];
+                        lost?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getCombinedSpotOrderBook: {
         parameters: {
             query: {
@@ -3954,6 +4602,560 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    getMarketOpenInterest: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current open interest and windowed change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOpenInterest"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFundingRate: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Settled history size (1–30, default 12) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current funding and recent settlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketFundingRate"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLongShortRatio: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLongShortRatio"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFuturesHistory: {
+        parameters: {
+            query: {
+                /** @description open_interest | funding | long_short | liquidations */
+                metric: "open_interest" | "funding" | "long_short" | "liquidations";
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                from?: string;
+                to?: string;
+                /** @description Max rows, default 200, max 1000 */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored rows newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        metric?: string;
+                        exchange?: string;
+                        symbol?: string;
+                        count?: number;
+                        items?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationHunt: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both, never averaged) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue hunt report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketSqueezeRisk: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined squeeze risk */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPositioning: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined positioning */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVenueDivergence: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Venue comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        alignment?: string;
+                        title?: string;
+                        summary?: string;
+                        important?: boolean;
+                        diffs?: Record<string, unknown>[];
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketCVD: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined CVD vs price */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketTakerFlow: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined taker flow */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBasis: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue basis plus optional agreement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        venues?: Record<string, unknown>[];
+                        agreement?: Record<string, unknown>;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketCorrelation: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-window correlation vs BTC and ETH */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        windows?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBreadth: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-window up/down counts plus BTC/ETH read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        exchange?: string;
+                        quote?: string;
+                        universe?: number;
+                        asOf?: string;
+                        windows?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVolatility: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-window volatility vs history and BTC/ETH */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        windows?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketSnapshot: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        spot?: Record<string, unknown>;
+                        venues?: Record<string, unknown>[];
+                        combined?: Record<string, unknown>;
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLevels: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Support and resistance zones plus optional breakout */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        price?: string;
+                        supports?: Record<string, unknown>[];
+                        resistances?: Record<string, unknown>[];
+                        active?: Record<string, unknown>;
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketWhales: {
+        parameters: {
+            query?: {
+                /** @description Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins. */
+                symbol?: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Minimum USD size (default 100000) */
+                minNotional?: number;
+                /** @description Max events (default 30, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whale prints and liquidations, biggest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol?: string;
+                        exchange?: string;
+                        asOf?: string;
+                        minNotional?: string;
+                        events?: Record<string, unknown>[];
+                        summary?: string;
+                        note?: string;
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     getSupply: {

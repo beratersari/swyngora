@@ -35,6 +35,8 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("SUPPLY_CACHE_TTL", "")
 	t.Setenv("CACHE_CLEANUP_EVERY", "")
 	t.Setenv("SPOT_MARKET_CACHE_TTL", "")
+	t.Setenv("BINANCE_FUTURES_BASE_URL", "")
+	t.Setenv("OPEN_INTEREST_CACHE_TTL", "")
 	t.Setenv("SUPPLY_REFRESH_HOUR", "")
 	t.Setenv("SUPPLY_REFRESH_MINUTE", "")
 	t.Setenv("SUPPLY_REFRESH_TZ", "")
@@ -75,6 +77,12 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.SpotMarketCacheTTL != 5*time.Second {
 		t.Fatalf("spot ttl=%v", cfg.SpotMarketCacheTTL)
+	}
+	if cfg.BinanceFuturesBaseURL != "https://fapi.binance.com" {
+		t.Fatalf("futures base=%q", cfg.BinanceFuturesBaseURL)
+	}
+	if cfg.OpenInterestCacheTTL != 30*time.Second {
+		t.Fatalf("oi ttl=%v", cfg.OpenInterestCacheTTL)
 	}
 	if cfg.SupplyRefreshHour != 3 || cfg.SupplyRefreshMinute != 0 {
 		t.Fatalf("refresh at %d:%d", cfg.SupplyRefreshHour, cfg.SupplyRefreshMinute)
