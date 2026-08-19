@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional (who hit the futures book). It is not account long/short. Price is the 5-minute close. Binance uses the public 5m taker series; Bybit uses live trades (24h is complete after this process has been collecting). Combined adds both venues' delta, never averages. Informational only — not financial advice."
+const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional (who hit the futures book). It is not account long/short. Price is the 5-minute close. Windows show how CVD changed over 15m / 1h / 4h / 24h, not only the latest total. Combined uses the overlapping time range (a missing 5m slot on one venue does not make a full 24h tape look unfinished). Each window says how much Binance vs Bybit added, including when one rose and the other fell. Divergence includes how long the split has been running and how far price and CVD moved. Informational only — not financial advice."
 
 // WithTakerBucketStore attaches durable taker bars for CVD.
 func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {

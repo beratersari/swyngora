@@ -2506,10 +2506,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_cvd",
             description=(
                 "Cumulative Volume Delta: running sum of market-buy minus "
-                "market-sell notional over time, with price. 1h / 4h / 24h "
-                "reads say if flow confirms price, disagrees, or is absorbed "
-                "(lots of market buys, price barely moves). Binance and Bybit "
-                "separately plus combined."
+                "market-sell notional over time, with price. Windows show CVD "
+                "change over 15m / 1h / 4h / 24h. Flags price-up/CVD-down or "
+                "price-down/CVD-up, including how long it has been going and "
+                "how far price vs CVD moved. Combined uses the overlapping "
+                "time range and shows when Binance CVD rose while Bybit fell "
+                "(or the reverse)."
             ),
             args_schema=TakerFlowInput,
         ),

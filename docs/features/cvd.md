@@ -16,10 +16,24 @@ Useful when:
 `GET /api/v1/market/cvd?symbol=BTCUSDT`
 
 - `exchange=all` (default): **Binance** and **Bybit** separately plus `combined`
-- 5-minute points: `buyNotional`, `sellNotional`, `delta`, running `cvd`, `price`
-- Windows **1h / 4h / 24h**: CVD change vs price change, labeled
-  `confirms` | `opposite` | `absorption` | `mixed`
-- Combined **adds** each venue’s delta per bar (never averages)
+- 5-minute points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
+  `price`, `priceChangePct`, `vsPrice`, and `divergence`
+- **Divergence:** `price_up_cvd_down` or `price_down_cvd_up` on a point,
+  on each 15m / 1h / 4h / 24h window, and on the series `divergence`
+  object — how long the current split has been running (`duration`,
+  `since`), and how far price (`priceMovePct`) and CVD (`cvdMove`)
+  moved against each other
+- Windows **15m / 1h / 4h / 24h**: CVD change vs price change (not only
+  the latest total), labeled `confirms` | `opposite` | `absorption` | `mixed`
+- Combined **adds** each venue’s delta on the overlapping **time range**
+  (a quiet 5m slot on one side is treated as 0, not a hole). Combined
+  `complete` follows both venues — one missing 5m bucket at the start
+  does not make a 24h tape look unfinished. A short Bybit history still
+  does **not** make combined complete. `overlapFrom` / `overlapTo` mark
+  that range.
+- Combined points and `contributions` show how much **Binance** and
+  **Bybit** each added. `venueSplit` flags when one venue’s CVD rose
+  while the other fell (`alignment=opposite`)
 
 Binance uses the public 5m taker series (~24h+ immediately). Bybit uses
 live trades; 24h `complete` after this process has been collecting. Bars

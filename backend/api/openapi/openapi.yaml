@@ -1254,11 +1254,17 @@ paths:
       description: |
         **CVD** is the running sum of aggressive futures **market-buy**
         notional minus **market-sell** notional. Each 5-minute point includes
-        price so you can see when price is flat but buyers are hitting, or
-        price rises while sells are stronger. **1h / 4h / 24h** reads label
-        `confirms`, `opposite`, or `absorption`. `exchange=all` (default)
-        returns Binance and Bybit separately plus a combined series (deltas
-        added, never averaged). Informational only.
+        price, `priceChangePct`, `vsPrice`, and `divergence`
+        (`price_up_cvd_down` / `price_down_cvd_up`) so you can see when
+        price and flow disagree. Divergence includes how long the split
+        has been running and how far price and CVD moved. **15m / 1h /
+        4h / 24h** windows show CVD change (not only the latest total)
+        and label `confirms`, `opposite`, or `absorption`. `exchange=all`
+        (default) returns Binance and Bybit separately plus a combined
+        series. Combined uses the overlapping **time range** (a missing
+        5m slot is 0) and is `complete` when both venues are. Combined
+        `venueSplit` flags Binance CVD up / Bybit down (or the reverse).
+        Informational only.
       operationId: getMarketCVD
       tags: [Market]
       parameters:

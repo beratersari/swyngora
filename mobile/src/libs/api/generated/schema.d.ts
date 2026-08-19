@@ -4871,7 +4871,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Per-venue and optional combined CVD vs price */
+            /** @description Per-venue and optional combined CVD vs price (overlap-only combined, venue share, divergence) */
             200: {
                 headers: {
                     [name: string]: unknown;

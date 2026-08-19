@@ -606,7 +606,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_cvd",
-		mcp.WithDescription("Cumulative Volume Delta: running sum of aggressive market-buy minus market-sell notional over time, plotted with price. 1h / 4h / 24h reads say if flow confirms price, disagrees (price up but more selling), or is absorbed (lots of market buys, price barely moves). Binance and Bybit separately plus combined. Not financial advice."),
+		mcp.WithDescription("Cumulative Volume Delta: running sum of aggressive market-buy minus market-sell notional over time, plotted with price. Windows show CVD change over 15m / 1h / 4h / 24h. Points flag price-up/CVD-down or price-down/CVD-up, with how long the split has been running and how far each moved. Combined uses the overlapping time range (complete when both venues are) and shows when Binance CVD rose while Bybit fell. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

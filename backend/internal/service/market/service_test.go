@@ -1382,6 +1382,12 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 	if got.Summary == "" {
 		t.Fatal("summary")
 	}
+	if got.Combined.Complete {
+		t.Fatal("1h overlap must not mark combined complete")
+	}
+	if len(got.Combined.Contributions) != 2 {
+		t.Fatalf("contributions %+v", got.Combined.Contributions)
+	}
 }
 
 func TestGetCVD_BadSymbol(t *testing.T) {

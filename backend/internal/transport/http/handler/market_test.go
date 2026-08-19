@@ -407,6 +407,50 @@ func TestGetCVD_OK(t *testing.T) {
 	}
 }
 
+func TestCVDToDTO_SharesAndDivergence(t *testing.T) {
+	at := time.Date(2026, 8, 16, 12, 5, 0, 0, time.UTC)
+	from := at.Add(-time.Hour)
+	rep := &domain.CVDReport{
+		Symbol: "BTCUSDT", Exchange: "all",
+		Combined: &domain.CVDVenueSeries{
+			Exchange: "all", Symbol: "BTCUSDT",
+			Points: []domain.CVDPoint{{
+				Time: at, Price: 101, PriceChangePct: 1, Delta: -80, CVD: 20,
+				VsPrice: domain.CVDVsOpposite, Divergence: domain.CVDDivPriceUpCVDDown,
+				Shares: []domain.CVDShare{
+					{Exchange: domain.ExchangeBinance, Delta: -50, CVD: 10, SharePct: 50},
+					{Exchange: domain.ExchangeBybit, Delta: -30, CVD: 10, SharePct: 50},
+				},
+			}},
+			Contributions: []domain.CVDShare{
+				{Exchange: domain.ExchangeBinance, CVD: 10, SharePct: 50},
+			},
+			OverlapFrom: &from, OverlapTo: &at,
+			Divergence: domain.CVDDivergence{
+				Kind: domain.CVDDivPriceUpCVDDown, VsPrice: domain.CVDVsOpposite,
+				Title: "price up, CVD down", Bars: 1, LastAt: at,
+			},
+			Complete: false,
+		},
+	}
+	got := cvdToDTO(rep)
+	if got.Combined == nil || got.Combined.Complete || got.Combined.OverlapFrom == nil {
+		t.Fatalf("%+v", got.Combined)
+	}
+	if got.Combined.Divergence.Kind != domain.CVDDivPriceUpCVDDown {
+		t.Fatalf("div %+v", got.Combined.Divergence)
+	}
+	if got.Combined.Divergence.CVDMove == "" {
+		t.Fatal("expected cvdMove on divergence")
+	}
+	if len(got.Combined.Points) != 1 || got.Combined.Points[0].Divergence != domain.CVDDivPriceUpCVDDown {
+		t.Fatalf("point %+v", got.Combined.Points)
+	}
+	if len(got.Combined.Points[0].Shares) != 2 || got.Combined.Points[0].Shares[0].Exchange != "binance" {
+		t.Fatalf("shares %+v", got.Combined.Points[0].Shares)
+	}
+}
+
 func TestGetCVD_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd", nil)

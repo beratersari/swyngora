@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Combined CVD 5m buckets:** combined uses the overlapping time range and treats a missing 5-minute slot as 0. When both venues already have 24h, combined stays `complete` even if the first shared bucket is one bar late (`docs/features/cvd.md`)
+- **Combined CVD completeness:** combined CVD only uses the time range both Binance and Bybit have. It is not marked `complete` while Bybit history is still filling — a full Binance series no longer makes a Binance-heavy combined look finished (`docs/features/cvd.md`)
 - **Bybit open interest double-count:** current and historical Bybit figures now use `singleOpenInterest` / `singleOpenInterestValue` (one side). The older `openInterest` field is still both sides and was ~2× the UI value; if the single field is missing we halve the bilateral figure (`docs/features/open-interest.md`)
 
 ### Changed
@@ -27,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **CVD windows and venue split:** 15m / 1h / 4h / 24h CVD change (not only the latest total); `venueSplit` when Binance CVD rises and Bybit falls (or the reverse); divergence includes duration and how far price vs CVD moved (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
+- **CVD divergence and venue share:** each 5m point and 1h / 4h / 24h window flags price-up/CVD-down or price-down/CVD-up; combined CVD shows how much Binance and Bybit each added (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **CVD:** cumulative market-buy minus market-sell notional over time versus price (1h / 4h / 24h confirms, opposite, or absorption) for Binance, Bybit, and combined (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **Iceberg refill:** detect when visible buy or sell size at one price is eaten and a similar clip comes back, repeatedly — both sides (`GET /api/v1/market/orderbook/icebergs`, MCP `get_orderbook_icebergs`; live walls get `behavior=iceberg`) (`docs/features/icebergs.md`)
 - **Order-book history:** 1-minute samples of bid/ask levels, spread, liquidity, imbalance, and walls; look up a time and compare two times to see which price levels gained or lost liquidity (`GET /api/v1/market/orderbook/history`, `.../history/compare`, MCP `get_orderbook_history` / `compare_orderbook_history`) (`docs/features/book-history.md`)
