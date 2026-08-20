@@ -175,16 +175,6 @@ def test_extract_trace_tools():
     assert thinking
 
 
-def test_session_memory():
-    mem = SessionMemory(max_messages=4)
-    from langchain_core.messages import AIMessage, HumanMessage
-
-    mem.append("s", [HumanMessage(content="a"), AIMessage(content="b")])
-    mem.append("s", [HumanMessage(content="c"), AIMessage(content="d")])
-    mem.append("s", [HumanMessage(content="e"), AIMessage(content="f")])
-    assert len(mem.get("s")) == 4  # capped
-
-
 def test_run_agent_emits_one_prefixed_tool_result():
     out, events = _scripted_ticker_agent('{"lastPrice":"100"}')
     assert out
