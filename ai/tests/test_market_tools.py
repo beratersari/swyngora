@@ -26,7 +26,12 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
-                    "venues": [{"exchange": "binance", "current": {"ratio": "1.70", "bias": "long", "longPct": "63"}}],
+                    "venues": [
+                        {
+                            "exchange": "binance",
+                            "current": {"ratio": "1.70", "bias": "long", "longPct": "63"},
+                        }
+                    ],
                 },
             )
         if request.url.path.endswith("/funding-rate"):
@@ -34,7 +39,12 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
-                    "venues": [{"exchange": "binance", "current": {"rate": "0.0001", "ratePct": "0.01", "payer": "long"}}],
+                    "venues": [
+                        {
+                            "exchange": "binance",
+                            "current": {"rate": "0.0001", "ratePct": "0.01", "payer": "long"},
+                        }
+                    ],
                 },
             )
         if request.url.path.endswith("/open-interest"):
