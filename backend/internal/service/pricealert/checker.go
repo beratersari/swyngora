@@ -20,13 +20,28 @@ type BookFetcher interface {
 	GetSpotOrderBook(ctx context.Context, exchange, symbol, group string, levels int, rangePct float64) (*domain.OrderBook, error)
 }
 
+// AccountChecker reports whether a tenant is closed so workers can skip them.
+type AccountChecker interface {
+	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
+func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
+	if accounts == nil || clientID == "" {
+		return false
+	}
+	closed, _, err := accounts.IsClosed(ctx, clientID)
+	return err == nil && closed
+}
+
 // Checker evaluates active price alerts on an interval.
 // One-time alerts fire once then leave the active set.
 // Repeating alerts fire on each edge into the condition zone and re-arm on the safe side.
+// Closed accounts are skipped (docs/features/account-close.md — workers skip the tenant).
 type Checker struct {
 	Alerts   *Service
 	Market   TickerFetcher
 	Books    BookFetcher
+	Accounts AccountChecker
 	Interval time.Duration
 	Logger   *slog.Logger
 	// now and sleep are injectable for tests.
@@ -92,6 +107,9 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	priceGroups := map[key][]domain.PriceAlert{}
 	bookGroups := map[bookKey][]domain.PriceAlert{}
 	for _, a := range active {
+		if tenantClosed(ctx, c.Accounts, a.ClientID) {
+			continue
+		}
 		if domain.IsBookAlert(a.Kind) {
 			rng := a.RangePct
 			if rng <= 0 {

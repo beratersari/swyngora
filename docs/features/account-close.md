@@ -66,7 +66,8 @@ go test ./internal/service/account/... -count=1
 ## Known limitations
 
 - “Login” is the clientId model; there is no separate auth provider yet.  
-- Body-only `clientId` (no header/query) is not gated by REST middleware. Prefer `X-Client-Id`.  
+- REST `AccountGate` reads `X-Client-Id`, `?clientId=`, then JSON `clientId` (body is restored).  
 - MCP tools with `clientId` are blocked while closed (same `RequireActive` error as REST).  
 - Telegram uses the same `RequireActive` check after resolving the mapped tenant id. Public market commands (`/price`, `/rsi`, …) stay available.  
-- Paper books are frozen on close (plans paused, open orders canceled) and purged after grace.
+- Paper books are frozen on close (plans paused, open orders canceled) and purged after grace.  
+- Background workers skip closed tenants: price-alert checker, webhook deliverer, scanner `RunOnce`, price-diff `ProcessActiveWatches`. Rows stay until purge so reopen works.

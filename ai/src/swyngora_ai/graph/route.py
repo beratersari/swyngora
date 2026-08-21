@@ -72,6 +72,13 @@ def classify_route(message: str) -> Route:
             "pump",
             "swing",
             "depth",
+            "funding",
+            "open interest",
+            "open-interest",
+            "cvd",
+            "whale",
+            "squeeze",
+            "basis",
         )
     ):
         route.book = True

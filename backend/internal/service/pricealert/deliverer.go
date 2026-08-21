@@ -16,6 +16,7 @@ import (
 // Pending rows survive restarts; each alert_id is delivered at most once (status delivered).
 type Deliverer struct {
 	Alerts      *Service
+	Accounts    AccountChecker
 	HTTP        *http.Client
 	Interval    time.Duration
 	MaxAttempts int
@@ -94,6 +95,9 @@ func (d *Deliverer) RunOnce(ctx context.Context) {
 		d.Logger.Error("list due digests", "err", err)
 	} else {
 		for i := range dueDigests {
+			if tenantClosed(ctx, d.Accounts, dueDigests[i].ClientID) {
+				continue
+			}
 			d.deliverDigest(ctx, &dueDigests[i])
 		}
 	}
@@ -104,6 +108,9 @@ func (d *Deliverer) RunOnce(ctx context.Context) {
 		return
 	}
 	for i := range due {
+		if tenantClosed(ctx, d.Accounts, due[i].ClientID) {
+			continue
+		}
 		d.deliverOne(ctx, &due[i])
 	}
 }

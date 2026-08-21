@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents import create_agent
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 
 from swyngora_ai.agents.prompts import ORCHESTRATOR_SYSTEM
@@ -16,6 +16,7 @@ from swyngora_ai.agents.specialists import SpecialistRunner
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.graph.facts import extract_market_facts
 from swyngora_ai.graph.route import classify_route
+from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
 from swyngora_ai.llm.factory import build_chat_model
@@ -32,6 +33,7 @@ from swyngora_ai.tools.market_http import (
     bind_client_id,
     bind_tool_scope,
     collected_tool_json,
+    record_tool_json,
     reset_bound_client_id,
     reset_tool_json_turn,
     reset_tool_scope,
@@ -50,6 +52,17 @@ class ChatResult:
 
 
 # SessionMemory + memory_key live in swyngora_ai.memory.finmem (re-exported here).
+
+
+def _should_refresh_tape(memory: Any, client_id: str, message: str) -> bool:
+    """True when the user asked for market numbers and FinMem tape is older than TTL."""
+    route = classify_route(message)
+    if not (route.tape or route.book):
+        return False
+    check = getattr(memory, "tape_is_stale", None)
+    if not callable(check):
+        return False
+    return bool(check(client_id))
 
 
 def _content_text(content: Any) -> str:
@@ -255,6 +268,23 @@ class Orchestrator:
             emit("status", "Planning…")
             history = self.memory.get(mem_key)
             messages: list[BaseMessage] = list(history) + [HumanMessage(content=user_message)]
+            if _should_refresh_tape(self.memory, cid, user_message):
+                emit("status", "Refreshing stale tape…")
+                tape_blobs = prefetch_tape(self.settings, user_message)
+                for blob in tape_blobs:
+                    record_tool_json(blob)
+                if tape_blobs:
+                    messages.insert(
+                        -1,
+                        SystemMessage(
+                            content=(
+                                "Fresh market tape JSON (prefer over older chat numbers):\n"
+                                + "\n".join(tape_blobs[:6])
+                            )
+                        ),
+                    )
+                    if isinstance(self.memory, FinMem):
+                        self.memory.note_tape(cid)
             config: RunnableConfig = {
                 "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
             }

@@ -158,6 +158,36 @@ func (f *fakeTicker) GetTicker24h(_ context.Context, exchange, symbol string) (*
 	return &domain.Ticker24h{Symbol: symbol, LastPrice: p}, nil
 }
 
+type closedAccounts map[string]bool
+
+func (m closedAccounts) IsClosed(_ context.Context, clientID string) (bool, *domain.Account, error) {
+	return m[clientID], nil, nil
+}
+
+func TestChecker_SkipsClosedAccount(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "closed-user", Symbol: "BTCUSDT", Condition: "above", TargetPrice: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkt := &fakeTicker{prices: map[string]string{"binance|BTCUSDT": "200"}}
+	c := &Checker{Alerts: svc, Market: mkt, Accounts: closedAccounts{"closed-user": true}}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "closed-user", a.ID)
+	if got.Status != domain.AlertStatusActive {
+		t.Fatalf("closed tenant must not fire: %+v", got)
+	}
+	c.Accounts = closedAccounts{"closed-user": false}
+	c.RunOnce(ctx)
+	got, _ = svc.Get(ctx, "closed-user", a.ID)
+	if got.Status != domain.AlertStatusTriggered {
+		t.Fatalf("reopened tenant should fire: %+v", got)
+	}
+}
+
 func TestChecker_TriggersOnce(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

@@ -10,7 +10,8 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 from swyngora_ai.agents.specialists import build_specialist_tools
 from swyngora_ai.config import Settings
-from swyngora_ai.graph.orchestrator import Orchestrator, SessionMemory
+from swyngora_ai.graph.orchestrator import Orchestrator, SessionMemory, _should_refresh_tape
+from swyngora_ai.memory.finmem import FinMem
 
 
 class ScriptedModel(BaseChatModel):
@@ -55,6 +56,15 @@ def test_build_specialist_tools_names():
         "x_agent",
         "analyst_agent",
     }
+
+
+def test_should_refresh_tape_uses_finmem_ttl():
+    mem = FinMem(path=":memory:")
+    assert _should_refresh_tape(mem, "c1", "What is BTC price?")
+    mem.note_tape("c1", "BTCUSDT", "binance")
+    assert not _should_refresh_tape(mem, "c1", "What is BTC price?")
+    assert not _should_refresh_tape(SessionMemory(), "c1", "What is BTC price?")
+    assert not _should_refresh_tape(mem, "c1", "hello")
 
 
 def test_orchestrator_chat_with_scripted_model():

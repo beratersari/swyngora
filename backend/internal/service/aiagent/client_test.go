@@ -115,6 +115,23 @@ func TestClient_SendsServiceToken(t *testing.T) {
 	}
 }
 
+func TestClient_ChatNilOptsDefaultsToFullAccess(t *testing.T) {
+	// Telegram /ask and other callers pass opts == nil → canTrade + canManageKeys.
+	var got ChatRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_ = json.NewEncoder(w).Encode(map[string]any{"reply": "ok", "sessionId": "s"})
+	}))
+	t.Cleanup(srv.Close)
+	c := New(srv.URL, 5*time.Second)
+	if _, err := c.Chat(context.Background(), "mint a key", "s", "tg-user", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !got.CanTrade || !got.CanManageKeys {
+		t.Fatalf("nil opts: trade=%v keys=%v (want both true)", got.CanTrade, got.CanManageKeys)
+	}
+}
+
 func TestClient_ChatForwardsScope(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req ChatRequest

@@ -202,7 +202,8 @@ class SpecialistRunner:
             ),
             (
                 SPECIALIST_BOOK,
-                "Call ONLY if the user asked for order book, liquidations, liquidity, impact, pumps, or swing.",
+                "Call ONLY if the user asked for order book, liquidations, liquidity, impact, pumps, swing, "
+                "funding, open interest, CVD, whales, levels, snapshot, or related flow analytics.",
             ),
             (
                 SPECIALIST_PAPER,

@@ -239,7 +239,7 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 		editProgress(force)
 	}
 
-	res, err := b.Router.ai.ChatStream(aiCtx, q, session, session, nil, onEvent)
+	res, err := b.Router.ai.ChatStream(aiCtx, q, session, session, telegramAIChatOptions(), onEvent)
 	if err != nil {
 		log.Warn("telegram AI stream failed", "err", err)
 		// Only fall back to non-stream Chat when the stream endpoint is missing
@@ -259,7 +259,7 @@ func (b *Bot) handleAI(ctx context.Context, chatID, userID int64, text string) {
 			editProgress(true)
 			// Fresh timeout budget for the fallback call.
 			fbCtx, fbCancel := context.WithTimeout(ctx, b.Router.opts.AITimeout)
-			res, err = b.Router.ai.Chat(fbCtx, q, session, session, nil)
+			res, err = b.Router.ai.Chat(fbCtx, q, session, session, telegramAIChatOptions())
 			fbCancel()
 		}
 

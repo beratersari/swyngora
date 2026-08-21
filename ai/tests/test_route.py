@@ -32,6 +32,12 @@ def test_book_keywords():
     assert r.tape
 
 
+def test_funding_and_cvd_are_book():
+    r = classify_route("What is BTC funding and CVD?")
+    assert r.book
+    assert r.tape
+
+
 def test_paper_and_account():
     assert classify_route("place a paper OCO on BTC").paper
     assert classify_route("add ETH to my watchlist").account

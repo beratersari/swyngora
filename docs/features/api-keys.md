@@ -22,7 +22,7 @@ The process master token (`API_AUTH_TOKEN`) still has full access and is how the
 
 Secrets are stored as SHA-256 hashes. The full token is returned **once** on create (`swy_` + 48 hex chars). List shows only `prefix` (first 12 characters).
 
-Limits: 20 active keys per `clientId`; name 1–64 characters.
+Limits: 20 active keys per `clientId`; name 1–64 characters. `clientId` is validated with `domain.NormalizeClientID` (reserved names and enumerable `tg-<digits>` are rejected).
 
 ### HTTP
 

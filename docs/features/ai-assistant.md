@@ -12,7 +12,7 @@ LangChain **ReAct orchestrator**: the model chooses specialists from the user pr
 User → Orchestrator (create_agent)
          optional, only if the question needs it:
          ├─ market_tape_agent  → ticker, candles, indicators, FX, lists, delists, holders
-         ├─ market_book_agent  → book, liquidations, impact, pumps, swing
+         ├─ market_book_agent  → book, liquidations, impact, pumps, swing, OI/funding/CVD/flow
          ├─ paper_desk_agent   → paper books / orders / margin
          ├─ account_agent      → watchlist, alerts, keys, export/import
          ├─ web_agent          → allowlisted RSS + wiki + Gecko + SEC EDGAR / KAP
@@ -38,11 +38,11 @@ User → Orchestrator (create_agent)
 - Social/X results are labeled weak and incomplete.
 - Coin/project questions dispatch **web_agent** (`web_research` + `web_news`) and optionally **x_agent**; public **URLs** return as `references` on the chat payload and render as source cards in the web UI.
 - Answers include “not financial advice” framing for market questions.
-- Session memory is **namespaced by `clientId` + `sessionId`**. Optional FinMem SQLite (`AI_MEMORY_PATH`) stores daily notes + last tape timestamp (TTL 5m). `reset` uses the same tenant key.
+- Session memory is **namespaced by `clientId` + `sessionId`**. Optional FinMem SQLite (`AI_MEMORY_PATH`) stores daily notes + last tape timestamp (TTL 5m). On the live `chat` path, a tape/book question with a stale timestamp prefetches ticker/indicators before the ReAct turn. `reset` uses the same tenant key.
 - HTTP/Telegram pass `clientId`; Python tools bind that id (and send `SWYNGORA_API_TOKEN` / `X-Client-Id`) so the model cannot switch tenants. Reserved ids (`ai-assistant`, `http-default`, `anonymous`) are rejected by the backend.
 - The Go AI proxy also passes `canTrade` / `canManageKeys` from the authenticated identity. User **read** keys keep AI chat but mutating tools return 403; user keys never get key-admin tools even with trade permission.
 - Web `/ai` streams `POST /api/v1/ai/chat/stream` and shows a **Process** timeline (status / think / tools / results) as each step happens. The list stays open while working, then collapses to a one-line summary so the answer stays readable. Non-stream `POST /api/v1/ai/chat` remains as fallback.
-- Telegram `/ask` uses the same stream for live progress edits.
+- Telegram `/ask` uses the same stream for live progress edits. Telegram AI scope is **read-only** (`canTrade=false`, `canManageKeys=false`); paper fills stay on `/buy` confirm.
 
 ## How to run
 

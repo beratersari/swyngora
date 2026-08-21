@@ -175,6 +175,12 @@ func (r *Router) cmdAsk(ctx context.Context, userID int64, args []string) string
 	return r.runAI(ctx, userID, q)
 }
 
+// telegramAIChatOptions keeps /ask read-only. Paper fills go through /buy confirm;
+// key admin stays on the HTTP account API, not the bot.
+func telegramAIChatOptions() *aiagent.ChatOptions {
+	return &aiagent.ChatOptions{CanTrade: false, CanManageKeys: false}
+}
+
 func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	if r.ai == nil {
 		return "AI is not configured. Set AI_SERVICE_URL / AI_AUTOSTART + AI_PYTHON, then restart the backend."
@@ -185,7 +191,7 @@ func (r *Router) runAI(ctx context.Context, userID int64, q string) string {
 	}
 	aiCtx, cancel := context.WithTimeout(ctx, r.opts.AITimeout)
 	defer cancel()
-	res, err := r.ai.Chat(aiCtx, q, session, session, nil)
+	res, err := r.ai.Chat(aiCtx, q, session, session, telegramAIChatOptions())
 	if err != nil {
 		return "AI unavailable: " + esc(err.Error()) + "\n\nEnsure the AI service is running (backend can auto-start it) and try again."
 	}

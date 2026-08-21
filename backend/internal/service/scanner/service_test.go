@@ -108,6 +108,51 @@ func TestScanner_CreateRunDedupe(t *testing.T) {
 	}
 }
 
+type closedAccounts map[string]bool
+
+func (m closedAccounts) IsClosed(_ context.Context, clientID string) (bool, *domain.Account, error) {
+	return m[clientID], nil, nil
+}
+
+func TestScanner_RunOnceSkipsClosedAccount(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	candles := make([]domain.Candle, 25)
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 25; i++ {
+		vol := "100"
+		if i == 24 {
+			vol = "400"
+		}
+		candles[i] = domain.Candle{
+			OpenTime: t0.Add(time.Duration(i) * time.Hour),
+			Close:    "10",
+			Volume:   vol,
+		}
+	}
+	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
+		"binance|BTCUSDT|1h": candles,
+	}}, &fakeWatch{wl: &domain.Watchlist{
+		ClientID: "scan-closed",
+		Items:    []domain.WatchlistItem{{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT"}},
+	}})
+	svc.SetAccountChecker(closedAccounts{"scan-closed": true})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{
+		ClientID: "scan-closed", Type: "volume_increase", Interval: "1h",
+		VolumeLookback: 20, VolumeMinRatio: 2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	n, err := svc.RunOnce(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("closed tenant must not insert results n=%d err=%v", n, err)
+	}
+}
+
 func TestScanner_CreateValidation(t *testing.T) {
 	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
 	if err != nil {

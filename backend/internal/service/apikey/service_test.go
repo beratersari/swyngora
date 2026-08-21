@@ -40,6 +40,19 @@ func TestAPIKey_CreateListRevokeAuth(t *testing.T) {
 	}
 }
 
+func TestAPIKey_CreateRejectsIDsDomainWouldReject(t *testing.T) {
+	svc := New(accountstore.NewMemory())
+	ctx := context.Background()
+	for _, id := range []string{"anonymous", "ai-assistant", "http-default", "tg-12345"} {
+		if _, err := domain.NormalizeClientID(id); err == nil {
+			t.Fatalf("precondition: domain must reject %q", id)
+		}
+		if _, err := svc.Create(ctx, CreateInput{ClientID: id, Name: "k", Permission: "read"}); err == nil {
+			t.Fatalf("%s: Create must use domain.NormalizeClientID", id)
+		}
+	}
+}
+
 func TestAPIKey_ReadCannotTrade(t *testing.T) {
 	svc := New(accountstore.NewMemory())
 	created, err := svc.Create(context.Background(), CreateInput{ClientID: "u2", Name: "Reader", Permission: "read"})

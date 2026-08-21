@@ -409,6 +409,8 @@ func main() {
 	})
 	watchSvc.SetAccountChecker(accountSvc)
 	portfolioSvc.SetAccountChecker(accountSvc)
+	scannerSvc.SetAccountChecker(accountSvc)
+	priceDiffSvc.SetAccountChecker(accountSvc)
 	logger.Info("account store ready", "driver", "sqlite", "path", accountStore.Path(), "grace", domain.AccountCloseGrace.String())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -603,6 +605,7 @@ func main() {
 		Alerts:   alertSvc,
 		Market:   marketSvc,
 		Books:    marketSvc,
+		Accounts: accountSvc,
 		Interval: cfg.AlertCheckInterval,
 		Logger:   logger,
 	}
@@ -612,6 +615,7 @@ func main() {
 	// Deliverer hardens CheckRedirect; explicit client keeps timeout from config.
 	webhookDeliverer := &pricealert.Deliverer{
 		Alerts:      alertSvc,
+		Accounts:    accountSvc,
 		HTTP:        webhookClient,
 		Interval:    cfg.WebhookDeliveryInterval,
 		MaxAttempts: cfg.WebhookMaxAttempts,

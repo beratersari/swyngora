@@ -48,6 +48,35 @@ func freshTicker(price string, now time.Time) *domain.Ticker24h {
 	return &domain.Ticker24h{LastPrice: price, CloseTime: now.Add(-10 * time.Second)}
 }
 
+type closedAccounts map[string]bool
+
+func (m closedAccounts) IsClosed(_ context.Context, clientID string) (bool, *domain.Account, error) {
+	return m[clientID], nil, nil
+}
+
+func TestProcessActiveWatches_SkipsClosedAccount(t *testing.T) {
+	now := time.Now().UTC()
+	m := &fakeTicker{data: map[string]*domain.Ticker24h{
+		"binance|BTCUSDT":  freshTicker("100", now),
+		"coinbase|BTC-USD": freshTicker("102", now),
+		"bybit|BTCUSDT":    freshTicker("100.2", now),
+	}}
+	svc := newSvc(t, m)
+	svc.MaxPriceAge = 2 * time.Minute
+	svc.SetAccountChecker(closedAccounts{"arb-closed": true})
+	ctx := context.Background()
+	if _, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "arb-closed", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, cl, touched, err := svc.ProcessActiveWatches(ctx, now)
+	if err != nil || c != 0 || cl != 0 || touched != 0 {
+		t.Fatalf("closed tenant must not process created=%d closed=%d touched=%d err=%v", c, cl, touched, err)
+	}
+}
+
 func TestCreateWatch_RejectsTinyNetFloor(t *testing.T) {
 	svc := newSvc(t, &fakeTicker{})
 	_, err := svc.CreateWatch(context.Background(), CreateInput{

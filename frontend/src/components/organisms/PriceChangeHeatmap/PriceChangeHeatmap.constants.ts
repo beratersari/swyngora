@@ -1,5 +1,5 @@
-/** Cap tiles so the map stays readable (API spot max is 500). */
-export const HEATMAP_MAX_TILES = 120;
+/** Cap tiles to the realtime WS max (docs/features/realtime.md: 100 per connection). */
+export const HEATMAP_MAX_TILES = 100;
 
 /** Visible white street between tiles. 2px matches CoinMarketCap (1px inset each side). */
 export const HEATMAP_GUTTER = 2;

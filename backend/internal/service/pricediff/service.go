@@ -28,10 +28,16 @@ type CreateInput struct {
 	FeeBybitPct    float64
 }
 
+// AccountChecker reports whether a tenant is closed so workers can skip them.
+type AccountChecker interface {
+	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
 // Service orchestrates price-diff watches and opportunity evaluation.
 type Service struct {
-	store  domain.PriceDiffPort
-	market TickerFetcher
+	store   domain.PriceDiffPort
+	market  TickerFetcher
+	account AccountChecker
 	// MaxPriceAge rejects tickers older than this (default 2m).
 	MaxPriceAge time.Duration
 }
@@ -43,6 +49,21 @@ func New(store domain.PriceDiffPort, market TickerFetcher) *Service {
 		market:      market,
 		MaxPriceAge: domain.DefaultPriceDiffMaxAge,
 	}
+}
+
+// SetAccountChecker wires account-closed skips for ProcessActiveWatches.
+func (s *Service) SetAccountChecker(a AccountChecker) {
+	if s != nil {
+		s.account = a
+	}
+}
+
+func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
+	if accounts == nil || clientID == "" {
+		return false
+	}
+	closed, _, err := accounts.IsClosed(ctx, clientID)
+	return err == nil && closed
 }
 
 // PurgeClient deletes watches (and their opportunities via store FK/delete) for a tenant.
@@ -204,6 +225,9 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (crea
 		return 0, 0, 0, err
 	}
 	for i := range watches {
+		if tenantClosed(ctx, s.account, watches[i].ClientID) {
+			continue
+		}
 		c, cl, t, e := s.processWatch(ctx, &watches[i], now)
 		if e != nil {
 			continue

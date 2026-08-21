@@ -23,16 +23,37 @@ type WatchlistReader interface {
 	Get(ctx context.Context, actorClientID, ownerClientID string) (*domain.WatchlistAccess, error)
 }
 
+// AccountChecker reports whether a tenant is closed so workers can skip them.
+type AccountChecker interface {
+	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
 // Service orchestrates scanner rules and evaluation.
 type Service struct {
-	store domain.ScannerPort
-	market CandleFetcher
-	watch  WatchlistReader
+	store   domain.ScannerPort
+	market  CandleFetcher
+	watch   WatchlistReader
+	account AccountChecker
 }
 
 // New constructs a scanner service.
 func New(store domain.ScannerPort, market CandleFetcher, watch WatchlistReader) *Service {
 	return &Service{store: store, market: market, watch: watch}
+}
+
+// SetAccountChecker wires account-closed skips for the background runner.
+func (s *Service) SetAccountChecker(a AccountChecker) {
+	if s != nil {
+		s.account = a
+	}
+}
+
+func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
+	if accounts == nil || clientID == "" {
+		return false
+	}
+	closed, _, err := accounts.IsClosed(ctx, clientID)
+	return err == nil && closed
 }
 
 // CreateInput creates a scanner rule for the client's watchlist.
@@ -254,6 +275,9 @@ func (s *Service) RunOnce(ctx context.Context) (int, error) {
 	inserted := 0
 	now := time.Now().UTC()
 	for clientID, clientRules := range byClient {
+		if tenantClosed(ctx, s.account, clientID) {
+			continue
+		}
 		acc, err := s.watch.Get(ctx, clientID, "")
 		if err != nil {
 			// Skip clients without watchlist
