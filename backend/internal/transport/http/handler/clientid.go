@@ -24,6 +24,11 @@ func resolveClientID(r *http.Request, bodyClientID string) (string, error) {
 		}
 		return id.ClientID, nil
 	}
+	header := strings.TrimSpace(r.Header.Get("X-Client-Id"))
+	query := strings.TrimSpace(r.URL.Query().Get("clientId"))
+	if _, err := middleware.AgreeClientIDs(header, query, bodyClientID); err != nil {
+		return "", err
+	}
 	if bodyClientID != "" {
 		return bodyClientID, nil
 	}

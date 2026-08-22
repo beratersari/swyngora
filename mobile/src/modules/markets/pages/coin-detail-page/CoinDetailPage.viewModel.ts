@@ -32,8 +32,9 @@ import {
   formatSupplyNum,
   formatTradeCount,
   formatVolumeRatio,
-  indicatorPointsToEmaLine,
+  emaLineFromCloses,
   indicatorPointsToRsi,
+  parseEmaPeriods,
   isMarketExchange,
   mergeChartCandles,
   pumpEventsToChartMarkers,
@@ -301,14 +302,15 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
   const candleOverlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
-    const keys = sortedEmaKeys(indicatorsQuery.data?.latest?.ema);
-    return keys.map((key, i) => ({
-      id: `ema-${key}`,
-      title: t('detail:emaTitle', { period: key }),
-      color: emaColor(key, i),
-      data: indicatorPointsToEmaLine(indicatorsQuery.data?.points, key),
+    const fromApi = parseEmaPeriods((indicatorsQuery.data?.emaPeriods ?? []).join(','));
+    const periods = fromApi.length > 0 ? fromApi : parseEmaPeriods(DEFAULT_EMA_PERIODS);
+    return periods.map((period, i) => ({
+      id: `ema-${period}`,
+      title: t('detail:emaTitle', { period }),
+      color: emaColor(String(period), i),
+      data: emaLineFromCloses(candles, period),
     }));
-  }, [showEma, indicatorsQuery.data, t]);
+  }, [showEma, indicatorsQuery.data?.emaPeriods, candles, t]);
 
   const rsiPoints = useMemo(
     () => indicatorPointsToRsi(indicatorsQuery.data?.points),

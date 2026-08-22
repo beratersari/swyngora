@@ -20,7 +20,7 @@ Users need to close their account (opaque `clientId` tenancy). While closed they
 | `POST` | `/api/v1/account/close` | Close account; sets `purgeAt = now + 7d` |
 | `POST` | `/api/v1/account/reopen` | Restore access if still before `purgeAt` |
 
-Middleware reads tenant id from `X-Client-Id`, `?clientId=`, or JSON `clientId` (body is restored for the handler). User-scoped routes **fail closed** with `400 invalid_argument` when no clientId is present. Closed accounts get `403 account_closed`. Public market routes are unaffected. **`/mcp` is not header-gated** (tools pass `clientId` in the JSON body); in-process MCP tools call `RequireActive` when `clientId` is present so closed accounts cannot mutate via agents.
+Middleware reads tenant id from `X-Client-Id`, `?clientId=`, and JSON `clientId` (body is restored for the handler). If those values disagree, the request is `400 invalid_argument` — the gate and the handler must see the same tenant. User-scoped routes **fail closed** with `400 invalid_argument` when no clientId is present. Closed accounts get `403 account_closed`. Public market routes are unaffected. **`/mcp` is not header-gated** (tools pass `clientId` in the JSON body); in-process MCP tools call `RequireActive` when `clientId` is present so closed accounts cannot mutate via agents. Paper `PlaceOrder` / `PlacePendingOrder` also reject a closed owner so Telegram confirm and other transports cannot skip the HTTP gate.
 
 Reserved tenant names (`default`, `anonymous`, `http-default`, `ai-assistant`, enumerable `tg-<digits>`) are rejected. Telegram users get a persisted UUID mapping (not `tg-<userId>`).
 
@@ -66,8 +66,8 @@ go test ./internal/service/account/... -count=1
 ## Known limitations
 
 - “Login” is the clientId model; there is no separate auth provider yet.  
-- REST `AccountGate` reads `X-Client-Id`, `?clientId=`, then JSON `clientId` (body is restored).  
+- REST `AccountGate` requires `X-Client-Id`, `?clientId=`, and JSON `clientId` to agree (body is restored).  
 - MCP tools with `clientId` are blocked while closed (same `RequireActive` error as REST).  
-- Telegram uses the same `RequireActive` check after resolving the mapped tenant id. Public market commands (`/price`, `/rsi`, …) stay available.  
+- Telegram uses the same `RequireActive` check after resolving the mapped tenant id, including `/buy` `/sell` **Confirm** (pending preview is discarded if the account closed in the meantime). Public market commands (`/price`, `/rsi`, …) stay available.  
 - Paper books are frozen on close (plans paused, open orders canceled) and purged after grace.  
 - Background workers skip closed tenants: price-alert checker, webhook deliverer, scanner `RunOnce`, price-diff `ProcessActiveWatches`. Rows stay until purge so reopen works.

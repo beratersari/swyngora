@@ -379,6 +379,9 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err != nil {
 		return nil, nil, err
 	}
+	if err := s.rejectClosedOwner(ctx, p); err != nil {
+		return nil, nil, err
+	}
 	clientID := p.BookID()
 	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
 	if err != nil {
@@ -885,6 +888,9 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	}
 	p, err := s.requireAccessErr(ctx, in.ClientID, domain.PortfolioRoleTrader, in.PortfolioID, in.OwnerClientID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.rejectClosedOwner(ctx, p); err != nil {
 		return nil, err
 	}
 	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)

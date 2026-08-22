@@ -30,6 +30,7 @@ export {
 export {
   apiCandlesToChart,
   filterValidApiCandles,
+  preferLongerCandleSeries,
   mergeCandleHistory,
   oldestCandleOpenTimeMs,
   trimCandlesToMax,
@@ -64,6 +65,9 @@ export {
   rsiBandLabel,
   indicatorPointsToRsiLine,
   indicatorPointsToEmaLine,
+  emaFromCloses,
+  emaLineFromCloses,
+  parseEmaPeriods,
   sortedEmaKeys,
 } from './indicators';
 export type { ChartLinePoint, RsiBandKey } from './indicators';

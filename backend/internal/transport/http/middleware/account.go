@@ -3,10 +3,12 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 )
 
@@ -17,9 +19,6 @@ const maxAccountGatePeek = 1 << 20 // 1 MiB
 // Market routes without a clientId are unaffected.
 func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		if svc == nil {
-			return next
-		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			path := r.URL.Path
 			// Always allow health, market public data, reopen + status.
@@ -36,12 +35,23 @@ func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			clientID := ""
-			if id := IdentityFrom(r.Context()); id != nil {
-				clientID = id.ClientID
+			header, query, body := peekTenantIDs(r)
+			agreed, err := AgreeClientIDs(header, query, body)
+			if err != nil {
+				writeJSONError(w, http.StatusBadRequest, "invalid_argument", "clientId header, query, and body must match")
+				return
 			}
-			if clientID == "" {
-				clientID = tenantClientID(r)
+			if svc == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			clientID := agreed
+			if id := IdentityFrom(r.Context()); id != nil && id.UserKey && id.ClientID != "" {
+				if agreed != "" && agreed != id.ClientID {
+					writeJSONError(w, http.StatusForbidden, "forbidden", "clientId does not match API key binding")
+					return
+				}
+				clientID = id.ClientID
 			}
 			if clientID == "" {
 				writeJSONError(w, http.StatusBadRequest, "invalid_argument", "clientId is required")
@@ -56,14 +66,34 @@ func AccountGate(svc *account.Service) func(http.Handler) http.Handler {
 	}
 }
 
-// tenantClientID reads header, query, then JSON body clientId (restoring the body).
-func tenantClientID(r *http.Request) string {
-	if v := strings.TrimSpace(r.Header.Get("X-Client-Id")); v != "" {
-		return v
+// AgreeClientIDs returns the single tenant id when every non-empty value matches.
+func AgreeClientIDs(ids ...string) (string, error) {
+	seen := ""
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if seen == "" {
+			seen = id
+			continue
+		}
+		if id != seen {
+			return "", fmt.Errorf("%w: clientId header, query, and body must match", domain.ErrInvalidArgument)
+		}
 	}
-	if v := strings.TrimSpace(r.URL.Query().Get("clientId")); v != "" {
-		return v
-	}
+	return seen, nil
+}
+
+// peekTenantIDs reads header, query, and JSON body clientId (restoring the body).
+func peekTenantIDs(r *http.Request) (header, query, body string) {
+	header = strings.TrimSpace(r.Header.Get("X-Client-Id"))
+	query = strings.TrimSpace(r.URL.Query().Get("clientId"))
+	body = peekJSONClientID(r)
+	return
+}
+
+func peekJSONClientID(r *http.Request) string {
 	ct := strings.ToLower(r.Header.Get("Content-Type"))
 	if r.Body == nil || r.ContentLength == 0 {
 		return ""
@@ -77,13 +107,13 @@ func tenantClientID(r *http.Request) string {
 	if err != nil || len(raw) == 0 || len(raw) > maxAccountGatePeek {
 		return ""
 	}
-	var body struct {
+	var payload struct {
 		ClientID string `json:"clientId"`
 	}
-	if json.Unmarshal(raw, &body) != nil {
+	if json.Unmarshal(raw, &payload) != nil {
 		return ""
 	}
-	return strings.TrimSpace(body.ClientID)
+	return strings.TrimSpace(payload.ClientID)
 }
 
 func writeJSONError(w http.ResponseWriter, status int, code, message string) {

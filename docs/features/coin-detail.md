@@ -50,14 +50,15 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Route `/markets/:exchange/:symbol`; query `interval` + `limit` (defaults `1h` / `100`)
 - Layout: Header → stats → tabs (Overview chart · Order book · Holders · Indicators · Trade)
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
+- Chart starts the kline fetch immediately (does not wait for the intervals list). A 100-bar first request paints the viewport, then the 300-bar live window replaces it. EMA overlays come from loaded candles so they do not block first paint. The overview chart stays mounted when switching detail tabs.
 - Partial errors per section; supply 404 is soft
 
 ### Indicators (DET-B)
 
 - Same interval/limit as candles
 - RSI: separate 0–100 pane, bands 30/70 (labels educational only)
-- EMA: overlays on price chart; periods fixed 12,26; RSI period 14
-- Use `GET /indicators` only (not batch) for detail
+- EMA: overlays on the price chart from **loaded candles** (same SMA-seed EMA as the backend) so pan-left history keeps the line; periods 12,26
+- RSI snapshot on the Indicators tab still uses `GET /indicators` (not batch)
 
 ---
 
@@ -79,7 +80,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Indicators = RSI + EMA only  
 - Supply = Binance marketing-list coverage  
 - Holders = CoinMarketCap public snapshot when published; 404 otherwise  
-- Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules)  
+- Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules). Live pump markers use the current pair only (`rtkCurrent` + exchange/symbol match) so a previous coin’s events cannot snap onto the new candles.  
 - Header links to alerts, compare, and the Signals desk; watchlist star on the pair
 
 DET-1…4 accepted and applied on the product frontend branch.

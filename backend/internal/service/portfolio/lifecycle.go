@@ -8,6 +8,21 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// rejectClosedOwner returns ErrAccountClosed when the book's owner is closed.
+func (s *Service) rejectClosedOwner(ctx context.Context, p *domain.Portfolio) error {
+	if p == nil {
+		return nil
+	}
+	owner := strings.TrimSpace(p.ClientID)
+	if owner == "" {
+		owner = p.BookID()
+	}
+	if s.ownerClosed(ctx, owner) {
+		return &domain.ErrAccountClosed{ClientID: owner}
+	}
+	return nil
+}
+
 // ownerClosed is true when the book owner (or the id itself) has a closed account.
 func (s *Service) ownerClosed(ctx context.Context, bookOrOwner string) bool {
 	if s == nil || s.account == nil {

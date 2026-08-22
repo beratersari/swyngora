@@ -36,6 +36,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 - `POST .../positions/{id}/margin` with `delta` (+ add from cash, − return to cash)
 - Cannot go below initial margin for remaining size
 - Liquidation price recalculated after adjust
+- After a successful debit/credit the service reloads the position **by book id**. It does not re-run actor `requireAccess` on the UUID (that failed once a second book existed and a client retry double-charged). Same for repay.
 
 ### Borrowing & interest
 - **Long:** borrowed **cash** = notional − margin (`debtAsset=quote`); principal and interest shown separately

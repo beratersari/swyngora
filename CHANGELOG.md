@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Coin-detail candle first paint:** klines start immediately (no intervals waterfall), a 100-bar request paints the viewport while the 300-bar window loads, and the chart no longer waits on indicators or remounts when switching tabs (`docs/features/coin-detail.md`)
+- **Coin-detail EMA on pan:** EMA overlays are computed from every loaded candle so the line continues when you scroll into older history (`docs/features/coin-detail.md`)
+- **Multi-book margin adjust/repay:** after the cash move, reload the position by book id instead of treating the book UUID as the actor — a second paper book no longer 4xxs a successful debit so a retry cannot double-charge (`docs/features/paper-margin.md`)
+- **AccountGate tenant match:** `X-Client-Id`, `?clientId=`, and JSON `clientId` must agree; a decoy header can no longer trade or mutate a closed tenant. Paper `PlaceOrder` also rejects a closed owner (`docs/features/account-close.md`)
+- **Telegram confirm after close:** `/buy` `/sell` Confirm re-checks `RequireActive` and does not fill (`docs/features/telegram-bot.md`)
+- **AI tool scope on worker threads:** tenant id and read-only `canTrade` survive LangChain threads that drop ContextVars (`docs/features/ai-assistant.md`)
+- **Desk tape venue switch:** the sticky tape no longer relabels the previous venue’s prices as the newly selected venue (`frontend/src/libs/hooks/useDeskPriceTape.ts`)
+- **Coin-detail pump markers:** live pump events use the current pair only so BTC arrows cannot snap onto an ETH chart (`docs/features/coin-detail.md`)
 - **CVD divergence runs:** a quiet gap no longer glues two same-kind splits into one long episode (`docs/features/cvd.md`)
 - **Combined CVD 5m buckets:** combined uses the overlapping time range and treats a missing 5-minute slot as 0. When both venues already have 24h, combined stays `complete` even if the first shared bucket is one bar late (`docs/features/cvd.md`)
 - **Combined CVD completeness:** combined CVD only uses the time range both Binance and Bybit have. It is not marked `complete` while Bybit history is still filling — a full Binance series no longer makes a Binance-heavy combined look finished (`docs/features/cvd.md`)

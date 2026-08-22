@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   apiCandlesToChart,
+  emaFromCloses,
+  emaLineFromCloses,
   endTimeBeforeOldestCandle,
   mergeChartCandles,
+  parseEmaPeriods,
   resolveInterval,
   sortedEmaKeys,
   type ChartCandle,
@@ -71,5 +74,23 @@ describe('endTimeBeforeOldestCandle', () => {
     });
     expect(iso).toBe(new Date(1_700_000_000 * 1000 - 1).toISOString());
     expect(endTimeBeforeOldestCandle(undefined)).toBeUndefined();
+  });
+});
+
+describe('emaFromCloses / emaLineFromCloses', () => {
+  it('matches SMA seed and covers prepended history times', () => {
+    expect(parseEmaPeriods('12,26')).toEqual([12, 26]);
+    const ema = emaFromCloses([1, 2, 3, 4, 5], 3);
+    expect(ema[2]).toBeCloseTo(2, 9);
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      time: 1_700_000_000 + i * 3600,
+      close: 80 + i,
+    }));
+    const live = Array.from({ length: 40 }, (_, i) => ({
+      time: 1_700_000_000 + (i + 20) * 3600,
+      close: 100 + i,
+    }));
+    const withHistory = emaLineFromCloses([...history, ...live], 12);
+    expect(withHistory[0]?.time).toBe(history[11]?.time);
   });
 });

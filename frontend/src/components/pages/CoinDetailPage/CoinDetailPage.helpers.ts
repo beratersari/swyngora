@@ -35,6 +35,20 @@ export function mergePumpEvents(
  * Map pump API events → chart markers (UTC seconds).
  * Keeps dumps (negative returnPct) and filters by |return| threshold.
  */
+/** Live pump payload for this pair only. Drops a previous coin's RTK `.data`. */
+export function livePumpEventsForPair(
+  resp: { exchange?: string; symbol?: string; events?: readonly PumpEventDto[] } | undefined,
+  exchange: string,
+  symbol: string,
+): PumpEventDto[] {
+  if (!resp?.events?.length) return [];
+  const ex = exchange.trim().toLowerCase();
+  const sym = symbol.trim().toUpperCase();
+  if (resp.exchange && resp.exchange.toLowerCase() !== ex) return [];
+  if (resp.symbol && resp.symbol.toUpperCase() !== sym) return [];
+  return [...resp.events];
+}
+
 export function pumpEventsToChartMarkers(
   events: readonly PumpEventDto[] | undefined,
   minAbsReturnPct: number,

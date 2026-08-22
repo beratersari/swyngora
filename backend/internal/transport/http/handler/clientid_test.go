@@ -32,11 +32,17 @@ func TestResolveClientID_UserKeyForcesBinding(t *testing.T) {
 func TestResolveClientID_MasterUsesBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set("X-Client-Id", "header-client")
-	got, err := resolveClientID(req, "body-client")
-	if err != nil || got != "body-client" {
-		t.Fatalf("got %q err=%v", got, err)
+	got, err := resolveClientID(req, "header-client")
+	if err != nil || got != "header-client" {
+		t.Fatalf("matching ids %q err=%v", got, err)
 	}
-	got, err = resolveClientID(req, "")
+	got, err = resolveClientID(req, "body-client")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("mismatch want invalid argument, got %q err=%v", got, err)
+	}
+	req2 := httptest.NewRequest(http.MethodPost, "/", nil)
+	req2.Header.Set("X-Client-Id", "header-client")
+	got, err = resolveClientID(req2, "")
 	if err != nil || got != "header-client" {
 		t.Fatalf("header fallback %q err=%v", got, err)
 	}

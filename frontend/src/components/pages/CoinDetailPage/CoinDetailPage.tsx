@@ -52,14 +52,21 @@ import {
 } from '@/libs/api';
 import { useDisplayCurrency, useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
-import { formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
+import {
+  emaLineFromCloses,
+  formatPrice,
+  newPaperIdempotencyKey,
+  parseEmaPeriods,
+  rtkCurrent,
+  rtkCurrentPending,
+} from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import {
   apiCandlesToChart,
   DEFAULT_DETAIL_TAB,
   detailStateToSearchParams,
   filterValidApiCandles,
-  indicatorPointsToEmaLine,
+  preferLongerCandleSeries,
   intervalToSeconds,
   marketsBackPath,
   mergeCandleHistory,
@@ -68,9 +75,7 @@ import {
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
-  scalePriceSeries,
   pairQuote,
-  sortedEmaKeys,
   toSupplyAsset,
   trimCandlesToMax,
   type ApiCandle,
@@ -78,6 +83,7 @@ import {
 } from '@/libs/utils';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
+  DETAIL_CANDLE_FIRST_LIMIT,
   DEFAULT_DETAIL_PUMP_THRESHOLD_PCT,
   DEFAULT_DETAIL_SERIES_POLL_MS,
   DEFAULT_DETAIL_TICKER_POLL_MS,
@@ -103,6 +109,7 @@ import {
 import {
   mergeChartMarkers,
   mergePumpEvents,
+  livePumpEventsForPair,
   pumpEventsToChartMarkers,
   scannerResultsToChartMarkers,
 } from './CoinDetailPage.helpers';
@@ -201,6 +208,9 @@ export function CoinDetailPage() {
     });
   }, [supportedIntervals, urlState.interval, urlState.tab, setSearchParams]);
 
+  // Candles start immediately with the URL/default interval. History / pumps /
+  // indicators wait until the venue interval list is known so we do not page
+  // the wrong series.
   const skipSeries = skip || waitingForIntervals;
   const supplyAsset = toSupplyAsset(symbol);
 
@@ -314,17 +324,28 @@ export function CoinDetailPage() {
     },
   );
 
-  // Live head only — polled. Deeper history is paged with endTime (see onNeedMoreHistory).
+  // First-paint slice + full live window in parallel. The short request usually
+  // returns first so the chart can draw before the 300-bar poll window arrives.
+  const firstCandlesQuery = useGetCandlesQuery(
+    { exchange: exchangeArg, symbol, interval, limit: DETAIL_CANDLE_FIRST_LIMIT },
+    { skip, refetchOnFocus: true },
+  );
   const candlesQuery = useGetCandlesQuery(
     { exchange: exchangeArg, symbol, interval, limit: DEFAULT_DETAIL_CANDLE_LIMIT },
     {
-      skip: skipSeries,
+      skip,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );
+  const liveHeadReady = Boolean(
+    rtkCurrent(firstCandlesQuery)?.candles?.length || rtkCurrent(candlesQuery)?.candles?.length,
+  );
 
-  const liveCandleRows = rtkCurrent(candlesQuery)?.candles;
+  const liveCandleRows = preferLongerCandleSeries(
+    rtkCurrent(firstCandlesQuery)?.candles,
+    rtkCurrent(candlesQuery)?.candles,
+  );
   const liveCandles = useMemo(
     () => filterValidApiCandles(liveCandleRows),
     [liveCandleRows],
@@ -364,7 +385,7 @@ export function CoinDetailPage() {
       maxEvents: 40,
     },
     {
-      skip: skipSeries || !showPumpMarkers || isEquity,
+      skip: skipSeries || !showPumpMarkers || isEquity || !liveHeadReady,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
       refetchOnFocus: true,
     },
@@ -381,7 +402,7 @@ export function CoinDetailPage() {
       emaPeriods: DEFAULT_EMA_PERIODS,
     },
     {
-      skip: skipSeries,
+      skip: skipSeries || !liveHeadReady,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
       refetchOnFocus: true,
     },
@@ -481,38 +502,38 @@ export function CoinDetailPage() {
   ]);
 
   const liveIndicators = rtkCurrent(indicatorsQuery);
-  const indicatorPoints = liveIndicators?.points;
-  const latestEma = liveIndicators?.latest?.ema;
+  const emaPeriods = useMemo(() => {
+    const fromApi = parseEmaPeriods((liveIndicators?.emaPeriods ?? []).join(','));
+    return fromApi.length > 0 ? fromApi : parseEmaPeriods(DEFAULT_EMA_PERIODS);
+  }, [liveIndicators?.emaPeriods]);
   const overlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
-    const keys = sortedEmaKeys(latestEma);
-    const quote = pairQuote(symbol, exchange);
-    return keys.map((key, i) => ({
-      id: `ema-${key}`,
-      title: t('detail:indicators.emaLabel', { period: key }),
-      color: emaColor(key, i),
-      data: scalePriceSeries(
-        indicatorPointsToEmaLine(indicatorPoints, key),
-        quote,
-        displayCurrency,
-        fxRates,
-      ),
+    return emaPeriods.map((period, i) => ({
+      id: `ema-${period}`,
+      title: t('detail:indicators.emaLabel', { period }),
+      color: emaColor(String(period), i),
+      // Compute on loaded chart bars so pan-left history keeps an EMA line.
+      data: emaLineFromCloses(chartData, period),
     }));
-  }, [showEma, latestEma, indicatorPoints, t, exchange, symbol, displayCurrency, fxRates]);
+  }, [showEma, emaPeriods, chartData, t]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
     const maxDist = barSec > 0 ? barSec * 1.5 : 3600;
+    const livePumps = rtkCurrent(pumpsQuery);
     const pumpRaw =
-      showPumpMarkers
+      showPumpMarkers && exchange && symbol
         ? pumpEventsToChartMarkers(
-            mergePumpEvents(pumpsQuery.data?.events, historyPumpEvents),
+            mergePumpEvents(
+              livePumpEventsForPair(livePumps, exchange, symbol),
+              historyPumpEvents,
+            ),
             pumpThresholdPct,
           )
         : [];
     const signalRaw =
       showSignalMarkers && exchange && symbol
-        ? scannerResultsToChartMarkers(scannerResultsQuery.data?.results, exchange, symbol)
+        ? scannerResultsToChartMarkers(rtkCurrent(scannerResultsQuery)?.results, exchange, symbol)
         : [];
     const pumpSnapped = snapMarkersToCandleTimes(pumpRaw, chartData, { maxDistanceSec: maxDist });
     const signalSnapped = snapMarkersToCandleTimes(signalRaw, chartData, { maxDistanceSec: maxDist });
@@ -520,7 +541,7 @@ export function CoinDetailPage() {
   }, [
     showPumpMarkers,
     showSignalMarkers,
-    pumpsQuery.data?.events,
+    pumpsQuery,
     historyPumpEvents,
     pumpThresholdPct,
     scannerResultsQuery.data?.results,
@@ -554,6 +575,7 @@ export function CoinDetailPage() {
     void orderHeatmapQuery.refetch();
     void supplyQuery.refetch();
     void holdersQuery.refetch();
+    void firstCandlesQuery.refetch();
     void candlesQuery.refetch();
     void indicatorsQuery.refetch();
     if (showPumpMarkers) {
@@ -595,9 +617,11 @@ export function CoinDetailPage() {
   const headerLoading = rtkCurrentPending(tickerQuery);
   const statsLoading = rtkCurrentPending(tickerQuery) || rtkCurrentPending(supplyQuery);
   const seriesLoading =
-    ((candlesQuery.isLoading || indicatorsQuery.isLoading) && chartData.length === 0) ||
-    waitingForIntervals;
+    chartData.length === 0 &&
+    rtkCurrentPending(firstCandlesQuery) &&
+    rtkCurrentPending(candlesQuery);
   const seriesFetching =
+    firstCandlesQuery.isFetching ||
     candlesQuery.isFetching ||
     indicatorsQuery.isFetching ||
     tickerQuery.isFetching ||
@@ -661,7 +685,6 @@ export function CoinDetailPage() {
       <DeskTabs
         activeKey={tab}
         onChange={(key) => patchUrl({ tab: key as DetailTab })}
-        destroyOnHidden
         items={[
           {
             key: 'overview',
@@ -711,16 +734,18 @@ export function CoinDetailPage() {
           />
         ) : null}
 
-        {candlesQuery.isError && chartData.length === 0 ? (
+        {(firstCandlesQuery.isError && candlesQuery.isError && chartData.length === 0) ? (
           <Alert
             type="error"
             showIcon
             message={t('detail:chart.loadErrorTitle')}
-            description={rtkErrorMessage(candlesQuery.error, {
+            description={rtkErrorMessage(candlesQuery.error ?? firstCandlesQuery.error, {
               resource: t('detail:resource.candles'),
             })}
           />
-        ) : !seriesLoading && candlesQuery.isSuccess && chartData.length === 0 ? (
+        ) : !seriesLoading &&
+          (firstCandlesQuery.isSuccess || candlesQuery.isSuccess) &&
+          chartData.length === 0 ? (
           <Alert
             type="info"
             showIcon
@@ -743,7 +768,7 @@ export function CoinDetailPage() {
               data={chartData}
               overlays={overlays}
               markers={chartMarkers}
-              isLoading={seriesLoading || waitingForIntervals}
+              isLoading={seriesLoading}
               seriesKey={seriesKey}
               isLoadingMore={isLoadingMore}
               hasMoreHistory={hasMoreHistory}

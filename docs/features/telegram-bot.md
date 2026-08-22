@@ -36,7 +36,7 @@ One backend process (`cmd/server`) can auto-start the Python AI child when `AI_A
 1. **Confirm** — place a paper market order at the *current* last price plus venue slippage; a taker fee is charged (may differ slightly from the preview).
 2. **Cancel** — discard; nothing is sent.
 
-Confirmations expire after 5 minutes and can only be used by the same Telegram user. Same simulated book as the HTTP API (`docs/features/paper-trading.md`).
+Confirmations expire after 5 minutes and can only be used by the same Telegram user. Confirm re-checks that the mapped account is still active — a close after preview does not fill. Same simulated book as the HTTP API (`docs/features/paper-trading.md`).
 
 ## AI setup
 

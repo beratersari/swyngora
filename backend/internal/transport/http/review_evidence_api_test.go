@@ -106,12 +106,15 @@ func TestReviewEvidence_MasterTokenImpersonatesAnyClientID(t *testing.T) {
 		t.Fatalf("alice=%d bob=%d", len(alice), len(bob))
 	}
 
-	// Same master token reads alice's list after acting as bob — no extra credential.
-	rr := evidenceDo(t, h, http.MethodGet, "/api/v1/watchlist?clientId=alice", evidenceMaster, "bob", nil)
+	// Same master token can act as alice (matching header + query). Disagreeing ids are 400.
+	rr := evidenceDo(t, h, http.MethodGet, "/api/v1/watchlist?clientId=alice", evidenceMaster, "alice", nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("impersonate get: %d %s", rr.Code, rr.Body.String())
 	}
-	// Query clientId wins for Get; header is ignored when query is set. Prove header-only works too:
+	rr = evidenceDo(t, h, http.MethodGet, "/api/v1/watchlist?clientId=alice", evidenceMaster, "bob", nil)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("mismatch want 400, got %d %s", rr.Code, rr.Body.String())
+	}
 	rr = evidenceDo(t, h, http.MethodGet, "/api/v1/watchlist", evidenceMaster, "alice", nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("header-only get: %d %s", rr.Code, rr.Body.String())

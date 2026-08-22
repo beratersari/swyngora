@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 from contextvars import ContextVar
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -20,6 +22,47 @@ bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
 bound_can_trade: ContextVar[bool] = ContextVar("bound_can_trade", default=True)
 bound_can_manage_keys: ContextVar[bool] = ContextVar("bound_can_manage_keys", default=True)
 _turn_tool_json: ContextVar[list[str] | None] = ContextVar("turn_tool_json", default=None)
+
+
+@dataclass(frozen=True)
+class _ToolBind:
+    client_id: str
+    can_trade: bool
+    can_manage_keys: bool
+
+
+# LangChain may run tools on threads that do not inherit ContextVars
+# (same hole progress.py already documents). The stack is the fallback.
+_bind_lock = threading.Lock()
+_bind_stack: list[_ToolBind] = []
+
+
+def _push_bind(*, client_id: str | None = None, can_trade: bool | None = None, can_manage_keys: bool | None = None) -> None:
+    with _bind_lock:
+        prev = _bind_stack[-1] if _bind_stack else _ToolBind("", True, True)
+        _bind_stack.append(
+            _ToolBind(
+                client_id=prev.client_id if client_id is None else client_id,
+                can_trade=prev.can_trade if can_trade is None else can_trade,
+                can_manage_keys=prev.can_manage_keys if can_manage_keys is None else can_manage_keys,
+            )
+        )
+
+
+def _pop_bind() -> None:
+    with _bind_lock:
+        if _bind_stack:
+            _bind_stack.pop()
+
+
+def _active_bind() -> _ToolBind:
+    cid = bound_client_id.get()
+    if cid:
+        return _ToolBind(cid, bound_can_trade.get(), bound_can_manage_keys.get())
+    with _bind_lock:
+        if _bind_stack:
+            return _bind_stack[-1]
+    return _ToolBind("", bound_can_trade.get(), bound_can_manage_keys.get())
 
 _READ_ONLY_DENY = (
     "ERROR 403: this AI session is read-only; a trade-permission API key is required "
@@ -71,20 +114,25 @@ def format_tool_json(payload: Any) -> str:
 
 def bind_client_id(client_id: str) -> Any:
     """Force tenant tools to the authenticated subject for this chat turn."""
-    return bound_client_id.set((client_id or "").strip())
+    cid = (client_id or "").strip()
+    _push_bind(client_id=cid)
+    return bound_client_id.set(cid)
 
 
 def reset_bound_client_id(token: Any) -> None:
+    _pop_bind()
     bound_client_id.reset(token)
 
 
 def bind_tool_scope(*, can_trade: bool = True, can_manage_keys: bool = True) -> tuple[Any, Any]:
     """Bind trade + key-admin scope for one chat turn (returns tokens for reset)."""
+    _push_bind(can_trade=bool(can_trade), can_manage_keys=bool(can_manage_keys))
     return bound_can_trade.set(bool(can_trade)), bound_can_manage_keys.set(bool(can_manage_keys))
 
 
 def reset_tool_scope(tokens: tuple[Any, Any]) -> None:
     trade_tok, keys_tok = tokens
+    _pop_bind()
     bound_can_trade.reset(trade_tok)
     bound_can_manage_keys.reset(keys_tok)
 
@@ -129,13 +177,13 @@ class _HTTP:
         headers: dict[str, str] = {}
         if self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
-        cid = bound_client_id.get()
+        cid = _active_bind().client_id
         if cid:
             headers["X-Client-Id"] = cid
         return headers
 
     def _apply_client_id(self, params: dict[str, Any] | None, body: dict[str, Any] | None) -> None:
-        cid = bound_client_id.get()
+        cid = _active_bind().client_id
         if not cid:
             return
         if params is not None:
@@ -144,9 +192,10 @@ class _HTTP:
             body["clientId"] = cid
 
     def _scope_error(self, path: str, *, mutating: bool) -> str | None:
-        if _is_key_or_account_admin_path(path) and not bound_can_manage_keys.get():
+        bind = _active_bind()
+        if _is_key_or_account_admin_path(path) and not bind.can_manage_keys:
             return _KEY_ADMIN_DENY
-        if mutating and not bound_can_trade.get():
+        if mutating and not bind.can_trade:
             return _READ_ONLY_DENY
         return None
 

@@ -238,7 +238,8 @@ func (s *Service) AdjustMargin(ctx context.Context, in MarginAdjustInput) (*doma
 		if err != nil {
 			return nil, err
 		}
-		return s.GetMarginPosition(ctx, clientID, pos.ID)
+		// Reload by book id — GetMarginPosition treats its first arg as the actor.
+		return s.reloadMarginPosition(ctx, clientID, pos)
 	}
 	return nil, fmt.Errorf("%w: margin adjust lost the debt race", domain.ErrConflict)
 }
@@ -326,8 +327,8 @@ func (s *Service) RepayMarginDebt(ctx context.Context, in MarginRepayInput) (*do
 		err = s.store.ApplyMarginRepay(ctx, p, *pos, tr, expected)
 		if err == nil {
 			_ = s.recomputeCrossLiquidations(ctx, clientID, now)
-			out, gerr := s.GetMarginPosition(ctx, clientID, pos.ID)
-			return out, &tr, gerr
+			out, _ := s.reloadMarginPosition(ctx, clientID, pos)
+			return out, &tr, nil
 		}
 		// Concurrent liquidation closed the position — repay cannot apply.
 		if errors.Is(err, domain.ErrNotFound) {
@@ -932,7 +933,30 @@ func (s *Service) SetMarginBrackets(ctx context.Context, in MarginBracketsInput)
 	if err := s.store.UpdateMarginPositionMeta(ctx, *pos); err != nil {
 		return nil, err
 	}
-	return s.GetMarginPosition(ctx, clientID, pos.ID)
+	return s.reloadMarginPosition(ctx, clientID, pos)
+}
+
+// reloadMarginPosition re-reads a position by book id after a successful write.
+// Do not call GetMarginPosition here: that helper treats the first argument as
+// the actor, so a UUID book id fails once the owner has more than one book.
+// If the re-read fails, return the already-applied row so clients do not retry.
+func (s *Service) reloadMarginPosition(ctx context.Context, bookID string, applied *domain.MarginPosition) (*domain.MarginPosition, error) {
+	if applied == nil {
+		return nil, fmt.Errorf("%w: position is required", domain.ErrInvalidArgument)
+	}
+	pos, err := s.store.GetMarginPosition(ctx, bookID, applied.ID)
+	if err != nil {
+		s.markMarginPosition(ctx, applied)
+		return applied, nil
+	}
+	if pos.Status == domain.MarginPositionOpen {
+		_ = s.accruePositionInterest(ctx, pos, time.Now().UTC())
+		if fresh, rerr := s.store.GetMarginPosition(ctx, bookID, pos.ID); rerr == nil {
+			pos = fresh
+		}
+		s.markMarginPosition(ctx, pos)
+	}
+	return pos, nil
 }
 
 // ListMarginOrders lists margin open orders.

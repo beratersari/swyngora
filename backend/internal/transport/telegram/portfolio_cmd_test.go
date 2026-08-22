@@ -11,6 +11,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/account"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -227,5 +228,56 @@ func TestEncodeInlineKeyboard(t *testing.T) {
 	s := encodeInlineKeyboard(confirmCancelKeyboard("abc123"))
 	if !strings.Contains(s, "Confirm") || !strings.Contains(s, "pf:c:abc123") || !strings.Contains(s, "pf:x:abc123") {
 		t.Fatalf("%s", s)
+	}
+}
+
+func TestTelegramConfirmAfterCloseDoesNotFill(t *testing.T) {
+	r := newPaperRouter(t)
+	ids, ok := r.opts.Identities.(*accountstore.Memory)
+	if !ok {
+		t.Fatal("newPaperRouter identities must be *accountstore.Memory")
+	}
+	acct := account.New(ids, account.DataPurgeDeps{Paper: r.portfolio})
+	r.opts.Accounts = acct
+	r.portfolio.SetAccountChecker(acct)
+
+	ctx := context.Background()
+	bypassRate(r)
+	out := r.Handle(ctx, 5, 88, "/portfolio create 10000")
+	if strings.Contains(strings.ToLower(out), "error") || strings.Contains(strings.ToLower(out), "closed") {
+		t.Fatalf("create: %s", out)
+	}
+	bypassRate(r)
+	prev := r.HandleMessage(ctx, 5, 88, "/buy BTCUSDT 2")
+	if len(prev.Keyboard) == 0 || len(prev.Keyboard[0]) < 1 {
+		t.Fatalf("want confirm button: %+v text=%s", prev.Keyboard, prev.Text)
+	}
+	confirm := prev.Keyboard[0][0].CallbackData
+	if !strings.HasPrefix(confirm, "pf:c:") {
+		t.Fatalf("callback=%s", confirm)
+	}
+
+	clientID := mappedClientID(t, r, 88)
+	if _, err := acct.Close(ctx, clientID); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := r.portfolio.View(ctx, clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	done := r.HandleCallback(ctx, 5, 88, confirm)
+	after, err := r.portfolio.View(ctx, clientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.CashBalance < before.CashBalance-1e-6 {
+		t.Fatalf("telegram confirm filled after close (cash %v→%v reply=%s)",
+			before.CashBalance, after.CashBalance, done.Text)
+	}
+	low := strings.ToLower(done.Text)
+	if strings.Contains(low, "filled") && !strings.Contains(low, "closed") {
+		t.Fatalf("confirm reply looks like a fill after close: %s", done.Text)
 	}
 }

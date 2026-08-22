@@ -84,6 +84,58 @@ export function sortedEmaKeys(ema: Record<string, number> | undefined): string[]
   return Object.keys(ema).sort((a, b) => Number(a) - Number(b));
 }
 
+const MIN_EMA_PERIOD = 2;
+
+/** Parse `"12,26"` into unique ascending periods. */
+export function parseEmaPeriods(csv: string | undefined): number[] {
+  if (!csv?.trim()) return [];
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const part of csv.split(',')) {
+    const n = Number(part.trim());
+    if (!Number.isInteger(n) || n < MIN_EMA_PERIOD || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/** EMA over closes. Seed is SMA of the first `period` closes. */
+export function emaFromCloses(closes: readonly number[], period: number): Array<number | null> {
+  const n = closes.length;
+  const out: Array<number | null> = Array.from({ length: n }, () => null);
+  if (!Number.isInteger(period) || period < MIN_EMA_PERIOD || n < period) return out;
+  let sum = 0;
+  for (let i = 0; i < period; i += 1) sum += closes[i]!;
+  let ema = sum / period;
+  out[period - 1] = ema;
+  const k = 2 / (period + 1);
+  for (let i = period; i < n; i += 1) {
+    ema = closes[i]! * k + ema * (1 - k);
+    out[i] = ema;
+  }
+  return out;
+}
+
+/** EMA line on the same time axis as loaded chart candles. */
+export function emaLineFromCloses(
+  bars: ReadonlyArray<{ time: number; close: number }>,
+  period: number,
+): ChartLinePoint[] {
+  if (!bars.length) return [];
+  const ema = emaFromCloses(
+    bars.map((b) => b.close),
+    period,
+  );
+  const out: ChartLinePoint[] = [];
+  for (let i = 0; i < ema.length; i += 1) {
+    const v = ema[i];
+    if (v == null || !Number.isFinite(v) || !Number.isFinite(bars[i]!.time)) continue;
+    out.push({ time: bars[i]!.time, value: v });
+  }
+  return out;
+}
+
 export function indicatorPointsToEmaLine(
   points:
     | {

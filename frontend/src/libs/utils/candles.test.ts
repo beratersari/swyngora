@@ -4,6 +4,7 @@ import {
   filterValidApiCandles,
   mergeCandleHistory,
   oldestCandleOpenTimeMs,
+  preferLongerCandleSeries,
   trimCandlesToMax,
   type ApiCandle,
 } from './candles';
@@ -103,6 +104,16 @@ describe('trimCandlesToMax', () => {
       '2024-01-01T01:00:00Z',
       '2024-01-01T02:00:00Z',
     ]);
+  });
+});
+
+describe('preferLongerCandleSeries', () => {
+  it('uses the longer live window and ignores empty sides', () => {
+    const short = [c('2024-01-01T00:00:00Z')];
+    const long = [c('2024-01-01T00:00:00Z'), c('2024-01-01T01:00:00Z')];
+    expect(preferLongerCandleSeries(short, long)).toBe(long);
+    expect(preferLongerCandleSeries(short, undefined)).toBe(short);
+    expect(preferLongerCandleSeries(undefined, undefined)).toBeUndefined();
   });
 });
 

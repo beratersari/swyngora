@@ -12,8 +12,6 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 )
 
-
-
 func (r *Router) selectedBookID(userID int64) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -548,6 +546,11 @@ func (r *Router) confirmPendingTrade(ctx context.Context, chatID, userID int64, 
 	if p.ChatID != chatID || p.UserID != userID {
 		r.pending.restore(p)
 		return Reply{Text: "This confirmation belongs to another user.", Toast: "Not yours"}
+	}
+	if r.opts.Accounts != nil {
+		if err := r.opts.Accounts.RequireActive(ctx, p.ClientID); err != nil {
+			return Reply{Text: friendlyErr(err), ClearKeyboard: true, Toast: "Closed"}
+		}
 	}
 	tr, view, err := r.portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: p.ClientID, PortfolioID: p.PortfolioID, Exchange: p.Exchange, Symbol: p.Symbol,

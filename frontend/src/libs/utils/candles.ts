@@ -47,6 +47,18 @@ export function apiCandlesToChart(candles: ApiCandle[]): ChartCandle[] {
     .filter((x): x is ChartCandle => x !== null);
 }
 
+/** Prefer the longer live series (full window over the first-paint slice). */
+export function preferLongerCandleSeries(
+  a: readonly ApiCandle[] | undefined,
+  b: readonly ApiCandle[] | undefined,
+): readonly ApiCandle[] | undefined {
+  const al = a?.length ?? 0;
+  const bl = b?.length ?? 0;
+  if (bl >= al && bl > 0) return b;
+  if (al > 0) return a;
+  return undefined;
+}
+
 /** Keep candles with complete OHLC + openTime. */
 export function filterValidApiCandles(
   candles: readonly (Partial<ApiCandle> | undefined)[] | undefined,

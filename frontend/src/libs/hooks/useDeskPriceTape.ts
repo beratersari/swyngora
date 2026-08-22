@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
-import { useListSpotMarketsQuery, type MarketExchange } from '@/libs/api';
+import { useListSpotMarketsQuery, type MarketExchange, type SpotMarket } from '@/libs/api';
 import {
   loadDeskTapeSource,
   saveDeskTapeSource,
@@ -8,10 +8,36 @@ import {
   type DeskTapeSource,
 } from '@/components/organisms/DeskPriceTape';
 import { toTickerTapeItem, type TickerTapeItem } from '@/components/molecules/TickerTape';
-import { defaultQuoteForExchange } from '@/libs/utils';
+import { defaultQuoteForExchange, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
+import type { DisplayCurrency, FxRatesMap } from '@/libs/utils';
 import { useDisplayCurrency } from './displayCurrency';
 import { useDocumentVisible } from './useDocumentVisible';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
+
+/** Build tape rows only from the list that belongs to `venue`. */
+export function deskTapeItemsFromList(
+  venue: string | undefined,
+  list: readonly SpotMarket[] | undefined,
+  display: { currency: DisplayCurrency; rates?: FxRatesMap },
+  sourceExchange?: string,
+): TickerTapeItem[] {
+  if (!venue) return [];
+  if (sourceExchange && sourceExchange !== venue) return [];
+  const out: TickerTapeItem[] = [];
+  for (const row of list ?? []) {
+    const item = toTickerTapeItem(
+      {
+        exchange: venue,
+        symbol: row.symbol,
+        lastPrice: row.lastPrice,
+        priceChangePercent: row.priceChangePercent,
+      },
+      display,
+    );
+    if (item) out.push(item);
+  }
+  return out;
+}
 
 export function useDeskPriceTape(): {
   source: DeskTapeSource;
@@ -48,38 +74,27 @@ export function useDeskPriceTape(): {
     },
   );
 
+  const liveList = rtkCurrent(venueQuery);
+  const sourceExchange = venueQuery.originalArgs?.exchange;
   const venueSymbols = useMemo(() => {
-    if (!venue) return [];
-    return (venueQuery.data?.items ?? [])
+    if (!venue || (sourceExchange && sourceExchange !== venue)) return [];
+    return (liveList?.items ?? [])
       .map((row) => ({
         exchange: venue,
         symbol: (row.symbol ?? '').toUpperCase(),
       }))
       .filter((it) => it.symbol);
-  }, [venue, venueQuery.data?.items]);
+  }, [venue, liveList?.items, sourceExchange]);
   usePriceSubscription(venueSymbols, visible && Boolean(venue));
 
   const display = useMemo(() => ({ currency, rates }), [currency, rates]);
 
-  const items = useMemo(() => {
-    if (!venue) return [];
-    const out: TickerTapeItem[] = [];
-    for (const row of venueQuery.data?.items ?? []) {
-      const item = toTickerTapeItem(
-        {
-          exchange: venue,
-          symbol: row.symbol,
-          lastPrice: row.lastPrice,
-          priceChangePercent: row.priceChangePercent,
-        },
-        display,
-      );
-      if (item) out.push(item);
-    }
-    return out;
-  }, [venue, venueQuery.data?.items, display]);
+  const items = useMemo(
+    () => deskTapeItemsFromList(venue, liveList?.items, display, sourceExchange),
+    [venue, liveList?.items, display, sourceExchange],
+  );
 
-  const isLoading = Boolean(venue && (venueQuery.isLoading || (venueQuery.isFetching && items.length === 0)));
+  const isLoading = Boolean(venue && rtkCurrentPending(venueQuery));
 
   return { source, setSource, items, isLoading, paused: !visible };
 }

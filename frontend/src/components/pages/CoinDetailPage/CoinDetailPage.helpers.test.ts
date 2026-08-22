@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  livePumpEventsForPair,
   mergeChartMarkers,
   mergePumpEvents,
   pumpEventsToChartMarkers,
@@ -39,6 +40,34 @@ describe('pumpEventsToChartMarkers', () => {
   it('returns empty for missing events', () => {
     expect(pumpEventsToChartMarkers(undefined, 5)).toEqual([]);
     expect(pumpEventsToChartMarkers([], 5)).toEqual([]);
+  });
+});
+
+describe('livePumpEventsForPair', () => {
+  const btcEvent = { openTime: '2024-06-01T12:00:00Z', returnPct: 12.5 };
+
+  it('keeps events for the current pair', () => {
+    expect(
+      livePumpEventsForPair(
+        { exchange: 'binance', symbol: 'BTCUSDT', events: [btcEvent] },
+        'binance',
+        'BTCUSDT',
+      ),
+    ).toEqual([btcEvent]);
+  });
+
+  it('drops a previous coin payload so markers cannot snap onto the new series', () => {
+    expect(
+      livePumpEventsForPair(
+        { exchange: 'binance', symbol: 'BTCUSDT', events: [btcEvent] },
+        'binance',
+        'ETHUSDT',
+      ),
+    ).toEqual([]);
+  });
+
+  it('returns empty when RTK currentData is missing (arg change)', () => {
+    expect(livePumpEventsForPair(undefined, 'binance', 'ETHUSDT')).toEqual([]);
   });
 });
 

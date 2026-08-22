@@ -75,6 +75,29 @@ func TestAccountGate_BodyClientIDRestoredAndActive(t *testing.T) {
 	}
 }
 
+func TestAccountGate_HeaderBodyMismatchRejected(t *testing.T) {
+	svc := account.New(accountstore.NewMemory(), account.DataPurgeDeps{})
+	if _, err := svc.Close(context.Background(), "closed-user"); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	h := AccountGate(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders", strings.NewReader(`{"clientId":"closed-user","side":"buy"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "active-decoy")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if called {
+		t.Fatal("handler must not run when header and body clientId disagree")
+	}
+}
+
 func TestAccountGate_MarketUnaffected(t *testing.T) {
 	svc := account.New(accountstore.NewMemory(), account.DataPurgeDeps{})
 	h := AccountGate(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

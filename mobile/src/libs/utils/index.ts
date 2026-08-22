@@ -20,6 +20,8 @@ export {
   endTimeBeforeOldestCandle,
   indicatorPointsToEmaLine,
   indicatorPointsToRsi,
+  emaLineFromCloses,
+  parseEmaPeriods,
   sortedEmaKeys,
   resolveInterval,
   emaColor,

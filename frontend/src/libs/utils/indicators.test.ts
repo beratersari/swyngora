@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  emaFromCloses,
+  emaLineFromCloses,
   formatIndicator,
   indicatorPointsToEmaLine,
   indicatorPointsToRsiLine,
+  parseEmaPeriods,
   rsiBandKey,
   rsiBandLabel,
   rsiTone,
@@ -69,6 +72,41 @@ describe('indicatorPointsToRsiLine', () => {
   it('returns empty for missing points', () => {
     expect(indicatorPointsToRsiLine(undefined)).toEqual([]);
     expect(indicatorPointsToRsiLine([])).toEqual([]);
+  });
+});
+
+describe('parseEmaPeriods / emaFromCloses', () => {
+  it('parses unique ascending periods', () => {
+    expect(parseEmaPeriods('12,26')).toEqual([12, 26]);
+    expect(parseEmaPeriods('26, 12, 12')).toEqual([12, 26]);
+    expect(parseEmaPeriods('1,12')).toEqual([12]);
+    expect(parseEmaPeriods(undefined)).toEqual([]);
+  });
+
+  it('matches backend SMA seed and recurrence', () => {
+    const ema = emaFromCloses([1, 2, 3, 4, 5], 3);
+    expect(ema[0]).toBeNull();
+    expect(ema[1]).toBeNull();
+    expect(ema[2]).toBeCloseTo(2, 9);
+    expect(ema[3]).toBeCloseTo(3, 6);
+  });
+
+  it('covers prepended history times so pan-left bars keep an EMA', () => {
+    const live = Array.from({ length: 40 }, (_, i) => ({
+      time: 1_700_000_000 + (i + 20) * 3600,
+      close: 100 + i,
+    }));
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      time: 1_700_000_000 + i * 3600,
+      close: 80 + i,
+    }));
+    const all = [...history, ...live];
+    const liveOnly = emaLineFromCloses(live, 12);
+    const withHistory = emaLineFromCloses(all, 12);
+    expect(liveOnly[0]?.time).toBe(live[11]?.time);
+    expect(withHistory[0]?.time).toBe(history[11]?.time);
+    expect(withHistory[0]!.time).toBeLessThan(liveOnly[0]!.time);
+    expect(withHistory.some((p) => p.time === history[11]?.time)).toBe(true);
   });
 });
 

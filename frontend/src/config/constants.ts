@@ -20,6 +20,12 @@ export const DEFAULT_DETAIL_TICKER_POLL_MS = 15_000;
 export const DEFAULT_DETAIL_SERIES_POLL_MS = 30_000;
 
 /**
+ * First candle request on coin detail — enough for the initial viewport
+ * (`INITIAL_VISIBLE_BARS` ≈ 80) so the chart can paint before the full live window.
+ */
+export const DETAIL_CANDLE_FIRST_LIMIT = 100;
+
+/**
  * Live (polled) candle window on coin detail.
  * Sized so pump/dump markers have a useful first paint without requiring pan.
  * Deeper history still loads via endTime pages on pan-left.
@@ -37,7 +43,8 @@ export const DETAIL_CANDLE_PAGE_SIZE = 200;
 export const DETAIL_CANDLE_MAX_LIMIT = 10_000;
 
 /**
- * Cap for indicator series and a floor for pump analysis (API max 1000).
+ * Cap for the Indicators-tab RSI series (API max 1000).
+ * Price-chart EMA overlays are computed from loaded candles, not this window.
  * Pump limit tracks loaded chart bars up to 1000 (see analyticsBarLimit).
  */
 export const DETAIL_INDICATOR_LIMIT = 500;
