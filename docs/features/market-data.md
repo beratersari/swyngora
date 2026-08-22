@@ -85,6 +85,8 @@ Cash stocks use the same list/ticker/candle contracts as crypto pairs:
 
 Metrics: last, session change %, day high/low (Yahoo/spark on detail), share volume, notional volume (`price × volume`). Nasdaq **market cap** comes from the Nasdaq screener. BIST **market cap** comes from the Turkey scanner (TRY). Yahoo spark (used for candles and the BIST fallback tape) does **not** publish mcap. No public order book (detail book is empty / 404).
 
+Ticker and candle fetches **fail closed** when Yahoo is down — expired last-good quotes are not returned as live (paper fills and price alerts use last price as current). Spot list may serve last-good after a screener miss; those caches are cleaned on the same process TTL tick as crypto.
+
 ### Spot markets — `GET /api/v1/market/spot`
 
 - **Source (crypto):** Binance `GET /api/v3/exchangeInfo` + `GET /api/v3/ticker/24hr` (crypto spot only; tokenized equities `bStocks` and commodity wrappers `tCommodities` are excluded). Product catalog is **required** for the filter: without a warm or stale catalog snapshot, the spot list returns `502` rather than listing non-crypto products.

@@ -29,32 +29,34 @@ func wallWatchIdle() time.Duration {
 
 // Service orchestrates market-data use cases. Handlers call this layer only.
 type Service struct {
-	markets       map[domain.Exchange]domain.MarketDataPort
-	supply        domain.SupplyPort
-	delist        domain.SpotDelistStore
-	delistEnabled bool
-	delistSource  map[domain.Exchange]bool
-	walls         *domain.WallMemory
-	icebergs      *domain.IcebergMemory
-	heat          *domain.HeatmapTape
-	watchMu       sync.Mutex
-	wallWatch     map[string]wallWatch
-	heatUniverse  map[domain.Exchange][]string
-	liq           *domain.LiquidationBook
-	liqWatch      LiquidationWatch
-	fx            FxSource
-	fxCache       *cache.TTL[*domain.FxRates]
-	holders       domain.HoldersPort
-	oi            map[domain.Exchange]domain.OpenInterestPort
-	funding       map[domain.Exchange]domain.FundingRatePort
-	longShort     map[domain.Exchange]domain.LongShortRatioPort
-	taker         map[domain.Exchange]domain.TakerFlowPort
-	takerStore    domain.TakerBucketStore
-	basis         map[domain.Exchange]domain.BasisPort
-	windows       map[domain.Exchange]domain.WindowChangePort
-	onFuturesSym  func(string)
-	futHist       FuturesHistoryReader
-	bookHist      BookHistoryReader
+	markets        map[domain.Exchange]domain.MarketDataPort
+	supply         domain.SupplyPort
+	delist         domain.SpotDelistStore
+	delistEnabled  bool
+	delistSource   map[domain.Exchange]bool
+	walls          *domain.WallMemory
+	icebergs       *domain.IcebergMemory
+	heat           *domain.HeatmapTape
+	watchMu        sync.Mutex
+	wallWatch      map[string]wallWatch
+	heatUniverse   map[domain.Exchange][]string
+	liq            *domain.LiquidationBook
+	liqWatch       LiquidationWatch
+	fx             FxSource
+	fxCache        *cache.TTL[*domain.FxRates]
+	holders        domain.HoldersPort
+	oi             map[domain.Exchange]domain.OpenInterestPort
+	funding        map[domain.Exchange]domain.FundingRatePort
+	longShort      map[domain.Exchange]domain.LongShortRatioPort
+	taker          map[domain.Exchange]domain.TakerFlowPort
+	takerStore     domain.TakerBucketStore
+	basis          map[domain.Exchange]domain.BasisPort
+	windows        map[domain.Exchange]domain.WindowChangePort
+	onFuturesSym   func(string)
+	futHist        FuturesHistoryReader
+	bookHist       BookHistoryReader
+	delistQuote    *cache.TTL[*domain.Ticker24h]
+	delistSupplyFB domain.SymbolSupplyFallback
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -240,7 +242,17 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 		heat:         domain.NewHeatmapTape(),
 		wallWatch:    map[string]wallWatch{},
 		heatUniverse: map[domain.Exchange][]string{},
+		delistQuote:  cache.New[*domain.Ticker24h](time.Hour),
 	}
+}
+
+// WithDelistSupplyFallback fills circulating supply for delist rows missing
+// from the Binance marketing snapshot (CoinGecko public markets).
+func (s *Service) WithDelistSupplyFallback(fb domain.SymbolSupplyFallback) *Service {
+	if s != nil {
+		s.delistSupplyFB = fb
+	}
+	return s
 }
 
 // WithDelistStore attaches optional delist schedule for spot enrichment.
@@ -392,7 +404,20 @@ func (s *Service) GetCandles(ctx context.Context, exchange, symbol, interval str
 	if err != nil {
 		return nil, err
 	}
-	return p.GetCandles(ctx, q)
+	bars, err := p.GetCandles(ctx, q)
+	if err == nil && len(bars) > 0 {
+		return bars, nil
+	}
+	if q.EndTime.IsZero() {
+		if e, ok := s.delistEntry(ex, symbol); ok && !e.DelistTime.IsZero() {
+			q.EndTime = e.DelistTime.UTC()
+			hist, herr := p.GetCandles(ctx, q)
+			if herr == nil && len(hist) > 0 {
+				return hist, nil
+			}
+		}
+	}
+	return bars, err
 }
 
 // GetSpotOrderBook returns a grouped spot order book plus ±rangePct analysis.
@@ -952,7 +977,14 @@ func (s *Service) GetTicker24h(ctx context.Context, exchange, symbol string) (*d
 	if err != nil {
 		return nil, err
 	}
-	return p.GetTicker24h(ctx, symbol)
+	tkr, err := p.GetTicker24h(ctx, symbol)
+	if err == nil && tkr != nil && strings.TrimSpace(tkr.LastPrice) != "" {
+		return tkr, nil
+	}
+	if fb, ok := s.lastDelistTicker(ctx, ex, p, symbol); ok {
+		return fb, nil
+	}
+	return tkr, err
 }
 
 // GetSupply returns circulating / total / max supply for a base asset (or pair).
@@ -1159,6 +1191,9 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 	}
 	s.enrichDelistTimes(ex, all)
 	all = s.injectUpcomingDelists(ex, all)
+	s.hydrateDelistQuotes(ctx, ex, all)
+	s.enrichDelistMcap(ctx, ex, all)
+	all = dropUnquotedDelistStubs(all)
 
 	filtered := filterSpotMarkets(all, q)
 
@@ -1734,11 +1769,17 @@ func (s *Service) enrichDelistTimes(ex domain.Exchange, items []domain.SpotMarke
 		return
 	}
 	for i := range items {
-		if t, ok := s.delist.DelistTime(ex, items[i].Symbol); ok {
-			tt := t
-			items[i].DelistTime = &tt
-			items[i].Tags = ensureTag(items[i].Tags, domain.TagDelist)
+		e, ok := s.delist.Get(ex, items[i].Symbol)
+		if !ok {
+			continue
 		}
+		tt := e.DelistTime
+		items[i].DelistTime = &tt
+		if !e.AnnouncedAt.IsZero() {
+			aa := e.AnnouncedAt
+			items[i].DelistAnnouncedAt = &aa
+		}
+		items[i].Tags = ensureTag(items[i].Tags, domain.TagDelist)
 	}
 }
 
@@ -1763,14 +1804,19 @@ func (s *Service) injectUpcomingDelists(ex domain.Exchange, items []domain.SpotM
 		}
 		base, quote := inferDelistBaseQuote(ex, sym)
 		tt := e.DelistTime
-		items = append(items, domain.SpotMarket{
+		row := domain.SpotMarket{
 			Symbol:     sym,
 			BaseAsset:  base,
 			QuoteAsset: quote,
 			Status:     "TRADING",
 			Tags:       []string{domain.TagDelist},
 			DelistTime: &tt,
-		})
+		}
+		if !e.AnnouncedAt.IsZero() {
+			aa := e.AnnouncedAt
+			row.DelistAnnouncedAt = &aa
+		}
+		items = append(items, row)
 		have[sym] = struct{}{}
 	}
 	return items

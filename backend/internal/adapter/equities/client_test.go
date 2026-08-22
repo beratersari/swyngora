@@ -5,8 +5,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -47,6 +50,52 @@ func TestNasdaqListAndTicker(t *testing.T) {
 	tk, err := c.GetTicker24h(context.Background(), "aapl")
 	if err != nil || tk.LastPrice != "190.5" || tk.Symbol != "AAPL" {
 		t.Fatalf("ticker %+v %v", tk, err)
+	}
+}
+
+func TestGetTicker24hDoesNotServeExpiredAsLive(t *testing.T) {
+	var fail atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if fail.Load() {
+			http.Error(w, "upstream down", http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/v7/finance/spark") {
+			_, _ = w.Write([]byte(`{"spark":{"result":[{"symbol":"AAPL","response":[{"meta":{
+				"symbol":"AAPL","instrumentType":"EQUITY","shortName":"Apple Inc.",
+				"regularMarketPrice":190.5,"regularMarketDayHigh":191,"regularMarketDayLow":188.5,
+				"regularMarketVolume":50000000,"regularMarketTime":1700000000,"chartPreviousClose":189.25
+			}}]}]}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewNasdaq(Options{
+		BaseURL:     srv.URL,
+		Universe:    []string{"AAPL"},
+		TickerCache: cache.New[*domain.Ticker24h](15 * time.Millisecond),
+	})
+	first, err := c.GetTicker24h(context.Background(), "AAPL")
+	if err != nil || first == nil || first.LastPrice != "190.5" {
+		t.Fatalf("first ticker %+v %v", first, err)
+	}
+	deadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if _, ok := c.tickers.Get("AAPL"); !ok {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if _, ok := c.tickers.Get("AAPL"); ok {
+		t.Fatal("fresh Get still hits after TTL")
+	}
+	fail.Store(true)
+	second, err := c.GetTicker24h(context.Background(), "AAPL")
+	if err == nil {
+		t.Fatalf("expected Yahoo failure, got live lastPrice=%s", second.LastPrice)
 	}
 }
 

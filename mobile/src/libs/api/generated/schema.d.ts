@@ -163,9 +163,11 @@ export interface paths {
          * @description Cached spot delist schedule per venue. Binance uses the official
          *     wallet schedule when BINANCE_API_KEY is set. Bybit is parsed from
          *     public delisting announcements (no key). Coinbase / Nasdaq / BIST
-         *     have no free future calendar. Pairs that delist in the next ~31 days
-         *     or in the last 30 days stay on the default TRADING markets list
-         *     with a Delist tag.
+         *     have no free future calendar. Each item includes `delistTime` (halt)
+         *     and `announcedAt` when the venue published the notice (Binance CMS
+         *     `releaseDate`, Bybit `publishTime`). Pairs that delist in the next
+         *     ~31 days or in the last 30 days stay on the default TRADING markets
+         *     list with a Delist tag.
          */
         get: operations["listDelistSchedule"];
         put?: never;
@@ -4067,6 +4069,11 @@ export interface components {
              * @description Scheduled spot delist time (UTC) when known
              */
             delistTime?: string | null;
+            /**
+             * Format: date-time
+             * @description When the venue published the delist announcement (UTC)
+             */
+            announcedAt?: string | null;
         };
         DelistScheduleResponse: {
             exchange?: string;
@@ -4078,6 +4085,11 @@ export interface components {
             symbol?: string;
             /** Format: date-time */
             delistTime?: string;
+            /**
+             * Format: date-time
+             * @description When the venue published the delist announcement (UTC)
+             */
+            announcedAt?: string;
         };
     };
     responses: {

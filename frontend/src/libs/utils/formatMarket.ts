@@ -28,6 +28,22 @@ export function formatDelistDate(
   return `${datePart} ${timePart} UTC`;
 }
 
+/** UTC calendar day for announcement tags, e.g. "20 Aug 2026". */
+export function formatDelistDay(
+  value: string | number | Date | null | undefined,
+  locale?: string,
+): string {
+  if (value === null || value === undefined || value === '') return '';
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(locale || undefined, {
+    timeZone: 'UTC',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function formatChangePercent(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return DASH;
   const n = typeof value === 'number' ? value : Number(value);

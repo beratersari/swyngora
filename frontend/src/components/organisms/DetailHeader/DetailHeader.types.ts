@@ -14,4 +14,5 @@ export type DetailHeaderProps = WithLoadingProps & {
   compareTo?: string;
   signalsTo?: string;
   delistTime?: string | null;
+  announcedAt?: string | null;
 };

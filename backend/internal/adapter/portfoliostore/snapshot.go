@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -200,6 +202,13 @@ func (s *SQLite) ImportOwnedPortfolios(ctx context.Context, ownerClientID string
 				continue
 			}
 		}
+		taken, takenOwner, err := s.txBookOwner(ctx, tx, snap.Book.ID)
+		if err != nil {
+			return added, err
+		}
+		if domain.MustRemintImportedBookID(snap.Book.ID, ownerClientID) || (taken && takenOwner != ownerClientID) {
+			snap = domain.RebindPortfolioSnapshotBookID(snap, uuid.NewString())
+		}
 		if nBooks >= domain.MaxPortfoliosPerClient {
 			break
 		}
@@ -215,6 +224,18 @@ func (s *SQLite) ImportOwnedPortfolios(ctx context.Context, ownerClientID string
 		return 0, err
 	}
 	return added, nil
+}
+
+func (s *SQLite) txBookOwner(ctx context.Context, tx *sql.Tx, id string) (bool, string, error) {
+	var owner string
+	err := tx.QueryRowContext(ctx, `SELECT client_id FROM portfolios WHERE id = ?`, id).Scan(&owner)
+	if err == sql.ErrNoRows {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	return true, owner, nil
 }
 
 func (s *SQLite) txListBookIDs(ctx context.Context, tx *sql.Tx, owner string) ([]string, error) {

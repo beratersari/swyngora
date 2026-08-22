@@ -110,7 +110,8 @@ type cmsArticleListResponse struct {
 		Catalogs []struct {
 			CatalogID int `json:"catalogId"`
 			Articles  []struct {
-				Title string `json:"title"`
+				Title       string `json:"title"`
+				ReleaseDate int64  `json:"releaseDate"`
 			} `json:"articles"`
 		} `json:"catalogs"`
 	} `json:"data"`
@@ -154,11 +155,13 @@ func (c *Client) fetchCMSWillDelistEntries(ctx context.Context) ([]domain.SpotDe
 			if !ok || !domain.DelistVisibleOnTradingList(when, now) {
 				continue
 			}
+			announced := unixMillisUTC(art.ReleaseDate)
 			for _, tok := range tokens {
 				out = append(out, domain.SpotDelistEntry{
-					Exchange:   domain.ExchangeBinance,
-					Symbol:     tok + "USDT",
-					DelistTime: when,
+					Exchange:    domain.ExchangeBinance,
+					Symbol:      tok + "USDT",
+					DelistTime:  when,
+					AnnouncedAt: announced,
 				})
 			}
 		}
@@ -196,17 +199,18 @@ func parseBinanceWillDelistTitle(title string) (tokens []string, when time.Time,
 }
 
 func mergeDelistEntriesPreferFirst(primary, extra []domain.SpotDelistEntry) []domain.SpotDelistEntry {
-	seen := make(map[string]struct{}, len(primary)+len(extra))
+	idx := make(map[string]int, len(primary)+len(extra))
 	out := make([]domain.SpotDelistEntry, 0, len(primary)+len(extra))
 	for _, e := range primary {
 		sym := strings.ToUpper(strings.TrimSpace(e.Symbol))
 		if sym == "" {
 			continue
 		}
-		if _, ok := seen[sym]; ok {
+		if _, ok := idx[sym]; ok {
 			continue
 		}
-		seen[sym] = struct{}{}
+		e.Symbol = sym
+		idx[sym] = len(out)
 		out = append(out, e)
 	}
 	for _, e := range extra {
@@ -214,11 +218,25 @@ func mergeDelistEntriesPreferFirst(primary, extra []domain.SpotDelistEntry) []do
 		if sym == "" {
 			continue
 		}
-		if _, ok := seen[sym]; ok {
+		if i, ok := idx[sym]; ok {
+			if out[i].AnnouncedAt.IsZero() && !e.AnnouncedAt.IsZero() {
+				out[i].AnnouncedAt = e.AnnouncedAt
+			}
 			continue
 		}
-		seen[sym] = struct{}{}
+		e.Symbol = sym
+		idx[sym] = len(out)
 		out = append(out, e)
 	}
 	return out
+}
+
+func unixMillisUTC(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+	if ms < 1e12 {
+		return time.Unix(ms, 0).UTC()
+	}
+	return time.UnixMilli(ms).UTC()
 }

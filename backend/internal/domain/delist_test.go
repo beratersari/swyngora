@@ -35,3 +35,21 @@ func TestDelistVisibleOnTradingList(t *testing.T) {
 		t.Fatal("zero time")
 	}
 }
+
+func TestTickerFromLastCandle(t *testing.T) {
+	got := TickerFromLastCandle("vanryusdt", Candle{Open: "1", Close: "1.1", High: "1.2", Low: "0.9", Volume: "10", QuoteVolume: "11"})
+	if got.Symbol != "VANRYUSDT" || got.LastPrice != "1.1" || got.QuoteVolume != "11" {
+		t.Fatalf("%+v", got)
+	}
+	if got.PriceChangePercent != "10.00" {
+		t.Fatalf("pct=%s", got.PriceChangePercent)
+	}
+}
+
+func TestApplyTickerToSpotDoesNotOverwriteLive(t *testing.T) {
+	m := SpotMarket{LastPrice: "5", Volume: ""}
+	ApplyTickerToSpot(&m, Ticker24h{LastPrice: "9", Volume: "100"})
+	if m.LastPrice != "5" || m.Volume != "100" {
+		t.Fatalf("%+v", m)
+	}
+}

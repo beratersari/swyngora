@@ -25,6 +25,8 @@ type SpotDelistEntry struct {
 	Symbol string
 	// DelistTime is when trading ceases (UTC).
 	DelistTime time.Time
+	// AnnouncedAt is when the venue published the delist notice (UTC). Zero if unknown.
+	AnnouncedAt time.Time
 }
 
 // DelistVisibleOnTradingList is true when the pair should stay on the default
@@ -52,6 +54,8 @@ type SpotDelistStore interface {
 	ReplaceAll(exchange Exchange, entries []SpotDelistEntry)
 	// DelistTime returns the scheduled delist time for a symbol when known.
 	DelistTime(exchange Exchange, symbol string) (time.Time, bool)
+	// Get returns the stored entry (halt time + announcement time) when known.
+	Get(exchange Exchange, symbol string) (SpotDelistEntry, bool)
 	// List returns a snapshot of all entries for an exchange (stable symbol order).
 	List(exchange Exchange) []SpotDelistEntry
 }

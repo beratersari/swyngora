@@ -40,3 +40,17 @@ func TestMemoryKeepsEarliestDelist(t *testing.T) {
 		t.Fatalf("want earliest %v got %v ok=%v", early, got, ok)
 	}
 }
+
+func TestMemoryKeepsAnnouncementWhenMerging(t *testing.T) {
+	m := NewMemory()
+	halt := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	ann := time.Date(2026, 8, 20, 6, 0, 0, 0, time.UTC)
+	m.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
+		{Symbol: "ICXUSDT", DelistTime: halt},
+		{Symbol: "ICXUSDT", DelistTime: halt.Add(time.Hour), AnnouncedAt: ann},
+	})
+	e, ok := m.Get(domain.ExchangeBinance, "ICXUSDT")
+	if !ok || !e.DelistTime.Equal(halt) || !e.AnnouncedAt.Equal(ann) {
+		t.Fatalf("entry=%+v ok=%v", e, ok)
+	}
+}

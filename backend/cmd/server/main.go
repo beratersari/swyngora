@@ -17,6 +17,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cmc"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
@@ -87,6 +88,10 @@ func main() {
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
 	catalogCache := cache.New[*domain.AssetCatalogEntry](cfg.SupplyCacheTTL)
 	holdersCache := cache.NewWithOptions[*domain.AssetHolders](cfg.HoldersCacheTTL, cache.Options{MaxEntries: 512})
+	delistSupplyCache := cache.NewWithOptions[*domain.AssetSupply](6*time.Hour, cache.Options{MaxEntries: 512})
+
+	nasdaqClient := equities.NewNasdaq(equities.Options{HTTPClient: httpClient})
+	bistClient := equities.NewBist(equities.Options{HTTPClient: httpClient})
 
 	stopCleanup := make(chan struct{})
 	go func() {
@@ -112,6 +117,9 @@ func main() {
 				supplyCache.Cleanup()
 				catalogCache.Cleanup()
 				holdersCache.Cleanup()
+				delistSupplyCache.Cleanup()
+				nasdaqClient.Cleanup()
+				bistClient.Cleanup()
 			case <-stopCleanup:
 				return
 			}
@@ -207,9 +215,12 @@ func main() {
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
-		domain.ExchangeNasdaq:   equities.NewNasdaq(equities.Options{HTTPClient: httpClient}),
-		domain.ExchangeBist:     equities.NewBist(equities.Options{HTTPClient: httpClient}),
-	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
+		domain.ExchangeNasdaq:   nasdaqClient,
+		domain.ExchangeBist:     bistClient,
+	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithDelistSupplyFallback(coingecko.New(coingecko.Options{
+		HTTPClient: httpClient,
+		Cache:      delistSupplyCache,
+	})).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
 		BaseURL:    cfg.CMCBaseURL,
 		HTTPClient: httpClient,
 		Catalog:    binanceClient,

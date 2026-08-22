@@ -9,6 +9,7 @@ import {
   changeTone,
   formatChangePercent,
   formatDelistDate,
+  formatDelistDay,
   formatSymbolDisplay,
   pairQuote,
 } from '@/libs/utils';
@@ -38,10 +39,12 @@ export function DetailHeader({
   compareTo,
   signalsTo,
   delistTime,
+  announcedAt,
 }: DetailHeaderProps) {
   const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets', 'signals']);
   const { formatPrice } = useDisplayCurrency();
   const delistLabel = formatDelistDate(delistTime);
+  const announcedLabel = formatDelistDay(announcedAt);
 
   return (
     <HeaderCard>
@@ -55,7 +58,12 @@ export function DetailHeader({
             <BrandTag variant="exchange">{exchange}</BrandTag>
             {delistLabel ? (
               <BrandTag variant="delist">
-                {t('markets:table.delistTag', { date: delistLabel })}
+                {announcedLabel
+                  ? t('markets:table.delistTagAnnounced', {
+                      date: delistLabel,
+                      announced: announcedLabel,
+                    })
+                  : t('markets:table.delistTag', { date: delistLabel })}
               </BrandTag>
             ) : null}
             {onToggleWatch ? (

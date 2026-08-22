@@ -8,9 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Delist last print:** already-removed pairs keep last / high / low / volume from the venue kline at halt so Markets and coin detail are not blank (`docs/features/delist-schedule.md`)
+- **Delist market cap:** scheduled delist rows missing Binance circulating supply use CoinGecko public markets so the mcap column is not empty (`docs/features/delist-schedule.md`)
+- **Delist announcement date:** amber Delist tags include when the venue published the notice (`announcedAt` from Binance CMS `releaseDate` and Bybit `publishTime`), not only the halt clock (`docs/features/delist-schedule.md`)
 - **Multi-exchange delist tags:** Binance official schedule (plus CMS “Will Delist” titles) and Bybit announcement dates (article HTML when the list feed is empty). Pairs that delist in the next ~31 days **or in the last 30 days** stay on the default Markets list with an amber Delist tag (and are injected if the venue already halted them). Coinbase / Nasdaq / BIST have no public calendar (`docs/features/delist-schedule.md`)
 
 ### Fixed
+- **Paper import first-book squat:** extra non-UUID book ids (and UUIDs already owned by another tenant) are reminted so an import cannot occupy another client’s first-book primary key (`docs/features/user-data-import.md`)
+- **Nasdaq/BIST live marks:** Yahoo ticker/candle misses fail closed instead of serving an expired last-good price to paper fills and alerts; equity caches join the process cleanup tick (`docs/features/market-data.md`)
+- **Symbol suggest venue switch:** jump-search / paper / alert typeahead no longer offers the previous exchange’s symbols while the new venue loads
 - **Coin-detail candle first paint:** klines start immediately (no intervals waterfall), a 100-bar request paints the viewport while the 300-bar window loads, and the chart no longer waits on indicators or remounts when switching tabs (`docs/features/coin-detail.md`)
 - **Coin-detail EMA on pan:** EMA overlays are computed from every loaded candle so the line continues when you scroll into older history (`docs/features/coin-detail.md`)
 - **Multi-book margin adjust/repay:** after the cash move, reload the position by book id instead of treating the book UUID as the actor — a second paper book no longer 4xxs a successful debit so a retry cannot double-charge (`docs/features/paper-margin.md`)

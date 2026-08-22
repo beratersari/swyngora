@@ -7,18 +7,18 @@ import (
 
 // PortfolioSnapshot is a full paper-book backup (balance, positions, history, orders, lots, margin, shares).
 type PortfolioSnapshot struct {
-	Book             Portfolio
-	Positions        []Position
-	Trades           []Trade
-	OpenOrders       []PendingOrder
-	Lots             []TaxLot
-	LotFills         []TaxLotFill
-	RecurringPlans   []RecurringBuyPlan
-	RecurringRuns    []RecurringBuyRun
-	MarginPositions  []MarginPosition
-	MarginOrders     []MarginOrder
-	MarginTrades     []MarginTrade
-	Shares           []PortfolioShare
+	Book            Portfolio
+	Positions       []Position
+	Trades          []Trade
+	OpenOrders      []PendingOrder
+	Lots            []TaxLot
+	LotFills        []TaxLotFill
+	RecurringPlans  []RecurringBuyPlan
+	RecurringRuns   []RecurringBuyRun
+	MarginPositions []MarginPosition
+	MarginOrders    []MarginOrder
+	MarginTrades    []MarginTrade
+	Shares          []PortfolioShare
 }
 
 // RemapPortfolioSnapshot rewrites ownership to importerClientID.
@@ -37,6 +37,56 @@ func RemapPortfolioSnapshot(snap PortfolioSnapshot, fileOwnerClientID, importerC
 	if newBook == "" {
 		newBook = importerClientID
 	}
+	return rebindPortfolioSnapshotBook(snap, oldBook, newBook, importerClientID)
+}
+
+// MustRemintImportedBookID is true for extra-book ids that would occupy another
+// tenant's first-book primary key (id == clientId). Extra UUID books keep their
+// ids (user-data-import.md). The importer's remapped main book is kept.
+func MustRemintImportedBookID(bookID, ownerClientID string) bool {
+	bookID = strings.TrimSpace(bookID)
+	ownerClientID = strings.TrimSpace(ownerClientID)
+	if bookID == "" || bookID == ownerClientID {
+		return false
+	}
+	return !looksLikeBookUUID(bookID)
+}
+
+func looksLikeBookUUID(id string) bool {
+	if len(id) != 36 {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		switch i {
+		case 8, 13, 18, 23:
+			if c != '-' {
+				return false
+			}
+		default:
+			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// RebindPortfolioSnapshotBookID rewrites Book.ID and every child row keyed by the old book id.
+func RebindPortfolioSnapshotBookID(snap PortfolioSnapshot, newBook string) PortfolioSnapshot {
+	oldBook := strings.TrimSpace(snap.Book.ID)
+	if oldBook == "" {
+		oldBook = strings.TrimSpace(snap.Book.ClientID)
+	}
+	newBook = strings.TrimSpace(newBook)
+	if newBook == "" || newBook == oldBook {
+		return snap
+	}
+	owner := strings.TrimSpace(snap.Book.ClientID)
+	return rebindPortfolioSnapshotBook(snap, oldBook, newBook, owner)
+}
+
+func rebindPortfolioSnapshotBook(snap PortfolioSnapshot, oldBook, newBook, ownerClientID string) PortfolioSnapshot {
 	mapID := func(id string) string {
 		if strings.TrimSpace(id) == oldBook {
 			return newBook
@@ -44,7 +94,9 @@ func RemapPortfolioSnapshot(snap PortfolioSnapshot, fileOwnerClientID, importerC
 		return id
 	}
 	snap.Book.ID = newBook
-	snap.Book.ClientID = importerClientID
+	if ownerClientID != "" {
+		snap.Book.ClientID = ownerClientID
+	}
 	for i := range snap.Positions {
 		snap.Positions[i].ClientID = newBook
 	}
@@ -74,7 +126,9 @@ func RemapPortfolioSnapshot(snap PortfolioSnapshot, fileOwnerClientID, importerC
 	}
 	for i := range snap.Shares {
 		snap.Shares[i].PortfolioID = mapID(snap.Shares[i].PortfolioID)
-		snap.Shares[i].OwnerClientID = importerClientID
+		if ownerClientID != "" {
+			snap.Shares[i].OwnerClientID = ownerClientID
+		}
 	}
 	return snap
 }

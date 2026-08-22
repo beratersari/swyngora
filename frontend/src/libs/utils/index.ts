@@ -39,6 +39,7 @@ export type { ApiCandle, ChartCandle } from './candles';
 export {
   formatChangePercent,
   formatDelistDate,
+  formatDelistDay,
   formatDateTime,
   formatExactDateTime,
   signalTriggerAt,

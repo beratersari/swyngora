@@ -60,10 +60,12 @@ type announcementsResponse struct {
 }
 
 type announcementRow struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	URL         string `json:"url"`
-	Type        struct {
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	URL           string `json:"url"`
+	PublishTime   int64  `json:"publishTime"`
+	DateTimestamp int64  `json:"dateTimestamp"`
+	Type          struct {
 		Key string `json:"key"`
 	} `json:"type"`
 	Tags []string `json:"tags"`
@@ -114,15 +116,20 @@ func (c *Client) FetchSpotDelistSchedule(ctx context.Context) ([]domain.SpotDeli
 		if !hasTime || when.Before(cutoff) {
 			continue
 		}
+		announced := unixMillisUTC(row.PublishTime)
+		if announced.IsZero() {
+			announced = unixMillisUTC(row.DateTimestamp)
+		}
 		for _, sym := range syms {
 			if prev, ok := seen[sym]; ok && !when.Before(prev) {
 				continue
 			}
 			seen[sym] = when
 			out = append(out, domain.SpotDelistEntry{
-				Exchange:   domain.ExchangeBybit,
-				Symbol:     sym,
-				DelistTime: when,
+				Exchange:    domain.ExchangeBybit,
+				Symbol:      sym,
+				DelistTime:  when,
+				AnnouncedAt: announced,
 			})
 		}
 	}
@@ -264,6 +271,16 @@ func stripHTML(s string) string {
 	s = html.UnescapeString(s)
 	s = spaceRe.ReplaceAllString(s, " ")
 	return strings.TrimSpace(s)
+}
+
+func unixMillisUTC(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+	if ms < 1e12 {
+		return time.Unix(ms, 0).UTC()
+	}
+	return time.UnixMilli(ms).UTC()
 }
 
 func parseDelistSymbols(text string) []string {

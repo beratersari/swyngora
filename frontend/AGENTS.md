@@ -17,7 +17,7 @@ React SPA that talks to the Go backend via **OpenAPI-described HTTP**. Not `simp
 | UI structure       | Atomic Design (atoms → molecules → organisms → templates → pages)                                                               |
 | File split (UI)    | **Prefixed** colocation: `Name.tsx`, `Name.types.ts`, `Name.styles.ts`, `Name.constants.ts`, `Name.helpers.ts`, `Name.test.tsx` |
 | Shared non-UI      | **`src/libs/{api,realtime,hooks,utils,types}`**                                                                                 |
-| Server state       | **RTK Query** only for backend REST — lives in **`libs/api`**                                                                   |
+| Server state       | **RTK Query** only for backend REST — lives in **`libs/api`**. Use `rtkCurrent` (not `.data`) for symbol/venue/book-keyed reads so a previous arg is not treated as live. |
 | Types from backend | **Generated** into `libs/api/generated/` from OpenAPI                                                                           |
 | Bundle             | Vite + React + TypeScript                                                                                                       |
 | Design system      | Tokens + Text + Skeleton + motion — `docs/design/frontend-design-system.md`                                                     |

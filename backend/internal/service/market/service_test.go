@@ -20,6 +20,7 @@ type fakeMarket struct {
 	prints       map[string][]domain.TakerPrint
 	printSyms    []string
 	err          error
+	tickerErr    error
 	lastQ        domain.CandleQuery
 	lastSym      string
 	lastBookQ    domain.OrderBookQuery
@@ -57,6 +58,9 @@ func (f *fakeMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]doma
 
 func (f *fakeMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
 	f.lastSym = symbol
+	if f.tickerErr != nil {
+		return nil, f.tickerErr
+	}
 	if f.err != nil {
 		return nil, f.err
 	}

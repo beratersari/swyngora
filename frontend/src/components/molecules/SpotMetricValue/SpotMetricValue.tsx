@@ -8,6 +8,7 @@ import {
   formatChangePercent,
   formatCompactUsd,
   formatDelistDate,
+  formatDelistDay,
   formatTradeCount,
   marketCapQuote,
   pairQuote,
@@ -35,6 +36,7 @@ export function SpotMetricValue({
   if (metric.format === 'tags') {
     const tags = (raw as string[] | undefined) ?? [];
     const delistLabel = formatDelistDate(spot?.delistTime, locale);
+    const announcedLabel = formatDelistDay(spot?.announcedAt, locale);
     // Backend injects synthetic "Delist" into tags[]; avoid duplicating plain Tag + BrandTag.
     const productTags = tags.filter((tag) => tag.toLowerCase() !== 'delist');
     if (isLoading) {
@@ -55,7 +57,9 @@ export function SpotMetricValue({
       <TagsWrap>
         {delistLabel ? (
           <BrandTag variant="delist">
-            {t('markets:table.delistTag', { date: delistLabel })}
+            {announcedLabel
+              ? t('markets:table.delistTagAnnounced', { date: delistLabel, announced: announcedLabel })
+              : t('markets:table.delistTag', { date: delistLabel })}
           </BrandTag>
         ) : null}
         {productTags.slice(0, delistLabel ? 3 : 4).map((tag) => (

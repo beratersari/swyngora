@@ -2359,7 +2359,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_delist_schedule,
             name="list_delist_schedule",
-            description="Spot delistings in the last 30 days or next ~31 days (symbol + UTC time). exchange=binance|bybit (Coinbase has no public calendar).",
+            description="Spot delistings in the last 30 days or next ~31 days (symbol, halt delistTime, announcedAt when the notice was published). exchange=binance|bybit (Coinbase has no public calendar).",
             args_schema=DelistInput,
         ),
         StructuredTool.from_function(

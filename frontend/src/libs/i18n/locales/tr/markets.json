@@ -43,7 +43,8 @@
     "emptyTitle": "Filtrelere uyan piyasa yok",
     "emptyHint": "Başka borsa, quote, etiket veya arama deneyin",
     "openDetail": "{{symbol}} detayını aç",
-    "delistTag": "Delist {{date}}"
+    "delistTag": "Delist {{date}}",
+    "delistTagAnnounced": "Delist {{date}} · duyuru {{announced}}"
   },
   "columns": {
     "button": "Sütunlar",

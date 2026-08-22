@@ -11,6 +11,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       vi.fn(),
       {
         data: { items: [{ symbol: 'BTCUSDT', baseAsset: 'BTC' }] },
+        currentData: { items: [{ symbol: 'BTCUSDT', baseAsset: 'BTC' }] },
         originalArgs: { exchange: 'binance' },
         isFetching: false,
       },

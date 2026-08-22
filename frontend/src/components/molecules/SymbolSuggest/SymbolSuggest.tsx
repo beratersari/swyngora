@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AutoComplete } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useLazyListSpotMarketsQuery, type MarketExchange } from '@/libs/api';
-import { defaultQuoteForExchange, formatSymbolDisplay } from '@/libs/utils';
+import { defaultQuoteForExchange, formatSymbolDisplay, rtkCurrent } from '@/libs/utils';
 import { useDebouncedValue } from '@/libs/hooks';
 import type { SymbolSuggestProps } from './SymbolSuggest.types';
 
@@ -48,14 +48,14 @@ export function SymbolSuggest({
   const options = useMemo(() => {
     const args = spotState.originalArgs;
     if (!args || args.exchange !== exchange) return [];
-    const items = spotState.data?.items ?? [];
+    const items = rtkCurrent(spotState)?.items ?? [];
     return items
       .filter((it) => it.symbol)
       .map((it) => ({
         value: it.symbol!,
         label: formatSymbolDisplay(it.symbol),
       }));
-  }, [spotState.data?.items, spotState.originalArgs, exchange]);
+  }, [spotState, exchange]);
 
   return (
     <AutoComplete

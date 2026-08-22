@@ -1,6 +1,8 @@
 package market
 
 import (
+	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,8 +25,9 @@ func TestEnsureTagPrependsOnce(t *testing.T) {
 func TestEnrichDelistTimesAddsTagAndTime(t *testing.T) {
 	store := deliststore.NewMemory()
 	when := time.Date(2026, 8, 17, 3, 0, 0, 0, time.UTC)
+	ann := time.Date(2026, 8, 10, 6, 0, 0, 0, time.UTC)
 	store.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
-		{Symbol: "HFTUSDT", DelistTime: when},
+		{Symbol: "HFTUSDT", DelistTime: when, AnnouncedAt: ann},
 	})
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{}, nil).
 		WithDelistStore(store).
@@ -38,6 +41,9 @@ func TestEnrichDelistTimesAddsTagAndTime(t *testing.T) {
 
 	if items[0].DelistTime == nil || !items[0].DelistTime.Equal(when) {
 		t.Fatalf("HFT delist time=%v", items[0].DelistTime)
+	}
+	if items[0].DelistAnnouncedAt == nil || !items[0].DelistAnnouncedAt.Equal(ann) {
+		t.Fatalf("HFT announced=%v", items[0].DelistAnnouncedAt)
 	}
 	if items[0].Tags[0] != domain.TagDelist {
 		t.Fatalf("HFT tags=%v", items[0].Tags)
@@ -97,6 +103,131 @@ func TestFilterSpotKeepsUpcomingDelistOnTradingQuery(t *testing.T) {
 	got := filterSpotMarkets(all, domain.SpotListQuery{Status: "TRADING", QuoteAsset: "USDT"})
 	if len(got) != 3 {
 		t.Fatalf("want BTC + upcoming + last-30d delist, got %+v", got)
+	}
+}
+
+func TestHydrateDelistQuotesFillsEmptyStub(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Date(2026, 8, 18, 8, 0, 0, 0, time.UTC)
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "VANRYUSDT", DelistTime: halt, AnnouncedAt: halt.Add(-6 * 24 * time.Hour)},
+	})
+	fm := &fakeMarket{
+		tickerErr: domain.ErrNotFound,
+		candles: []domain.Candle{{
+			OpenTime:    halt.Add(-24 * time.Hour),
+			Open:        "0.0010",
+			High:        "0.0012",
+			Low:         "0.0008",
+			Close:       "0.0009",
+			Volume:      "1000",
+			QuoteVolume: "0.95",
+			CloseTime:   halt.Add(-time.Millisecond),
+		}},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBybit: fm,
+	}, nil).WithDelistStore(store)
+	items := svc.injectUpcomingDelists(domain.ExchangeBybit, nil)
+	if len(items) != 1 || items[0].LastPrice != "" {
+		t.Fatalf("pre-hydrate %+v", items)
+	}
+	svc.hydrateDelistQuotes(context.Background(), domain.ExchangeBybit, items)
+	if items[0].LastPrice != "0.0009" || items[0].QuoteVolume != "0.95" || items[0].HighPrice != "0.0012" {
+		t.Fatalf("hydrated %+v", items[0])
+	}
+	if items[0].PriceChangePercent == "" {
+		t.Fatal("expected change pct from last candle")
+	}
+}
+
+func TestGetTicker24hFallsBackToHaltCandle(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Date(2026, 8, 18, 8, 0, 0, 0, time.UTC)
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "VANRYUSDT", DelistTime: halt},
+	})
+	fm := &fakeMarket{
+		tickerErr: domain.ErrNotFound,
+		candles: []domain.Candle{{
+			Open: "1", Close: "2", High: "3", Low: "0.5", Volume: "10", QuoteVolume: "20",
+		}},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBybit: fm,
+	}, nil).WithDelistStore(store)
+	tkr, err := svc.GetTicker24h(context.Background(), "bybit", "VANRYUSDT")
+	if err != nil || tkr == nil || tkr.LastPrice != "2" {
+		t.Fatalf("ticker %+v err=%v", tkr, err)
+	}
+}
+
+type fakeSymbolSupply struct {
+	by map[string]*domain.AssetSupply
+}
+
+func (f fakeSymbolSupply) SupplyBySymbols(_ context.Context, symbols []string) (map[string]*domain.AssetSupply, error) {
+	out := map[string]*domain.AssetSupply{}
+	for _, s := range symbols {
+		if v, ok := f.by[strings.ToUpper(s)]; ok {
+			out[strings.ToUpper(s)] = v
+		}
+	}
+	return out, nil
+}
+
+func TestEnrichDelistMcapUsesFallback(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Now().UTC()
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "HFTUSDT", DelistTime: halt},
+	})
+	circ := 9e8
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBybit: &fakeMarket{},
+	}, nil).WithDelistStore(store).WithDelistSupplyFallback(fakeSymbolSupply{
+		by: map[string]*domain.AssetSupply{
+			"HFT": {Asset: "HFT", CirculatingSupply: &circ, Source: "coingecko"},
+		},
+	})
+	items := []domain.SpotMarket{{
+		Symbol: "HFTUSDT", BaseAsset: "HFT", QuoteAsset: "USDT",
+		LastPrice: "0.01", DelistTime: &halt,
+	}}
+	svc.enrichDelistMcap(context.Background(), domain.ExchangeBybit, items)
+	if items[0].MarketCapCirculating == nil || *items[0].MarketCapCirculating != 9e6 {
+		t.Fatalf("mcap=%v", items[0].MarketCapCirculating)
+	}
+}
+
+func TestDropUnquotedDelistStubs(t *testing.T) {
+	halt := time.Now().UTC()
+	got := dropUnquotedDelistStubs([]domain.SpotMarket{
+		{Symbol: "BTCUSDT", LastPrice: "100"},
+		{Symbol: "GONEUSDT", LastPrice: "", DelistTime: &halt},
+		{Symbol: "KEEPUSDT", LastPrice: "1", DelistTime: &halt},
+	})
+	if len(got) != 2 || got[0].Symbol != "BTCUSDT" || got[1].Symbol != "KEEPUSDT" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestHydrateDelistQuotesLeavesLivePrice(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Now().UTC().Add(5 * 24 * time.Hour)
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "TAIUSDT", DelistTime: halt},
+	})
+	fm := &fakeMarket{candles: []domain.Candle{{Close: "9"}}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBybit: fm,
+	}, nil).WithDelistStore(store)
+	items := []domain.SpotMarket{{
+		Symbol: "TAIUSDT", LastPrice: "0.0065", DelistTime: &halt,
+	}}
+	svc.hydrateDelistQuotes(context.Background(), domain.ExchangeBybit, items)
+	if items[0].LastPrice != "0.0065" {
+		t.Fatalf("live price overwritten: %+v", items[0])
 	}
 }
 

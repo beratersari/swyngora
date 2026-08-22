@@ -1340,8 +1340,9 @@ type spotMarketDTO struct {
 	MarketCapCirculating *float64 `json:"marketCapCirculating"`
 	MarketCapTotal       *float64 `json:"marketCapTotal"`
 	// MarketCapMax is a number, the string "∞" when max supply is undefined, or null.
-	MarketCapMax any     `json:"marketCapMax"`
-	DelistTime   *string `json:"delistTime,omitempty"`
+	MarketCapMax      any     `json:"marketCapMax"`
+	DelistTime        *string `json:"delistTime,omitempty"`
+	DelistAnnouncedAt *string `json:"announcedAt,omitempty"`
 }
 
 type spotListResponse struct {
@@ -1509,6 +1510,10 @@ func (h *MarketHandler) ListSpotMarkets(w http.ResponseWriter, r *http.Request) 
 			s := m.DelistTime.UTC().Format(time.RFC3339)
 			dto.DelistTime = &s
 		}
+		if m.DelistAnnouncedAt != nil && !m.DelistAnnouncedAt.IsZero() {
+			s := m.DelistAnnouncedAt.UTC().Format(time.RFC3339)
+			dto.DelistAnnouncedAt = &s
+		}
 		out.Items = append(out.Items, dto)
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -1531,8 +1536,9 @@ type delistScheduleResponse struct {
 }
 
 type delistEntryDTO struct {
-	Symbol     string `json:"symbol"`
-	DelistTime string `json:"delistTime"`
+	Symbol      string  `json:"symbol"`
+	DelistTime  string  `json:"delistTime"`
+	AnnouncedAt *string `json:"announcedAt,omitempty"`
 }
 
 // ListDelistSchedule handles GET /api/v1/market/delist-schedule
@@ -1553,10 +1559,15 @@ func (h *MarketHandler) ListDelistSchedule(w http.ResponseWriter, r *http.Reques
 		Items:    make([]delistEntryDTO, 0, len(entries)),
 	}
 	for _, e := range entries {
-		out.Items = append(out.Items, delistEntryDTO{
+		item := delistEntryDTO{
 			Symbol:     e.Symbol,
 			DelistTime: e.DelistTime.UTC().Format(time.RFC3339),
-		})
+		}
+		if !e.AnnouncedAt.IsZero() {
+			s := e.AnnouncedAt.UTC().Format(time.RFC3339)
+			item.AnnouncedAt = &s
+		}
+		out.Items = append(out.Items, item)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

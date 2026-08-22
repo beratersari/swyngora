@@ -10,10 +10,11 @@ Show pairs that an exchange **will delist in the next month** or **already delis
 2. **Binance** — official `GET /sapi/v1/spot/delist-schedule` when `BINANCE_API_KEY` is set, plus public CMS “Will Delist TOKEN on DATE” titles so last-30-day full-token removals stay visible after they leave the official schedule.
 3. **Bybit** — public `GET /v5/announcements/index?type=delistings` (no key). List rows often have empty descriptions, so the job fetches the announcement HTML (capped) and parses the spot halt date (“will end after …”) plus pair list. Perp-only, Alpha, and lending notices are skipped.
 4. **Coinbase / Nasdaq / BIST** — no free upcoming calendar; schedule is empty (`enabled: false`).
-5. Spot rows get `delistTime` + a synthetic `Delist` tag.
+5. Spot rows get `delistTime` (halt), `announcedAt` (when the venue published the notice — Binance CMS `releaseDate`, Bybit `publishTime`), and a synthetic `Delist` tag. The tag shows both dates when `announcedAt` is known.
 6. Pairs that delist in the next **31 days** or in the last **30 days** stay on the default `status=TRADING` list even if the venue already marked them `BREAK`. Missing book rows are injected as stubs so they still appear.
-7. `GET /api/v1/market/delist-schedule?exchange=` returns that venue’s cache. `enabled` is per venue.
-8. UI: Markets banner + Tags column; Coin Detail header tag. Filter tag **Delist (30 days)** when the venue has rows.
+7. Stubs with no live tape are filled from the venue’s last kline at halt (last / high / low / volume). Live book prices are not overwritten. Coin-detail ticker/candles use the same halt-window fallback. Market cap uses the Binance supply snapshot when present; otherwise CoinGecko public `/coins/markets` (exact ticker, delist rows only).
+8. `GET /api/v1/market/delist-schedule?exchange=` returns that venue’s cache. `enabled` is per venue.
+9. UI: Markets banner + Tags column; Coin Detail header tag. Filter tag **Delist (30 days)** when the venue has rows.
 
 ## Code
 
@@ -25,7 +26,7 @@ Show pairs that an exchange **will delist in the next month** or **already delis
 | Bybit fetch | `backend/internal/adapter/bybit/delist.go` |
 | Job | `backend/internal/service/delistjob/` (one runner per source) |
 | Enrichment | `enrichDelistTimes`, `injectUpcomingDelists` |
-| HTTP | `GET /api/v1/market/delist-schedule` + `SpotMarket.delistTime` |
+| HTTP | `GET /api/v1/market/delist-schedule` + `SpotMarket.delistTime` / `announcedAt` |
 | MCP | `list_delist_schedule` |
 | UI | `MarketsPage`, `MarketsTable` / `SpotMetricValue`, `DetailHeader` |
 

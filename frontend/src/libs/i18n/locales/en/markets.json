@@ -43,7 +43,8 @@
     "emptyTitle": "No markets match filters",
     "emptyHint": "Try another exchange, quote, tag, or search",
     "openDetail": "Open {{symbol}} detail",
-    "delistTag": "Delist {{date}}"
+    "delistTag": "Delist {{date}}",
+    "delistTagAnnounced": "Delist {{date}} · announced {{announced}}"
   },
   "columns": {
     "button": "Columns",

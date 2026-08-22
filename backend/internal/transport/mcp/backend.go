@@ -1030,10 +1030,14 @@ func (b *Backend) ListDelistSchedule(ctx context.Context, exchange string) (json
 	ex, _ := b.Market.ResolveExchange(exchange)
 	items := make([]map[string]any, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, map[string]any{
+		row := map[string]any{
 			"symbol":     e.Symbol,
 			"delistTime": e.DelistTime.UTC().Format(time.RFC3339),
-		})
+		}
+		if !e.AnnouncedAt.IsZero() {
+			row["announcedAt"] = e.AnnouncedAt.UTC().Format(time.RFC3339)
+		}
+		items = append(items, row)
 	}
 	return mustJSON(map[string]any{
 		"exchange": string(ex),

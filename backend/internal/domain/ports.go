@@ -29,6 +29,12 @@ type SupplyPort interface {
 	Refresh(ctx context.Context) (int, error)
 }
 
+// SymbolSupplyFallback looks up circulating/total/max supply by ticker when the
+// Binance marketing snapshot has no row (typical for already-delisted alts).
+type SymbolSupplyFallback interface {
+	SupplyBySymbols(ctx context.Context, symbols []string) (map[string]*AssetSupply, error)
+}
+
 // AssetCatalogPort resolves a base ticker (or pair) to a CoinMarketCap id.
 // Implementations MUST serve from the Binance marketing snapshot (cache-only).
 type AssetCatalogPort interface {

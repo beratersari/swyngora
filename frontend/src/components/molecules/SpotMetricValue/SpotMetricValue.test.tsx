@@ -103,6 +103,22 @@ describe('SpotMetricValue', () => {
     expect(text).not.toMatch(/USDT/);
   });
 
+  it('includes announcement day on the delist tag when announcedAt is set', () => {
+    renderWithProviders(
+      <SpotMetricValue
+        metric={tagsMetric}
+        locale="en-GB"
+        spot={{
+          tags: [],
+          delistTime: '2026-09-03T00:00:00Z',
+          announcedAt: '2026-08-20T06:00:06Z',
+        }}
+      />,
+    );
+    expect(screen.getByText(/announced/i)).toBeInTheDocument();
+    expect(screen.getByText(/20 Aug 2026/)).toBeInTheDocument();
+  });
+
   it('renders delist tag alone when product tags are empty', () => {
     renderWithProviders(
       <SpotMetricValue

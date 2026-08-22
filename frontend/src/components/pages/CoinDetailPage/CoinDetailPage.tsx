@@ -219,13 +219,16 @@ export function CoinDetailPage() {
     { exchange: (exchange ?? 'binance') as MarketExchange },
     { skip: !exchange || isEquity },
   );
-  const delistTime = useMemo(() => {
+  const delistHit = useMemo(() => {
     if (!symbol || !delistQuery.data?.items?.length) return null;
-    const hit = delistQuery.data.items.find(
-      (it) => (it.symbol ?? '').toUpperCase() === String(symbol).toUpperCase(),
+    return (
+      delistQuery.data.items.find(
+        (it) => (it.symbol ?? '').toUpperCase() === String(symbol).toUpperCase(),
+      ) ?? null
     );
-    return hit?.delistTime ?? null;
   }, [delistQuery.data?.items, symbol]);
+  const delistTime = delistHit?.delistTime ?? null;
+  const announcedAt = delistHit?.announcedAt ?? null;
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
@@ -656,6 +659,7 @@ export function CoinDetailPage() {
           });
         }}
       delistTime={delistTime}
+      announcedAt={announcedAt}
       />
 
       <DetailStats

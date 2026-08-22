@@ -94,7 +94,7 @@ func TestFetchSpotDelistSchedule(t *testing.T) {
 			t.Fatalf("type=%s", r.URL.Query().Get("type"))
 		}
 		_, _ = w.Write([]byte(`{"retCode":0,"retMsg":"OK","result":{"list":[
-			{"title":"Delisting ABCUSDT spot pair on December 19, 2026","description":"Spot ABCUSDT","type":{"key":"delistings"},"tags":["Spot"]},
+			{"title":"Delisting ABCUSDT spot pair on December 19, 2026","description":"Spot ABCUSDT","publishTime":1786339200000,"type":{"key":"delistings"},"tags":["Spot"]},
 			{"title":"New Listing: FOO","description":"list FOOUSDT","type":{"key":"new_crypto"},"tags":["Spot"]}
 		]}}`))
 	}))
@@ -110,6 +110,9 @@ func TestFetchSpotDelistSchedule(t *testing.T) {
 	want := time.Date(2026, time.December, 19, 0, 0, 0, 0, time.UTC)
 	if !got[0].DelistTime.Equal(want) {
 		t.Fatalf("time=%v", got[0].DelistTime)
+	}
+	if !got[0].AnnouncedAt.Equal(time.UnixMilli(1786339200000).UTC()) {
+		t.Fatalf("announced=%v", got[0].AnnouncedAt)
 	}
 }
 

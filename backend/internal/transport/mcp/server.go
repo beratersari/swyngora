@@ -970,7 +970,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_delist_schedule",
-		mcp.WithDescription("List spot delistings for a venue (last 30 days and next ~31 days). Binance official schedule plus CMS titles; Bybit announcements. Empty if none or unsupported."),
+		mcp.WithDescription("List spot delistings for a venue (last 30 days and next ~31 days). Each item has delistTime (halt) and announcedAt (when the notice was published) when known. Binance official schedule plus CMS titles; Bybit announcements. Empty if none or unsupported."),
 		mcp.WithString("exchange", mcp.Description("Venue id; default binance")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ListDelistSchedule(ctx, req.GetString("exchange", "binance"))

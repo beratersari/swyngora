@@ -124,3 +124,88 @@ func TestSnapshot_ExportImportRoundTripAndMerge(t *testing.T) {
 		t.Fatalf("merge skip n=%d err=%v", n, err)
 	}
 }
+
+func TestSnapshot_ImportDoesNotOccupyVictimFirstBookID(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "pf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	crafted := domain.PortfolioSnapshot{
+		Book: domain.Portfolio{
+			ID: "victim", ClientID: "attacker", Name: "Main", Currency: "USDT",
+			StartingBalance: 1, CashBalance: 1, CreatedAt: now, UpdatedAt: now,
+		},
+	}
+	mapped := domain.RemapPortfolioSnapshot(crafted, "attacker", "attacker")
+	mapped = domain.RekeyPortfolioSnapshot(mapped, uuid.NewString)
+	n, err := st.ImportOwnedPortfolios(ctx, "attacker", []domain.PortfolioSnapshot{mapped}, false)
+	if err != nil || n != 1 {
+		t.Fatalf("import n=%d err=%v", n, err)
+	}
+	if got, gerr := st.GetPortfolio(ctx, "victim"); gerr == nil {
+		t.Fatalf("victim first-book id occupied: %+v", got)
+	}
+	if _, err := st.CreatePortfolio(ctx, domain.Portfolio{
+		ID: "victim", ClientID: "victim", Name: "Main", Currency: "USDT",
+		StartingBalance: 10000, CashBalance: 10000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("victim first book: %v", err)
+	}
+}
+
+func TestSnapshot_ImportRemintsCollidingExtraUUID(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "pf.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	now := time.Now().UTC()
+	secondID := "608d45b9-b24f-46cb-ac62-07b3701cdec7"
+
+	if _, err := st.CreatePortfolio(ctx, domain.Portfolio{
+		ID: "alice", ClientID: "alice", Name: "Main", Currency: "USDT",
+		StartingBalance: 10000, CashBalance: 10000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePortfolio(ctx, domain.Portfolio{
+		ID: secondID, ClientID: "alice", Name: "Alt", Currency: "USDT",
+		StartingBalance: 1000, CashBalance: 1000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreatePortfolio(ctx, domain.Portfolio{
+		ID: "bob", ClientID: "bob", Name: "Main", Currency: "USDT",
+		StartingBalance: 5000, CashBalance: 5000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	snaps, err := st.ExportOwnedPortfolios(ctx, "alice")
+	if err != nil || len(snaps) != 2 {
+		t.Fatalf("export n=%d err=%v", len(snaps), err)
+	}
+	var remapped []domain.PortfolioSnapshot
+	for _, snap := range snaps {
+		m := domain.RemapPortfolioSnapshot(snap, "alice", "bob")
+		m = domain.RekeyPortfolioSnapshot(m, uuid.NewString)
+		remapped = append(remapped, m)
+	}
+	n, err := st.ImportOwnedPortfolios(ctx, "bob", remapped, false)
+	if err != nil || n != 1 {
+		t.Fatalf("bob import n=%d err=%v", n, err)
+	}
+	books, err := st.ListPortfolios(ctx, "bob")
+	if err != nil || len(books) != 2 {
+		t.Fatalf("bob books n=%d err=%v", len(books), err)
+	}
+	aliceAlt, err := st.GetPortfolio(ctx, secondID)
+	if err != nil || aliceAlt.ClientID != "alice" {
+		t.Fatalf("alice extra book mutated: %+v %v", aliceAlt, err)
+	}
+}

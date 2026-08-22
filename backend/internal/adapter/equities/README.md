@@ -21,6 +21,8 @@ BIST falls back to the Bigpara ticker board + Yahoo spark if the scanner is down
 - Candles map Swyngora intervals onto Yahoo `1m` / `5m` / `15m` / `60m` / `1d` / `1wk` / `1mo`.
 - No public order book: `GetOrderBook` returns not found.
 - The market service does **not** apply Binance product tags or crypto circulating-supply mcap to equity rows.
+- **Ticker / candles:** cache TTL only. An upstream miss after expiry returns an error — last-good is not served as a live mark (paper fills and alerts).
+- **Spot list:** last-good on screener failure until `Cleanup()` (wired from `cmd/server` with the crypto cache tick).
 
 ## Tests
 

@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 func TestFetchSpotDelistScheduleRequiresAPIKey(t *testing.T) {
@@ -89,8 +91,8 @@ func TestFetchSpotDelistScheduleMergesCMSPastWillDelist(t *testing.T) {
 			_, _ = w.Write([]byte(`[{"delistTime":1786928400000,"symbols":["ICXUSDT"]}]`))
 		case cmsDelistCatalogPath:
 			body := `{"code":"000000","data":{"catalogs":[{"catalogId":161,"articles":[` +
-				`{"title":"Binance Will Delist ICX, SCRT, STORJ on ` + future + `"},` +
-				`{"title":"Binance Will Delist ACX, HFT on ` + past + `"},` +
+				`{"title":"Binance Will Delist ICX, SCRT, STORJ on ` + future + `","releaseDate":1787205606608},` +
+				`{"title":"Binance Will Delist ACX, HFT on ` + past + `","releaseDate":1786339200000},` +
 				`{"title":"Notice of Removal of Spot Trading Pairs - 2026-08-21"}` +
 				`]}]}}`
 			_, _ = w.Write([]byte(body))
@@ -109,15 +111,22 @@ func TestFetchSpotDelistScheduleMergesCMSPastWillDelist(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := map[string]time.Time{}
+	found := map[string]domain.SpotDelistEntry{}
 	for _, e := range entries {
-		found[e.Symbol] = e.DelistTime
+		found[e.Symbol] = e
 	}
-	if !found["ICXUSDT"].Equal(time.UnixMilli(1786928400000).UTC()) {
-		t.Fatalf("official time should win for ICX: %v", found["ICXUSDT"])
+	if !found["ICXUSDT"].DelistTime.Equal(time.UnixMilli(1786928400000).UTC()) {
+		t.Fatalf("official time should win for ICX: %v", found["ICXUSDT"].DelistTime)
+	}
+	wantAnn := time.UnixMilli(1787205606608).UTC()
+	if !found["ICXUSDT"].AnnouncedAt.Equal(wantAnn) {
+		t.Fatalf("ICX announcedAt=%v want %v", found["ICXUSDT"].AnnouncedAt, wantAnn)
 	}
 	if _, ok := found["ACXUSDT"]; !ok {
 		t.Fatalf("expected CMS ACXUSDT in %v", found)
+	}
+	if found["ACXUSDT"].AnnouncedAt.IsZero() {
+		t.Fatal("CMS ACX should carry releaseDate")
 	}
 	if _, ok := found["HFTUSDT"]; !ok {
 		t.Fatalf("expected CMS HFTUSDT in %v", found)

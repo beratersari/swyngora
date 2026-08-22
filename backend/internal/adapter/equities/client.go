@@ -228,10 +228,8 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 	}
 	quotes, err := c.fetchQuotes(ctx, []string{local})
 	if err != nil {
-		if stale, ok := c.tickers.GetStale(local); ok {
-			cp := *stale
-			return &cp, nil
-		}
+		// Do not serve an expired last-good ticker as live: paper fills and
+		// price alerts treat LastPrice as current (AGENTS.md §6.6).
 		return nil, err
 	}
 	if len(quotes) == 0 {
@@ -278,11 +276,6 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 	u.RawQuery = qs.Encode()
 	body, err := c.get(ctx, u.String())
 	if err != nil {
-		if cacheable {
-			if stale, ok := c.candles.GetStale(key); ok {
-				return append([]domain.Candle(nil), stale...), nil
-			}
-		}
 		return nil, err
 	}
 	bars, err := parseChart(body, limit)
@@ -293,6 +286,19 @@ func (c *Client) GetCandles(ctx context.Context, q domain.CandleQuery) ([]domain
 		c.candles.Set(key, bars)
 	}
 	return bars, nil
+}
+
+// Cleanup drops expired spot/ticker/candle entries so last-good lists cannot live for the process lifetime.
+func (c *Client) Cleanup() {
+	if c.spot != nil {
+		c.spot.Cleanup()
+	}
+	if c.tickers != nil {
+		c.tickers.Cleanup()
+	}
+	if c.candles != nil {
+		c.candles.Cleanup()
+	}
 }
 
 // GetOrderBook is not available for public cash-equity quotes.
