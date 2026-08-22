@@ -25,6 +25,39 @@ export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['q
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;
 export type SupplyQuery = NonNullable<operations['getSupply']['parameters']['query']>;
 export type HoldersQuery = NonNullable<operations['getHolders']['parameters']['query']>;
+export type AssetProfile = components['schemas']['AssetProfile'];
+export type AssetProfileQuery = NonNullable<operations['getAssetProfile']['parameters']['query']>;
+export type MarketOpenInterest = components['schemas']['MarketOpenInterest'];
+export type MarketFundingRate = components['schemas']['MarketFundingRate'];
+export type MarketLiquidations = components['schemas']['MarketLiquidations'];
+export type OpenInterestQuery = NonNullable<
+  operations['getMarketOpenInterest']['parameters']['query']
+>;
+export type LiquidationsQuery = NonNullable<
+  operations['getMarketLiquidations']['parameters']['query']
+>;
+export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
+
+export type MarketCvdVenue = {
+  exchange?: string;
+  lastCvd?: string;
+  lastPrice?: string;
+  summary?: string;
+  error?: string;
+  complete?: boolean;
+  windows?: { window?: string; cvdChange?: string; label?: string; complete?: boolean }[];
+};
+
+export type MarketCvd = {
+  symbol?: string;
+  exchange?: string;
+  summary?: string;
+  note?: string;
+  venues?: MarketCvdVenue[];
+  combined?: MarketCvdVenue;
+  spotCombined?: MarketCvdVenue;
+  spotFutures?: { summary?: string };
+};
 export type IntervalsQuery = NonNullable<operations['listIntervals']['parameters']['query']>;
 export type IndicatorsQuery = NonNullable<operations['getIndicators']['parameters']['query']>;
 export type PumpEventsQuery = NonNullable<operations['getPumpEvents']['parameters']['query']>;

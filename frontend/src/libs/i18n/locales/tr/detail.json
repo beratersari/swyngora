@@ -11,12 +11,15 @@
     "overview": "Genel bakış",
     "orderbook": "Emir defteri",
     "holders": "Tutucular",
+    "tape": "Bant",
     "indicators": "Göstergeler",
     "trade": "İşlem"
   },
   "chart": {
     "title": "Fiyat grafiği",
     "meta": "{{interval}} · {{bars}} bar yüklü · sola kaydırın (1000+ geçmiş sayfalı)",
+    "delistAnnounced": "Duyuru",
+    "delistHalt": "Delist",
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",
@@ -46,7 +49,8 @@
     "tickerTitle": "24s ticker",
     "supplyTitle": "Arz",
     "supplySource": "Arz kaynağı: {{source}}",
-    "asOf": "{{date}} itibarıyla"
+    "asOf": "{{date}} itibarıyla",
+    "stale": "son iyi arz anlık görüntüsü (yenileme başarısız veya süresi doldu)"
   },
   "holders": {
     "title": "Tutucular",
@@ -60,7 +64,9 @@
     "balance": "Bakiye",
     "valueUsd": "Değer",
     "share": "Pay",
-    "source": "Tutucu kaynağı: {{source}}"
+    "source": "Tutucu kaynağı: {{source}}",
+    "emptyWallets": "Tutucu sayısı yayımlanmış ama CoinMarketCap üst cüzdan listesi vermemiş.",
+    "stale": "Son iyi anlık görüntü gösteriliyor — CoinMarketCap gecikmeli veya kota dolu."
   },
   "indicators": {
     "title": "Teknik göstergeler",
@@ -71,6 +77,7 @@
     "emaLatest": "EMA({{period}}) son",
     "rsiBand": "{{band}} (30 / 70 bant)",
     "rsiSeries": "RSI serisi",
+    "rsiEmpty": "Bu aralık için RSI verisi yok.",
     "emaLegend": "EMA lejantı (fiyat grafiği):",
     "emaLabel": "EMA {{period}}",
     "fallbackNote": "Yalnızca bilgilendirme — yatırım tavsiyesi değildir. RSI Wilder; EMA SMA tohumlu.",
@@ -83,7 +90,10 @@
   },
   "errors": {
     "supply404": "Bu varlık için arz anlık görüntüsü yok (Binance pazarlama listesi kapsamı).",
-    "holders404": "Bu varlık için tutucu anlık görüntüsü yok."
+    "supplyEquity": "Hisselerin Binance/CoinMarketCap arz anlık görüntüsü yoktur.",
+    "holders404": "CoinMarketCap bu varlık için tutucu tablosu yayımlamamış.",
+    "holdersUnmapped": "Bu ticker Binance pazarlama kataloğunda CoinMarketCap kimliği taşımıyor; tutucu verisi yüklenemez.",
+    "tickerHalted": "Durdurma öncesi son işlem — canlı 24s penceresi değil."
   },
   "pollingPaused": "Sekme gizliyken canlı yenileme duraklatıldı.",
   "resource": {
@@ -93,7 +103,36 @@
     "candles": "mumlar",
     "indicators": "göstergeler",
     "intervals": "aralıklar",
-    "orderBook": "emir defteri"
+    "orderBook": "emir defteri",
+    "tape": "vadeli bant"
+  },
+  "tape": {
+    "title": "Vadeli bant",
+    "subtitle": "Açık faiz, fonlama, likidasyonlar ve CVD — Binance USD-M ve Bybit linear. Yalnızca bilgilendirme.",
+    "oi": "Açık faiz",
+    "oiNow": "Nominal",
+    "oi1h": "1s değişim",
+    "oi24h": "24s değişim",
+    "venues": "Borsalar",
+    "funding": "Fonlama",
+    "nextRate": "Sonraki oran",
+    "payer": "Ödeyen",
+    "payer_long": "Long öder",
+    "payer_short": "Short öder",
+    "payer_none": "Yok",
+    "nextTime": "Sonraki ödeme",
+    "liquidations": "Likidasyonlar",
+    "liq1h": "1s nominal",
+    "liq24h": "24s nominal",
+    "liqLong": "1s long liq",
+    "liqShort": "1s short liq",
+    "cvd": "CVD",
+    "cvdLast": "Son CVD",
+    "cvdSummary": "Okuma",
+    "incomplete": "Pencere eksik — geçmiş hâlâ doluyor.",
+    "liqIncomplete": "Likidasyon toplamları yalnızca bu sürecin bu coini izlediği süreyi kapsar.",
+    "unsupported": "Bu borsada perpetual bant yok. Aynı baz Binance + Bybit’te varsa o gösterilir.",
+    "none": "Bu sembol için Binance veya Bybit’te perpetual defter yok."
   },
   "orderBook": {
     "title": "Emir defteri",
@@ -134,7 +173,7 @@
     "asks": "Satış",
     "bidSize": "Alış büyüklüğü",
     "askSize": "Satış büyüklüğü",
-    "empty": "Bu çift için henüz canlı defter yok."
+    "empty": "Bu çift için canlı defter yok."
   },
   "paperTrade": {
     "title": "Kağıt işlem",

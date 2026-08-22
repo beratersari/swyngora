@@ -1463,14 +1463,46 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/asset-profile:
+    get:
+      summary: Logo, listing date, and published contracts
+      description: |
+        Identity for a crypto base asset. Logo is CoinMarketCap's public static
+        icon from the Binance marketing `cmcUniqueId`. Listing date and
+        contracts come from the same public CMC detail payload as holders when
+        published. `404` `catalog_unmapped` when there is no CMC id.
+      operationId: getAssetProfile
+      tags: [Market]
+      parameters:
+        - name: asset
+          in: query
+          schema: { type: string, example: BTC }
+        - name: symbol
+          in: query
+          schema: { type: string, example: BTCUSDT }
+      responses:
+        '200':
+          description: Asset identity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssetProfile'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/holders:
     get:
       summary: Crypto holder count and top wallets
       description: |
         On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
         Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
-        data-api (not a paid plan). Cache TTL default 1h; 429 may serve last-good.
-        Equities and unmapped tickers return 404. Informational only.
+        data-api (not a paid plan). Cache TTL default 1h; 429 / upstream / empty
+        CMC blips may serve last-good with `stale: true`. `404` `catalog_unmapped`
+        means no Binance `cmcUniqueId`; `404` `holders_unpublished` means CMC has
+        no holder table. Informational only.
       operationId: getHolders
       tags: [Market]
       parameters:
@@ -5248,6 +5280,9 @@ components:
         tradeCount:
           type: integer
           format: int64
+        halted:
+          type: boolean
+          description: True when this is a last print before a delist halt, not a live 24h window
     OrderBookLevel:
       type: object
       properties:
@@ -5719,9 +5754,32 @@ components:
           format: date-time
         source:
           type: string
+        stale:
+          type: boolean
+          description: True when serving last-good after the live supply TTL expired
         note:
           type: string
 
+    AssetProfile:
+      type: object
+      properties:
+        asset: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        providerId: { type: string }
+        logoUrl: { type: string }
+        listingDate: { type: string, description: YYYY-MM-DD when known }
+        contracts:
+          type: array
+          items:
+            type: object
+            properties:
+              chain: { type: string }
+              address: { type: string }
+        asOf: { type: string, format: date-time }
+        source: { type: string }
+        stale: { type: boolean }
+        note: { type: string }
     HolderWallet:
       type: object
       properties:
@@ -5770,6 +5828,9 @@ components:
           format: date-time
         source:
           type: string
+        stale:
+          type: boolean
+          description: True when serving last-good after a CMC 429, upstream error, or empty blip
         note:
           type: string
 

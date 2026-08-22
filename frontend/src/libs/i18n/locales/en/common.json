@@ -10,7 +10,8 @@
     "signals": "Signals",
     "compare": "Compare",
     "portfolio": "Paper",
-    "heatmap": "Heatmap"
+    "heatmap": "Heatmap",
+    "settings": "Settings"
   },
   "brand": {
     "tagline": "Market desk"
@@ -46,7 +47,8 @@
     "native": "Native",
     "USD": "USD",
     "TRY": "TRY",
-    "EUR": "EUR"
+    "EUR": "EUR",
+    "stale": "FX rates are stale — conversions may be off"
   },
   "actions": {
     "retry": "Retry",

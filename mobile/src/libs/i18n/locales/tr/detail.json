@@ -22,7 +22,10 @@
   "pumpsSection": "Pump / dump olayları",
   "pumpEventsEmpty": "Eşiklere uyan olay yok",
   "pumpEventsCount": "{{count}} olay",
-  "supplyUnavailable": "Bu varlık için arz bilgisi yok",
+  "supplyUnavailable": "Bu varlık için arz bilgisi yok (Binance pazarlama listesi).",
+  "supplyEquity": "Hisselerin Binance/CoinMarketCap arz anlık görüntüsü yoktur.",
+  "holdersUnavailable": "CoinMarketCap bu varlık için tutucu tablosu yayımlamamış.",
+  "holdersUnmapped": "Bu ticker Binance pazarlama kataloğunda CoinMarketCap kimliği taşımıyor.",
   "retryAll": "Tümünü yenile",
   "stats": {
     "open": "Açılış",
@@ -37,5 +40,7 @@
     "holders": "Tutucular",
     "topTenHolders": "İlk 10 pay"
   },
-  "askAi": "Bu çift hakkında AI’ya sor"
+  "askAi": "Bu çift hakkında AI’ya sor",
+  "delistAnnounced": "Duyuru",
+  "delistHalt": "Delist"
 }

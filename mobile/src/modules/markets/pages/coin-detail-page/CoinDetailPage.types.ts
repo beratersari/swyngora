@@ -6,6 +6,7 @@ import type {
   ChartMarker,
   ChartPriceLine,
 } from '@/libs/utils';
+import type { ChartVertLine } from '@/components/organisms/candle-chart/CandleChart.vertLines';
 
 export type CoinDetailPageViewModel = {
   symbol: string;
@@ -23,6 +24,7 @@ export type CoinDetailPageViewModel = {
   statsLoading: boolean;
   tickerError: string | null;
   supplyError: string | null;
+  holdersError: string | null;
 
   intervals: string[];
   intervalsLoading: boolean;
@@ -32,6 +34,7 @@ export type CoinDetailPageViewModel = {
   onToggleEma: () => void;
   showPumps: boolean;
   onTogglePumps: () => void;
+  pumpsSupported: boolean;
   showPumpMargin: boolean;
   onTogglePumpMargin: () => void;
 
@@ -39,6 +42,7 @@ export type CoinDetailPageViewModel = {
   candleOverlays: CandleChartOverlay[];
   chartMarkers: ChartMarker[];
   chartPriceLines: ChartPriceLine[];
+  chartVertLines: ChartVertLine[];
   candlesLoading: boolean;
   /** Loading bars while panning left (history). */
   candlesLoadingOlder: boolean;

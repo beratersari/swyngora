@@ -117,6 +117,7 @@ export function DetailStats({
                 }),
               })}`
             : null}
+          {supply.stale ? ` · ${t('stats.stale')}` : null}
         </Text>
       ) : null}
     </StatsSection>

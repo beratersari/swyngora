@@ -1,4 +1,8 @@
-import type { CandleChartMarker } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
+import type {
+  CandleChartMarker,
+  CandleChartVertLine,
+} from '@/components/molecules/CandleChartHost/CandleChartHost.types';
+import { isoToUnixSeconds } from '@/components/molecules/CandleChartHost/CandleChartHost.vertLines';
 import type { PumpEventDto, ScannerResult } from '@/libs/api';
 import { ruleTypeShort } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
@@ -141,4 +145,34 @@ export function mergeChartMarkers(
     byTime.set(m.time, { ...prev, text: base ? `${base} · ${extra}` : extra });
   }
   return [...byTime.values()].sort((a, b) => a.time - b.time);
+}
+
+export function delistEventsToVertLines(args: {
+  announcedAt?: string | null;
+  delistTime?: string | null;
+  announcedLabel: string;
+  delistLabel: string;
+  announcedColor: string;
+  delistColor: string;
+}): CandleChartVertLine[] {
+  const out: CandleChartVertLine[] = [];
+  const announced = isoToUnixSeconds(args.announcedAt);
+  if (announced != null) {
+    out.push({
+      id: 'delist-announced',
+      time: announced,
+      color: args.announcedColor,
+      label: args.announcedLabel,
+    });
+  }
+  const halt = isoToUnixSeconds(args.delistTime);
+  if (halt != null) {
+    out.push({
+      id: 'delist-halt',
+      time: halt,
+      color: args.delistColor,
+      label: args.delistLabel,
+    });
+  }
+  return out;
 }

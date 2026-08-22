@@ -15,7 +15,10 @@ Open a single-pair detail screen from the markets list: 24h ticker, supply, hold
 ## Behavior (happy path)
 
 1. User taps a market row.  
-2. Detail shows symbol header, 24h stats, supply, holder count and top-10 share.  
+2. Detail shows symbol header, 24h stats, supply, and (crypto only) holder count
+   + top-10 share. Missing holders/supply show a reason string, not silent dashes.
+   Equities hide holder tiles and pump events. Pair symbols (`BTC-USD`, `ETHTRY`)
+   resolve to the base asset for supply/holders.  
 3. User changes interval → candles + indicators refetch.  
 4. Chart overlay chips: EMA (from loaded candles so pan-left history keeps the line), Pumps markers, Margin price lines (pump high/low).  
 5. While screen focused and app active, ticker/candles poll.  

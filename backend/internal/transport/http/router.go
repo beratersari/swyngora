@@ -108,6 +108,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/whales", mh.GetWhales)
 	mux.HandleFunc("GET /api/v1/market/supply", mh.GetSupply)
 	mux.HandleFunc("GET /api/v1/market/holders", mh.GetHolders)
+	mux.HandleFunc("GET /api/v1/market/asset-profile", mh.GetAssetProfile)
 	mux.HandleFunc("GET /api/v1/market/exchanges", mh.ListExchanges)
 	mux.HandleFunc("GET /api/v1/market/fx", mh.GetFxRates)
 	mux.HandleFunc("GET /api/v1/market/intervals", mh.GetIntervals)

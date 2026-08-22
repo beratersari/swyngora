@@ -61,7 +61,7 @@ type snapVenueDTO struct {
 type snapSpotDTO struct {
 	Price       string          `json:"price"`
 	Volume24h   string          `json:"volume24h"`
-	MarketCap   string          `json:"marketCap"`
+	MarketCap   string          `json:"marketCap,omitempty"`
 	Circulating string          `json:"circulating,omitempty"`
 	Windows     []snapWindowDTO `json:"windows"`
 }
@@ -85,12 +85,15 @@ func snapshotToDTO(a *domain.SnapshotReport) snapshotResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, AsOf: a.AsOf.UTC(),
 		Spot: snapSpotDTO{
 			Price: formatHistQty(a.Spot.Price), Volume24h: formatHistQty(a.Spot.Volume24h),
-			MarketCap: formatHistQty(a.Spot.MarketCap), Windows: snapWindowsToDTO(a.Spot.Windows, false),
+			Windows: snapWindowsToDTO(a.Spot.Windows, false),
 		},
 		Summary: a.Summary, Note: a.Note,
 	}
 	if a.Spot.Circulating > 0 {
 		out.Spot.Circulating = formatHistQty(a.Spot.Circulating)
+	}
+	if a.Spot.MarketCap > 0 {
+		out.Spot.MarketCap = formatHistQty(a.Spot.MarketCap)
 	}
 	for _, v := range a.Venues {
 		out.Venues = append(out.Venues, snapVenueToDTO(v))

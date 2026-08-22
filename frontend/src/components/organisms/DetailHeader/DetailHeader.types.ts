@@ -6,6 +6,9 @@ export type DetailHeaderProps = WithLoadingProps & {
   lastPrice?: string | number | null;
   priceChangePercent?: string | number | null;
   assetName?: string | null;
+  logoUrl?: string | null;
+  listingDate?: string | null;
+  contractLabel?: string | null;
   backTo?: string;
   watched?: boolean;
   onToggleWatch?: () => void;
@@ -15,4 +18,5 @@ export type DetailHeaderProps = WithLoadingProps & {
   signalsTo?: string;
   delistTime?: string | null;
   announcedAt?: string | null;
+  halted?: boolean;
 };

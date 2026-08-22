@@ -8,6 +8,7 @@ import {
 } from 'lightweight-charts';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
+import { CHART_LOCALIZATION, CHART_TIME_SCALE } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
 import { DEFAULT_HEIGHT } from './CompareChartHost.constants';
 import {
@@ -46,7 +47,8 @@ export function CompareChartHost({
         horzLines: { color: semanticColors.chart.grid },
       },
       rightPriceScale: { borderColor: semanticColors.border.default },
-      timeScale: { borderColor: semanticColors.border.default },
+      timeScale: { borderColor: semanticColors.border.default, ...CHART_TIME_SCALE },
+      localization: CHART_LOCALIZATION,
     });
     chartRef.current = chart;
     const ro = new ResizeObserver(() => {

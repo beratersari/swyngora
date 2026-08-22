@@ -114,8 +114,8 @@ func main() {
 				bybitSpot.Cleanup()
 				binanceOI.Cleanup()
 				bybitOI.Cleanup()
-				supplyCache.Cleanup()
-				catalogCache.Cleanup()
+				// Supply/catalog are daily snapshots replaced atomically on
+				// successful Refresh. Do not evict last-good on TTL.
 				holdersCache.Cleanup()
 				delistSupplyCache.Cleanup()
 				nasdaqClient.Cleanup()
@@ -220,12 +220,14 @@ func main() {
 	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithDelistSupplyFallback(coingecko.New(coingecko.Options{
 		HTTPClient: httpClient,
 		Cache:      delistSupplyCache,
-	})).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
+	})).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
+	cmcClient := cmc.New(cmc.Options{
 		BaseURL:    cfg.CMCBaseURL,
 		HTTPClient: httpClient,
 		Catalog:    binanceClient,
 		Cache:      holdersCache,
-	})).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+	})
+	marketSvc = marketSvc.WithHolders(cmcClient).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{

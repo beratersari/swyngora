@@ -1,0 +1,64 @@
+{
+  "title": "Ayarlar",
+  "subtitle": "API anahtarları, dışa aktarma, paylaşım ve kâğıt düzenli alımlar. Kâğıt işlem gerçek para değildir.",
+  "tabs": {
+    "keys": "API anahtarları",
+    "export": "Dışa aktar",
+    "sharing": "Paylaşım",
+    "recurring": "Düzenli alım"
+  },
+  "clientId": "Bu masanın client id’si",
+  "keys": {
+    "hint": "Adlandırılmış anahtarlar bu masaya bağlanır. Sır yalnızca bir kez gösterilir.",
+    "name": "Ad",
+    "permission": "İzin",
+    "read": "Okuma",
+    "trade": "İşlem",
+    "create": "Anahtar oluştur",
+    "created": "Bu sırrı şimdi kopyalayın — bir daha gösterilmez.",
+    "prefix": "Önek",
+    "revoke": "İptal",
+    "empty": "Henüz anahtar yok.",
+    "loadFailed": "API anahtarları yüklenemedi"
+  },
+  "export": {
+    "hint": "İzleme listesi, paylaşımlar, uyarılar, geriye dönük testler ve kâğıt defterleri JSON veya CSV olarak indirin.",
+    "format": "Biçim",
+    "start": "Dışa aktarmayı başlat",
+    "started": "Dışa aktarma kuyruğa alındı",
+    "empty": "Henüz iş yok.",
+    "download": "İndir",
+    "cancel": "İptal",
+    "loadFailed": "Dışa aktarmalar yüklenemedi"
+  },
+  "sharing": {
+    "watchlist": "İzleme listesi paylaşımları",
+    "portfolio": "Kâğıt defter paylaşımları",
+    "grantee": "Alıcı client id",
+    "role": "Rol",
+    "viewer": "Görüntüleyici",
+    "editor": "Editör",
+    "trader": "İşlemci",
+    "share": "Paylaş",
+    "revoke": "Kaldır",
+    "emptyWl": "İzleme listesi paylaşılmamış.",
+    "emptyPf": "Kâğıt defter paylaşımı yok.",
+    "loadFailed": "Paylaşımlar yüklenemedi"
+  },
+  "recurring": {
+    "hint": "Zamanlanmış kâğıt piyasa alımları. Yetersiz nakit yalnızca o turu düşürür. Gerçek para değildir.",
+    "symbol": "Sembol",
+    "amount": "Nakit tutar",
+    "frequency": "Sıklık",
+    "daily": "Günlük",
+    "weekly": "Haftalık",
+    "monthly": "Aylık",
+    "interval": "Aralık (saat)",
+    "create": "Plan oluştur",
+    "empty": "Düzenli alım yok.",
+    "pause": "Duraklat",
+    "resume": "Sürdür",
+    "delete": "Sil",
+    "loadFailed": "Düzenli alımlar yüklenemedi"
+  }
+}

@@ -1,4 +1,7 @@
 import type { ChartCandle, ChartLinePoint, ChartMarker, ChartPriceLine } from '@/libs/utils';
+import type { ChartVertLine } from './CandleChart.vertLines';
+
+export type { ChartVertLine };
 
 export type CandleChartOverlay = {
   id: string;
@@ -16,6 +19,8 @@ export type CandleChartProps = {
   markers?: ChartMarker[];
   /** Horizontal margin / level lines (high-low / start-end of pumps). */
   priceLines?: ChartPriceLine[];
+  /** Delist announce / halt vertical lines. */
+  vertLines?: ChartVertLine[];
   height?: number;
   isLoading?: boolean;
   /** Fetching bars to the left of the series (pan back in time). */

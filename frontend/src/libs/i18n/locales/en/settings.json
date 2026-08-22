@@ -1,0 +1,64 @@
+{
+  "title": "Settings",
+  "subtitle": "API keys, data export, sharing, and paper recurring buys. Paper trading is not real money.",
+  "tabs": {
+    "keys": "API keys",
+    "export": "Export",
+    "sharing": "Sharing",
+    "recurring": "Recurring buys"
+  },
+  "clientId": "This desk client id",
+  "keys": {
+    "hint": "Named keys bind to this desk. The secret is shown once. Read keys cannot trade; trade keys can place paper orders.",
+    "name": "Name",
+    "permission": "Permission",
+    "read": "Read",
+    "trade": "Trade",
+    "create": "Create key",
+    "created": "Copy this secret now — it will not be shown again.",
+    "prefix": "Prefix",
+    "revoke": "Revoke",
+    "empty": "No keys yet.",
+    "loadFailed": "Could not load API keys"
+  },
+  "export": {
+    "hint": "Download your watchlist, shares, alerts, scanner backtests, and paper books as JSON or CSV.",
+    "format": "Format",
+    "start": "Start export",
+    "started": "Export queued",
+    "empty": "No export jobs yet.",
+    "download": "Download",
+    "cancel": "Cancel",
+    "loadFailed": "Could not load exports"
+  },
+  "sharing": {
+    "watchlist": "Watchlist shares",
+    "portfolio": "Paper book shares",
+    "grantee": "Grantee client id",
+    "role": "Role",
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "trader": "Trader",
+    "share": "Share",
+    "revoke": "Revoke",
+    "emptyWl": "Watchlist is not shared.",
+    "emptyPf": "No paper-book shares.",
+    "loadFailed": "Could not load shares"
+  },
+  "recurring": {
+    "hint": "Paper market buys on a schedule. Insufficient cash fails that run only. Not real money.",
+    "symbol": "Symbol",
+    "amount": "Cash amount",
+    "frequency": "Frequency",
+    "daily": "Daily",
+    "weekly": "Weekly",
+    "monthly": "Monthly",
+    "interval": "Interval (hours)",
+    "create": "Create plan",
+    "empty": "No recurring buys.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "delete": "Delete",
+    "loadFailed": "Could not load recurring buys"
+  }
+}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  delistEventsToVertLines,
   livePumpEventsForPair,
   mergeChartMarkers,
   mergePumpEvents,
@@ -142,5 +143,38 @@ describe('mergeChartMarkers', () => {
     expect(out).toHaveLength(1);
     expect(out[0]?.shape).toBe('arrowUp');
     expect(out[0]?.text).toBe('↑8.5 · RSI');
+  });
+});
+
+describe('delistEventsToVertLines', () => {
+  it('maps announcement and halt times', () => {
+    const out = delistEventsToVertLines({
+      announcedAt: '2026-08-20T06:00:00Z',
+      delistTime: '2026-09-03T00:00:00Z',
+      announcedLabel: 'Announced',
+      delistLabel: 'Delist',
+      announcedColor: '#F5B544',
+      delistColor: '#EA3943',
+    });
+    expect(out).toHaveLength(2);
+    expect(out[0]).toMatchObject({
+      id: 'delist-announced',
+      time: Math.floor(Date.parse('2026-08-20T06:00:00Z') / 1000),
+      label: 'Announced',
+    });
+    expect(out[1]?.id).toBe('delist-halt');
+  });
+
+  it('skips missing or invalid dates', () => {
+    expect(
+      delistEventsToVertLines({
+        announcedAt: '',
+        delistTime: 'nope',
+        announcedLabel: 'A',
+        delistLabel: 'D',
+        announcedColor: '#0',
+        delistColor: '#1',
+      }),
+    ).toEqual([]);
   });
 });

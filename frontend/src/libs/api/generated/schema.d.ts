@@ -924,6 +924,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/asset-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Logo, listing date, and published contracts
+         * @description Identity for a crypto base asset. Logo is CoinMarketCap's public static
+         *     icon from the Binance marketing `cmcUniqueId`. Listing date and
+         *     contracts come from the same public CMC detail payload as holders when
+         *     published. `404` `catalog_unmapped` when there is no CMC id.
+         */
+        get: operations["getAssetProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/holders": {
         parameters: {
             query?: never;
@@ -935,8 +958,10 @@ export interface paths {
          * Crypto holder count and top wallets
          * @description On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
          *     Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
-         *     data-api (not a paid plan). Cache TTL default 1h; 429 may serve last-good.
-         *     Equities and unmapped tickers return 404. Informational only.
+         *     data-api (not a paid plan). Cache TTL default 1h; 429 / upstream / empty
+         *     CMC blips may serve last-good with `stale: true`. `404` `catalog_unmapped`
+         *     means no Binance `cmcUniqueId`; `404` `holders_unpublished` means CMC has
+         *     no holder table. Informational only.
          */
         get: operations["getHolders"];
         put?: never;
@@ -2710,6 +2735,8 @@ export interface components {
             closeTime?: string;
             /** Format: int64 */
             tradeCount?: number;
+            /** @description True when this is a last print before a delist halt, not a live 24h window */
+            halted?: boolean;
         };
         OrderBookLevel: {
             price?: string;
@@ -3185,6 +3212,26 @@ export interface components {
             /** Format: date-time */
             asOf?: string;
             source?: string;
+            /** @description True when serving last-good after the live supply TTL expired */
+            stale?: boolean;
+            note?: string;
+        };
+        AssetProfile: {
+            asset?: string;
+            name?: string;
+            slug?: string;
+            providerId?: string;
+            logoUrl?: string;
+            /** @description YYYY-MM-DD when known */
+            listingDate?: string;
+            contracts?: {
+                chain?: string;
+                address?: string;
+            }[];
+            /** Format: date-time */
+            asOf?: string;
+            source?: string;
+            stale?: boolean;
             note?: string;
         };
         HolderWallet: {
@@ -3210,6 +3257,8 @@ export interface components {
             /** Format: date-time */
             asOf?: string;
             source?: string;
+            /** @description True when serving last-good after a CMC 429, upstream error, or empty blip */
+            stale?: boolean;
             note?: string;
         };
         SpotListResponse: {
@@ -5193,6 +5242,32 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getAssetProfile: {
+        parameters: {
+            query?: {
+                asset?: string;
+                symbol?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Asset identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetProfile"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

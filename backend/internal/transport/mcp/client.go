@@ -490,6 +490,13 @@ func (c *APIClient) GetSupply(ctx context.Context, asset string) (json.RawMessag
 	return c.get(ctx, "/api/v1/market/supply", q)
 }
 
+// GetAssetProfile returns logo, listing date, and contracts for a crypto asset.
+func (c *APIClient) GetAssetProfile(ctx context.Context, asset string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("asset", asset)
+	return c.get(ctx, "/api/v1/market/asset-profile", q)
+}
+
 // GetHolders returns an on-chain holder snapshot for a crypto asset.
 func (c *APIClient) GetHolders(ctx context.Context, asset string) (json.RawMessage, error) {
 	q := url.Values{}

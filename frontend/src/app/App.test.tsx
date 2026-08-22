@@ -19,6 +19,7 @@ describe('App shell navigation', () => {
     expect(links.some((a) => a.getAttribute('href') === '/alerts')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/compare')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/heatmap')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/settings')).toBe(true);
     expect(screen.getByTestId('routes')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /market prices|piyasa fiyat/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /binance/i })).toBeInTheDocument();

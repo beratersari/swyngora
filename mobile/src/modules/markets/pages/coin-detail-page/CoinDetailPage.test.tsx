@@ -21,6 +21,7 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     statsLoading: false,
     tickerError: null,
     supplyError: null,
+    holdersError: null,
     intervals: ['1h', '4h'],
     intervalsLoading: false,
     interval: '1h',
@@ -29,6 +30,7 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     onToggleEma: vi.fn(),
     showPumps: true,
     onTogglePumps: vi.fn(),
+    pumpsSupported: true,
     showPumpMargin: false,
     onTogglePumpMargin: vi.fn(),
     // empty chart series avoids lightweight-charts canvas in jsdom
@@ -36,6 +38,7 @@ function makeVm(overrides: Partial<CoinDetailPageViewModel> = {}): CoinDetailPag
     candleOverlays: [],
     chartMarkers: [],
     chartPriceLines: [],
+    chartVertLines: [],
     candlesLoading: false,
     candlesLoadingOlder: false,
     candlesError: null,

@@ -55,6 +55,7 @@ func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.
 		"openTime":           tkr.OpenTime.UTC().Format(time.RFC3339Nano),
 		"closeTime":          tkr.CloseTime.UTC().Format(time.RFC3339Nano),
 		"tradeCount":         tkr.TradeCount,
+		"halted":             tkr.Halted,
 	})
 }
 
@@ -852,6 +853,33 @@ func (b *Backend) GetSupply(ctx context.Context, asset string) (json.RawMessage,
 		"currentPriceUsd":   sup.CurrentPriceUSD,
 		"asOf":              sup.AsOf.UTC().Format(time.RFC3339Nano),
 		"source":            sup.Source,
+		"stale":             sup.Stale,
+	})
+}
+
+func (b *Backend) GetAssetProfile(ctx context.Context, asset string) (json.RawMessage, error) {
+	got, err := b.Market.GetAssetProfile(ctx, asset)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]map[string]any, 0, len(got.Contracts))
+	for _, c := range got.Contracts {
+		rows = append(rows, map[string]any{"chain": c.Chain, "address": c.Address})
+	}
+	listing := ""
+	if got.ListingDate != nil && !got.ListingDate.IsZero() {
+		listing = got.ListingDate.UTC().Format("2006-01-02")
+	}
+	return mustJSON(map[string]any{
+		"asset":       got.Asset,
+		"name":        got.Name,
+		"slug":        got.Slug,
+		"providerId":  got.ProviderID,
+		"logoUrl":     got.LogoURL,
+		"listingDate": listing,
+		"contracts":   rows,
+		"asOf":        got.AsOf.UTC().Format(time.RFC3339Nano),
+		"source":      got.Source,
 	})
 }
 
@@ -881,6 +909,7 @@ func (b *Backend) GetHolders(ctx context.Context, asset string) (json.RawMessage
 		"topHolders":         rows,
 		"asOf":               got.AsOf.UTC().Format(time.RFC3339Nano),
 		"source":             got.Source,
+		"stale":              got.Stale,
 	})
 }
 

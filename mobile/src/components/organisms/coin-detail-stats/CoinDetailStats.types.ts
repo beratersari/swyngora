@@ -3,4 +3,5 @@ export type CoinDetailStatsProps = {
   isLoading?: boolean;
   tickerError?: string | null;
   supplyError?: string | null;
+  holdersError?: string | null;
 };

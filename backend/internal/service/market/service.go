@@ -45,6 +45,7 @@ type Service struct {
 	fx             FxSource
 	fxCache        *cache.TTL[*domain.FxRates]
 	holders        domain.HoldersPort
+	profile        domain.AssetProfilePort
 	oi             map[domain.Exchange]domain.OpenInterestPort
 	funding        map[domain.Exchange]domain.FundingRatePort
 	longShort      map[domain.Exchange]domain.LongShortRatioPort
@@ -73,6 +74,14 @@ type LiquidationWatch interface {
 func (s *Service) WithHolders(h domain.HoldersPort) *Service {
 	if s != nil {
 		s.holders = h
+	}
+	return s
+}
+
+// WithAssetProfile attaches logo / listing / contract metadata.
+func (s *Service) WithAssetProfile(p domain.AssetProfilePort) *Service {
+	if s != nil {
+		s.profile = p
 	}
 	return s
 }
@@ -998,6 +1007,18 @@ func (s *Service) GetSupply(ctx context.Context, asset string) (*domain.AssetSup
 		return nil, fmt.Errorf("%w: supply port not configured", domain.ErrUpstream)
 	}
 	return s.supply.GetSupply(ctx, asset)
+}
+
+// GetAssetProfile returns logo, listing date, and published contracts.
+func (s *Service) GetAssetProfile(ctx context.Context, asset string) (*domain.AssetProfile, error) {
+	asset = strings.TrimSpace(asset)
+	if asset == "" {
+		return nil, fmt.Errorf("%w: asset is required", domain.ErrInvalidArgument)
+	}
+	if s.profile == nil {
+		return nil, fmt.Errorf("%w: asset profile port not configured", domain.ErrUpstream)
+	}
+	return s.profile.GetAssetProfile(ctx, asset)
 }
 
 // GetHolders returns an on-chain holder snapshot for a crypto base asset or pair.

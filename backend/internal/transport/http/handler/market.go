@@ -121,6 +121,7 @@ type tickerResponse struct {
 	OpenTime           string `json:"openTime"`
 	CloseTime          string `json:"closeTime"`
 	TradeCount         int64  `json:"tradeCount"`
+	Halted             bool   `json:"halted"`
 }
 
 type orderBookLevelDTO struct {
@@ -1185,6 +1186,7 @@ func (h *MarketHandler) GetTicker24h(w http.ResponseWriter, r *http.Request) {
 		OpenTime:           tkr.OpenTime.UTC().Format(time.RFC3339Nano),
 		CloseTime:          tkr.CloseTime.UTC().Format(time.RFC3339Nano),
 		TradeCount:         tkr.TradeCount,
+		Halted:             tkr.Halted,
 	})
 }
 
@@ -1198,6 +1200,7 @@ type supplyResponse struct {
 	CurrentPriceUSD   *float64 `json:"currentPriceUsd"`
 	AsOf              string   `json:"asOf"`
 	Source            string   `json:"source"`
+	Stale             bool     `json:"stale"`
 	Note              string   `json:"note"`
 }
 
@@ -1223,7 +1226,8 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 		CurrentPriceUSD:   domain.CloneFloatPtr(sup.CurrentPriceUSD),
 		AsOf:              sup.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:            sup.Source,
-		Note:              "Circulating / total / max supply from Binance marketing symbol list (daily snapshot @ 03:00 UTC plus startup). Max may be null when undefined. Request path is cache-only.",
+		Stale:             sup.Stale,
+		Note:              "Circulating / total / max supply from Binance marketing symbol list (daily snapshot @ 03:00 UTC plus startup). Max may be null when undefined. Request path is cache-only. stale=true is last-good after TTL.",
 	})
 }
 
@@ -1246,7 +1250,61 @@ type holdersResponse struct {
 	TopHolders         []holderRowDTO `json:"topHolders"`
 	AsOf               string         `json:"asOf"`
 	Source             string         `json:"source"`
+	Stale              bool           `json:"stale"`
 	Note               string         `json:"note"`
+}
+
+type assetContractDTO struct {
+	Chain   string `json:"chain"`
+	Address string `json:"address"`
+}
+
+type assetProfileResponse struct {
+	Asset       string             `json:"asset"`
+	Name        string             `json:"name"`
+	Slug        string             `json:"slug"`
+	ProviderID  string             `json:"providerId"`
+	LogoURL     string             `json:"logoUrl"`
+	ListingDate string             `json:"listingDate,omitempty"`
+	Contracts   []assetContractDTO `json:"contracts"`
+	AsOf        string             `json:"asOf"`
+	Source      string             `json:"source"`
+	Stale       bool               `json:"stale"`
+	Note        string             `json:"note"`
+}
+
+// GetAssetProfile handles GET /api/v1/market/asset-profile
+func (h *MarketHandler) GetAssetProfile(w http.ResponseWriter, r *http.Request) {
+	asset := r.URL.Query().Get("asset")
+	if asset == "" {
+		asset = r.URL.Query().Get("symbol")
+	}
+	got, err := h.svc.GetAssetProfile(r.Context(), asset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows := make([]assetContractDTO, 0, len(got.Contracts))
+	for _, c := range got.Contracts {
+		rows = append(rows, assetContractDTO{Chain: c.Chain, Address: c.Address})
+	}
+	listing := ""
+	if got.ListingDate != nil && !got.ListingDate.IsZero() {
+		listing = got.ListingDate.UTC().Format("2006-01-02")
+	}
+	writeJSON(w, http.StatusOK, assetProfileResponse{
+		Asset:       got.Asset,
+		Name:        got.Name,
+		Slug:        got.Slug,
+		ProviderID:  got.ProviderID,
+		LogoURL:     got.LogoURL,
+		ListingDate: listing,
+		Contracts:   rows,
+		AsOf:        got.AsOf.UTC().Format(time.RFC3339Nano),
+		Source:      got.Source,
+		Stale:       got.Stale,
+		Note:        "Logo is CoinMarketCap's public static icon. Listing date and contracts come from the same public detail payload as holders when published.",
+	})
 }
 
 // GetHolders handles GET /api/v1/market/holders
@@ -1281,7 +1339,8 @@ func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
 		TopHolders:         rows,
 		AsOf:               got.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:             got.Source,
-		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api. Mapped via Binance marketing cmcUniqueId. Crypto only; coverage varies by asset. Informational only.",
+		Stale:              got.Stale,
+		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api. Mapped via Binance marketing cmcUniqueId. Crypto only; coverage varies by asset. Informational only. stale=true is last-good after a CMC blip.",
 	})
 }
 

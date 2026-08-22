@@ -44,6 +44,9 @@ func TestTickerFromLastCandle(t *testing.T) {
 	if got.PriceChangePercent != "10.00" {
 		t.Fatalf("pct=%s", got.PriceChangePercent)
 	}
+	if !got.Halted {
+		t.Fatal("last-print ticker must be marked halted")
+	}
 }
 
 func TestApplyTickerToSpotDoesNotOverwriteLive(t *testing.T) {

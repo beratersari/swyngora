@@ -28,7 +28,7 @@ Show pairs that an exchange **will delist in the next month** or **already delis
 | Enrichment | `enrichDelistTimes`, `injectUpcomingDelists` |
 | HTTP | `GET /api/v1/market/delist-schedule` + `SpotMarket.delistTime` / `announcedAt` |
 | MCP | `list_delist_schedule` |
-| UI | `MarketsPage`, `MarketsTable` / `SpotMetricValue`, `DetailHeader` |
+| UI | `MarketsPage`, `MarketsTable` / `SpotMetricValue`, `DetailHeader`, coin-detail chart vertical lines (announced + halt; snapped onto existing candles so bars stay visible) |
 
 ## Config
 

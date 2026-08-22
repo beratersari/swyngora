@@ -5,7 +5,14 @@ import {
   type SupportedExchange,
 } from '@/config/constants';
 
-export const DETAIL_TABS = ['overview', 'orderbook', 'holders', 'indicators', 'trade'] as const;
+export const DETAIL_TABS = [
+  'overview',
+  'orderbook',
+  'tape',
+  'holders',
+  'indicators',
+  'trade',
+] as const;
 export type DetailTab = (typeof DETAIL_TABS)[number];
 export const DEFAULT_DETAIL_TAB: DetailTab = 'overview';
 
@@ -110,7 +117,25 @@ export function parseSymbolParam(raw: string | undefined): string {
  * (BTCUSDT → BTC) but not Coinbase-style `BASE-QUOTE` (BTC-USD stays as-is → 404).
  * Longest stable first so USDT/FDUSD win over shorter tails.
  */
-const SUPPLY_STABLE_QUOTES = ['FDUSD', 'USDT', 'USDC', 'BUSD', 'TUSD', 'DAI'] as const;
+const SUPPLY_QUOTE_SUFFIXES = [
+  'FDUSD',
+  'USDT',
+  'USDC',
+  'BUSD',
+  'TUSD',
+  'DAI',
+  'EUR',
+  'TRY',
+  'BRL',
+  'GBP',
+  'AUD',
+  'CAD',
+  'ARS',
+  'JPY',
+  'BTC',
+  'ETH',
+  'BNB',
+] as const;
 
 export function toSupplyAsset(symbol: string): string {
   const s = symbol.trim().toUpperCase();
@@ -120,11 +145,24 @@ export function toSupplyAsset(symbol: string): string {
     const base = s.split('-')[0]?.trim() ?? '';
     return base || s;
   }
-  for (const q of SUPPLY_STABLE_QUOTES) {
+  for (const q of SUPPLY_QUOTE_SUFFIXES) {
     if (s.length > q.length && s.endsWith(q)) {
       const base = s.slice(0, -q.length);
       if (base && base !== q) return base;
     }
+  }
+  return s;
+}
+
+/** Map a spot pair onto the USD-M / linear perp ticker used by OI, funding, CVD, liqs. */
+export function toPerpSymbol(symbol: string): string {
+  const s = symbol.trim().toUpperCase();
+  if (!s) return '';
+  if (s.includes('-')) {
+    const [base, quote] = s.split('-');
+    if (!base) return s;
+    const q = !quote || quote === 'USD' ? 'USDT' : quote;
+    return `${base}${q}`;
   }
   return s;
 }

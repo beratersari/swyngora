@@ -15,6 +15,9 @@ func TestSentinelErrors_DistinctAndWrappable(t *testing.T) {
 		ErrIdempotencyHit,
 		ErrUpstream,
 		ErrRateLimited,
+		ErrSupplyUnmapped,
+		ErrCatalogUnmapped,
+		ErrHoldersUnpublished,
 	}
 	for i, a := range sentinels {
 		if a == nil || a.Error() == "" {

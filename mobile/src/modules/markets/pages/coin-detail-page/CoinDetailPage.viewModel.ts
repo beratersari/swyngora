@@ -5,6 +5,7 @@ import type { RouteProp } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import { AiScreens } from '@/modules/ai';
 import type { CandleChartOverlay } from '@/components/organisms/candle-chart';
+import { isoToUnixSeconds, type ChartVertLine } from '@/components/organisms/candle-chart/CandleChart.vertLines';
 import {
   rtkErrorMessage,
   useGetCandlesQuery,
@@ -12,6 +13,7 @@ import {
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
+  useListDelistScheduleQuery,
   useGetTicker24hQuery,
   useLazyGetCandlesQuery,
   useListIntervalsQuery,
@@ -37,6 +39,7 @@ import {
   parseEmaPeriods,
   isMarketExchange,
   mergeChartCandles,
+  toSupplyAsset,
   pumpEventsToChartMarkers,
   pumpEventsToMarginLines,
   pumpModeLabel,
@@ -45,6 +48,7 @@ import {
   sortedEmaKeys,
   type ChartCandle,
 } from '@/libs/utils';
+import { semanticColors } from '@/styles/tokens';
 import {
   DEFAULT_PUMP_DETAIL_DIRECTION,
   DEFAULT_PUMP_DETAIL_LOOKBACK_HOURS,
@@ -159,20 +163,27 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     },
   );
 
+  const isEquity = exchange === 'nasdaq' || exchange === 'bist';
+  const supplyAsset = toSupplyAsset(symbol);
+
   const supplyQuery = useGetSupplyQuery(
-    { symbol },
+    { asset: supplyAsset },
     {
-      skip,
+      skip: skip || isEquity || !supplyAsset,
       pollingInterval: polling ? DETAIL_TICKER_POLL_MS : 0,
       refetchOnFocus: false,
     },
   );
 
-  const isEquity = exchange === 'nasdaq' || exchange === 'bist';
+  const delistQuery = useListDelistScheduleQuery(
+    { exchange: exchange as MarketExchange },
+    { skip: skip || isEquity },
+  );
+
   const holdersQuery = useGetHoldersQuery(
-    { symbol },
+    { asset: supplyAsset },
     {
-      skip: skip || isEquity,
+      skip: skip || isEquity || !supplyAsset,
       refetchOnFocus: false,
     },
   );
@@ -331,8 +342,8 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   const supply = supplyQuery.data;
   const holders = holdersQuery.data;
 
-  const statsItems = useMemo(
-    () => [
+  const statsItems = useMemo(() => {
+    const items = [
       { label: t('detail:stats.open'), value: formatPrice(ticker?.openPrice) },
       { label: t('detail:stats.high24h'), value: formatPrice(ticker?.highPrice) },
       { label: t('detail:stats.low24h'), value: formatPrice(ticker?.lowPrice) },
@@ -358,27 +369,46 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
             : null,
         ),
       },
-      {
-        label: t('detail:stats.holders'),
-        value: formatSupplyNum(holders?.holderCount),
-      },
-      {
-        label: t('detail:stats.topTenHolders'),
-        value:
-          holders?.topTenSharePct != null && Number.isFinite(holders.topTenSharePct)
-            ? `${holders.topTenSharePct.toFixed(2)}%`
-            : '—',
-      },
-    ],
-    [ticker, supply, holders, exchange, t],
-  );
+    ];
+    if (!isEquity && !holdersQuery.isError) {
+      items.push(
+        {
+          label: t('detail:stats.holders'),
+          value: formatSupplyNum(holders.holderCount),
+        },
+        {
+          label: t('detail:stats.topTenHolders'),
+          value:
+            holders.topTenSharePct != null && Number.isFinite(holders.topTenSharePct)
+              ? `${holders.topTenSharePct.toFixed(2)}%`
+              : '—',
+        },
+      );
+    }
+    return items;
+  }, [ticker, supply, holders, holdersQuery.isError, isEquity, exchange, t]);
 
-  const supplyError =
-    supplyQuery.isError && (supplyQuery.error as { status?: number })?.status !== 404
-      ? rtkErrorMessage(supplyQuery.error, { resource: 'supply' })
-      : supplyQuery.isError
-        ? t('detail:supplyUnavailable')
-        : null;
+  const supplyError = isEquity
+    ? t('detail:supplyEquity')
+    : supplyQuery.isError
+      ? rtkErrorMessage(supplyQuery.error, {
+          resource: 'supply',
+          codeMessages: { supply_unmapped: t('detail:supplyUnavailable') },
+          statusMessages: { 404: t('detail:supplyUnavailable') },
+        })
+      : null;
+
+  const holdersError =
+    isEquity || !holdersQuery.isError
+      ? null
+      : rtkErrorMessage(holdersQuery.error, {
+          resource: 'holders',
+          codeMessages: {
+            catalog_unmapped: t('detail:holdersUnmapped'),
+            holders_unpublished: t('detail:holdersUnavailable'),
+          },
+          statusMessages: { 404: t('detail:holdersUnavailable') },
+        });
 
   const onBack = useCallback(() => {
     navigation.goBack();
@@ -425,7 +455,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
   );
 
   const pumpQuery = useGetPumpEventsQuery(pumpQueryArgs, {
-    skip: skip || !symbol,
+    skip: skip || !symbol || isEquity,
     refetchOnFocus: false,
     pollingInterval: 0,
   });
@@ -441,6 +471,33 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       showPumpMargin ? pumpEventsToMarginLines(pumpQuery.data?.events) : [],
     [showPumpMargin, pumpQuery.data?.events],
   );
+
+  const chartVertLines = useMemo((): ChartVertLine[] => {
+    const hit =
+      delistQuery.data?.items?.find(
+        (it) => (it.symbol ?? '').toUpperCase() === symbol.toUpperCase(),
+      ) ?? null;
+    const out: ChartVertLine[] = [];
+    const announced = isoToUnixSeconds(hit?.announcedAt);
+    if (announced != null) {
+      out.push({
+        id: 'delist-announced',
+        time: announced,
+        color: semanticColors.status.warning,
+        label: t('detail:delistAnnounced', { defaultValue: 'Announced' }),
+      });
+    }
+    const halt = isoToUnixSeconds(hit?.delistTime);
+    if (halt != null) {
+      out.push({
+        id: 'delist-halt',
+        time: halt,
+        color: semanticColors.status.error,
+        label: t('detail:delistHalt', { defaultValue: 'Delist' }),
+      });
+    }
+    return out;
+  }, [delistQuery.data?.items, symbol, t]);
 
   const pumpEventRows = useMemo(() => {
     const events = pumpQuery.data?.events ?? [];
@@ -516,6 +573,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       ? rtkErrorMessage(tickerQuery.error, { resource: 'ticker' })
       : null,
     supplyError,
+    holdersError,
 
     intervals: supported ?? [],
     intervalsLoading: intervalsQuery.isLoading,
@@ -525,6 +583,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     onToggleEma: () => setShowEma((v) => !v),
     showPumps,
     onTogglePumps: () => setShowPumps((v) => !v),
+    pumpsSupported: !isEquity,
     showPumpMargin,
     onTogglePumpMargin: () => setShowPumpMargin((v) => !v),
 
@@ -532,6 +591,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     candleOverlays,
     chartMarkers,
     chartPriceLines,
+    chartVertLines,
     candlesLoading:
       (candlesQuery.isLoading || candlesQuery.isFetching) && candles.length === 0,
     candlesLoadingOlder: isLoadingOlder,

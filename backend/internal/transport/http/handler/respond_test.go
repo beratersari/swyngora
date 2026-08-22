@@ -23,6 +23,9 @@ func TestWriteError_Mapping(t *testing.T) {
 	}{
 		{fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument), http.StatusBadRequest, "invalid_argument", "symbol"},
 		{fmt.Errorf("%w: x", domain.ErrNotFound), http.StatusNotFound, "not_found", "not found"},
+		{fmt.Errorf("%w: catalog for ACE", domain.ErrCatalogUnmapped), http.StatusNotFound, "catalog_unmapped", "CoinMarketCap"},
+		{fmt.Errorf("%w: holders for ACE", domain.ErrHoldersUnpublished), http.StatusNotFound, "holders_unpublished", "not published"},
+		{fmt.Errorf("%w: supply for ACE", domain.ErrSupplyUnmapped), http.StatusNotFound, "supply_unmapped", "marketing catalog"},
 		{fmt.Errorf("%w: binance 429", domain.ErrRateLimited), http.StatusTooManyRequests, "rate_limited", "try again"},
 		{fmt.Errorf("%w: request failed: dial tcp secret", domain.ErrUpstream), http.StatusBadGateway, "upstream_error", "unavailable"},
 		{fmt.Errorf("%w: AI service unreachable at http://127.0.0.1:8090", domain.ErrUpstream), http.StatusBadGateway, "ai_unavailable", "Ollama"},

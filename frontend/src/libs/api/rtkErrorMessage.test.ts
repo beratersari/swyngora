@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getRtkErrorCode,
   getRtkErrorRawMessage,
   getRtkErrorStatus,
   isFetchBaseQueryError,
@@ -77,6 +78,24 @@ describe('rtkErrorMessage', () => {
 
   it('uses SerializedError message', () => {
     expect(rtkErrorMessage({ message: 'boom' })).toBe('boom');
+  });
+
+  it('prefers API error.code overrides over status and raw message', () => {
+    expect(
+      rtkErrorMessage(
+        {
+          status: 404,
+          data: { error: { code: 'catalog_unmapped', message: 'resource not found' } },
+        },
+        {
+          codeMessages: { catalog_unmapped: 'No CoinMarketCap id for this asset.' },
+          statusMessages: { 404: 'generic 404' },
+        },
+      ),
+    ).toBe('No CoinMarketCap id for this asset.');
+    expect(getRtkErrorCode({ data: { error: { code: ' holders_unpublished ' } } })).toBe(
+      'holders_unpublished',
+    );
   });
 
   it('allows status message overrides (call-site wins first)', () => {

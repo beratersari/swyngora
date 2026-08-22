@@ -10,7 +10,8 @@
     "signals": "Sinyaller",
     "compare": "Karşılaştır",
     "portfolio": "Kağıt",
-    "heatmap": "Isı haritası"
+    "heatmap": "Isı haritası",
+    "settings": "Ayarlar"
   },
   "brand": {
     "tagline": "Piyasa masası"
@@ -46,7 +47,8 @@
     "native": "Yerel",
     "USD": "USD",
     "TRY": "TRY",
-    "EUR": "EUR"
+    "EUR": "EUR",
+    "stale": "Kurlar gecikmeli — çevrimler sapabilir"
   },
   "actions": {
     "retry": "Yeniden dene",

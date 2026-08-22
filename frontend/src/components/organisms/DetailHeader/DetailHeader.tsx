@@ -30,6 +30,9 @@ export function DetailHeader({
   lastPrice,
   priceChangePercent,
   assetName,
+  logoUrl,
+  listingDate,
+  contractLabel,
   backTo = '/markets',
   isLoading = false,
   watched = false,
@@ -40,6 +43,7 @@ export function DetailHeader({
   signalsTo,
   delistTime,
   announcedAt,
+  halted = false,
 }: DetailHeaderProps) {
   const { t } = useTranslation(['detail', 'watchlist', 'alerts', 'markets', 'signals']);
   const { formatPrice } = useDisplayCurrency();
@@ -52,10 +56,20 @@ export function DetailHeader({
         <TitleBlock>
           <BackLink to={backTo}>{t('backToMarkets')}</BackLink>
           <TitleRow>
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt=""
+                width={28}
+                height={28}
+                style={{ borderRadius: 14, objectFit: 'contain' }}
+              />
+            ) : null}
             <Text variant="h2" color="primary" mono isLoading={isLoading} skeletonWidth={140}>
               {formatSymbolDisplay(symbol)}
             </Text>
             <BrandTag variant="exchange">{exchange}</BrandTag>
+            {halted ? <BrandTag variant="delist">{t('detail:errors.tickerHalted')}</BrandTag> : null}
             {delistLabel ? (
               <BrandTag variant="delist">
                 {announcedLabel
@@ -93,6 +107,16 @@ export function DetailHeader({
             {assetName ? (
               <Text variant="body" color="secondary">
                 {assetName}
+              </Text>
+            ) : null}
+            {listingDate ? (
+              <Text variant="caption" color="secondary">
+                {listingDate}
+              </Text>
+            ) : null}
+            {contractLabel ? (
+              <Text variant="caption" color="secondary" mono>
+                {contractLabel}
               </Text>
             ) : null}
           </TitleRow>

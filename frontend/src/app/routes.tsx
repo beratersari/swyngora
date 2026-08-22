@@ -8,6 +8,7 @@ import { MarketsPage } from '@/components/pages/MarketsPage';
 import { PortfolioPage } from '@/components/pages/PortfolioPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
 import { SignalsPage } from '@/components/pages/SignalsPage';
+import { SettingsPage } from '@/components/pages/SettingsPage';
 import { WatchlistPage } from '@/components/pages/WatchlistPage';
 
 export function AppRoutes() {
@@ -23,6 +24,7 @@ export function AppRoutes() {
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/compare" element={<ComparePage />} />
       <Route path="/heatmap" element={<HeatmapPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
       <Route path="/ai" element={<AiChatPage />} />
       <Route path="*" element={<Navigate to="/markets" replace />} />
     </Routes>

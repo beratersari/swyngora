@@ -30,6 +30,7 @@ func (s *Service) lastDelistTicker(ctx context.Context, ex domain.Exchange, p do
 	if s.delistQuote != nil {
 		if hit, ok := s.delistQuote.Get(key); ok && hit != nil && hit.LastPrice != "" {
 			cp := *hit
+			cp.Halted = true
 			return &cp, true
 		}
 	}

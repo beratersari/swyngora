@@ -19,6 +19,10 @@ const mockCandles = vi.fn();
 const mockIndicators = vi.fn();
 const mockOrderBook = vi.fn();
 const mockOrderHeatmap = vi.fn();
+const mockOpenInterest = vi.fn();
+const mockLiquidations = vi.fn();
+const mockCvd = vi.fn();
+const mockProfile = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -32,6 +36,10 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetIndicatorsQuery: () => mockIndicators(),
     useGetSpotOrderBookQuery: () => mockOrderBook(),
     useGetSpotOrderBookHeatmapQuery: () => mockOrderHeatmap(),
+    useGetOpenInterestQuery: () => mockOpenInterest(),
+    useGetMarketLiquidationsQuery: () => mockLiquidations(),
+    useGetMarketCvdQuery: () => mockCvd(),
+    useGetAssetProfileQuery: () => mockProfile(),
   };
 });
 
@@ -180,6 +188,18 @@ describe('CoinDetailPage', () => {
       isFetching: false,
       refetch: vi.fn(),
     });
+    const emptyTape = {
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    mockOpenInterest.mockReturnValue(emptyTape);
+    mockLiquidations.mockReturnValue(emptyTape);
+    mockCvd.mockReturnValue(emptyTape);
+    mockProfile.mockReturnValue(emptyTape);
   });
 
   it('renders symbol header and chart host', async () => {

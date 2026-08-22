@@ -1,5 +1,8 @@
 import type { ChartCandle, ChartLinePoint } from '@/libs/utils';
 import type { WithLoadingProps } from '@/components/types';
+import type { CandleChartVertLine } from './CandleChartHost.vertLines';
+
+export type { CandleChartVertLine };
 
 export type CandleChartOverlay = {
   id: string;
@@ -23,6 +26,8 @@ export type CandleChartHostProps = WithLoadingProps & {
   overlays?: CandleChartOverlay[];
   /** Optional event markers (e.g. pump scanner hits) */
   markers?: CandleChartMarker[];
+  /** Full-height vertical event lines (delist announce / halt). */
+  vertLines?: CandleChartVertLine[];
   height?: number;
   className?: string;
   /**

@@ -18,6 +18,7 @@ export {
   useGetIndicatorsQuery,
   usePostIndicatorsBatchQuery,
   useLazyPostIndicatorsBatchQuery,
+  useListDelistScheduleQuery,
   compactParams,
 } from './endpoints/marketApi';
 export type {

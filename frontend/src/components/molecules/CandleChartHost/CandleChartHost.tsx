@@ -8,12 +8,14 @@ import {
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
+  type ISeriesPrimitive,
   type LogicalRange,
   type SeriesMarker,
   type Time,
 } from 'lightweight-charts';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
+import { CHART_LOCALIZATION, CHART_TIME_SCALE } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
 import type { CandleChartHostProps } from './CandleChartHost.types';
 import {
@@ -28,6 +30,10 @@ import {
   ChartSkeletonLayer,
 } from './CandleChartHost.styles';
 import { snapMarkersToCandleTimes } from './CandleChartHost.markers';
+import {
+  VertLinePrimitive,
+  snapVertLinesToCandleTimes,
+} from './CandleChartHost.vertLines';
 import {
   candleDataSignature,
   chartPriceFormatFromCandles,
@@ -49,6 +55,7 @@ export function CandleChartHost({
   data,
   overlays = [],
   markers = [],
+  vertLines = [],
   height = DEFAULT_HEIGHT,
   className,
   isLoading = false,
@@ -63,6 +70,8 @@ export function CandleChartHost({
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const overlayRefs = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const vertPrimitivesRef = useRef<ISeriesPrimitive<Time>[]>([]);
+  const lastVertSigRef = useRef<string>('');
   const lastCandleSigRef = useRef<string>('');
   const lastOverlaySigRef = useRef<string>('');
   const lastMarkersSigRef = useRef<string>('');
@@ -102,7 +111,9 @@ export function CandleChartHost({
       },
       timeScale: {
         borderColor: semanticColors.border.default,
+        ...CHART_TIME_SCALE,
       },
+      localization: CHART_LOCALIZATION,
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: {
@@ -165,6 +176,15 @@ export function CandleChartHost({
         // chart.remove() also tears down primitives
       }
       markersPluginRef.current = null;
+      for (const p of vertPrimitivesRef.current) {
+        try {
+          seriesRef.current?.detachPrimitive(p);
+        } catch {
+          // chart.remove() also tears down primitives
+        }
+      }
+      vertPrimitivesRef.current = [];
+      lastVertSigRef.current = '';
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -199,6 +219,7 @@ export function CandleChartHost({
     lastOverlaySigRef.current = '';
     lastMarkersSigRef.current = '';
     lastPriceFormatKeyRef.current = '';
+    lastVertSigRef.current = '';
   }, [seriesKey]);
 
   // Sync candles + overlays when content changes.
@@ -374,6 +395,43 @@ export function CandleChartHost({
     });
     lastMarkersSigRef.current = markersSig;
   }, [data, markers]);
+
+  useLayoutEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    const snapped = snapVertLinesToCandleTimes(
+      vertLines,
+      data.map((c) => c.time),
+    );
+    const usedOnBar = new Map<number, number>();
+    const stacked = snapped.map((line) => {
+      const slot = usedOnBar.get(line.time) ?? 0;
+      usedOnBar.set(line.time, slot + 1);
+      return { ...line, labelOffsetY: slot * 20 };
+    });
+
+    const sig = `${candleDataSignature(data)}::${stacked
+      .map((v) => `${v.id}:${v.time}:${v.color}:${v.label}:${v.labelOffsetY ?? 0}`)
+      .join('|')}`;
+    if (sig === lastVertSigRef.current) return;
+    lastVertSigRef.current = sig;
+
+    for (const p of vertPrimitivesRef.current) {
+      try {
+        series.detachPrimitive(p);
+      } catch {
+        // ignore detach races
+      }
+    }
+    vertPrimitivesRef.current = [];
+
+    for (const line of stacked) {
+      const prim = new VertLinePrimitive(line);
+      series.attachPrimitive(prim);
+      vertPrimitivesRef.current.push(prim);
+    }
+  }, [vertLines, data]);
 
   const showSkeleton = isLoading && data.length === 0;
 

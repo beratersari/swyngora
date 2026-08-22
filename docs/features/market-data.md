@@ -103,7 +103,7 @@ Ticker and candle fetches **fail closed** when Yahoo is down — expired last-go
   - `marketCapMax` is `"∞"` only when max supply is undefined **and** a USD price exists
   - Market-cap **sorts** collapse to one preferred quote per base (USDT > USDC > …); empty supply snapshot → `502`
   - Missing mcaps sort last (never treated as zero)
-  - Supply/mcap is **not** fetched per user request: daily Binance marketing symbol-list refresh populates cache; requests are cache-only
+  - Supply/mcap is **not** fetched per user request: daily Binance marketing symbol-list refresh populates cache; requests are cache-only. After TTL the last-good snapshot is still served with `stale: true` (supply/catalog are not evicted on cleanup). Unmapped assets return `404` `supply_unmapped`.
   - base/quote/status are filter params only (not list columns)
 
 ### Candles — `GET /api/v1/market/candles`

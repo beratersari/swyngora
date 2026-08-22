@@ -11,6 +11,7 @@ import {
   type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
+  type ISeriesPrimitive,
   type LogicalRange,
   type SeriesMarker,
   type Time,
@@ -18,8 +19,10 @@ import {
 } from 'lightweight-charts';
 import { Skeleton } from '@/components/atoms/skeleton';
 import { Text } from '@/components/atoms/text';
+import { CHART_LOCALIZATION, CHART_TIME_SCALE } from '@/libs/utils';
 import { colors, semanticColors } from '@/styles/tokens';
 import type { CandleChartProps } from './CandleChart.types';
+import { VertLinePrimitive, snapVertLinesToCandleTimes } from './CandleChart.vertLines';
 import { styles } from './CandleChart.styles';
 
 const DEFAULT_HISTORY_EDGE = 20;
@@ -43,6 +46,7 @@ export function CandleChart({
   overlays = [],
   markers = [],
   priceLines = [],
+  vertLines = [],
   height = 260,
   isLoading,
   isLoadingOlder = false,
@@ -61,6 +65,7 @@ export function CandleChart({
   const overlayRefs = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const priceLineObjsRef = useRef<IPriceLine[]>([]);
+  const vertPrimitivesRef = useRef<ISeriesPrimitive<Time>[]>([]);
   const hasFittedRef = useRef(false);
   const prevFirstTimeRef = useRef<number | null>(null);
   const prevLenRef = useRef(0);
@@ -162,7 +167,9 @@ export function CandleChart({
         minBarSpacing: 2,
         fixLeftEdge: false,
         fixRightEdge: false,
+        ...CHART_TIME_SCALE,
       },
+      localization: CHART_LOCALIZATION,
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
@@ -214,6 +221,14 @@ export function CandleChart({
       }
       markersPluginRef.current = null;
       priceLineObjsRef.current = [];
+      for (const p of vertPrimitivesRef.current) {
+        try {
+          candleRef.current?.detachPrimitive(p);
+        } catch {
+          /* chart already removed */
+        }
+      }
+      vertPrimitivesRef.current = [];
       chart.remove();
       chartRef.current = null;
       candleRef.current = null;
@@ -317,6 +332,26 @@ export function CandleChart({
             axisLabelVisible: line.axisLabelVisible ?? true,
           }),
         );
+        for (const p of vertPrimitivesRef.current) {
+          try {
+            series.detachPrimitive(p);
+          } catch {
+            /* already gone */
+          }
+        }
+        vertPrimitivesRef.current = [];
+        const snapped = snapVertLinesToCandleTimes(
+          vertLines,
+          candles.map((c) => c.time),
+        );
+        const usedOnBar = new Map<number, number>();
+        for (const line of snapped) {
+          const slot = usedOnBar.get(line.time) ?? 0;
+          usedOnBar.set(line.time, slot + 1);
+          const prim = new VertLinePrimitive({ ...line, labelOffsetY: slot * 20 });
+          series.attachPrimitive(prim);
+          vertPrimitivesRef.current.push(prim);
+        }
       }
 
       if (!hasFittedRef.current) {
@@ -376,7 +411,7 @@ export function CandleChart({
     prevFirstTimeRef.current = firstTime;
     prevLenRef.current = candles.length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candles, overlays, markers, priceLines, showHost]);
+  }, [candles, overlays, markers, priceLines, vertLines, showHost]);
 
   // When loading finishes and we still need history, try again (chain pages).
   useEffect(() => {

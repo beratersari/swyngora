@@ -48,6 +48,11 @@ type HoldersPort interface {
 	GetHolders(ctx context.Context, asset string) (*AssetHolders, error)
 }
 
+// AssetProfilePort serves logo, listing date, and published contracts.
+type AssetProfilePort interface {
+	GetAssetProfile(ctx context.Context, asset string) (*AssetProfile, error)
+}
+
 // OpenInterestPort loads current + historical futures open interest for one venue.
 // Implemented by Binance USD-M and Bybit linear adapters.
 type OpenInterestPort interface {

@@ -21,6 +21,9 @@ vi.mock('@/components/pages/AiChatPage', () => ({
 vi.mock('@/components/pages/HeatmapPage', () => ({
   HeatmapPage: () => <div data-testid="heatmap-page">Heatmap</div>,
 }));
+vi.mock('@/components/pages/SettingsPage', () => ({
+  SettingsPage: () => <div data-testid="settings-page">Settings</div>,
+}));
 
 describe('AppRoutes', () => {
   it('redirects / to /markets', () => {
@@ -49,6 +52,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('ai-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/heatmap'] });
     expect(screen.getByTestId('heatmap-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/settings'] });
+    expect(screen.getByTestId('settings-page')).toBeInTheDocument();
   });
 
   it('redirects unknown paths to markets', () => {

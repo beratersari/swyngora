@@ -21,6 +21,7 @@ export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
 export { newPaperIdempotencyKey } from './paperIdempotency';
 export { rtkCurrent, rtkCurrentPending } from './rtkQuery';
+export { CHART_LOCALIZATION, CHART_TIME_SCALE, formatChartDateTime } from './chartTime';
 export type { RtkQuerySlice } from './rtkQuery';
 export {
   getOrCreateAiSessionId,
@@ -82,6 +83,7 @@ export {
   parseDetailTab,
   resolveInterval,
   toSupplyAsset,
+  toPerpSymbol,
   marketsBackPath,
   intervalToSeconds,
   analyticsBarLimit,

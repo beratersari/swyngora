@@ -14,6 +14,8 @@ export type RtkErrorMessageOptions = {
    * Call-site overrides always win when present.
    */
   statusMessages?: Partial<Record<number | string, string>>;
+  /** Override copy for API error.code (e.g. catalog_unmapped). Wins over status. */
+  codeMessages?: Partial<Record<string, string>>;
 };
 
 type ApiErrorBody = {
@@ -43,6 +45,17 @@ function defaultStatusMessage(status: number | string): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/** Extract OpenAPI `error.code` from a query/mutation error body. */
+export function getRtkErrorCode(error: unknown): string | undefined {
+  if (!isRecord(error) || !('data' in error) || !isRecord(error.data)) return undefined;
+  const body = error.data as ApiErrorBody;
+  if (typeof body.code === 'string' && body.code.trim()) return body.code.trim();
+  if (isRecord(body.error) && typeof body.error.code === 'string' && body.error.code.trim()) {
+    return body.error.code.trim();
+  }
+  return undefined;
 }
 
 /** Extract HTTP or RTK status from a query/mutation error. */
@@ -92,6 +105,11 @@ export function getRtkErrorRawMessage(error: unknown): string | undefined {
 export function rtkErrorMessage(error: unknown, options: RtkErrorMessageOptions = {}): string {
   const resource = options.resource?.trim();
   const status = getRtkErrorStatus(error);
+  const code = getRtkErrorCode(error);
+
+  if (code && options.codeMessages?.[code]) {
+    return options.codeMessages[code]!;
+  }
 
   if (status !== undefined && options.statusMessages?.[status]) {
     return options.statusMessages[status]!;

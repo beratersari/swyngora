@@ -25,11 +25,12 @@ const (
 
 // Client implements domain.HoldersPort against CoinMarketCap’s public data-api.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	catalog    domain.AssetCatalogPort
-	holders    *cache.TTL[*domain.AssetHolders]
-	sf         singleflight.Group
+	baseURL     string
+	httpClient  *http.Client
+	catalog     domain.AssetCatalogPort
+	holders     *cache.TTL[*domain.AssetHolders]
+	unpublished *cache.TTL[struct{}]
+	sf          singleflight.Group
 }
 
 // Options configures the CMC holders client.
@@ -51,10 +52,11 @@ func New(opts Options) *Client {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
 	return &Client{
-		baseURL:    base,
-		httpClient: hc,
-		catalog:    opts.Catalog,
-		holders:    opts.Cache,
+		baseURL:     base,
+		httpClient:  hc,
+		catalog:     opts.Catalog,
+		holders:     opts.Cache,
+		unpublished: cache.New[struct{}](time.Hour),
 	}
 }
 
@@ -74,18 +76,35 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 	if hit, ok := c.holders.Get(key); ok {
 		return domain.CloneHolders(hit), nil
 	}
+	if c.unpublished != nil {
+		if _, ok := c.unpublished.Get(key); ok {
+			return nil, fmt.Errorf("%w: holders for %q not published", domain.ErrHoldersUnpublished, key)
+		}
+	}
 
 	v, err, _ := c.sf.Do(key, func() (any, error) {
 		if hit, ok := c.holders.Get(key); ok {
 			return hit, nil
 		}
+		if c.unpublished != nil {
+			if _, ok := c.unpublished.Get(key); ok {
+				return nil, fmt.Errorf("%w: holders for %q not published", domain.ErrHoldersUnpublished, key)
+			}
+		}
 		snap, fetchErr := c.fetchDetail(ctx, entry)
 		if fetchErr != nil {
-			if stale, ok := c.holders.GetStale(key); ok &&
-				(errors.Is(fetchErr, domain.ErrRateLimited) || errors.Is(fetchErr, domain.ErrUpstream)) {
-				return stale, nil
+			if stale, ok := c.holders.GetStale(key); ok && stale != nil && isHoldersLastGood(fetchErr) {
+				cp := domain.CloneHolders(stale)
+				cp.Stale = true
+				return cp, nil
+			}
+			if isHoldersUnpublished(fetchErr) && c.unpublished != nil {
+				c.unpublished.Set(key, struct{}{})
 			}
 			return nil, fetchErr
+		}
+		if c.unpublished != nil {
+			c.unpublished.Delete(key)
 		}
 		c.holders.Set(key, snap)
 		return snap, nil
@@ -96,7 +115,74 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 	return domain.CloneHolders(v.(*domain.AssetHolders)), nil
 }
 
+// GetAssetProfile returns logo (always from the public CMC static CDN when an
+// id exists) plus listing date and contracts when the detail payload has them.
+func (c *Client) GetAssetProfile(ctx context.Context, asset string) (*domain.AssetProfile, error) {
+	if c == nil || c.catalog == nil {
+		return nil, fmt.Errorf("%w: holders catalog not configured", domain.ErrUpstream)
+	}
+	entry, err := c.catalog.LookupAsset(ctx, asset)
+	if err != nil {
+		return nil, err
+	}
+	out := profileFromCatalog(entry)
+	if c.holders != nil {
+		if hit, ok := c.holders.Get(entry.Asset); ok && hit != nil {
+			mergeHoldersName(out, hit)
+		}
+	}
+	body, fetchErr := c.fetchDetailBody(ctx, entry)
+	if fetchErr != nil {
+		return out, nil
+	}
+	applyProfileJSON(out, body)
+	return out, nil
+}
+
+func profileFromCatalog(entry *domain.AssetCatalogEntry) *domain.AssetProfile {
+	if entry == nil {
+		return &domain.AssetProfile{Source: "coinmarketcap"}
+	}
+	return &domain.AssetProfile{
+		Asset:      entry.Asset,
+		Name:       entry.Name,
+		Slug:       entry.Slug,
+		ProviderID: strconv.FormatInt(entry.CMCID, 10),
+		LogoURL:    domain.CMCLogoURL(entry.CMCID),
+		AsOf:       time.Now().UTC(),
+		Source:     "coinmarketcap",
+	}
+}
+
+func mergeHoldersName(out *domain.AssetProfile, hit *domain.AssetHolders) {
+	if out == nil || hit == nil {
+		return
+	}
+	if strings.TrimSpace(hit.Name) != "" {
+		out.Name = hit.Name
+	}
+}
+
+func isHoldersLastGood(err error) bool {
+	return errors.Is(err, domain.ErrRateLimited) ||
+		errors.Is(err, domain.ErrUpstream) ||
+		errors.Is(err, domain.ErrHoldersUnpublished) ||
+		errors.Is(err, domain.ErrNotFound)
+}
+
+func isHoldersUnpublished(err error) bool {
+	return errors.Is(err, domain.ErrHoldersUnpublished) || errors.Is(err, domain.ErrNotFound)
+}
+
 func (c *Client) fetchDetail(ctx context.Context, entry *domain.AssetCatalogEntry) (*domain.AssetHolders, error) {
+	body, err := c.fetchDetailBody(ctx, entry)
+	if err != nil {
+		return nil, err
+	}
+	return parseDetail(body, entry)
+}
+
+func (c *Client) fetchDetailBody(ctx context.Context, entry *domain.AssetCatalogEntry) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -121,16 +207,113 @@ func (c *Client) fetchDetail(ctx context.Context, entry *domain.AssetCatalogEntr
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: cmc status %d", domain.ErrRateLimited, resp.StatusCode)
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, fmt.Errorf("%w: holders for %q", domain.ErrNotFound, entry.Asset)
+		return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, entry.Asset)
 	case resp.StatusCode >= 400:
 		return nil, fmt.Errorf("%w: cmc status %d: %s", domain.ErrUpstream, resp.StatusCode, truncate(string(body), 200))
 	}
+	return body, nil
+}
 
-	snap, err := parseDetail(body, entry)
-	if err != nil {
-		return nil, err
+func applyProfileJSON(out *domain.AssetProfile, body []byte) {
+	if out == nil || len(body) == 0 {
+		return
 	}
-	return snap, nil
+	var env detailEnvelope
+	if err := json.Unmarshal(body, &env); err != nil || len(env.Data) == 0 {
+		return
+	}
+	var extra struct {
+		Name         string          `json:"name"`
+		DateAdded    string          `json:"dateAdded"`
+		DateLaunched string          `json:"dateLaunched"`
+		LaunchDate   string          `json:"launchDate"`
+		Statistics   json.RawMessage `json:"statistics"`
+		ContractAddr json.RawMessage `json:"contractAddress"`
+		Platforms    json.RawMessage `json:"platforms"`
+	}
+	if err := json.Unmarshal(env.Data, &extra); err != nil {
+		return
+	}
+	if strings.TrimSpace(extra.Name) != "" {
+		out.Name = extra.Name
+	}
+	for _, raw := range []string{extra.DateLaunched, extra.LaunchDate, extra.DateAdded} {
+		if t, ok := parseCMCTime(raw); ok {
+			out.ListingDate = &t
+			break
+		}
+	}
+	if out.ListingDate == nil && len(extra.Statistics) > 0 {
+		var stats struct {
+			DateAdded    string `json:"dateAdded"`
+			DateLaunched string `json:"dateLaunched"`
+		}
+		if json.Unmarshal(extra.Statistics, &stats) == nil {
+			for _, raw := range []string{stats.DateLaunched, stats.DateAdded} {
+				if t, ok := parseCMCTime(raw); ok {
+					out.ListingDate = &t
+					break
+				}
+			}
+		}
+	}
+	out.Contracts = parseCMCContracts(extra.ContractAddr)
+	if len(out.Contracts) == 0 {
+		out.Contracts = parseCMCContracts(extra.Platforms)
+	}
+	out.AsOf = time.Now().UTC()
+}
+
+func parseCMCTime(raw string) (time.Time, bool) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC(), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func parseCMCContracts(raw json.RawMessage) []domain.AssetContract {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	var rows []struct {
+		ContractAddress string `json:"contractAddress"`
+		Address         string `json:"address"`
+		Platform        struct {
+			Name string `json:"name"`
+			Coin struct {
+				Symbol string `json:"symbol"`
+			} `json:"coin"`
+		} `json:"platform"`
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil
+	}
+	out := make([]domain.AssetContract, 0, len(rows))
+	for _, row := range rows {
+		addr := strings.TrimSpace(row.ContractAddress)
+		if addr == "" {
+			addr = strings.TrimSpace(row.Address)
+		}
+		if addr == "" {
+			continue
+		}
+		chain := strings.TrimSpace(row.Platform.Name)
+		if chain == "" {
+			chain = strings.TrimSpace(row.Platform.Coin.Symbol)
+		}
+		if chain == "" {
+			chain = strings.TrimSpace(row.Name)
+		}
+		out = append(out, domain.AssetContract{Chain: chain, Address: addr})
+	}
+	return out
 }
 
 type detailEnvelope struct {
@@ -166,14 +349,14 @@ func parseDetail(body []byte, entry *domain.AssetCatalogEntry) (*domain.AssetHol
 		return nil, fmt.Errorf("%w: decode cmc detail: %v", domain.ErrUpstream, err)
 	}
 	if len(env.Data) == 0 || string(env.Data) == "null" {
-		return nil, fmt.Errorf("%w: holders for %q", domain.ErrNotFound, entry.Asset)
+		return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, entry.Asset)
 	}
 	var data detailData
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		return nil, fmt.Errorf("%w: decode cmc detail data: %v", domain.ErrUpstream, err)
 	}
 	if data.Holders == nil {
-		return nil, fmt.Errorf("%w: holders for %q not published", domain.ErrNotFound, entry.Asset)
+		return nil, fmt.Errorf("%w: holders for %q not published", domain.ErrHoldersUnpublished, entry.Asset)
 	}
 
 	count, hasCount := parseOptionalInt(data.Holders.HolderCount)
@@ -189,7 +372,7 @@ func parseDetail(body []byte, entry *domain.AssetCatalogEntry) (*domain.AssetHol
 	}
 	list = domain.CapHolderList(list, domain.MaxHolderList)
 	if (!hasCount || count <= 0) && len(list) == 0 {
-		return nil, fmt.Errorf("%w: holders for %q empty", domain.ErrNotFound, entry.Asset)
+		return nil, fmt.Errorf("%w: holders for %q empty", domain.ErrHoldersUnpublished, entry.Asset)
 	}
 
 	name := strings.TrimSpace(data.Name)

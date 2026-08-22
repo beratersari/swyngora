@@ -47,6 +47,7 @@ export function HolderPanel({
   const showUsd = rows.some(
     (row) => holderUsdValue(row.sharePct, circulatingSupply, priceUsd) != null,
   );
+  const showStats = Boolean(holders) && !error;
 
   return (
     <Panel>
@@ -62,7 +63,11 @@ export function HolderPanel({
       {error ? (
         <Alert type="info" showIcon message={t('holders.title')} description={error} />
       ) : null}
+      {!error && holders?.stale ? (
+        <Alert type="warning" showIcon message={t('holders.stale')} />
+      ) : null}
 
+      {showStats ? (
       <StatsGrid>
         <Stat
           label={t('holders.count')}
@@ -90,6 +95,13 @@ export function HolderPanel({
           isLoading={isLoading}
         />
       </StatsGrid>
+      ) : null}
+
+      {showStats && rows.length === 0 && !isLoading ? (
+        <Text variant="caption" color="secondary">
+          {t('holders.emptyWallets')}
+        </Text>
+      ) : null}
 
       {rows.length > 0 ? (
         <Table

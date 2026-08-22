@@ -1,2 +1,7 @@
 export { CandleChartHost } from './CandleChartHost';
-export type { CandleChartHostProps } from './CandleChartHost.types';
+export type {
+  CandleChartHostProps,
+  CandleChartMarker,
+  CandleChartOverlay,
+  CandleChartVertLine,
+} from './CandleChartHost.types';

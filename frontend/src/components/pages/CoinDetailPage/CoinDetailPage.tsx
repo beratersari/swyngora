@@ -13,6 +13,7 @@ import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
+import { TapePanel } from '@/components/organisms/TapePanel';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
   OrderBookPanel,
@@ -34,6 +35,10 @@ import {
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
+  useGetAssetProfileQuery,
+  useGetOpenInterestQuery,
+  useGetMarketLiquidationsQuery,
+  useGetMarketCvdQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
@@ -60,7 +65,7 @@ import {
   rtkCurrent,
   rtkCurrentPending,
 } from '@/libs/utils';
-import { mediaQueries } from '@/styles/tokens';
+import { mediaQueries, semanticColors } from '@/styles/tokens';
 import {
   apiCandlesToChart,
   DEFAULT_DETAIL_TAB,
@@ -75,8 +80,10 @@ import {
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
+  aliasFxCode,
   pairQuote,
   toSupplyAsset,
+  toPerpSymbol,
   trimCandlesToMax,
   type ApiCandle,
   type DetailTab,
@@ -107,6 +114,7 @@ import {
   TabStack,
 } from './CoinDetailPage.styles';
 import {
+  delistEventsToVertLines,
   mergeChartMarkers,
   mergePumpEvents,
   livePumpEventsForPair,
@@ -326,6 +334,32 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
+  const profileQuery = useGetAssetProfileQuery(
+    { asset: supplyAsset },
+    {
+      skip: skip || !supplyAsset || isEquity,
+      refetchOnFocus: true,
+    },
+  );
+
+  const perpSymbol = toPerpSymbol(symbol);
+  const tapeQueryArg = { exchange: 'all' as const, symbol: perpSymbol };
+  const skipTape = skip || isEquity || !perpSymbol;
+  const openInterestQuery = useGetOpenInterestQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const liquidationsQuery = useGetMarketLiquidationsQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
 
   // First-paint slice + full live window in parallel. The short request usually
   // returns first so the chart can draw before the 300-bar poll window arrives.
@@ -554,8 +588,24 @@ export function CoinDetailPage() {
     interval,
   ]);
 
+  const chartVertLines = useMemo(
+    () =>
+      delistEventsToVertLines({
+        announcedAt,
+        delistTime,
+        announcedLabel: t('detail:chart.delistAnnounced'),
+        delistLabel: t('detail:chart.delistHalt'),
+        announcedColor: semanticColors.status.warning,
+        delistColor: semanticColors.status.error,
+      }),
+    [announcedAt, delistTime, t],
+  );
+
   const tab: DetailTab = useMemo(() => {
-    if (isEquity && (urlState.tab === 'orderbook' || urlState.tab === 'holders')) {
+    if (
+      isEquity &&
+      (urlState.tab === 'orderbook' || urlState.tab === 'holders' || urlState.tab === 'tape')
+    ) {
       return DEFAULT_DETAIL_TAB;
     }
     return urlState.tab;
@@ -640,7 +690,14 @@ export function CoinDetailPage() {
         exchange={exchange}
         lastPrice={rtkCurrent(tickerQuery)?.lastPrice}
         priceChangePercent={rtkCurrent(tickerQuery)?.priceChangePercent}
-        assetName={rtkCurrent(supplyQuery)?.name}
+        assetName={rtkCurrent(supplyQuery)?.name ?? rtkCurrent(profileQuery)?.name}
+        logoUrl={rtkCurrent(profileQuery)?.logoUrl}
+        listingDate={rtkCurrent(profileQuery)?.listingDate}
+        contractLabel={
+          rtkCurrent(profileQuery)?.contracts?.[0]
+            ? `${rtkCurrent(profileQuery)?.contracts?.[0]?.chain ?? ''} ${rtkCurrent(profileQuery)?.contracts?.[0]?.address ?? ''}`.trim()
+            : null
+        }
         backTo={backTo}
         isLoading={headerLoading}
         watched={watched}
@@ -660,6 +717,7 @@ export function CoinDetailPage() {
         }}
       delistTime={delistTime}
       announcedAt={announcedAt}
+      halted={Boolean(rtkCurrent(tickerQuery)?.halted)}
       />
 
       <DetailStats
@@ -675,14 +733,19 @@ export function CoinDetailPage() {
             : null
         }
         supplyError={
-          supplyQuery.isError
-            ? rtkErrorMessage(supplyQuery.error, {
-                resource: t('detail:resource.supply'),
-                statusMessages: {
-                  404: t('detail:errors.supply404'),
-                },
-              })
-            : null
+          isEquity
+            ? t('detail:errors.supplyEquity')
+            : supplyQuery.isError
+              ? rtkErrorMessage(supplyQuery.error, {
+                  resource: t('detail:resource.supply'),
+                  codeMessages: {
+                    supply_unmapped: t('detail:errors.supply404'),
+                  },
+                  statusMessages: {
+                    404: t('detail:errors.supply404'),
+                  },
+                })
+              : null
         }
       />
 
@@ -712,12 +775,12 @@ export function CoinDetailPage() {
           interval={interval}
           intervalsLoading={intervalsQuery.isLoading && !supportedIntervals?.length}
           onIntervalChange={(iv) => patchUrl({ interval: iv })}
-          pumpThresholdPct={pumpThresholdPct}
-          onPumpThresholdChange={setPumpThresholdPct}
+          pumpThresholdPct={isEquity ? undefined : pumpThresholdPct}
+          onPumpThresholdChange={isEquity ? undefined : setPumpThresholdPct}
           showPumpMarkers={showPumpMarkers}
-          onShowPumpMarkersChange={setShowPumpMarkers}
+          onShowPumpMarkersChange={isEquity ? undefined : setShowPumpMarkers}
           showSignalMarkers={showSignalMarkers}
-          onShowSignalMarkersChange={setShowSignalMarkers}
+          onShowSignalMarkersChange={isEquity ? undefined : setShowSignalMarkers}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
@@ -772,6 +835,7 @@ export function CoinDetailPage() {
               data={chartData}
               overlays={overlays}
               markers={chartMarkers}
+              vertLines={chartVertLines}
               isLoading={seriesLoading}
               seriesKey={seriesKey}
               isLoadingMore={isLoadingMore}
@@ -839,6 +903,54 @@ export function CoinDetailPage() {
                   ),
                 },
                 {
+                  key: 'tape',
+                  label: t('detail:tabs.tape'),
+                  children: (
+                    <TapePanel
+                      openInterest={rtkCurrent(openInterestQuery)}
+                      openInterestError={
+                        openInterestQuery.isError
+                          ? rtkErrorMessage(openInterestQuery.error, {
+                              resource: t('detail:resource.tape'),
+                              statusMessages: {
+                                404: t('detail:tape.none'),
+                                400: t('detail:tape.unsupported'),
+                              },
+                            })
+                          : null
+                      }
+                      liquidations={rtkCurrent(liquidationsQuery)}
+                      liquidationsError={
+                        liquidationsQuery.isError
+                          ? rtkErrorMessage(liquidationsQuery.error, {
+                              resource: t('detail:resource.tape'),
+                              statusMessages: {
+                                404: t('detail:tape.none'),
+                                400: t('detail:tape.unsupported'),
+                              },
+                            })
+                          : null
+                      }
+                      cvd={rtkCurrent(cvdQuery)}
+                      cvdError={
+                        cvdQuery.isError
+                          ? rtkErrorMessage(cvdQuery.error, {
+                              resource: t('detail:resource.tape'),
+                              statusMessages: {
+                                400: t('detail:tape.unsupported'),
+                              },
+                            })
+                          : null
+                      }
+                      isLoading={
+                        rtkCurrentPending(openInterestQuery) ||
+                        rtkCurrentPending(liquidationsQuery) ||
+                        rtkCurrentPending(cvdQuery)
+                      }
+                    />
+                  ),
+                },
+                {
                   key: 'holders',
                   label: t('detail:tabs.holders'),
                   children: (
@@ -847,7 +959,8 @@ export function CoinDetailPage() {
                       circulatingSupply={rtkCurrent(supplyQuery)?.circulatingSupply}
                       priceUsd={
                         rtkCurrent(supplyQuery)?.currentPriceUsd ??
-                        (Number.isFinite(Number(rtkCurrent(tickerQuery)?.lastPrice))
+                        (aliasFxCode(pairQuote(symbol, exchange)) === 'USD' &&
+                        Number.isFinite(Number(rtkCurrent(tickerQuery)?.lastPrice))
                           ? Number(rtkCurrent(tickerQuery)?.lastPrice)
                           : null)
                       }
@@ -856,6 +969,10 @@ export function CoinDetailPage() {
                         holdersQuery.isError
                           ? rtkErrorMessage(holdersQuery.error, {
                               resource: t('detail:resource.holders'),
+                              codeMessages: {
+                                catalog_unmapped: t('detail:errors.holdersUnmapped'),
+                                holders_unpublished: t('detail:errors.holders404'),
+                              },
                               statusMessages: {
                                 404: t('detail:errors.holders404'),
                               },

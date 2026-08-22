@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -25,7 +26,8 @@ const productCatalogPath = "/bapi/asset/v2/public/asset-service/product/get-prod
 // It does **not** call Binance on the request path — populate via Refresh.
 //
 // Lookup order: exact uppercased ticker first (so RLUSD/BFUSD are not mangled),
-// then strip a USD-stable quote suffix for pair forms (BTCUSDT → BTC).
+// then NormalizeAssetKey (BTCUSDT / BTC-USD / ETHTRY → BTC). Expired entries
+// are served last-good with Stale=true until the next successful Refresh.
 func (c *Client) GetSupply(ctx context.Context, asset string) (*domain.AssetSupply, error) {
 	_ = ctx
 	key := strings.ToUpper(strings.TrimSpace(asset))
@@ -35,16 +37,35 @@ func (c *Client) GetSupply(ctx context.Context, asset string) (*domain.AssetSupp
 	if c.supply == nil {
 		return nil, fmt.Errorf("%w: supply cache not configured", domain.ErrUpstream)
 	}
-	if hit, ok := c.supply.Get(key); ok {
-		return cloneSupply(hit), nil
+	if hit, stale, ok := lookupSupply(c.supply, key); ok {
+		return stampSupply(hit, stale), nil
 	}
-	if base := stripStableQuoteSuffix(key); base != key {
-		if hit, ok := c.supply.Get(base); ok {
-			return cloneSupply(hit), nil
+	return nil, fmt.Errorf("%w: supply for %q not in Binance supply snapshot cache", domain.ErrSupplyUnmapped, key)
+}
+
+func lookupSupply(store *cache.TTL[*domain.AssetSupply], key string) (*domain.AssetSupply, bool, bool) {
+	if hit, ok := store.Get(key); ok {
+		return hit, false, true
+	}
+	if stale, ok := store.GetStale(key); ok && stale != nil {
+		return stale, true, true
+	}
+	base := domain.NormalizeAssetKey(key)
+	if base != "" && base != key {
+		if hit, ok := store.Get(base); ok {
+			return hit, false, true
 		}
-		key = base // for clearer not-found message
+		if stale, ok := store.GetStale(base); ok && stale != nil {
+			return stale, true, true
+		}
 	}
-	return nil, fmt.Errorf("%w: supply for %q not in Binance supply snapshot cache", domain.ErrNotFound, key)
+	return nil, false, false
+}
+
+func stampSupply(hit *domain.AssetSupply, stale bool) *domain.AssetSupply {
+	cp := cloneSupply(hit)
+	cp.Stale = stale
+	return cp
 }
 
 func cloneSupply(hit *domain.AssetSupply) *domain.AssetSupply {
@@ -101,19 +122,21 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 	}
 
 	asOf := time.Now().UTC()
-	// First pass: pick best row per base (prefer USDT-class pairs).
+	// First pass: pick best supply row and best CMC-id row independently per base.
+	// A USDT winner with no cmcUniqueId must not drop an id on a lesser quote.
 	type rowScore struct {
 		row   marketingSymbolRow
 		score int
 	}
-	best := map[string]rowScore{}
+	bestSupply := map[string]rowScore{}
+	bestCatalog := map[string]rowScore{}
 	for _, row := range envelope.Data {
 		if hasNonCryptoTag(row.Tags) {
 			continue
 		}
 		base := strings.ToUpper(strings.TrimSpace(row.Name))
 		if base == "" {
-			base = stripStableQuoteSuffix(strings.ToUpper(strings.TrimSpace(row.Symbol)))
+			base = domain.NormalizeAssetKey(strings.ToUpper(strings.TrimSpace(row.Symbol)))
 		}
 		if base == "" {
 			continue
@@ -121,30 +144,30 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 		circ, hasCirc := parseOptionalFloat(row.CirculatingSupply)
 		total, hasTotal := parseOptionalFloat(row.TotalSupply)
 		max, hasMax := parseOptionalFloat(row.MaxSupply)
-		if (!hasCirc || circ <= 0) && (!hasTotal || total <= 0) && (!hasMax || max <= 0) {
-			continue
+		hasSupply := (hasCirc && circ > 0) || (hasTotal && total > 0) || (hasMax && max > 0)
+		id, hasID := parseOptionalInt(row.CMCUniqueID)
+		quoteScore := pairQuoteScore(row.Symbol)
+		if hasSupply {
+			score := quoteScore + completenessScore(hasCirc && circ > 0, hasTotal && total > 0, hasMax && max > 0)
+			if prev, ok := bestSupply[base]; !ok || score > prev.score {
+				bestSupply[base] = rowScore{row: row, score: score}
+			}
 		}
-		score := pairQuoteScore(row.Symbol) + completenessScore(hasCirc && circ > 0, hasTotal && total > 0, hasMax && max > 0)
-		if prev, ok := best[base]; !ok || score > prev.score {
-			best[base] = rowScore{row: row, score: score}
+		if hasID && id > 0 {
+			if prev, ok := bestCatalog[base]; !ok || quoteScore > prev.score {
+				bestCatalog[base] = rowScore{row: row, score: quoteScore}
+			}
 		}
 	}
 
-	next := make(map[string]*domain.AssetSupply, len(best))
-	catalog := make(map[string]*domain.AssetCatalogEntry, len(best))
-	for base, rs := range best {
+	next := make(map[string]*domain.AssetSupply, len(bestSupply))
+	for base, rs := range bestSupply {
 		row := rs.row
 		circ, hasCirc := parseOptionalFloat(row.CirculatingSupply)
 		total, hasTotal := parseOptionalFloat(row.TotalSupply)
 		max, hasMax := parseOptionalFloat(row.MaxSupply)
 
-		name := strings.TrimSpace(row.FullName)
-		if name == "" {
-			name = strings.TrimSpace(row.LocalFullName)
-		}
-		if name == "" {
-			name = base
-		}
+		name := marketingRowName(row, base)
 
 		var usd *float64
 		if px, ok := parseOptionalFloat(row.Price); ok && px > 0 {
@@ -172,13 +195,23 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 			sup.CurrentPriceUSD = usd
 		}
 		next[base] = sup
-		if id, ok := parseOptionalInt(row.CMCUniqueID); ok && id > 0 {
-			catalog[base] = &domain.AssetCatalogEntry{
-				Asset: base,
-				Name:  name,
-				CMCID: id,
-				Slug:  strings.TrimSpace(row.Slug),
-			}
+	}
+
+	catalog := make(map[string]*domain.AssetCatalogEntry, len(bestCatalog))
+	for base, rs := range bestCatalog {
+		id, ok := parseOptionalInt(rs.row.CMCUniqueID)
+		if !ok || id <= 0 {
+			continue
+		}
+		name := marketingRowName(rs.row, base)
+		if sup, has := next[base]; has && strings.TrimSpace(sup.Name) != "" {
+			name = sup.Name
+		}
+		catalog[base] = &domain.AssetCatalogEntry{
+			Asset: base,
+			Name:  name,
+			CMCID: id,
+			Slug:  strings.TrimSpace(rs.row.Slug),
 		}
 	}
 	if len(next) == 0 {
@@ -192,6 +225,17 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 		c.catalog.ReplaceAll(catalog)
 	}
 	return len(next), nil
+}
+
+func marketingRowName(row marketingSymbolRow, fallback string) string {
+	name := strings.TrimSpace(row.FullName)
+	if name == "" {
+		name = strings.TrimSpace(row.LocalFullName)
+	}
+	if name == "" {
+		name = fallback
+	}
+	return name
 }
 
 // LookupAsset resolves a base ticker or pair to the CoinMarketCap id stored
@@ -208,13 +252,20 @@ func (c *Client) LookupAsset(ctx context.Context, asset string) (*domain.AssetCa
 	if hit, ok := c.catalog.Get(key); ok {
 		return cloneCatalog(hit), nil
 	}
-	if base := stripStableQuoteSuffix(key); base != key {
+	if stale, ok := c.catalog.GetStale(key); ok && stale != nil {
+		return cloneCatalog(stale), nil
+	}
+	base := domain.NormalizeAssetKey(key)
+	if base != "" && base != key {
 		if hit, ok := c.catalog.Get(base); ok {
 			return cloneCatalog(hit), nil
 		}
+		if stale, ok := c.catalog.GetStale(base); ok && stale != nil {
+			return cloneCatalog(stale), nil
+		}
 		key = base
 	}
-	return nil, fmt.Errorf("%w: catalog for %q not in Binance marketing snapshot", domain.ErrNotFound, key)
+	return nil, fmt.Errorf("%w: catalog for %q not in Binance marketing snapshot", domain.ErrCatalogUnmapped, key)
 }
 
 func cloneCatalog(hit *domain.AssetCatalogEntry) *domain.AssetCatalogEntry {

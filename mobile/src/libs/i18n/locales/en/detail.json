@@ -22,7 +22,10 @@
   "pumpsSection": "Pump / dump events",
   "pumpEventsEmpty": "No events matched thresholds",
   "pumpEventsCount": "{{count}} events",
-  "supplyUnavailable": "Supply not available for this asset",
+  "supplyUnavailable": "Supply not available for this asset (Binance marketing list).",
+  "supplyEquity": "Listed stocks do not have a Binance/CoinMarketCap supply snapshot.",
+  "holdersUnavailable": "CoinMarketCap has not published a holder table for this asset.",
+  "holdersUnmapped": "This ticker has no CoinMarketCap id in the Binance marketing catalog.",
   "retryAll": "Retry all",
   "stats": {
     "open": "Open",
@@ -37,5 +40,7 @@
     "holders": "Holders",
     "topTenHolders": "Top 10 share"
   },
-  "askAi": "Ask AI about this pair"
+  "askAi": "Ask AI about this pair",
+  "delistAnnounced": "Announced",
+  "delistHalt": "Delist"
 }

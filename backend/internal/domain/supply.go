@@ -25,6 +25,8 @@ type AssetSupply struct {
 	AsOf time.Time
 	// Source identifies the data provider (e.g. "binance").
 	Source string
+	// Stale is true when serving last-good after the live TTL expired.
+	Stale bool
 }
 
 // CloneFloatPtr returns a copy of the pointed-to float64 (or nil). This is used

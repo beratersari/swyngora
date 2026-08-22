@@ -43,6 +43,7 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           isLoading={vm.statsLoading}
           tickerError={vm.tickerError}
           supplyError={vm.supplyError}
+          holdersError={vm.holdersError}
         />
 
         <IntervalToolbar
@@ -53,9 +54,9 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           showEma={vm.showEma}
           onToggleEma={vm.onToggleEma}
           showPumps={vm.showPumps}
-          onTogglePumps={vm.onTogglePumps}
+          onTogglePumps={vm.pumpsSupported ? vm.onTogglePumps : undefined}
           showPumpMargin={vm.showPumpMargin}
-          onTogglePumpMargin={vm.onTogglePumpMargin}
+          onTogglePumpMargin={vm.pumpsSupported ? vm.onTogglePumpMargin : undefined}
         />
 
         <Text variant="label" color="secondary">
@@ -66,6 +67,7 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           overlays={vm.candleOverlays}
           markers={vm.chartMarkers}
           priceLines={vm.chartPriceLines}
+          vertLines={vm.chartVertLines}
           isLoading={vm.candlesLoading}
           isLoadingOlder={vm.candlesLoadingOlder}
           errorMessage={vm.candlesError}
@@ -88,15 +90,17 @@ function CoinDetailPageView({ vm }: { vm: CoinDetailPageViewModel }) {
           errorMessage={vm.indicatorsError}
         />
 
-        <PumpEventList
-          title={t('detail:pumpsSection')}
-          rows={vm.pumpEventRows}
-          isLoading={vm.pumpEventsLoading}
-          errorMessage={vm.pumpEventsError}
-          emptyMessage={t('detail:pumpEventsEmpty')}
-          subtitle={vm.pumpEventsSubtitle}
-          disclaimer={vm.pumpDisclaimer}
-        />
+        {vm.pumpsSupported ? (
+          <PumpEventList
+            title={t('detail:pumpsSection')}
+            rows={vm.pumpEventRows}
+            isLoading={vm.pumpEventsLoading}
+            errorMessage={vm.pumpEventsError}
+            emptyMessage={t('detail:pumpEventsEmpty')}
+            subtitle={vm.pumpEventsSubtitle}
+            disclaimer={vm.pumpDisclaimer}
+          />
+        ) : null}
 
         <View style={styles.retry}>
           <Button label={t('detail:retryAll')} variant="secondary" onPress={vm.onRetry} />

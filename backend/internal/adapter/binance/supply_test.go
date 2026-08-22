@@ -47,39 +47,39 @@ func TestRefresh_PopulatesAllSupplyFields(t *testing.T) {
 			"data": []map[string]any{
 				{
 					"name": "BTC", "fullName": "Bitcoin", "symbol": "BTCUSDT",
-					"tags": []string{"Payments"},
+					"tags":              []string{"Payments"},
 					"circulatingSupply": 19_800_000, "totalSupply": 19_800_000, "maxSupply": 21_000_000,
 					"price": 64000.5, "infiniteSupply": false,
 					"cmcUniqueId": 1, "slug": "bitcoin",
 				},
 				{
 					"name": "ETH", "fullName": "Ethereum", "symbol": "ETHUSDT",
-					"tags": []string{"Layer1_Layer2"},
+					"tags":              []string{"Layer1_Layer2"},
 					"circulatingSupply": 120_000_000, "totalSupply": 120_000_000, "maxSupply": nil,
 					"price": 3000.0, "infiniteSupply": false,
 				},
 				{
 					"name": "ACE", "fullName": "Fusionist", "symbol": "ACEUSDT",
-					"tags": []string{"Gaming"},
+					"tags":              []string{"Gaming"},
 					"circulatingSupply": 42_000_000, "totalSupply": 100_000_000, "maxSupply": 150_000_000,
 					"price": 0.09,
 				},
 				// Non-crypto: must not enter supply cache.
 				{
 					"name": "NVDAB", "fullName": "NVIDIA", "symbol": "NVDABUSDT",
-					"tags": []string{"bStocks"},
+					"tags":              []string{"bStocks"},
 					"circulatingSupply": 32797, "totalSupply": 32797, "maxSupply": nil,
 					"price": 200.0,
 				},
 				{
 					"name": "TSLAB", "fullName": "Tesla", "symbol": "TSLABUSDT",
-					"tags": []string{"bStocks"},
+					"tags":              []string{"bStocks"},
 					"circulatingSupply": 1, "totalSupply": 1,
 					"price": 300.0,
 				},
 				{
 					"name": "PAXG", "fullName": "PAX Gold", "symbol": "PAXGUSDT",
-					"tags": []string{"tCommodities"},
+					"tags":              []string{"tCommodities"},
 					"circulatingSupply": 100, "totalSupply": 100,
 					"price": 2000.0,
 				},
@@ -155,7 +155,7 @@ func TestRefresh_PopulatesAllSupplyFields(t *testing.T) {
 	}
 
 	for _, asset := range []string{"NVDAB", "TSLAB", "PAXG"} {
-		if _, err := c.GetSupply(context.Background(), asset); err == nil || !errors.Is(err, domain.ErrNotFound) {
+		if _, err := c.GetSupply(context.Background(), asset); err == nil || !errors.Is(err, domain.ErrSupplyUnmapped) {
 			t.Fatalf("expected %s excluded from supply cache, err=%v", asset, err)
 		}
 	}
@@ -246,7 +246,7 @@ func TestGetSupply_BareUSDNamedBasesNotMangled(t *testing.T) {
 func TestGetSupply_NotFound(t *testing.T) {
 	c := NewClient(Options{SupplyCache: cache.New[*domain.AssetSupply](time.Hour)})
 	_, err := c.GetSupply(context.Background(), "NOPE")
-	if err == nil || !errors.Is(err, domain.ErrNotFound) {
+	if err == nil || !errors.Is(err, domain.ErrSupplyUnmapped) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -272,6 +272,100 @@ func TestRefresh_UpstreamError(t *testing.T) {
 	_, err := c.Refresh(context.Background())
 	if err == nil || !errors.Is(err, domain.ErrUpstream) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestRefresh_CatalogIdWithoutSupplyAndUnionAcrossRows(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": "000000", "success": true,
+			"data": []map[string]any{
+				{
+					"name": "NEW", "fullName": "Newcoin", "symbol": "NEWUSDT",
+					"cmcUniqueId": 99, "slug": "newcoin",
+					// no supply — used to be dropped before the id was stored
+				},
+				{
+					"name": "ETH", "fullName": "Ethereum", "symbol": "ETHUSDT",
+					"circulatingSupply": 120_000_000, "totalSupply": 120_000_000,
+					"price": 3000.0,
+					// winning USDT row has no CMC id
+				},
+				{
+					"name": "ETH", "fullName": "Ethereum", "symbol": "ETHUSDC",
+					"circulatingSupply": 119_000_000, "totalSupply": 119_000_000,
+					"price":       2999.0,
+					"cmcUniqueId": 1027, "slug": "ethereum",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	catCache := cache.New[*domain.AssetCatalogEntry](time.Hour)
+	c := NewClient(Options{
+		ProductBaseURL: srv.URL,
+		HTTPClient:     srv.Client(),
+		SupplyCache:    cache.New[*domain.AssetSupply](time.Hour),
+		CatalogCache:   catCache,
+	})
+	if _, err := c.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// Catalog-only asset (no supply numbers).
+	if _, err := c.GetSupply(context.Background(), "NEW"); !errors.Is(err, domain.ErrSupplyUnmapped) {
+		t.Fatalf("NEW supply err=%v", err)
+	}
+	cat, err := c.LookupAsset(context.Background(), "NEWUSDT")
+	if err != nil || cat.CMCID != 99 || cat.Slug != "newcoin" {
+		t.Fatalf("NEW catalog=%+v err=%v", cat, err)
+	}
+
+	// Losing USDC row still donates the CMC id.
+	ethCat, err := c.LookupAsset(context.Background(), "ETHTRY")
+	if err != nil || ethCat.CMCID != 1027 {
+		t.Fatalf("ETH catalog=%+v err=%v", ethCat, err)
+	}
+	ethSup, err := c.GetSupply(context.Background(), "ETH-USD")
+	if err != nil || ethSup.CirculatingSupply == nil || *ethSup.CirculatingSupply != 120_000_000 {
+		t.Fatalf("ETH supply=%+v err=%v", ethSup, err)
+	}
+}
+
+func TestGetSupply_ServesStaleAfterTTL(t *testing.T) {
+	supCache := cache.New[*domain.AssetSupply](time.Nanosecond)
+	supCache.Set("BTC", &domain.AssetSupply{Asset: "BTC", Source: "binance", CirculatingSupply: ptrF(21)})
+	time.Sleep(2 * time.Millisecond)
+	c := NewClient(Options{SupplyCache: supCache})
+	got, err := c.GetSupply(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Stale || got.CirculatingSupply == nil || *got.CirculatingSupply != 21 {
+		t.Fatalf("want stale last-good, got %+v", got)
+	}
+}
+
+func TestLookupAsset_HyphenAndFiatQuotes(t *testing.T) {
+	catCache := cache.New[*domain.AssetCatalogEntry](time.Hour)
+	catCache.Set("BTC", &domain.AssetCatalogEntry{Asset: "BTC", CMCID: 1})
+	c := NewClient(Options{
+		SupplyCache:  cache.New[*domain.AssetSupply](time.Hour),
+		CatalogCache: catCache,
+	})
+	for _, key := range []string{"BTC-USD", "BTCEUR", "ETHTRY"} {
+		_, err := c.LookupAsset(context.Background(), key)
+		if key == "ETHTRY" {
+			if !errors.Is(err, domain.ErrCatalogUnmapped) {
+				t.Fatalf("%s err=%v", key, err)
+			}
+			continue
+		}
+		got, err := c.LookupAsset(context.Background(), key)
+		if err != nil || got.CMCID != 1 {
+			t.Fatalf("%s catalog=%+v err=%v", key, got, err)
+		}
 	}
 }
 
@@ -314,7 +408,7 @@ func TestRefresh_PrefersUSDTPairAndAtomicReplace(t *testing.T) {
 	if n != 1 {
 		t.Fatalf("unique bases=%d", n)
 	}
-	if _, err := c.GetSupply(context.Background(), "GONE"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := c.GetSupply(context.Background(), "GONE"); !errors.Is(err, domain.ErrSupplyUnmapped) {
 		t.Fatalf("GONE should be removed, err=%v", err)
 	}
 	sup, err := c.GetSupply(context.Background(), "BTC")

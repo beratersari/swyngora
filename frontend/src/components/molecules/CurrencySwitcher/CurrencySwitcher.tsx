@@ -10,14 +10,16 @@ import type { CurrencySwitcherProps } from './CurrencySwitcher.types';
  */
 export function CurrencySwitcher({ className, size = 'small' }: CurrencySwitcherProps) {
   const { t } = useTranslation('common');
-  const { currency, setCurrency } = useDisplayCurrency();
+  const { currency, setCurrency, stale } = useDisplayCurrency();
 
   return (
     <Select
       className={className}
       size={size}
       value={currency}
-      aria-label={t('currency.label')}
+      aria-label={stale ? `${t('currency.label')} — ${t('currency.stale')}` : t('currency.label')}
+      status={stale ? 'warning' : undefined}
+      title={stale ? t('currency.stale') : undefined}
       style={{ minWidth: 118 }}
       options={DISPLAY_CURRENCIES.map((code) => ({
         value: code,

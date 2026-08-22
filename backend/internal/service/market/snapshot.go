@@ -84,9 +84,13 @@ func (s *Service) GetSnapshot(ctx context.Context, exchange, symbol string) (*do
 	if supply != nil && supply.CirculatingSupply != nil {
 		circ = *supply.CirculatingSupply
 	}
-	domain.ApplyMarketCap(spotWins, circ, lastPx)
+	mcap := 0.0
+	if circ > 0 && lastPx > 0 {
+		mcap = circ * lastPx
+		domain.ApplyMarketCap(spotWins, circ, lastPx)
+	}
 	spot := domain.SnapshotSpot{
-		Price: lastPx, Volume24h: vol24, MarketCap: circ * lastPx, Circulating: circ,
+		Price: lastPx, Volume24h: vol24, MarketCap: mcap, Circulating: circ,
 		Windows: spotWins,
 	}
 

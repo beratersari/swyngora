@@ -87,6 +87,40 @@ func SplitBaseQuote(ex Exchange, symbol string) (base, quote string) {
 	return symbol, ""
 }
 
+// AssetQuoteSuffixes are longest-first quote tails stripped to resolve a base
+// asset key for supply / holders catalog lookup. Bare "USD" is omitted so
+// RLUSD / BFUSD stay intact; hyphenated BASE-USD is handled in NormalizeAssetKey.
+var AssetQuoteSuffixes = []string{
+	"FDUSD", "USDT", "USDC", "BUSD", "TUSD", "DAI",
+	"EUR", "TRY", "BRL", "GBP", "AUD", "CAD", "ARS", "JPY",
+	"BTC", "ETH", "BNB",
+}
+
+// NormalizeAssetKey maps a trading pair or base ticker to the supply/holders
+// catalog key (BTCUSDT / BTC-USD / ETHTRY → BTC). Exact bases that only look
+// like a quote tail (TUSD, RLUSD) are preserved.
+func NormalizeAssetKey(raw string) string {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	if s == "" {
+		return ""
+	}
+	if i := strings.IndexByte(s, '-'); i > 0 {
+		s = strings.TrimSpace(s[:i])
+		if s == "" {
+			return strings.ToUpper(strings.TrimSpace(raw))
+		}
+	}
+	for _, q := range AssetQuoteSuffixes {
+		if len(s) > len(q) && strings.HasSuffix(s, q) {
+			base := strings.TrimSuffix(s, q)
+			if base != "" && base != q {
+				return base
+			}
+		}
+	}
+	return s
+}
+
 // RequireQuoteMatchesCurrency rejects pairs whose quote asset is not the portfolio cash unit.
 func RequireQuoteMatchesCurrency(ex Exchange, symbol, currency string) error {
 	currency = strings.ToUpper(strings.TrimSpace(currency))

@@ -8,6 +8,8 @@ import './endpoints/alertsApi';
 import './endpoints/aiApi';
 import './endpoints/portfolioApi';
 import './endpoints/accountApi';
+import './endpoints/exportApi';
+import './endpoints/recurringApi';
 import './endpoints/scannerApi';
 import './endpoints/swingApi';
 

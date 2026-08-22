@@ -114,7 +114,13 @@ export function IndicatorPanel({
         <Text variant="label" color="secondary">
           {t('indicators.rsiSeries')}
         </Text>
-        <IndicatorChartHost data={rsiLine} isLoading={isLoading && rsiLine.length === 0} />
+        {rsiLine.length === 0 && !isLoading ? (
+          <Text variant="caption" color="secondary">
+            {t('indicators.rsiEmpty')}
+          </Text>
+        ) : (
+          <IndicatorChartHost data={rsiLine} isLoading={isLoading && rsiLine.length === 0} />
+        )}
       </ChartBlock>
 
       {showEmaOnChart && emaKeys.length > 0 ? (

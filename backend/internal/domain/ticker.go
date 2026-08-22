@@ -22,6 +22,9 @@ type Ticker24h struct {
 	OpenTime    time.Time
 	CloseTime   time.Time
 	TradeCount  int64
+	// Halted is true when this ticker is a last print before a delist halt,
+	// not a live rolling 24h window.
+	Halted bool
 }
 
 // TickerFromLastCandle builds a last-print ticker from the final kline before a halt.
@@ -37,6 +40,7 @@ func TickerFromLastCandle(symbol string, c Candle) Ticker24h {
 		OpenTime:    c.OpenTime,
 		CloseTime:   c.CloseTime,
 		TradeCount:  c.TradeCount,
+		Halted:      true,
 	}
 	o, e1 := strconv.ParseFloat(c.Open, 64)
 	cl, e2 := strconv.ParseFloat(c.Close, 64)

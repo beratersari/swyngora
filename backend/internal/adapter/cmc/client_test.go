@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -103,24 +104,47 @@ func TestGetHolders_ParsesSnapshot(t *testing.T) {
 }
 
 func TestGetHolders_NotPublished(t *testing.T) {
+	hits := 0
 	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits++
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{"id": 1, "name": "Bitcoin", "holders": nil},
 		})
 	}))
 	_, err := c.GetHolders(context.Background(), "BTC")
-	if !errors.Is(err, domain.ErrNotFound) {
+	if !errors.Is(err, domain.ErrHoldersUnpublished) {
 		t.Fatalf("err=%v", err)
+	}
+	_, err = c.GetHolders(context.Background(), "BTC")
+	if !errors.Is(err, domain.ErrHoldersUnpublished) {
+		t.Fatalf("neg err=%v", err)
+	}
+	if hits != 1 {
+		t.Fatalf("unpublished should be negative-cached, hits=%d", hits)
+	}
+}
+
+func TestGetAssetProfile_LogoFromCatalog(t *testing.T) {
+	c := New(Options{
+		Catalog: stubCatalog{entry: btcEntry()},
+		Cache:   cache.New[*domain.AssetHolders](time.Hour),
+	})
+	got, err := c.GetAssetProfile(context.Background(), "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LogoURL != domain.CMCLogoURL(1) || got.Asset != "BTC" {
+		t.Fatalf("%+v", got)
 	}
 }
 
 func TestGetHolders_CatalogMiss(t *testing.T) {
 	c := New(Options{
-		Catalog: stubCatalog{err: domain.ErrNotFound},
+		Catalog: stubCatalog{err: fmt.Errorf("%w: AAPL", domain.ErrCatalogUnmapped)},
 		Cache:   cache.New[*domain.AssetHolders](time.Hour),
 	})
 	_, err := c.GetHolders(context.Background(), "AAPL")
-	if !errors.Is(err, domain.ErrNotFound) {
+	if !errors.Is(err, domain.ErrCatalogUnmapped) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -144,8 +168,8 @@ func TestGetHolders_RateLimitServesStale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.HolderCount != 1 {
-		t.Fatalf("want stale, got %+v", got)
+	if got.HolderCount != 1 || !got.Stale {
+		t.Fatalf("want stale last-good, got %+v", got)
 	}
 }
 

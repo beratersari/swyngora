@@ -9,6 +9,7 @@ import {
 } from 'lightweight-charts';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
+import { CHART_LOCALIZATION, CHART_TIME_SCALE } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
 import {
   BAND_LINE_COLOR,
@@ -83,7 +84,9 @@ export function IndicatorChartHost({
       },
       timeScale: {
         borderColor: semanticColors.border.default,
+        ...CHART_TIME_SCALE,
       },
+      localization: CHART_LOCALIZATION,
     });
 
     const series = chart.addSeries(LineSeries, {

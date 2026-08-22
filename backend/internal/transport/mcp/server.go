@@ -58,6 +58,7 @@ type DataPort interface {
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
 	GetHolders(ctx context.Context, asset string) (json.RawMessage, error)
+	GetAssetProfile(ctx context.Context, asset string) (json.RawMessage, error)
 	ListSpot(ctx context.Context, exchange, query, quote, sort, order, tag string, limit, offset int) (json.RawMessage, error)
 	GetIndicators(ctx context.Context, exchange, symbol, interval string, limit, rsiPeriod int, emaPeriods string) (json.RawMessage, error)
 	DetectPumpEvents(ctx context.Context, args map[string]any) (json.RawMessage, error)
@@ -789,6 +790,21 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetHolders(ctx, asset)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_asset_profile",
+		mcp.WithDescription("Logo URL, listing date, and published token contracts for a crypto base asset. Uses Binance marketing CMC id and CoinMarketCap public data. Informational only."),
+		mcp.WithString("asset", mcp.Required(), mcp.Description("Base asset ticker e.g. BTC (pairs like BTCUSDT also work)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		asset, err := req.RequireString("asset")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetAssetProfile(ctx, asset)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

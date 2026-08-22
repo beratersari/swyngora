@@ -32,8 +32,23 @@ describe('HolderPanel', () => {
     expect(screen.getByText(/248/)).toBeInTheDocument();
   });
 
-  it('shows a soft error', () => {
+  it('shows a soft error without dash stats', () => {
     renderWithTheme(<HolderPanel error="not published" />);
     expect(screen.getByText('not published')).toBeInTheDocument();
+    expect(screen.queryByText('Addresses')).not.toBeInTheDocument();
+  });
+
+  it('explains a published count with no wallet rows', () => {
+    renderWithTheme(
+      <HolderPanel
+        holders={{
+          asset: 'FOO',
+          holderCount: 12,
+          topHolders: [],
+          source: 'coinmarketcap',
+        }}
+      />,
+    );
+    expect(screen.getByText(/listed no top wallets/i)).toBeInTheDocument();
   });
 });

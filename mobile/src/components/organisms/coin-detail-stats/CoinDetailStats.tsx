@@ -9,6 +9,7 @@ export function CoinDetailStats({
   isLoading,
   tickerError,
   supplyError,
+  holdersError,
 }: CoinDetailStatsProps) {
   return (
     <View style={styles.section}>
@@ -20,6 +21,11 @@ export function CoinDetailStats({
       {supplyError ? (
         <Text variant="caption" color="steel">
           Supply: {supplyError}
+        </Text>
+      ) : null}
+      {holdersError ? (
+        <Text variant="caption" color="steel">
+          Holders: {holdersError}
         </Text>
       ) : null}
       <View style={styles.grid}>

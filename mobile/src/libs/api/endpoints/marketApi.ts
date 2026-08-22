@@ -283,6 +283,19 @@ export const marketApi = baseApi.injectEndpoints({
         },
       ],
     }),
+
+    listDelistSchedule: build.query<
+      components['schemas']['DelistScheduleResponse'],
+      { exchange?: MarketExchange } | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/delist-schedule',
+        params: {
+          exchange: arg && typeof arg === 'object' && 'exchange' in arg ? arg.exchange : undefined,
+        },
+      }),
+      keepUnusedDataFor: 300,
+    }),
   }),
 });
 
@@ -299,4 +312,5 @@ export const {
   useGetIndicatorsQuery,
   usePostIndicatorsBatchQuery,
   useLazyPostIndicatorsBatchQuery,
+  useListDelistScheduleQuery,
 } = marketApi;

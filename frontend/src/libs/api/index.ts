@@ -19,6 +19,10 @@ export {
   useGetSpotOrderBookHeatmapQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
+  useGetAssetProfileQuery,
+  useGetOpenInterestQuery,
+  useGetMarketLiquidationsQuery,
+  useGetMarketCvdQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,
@@ -47,6 +51,9 @@ export type {
   Supply,
   AssetHolders,
   HoldersQuery,
+  MarketOpenInterest,
+  MarketLiquidations,
+  MarketCvd,
   CandlesQuery,
   Ticker24hQuery,
   SupplyQuery,
@@ -65,8 +72,25 @@ export {
   useGetWatchlistQuery,
   useAddWatchlistItemMutation,
   useRemoveWatchlistItemMutation,
+  useListWatchlistSharesQuery,
+  useShareWatchlistMutation,
+  useRevokeWatchlistShareMutation,
 } from './endpoints/watchlistApi';
-export type { Watchlist, WatchlistItem } from './endpoints/watchlistApi';
+export type { Watchlist, WatchlistItem, WatchlistShare } from './endpoints/watchlistApi';
+export {
+  useListExportsQuery,
+  useStartExportMutation,
+  useCancelExportMutation,
+} from './endpoints/exportApi';
+export type { ExportJob } from './endpoints/exportApi';
+export {
+  useListRecurringBuysQuery,
+  useCreateRecurringBuyMutation,
+  usePauseRecurringBuyMutation,
+  useResumeRecurringBuyMutation,
+  useDeleteRecurringBuyMutation,
+} from './endpoints/recurringApi';
+export type { RecurringBuyPlan, CreateRecurringBuyArg } from './endpoints/recurringApi';
 export { usePostAiChatMutation } from './endpoints/aiApi';
 export type { AiChatRequest, AiChatResponse, PostAiChatArg } from './endpoints/aiApi';
 export { streamAiChat } from './aiChatStream';
@@ -74,6 +98,7 @@ export type { AiStreamEvent, StreamAiChatArg } from './aiChatStream';
 export {
   rtkErrorMessage,
   getRtkErrorStatus,
+  getRtkErrorCode,
   getRtkErrorRawMessage,
   isFetchBaseQueryError,
   isSerializedError,

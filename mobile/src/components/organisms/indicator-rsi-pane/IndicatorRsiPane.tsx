@@ -30,7 +30,7 @@ export function IndicatorRsiPane({
         textColor: semanticColors.text.secondary,
       },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.1, bottom: 0.1 } },
-      timeScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: true, secondsVisible: true },
       grid: {
         vertLines: { color: 'rgba(112, 125, 125, 0.15)' },
         horzLines: { color: 'rgba(112, 125, 125, 0.15)' },

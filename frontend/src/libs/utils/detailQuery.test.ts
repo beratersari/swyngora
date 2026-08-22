@@ -10,6 +10,7 @@ import {
   parseSymbolParam,
   resolveInterval,
   toSupplyAsset,
+  toPerpSymbol,
 } from './detailQuery';
 describe('parseExchangeParam', () => {
   it('accepts known venues (case-insensitive) and rejects unknown', () => {
@@ -97,6 +98,8 @@ describe('toSupplyAsset', () => {
     expect(toSupplyAsset('BTCUSDT')).toBe('BTC');
     expect(toSupplyAsset('ETHUSDC')).toBe('ETH');
     expect(toSupplyAsset('XFDUSD')).toBe('X');
+    expect(toSupplyAsset('ETHTRY')).toBe('ETH');
+    expect(toSupplyAsset('BTCEUR')).toBe('BTC');
   });
 
   it('keeps bare base tickers and empty', () => {
@@ -104,6 +107,14 @@ describe('toSupplyAsset', () => {
     expect(toSupplyAsset('RLUSD')).toBe('RLUSD');
     expect(toSupplyAsset('')).toBe('');
     expect(toSupplyAsset('   ')).toBe('');
+  });
+});
+
+describe('toPerpSymbol', () => {
+  it('maps Coinbase USD pairs onto USDT perps', () => {
+    expect(toPerpSymbol('BTC-USD')).toBe('BTCUSDT');
+    expect(toPerpSymbol('eth-usdc')).toBe('ETHUSDC');
+    expect(toPerpSymbol('BTCUSDT')).toBe('BTCUSDT');
   });
 });
 

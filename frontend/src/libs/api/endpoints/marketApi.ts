@@ -35,7 +35,15 @@ import type {
   Supply,
   SupplyQuery,
   AssetHolders,
+  AssetProfile,
+  AssetProfileQuery,
   HoldersQuery,
+  MarketOpenInterest,
+  MarketLiquidations,
+  MarketCvd,
+  OpenInterestQuery,
+  LiquidationsQuery,
+  CvdQuery,
   Ticker24h,
   Ticker24hQuery,
   SpotOrderBook,
@@ -57,7 +65,11 @@ export type {
   Ticker24h,
   Supply,
   AssetHolders,
+  AssetProfile,
   HoldersQuery,
+  MarketOpenInterest,
+  MarketLiquidations,
+  MarketCvd,
   CandlesQuery,
   Ticker24hQuery,
   SpotOrderBook,
@@ -191,12 +203,40 @@ export const marketApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, arg) => [{ type: 'Supply' as const, id: supplyTagId(arg) }],
     }),
 
+    getAssetProfile: build.query<AssetProfile, AssetProfileQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/asset-profile',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getHolders: build.query<AssetHolders, HoldersQuery>({
       query: (arg) => ({
         url: '/api/v1/market/holders',
         params: compactParams({ ...(arg ?? {}) }),
       }),
       providesTags: (_r, _e, arg) => [{ type: 'Holders' as const, id: holdersTagId(arg) }],
+    }),
+
+    getOpenInterest: build.query<MarketOpenInterest, OpenInterestQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/open-interest',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidations: build.query<MarketLiquidations, LiquidationsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidations',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketCvd: build.query<MarketCvd, CvdQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/cvd',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
     }),
 
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
@@ -290,6 +330,10 @@ export const {
   useGetSpotOrderBookHeatmapQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
+  useGetAssetProfileQuery,
+  useGetOpenInterestQuery,
+  useGetMarketLiquidationsQuery,
+  useGetMarketCvdQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,

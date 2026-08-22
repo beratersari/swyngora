@@ -4,6 +4,7 @@ import { getOrCreateClientId } from '@/libs/utils/clientId';
 
 export type Watchlist = components['schemas']['Watchlist'];
 export type WatchlistItem = NonNullable<Watchlist['items']>[number];
+export type WatchlistShare = components['schemas']['WatchlistShare'];
 
 export type AddWatchlistItemArg = {
   exchange?: string;
@@ -38,6 +39,31 @@ export const watchlistApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['Watchlist'],
     }),
+    listWatchlistShares: build.query<
+      { ownerClientId?: string; count?: number; shares?: WatchlistShare[] },
+      void
+    >({
+      query: () => '/api/v1/watchlist/shares',
+      providesTags: ['WatchlistShare'],
+    }),
+    shareWatchlist: build.mutation<
+      WatchlistShare,
+      { granteeClientId: string; role: 'viewer' | 'editor' }
+    >({
+      query: (body) => ({ url: '/api/v1/watchlist/shares', method: 'POST', body }),
+      invalidatesTags: ['WatchlistShare'],
+    }),
+    revokeWatchlistShare: build.mutation<
+      { revoked?: boolean },
+      { granteeClientId: string }
+    >({
+      query: ({ granteeClientId }) => ({
+        url: '/api/v1/watchlist/shares',
+        method: 'DELETE',
+        params: { granteeClientId },
+      }),
+      invalidatesTags: ['WatchlistShare'],
+    }),
     removeWatchlistItem: build.mutation<Watchlist, RemoveWatchlistItemArg>({
       query: ({ exchange, symbol }) => ({
         url: '/api/v1/watchlist/items',
@@ -57,4 +83,7 @@ export const {
   useGetWatchlistQuery,
   useAddWatchlistItemMutation,
   useRemoveWatchlistItemMutation,
+  useListWatchlistSharesQuery,
+  useShareWatchlistMutation,
+  useRevokeWatchlistShareMutation,
 } = watchlistApi;

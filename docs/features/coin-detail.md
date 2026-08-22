@@ -79,7 +79,10 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 
 - Indicators = RSI + EMA only  
 - Supply = Binance marketing-list coverage  
-- Holders = CoinMarketCap public snapshot when published; 404 otherwise  
+- Holders = CoinMarketCap public snapshot when published; `catalog_unmapped` vs
+  `holders_unpublished` 404s; last-good marked `stale`
+- Tape tab = OI, funding, liquidations, CVD (`exchange=all` Binance USD-M + Bybit linear)
+- Asset profile = CMC public logo, listing date, and contracts when the marketing id exists  
 - Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules). Live pump markers use the current pair only (`rtkCurrent` + exchange/symbol match) so a previous coin’s events cannot snap onto the new candles.  
 - Header links to alerts, compare, and the Signals desk; watchlist star on the pair
 

@@ -14,6 +14,8 @@ const addSeries = vi.fn(() => ({
   setData,
   applyOptions,
   setMarkers: vi.fn(),
+  attachPrimitive: vi.fn(),
+  detachPrimitive: vi.fn(),
 }));
 
 vi.mock('lightweight-charts', () => ({
@@ -38,6 +40,7 @@ vi.mock('lightweight-charts', () => ({
   ColorType: { Solid: 0 },
 }));
 
+import { createChart } from 'lightweight-charts';
 import { CandleChartHost } from './CandleChartHost';
 
 describe('CandleChartHost', () => {
@@ -58,5 +61,33 @@ describe('CandleChartHost', () => {
     );
     expect(screen.getByTestId('candle-chart-host')).toBeInTheDocument();
     expect(subscribeVisibleLogicalRangeChange).toHaveBeenCalled();
+    expect(createChart).toHaveBeenCalled();
+    const opts = vi.mocked(createChart).mock.calls[0]?.[1] as {
+      timeScale?: { timeVisible?: boolean; secondsVisible?: boolean };
+    };
+    expect(opts.timeScale?.timeVisible).toBe(true);
+    expect(opts.timeScale?.secondsVisible).toBe(true);
+  });
+
+  it('snaps vertical lines onto existing candles without a whitespace series', () => {
+    const attachPrimitive = vi.fn();
+    addSeries.mockImplementation(() => ({
+      setData,
+      applyOptions,
+      setMarkers: vi.fn(),
+      attachPrimitive,
+      detachPrimitive: vi.fn(),
+    }));
+    renderWithTheme(
+      <CandleChartHost
+        data={[
+          { time: 100, open: 1, high: 2, low: 0.5, close: 1.5 },
+          { time: 200, open: 1.5, high: 2.2, low: 1.4, close: 2 },
+        ]}
+        vertLines={[{ id: 'delist-halt', time: 250, color: '#f00', label: 'Delist' }]}
+      />,
+    );
+    expect(addSeries).toHaveBeenCalledTimes(1);
+    expect(attachPrimitive).toHaveBeenCalledTimes(1);
   });
 });

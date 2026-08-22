@@ -4,4 +4,5 @@ export type {
   CandleChartOverlay,
   ChartMarker,
   ChartPriceLine,
+  ChartVertLine,
 } from './CandleChart.types';

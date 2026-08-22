@@ -236,7 +236,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `DELIST_REFRESH_ON_STARTUP` | `true` | Fetch delist schedule once on start |
 | `BINANCE_PRODUCT_BASE_URL` | `https://www.binance.com` | Host for marketing symbol list (supply) |
 | `CMC_BASE_URL` | `https://api.coinmarketcap.com` | Public data-api host for holder snapshots |
-| `HOLDERS_CACHE_TTL` | `1h` | Per-asset holder snapshot TTL |
+| `HOLDERS_CACHE_TTL` | `1h` | Per-asset holder snapshot TTL; unpublished assets are negative-cached for the same window |
 | `COINBASE_BASE_URL` | `https://api.coinbase.com` | Coinbase public market products |
 | `COINBASE_EXCHANGE_URL` | `https://api.exchange.coinbase.com` | Coinbase public candles |
 | `BYBIT_BASE_URL` | `https://api.bybit.com` | Bybit v5 public market API |

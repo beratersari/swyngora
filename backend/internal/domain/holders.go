@@ -37,6 +37,8 @@ type AssetHolders struct {
 	TopHolders         []AssetHolder
 	AsOf               time.Time
 	Source             string
+	// Stale is true when serving last-good after a CMC 429/upstream/empty blip.
+	Stale bool
 }
 
 // CloneHolders copies a snapshot so cached values are not mutated by callers.

@@ -71,6 +71,15 @@ func mapError(err error) (status int, code, message string) {
 		return http.StatusGatewayTimeout, "timeout", "request timed out"
 	case errors.Is(err, domain.ErrInvalidArgument):
 		return http.StatusBadRequest, "invalid_argument", publicInvalidArgument(err)
+	case errors.Is(err, domain.ErrSupplyUnmapped):
+		return http.StatusNotFound, "supply_unmapped",
+			"supply snapshot is not in the Binance marketing catalog"
+	case errors.Is(err, domain.ErrCatalogUnmapped):
+		return http.StatusNotFound, "catalog_unmapped",
+			"asset is not in the Binance marketing catalog (no CoinMarketCap id)"
+	case errors.Is(err, domain.ErrHoldersUnpublished):
+		return http.StatusNotFound, "holders_unpublished",
+			"holder snapshot is not published for this asset"
 	case errors.Is(err, domain.ErrNotFound):
 		return http.StatusNotFound, "not_found", "resource not found"
 	case errors.Is(err, domain.ErrForbidden):
