@@ -16,9 +16,11 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "get_candles",
         "get_supply",
         "get_holders",
+        "get_asset_profile",
         "list_spot_markets",
         "get_indicators",
         "list_delist_schedule",
+        "get_post_delist",
     }
 )
 

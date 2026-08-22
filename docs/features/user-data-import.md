@@ -28,7 +28,7 @@ Users who exported watchlist, shares, alerts, backtests, and paper portfolios (J
 | **merge** | Upsert by exchange+symbol; count new only | Skip existing grantee | Skip existing id | Skip existing id | Skip book if id or name already exists |
 | **replace** | `Set` full list from file | Delete all shares then create | Delete all alerts then create | Delete all backtests then create | Delete all owned books then recreate from file |
 
-- Ownership is always the **uploading** `clientId` (file `clientId` is ignored). The file's main paper book (`id` = original owner) is remapped to the importer; extra **UUID** books keep their ids. A non-UUID extra id (would occupy another tenant’s first-book `id = clientId`) or a UUID already used by another owner is reminted before insert.
+- Ownership is always the **uploading** `clientId` (file `clientId` is ignored). The file's main paper book (`id` = original owner) is remapped to the importer. Extra books always get a new id so they cannot occupy another tenant’s first-book primary key (`id = clientId`), including unused UUID-shaped client ids. A UUID already used by another owner is reminted before insert.
 - Trade/order/lot/margin ids are rekeyed on apply so two clients can share one database.
 - Same symbol / share grantee / alert id / backtest id is never created twice.
 - One **pending/running** import per client (`409`); multiple previews allowed until confirm conflicts with an active apply.

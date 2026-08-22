@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendCandlesAfter,
+  delistCandleQueryEndTime,
   delistEventsToVertLines,
+  isPastDelist,
+  postDelistCandleLimit,
   livePumpEventsForPair,
   mergeChartMarkers,
   mergePumpEvents,
@@ -143,6 +147,81 @@ describe('mergeChartMarkers', () => {
     expect(out).toHaveLength(1);
     expect(out[0]?.shape).toBe('arrowUp');
     expect(out[0]?.text).toBe('↑8.5 · RSI');
+  });
+});
+
+describe('isPastDelist', () => {
+  const now = Date.parse('2026-08-22T12:00:00Z');
+
+  it('is true after halt', () => {
+    expect(isPastDelist('2026-08-17T00:00:00Z', now)).toBe(true);
+  });
+
+  it('is false for upcoming or missing', () => {
+    expect(isPastDelist('2026-09-03T00:00:00Z', now)).toBe(false);
+    expect(isPastDelist(null, now)).toBe(false);
+  });
+});
+
+describe('postDelistCandleLimit', () => {
+  const now = Date.parse('2026-08-22T12:00:00Z');
+
+  it('covers halt to now at the chart interval', () => {
+    expect(postDelistCandleLimit('1h', '2026-08-17T00:00:00Z', now)).toBe(140);
+    expect(postDelistCandleLimit('1d', '2026-08-17T00:00:00Z', now)).toBe(30);
+  });
+});
+
+describe('appendCandlesAfter', () => {
+  it('keeps venue bars and adds later off-venue bars', () => {
+    const venue = [
+      {
+        openTime: '2026-08-17T02:00:00Z',
+        open: '1',
+        high: '1',
+        low: '1',
+        close: '1',
+        volume: '1',
+      },
+    ];
+    const extra = [
+      {
+        openTime: '2026-08-17T02:00:00Z',
+        open: '9',
+        high: '9',
+        low: '9',
+        close: '9',
+        volume: '0',
+      },
+      {
+        openTime: '2026-08-18T00:00:00Z',
+        open: '2',
+        high: '2',
+        low: '2',
+        close: '2',
+        volume: '8',
+      },
+    ];
+    const got = appendCandlesAfter(venue, extra);
+    expect(got).toHaveLength(2);
+    expect(got[0]?.close).toBe('1');
+    expect(got[1]?.openTime).toBe('2026-08-18T00:00:00Z');
+  });
+});
+
+describe('delistCandleQueryEndTime', () => {
+  const now = Date.parse('2026-08-22T12:00:00Z');
+
+  it('returns halt+24h so the last session after a midnight schedule is fetched', () => {
+    expect(delistCandleQueryEndTime('2026-08-17T00:00:00Z', now)).toBe(
+      '2026-08-18T00:00:00.000Z',
+    );
+  });
+
+  it('omits endTime for upcoming or invalid delists', () => {
+    expect(delistCandleQueryEndTime('2026-09-03T03:00:00Z', now)).toBeUndefined();
+    expect(delistCandleQueryEndTime('', now)).toBeUndefined();
+    expect(delistCandleQueryEndTime(null, now)).toBeUndefined();
   });
 });
 

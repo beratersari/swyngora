@@ -34,14 +34,14 @@ const (
 
 // Portfolio change reasons pushed on the stream.
 const (
-	PortfolioChangeSnapshot      = "snapshot"
-	PortfolioChangeOrderPlaced   = "order_placed"
-	PortfolioChangeOrderAmended  = "order_amended"
+	PortfolioChangeSnapshot       = "snapshot"
+	PortfolioChangeOrderPlaced    = "order_placed"
+	PortfolioChangeOrderAmended   = "order_amended"
 	PortfolioChangeOrderCancelled = "order_cancelled"
-	PortfolioChangeOrderFilled   = "order_filled"
-	PortfolioChangeOrderUpdated  = "order_updated"
-	PortfolioChangeCash          = "cash"
-	PortfolioChangePosition      = "position"
+	PortfolioChangeOrderFilled    = "order_filled"
+	PortfolioChangeOrderUpdated   = "order_updated"
+	PortfolioChangeCash           = "cash"
+	PortfolioChangePosition       = "position"
 )
 
 // SymbolRef is an exchange+pair the client wants live prices for.
@@ -88,6 +88,7 @@ type PriceTick struct {
 	OpenTime           time.Time
 	CloseTime          time.Time
 	UpdatedAt          time.Time
+	Halted             bool
 }
 
 // PriceTickFromTicker maps a 24h ticker onto a stream tick.
@@ -111,6 +112,7 @@ func PriceTickFromTicker(exchange Exchange, t *Ticker24h, at time.Time) PriceTic
 		OpenTime:           t.OpenTime,
 		CloseTime:          t.CloseTime,
 		UpdatedAt:          at,
+		Halted:             t.Halted,
 	}
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Select } from 'antd';
 import { CompressOutlined, ExpandOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
@@ -18,7 +18,7 @@ import {
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
-import { defaultQuoteForExchange, rtkCurrent } from '@/libs/utils';
+import { defaultQuoteForExchange, parseExchangeParamOrDefault, rtkCurrent } from '@/libs/utils';
 import { BoardWrap, Field, PageStack, Toolbar, ToolbarLeft, ToolbarRight } from './HeatmapPage.styles';
 
 const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
@@ -26,9 +26,10 @@ const VENUES: MarketExchange[] = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bis
 export function HeatmapPage() {
   const { t } = useTranslation(['heatmap', 'common']);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
-  const [exchange, setExchange] = useState<MarketExchange>('binance');
-  const [quote, setQuote] = useState(defaultQuoteForExchange('binance'));
+  const exchange = parseExchangeParamOrDefault(searchParams.get('exchange') ?? undefined);
+  const quote = searchParams.get('quote') || defaultQuoteForExchange(exchange);
   const [metric, setMetric] = useState<HeatmapMetric>('marketCap');
   const [fullscreen, setFullscreen] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -73,8 +74,29 @@ export function HeatmapPage() {
   );
 
   const setVenue = (next: MarketExchange) => {
-    setExchange(next);
-    setQuote(defaultQuoteForExchange(next));
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        if (next && next !== 'binance') p.set('exchange', next);
+        else p.delete('exchange');
+        p.delete('quote');
+        return p;
+      },
+      { replace: true },
+    );
+  };
+
+  const setQuote = (next: string) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        const def = defaultQuoteForExchange(exchange);
+        if (next && next !== def) p.set('quote', next);
+        else p.delete('quote');
+        return p;
+      },
+      { replace: true },
+    );
   };
 
   useEffect(() => {

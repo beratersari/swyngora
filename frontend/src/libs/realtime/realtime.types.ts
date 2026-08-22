@@ -21,6 +21,7 @@ export type RealtimePriceTick = {
   openTime?: string;
   closeTime?: string;
   ts?: string;
+  halted?: boolean;
 };
 
 export type RealtimePortfolioEvent = {

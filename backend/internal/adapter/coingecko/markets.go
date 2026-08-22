@@ -25,9 +25,11 @@ const (
 
 // Client implements domain.SymbolSupplyFallback.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
-	cache      *cache.TTL[*domain.AssetSupply]
+	baseURL     string
+	httpClient  *http.Client
+	cache       *cache.TTL[*domain.AssetSupply]
+	ohlcCache   *cache.TTL[[]domain.Candle]
+	changeCache *cache.TTL[*float64]
 }
 
 // Options configures the public markets client.
@@ -51,7 +53,13 @@ func New(opts Options) *Client {
 	if cch == nil {
 		cch = cache.New[*domain.AssetSupply](cacheTTL)
 	}
-	return &Client{baseURL: base, httpClient: hc, cache: cch}
+	return &Client{
+		baseURL:     base,
+		httpClient:  hc,
+		cache:       cch,
+		ohlcCache:   cache.New[[]domain.Candle](ohlcCacheTTL),
+		changeCache: cache.New[*float64](cacheTTL),
+	}
 }
 
 // SupplyBySymbols returns the best exact-symbol match per ticker (highest mcap first).
@@ -102,6 +110,9 @@ func (c *Client) SupplyBySymbols(ctx context.Context, symbols []string) (map[str
 				continue
 			}
 			c.cache.Set(sym, sup)
+			if row.PriceChangePct24h != nil {
+				c.changeCache.Set(sym, cloneF(row.PriceChangePct24h))
+			}
 			out[sym] = cloneSupply(sup)
 		}
 	}
@@ -132,6 +143,7 @@ type marketRow struct {
 	Symbol            string   `json:"symbol"`
 	Name              string   `json:"name"`
 	CurrentPrice      *float64 `json:"current_price"`
+	PriceChangePct24h *float64 `json:"price_change_percentage_24h"`
 	CirculatingSupply *float64 `json:"circulating_supply"`
 	TotalSupply       *float64 `json:"total_supply"`
 	MaxSupply         *float64 `json:"max_supply"`

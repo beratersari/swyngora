@@ -211,16 +211,17 @@ func main() {
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
 
+	geckoClient := coingecko.New(coingecko.Options{
+		HTTPClient: httpClient,
+		Cache:      delistSupplyCache,
+	})
 	marketSvc := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  binanceClient,
 		domain.ExchangeCoinbase: coinbaseClient,
 		domain.ExchangeBybit:    bybitClient,
 		domain.ExchangeNasdaq:   nasdaqClient,
 		domain.ExchangeBist:     bistClient,
-	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithDelistSupplyFallback(coingecko.New(coingecko.Options{
-		HTTPClient: httpClient,
-		Cache:      delistSupplyCache,
-	})).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
+	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithDelistSupplyFallback(geckoClient).WithOffVenuePrice(geckoClient).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
 	cmcClient := cmc.New(cmc.Options{
 		BaseURL:    cfg.CMCBaseURL,
 		HTTPClient: httpClient,

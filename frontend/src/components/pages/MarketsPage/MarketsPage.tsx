@@ -31,6 +31,7 @@ import {
   marketsStateToSearchParams,
   metricColumnTitle,
   parseMarketsSearchParams,
+  rememberMarketsReturnPath,
   rtkCurrent,
   toSpotListQuery,
   type MarketsUrlState,
@@ -62,6 +63,11 @@ export function MarketsPage() {
   useEffect(() => {
     setQInput(state.q);
   }, [state.q]);
+
+  useEffect(() => {
+    const qs = searchParams.toString();
+    rememberMarketsReturnPath(qs ? `?${qs}` : '');
+  }, [searchParams]);
 
   /**
    * Functional URL updates — always merge from the latest search params so sort /

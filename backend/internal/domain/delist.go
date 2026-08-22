@@ -17,6 +17,24 @@ const DelistVisibleHorizon = 31 * 24 * time.Hour
 // list with a Delist tag (last 30 days).
 const DelistPastHorizon = 30 * 24 * time.Hour
 
+// DelistCandleGrace is added when fetching last klines so a date-only midnight
+// halt still includes the rest of that session (often a few hours later).
+const DelistCandleGrace = 24 * time.Hour
+
+// HaltCandleEnd is the kline endTime for last prints: scheduled halt + one day,
+// not after now.
+func HaltCandleEnd(halt, now time.Time) time.Time {
+	if halt.IsZero() {
+		return time.Time{}
+	}
+	end := halt.UTC().Add(DelistCandleGrace)
+	n := now.UTC()
+	if !n.IsZero() && end.After(n) {
+		return n
+	}
+	return end
+}
+
 // SpotDelistEntry is a scheduled spot-pair delisting on a venue.
 type SpotDelistEntry struct {
 	// Exchange is the venue id (binance, bybit, …).

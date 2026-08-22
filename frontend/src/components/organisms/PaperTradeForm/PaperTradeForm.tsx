@@ -328,7 +328,7 @@ export function PaperTradeForm({
       </FieldRow>
 
       <Actions>
-        {compact && kind === 'market' ? (
+        {compact && (kind === 'market' || kind === 'limit') ? (
           <>
             <Button
               type="primary"

@@ -178,6 +178,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/post-delist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Off-venue price after this exchange delisted the pair
+         * @description After a venue has halted a pair, Binance (or that venue) has no new
+         *     trades. This returns a labeled public reference: another listed venue
+         *     if the pair still trades there, otherwise CoinGecko USD last + OHLC.
+         *     Informational only — not this venue's book, not financial advice.
+         *     Listed and upcoming pairs return `available: false`.
+         */
+        get: operations["getPostDelist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/spot": {
         parameters: {
             query?: never;
@@ -4140,6 +4164,29 @@ export interface components {
              */
             announcedAt?: string;
         };
+        PostDelistResponse: {
+            exchange?: string;
+            symbol?: string;
+            base?: string;
+            /** Format: date-time */
+            delistTime?: string;
+            /** @description True when an off-venue last price was found */
+            available?: boolean;
+            /** @description Provider id (coingecko, bybit, coinbase, binance) */
+            source?: string;
+            /** @description Human label for the source */
+            sourceLabel?: string;
+            /** @description Why this is not the home venue tape */
+            note?: string;
+            lastPrice?: string;
+            priceChangePercent?: string;
+            /** @description Quote asset of lastPrice (USD or USDT) */
+            quote?: string;
+            /** Format: date-time */
+            asOf?: string;
+            interval?: string;
+            candles?: components["schemas"]["Candle"][];
+        };
     };
     responses: {
         /** @description Error payload */
@@ -4370,6 +4417,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DelistScheduleResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPostDelist: {
+        parameters: {
+            query: {
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                symbol: string;
+                /** @description Hint for other-venue candles. CoinGecko OHLC is daily (7d or 30d). */
+                interval?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Post-delist off-venue snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDelistResponse"];
                 };
             };
             400: components["responses"]["Error"];

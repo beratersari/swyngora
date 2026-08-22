@@ -58,6 +58,7 @@ type Service struct {
 	bookHist       BookHistoryReader
 	delistQuote    *cache.TTL[*domain.Ticker24h]
 	delistSupplyFB domain.SymbolSupplyFallback
+	offVenue       domain.OffVenuePricePort
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -417,13 +418,17 @@ func (s *Service) GetCandles(ctx context.Context, exchange, symbol, interval str
 	if err == nil && len(bars) > 0 {
 		return bars, nil
 	}
-	if q.EndTime.IsZero() {
-		if e, ok := s.delistEntry(ex, symbol); ok && !e.DelistTime.IsZero() {
-			q.EndTime = e.DelistTime.UTC()
-			hist, herr := p.GetCandles(ctx, q)
-			if herr == nil && len(hist) > 0 {
-				return hist, nil
-			}
+	if e, ok := s.delistEntry(ex, symbol); ok && !e.DelistTime.IsZero() {
+		retry := q
+		haltEnd := domain.HaltCandleEnd(e.DelistTime, time.Now().UTC())
+		if retry.EndTime.IsZero() || retry.EndTime.After(haltEnd) {
+			retry.EndTime = haltEnd
+		}
+		if hist, herr := p.GetCandles(ctx, retry); herr == nil && len(hist) > 0 {
+			return hist, nil
+		}
+		if bar, ok := lastHaltCandle(ctx, p, symbol, e.DelistTime); ok {
+			return []domain.Candle{bar}, nil
 		}
 	}
 	return bars, err
@@ -988,7 +993,11 @@ func (s *Service) GetTicker24h(ctx context.Context, exchange, symbol string) (*d
 	}
 	tkr, err := p.GetTicker24h(ctx, symbol)
 	if err == nil && tkr != nil && strings.TrimSpace(tkr.LastPrice) != "" {
-		return tkr, nil
+		out := *tkr
+		if e, ok := s.delistEntry(ex, symbol); ok && !e.DelistTime.IsZero() && !e.DelistTime.After(time.Now().UTC()) {
+			out.Halted = true
+		}
+		return &out, nil
 	}
 	if fb, ok := s.lastDelistTicker(ctx, ex, p, symbol); ok {
 		return fb, nil

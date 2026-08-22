@@ -79,7 +79,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, spot list, FX, del
 - Venues: binance, coinbase, bybit, nasdaq, bist. Default binance unless the name is a cash equity
   (AAPL → nasdaq, THYAO → bist) or the user specifies.
 - Display FX: `get_fx_rates` when the user wants TRY/EUR/GBP conversion (display only).
-- Delists: `list_delist_schedule`.
+- Delists: `list_delist_schedule`. After a halt, `get_post_delist` for off-venue movement (not this venue's book).
 - Return a compact factual block with symbol, exchange, last, 24h %, RSI/EMA if fetched, and data gaps.
 
 Default client_id for watchlist: {{client_id}}
@@ -164,6 +164,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   **or** `notional` (e.g. 1e9 USDT). `exchange=all` (default) merges three venues cheapest-first;
   `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_supply` → supply; `get_holders` → holder count / top wallets (crypto only);
+  `get_asset_profile` → name, logo, listing date, contracts;
   `list_spot_markets` → rankings/filters; watchlist tools only if asked.
 - **Pumps / vertical moves (1–2 day relevant):**
   - `detect_pump_events` — one symbol: set `min_return_pct` (e.g. 5, 8, 15), `lookback_hours`

@@ -13,6 +13,7 @@ import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
+import { PostDelistPanel } from '@/components/organisms/PostDelistPanel';
 import { TapePanel } from '@/components/organisms/TapePanel';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
@@ -42,6 +43,7 @@ import {
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
+  useGetPostDelistQuery,
   useListDelistScheduleQuery,
   useGetWatchlistQuery,
   useLazyGetCandlesQuery,
@@ -59,6 +61,7 @@ import { useDisplayCurrency, useDocumentVisible, useMediaQuery } from '@/libs/ho
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
 import {
   emaLineFromCloses,
+  formatDelistDay,
   formatPrice,
   newPaperIdempotencyKey,
   parseEmaPeriods,
@@ -73,7 +76,7 @@ import {
   filterValidApiCandles,
   preferLongerCandleSeries,
   intervalToSeconds,
-  marketsBackPath,
+  marketsBackPathFromSession,
   mergeCandleHistory,
   oldestCandleOpenTimeMs,
   parseDetailSearchParams,
@@ -114,7 +117,11 @@ import {
   TabStack,
 } from './CoinDetailPage.styles';
 import {
+  appendCandlesAfter,
+  delistCandleQueryEndTime,
   delistEventsToVertLines,
+  isPastDelist,
+  postDelistCandleLimit,
   mergeChartMarkers,
   mergePumpEvents,
   livePumpEventsForPair,
@@ -237,6 +244,21 @@ export function CoinDetailPage() {
   }, [delistQuery.data?.items, symbol]);
   const delistTime = delistHit?.delistTime ?? null;
   const announcedAt = delistHit?.announcedAt ?? null;
+  const pastDelist = isPastDelist(delistTime);
+  const candleEndTime = useMemo(() => delistCandleQueryEndTime(delistTime), [delistTime]);
+  const postDelistQuery = useGetPostDelistQuery(
+    {
+      exchange: (exchange ?? 'binance') as MarketExchange,
+      symbol: symbol ?? '',
+      interval,
+      limit: postDelistCandleLimit(interval, delistTime),
+    },
+    {
+      skip: skip || isEquity || !symbol || !exchange || !pastDelist,
+      pollingInterval: visible ? 120_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
@@ -364,11 +386,23 @@ export function CoinDetailPage() {
   // First-paint slice + full live window in parallel. The short request usually
   // returns first so the chart can draw before the 300-bar poll window arrives.
   const firstCandlesQuery = useGetCandlesQuery(
-    { exchange: exchangeArg, symbol, interval, limit: DETAIL_CANDLE_FIRST_LIMIT },
+    {
+      exchange: exchangeArg,
+      symbol,
+      interval,
+      limit: DETAIL_CANDLE_FIRST_LIMIT,
+      ...(candleEndTime ? { endTime: candleEndTime } : {}),
+    },
     { skip, refetchOnFocus: true },
   );
   const candlesQuery = useGetCandlesQuery(
-    { exchange: exchangeArg, symbol, interval, limit: DEFAULT_DETAIL_CANDLE_LIMIT },
+    {
+      exchange: exchangeArg,
+      symbol,
+      interval,
+      limit: DEFAULT_DETAIL_CANDLE_LIMIT,
+      ...(candleEndTime ? { endTime: candleEndTime } : {}),
+    },
     {
       skip,
       pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
@@ -388,7 +422,7 @@ export function CoinDetailPage() {
     [liveCandleRows],
   );
 
-  const allCandles = useMemo(
+  const mergedCandles = useMemo(
     () =>
       trimCandlesToMax(
         mergeCandleHistory(historyCandles, liveCandles),
@@ -396,18 +430,37 @@ export function CoinDetailPage() {
       ),
     [historyCandles, liveCandles],
   );
+  const postDelistView = rtkCurrent(postDelistQuery);
+  const chartSeriesKey = `${seriesKey}|${delistTime ?? ''}|${postDelistView?.source ?? ''}`;
+  const offVenueApiCandles = useMemo(
+    () => filterValidApiCandles(postDelistView?.candles),
+    [postDelistView?.candles],
+  );
+  const allCandles = useMemo(() => {
+    if (!pastDelist || !postDelistView?.available) return mergedCandles;
+    return appendCandlesAfter(mergedCandles, offVenueApiCandles);
+  }, [mergedCandles, offVenueApiCandles, pastDelist, postDelistView?.available]);
+  const postDelistLast = useMemo(() => {
+    const px = postDelistView?.lastPrice;
+    if (!px || displayCurrency === 'native') return px;
+    const converted = convert(Number(px), postDelistView?.quote || 'USD');
+    return converted == null ? px : String(converted);
+  }, [convert, displayCurrency, postDelistView?.lastPrice, postDelistView?.quote]);
 
   const chartData = useMemo(() => {
     const raw = apiCandlesToChart(allCandles);
     if (displayCurrency === 'native') return raw;
     const q = pairQuote(symbol, exchange);
-    return raw.map((bar) => ({
-      ...bar,
-      open: convert(bar.open, q) ?? bar.open,
-      high: convert(bar.high, q) ?? bar.high,
-      low: convert(bar.low, q) ?? bar.low,
-      close: convert(bar.close, q) ?? bar.close,
-    }));
+    const out = [];
+    for (const bar of raw) {
+      const open = convert(bar.open, q);
+      const high = convert(bar.high, q);
+      const low = convert(bar.low, q);
+      const close = convert(bar.close, q);
+      if (open == null || high == null || low == null || close == null) continue;
+      out.push({ ...bar, open, high, low, close });
+    }
+    return out;
   }, [allCandles, convert, displayCurrency, exchange, symbol]);
 
   // Live pump window matches the polled candle head (API max 1000).
@@ -447,19 +500,19 @@ export function CoinDetailPage() {
 
   const hasMoreHistory =
     !historyExhausted &&
-    allCandles.length > 0 &&
-    allCandles.length < DETAIL_CANDLE_MAX_LIMIT &&
+    mergedCandles.length > 0 &&
+    mergedCandles.length < DETAIL_CANDLE_MAX_LIMIT &&
     (candlesQuery.isSuccess || historyCandles.length > 0);
 
   const isLoadingMore = historyLoading;
 
   const onNeedMoreHistory = useCallback(() => {
     if (historyLoading || historyExhausted || skipSeries || !symbol || !exchange) return;
-    if (allCandles.length >= DETAIL_CANDLE_MAX_LIMIT) {
+    if (mergedCandles.length >= DETAIL_CANDLE_MAX_LIMIT) {
       setHistoryExhausted(true);
       return;
     }
-    const oldestMs = oldestCandleOpenTimeMs(allCandles);
+    const oldestMs = oldestCandleOpenTimeMs(mergedCandles);
     if (oldestMs == null) return;
 
     const endTime = new Date(oldestMs - 1).toISOString();
@@ -525,7 +578,7 @@ export function CoinDetailPage() {
         }
       });
   }, [
-    allCandles,
+    mergedCandles,
     exchange,
     fetchOlderCandles,
     fetchOlderPumps,
@@ -544,15 +597,34 @@ export function CoinDetailPage() {
     return fromApi.length > 0 ? fromApi : parseEmaPeriods(DEFAULT_EMA_PERIODS);
   }, [liveIndicators?.emaPeriods]);
   const overlays: CandleChartOverlay[] = useMemo(() => {
-    if (!showEma) return [];
-    return emaPeriods.map((period, i) => ({
-      id: `ema-${period}`,
-      title: t('detail:indicators.emaLabel', { period }),
-      color: emaColor(String(period), i),
-      // Compute on loaded chart bars so pan-left history keeps an EMA line.
-      data: emaLineFromCloses(chartData, period),
-    }));
-  }, [showEma, emaPeriods, chartData, t]);
+    const lines: CandleChartOverlay[] = [];
+    if (showEma) {
+      for (let i = 0; i < emaPeriods.length; i += 1) {
+        const period = emaPeriods[i]!;
+        lines.push({
+          id: `ema-${period}`,
+          title: t('detail:indicators.emaLabel', { period }),
+          color: emaColor(String(period), i),
+          data: emaLineFromCloses(chartData, period),
+        });
+      }
+    }
+    const realCount = mergedCandles.length;
+    const lastReal = realCount > 0 ? chartData[realCount - 1] : undefined;
+    const lastBar = chartData[chartData.length - 1];
+    if (lastReal && lastBar && lastBar.time > lastReal.time) {
+      lines.push({
+        id: 'delist-last-price',
+        title: t('detail:chart.haltedLast'),
+        color: semanticColors.status.warning,
+        data: [
+          { time: lastReal.time, value: lastReal.close },
+          { time: lastBar.time, value: lastBar.close },
+        ],
+      });
+    }
+    return lines;
+  }, [showEma, emaPeriods, chartData, mergedCandles.length, t]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
@@ -665,7 +737,7 @@ export function CoinDetailPage() {
     );
   }
 
-  const backTo = marketsBackPath(exchange);
+  const backTo = marketsBackPathFromSession(exchange);
 
   const headerLoading = rtkCurrentPending(tickerQuery);
   const statsLoading = rtkCurrentPending(tickerQuery) || rtkCurrentPending(supplyQuery);
@@ -757,7 +829,33 @@ export function CoinDetailPage() {
             key: 'overview',
             label: t('detail:tabs.overview'),
             children: (
+      <TabStack>
+      {pastDelist && !isEquity ? (
+        <PostDelistPanel
+          view={postDelistView}
+          lastPrice={postDelistLast}
+          isLoading={rtkCurrentPending(postDelistQuery)}
+          error={
+            postDelistQuery.isError
+              ? rtkErrorMessage(postDelistQuery.error, {
+                  resource: t('detail:resource.postDelist'),
+                })
+              : null
+          }
+        />
+      ) : null}
       <ChartCard>
+        {pastDelist && postDelistView?.available ? (
+          <Alert
+            type="info"
+            showIcon
+            message={t('detail:chart.postDelistBanner', {
+              date: formatDelistDay(delistTime) || delistTime,
+              source: postDelistView.sourceLabel || postDelistView.source,
+              exchange,
+            })}
+          />
+        ) : null}
         <ChartTitleRow>
           <Text variant="h4" color="primary">
             {t('detail:chart.title')}
@@ -837,15 +935,21 @@ export function CoinDetailPage() {
               markers={chartMarkers}
               vertLines={chartVertLines}
               isLoading={seriesLoading}
-              seriesKey={seriesKey}
+              seriesKey={chartSeriesKey}
               isLoadingMore={isLoadingMore}
               hasMoreHistory={hasMoreHistory}
               onNeedMoreHistory={onNeedMoreHistory}
+              anchorEndIndex={
+                pastDelist && postDelistView?.available
+                  ? allCandles.length
+                  : mergedCandles.length
+              }
               height={isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT}
             />
           </>
         )}
       </ChartCard>
+      </TabStack>
             ),
           },
           ...(!isEquity

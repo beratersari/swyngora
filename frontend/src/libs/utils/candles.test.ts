@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   apiCandlesToChart,
+  carryForwardCandlesUntil,
   filterValidApiCandles,
   mergeCandleHistory,
   oldestCandleOpenTimeMs,
@@ -114,6 +115,43 @@ describe('preferLongerCandleSeries', () => {
     expect(preferLongerCandleSeries(short, long)).toBe(long);
     expect(preferLongerCandleSeries(short, undefined)).toBe(short);
     expect(preferLongerCandleSeries(undefined, undefined)).toBeUndefined();
+  });
+});
+
+describe('carryForwardCandlesUntil', () => {
+  it('repeats the last close through the requested end', () => {
+    const bars = [c('2026-08-17T02:00:00Z', '0.0077')];
+    const until = Date.parse('2026-08-17T05:00:00Z');
+    const got = carryForwardCandlesUntil(bars, until, 3600);
+    expect(got.map((x) => x.openTime)).toEqual([
+      '2026-08-17T02:00:00Z',
+      '2026-08-17T03:00:00.000Z',
+      '2026-08-17T04:00:00.000Z',
+    ]);
+    expect(got[2]?.close).toBe('0.0077');
+    expect(got[2]?.volume).toBe('0');
+    expect(Number(got[2]?.high)).toBeGreaterThan(Number(got[2]?.low));
+  });
+
+  it('does nothing without a positive interval', () => {
+    const bars = [c('2026-08-17T02:00:00Z')];
+    expect(carryForwardCandlesUntil(bars, Date.now(), 0)).toHaveLength(1);
+  });
+
+  it('keeps leftover session bars after official midnight halt and continues past that day', () => {
+    const halt = Date.parse('2026-08-17T00:00:00Z');
+    const live: ApiCandle[] = [
+      { ...c('2026-08-16T23:00:00Z', '0.01'), high: '0.012', low: '0.009' },
+      { ...c('2026-08-17T02:00:00Z', '0.0077'), high: '0.0081', low: '0.0064' },
+    ];
+    const until = Date.parse('2026-08-19T00:00:00Z');
+    const got = carryForwardCandlesUntil(live, until, 3600);
+    const afterHalt = got.filter((b) => Date.parse(b.openTime) >= halt);
+    expect(afterHalt.length).toBeGreaterThan(20);
+    expect(got.some((b) => b.openTime.startsWith('2026-08-18'))).toBe(true);
+    const last = got[got.length - 1]!;
+    expect(Number(last.high)).toBeGreaterThan(Number(last.low));
+    expect(last.close).toBe('0.0077');
   });
 });
 

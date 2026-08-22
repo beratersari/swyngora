@@ -40,34 +40,15 @@ func RemapPortfolioSnapshot(snap PortfolioSnapshot, fileOwnerClientID, importerC
 	return rebindPortfolioSnapshotBook(snap, oldBook, newBook, importerClientID)
 }
 
-// MustRemintImportedBookID is true for extra-book ids that would occupy another
-// tenant's first-book primary key (id == clientId). Extra UUID books keep their
-// ids (user-data-import.md). The importer's remapped main book is kept.
+// MustRemintImportedBookID is true for every extra book (id != owner). Extra
+// ids must not occupy another tenant's first-book primary key (id == clientId),
+// including unused UUID-shaped client ids that are not in portfolios yet.
+// The importer's remapped main book is kept.
 func MustRemintImportedBookID(bookID, ownerClientID string) bool {
 	bookID = strings.TrimSpace(bookID)
 	ownerClientID = strings.TrimSpace(ownerClientID)
 	if bookID == "" || bookID == ownerClientID {
 		return false
-	}
-	return !looksLikeBookUUID(bookID)
-}
-
-func looksLikeBookUUID(id string) bool {
-	if len(id) != 36 {
-		return false
-	}
-	for i := 0; i < len(id); i++ {
-		c := id[i]
-		switch i {
-		case 8, 13, 18, 23:
-			if c != '-' {
-				return false
-			}
-		default:
-			if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-				return false
-			}
-		}
 	}
 	return true
 }

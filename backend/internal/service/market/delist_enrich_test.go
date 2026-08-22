@@ -141,6 +141,60 @@ func TestHydrateDelistQuotesFillsEmptyStub(t *testing.T) {
 	}
 }
 
+type endAwareMarket struct {
+	fakeMarket
+}
+
+func (m *endAwareMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	m.lastQ = q
+	if m.err != nil {
+		return nil, m.err
+	}
+	if q.EndTime.IsZero() {
+		return nil, nil
+	}
+	var out []domain.Candle
+	for _, c := range m.candles {
+		if !c.OpenTime.IsZero() && c.OpenTime.After(q.EndTime) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func TestGetCandles_DelistKeepsLastSessionAfterMidnightSchedule(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	store.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
+		{Symbol: "VICUSDT", DelistTime: halt},
+	})
+	last := domain.Candle{
+		OpenTime: halt.Add(2 * time.Hour),
+		Open:     "0.008", High: "0.009", Low: "0.006", Close: "0.0077",
+		Volume: "1", CloseTime: halt.Add(3*time.Hour - time.Millisecond),
+	}
+	fm := &endAwareMarket{fakeMarket: fakeMarket{
+		candles: []domain.Candle{
+			{OpenTime: halt.Add(-time.Hour), Open: "0.01", High: "0.01", Low: "0.01", Close: "0.01"},
+			last,
+		},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+	}, nil).WithDelistStore(store)
+	bars, err := svc.GetCandles(context.Background(), "binance", "VICUSDT", "1h", 10, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bars) != 2 {
+		t.Fatalf("want last session after official halt, got %d end=%v", len(bars), fm.lastQ.EndTime)
+	}
+	if !bars[1].OpenTime.Equal(last.OpenTime) || bars[1].Close != last.Close {
+		t.Fatalf("last bar %+v", bars[1])
+	}
+}
+
 func TestGetTicker24hFallsBackToHaltCandle(t *testing.T) {
 	store := deliststore.NewMemory()
 	halt := time.Date(2026, 8, 18, 8, 0, 0, 0, time.UTC)

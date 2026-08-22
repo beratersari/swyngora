@@ -32,12 +32,11 @@ func (s *Service) GetRiskLimitsView(ctx context.Context, clientID string, portfo
 	if err != nil {
 		return nil, err
 	}
-	clientID = p.BookID()
-	lim, snap, err := s.loadRiskWithDaySnapshot(ctx, clientID)
+	lim, snap, err := s.loadRiskWithDaySnapshot(ctx, p)
 	if err != nil {
 		return nil, err
 	}
-	st, err := s.buildRiskStatus(ctx, clientID, lim, snap)
+	st, err := s.buildRiskStatus(ctx, p, lim, snap)
 	if err != nil {
 		return nil, err
 	}
@@ -53,26 +52,26 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 	if err != nil {
 		return nil, err
 	}
-	clientID := p.BookID()
+	bookID := p.BookID()
 	if err := domain.ValidateOptionalRiskPct(in.MaxDailyLossPct, "maxDailyLossPct"); err != nil {
 		return nil, err
 	}
 	if err := domain.ValidateOptionalRiskPct(in.MaxAssetWeightPct, "maxAssetWeightPct"); err != nil {
 		return nil, err
 	}
-	_, snap, err := s.loadRiskWithDaySnapshot(ctx, clientID)
+	_, snap, err := s.loadRiskWithDaySnapshot(ctx, p)
 	if err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	saved, err := s.store.UpsertRiskLimits(ctx, domain.RiskLimits{
-		ClientID: clientID, MaxDailyLossPct: in.MaxDailyLossPct, MaxAssetWeightPct: in.MaxAssetWeightPct,
+		ClientID: bookID, MaxDailyLossPct: in.MaxDailyLossPct, MaxAssetWeightPct: in.MaxAssetWeightPct,
 		DayKey: snap.DayKey, DayStartEquity: snap.DayStartEquity, UpdatedAt: now,
 	})
 	if err != nil {
 		return nil, err
 	}
-	st, err := s.buildRiskStatus(ctx, clientID, *saved, *saved)
+	st, err := s.buildRiskStatus(ctx, p, *saved, *saved)
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +100,15 @@ func (s *Service) guardNewRisk(ctx context.Context, clientID, asset string, addi
 	if existing.MaxDailyLossPct == nil && existing.MaxAssetWeightPct == nil {
 		return nil
 	}
-	lim, snap, err := s.loadRiskWithDaySnapshot(ctx, clientID)
+	p, err := s.store.GetPortfolio(ctx, clientID)
 	if err != nil {
 		return err
 	}
-	st, err := s.buildRiskStatus(ctx, clientID, lim, snap)
+	lim, snap, err := s.loadRiskWithDaySnapshot(ctx, p)
+	if err != nil {
+		return err
+	}
+	st, err := s.buildRiskStatus(ctx, p, lim, snap)
 	if err != nil {
 		return err
 	}
@@ -124,14 +127,18 @@ func (s *Service) guardNewRisk(ctx context.Context, clientID, asset string, addi
 	return fmt.Errorf("%w: %s", domain.ErrForbidden, strings.Join(reasons, "; "))
 }
 
-func (s *Service) loadRiskWithDaySnapshot(ctx context.Context, clientID string) (domain.RiskLimits, domain.RiskLimits, error) {
-	lim, err := s.store.GetRiskLimits(ctx, clientID)
+func (s *Service) loadRiskWithDaySnapshot(ctx context.Context, p *domain.Portfolio) (domain.RiskLimits, domain.RiskLimits, error) {
+	if p == nil {
+		return domain.RiskLimits{}, domain.RiskLimits{}, domain.ErrNotFound
+	}
+	bookID := p.BookID()
+	lim, err := s.store.GetRiskLimits(ctx, bookID)
 	if err == domain.ErrNotFound {
-		lim = &domain.RiskLimits{ClientID: clientID}
+		lim = &domain.RiskLimits{ClientID: bookID}
 	} else if err != nil {
 		return domain.RiskLimits{}, domain.RiskLimits{}, err
 	}
-	view, err := s.View(ctx, clientID)
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return domain.RiskLimits{}, domain.RiskLimits{}, err
 	}
@@ -151,8 +158,8 @@ func (s *Service) loadRiskWithDaySnapshot(ctx context.Context, clientID string) 
 	return *lim, *lim, nil
 }
 
-func (s *Service) buildRiskStatus(ctx context.Context, clientID string, lim, snap domain.RiskLimits) (domain.RiskStatus, error) {
-	view, err := s.View(ctx, clientID)
+func (s *Service) buildRiskStatus(ctx context.Context, p *domain.Portfolio, lim, snap domain.RiskLimits) (domain.RiskStatus, error) {
+	view, err := s.View(ctx, p.ClientID, p.ID)
 	if err != nil {
 		return domain.RiskStatus{}, err
 	}

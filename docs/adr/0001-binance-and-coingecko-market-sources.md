@@ -47,4 +47,8 @@ Swyngora needs candlesticks, 24h volume, spot listings, and supply metrics align
 
 **Supply / circulating metrics** remain **Binance marketing symbol list only** (daily snapshot), applied as asset-level enrichment across venues. **Exception (delist rows):** if that snapshot has no circulating supply for a scheduled delist base, market cap is filled from CoinGecko’s public `/coins/markets` (no key, exact ticker). Default `/supply` and non-delist lists stay Binance-only. No paid API tiers.
 
+## Amendment (2026-08-22): post-delist off-venue price
+
+After a venue has halted a pair it has no new trades. **Do not invent venue candles.** Off-venue movement is a separate labeled snapshot (`GET /api/v1/market/post-delist`): another listed venue if the pair still trades there, otherwise CoinGecko public `/coins/markets` last + `/coins/{id}/ohlc` (no key). The home-venue chart stays on leftover real klines only. Informational only — not financial advice.
+
 **Holder snapshots** are a separate feed (CoinMarketCap public data-api, mapped via marketing `cmcUniqueId`). See [0003](0003-coinmarketcap-holder-source.md).

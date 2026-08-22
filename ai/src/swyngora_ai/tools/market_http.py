@@ -746,6 +746,7 @@ class PortfolioCashMoveInput(BaseModel):
     client_id: str
     amount: float = Field(gt=0, description="Positive cash amount")
     note: str = ""
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioTransferInput(BaseModel):
@@ -760,6 +761,7 @@ class PortfolioCashListInput(BaseModel):
     client_id: str
     limit: int = 50
     offset: int = 0
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class RiskLimitsSetInput(BaseModel):
@@ -770,6 +772,7 @@ class RiskLimitsSetInput(BaseModel):
     max_asset_weight_pct: float = Field(
         default=0, description="e.g. 30 = max one coin % of equity; 0 disables"
     )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioOrderInput(BaseModel):
@@ -783,19 +786,23 @@ class PortfolioOrderInput(BaseModel):
         default="",
         description="Optional retry key; same key + same request returns the original fill",
     )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioPendingOrderInput(BaseModel):
     client_id: str
     symbol: str
-    order_type: str = Field(description="limit_buy | limit_sell | stop_loss")
+    order_type: str = Field(description="limit_buy | limit_sell | stop_loss | trailing_stop")
     quantity: float = Field(gt=0)
-    trigger_price: float = Field(gt=0, description="Limit or stop price")
+    trigger_price: float = Field(default=0, description="Limit or stop price (omit for trailing_stop)")
     exchange: str = "binance"
     time_in_force: str = Field(default="gtc", description="gtc | ioc | fok")
     expires_at: str = Field(default="", description="RFC3339 expiry for GTC only")
     lot_method: str = Field(default="", description="fifo or lifo for sell types")
     idempotency_key: str = Field(default="", description="Optional retry key")
+    trail_type: str = Field(default="", description="trailing_stop: percent | offset")
+    trail_value: float = Field(default=0, description="trailing_stop: fraction e.g. 0.05 or fixed offset")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioLotsInput(BaseModel):
@@ -803,16 +810,19 @@ class PortfolioLotsInput(BaseModel):
     exchange: str = ""
     symbol: str = ""
     status: str = Field(default="open", description="open | closed | all")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioListOrdersInput(BaseModel):
     client_id: str
     status: str = Field(default="open", description="open|filled|canceled|rejected|all")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioCancelOrderInput(BaseModel):
     client_id: str
     order_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioOCOInput(BaseModel):
@@ -824,6 +834,7 @@ class PortfolioOCOInput(BaseModel):
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     expires_at: str = ""
     idempotency_key: str = ""
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioBracketInput(BaseModel):
@@ -836,6 +847,7 @@ class PortfolioBracketInput(BaseModel):
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     expires_at: str = ""
     idempotency_key: str = ""
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioAmendInput(BaseModel):
@@ -858,6 +870,13 @@ class PortfolioOrderGetInput(BaseModel):
 
 class DelistInput(BaseModel):
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+
+
+class PostDelistInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. VICUSDT")
+    exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
+    interval: str = Field(default="1d", description="Candle interval hint; CoinGecko is daily")
+    limit: int = Field(default=30, ge=1, le=200)
 
 
 class ImportPreviewInput(BaseModel):
@@ -1078,6 +1097,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def list_delist_schedule(exchange: str = "binance") -> str:
         return http.get("/api/v1/market/delist-schedule", {"exchange": exchange})
+
+    def get_post_delist(
+        symbol: str,
+        exchange: str = "binance",
+        interval: str = "1d",
+        limit: int = 30,
+    ) -> str:
+        return http.get(
+            "/api/v1/market/post-delist",
+            {
+                "symbol": symbol,
+                "exchange": exchange,
+                "interval": interval,
+                "limit": limit,
+            },
+        )
 
     def get_fx_rates() -> str:
         return http.get("/api/v1/market/fx")
@@ -1379,6 +1414,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def get_holders(asset: str) -> str:
         return http.get("/api/v1/market/holders", {"asset": asset})
+
+    def get_asset_profile(asset: str) -> str:
+        return http.get("/api/v1/market/asset-profile", {"asset": asset})
 
     def list_spot_markets(
         exchange: str = "binance",
@@ -1706,8 +1744,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def list_shared_portfolios(client_id: str) -> str:
         return http.get("/api/v1/portfolios/shared", {"clientId": client_id})
 
-    def get_portfolio_risk_limits(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/risk-limits", {"clientId": client_id})
+    def get_portfolio_risk_limits(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/risk-limits", q)
 
     def get_paper_trading_costs(exchange: str = "") -> str:
         q: dict[str, Any] = {}
@@ -1719,19 +1760,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         client_id: str,
         max_daily_loss_pct: float = 0,
         max_asset_weight_pct: float = 0,
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {}
         if max_daily_loss_pct:
             body["maxDailyLossPct"] = max_daily_loss_pct
         if max_asset_weight_pct:
             body["maxAssetWeightPct"] = max_asset_weight_pct
-        return http.put(
-            f"/api/v1/portfolio/risk-limits?clientId={client_id}",
-            body,
-        )
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        q = f"/api/v1/portfolio/risk-limits?clientId={client_id}"
+        if portfolio_id:
+            q += f"&portfolioId={portfolio_id}"
+        return http.put(q, body)
 
-    def clear_portfolio_risk_limits(client_id: str) -> str:
-        return http.delete("/api/v1/portfolio/risk-limits", {"clientId": client_id})
+    def clear_portfolio_risk_limits(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.delete("/api/v1/portfolio/risk-limits", q)
 
     def get_portfolio(client_id: str, portfolio_id: str = "") -> str:
         q: dict[str, Any] = {"clientId": client_id}
@@ -1747,10 +1794,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/performance", q)
 
-    def deposit_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
+    def deposit_portfolio_cash(
+        client_id: str, amount: float, note: str = "", portfolio_id: str = ""
+    ) -> str:
         body: dict[str, Any] = {"clientId": client_id, "amount": amount}
         if note:
             body["note"] = note
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/deposits", body)
 
     def transfer_portfolio_cash(
@@ -1771,17 +1822,23 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["note"] = note
         return http.post("/api/v1/portfolio/transfers", body)
 
-    def withdraw_portfolio_cash(client_id: str, amount: float, note: str = "") -> str:
+    def withdraw_portfolio_cash(
+        client_id: str, amount: float, note: str = "", portfolio_id: str = ""
+    ) -> str:
         body: dict[str, Any] = {"clientId": client_id, "amount": amount}
         if note:
             body["note"] = note
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/withdrawals", body)
 
-    def list_portfolio_cash_movements(client_id: str, limit: int = 50, offset: int = 0) -> str:
-        return http.get(
-            "/api/v1/portfolio/cash-movements",
-            {"clientId": client_id, "limit": limit, "offset": offset},
-        )
+    def list_portfolio_cash_movements(
+        client_id: str, limit: int = 50, offset: int = 0, portfolio_id: str = ""
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id, "limit": limit, "offset": offset}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/cash-movements", q)
 
     def place_portfolio_order(
         client_id: str,
@@ -1791,6 +1848,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         exchange: str = "binance",
         lot_method: str = "",
         idempotency_key: str = "",
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -1803,6 +1861,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["lotMethod"] = lot_method
         if idempotency_key:
             body["idempotencyKey"] = idempotency_key
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_pending_order(
@@ -1810,45 +1870,61 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         symbol: str,
         order_type: str,
         quantity: float,
-        trigger_price: float,
+        trigger_price: float = 0,
         exchange: str = "binance",
         time_in_force: str = "gtc",
         expires_at: str = "",
         lot_method: str = "",
         idempotency_key: str = "",
+        trail_type: str = "",
+        trail_value: float = 0,
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "type": order_type,
             "quantity": quantity,
-            "triggerPrice": trigger_price,
             "exchange": exchange,
             "timeInForce": time_in_force,
         }
+        if trigger_price:
+            body["triggerPrice"] = trigger_price
         if expires_at:
             body["expiresAt"] = expires_at
         if lot_method:
             body["lotMethod"] = lot_method
         if idempotency_key:
             body["idempotencyKey"] = idempotency_key
+        if trail_type:
+            body["trailType"] = trail_type
+        if trail_value:
+            body["trailValue"] = trail_value
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/orders", body)
 
     def list_portfolio_lots(
-        client_id: str, exchange: str = "", symbol: str = "", status: str = "open"
+        client_id: str,
+        exchange: str = "",
+        symbol: str = "",
+        status: str = "open",
+        portfolio_id: str = "",
     ) -> str:
         params: dict[str, Any] = {"clientId": client_id, "status": status}
         if exchange:
             params["exchange"] = exchange
         if symbol:
             params["symbol"] = symbol
+        if portfolio_id:
+            params["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/lots", params)
 
-    def list_portfolio_orders(client_id: str, status: str = "open") -> str:
-        return http.get(
-            "/api/v1/portfolio/orders",
-            {"clientId": client_id, "status": status},
-        )
+    def list_portfolio_orders(client_id: str, status: str = "open", portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id, "status": status}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/orders", q)
 
     def cancel_portfolio_order(client_id: str, order_id: str) -> str:
         return http.delete(
@@ -2363,6 +2439,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=DelistInput,
         ),
         StructuredTool.from_function(
+            get_post_delist,
+            name="get_post_delist",
+            description=(
+                "After a venue delisted a pair, off-venue last price and candles "
+                "(another listed venue or CoinGecko USD). Informational only — not "
+                "this exchange's book. Listed/upcoming pairs return available=false."
+            ),
+            args_schema=PostDelistInput,
+        ),
+        StructuredTool.from_function(
             get_fx_rates,
             name="get_fx_rates",
             description=(
@@ -2692,6 +2778,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "On-chain holder count, top 10/50/100 concentration, and top wallets "
                 "for a crypto asset (BTC or BTCUSDT). 404 if unpublished. Informational only."
+            ),
+            args_schema=SupplyInput,
+        ),
+        StructuredTool.from_function(
+            get_asset_profile,
+            name="get_asset_profile",
+            description=(
+                "Asset identity: name, logo, listing date, and contract addresses "
+                "for a crypto or equity ticker. Informational only."
             ),
             args_schema=SupplyInput,
         ),
@@ -3042,8 +3137,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             place_portfolio_pending_order,
             name="place_portfolio_pending_order",
             description=(
-                "Paper pending order: limit_buy, limit_sell, or stop_loss. "
+                "Paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. "
+                "trailing_stop uses trail_type (percent|offset) and trail_value. "
                 "time_in_force gtc|ioc|fok; optional expires_at for GTC. "
+                "Pass portfolio_id when the client has more than one book. "
                 "Pass idempotency_key on retries. Simulated only."
             ),
             args_schema=PortfolioPendingOrderInput,

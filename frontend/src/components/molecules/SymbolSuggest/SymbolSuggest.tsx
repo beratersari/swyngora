@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AutoComplete } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useLazyListSpotMarketsQuery, type MarketExchange } from '@/libs/api';
-import { defaultQuoteForExchange, formatSymbolDisplay, rtkCurrent } from '@/libs/utils';
+import { formatSymbolDisplay, rtkCurrent } from '@/libs/utils';
 import { useDebouncedValue } from '@/libs/hooks';
 import type { SymbolSuggestProps } from './SymbolSuggest.types';
 
@@ -36,7 +36,6 @@ export function SymbolSuggest({
     void fetchSpot({
       exchange: exchange as MarketExchange,
       q,
-      quote: defaultQuoteForExchange(exchange),
       sort: 'quoteVolume',
       order: 'desc',
       limit: 12,

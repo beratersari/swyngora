@@ -1,4 +1,5 @@
 import { env } from '@/config/env';
+import { getBrowserApiToken } from '@/libs/utils/apiAuth';
 import { getOrCreateClientId } from '@/libs/utils/clientId';
 import type { AiChatResponse } from './endpoints/aiApi';
 
@@ -37,6 +38,7 @@ export async function streamAiChat(arg: StreamAiChatArg): Promise<AiStreamEvent>
       Accept: 'application/x-ndjson, application/json',
       'Content-Type': 'application/json',
       'X-Client-Id': getOrCreateClientId(),
+      ...(getBrowserApiToken() ? { Authorization: `Bearer ${getBrowserApiToken()}` } : {}),
     },
     body: JSON.stringify({
       message: arg.message,

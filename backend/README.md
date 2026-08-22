@@ -31,6 +31,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached spot delist schedule (`exchange=`; halt `delistTime` + `announcedAt`; last 30 days + next ~31 days; Binance needs `BINANCE_API_KEY`, Bybit is public announcements) |
+| `GET` | `/api/v1/market/post-delist` | Off-venue last + candles after this exchange halted the pair (other listed venue or CoinGecko USD; informational) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
 | `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list |
 | `GET` | `/api/v1/market/orderbook/history/compare` | Which price levels gained or lost liquidity between two times |
@@ -315,7 +316,7 @@ go run ./cmd/server   # both REST and MCP
 ```
 
 Package: `internal/transport/mcp` (in-process tools → market/watchlist services).  
-Optional stdio-only binary: `go run ./cmd/mcp` (not required for normal use).
+Optional stdio-only binary: `SWYNGORA_API_URL=http://localhost:8080 API_AUTH_TOKEN=… go run ./cmd/mcp` (not required for normal use; `API_AUTH_TOKEN` or `SWYNGORA_API_TOKEN` is sent as `Authorization: Bearer` when the API is locked).
 
 **Rule:** new agent-useful features must add MCP tools in the same change (root `AGENTS.md` §6.5).
 

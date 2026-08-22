@@ -286,6 +286,17 @@ export const marketApi = baseApi.injectEndpoints({
       keepUnusedDataFor: 300,
     }),
 
+    getPostDelist: build.query<
+      import('./marketApi.types').PostDelistResponse,
+      import('./marketApi.types').PostDelistQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/post-delist',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      keepUnusedDataFor: 300,
+    }),
+
     postIndicatorsBatch: build.mutation<
       {
         exchange?: string;
@@ -321,6 +332,7 @@ export const {
   useListProductTagsQuery,
   useListSpotMarketsQuery,
   useListDelistScheduleQuery,
+  useGetPostDelistQuery,
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,

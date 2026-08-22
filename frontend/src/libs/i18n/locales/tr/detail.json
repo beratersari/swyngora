@@ -20,6 +20,7 @@
     "meta": "{{interval}} · {{bars}} bar yüklü · sola kaydırın (1000+ geçmiş sayfalı)",
     "delistAnnounced": "Duyuru",
     "delistHalt": "Delist",
+    "haltedLast": "Son fiyat",
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",
@@ -32,7 +33,19 @@
     "signalMarkers": "Salınım işaretleri",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
-    "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)"
+    "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",
+    "postDelistBanner": "{{date}} sonrası barlar {{source}} — {{exchange}} işlem yok. Yalnızca bilgi amaçlı, yatırım tavsiyesi değildir."
+  },
+  "postDelist": {
+    "title": "Delist sonrası",
+    "subtitle": "Bu borsa bu çifti artık işlememiyor. Aşağıdaki fiyat başka bir kamuya açık kaynaktan — yalnızca bilgi amaçlı, yatırım tavsiyesi değildir.",
+    "last": "Son",
+    "change24h": "24s",
+    "source": "Kaynak",
+    "quote": "Quote",
+    "asOf": "{{date}} itibarıyla",
+    "emptyTitle": "Borsa dışı fiyat yok",
+    "emptyBody": "Bu borsa çifti durdurduktan sonra kamuya açık bir fiyat bulunamadı."
   },
   "stats": {
     "open": "Açılış",
@@ -104,7 +117,8 @@
     "indicators": "göstergeler",
     "intervals": "aralıklar",
     "orderBook": "emir defteri",
-    "tape": "vadeli bant"
+    "tape": "vadeli bant",
+    "postDelist": "delist sonrası fiyat"
   },
   "tape": {
     "title": "Vadeli bant",

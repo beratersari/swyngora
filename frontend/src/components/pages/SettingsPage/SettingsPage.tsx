@@ -23,6 +23,7 @@ import {
   useShareWatchlistMutation,
   useStartExportMutation,
 } from '@/libs/api';
+import { setBrowserApiToken } from '@/libs/utils';
 import { currentClientId, exportDownloadHref } from './SettingsPage.helpers';
 import { FormRow, PageStack, Section } from './SettingsPage.styles';
 
@@ -65,6 +66,7 @@ function KeysPane() {
         onFinish={async (v: { name: string; permission: 'read' | 'trade' }) => {
           const got = await create(v).unwrap();
           setSecret(got.secret ?? null);
+          if (got.secret) setBrowserApiToken(got.secret);
           void message.success(t('settings:keys.created'));
         }}
       >

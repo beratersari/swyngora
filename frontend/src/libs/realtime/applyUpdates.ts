@@ -96,6 +96,7 @@ export function applyPriceTick(dispatch: AppDispatch, getState: () => RootState,
       if (tick.tradeCount != null) draft.tradeCount = tick.tradeCount;
       if (tick.openTime) draft.openTime = tick.openTime;
       if (tick.closeTime) draft.closeTime = tick.closeTime;
+      if (tick.halted != null) draft.halted = tick.halted;
       draft.exchange = exchange;
       draft.symbol = symbol;
     }),

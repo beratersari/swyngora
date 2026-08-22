@@ -107,10 +107,13 @@ export function scalePriceSeries(
   rates?: FxRatesMap | null,
 ): { time: number; value: number }[] {
   if (!points.length || preference === 'native') return points;
-  return points.map((p) => {
+  const out: { time: number; value: number }[] = [];
+  for (const p of points) {
     const next = convertAmount(p.value, nativeQuote, preference, rates);
-    return next === null ? p : { ...p, value: next };
-  });
+    if (next === null) continue;
+    out.push({ ...p, value: next });
+  }
+  return out;
 }
 
 export function formatConvertedCompact(

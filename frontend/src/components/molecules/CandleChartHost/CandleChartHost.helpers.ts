@@ -183,11 +183,13 @@ export function initialVisibleLogicalRange(
   barCount: number,
   visibleBars: number,
   rightPadding: number,
+  anchorEnd = barCount,
 ): { from: number; to: number } | null {
   if (barCount <= 0) return null;
-  const visible = Math.min(barCount, Math.max(1, visibleBars));
+  const end = Math.min(barCount, Math.max(0, anchorEnd));
+  const visible = Math.min(end || barCount, Math.max(1, visibleBars));
   return {
-    from: barCount - visible,
+    from: Math.max(0, (end || barCount) - visible),
     to: barCount + Math.max(0, rightPadding),
   };
 }

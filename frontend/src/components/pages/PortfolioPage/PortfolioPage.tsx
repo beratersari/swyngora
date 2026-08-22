@@ -90,7 +90,7 @@ export function PortfolioPage() {
 
   const portfolioQuery = useGetPortfolioQuery(
     bookId ? { portfolioId: bookId } : undefined,
-    { skip: books.length === 0 && !bookId, pollingInterval: visible ? 15_000 : 0, refetchOnFocus: true },
+    { skip: !bookId && books.length !== 1, pollingInterval: visible ? 15_000 : 0, refetchOnFocus: true },
   );
   const [period, setPeriod] = useState<PortfolioPerformancePeriod>('1w');
   const perfQuery = useGetPortfolioPerformanceQuery(

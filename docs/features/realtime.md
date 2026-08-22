@@ -30,7 +30,7 @@ Empty `symbols` on unsubscribe_prices drops all price subscriptions.
 
 - `hello` — protocol version + clientId
 - `ack` — subscription confirmed
-- `price` — lastPrice / 24h fields for one pair
+- `price` — lastPrice / 24h fields for one pair, plus `halted` when the last print is a delist halt (same meaning as REST `ticker.halted`)
 - `portfolio` — `reason` is `snapshot` \| `order_placed` \| `order_amended` \| `order_cancelled` \| `order_filled` \| `order_updated` \| `cash`; includes `portfolio` snapshot plus optional `order` / `trade` / `orders`
 - `error` — invalid request or access revoked
 - `pong`

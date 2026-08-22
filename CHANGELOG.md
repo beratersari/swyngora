@@ -8,12 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Post-delist movement:** after a venue halt, coin detail shows a labeled off-venue last price and candles (another listed venue or CoinGecko USD) instead of inventing flat Binance bars (`docs/features/delist-schedule.md`)
 - **Delist last print:** already-removed pairs keep last / high / low / volume from the venue kline at halt so Markets and coin detail are not blank (`docs/features/delist-schedule.md`)
 - **Delist market cap:** scheduled delist rows missing Binance circulating supply use CoinGecko public markets so the mcap column is not empty (`docs/features/delist-schedule.md`)
 - **Delist announcement date:** amber Delist tags include when the venue published the notice (`announcedAt` from Binance CMS `releaseDate` and Bybit `publishTime`), not only the halt clock (`docs/features/delist-schedule.md`)
 - **Multi-exchange delist tags:** Binance official schedule (plus CMS “Will Delist” titles) and Bybit announcement dates (article HTML when the list feed is empty). Pairs that delist in the next ~31 days **or in the last 30 days** stay on the default Markets list with an amber Delist tag (and are injected if the venue already halted them). Coinbase / Nasdaq / BIST have no public calendar (`docs/features/delist-schedule.md`)
 
 ### Fixed
+- **Delist chart after halt:** leftover venue klines after a midnight schedule stay visible on the home-venue chart; days after the last print come from the off-venue panel (`docs/features/delist-schedule.md`)
+- **Multi-book risk limits:** GET/PUT risk brakes and buy/margin guards no longer treat the book id as the actor; a second paper book cannot 400 the first book’s limits or block its buys (`docs/features/risk-limits.md`)
+- **Recurring buy overspend:** DCA sizes and fills on one last print so a ticker move between sizing and fill cannot debit more than the plan amount (`docs/features/recurring-buys.md`)
+- **Paper import UUID squat:** extra books always get a new id so an unused UUID-shaped client id cannot be occupied as another tenant’s first book (`docs/features/user-data-import.md`)
+- **Multi-book paper desk:** snapshot query skips until a book is selected; AI and MCP paper tools accept `portfolioId` (`docs/features/paper-trading.md`, `docs/features/ai-assistant.md`)
+- **USD chart native fallback:** ETHBTC (and other non-fiat quotes) no longer plot raw BTC prices on a USD chart when FX cannot convert (`docs/features/display-currency.md`)
+- **Compact limit sell:** coin-detail paper ticket keeps Buy/Sell for limit orders
+- **Heatmap venue URL:** selected exchange is written to `?exchange=` so header jump search stays on Coinbase/Bybit/Nasdaq/BIST
+- **Back to Markets filters:** opening a coin from a filtered list and going back restores search, quote, tag, and page
+- **Symbol typeahead quote pin:** search is not forced to the venue default quote, so ETHBTC is findable
+- **WS halted last-print:** price ticks include `halted` so the tape does not treat a delist last print as live (`docs/features/realtime.md`)
+- **Locked-API browser/stdio auth:** user-issued keys go on REST `Authorization` and WS `?token=`; stdio MCP sends `API_AUTH_TOKEN` / `SWYNGORA_API_TOKEN`
 - **Paper import first-book squat:** extra non-UUID book ids (and UUIDs already owned by another tenant) are reminted so an import cannot occupy another client’s first-book primary key (`docs/features/user-data-import.md`)
 - **Nasdaq/BIST live marks:** Yahoo ticker/candle misses fail closed instead of serving an expired last-good price to paper fills and alerts; equity caches join the process cleanup tick (`docs/features/market-data.md`)
 - **Symbol suggest venue switch:** jump-search / paper / alert typeahead no longer offers the previous exchange’s symbols while the new venue loads

@@ -13,6 +13,7 @@ BIST last prices and mcap are **TRY**. Nasdaq (and Coinbase) are **USD**. Crypto
 - Converted: last / open / high / low / quote volume / market cap / chart OHLC / **EMA (and other price-axis MAs)** overlay + latest EMA snapshot
 - Not converted: base volume (shares/coins), % change, RSI/indicators, paper-book cash (still USDT), order-book grouping
 - Chart uses the **spot** FX rate on historical bars (not historical FX)
+- If FX cannot convert the pair’s quote (e.g. ETHBTC in USD), the header shows **—** and the chart does **not** plot native prices as if they were the display currency
 - Preference is stored in `localStorage` (`swyngora.displayCurrency`)
 
 ## Where the code lives

@@ -19,6 +19,7 @@ export type { DisplayCurrency, FxRatesMap } from './displayCurrency';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
 export type { ParsedTradingPair } from './formatSymbol';
 export { getOrCreateClientId } from './clientId';
+export { BROWSER_API_TOKEN_KEY, getBrowserApiToken, setBrowserApiToken } from './apiAuth';
 export { newPaperIdempotencyKey } from './paperIdempotency';
 export { rtkCurrent, rtkCurrentPending } from './rtkQuery';
 export { CHART_LOCALIZATION, CHART_TIME_SCALE, formatChartDateTime } from './chartTime';
@@ -30,6 +31,8 @@ export {
 } from './aiSessionId';
 export {
   apiCandlesToChart,
+  candleIntervalSeconds,
+  carryForwardCandlesUntil,
   filterValidApiCandles,
   preferLongerCandleSeries,
   mergeCandleHistory,

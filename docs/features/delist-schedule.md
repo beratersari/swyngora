@@ -12,23 +12,24 @@ Show pairs that an exchange **will delist in the next month** or **already delis
 4. **Coinbase / Nasdaq / BIST** — no free upcoming calendar; schedule is empty (`enabled: false`).
 5. Spot rows get `delistTime` (halt), `announcedAt` (when the venue published the notice — Binance CMS `releaseDate`, Bybit `publishTime`), and a synthetic `Delist` tag. The tag shows both dates when `announcedAt` is known.
 6. Pairs that delist in the next **31 days** or in the last **30 days** stay on the default `status=TRADING` list even if the venue already marked them `BREAK`. Missing book rows are injected as stubs so they still appear.
-7. Stubs with no live tape are filled from the venue’s last kline at halt (last / high / low / volume). Live book prices are not overwritten. Coin-detail ticker/candles use the same halt-window fallback. Market cap uses the Binance supply snapshot when present; otherwise CoinGecko public `/coins/markets` (exact ticker, delist rows only).
-8. `GET /api/v1/market/delist-schedule?exchange=` returns that venue’s cache. `enabled` is per venue.
-9. UI: Markets banner + Tags column; Coin Detail header tag. Filter tag **Delist (30 days)** when the venue has rows.
+7. Stubs with no live tape are filled from the venue’s last kline at halt (last / high / low / volume). Live book prices are not overwritten. Coin-detail candles keep leftover venue klines after a midnight schedule (halt + 24h fetch). They do **not** invent flat bars after the last print. After halt the 24h ticker is marked `halted`. Market cap uses the Binance supply snapshot when present; otherwise CoinGecko public `/coins/markets` (exact ticker, delist rows only).
+8. After the official halt, `GET /api/v1/market/post-delist` returns labeled off-venue movement at the chart interval: another listed venue if the pair still trades there, otherwise CoinGecko USD last + OHLC. Coin detail **appends those bars on the single main chart** after the last home-venue print and shows an After delist note. Informational only — not this venue’s book. There is no second chart.
+9. `GET /api/v1/market/delist-schedule?exchange=` returns that venue’s cache. `enabled` is per venue.
+10. UI: Markets banner + Tags column; Coin Detail header tag plus an **After delist** panel. Filter tag **Delist (30 days)** when the venue has rows.
 
 ## Code
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/delist.go` |
+| Domain | `backend/internal/domain/delist.go`, `post_delist.go` |
 | Store | `backend/internal/adapter/deliststore/` |
 | Binance fetch | `backend/internal/adapter/binance/delist.go` |
 | Bybit fetch | `backend/internal/adapter/bybit/delist.go` |
 | Job | `backend/internal/service/delistjob/` (one runner per source) |
 | Enrichment | `enrichDelistTimes`, `injectUpcomingDelists` |
-| HTTP | `GET /api/v1/market/delist-schedule` + `SpotMarket.delistTime` / `announcedAt` |
-| MCP | `list_delist_schedule` |
-| UI | `MarketsPage`, `MarketsTable` / `SpotMetricValue`, `DetailHeader`, coin-detail chart vertical lines (announced + halt; snapped onto existing candles so bars stay visible) |
+| HTTP | `GET /api/v1/market/delist-schedule` + `SpotMarket.delistTime` / `announcedAt`; `GET /api/v1/market/post-delist` |
+| MCP | `list_delist_schedule`, `get_post_delist` |
+| UI | `MarketsPage`, `MarketsTable` / `SpotMetricValue`, `DetailHeader`, coin-detail chart vertical lines (announced + halt; snapped onto existing candles so bars stay visible), `PostDelistPanel` |
 
 ## Config
 
@@ -45,6 +46,7 @@ curl -sS 'http://127.0.0.1:8080/api/v1/market/delist-schedule?exchange=binance' 
 curl -sS 'http://127.0.0.1:8080/api/v1/market/delist-schedule?exchange=bybit' | head
 curl -sS 'http://127.0.0.1:8080/api/v1/market/spot?exchange=binance&tag=Delist&limit=20'
 curl -sS 'http://127.0.0.1:8080/api/v1/market/spot?exchange=bybit&tag=Delist&limit=20'
+curl -sS 'http://127.0.0.1:8080/api/v1/market/post-delist?exchange=binance&symbol=VICUSDT'
 ```
 
 ## Limits

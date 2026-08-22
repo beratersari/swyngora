@@ -66,6 +66,7 @@ type DataPort interface {
 	ListExchanges(ctx context.Context) (json.RawMessage, error)
 	GetFxRates(ctx context.Context) (json.RawMessage, error)
 	ListDelistSchedule(ctx context.Context, exchange string) (json.RawMessage, error)
+	GetPostDelist(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetWatchlistOwned(ctx context.Context, actorClientID, ownerClientID string) (json.RawMessage, error)
 	AddWatchlistItem(ctx context.Context, clientID, exchange, symbol, note string) (json.RawMessage, error)
@@ -177,6 +178,7 @@ type ServerOptions struct {
 	Data       DataPort
 	Accounts   *account.Service // when set, tools with clientId require an active account
 	APIBaseURL string
+	APIToken   string
 	Name       string
 	Version    string
 }
@@ -191,7 +193,7 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 	}
 	var data DataPort = opts.Data
 	if data == nil {
-		data = NewAPIClient(opts.APIBaseURL, 0)
+		data = NewAPIClientWithAuth(opts.APIBaseURL, 0, opts.APIToken)
 	}
 
 	s := server.NewMCPServer(
@@ -996,6 +998,24 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("get_post_delist",
+		mcp.WithDescription("After a venue has delisted a pair, fetch off-venue movement (another listed venue or CoinGecko USD). Informational only — not this exchange's book. Listed/upcoming pairs return available=false."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. VICUSDT")),
+		mcp.WithString("exchange", mcp.Description("Home venue that delisted the pair; default binance")),
+		mcp.WithString("interval", mcp.Description("Candle interval hint; default 1d")),
+		mcp.WithNumber("limit", mcp.Description("Max candles (1-200); default 30")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPostDelist(ctx, req.GetString("exchange", "binance"), symbol, req.GetString("interval", "1d"), req.GetInt("limit", 30))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("get_watchlist",
 		mcp.WithDescription("Get a watchlist by clientId. Optional ownerClientId reads a list shared with the actor (viewer/editor/owner)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Actor opaque client id (not 'default')")),
@@ -1675,6 +1695,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_portfolio_cash_movements",
 		mcp.WithDescription("List paper portfolio deposits, withdrawals, and internal transfers (newest first), including the opening balance."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows (default 50)")),
 		mcp.WithNumber("offset", mcp.Description("Pagination offset")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1682,6 +1703,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListPortfolioCashMovements(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1710,11 +1732,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_portfolio_risk_limits",
 		mcp.WithDescription("Get optional paper risk limits and live status (daily loss %, per-coin weights, whether new buys/margin opens are blocked). Limits never close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetPortfolioRiskLimits(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1725,6 +1749,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("set_portfolio_risk_limits",
 		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. Omit a value to disable that rule. Does not close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("maxDailyLossPct", mcp.Description("0 or omit to disable; else 0.01-100")),
 		mcp.WithNumber("maxAssetWeightPct", mcp.Description("0 or omit to disable; else 0.01-100")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1732,6 +1757,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		var daily, weight *float64
 		if v := req.GetFloat("maxDailyLossPct", 0); v > 0 {
 			daily = &v
@@ -1749,11 +1775,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("clear_portfolio_risk_limits",
 		mcp.WithDescription("Remove all paper risk limits for a client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.DeletePortfolioRiskLimits(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1811,6 +1839,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_portfolio_trades",
 		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, and taker fee."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
 		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1818,6 +1847,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListPortfolioTrades(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1848,6 +1878,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("place_portfolio_pending_order",
 		mcp.WithDescription("Place a paper pending order: limit_buy, limit_sell, stop_loss, or trailing_stop. Buy reservations include slippage and the taker fee. Fills use slipped last price. For trailing_stop use trailType+trailValue. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("type", mcp.Required(), mcp.Description("limit_buy | limit_sell | stop_loss | trailing_stop")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
@@ -1864,6 +1895,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -1897,6 +1929,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("place_portfolio_oco_order",
 		mcp.WithDescription("Place a paper OCO: take-profit limit sell + stop-loss for the same quantity. Full fill of one cancels the other; partial fill shrinks both remainings. Same tick fills at most one leg. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base size for both legs")),
 		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell price (must be above stop)")),
@@ -1910,6 +1943,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1936,6 +1970,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("place_portfolio_bracket_order",
 		mcp.WithDescription("Place a paper bracket: limit-buy entry with take-profit + stop-loss. Exits stay pending until entry fills; exit size tracks filled qty; exits are OCO. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Entry size")),
 		mcp.WithNumber("entryPrice", mcp.Required(), mcp.Description("Limit buy price")),
@@ -1950,6 +1985,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1980,6 +2016,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_portfolio_orders",
 		mcp.WithDescription("List paper pending orders (default status=open)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
 		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
@@ -1988,6 +2025,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListPortfolioOrders(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -1998,12 +2036,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_portfolio_order",
 		mcp.WithDescription("Get one paper pending order plus last price and amend hints (editable, max remaining, available cash/qty including this order's reservation)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		orderID, err := req.RequireString("orderId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2018,6 +2058,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("amend_portfolio_order",
 		mcp.WithDescription("Amend an open paper GTC limit_buy, limit_sell, or stop_loss in place (same id): triggerPrice and/or remainingQuantity. Recalculates reservations; fills immediately if newly marketable. OCO, bracket, trailing, IOC/FOK cannot be amended."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
 		mcp.WithNumber("triggerPrice", mcp.Description("New limit/stop price")),
 		mcp.WithNumber("remainingQuantity", mcp.Description("New remaining size (must stay > 0)")),
@@ -2026,6 +2067,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		orderID, err := req.RequireString("orderId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2047,6 +2089,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("cancel_all_portfolio_orders",
 		mcp.WithDescription("Cancel all open paper pending orders for a client, or only one market when symbol is set. Releases reservations. Empty result is success."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Description("When set, cancel only this pair (e.g. BTCUSDT); omit for all markets")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist; default binance when symbol is set")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2054,6 +2097,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.CancelAllPortfolioOrders(ctx, clientID, req.GetString("exchange", ""), req.GetString("symbol", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2064,12 +2108,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("cancel_portfolio_order",
 		mcp.WithDescription("Cancel an open paper pending order. Canceled orders never fill."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Pending order id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		orderID, err := req.RequireString("orderId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2084,6 +2130,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("create_recurring_buy",
 		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Cash notional per run e.g. 500")),
 		mcp.WithString("frequency", mcp.Required(), mcp.Description("daily | weekly | monthly | interval")),
@@ -2098,6 +2145,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2121,6 +2169,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("update_recurring_buy",
 		mcp.WithDescription("Update a paper recurring buy name, amount, or schedule (frequency/weekday/dayOfMonth/intervalHours). Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 		mcp.WithString("name", mcp.Description("New label")),
 		mcp.WithNumber("amount", mcp.Description("New cash notional per run")),
@@ -2134,6 +2183,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2149,11 +2199,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_recurring_buys",
 		mcp.WithDescription("List paper recurring buy plans for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListRecurringBuyPlans(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2164,12 +2216,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_recurring_buy",
 		mcp.WithDescription("Get one paper recurring buy plan by id."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2184,12 +2238,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("pause_recurring_buy",
 		mcp.WithDescription("Pause a paper recurring buy plan (no further executions until resume)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2204,12 +2260,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("resume_recurring_buy",
 		mcp.WithDescription("Resume a paused paper recurring buy plan."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2224,12 +2282,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("delete_recurring_buy",
 		mcp.WithDescription("Delete a paper recurring buy plan and its run history."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2244,6 +2304,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_recurring_buy_runs",
 		mcp.WithDescription("List execution history for a paper recurring buy plan (succeeded/failed runs)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
 		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
@@ -2252,6 +2313,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		planID, err := req.RequireString("planId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2266,6 +2328,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("create_portfolio_basket",
 		mcp.WithDescription("Create a named paper allocation basket (target percent mix). targetsJSON example: [{\"asset\":\"BTC\",\"weightPct\":50},{\"asset\":\"ETH\",\"weightPct\":30},{\"asset\":\"USDT\",\"weightPct\":20}]. Does not trade. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Basket label e.g. Core 50/30/20")),
 		mcp.WithString("targetsJSON", mcp.Required(), mcp.Description("JSON array of {asset,weightPct,exchange?}")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2273,6 +2336,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		name, err := req.RequireString("name")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2291,11 +2355,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_portfolio_baskets",
 		mcp.WithDescription("List saved paper allocation baskets for a client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListPortfolioBaskets(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2306,12 +2372,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("get_portfolio_basket",
 		mcp.WithDescription("Get a paper allocation basket with live actual vs target weights and proposed rebalance legs (preview, no trades)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("basketId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2326,6 +2394,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("update_portfolio_basket",
 		mcp.WithDescription("Update a paper allocation basket name and/or targetsJSON. Does not trade."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
 		mcp.WithString("name", mcp.Description("New label")),
 		mcp.WithString("targetsJSON", mcp.Description("JSON array of {asset,weightPct,exchange?}")),
@@ -2334,6 +2403,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("basketId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2348,12 +2418,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("delete_portfolio_basket",
 		mcp.WithDescription("Delete a paper allocation basket. Does not trade."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("basketId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2368,12 +2440,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("preview_portfolio_rebalance",
 		mcp.WithDescription("Preview market sells/buys to move a paper portfolio toward a basket. Does not trade. Rebalance is never automatic."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("basketId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2388,12 +2462,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("rebalance_portfolio_basket",
 		mcp.WithDescription("USER-TRIGGERED paper rebalance toward a basket (sell overweight, buy underweight at last price). Drift is allowed until this is called. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("basketId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2408,12 +2484,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("set_margin_mode",
 		mcp.WithDescription("Set paper portfolio margin mode isolated|cross. Blocked while open margin positions or pending margin orders exist."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("mode", mcp.Required(), mcp.Description("isolated | cross")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		mode, err := req.RequireString("mode")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2428,6 +2506,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("adjust_margin",
 		mcp.WithDescription("Add (delta>0) or remove (delta<0) margin from an isolated paper position; recalculates liquidation. Isolated mode only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
 		mcp.WithNumber("delta", mcp.Required(), mcp.Description("Positive add, negative remove")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2435,6 +2514,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("positionId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2453,6 +2533,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("repay_margin_debt",
 		mcp.WithDescription("Repay margin debt without closing: interest first, then principal. Amount in debt units (quote for long, base coins for short)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
 		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Debt units to repay")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2460,6 +2541,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("positionId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2478,6 +2560,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("place_margin_order",
 		mcp.WithDescription("Paper margin open: long|short, leverage 1-10, market or limit (uses account isolated|cross mode). Optional stopLoss/takeProfit. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("long | short")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base quantity")),
@@ -2493,6 +2576,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -2528,11 +2612,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_margin_positions",
 		mcp.WithDescription("List open paper margin positions with mark, unrealized PnL, liquidation price."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListMarginPositions(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2543,6 +2629,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("close_margin_position",
 		mcp.WithDescription("Close all or part of a paper margin position at market. quantity 0 = full close."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
 		mcp.WithNumber("quantity", mcp.Description("Partial size; omit/0 for full")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original close")),
@@ -2551,6 +2638,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		id, err := req.RequireString("positionId")
 		if err != nil {
@@ -2566,6 +2654,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("set_margin_brackets",
 		mcp.WithDescription("Set or clear stop-loss / take-profit on an open paper margin position."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("positionId", mcp.Required(), mcp.Description("Margin position id")),
 		mcp.WithNumber("stopLoss", mcp.Description("Stop-loss price")),
 		mcp.WithNumber("takeProfit", mcp.Description("Take-profit price")),
@@ -2576,6 +2665,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("positionId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2599,6 +2689,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_margin_orders",
 		mcp.WithDescription("List paper margin orders (default status=open)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("status", mcp.Description("open|filled|canceled|rejected|all")),
 		mcp.WithNumber("limit", mcp.Description("Max rows")),
 		mcp.WithNumber("offset", mcp.Description("Offset")),
@@ -2607,6 +2698,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListMarginOrders(ctx, clientID, req.GetString("status", "open"), req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2617,12 +2709,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("cancel_margin_order",
 		mcp.WithDescription("Cancel an open paper margin limit order."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("orderId", mcp.Required(), mcp.Description("Margin order id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		id, err := req.RequireString("orderId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
@@ -2637,6 +2731,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	addTool(mcp.NewTool("list_margin_trades",
 		mcp.WithDescription("List paper margin trade history (open/close/liquidation/sl/tp)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows")),
 		mcp.WithNumber("offset", mcp.Description("Offset")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -2644,6 +2739,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.ListMarginTrades(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

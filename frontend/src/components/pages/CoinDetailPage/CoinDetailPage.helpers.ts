@@ -4,7 +4,7 @@ import type {
 } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
 import { isoToUnixSeconds } from '@/components/molecules/CandleChartHost/CandleChartHost.vertLines';
 import type { PumpEventDto, ScannerResult } from '@/libs/api';
-import { ruleTypeShort } from '@/libs/utils';
+import { candleIntervalSeconds, type ApiCandle, ruleTypeShort } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
 
 /**
@@ -145,6 +145,55 @@ export function mergeChartMarkers(
     byTime.set(m.time, { ...prev, text: base ? `${base} · ${extra}` : extra });
   }
   return [...byTime.values()].sort((a, b) => a.time - b.time);
+}
+
+/** True when the official halt is already in the past. */
+export function isPastDelist(delistTime?: string | null, nowMs = Date.now()): boolean {
+  const halt = Date.parse(delistTime ?? '');
+  return Number.isFinite(halt) && halt < nowMs;
+}
+
+/** How many off-venue bars to fetch so the chart can cover halt → now. */
+export function postDelistCandleLimit(
+  interval: string,
+  delistTime?: string | null,
+  nowMs = Date.now(),
+): number {
+  const step = candleIntervalSeconds(interval);
+  const halt = Date.parse(delistTime ?? '');
+  if (!step || !Number.isFinite(halt) || halt >= nowMs) return 30;
+  const n = Math.ceil((nowMs - halt) / (step * 1000)) + 8;
+  return Math.min(200, Math.max(30, n));
+}
+
+/** Append off-venue bars after the last home-venue print (no invented flats). */
+export function appendCandlesAfter(
+  venue: readonly ApiCandle[],
+  extra: readonly ApiCandle[],
+): ApiCandle[] {
+  if (!extra.length) return [...venue];
+  let cutoff = 0;
+  const last = venue[venue.length - 1];
+  if (last) {
+    const ms = Date.parse(last.openTime);
+    if (Number.isFinite(ms)) cutoff = ms;
+  }
+  const tail = extra.filter((c) => {
+    const t = Date.parse(c.openTime);
+    return Number.isFinite(t) && t > cutoff;
+  });
+  if (!tail.length) return [...venue];
+  return [...venue, ...tail];
+}
+
+/** ISO endTime so already-halted pairs include the last trading session. */
+export function delistCandleQueryEndTime(
+  delistTime?: string | null,
+  nowMs = Date.now(),
+): string | undefined {
+  const halt = Date.parse(delistTime ?? '');
+  if (!Number.isFinite(halt) || halt >= nowMs) return undefined;
+  return new Date(halt + 24 * 60 * 60 * 1000).toISOString();
 }
 
 export function delistEventsToVertLines(args: {

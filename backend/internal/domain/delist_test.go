@@ -36,6 +36,18 @@ func TestDelistVisibleOnTradingList(t *testing.T) {
 	}
 }
 
+func TestHaltCandleEnd(t *testing.T) {
+	halt := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	if !HaltCandleEnd(halt, now).Equal(halt.Add(24 * time.Hour)) {
+		t.Fatal("want halt+24h")
+	}
+	sameDay := time.Date(2026, 8, 17, 3, 0, 0, 0, time.UTC)
+	if !HaltCandleEnd(halt, sameDay).Equal(sameDay) {
+		t.Fatal("must not request after now")
+	}
+}
+
 func TestTickerFromLastCandle(t *testing.T) {
 	got := TickerFromLastCandle("vanryusdt", Candle{Open: "1", Close: "1.1", High: "1.2", Low: "0.9", Volume: "10", QuoteVolume: "11"})
 	if got.Symbol != "VANRYUSDT" || got.LastPrice != "1.1" || got.QuoteVolume != "11" {

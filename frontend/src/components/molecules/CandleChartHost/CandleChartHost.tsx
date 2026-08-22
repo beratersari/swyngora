@@ -63,6 +63,8 @@ export function CandleChartHost({
   isLoadingMore = false,
   hasMoreHistory = true,
   onNeedMoreHistory,
+  rightPadding = INITIAL_RIGHT_PADDING,
+  anchorEndIndex,
 }: CandleChartHostProps) {
   const { t } = useTranslation('common');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -296,7 +298,8 @@ export function CandleChartHost({
         const range = initialVisibleLogicalRange(
           data.length,
           INITIAL_VISIBLE_BARS,
-          INITIAL_RIGHT_PADDING,
+          rightPadding,
+          anchorEndIndex ?? data.length,
         );
         if (range) {
           chart.timeScale().setVisibleLogicalRange(range);

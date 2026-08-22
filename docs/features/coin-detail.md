@@ -35,6 +35,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Supply stats | `GET` | `/api/v1/market/supply` | DET-A §7 |
 | Holder snapshot | `GET` | `/api/v1/market/holders` | [`holders.md`](holders.md) |
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
+| After-delist movement | `GET` | `/api/v1/market/post-delist` | [`delist-schedule.md`](delist-schedule.md) |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
 | Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |
 | Market depth graph | `GET` | `/api/v1/market/orderbook` (same live book) | [`order-book.md`](order-book.md) |
@@ -52,6 +53,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Chart starts the kline fetch immediately (does not wait for the intervals list). A 100-bar first request paints the viewport, then the 300-bar live window replaces it. EMA overlays come from loaded candles so they do not block first paint. The overview chart stays mounted when switching detail tabs.
 - Partial errors per section; supply 404 is soft
+- After the venue halt, leftover real klines stay on the main chart. Later movement is a labeled **After delist** panel (other venue or CoinGecko), not invented home-venue bars.
 
 ### Indicators (DET-B)
 

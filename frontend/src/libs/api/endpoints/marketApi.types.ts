@@ -116,3 +116,5 @@ export type ScanPumpEventsResponse = components['schemas']['PumpScanResponse'];
 
 export type DelistScheduleResponse = components['schemas']['DelistScheduleResponse'];
 export type DelistScheduleItem = components['schemas']['DelistScheduleItem'];
+export type PostDelistResponse = components['schemas']['PostDelistResponse'];
+export type PostDelistQuery = NonNullable<operations['getPostDelist']['parameters']['query']>;

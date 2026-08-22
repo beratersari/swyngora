@@ -1075,6 +1075,50 @@ func (b *Backend) ListDelistSchedule(ctx context.Context, exchange string) (json
 	})
 }
 
+func (b *Backend) GetPostDelist(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error) {
+	view, err := b.Market.GetPostDelist(ctx, exchange, symbol, interval, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{
+		"exchange":           view.Exchange,
+		"symbol":             view.Symbol,
+		"base":               view.Base,
+		"available":          view.Available,
+		"source":             view.Source,
+		"sourceLabel":        view.SourceLabel,
+		"note":               view.Note,
+		"lastPrice":          view.LastPrice,
+		"priceChangePercent": view.PriceChangePercent,
+		"quote":              view.Quote,
+		"interval":           view.Interval,
+	}
+	if !view.DelistTime.IsZero() {
+		out["delistTime"] = view.DelistTime.UTC().Format(time.RFC3339)
+	}
+	if !view.AsOf.IsZero() {
+		out["asOf"] = view.AsOf.UTC().Format(time.RFC3339)
+	}
+	if len(view.Candles) > 0 {
+		items := make([]map[string]any, 0, len(view.Candles))
+		for _, c := range view.Candles {
+			items = append(items, map[string]any{
+				"openTime":    c.OpenTime.UTC().Format(time.RFC3339Nano),
+				"open":        c.Open,
+				"high":        c.High,
+				"low":         c.Low,
+				"close":       c.Close,
+				"volume":      c.Volume,
+				"closeTime":   c.CloseTime.UTC().Format(time.RFC3339Nano),
+				"quoteVolume": c.QuoteVolume,
+				"tradeCount":  c.TradeCount,
+			})
+		}
+		out["candles"] = items
+	}
+	return mustJSON(out)
+}
+
 func (b *Backend) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {
 	return b.GetWatchlistOwned(ctx, clientID, "")
 }

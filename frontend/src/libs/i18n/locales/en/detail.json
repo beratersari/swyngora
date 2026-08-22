@@ -20,6 +20,7 @@
     "meta": "{{interval}} · {{bars}} bars loaded · pan left for older history (pages beyond 1000)",
     "delistAnnounced": "Announced",
     "delistHalt": "Delist",
+    "haltedLast": "Last print",
     "interval": "Interval",
     "bars": "Bars",
     "loadErrorTitle": "Could not load candles",
@@ -32,7 +33,19 @@
     "signalMarkers": "Swing markers",
     "pumpOn": "On",
     "pumpOff": "Off",
-    "pumpHint": "Markers when |return| ≥ threshold (informational only)"
+    "pumpHint": "Markers when |return| ≥ threshold (informational only)",
+    "postDelistBanner": "Bars after {{date}} are {{source}} — {{exchange}} has no trades. Informational only, not financial advice."
+  },
+  "postDelist": {
+    "title": "After delist",
+    "subtitle": "This venue no longer trades the pair. Price below is from another public source — informational only, not financial advice.",
+    "last": "Last",
+    "change24h": "24h",
+    "source": "Source",
+    "quote": "Quote",
+    "asOf": "as of {{date}}",
+    "emptyTitle": "No off-venue price",
+    "emptyBody": "No public price was found after this venue halted the pair."
   },
   "stats": {
     "open": "Open",
@@ -104,7 +117,8 @@
     "indicators": "indicators",
     "intervals": "intervals",
     "orderBook": "order book",
-    "tape": "futures tape"
+    "tape": "futures tape",
+    "postDelist": "post-delist price"
   },
   "tape": {
     "title": "Futures tape",

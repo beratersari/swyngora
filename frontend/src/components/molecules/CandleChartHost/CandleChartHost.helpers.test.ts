@@ -25,6 +25,8 @@ describe('CandleChartHost helpers', () => {
     expect(initialVisibleLogicalRange(300, 80, 6)).toEqual({ from: 220, to: 306 });
     expect(initialVisibleLogicalRange(40, 80, 6)).toEqual({ from: 0, to: 46 });
     expect(initialVisibleLogicalRange(0, 80, 6)).toBeNull();
+    // 80 real bars + 20 carried: first view stays on the last trade, tail is pannable.
+    expect(initialVisibleLogicalRange(100, 80, 6, 80)).toEqual({ from: 0, to: 106 });
   });
 
   it('maps candles to chart series points', () => {

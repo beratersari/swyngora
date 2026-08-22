@@ -20,11 +20,18 @@ import (
 // APIClient is a minimal HTTP client for the Swyngora backend API.
 type APIClient struct {
 	baseURL    string
+	authToken  string
 	httpClient *http.Client
 }
 
 // NewAPIClient constructs a client. baseURL is e.g. http://localhost:8080.
 func NewAPIClient(baseURL string, timeout time.Duration) *APIClient {
+	return NewAPIClientWithAuth(baseURL, timeout, "")
+}
+
+// NewAPIClientWithAuth is NewAPIClient plus a Bearer / X-API-Key secret for
+// locked APIs (stdio MCP: API_AUTH_TOKEN or SWYNGORA_API_TOKEN).
+func NewAPIClientWithAuth(baseURL string, timeout time.Duration, authToken string) *APIClient {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
 		baseURL = "http://localhost:8080"
@@ -33,11 +40,18 @@ func NewAPIClient(baseURL string, timeout time.Duration) *APIClient {
 		timeout = 20 * time.Second
 	}
 	return &APIClient{
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: timeout,
-		},
+		baseURL:    baseURL,
+		authToken:  strings.TrimSpace(authToken),
+		httpClient: &http.Client{Timeout: timeout},
 	}
+}
+
+func (c *APIClient) applyAuth(req *http.Request) {
+	if c == nil || req == nil || c.authToken == "" {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+c.authToken)
+	req.Header.Set("X-API-Key", c.authToken)
 }
 
 func applyPortfolioID(ctx context.Context, req *http.Request) {
@@ -61,6 +75,7 @@ func (c *APIClient) get(ctx context.Context, path string, query url.Values) (jso
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	c.applyAuth(req)
 	applyPortfolioID(ctx, req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -94,6 +109,7 @@ func (c *APIClient) sendJSON(ctx context.Context, method, path string, payload a
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	c.applyAuth(req)
 	applyPortfolioID(ctx, req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -574,6 +590,24 @@ func (c *APIClient) ListDelistSchedule(ctx context.Context, exchange string) (js
 		q.Set("exchange", exchange)
 	}
 	return c.get(ctx, "/api/v1/market/delist-schedule", q)
+}
+
+// GetPostDelist returns off-venue movement after this exchange halted the pair.
+func (c *APIClient) GetPostDelist(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if interval != "" {
+		q.Set("interval", interval)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/post-delist", q)
 }
 
 func (c *APIClient) GetWatchlist(ctx context.Context, clientID string) (json.RawMessage, error) {

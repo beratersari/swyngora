@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { env } from '@/config/env';
+import { getBrowserApiToken } from '@/libs/utils/apiAuth';
 import { getOrCreateClientId } from '@/libs/utils/clientId';
 
 export const baseApi = createApi({
@@ -8,6 +9,8 @@ export const baseApi = createApi({
     baseUrl: env.apiBaseUrl,
     prepareHeaders: (headers) => {
       headers.set('X-Client-Id', getOrCreateClientId());
+      const token = getBrowserApiToken();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
       return headers;
     },
   }),

@@ -44,4 +44,7 @@ export type CandleChartHostProps = WithLoadingProps & {
    * approaches the oldest loaded bar — parent should increase candle limit.
    */
   onNeedMoreHistory?: () => void;
+  rightPadding?: number;
+  /** Index after the last real (non-carried) bar; initial view stays on last trade. */
+  anchorEndIndex?: number;
 };

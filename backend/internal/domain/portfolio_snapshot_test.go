@@ -43,8 +43,8 @@ func TestMustRemintImportedBookID(t *testing.T) {
 	if MustRemintImportedBookID("carol", "carol") {
 		t.Fatal("importer first book must be kept")
 	}
-	if MustRemintImportedBookID(extra, "carol") {
-		t.Fatal("extra UUID book must be kept")
+	if !MustRemintImportedBookID(extra, "carol") {
+		t.Fatal("extra UUID book must be reminted so it cannot squat another tenant")
 	}
 	if !MustRemintImportedBookID("victim", "attacker") {
 		t.Fatal("non-UUID extra id would squat another tenant first book")

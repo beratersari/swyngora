@@ -27,8 +27,14 @@ func main() {
 
 	fmt.Fprintln(os.Stderr, "note: MCP is integrated in cmd/server at /mcp — this stdio binary is optional")
 
+	token := os.Getenv("API_AUTH_TOKEN")
+	if token == "" {
+		token = os.Getenv("SWYNGORA_API_TOKEN")
+	}
+
 	s := mcpx.NewServer(mcpx.ServerOptions{
 		APIBaseURL: apiURL,
+		APIToken:   token,
 		Name:       "swyngora-mcp",
 		Version:    "0.1.0",
 	})

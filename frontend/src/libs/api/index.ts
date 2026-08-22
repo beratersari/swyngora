@@ -10,6 +10,7 @@ export {
   useListProductTagsQuery,
   useListSpotMarketsQuery,
   useListDelistScheduleQuery,
+  useGetPostDelistQuery,
   useLazyListSpotMarketsQuery,
   useListIntervalsQuery,
   useGetCandlesQuery,
@@ -29,7 +30,11 @@ export {
   useScanPumpEventsQuery,
   usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
-export type { DelistScheduleResponse, DelistScheduleItem } from './endpoints/marketApi.types';
+export type {
+  DelistScheduleResponse,
+  DelistScheduleItem,
+  PostDelistResponse,
+} from './endpoints/marketApi.types';
 export type {
   SpotMarket,
   SpotListResponse,

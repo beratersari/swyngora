@@ -19,6 +19,17 @@ describe('patchSpotItem', () => {
     expect(Number(item.marketCapCirculating)).toBeCloseTo(1100);
   });
 
+  it('carries halted on a last-print tick', () => {
+    const tick: RealtimePriceTick = {
+      type: 'price',
+      exchange: 'binance',
+      symbol: 'BTCUSDT',
+      lastPrice: '1.23',
+      halted: true,
+    };
+    expect(tick.halted).toBe(true);
+  });
+
   it('ignores other symbols', () => {
     const item = { symbol: 'ETHUSDT', lastPrice: '100' };
     patchSpotItem(item, {

@@ -348,7 +348,7 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 	tr, _, err := s.PlaceOrder(ctx, OrderInput{
 		ClientID: book.ClientID, PortfolioID: book.ID,
 		Exchange: string(plan.Exchange), Symbol: plan.Symbol,
-		Side: "buy", Quantity: qty,
+		Side: "buy", Quantity: qty, MarkPrice: price,
 	})
 	if err != nil {
 		msg := err.Error()

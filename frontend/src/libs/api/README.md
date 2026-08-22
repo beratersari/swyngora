@@ -33,6 +33,7 @@ import {
   useGetHoldersQuery,
   useListIntervalsQuery,
   useGetIndicatorsQuery,
+  useGetPostDelistQuery,
 } from '@/libs/api';
 
 // pumps / watchlist / AI chat / scanner

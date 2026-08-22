@@ -37,6 +37,20 @@ describe('realtime helpers', () => {
     );
   });
 
+  it('appends a user-issued token for locked APIs and never invents one', () => {
+    const open = realtimeWsUrl('https://api.example.com', 'client-1', undefined, undefined, '');
+    expect(open).toBe('wss://api.example.com/api/v1/ws?clientId=client-1');
+    const locked = realtimeWsUrl(
+      'https://api.example.com',
+      'client-1',
+      undefined,
+      undefined,
+      'swy_user_key',
+    );
+    expect(locked).toContain('clientId=client-1');
+    expect(locked).toMatch(/[?&]token=swy_user_key/);
+  });
+
   it('caps reconnect backoff', () => {
     expect(reconnectDelayMs(0)).toBe(REALTIME_RECONNECT_MIN_MS);
     expect(reconnectDelayMs(1)).toBe(1000);

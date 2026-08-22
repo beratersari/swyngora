@@ -140,6 +140,10 @@ type OrderInput struct {
 	Quantity       float64
 	LotMethod      string // fifo | lifo (sells; ignored on buys)
 	IdempotencyKey string // optional; same key + same request returns the original fill
+	// MarkPrice, when > 0, is the last print used instead of fetching again.
+	// Recurring cash buys pin the mark they sized on so a later ticker cannot
+	// overspend the plan amount. Not mapped from HTTP.
+	MarkPrice float64
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -419,9 +423,15 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	} else if rec != nil {
 		return s.replayTrade(ctx, rec, in.ClientID, p.ID)
 	}
-	last, err := s.lastPrice(ctx, string(ex), sym)
-	if err != nil {
-		return nil, nil, err
+	var last float64
+	if in.MarkPrice > 0 {
+		last = in.MarkPrice
+	} else {
+		var lerr error
+		last, lerr = s.lastPrice(ctx, string(ex), sym)
+		if lerr != nil {
+			return nil, nil, lerr
+		}
 	}
 	cost := s.paperCost(ex)
 	price := domain.ApplySlippage(last, side, cost.SlippageRate)

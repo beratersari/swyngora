@@ -47,7 +47,10 @@ func (s *Service) lastDelistTicker(ctx context.Context, ex domain.Exchange, p do
 }
 
 func lastHaltCandle(ctx context.Context, p domain.MarketDataPort, symbol string, halt time.Time) (domain.Candle, bool) {
-	end := halt.UTC()
+	end := domain.HaltCandleEnd(halt, time.Now().UTC())
+	if end.IsZero() {
+		end = halt.UTC()
+	}
 	for _, iv := range []domain.CandleInterval{domain.Interval1d, domain.Interval1h} {
 		bars, err := p.GetCandles(ctx, domain.CandleQuery{
 			Symbol:   symbol,

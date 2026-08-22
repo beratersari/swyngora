@@ -497,6 +497,7 @@ func priceOutbound(tick domain.PriceTick) Outbound {
 		"openTime":           formatTime(tick.OpenTime),
 		"closeTime":          formatTime(tick.CloseTime),
 		"ts":                 formatTime(tick.UpdatedAt),
+		"halted":             tick.Halted,
 	}
 }
 

@@ -267,6 +267,56 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
 
+  /api/v1/market/post-delist:
+    get:
+      summary: Off-venue price after this exchange delisted the pair
+      description: |
+        After a venue has halted a pair, Binance (or that venue) has no new
+        trades. This returns a labeled public reference: another listed venue
+        if the pair still trades there, otherwise CoinGecko USD last + OHLC.
+        Informational only — not this venue's book, not financial advice.
+        Listed and upcoming pairs return `available: false`.
+      operationId: getPostDelist
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          required: false
+          schema:
+            type: string
+            default: binance
+            enum: [binance, coinbase, bybit, nasdaq, bist]
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+            example: VICUSDT
+        - name: interval
+          in: query
+          required: false
+          description: Hint for other-venue candles. CoinGecko OHLC is daily (7d or 30d).
+          schema:
+            type: string
+            default: 1d
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+            minimum: 1
+            maximum: 200
+      responses:
+        '200':
+          description: Post-delist off-venue snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDelistResponse'
+        '400':
+          $ref: '#/components/responses/Error'
+
   /api/v1/market/spot:
     get:
       summary: List Binance spot markets with search and sort
@@ -6765,3 +6815,37 @@ components:
           type: string
           format: date-time
           description: When the venue published the delist announcement (UTC)
+    PostDelistResponse:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        base: { type: string }
+        delistTime:
+          type: string
+          format: date-time
+        available:
+          type: boolean
+          description: True when an off-venue last price was found
+        source:
+          type: string
+          description: Provider id (coingecko, bybit, coinbase, binance)
+        sourceLabel:
+          type: string
+          description: Human label for the source
+        note:
+          type: string
+          description: Why this is not the home venue tape
+        lastPrice: { type: string }
+        priceChangePercent: { type: string }
+        quote:
+          type: string
+          description: Quote asset of lastPrice (USD or USDT)
+        asOf:
+          type: string
+          format: date-time
+        interval: { type: string }
+        candles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Candle'

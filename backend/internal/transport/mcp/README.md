@@ -44,6 +44,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_asset_profile` | Logo URL, listing date, and published token contracts |
 | `list_spot_markets` | Search/sort spot/equity list (`binance` / `coinbase` / `bybit` / `nasdaq` / `bist`) |
 | `list_delist_schedule` | Scheduled spot delists per venue (halt `delistTime` + `announcedAt` when the notice was published) |
+| `get_post_delist` | Off-venue last + candles after this venue halted the pair (other listed venue or CoinGecko USD) |
 | `get_indicators` | RSI/EMA |
 | `analyze_swing` | 4h+1d swing engine (quality gates, ATR stop/TP) |
 | `scan_swing_setups` | Watchlist swing scan |
@@ -77,11 +78,11 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `revoke_portfolio_share` | Remove a share |
 | `list_portfolio_shares` | Outgoing shares (owner) |
 | `list_shared_portfolios` | Books shared with you |
-| `get_portfolio` | Cash, positions, P&L snapshot (optional `portfolioId`) |
+| `get_portfolio` | Cash, positions, P&L snapshot (optional `portfolioId`; required when the client has 2+ books) |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `transfer_portfolio_cash` | Move cash between your own books (owner only; not deposit/withdrawal) |
 | `withdraw_portfolio_cash` | Withdraw available virtual cash |
-| `list_portfolio_cash_movements` | Deposit/withdraw history |
+| `list_portfolio_cash_movements` | Deposit/withdraw history (optional `portfolioId`) |
 | `get_portfolio_performance` | Equity history + period P&L (1d/1w/1m/3m) |
 | `get_portfolio_risk_limits` | Optional risk limits + live status |
 | `set_portfolio_risk_limits` | Set daily-loss % and/or max coin weight % |

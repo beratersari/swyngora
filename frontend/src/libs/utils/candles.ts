@@ -59,6 +59,80 @@ export function preferLongerCandleSeries(
   return undefined;
 }
 
+const CARRY_FORWARD_MAX_BARS = 200;
+
+function visibleLastPriceWick(last: ApiCandle): { high: string; low: string } {
+  const close = Number(last.close);
+  const high = Number(last.high);
+  const low = Number(last.low);
+  if (Number.isFinite(high) && Number.isFinite(low) && high > low) {
+    return { high: last.high, low: last.low };
+  }
+  const n = Number.isFinite(close) ? close : 0;
+  const tick = n === 0 ? 1e-8 : Math.abs(n) * 0.002;
+  return { high: String(n + tick), low: String(n - tick) };
+}
+
+/** Seconds per bar. `1M` is ~30d (intervalToSeconds treats it as 0). */
+export function candleIntervalSeconds(interval: string): number {
+  const raw = (interval ?? '').trim();
+  if (raw === '1M') return 30 * 86400;
+  const m = /^(\d+)([mhdw])$/.exec(raw);
+  if (!m) return 0;
+  const n = Number(m[1]);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  switch (m[2]) {
+    case 'm':
+      return n * 60;
+    case 'h':
+      return n * 3600;
+    case 'd':
+      return n * 86400;
+    case 'w':
+      return n * 604800;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * After the last venue print, keep drawing candles through `untilMs` at the
+ * last close. High/low reuse the last real wick so Lightweight Charts still
+ * paints a body (O=H=L=C bars are invisible).
+ */
+export function carryForwardCandlesUntil(
+  candles: readonly ApiCandle[],
+  untilMs: number,
+  intervalSec: number,
+): ApiCandle[] {
+  if (!candles.length || intervalSec <= 0 || !Number.isFinite(untilMs)) {
+    return [...candles];
+  }
+  const last = candles[candles.length - 1]!;
+  const lastOpen = Date.parse(last.openTime);
+  if (!Number.isFinite(lastOpen)) return [...candles];
+  const step = intervalSec * 1000;
+  const px = last.close;
+  const { high, low } = visibleLastPriceWick(last);
+  const out = [...candles];
+  let t = lastOpen + step;
+  let n = 0;
+  while (t < untilMs && n < CARRY_FORWARD_MAX_BARS) {
+    out.push({
+      openTime: new Date(t).toISOString(),
+      open: px,
+      high,
+      low,
+      close: px,
+      volume: '0',
+      closeTime: new Date(t + step - 1).toISOString(),
+    });
+    t += step;
+    n += 1;
+  }
+  return out;
+}
+
 /** Keep candles with complete OHLC + openTime. */
 export function filterValidApiCandles(
   candles: readonly (Partial<ApiCandle> | undefined)[] | undefined,
