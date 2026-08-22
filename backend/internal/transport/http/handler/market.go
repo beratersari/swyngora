@@ -1549,7 +1549,7 @@ func (h *MarketHandler) ListDelistSchedule(w http.ResponseWriter, r *http.Reques
 	ex, _ := h.svc.ResolveExchange(exchange)
 	out := delistScheduleResponse{
 		Exchange: string(ex),
-		Enabled:  h.svc.DelistEnabled(),
+		Enabled:  h.svc.DelistEnabledFor(exchange),
 		Items:    make([]delistEntryDTO, 0, len(entries)),
 	}
 	for _, e := range entries {

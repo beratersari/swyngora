@@ -42,7 +42,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_supply` | Supply snapshot |
 | `get_holders` | Holder count, concentration, top wallets (crypto; CMC public snapshot) |
 | `list_spot_markets` | Search/sort spot/equity list (`binance` / `coinbase` / `bybit` / `nasdaq` / `bist`) |
-| `list_delist_schedule` | Binance scheduled spot delists (also bound in Python `market_tape_agent`) |
+| `list_delist_schedule` | Scheduled spot delists per venue (Binance official + Bybit announcements) |
 | `get_indicators` | RSI/EMA |
 | `analyze_swing` | 4h+1d swing engine (quality gates, ATR stop/TP) |
 | `scan_swing_setups` | Watchlist swing scan |

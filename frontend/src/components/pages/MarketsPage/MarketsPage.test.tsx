@@ -15,6 +15,11 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useListExchangesQuery: () => mockExchanges(),
     useListProductTagsQuery: () => mockTags(),
     useListSpotMarketsQuery: () => mockSpot(),
+    useListDelistScheduleQuery: () => ({
+      data: { exchange: 'binance', enabled: true, items: [] },
+      isSuccess: true,
+      isLoading: false,
+    }),
     useGetWatchlistQuery: () => ({ data: { items: [] }, isLoading: false }),
     useAddWatchlistItemMutation: () => [vi.fn(), { isLoading: false }],
     useRemoveWatchlistItemMutation: () => [vi.fn(), { isLoading: false }],

@@ -33,6 +33,7 @@ type Service struct {
 	supply        domain.SupplyPort
 	delist        domain.SpotDelistStore
 	delistEnabled bool
+	delistSource  map[domain.Exchange]bool
 	walls         *domain.WallMemory
 	icebergs      *domain.IcebergMemory
 	heat          *domain.HeatmapTape
@@ -250,7 +251,7 @@ func (s *Service) WithDelistStore(store domain.SpotDelistStore) *Service {
 	return s
 }
 
-// WithDelistEnabled marks whether hourly delist refresh is configured.
+// WithDelistEnabled marks whether any venue delist refresh is configured.
 func (s *Service) WithDelistEnabled(enabled bool) *Service {
 	if s != nil {
 		s.delistEnabled = enabled
@@ -258,9 +259,39 @@ func (s *Service) WithDelistEnabled(enabled bool) *Service {
 	return s
 }
 
-// DelistEnabled reports whether delist data can be populated.
+// WithDelistSource records that a venue has a live delist feed.
+func (s *Service) WithDelistSource(ex domain.Exchange, enabled bool) *Service {
+	if s == nil {
+		return s
+	}
+	if s.delistSource == nil {
+		s.delistSource = map[domain.Exchange]bool{}
+	}
+	s.delistSource[ex] = enabled
+	if enabled {
+		s.delistEnabled = true
+	}
+	return s
+}
+
+// DelistEnabled reports whether any venue delist refresh is configured.
 func (s *Service) DelistEnabled() bool {
 	return s != nil && s.delistEnabled
+}
+
+// DelistEnabledFor reports whether this venue has a delist feed (or cached rows).
+func (s *Service) DelistEnabledFor(exchange string) bool {
+	if s == nil {
+		return false
+	}
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil {
+		return false
+	}
+	if s.delistSource[ex] {
+		return true
+	}
+	return s.delist != nil && len(s.delist.List(ex)) > 0
 }
 
 // ListDelistSchedule returns cached schedule for an exchange.
@@ -1127,6 +1158,7 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 		s.enrichProductTags(ctx, all)
 	}
 	s.enrichDelistTimes(ex, all)
+	all = s.injectUpcomingDelists(ex, all)
 
 	filtered := filterSpotMarkets(all, q)
 
@@ -1440,7 +1472,12 @@ func filterSpotMarkets(all []domain.SpotMarket, q domain.SpotListQuery) []domain
 			continue
 		}
 		if q.Status != "" && !strings.EqualFold(m.Status, q.Status) {
-			continue
+			// Keep pairs that delist within a month so they stay on the default
+			// TRADING list with a Delist tag even after the venue marks them BREAK.
+			if !strings.EqualFold(q.Status, "TRADING") || m.DelistTime == nil ||
+				!domain.DelistVisibleOnTradingList(*m.DelistTime, time.Now()) {
+				continue
+			}
 		}
 		if len(q.Tags) > 0 && !marketHasAnyTag(m, q.Tags) {
 			continue
@@ -1703,6 +1740,53 @@ func (s *Service) enrichDelistTimes(ex domain.Exchange, items []domain.SpotMarke
 			items[i].Tags = ensureTag(items[i].Tags, domain.TagDelist)
 		}
 	}
+}
+
+// injectUpcomingDelists appends stub rows for scheduled pairs missing from the
+// live book so a 1-month delist still appears when the venue already halted it.
+func (s *Service) injectUpcomingDelists(ex domain.Exchange, items []domain.SpotMarket) []domain.SpotMarket {
+	if s.delist == nil || domain.IsEquityExchange(ex) {
+		return items
+	}
+	now := time.Now().UTC()
+	have := make(map[string]struct{}, len(items))
+	for i := range items {
+		have[strings.ToUpper(items[i].Symbol)] = struct{}{}
+	}
+	for _, e := range s.delist.List(ex) {
+		if !domain.DelistVisibleOnTradingList(e.DelistTime, now) {
+			continue
+		}
+		sym := strings.ToUpper(e.Symbol)
+		if _, ok := have[sym]; ok {
+			continue
+		}
+		base, quote := inferDelistBaseQuote(ex, sym)
+		tt := e.DelistTime
+		items = append(items, domain.SpotMarket{
+			Symbol:     sym,
+			BaseAsset:  base,
+			QuoteAsset: quote,
+			Status:     "TRADING",
+			Tags:       []string{domain.TagDelist},
+			DelistTime: &tt,
+		})
+		have[sym] = struct{}{}
+	}
+	return items
+}
+
+func inferDelistBaseQuote(ex domain.Exchange, symbol string) (base, quote string) {
+	s := domain.NormalizeSymbol(ex, symbol)
+	if i := strings.Index(s, "-"); i > 0 {
+		return s[:i], s[i+1:]
+	}
+	for _, q := range []string{"USDT", "USDC", "USDE", "FDUSD", "BUSD", "TUSD", "DAI", "USD", "EUR", "TRY", "MNT", "BTC", "ETH"} {
+		if strings.HasSuffix(s, q) && len(s) > len(q) {
+			return s[:len(s)-len(q)], q
+		}
+	}
+	return s, ""
 }
 
 func ensureTag(tags []string, tag string) []string {

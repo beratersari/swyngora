@@ -12,7 +12,7 @@
     "tagAria": "Ürün etiketi",
     "tagPlaceholder": "Etiket",
     "allTags": "Tüm etiketler",
-    "delistTag": "Delist (planlı)"
+    "delistTag": "Delist (30 gün)"
   },
   "results": {
     "loading": "Piyasalar yükleniyor…",
@@ -62,7 +62,8 @@
   "resource": "piyasalar",
   "delist": {
     "disabledTitle": "Delist etiketleri kullanılamıyor",
-    "disabledBody": "Binance spot delist takvimini yüklemek için backend’de BINANCE_API_KEY ayarlayın.",
-    "activeHint": "Delist takviminde {{count}} çift var — Etiketler sütununa bakın."
+    "disabledBody": "Binance resmi takvimi için backend’de BINANCE_API_KEY ayarlayın. Bybit duyuruları anahtarsız yüklenir.",
+    "unsupportedBody": "Bu borsanın herkese açık yaklaşan delist takvimi yok.",
+    "activeHint": "Son 30 günde delist olan veya önümüzdeki ay delist olacak {{count}} çift — kehribar Delist etiketine bakın."
   }
 }

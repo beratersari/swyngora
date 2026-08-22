@@ -1037,7 +1037,7 @@ func (b *Backend) ListDelistSchedule(ctx context.Context, exchange string) (json
 	}
 	return mustJSON(map[string]any{
 		"exchange": string(ex),
-		"enabled":  b.Market.DelistEnabled(),
+		"enabled":  b.Market.DelistEnabledFor(string(ex)),
 		"items":    items,
 	})
 }

@@ -30,7 +30,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
-| `GET` | `/api/v1/market/delist-schedule` | Cached Binance spot delist schedule (`BINANCE_API_KEY`) |
+| `GET` | `/api/v1/market/delist-schedule` | Cached spot delist schedule (`exchange=`; last 30 days + next ~31 days; Binance needs `BINANCE_API_KEY`, Bybit is public announcements) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
 | `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list |
 | `GET` | `/api/v1/market/orderbook/history/compare` | Which price levels gained or lost liquidity between two times |

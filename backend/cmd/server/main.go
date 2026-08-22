@@ -20,8 +20,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
-	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
+	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
@@ -164,7 +164,7 @@ func main() {
 	defer bybitClient.Close()
 
 	delistStore := deliststore.NewMemory()
-	delistEnabled := cfg.BinanceAPIKey != ""
+	binanceDelist := cfg.BinanceAPIKey != ""
 	liqBook := domain.NewLiquidationBook()
 
 	futuresStore, err := futuresstore.Open(cfg.FuturesHistoryDBPath)
@@ -209,7 +209,7 @@ func main() {
 		domain.ExchangeBybit:    bybitClient,
 		domain.ExchangeNasdaq:   equities.NewNasdaq(equities.Options{HTTPClient: httpClient}),
 		domain.ExchangeBist:     equities.NewBist(equities.Options{HTTPClient: httpClient}),
-	}, binanceClient).WithDelistStore(delistStore).WithDelistEnabled(delistEnabled).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
+	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient)).WithHolders(cmc.New(cmc.Options{
 		BaseURL:    cfg.CMCBaseURL,
 		HTTPClient: httpClient,
 		Catalog:    binanceClient,
@@ -578,7 +578,7 @@ func main() {
 	}
 	go job.Start(ctx)
 
-	if cfg.BinanceAPIKey != "" {
+	if binanceDelist {
 		go (&delistjob.Runner{
 			Source:     binanceClient,
 			Store:      delistStore,
@@ -587,13 +587,25 @@ func main() {
 			Logger:     logger,
 			Exchange:   domain.ExchangeBinance,
 		}).Start(ctx)
-		logger.Info("delist schedule refresh enabled",
+		logger.Info("binance delist schedule refresh enabled",
 			"every", cfg.DelistRefreshEvery.String(),
 			"on_startup", cfg.DelistRefreshOnStartup,
 		)
 	} else {
-		logger.Info("delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
+		logger.Info("binance delist schedule disabled (set BINANCE_API_KEY to enable hourly refresh)")
 	}
+	go (&delistjob.Runner{
+		Source:     bybitClient,
+		Store:      delistStore,
+		Interval:   cfg.DelistRefreshEvery,
+		RunOnStart: cfg.DelistRefreshOnStartup,
+		Logger:     logger,
+		Exchange:   domain.ExchangeBybit,
+	}).Start(ctx)
+	logger.Info("bybit delist announcement refresh enabled",
+		"every", cfg.DelistRefreshEvery.String(),
+		"on_startup", cfg.DelistRefreshOnStartup,
+	)
 
 	go binanceLiq.Start(ctx)
 	go bybitLiq.Start(ctx)

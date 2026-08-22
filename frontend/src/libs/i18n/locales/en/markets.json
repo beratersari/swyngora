@@ -12,7 +12,7 @@
     "tagAria": "Product tag",
     "tagPlaceholder": "Tag",
     "allTags": "All tags",
-    "delistTag": "Delist (scheduled)"
+    "delistTag": "Delist (30 days)"
   },
   "results": {
     "loading": "Loading markets…",
@@ -62,7 +62,8 @@
   "resource": "markets",
   "delist": {
     "disabledTitle": "Delist tags unavailable",
-    "disabledBody": "Set BINANCE_API_KEY on the backend to load Binance’s spot delist schedule. Delist dates then appear as tags in the Tags column.",
-    "activeHint": "{{count}} pair(s) on the delist schedule — see the Tags column (amber Delist tag)."
+    "disabledBody": "Set BINANCE_API_KEY on the backend to load Binance’s official spot delist schedule. Bybit uses public announcements (no key). Delist dates then appear as tags in the Tags column.",
+    "unsupportedBody": "This venue has no public upcoming-delist calendar. Pairs still trading stay in the list without a date.",
+    "activeHint": "{{count}} pair(s) delisted in the last 30 days or scheduled in the next month — see the amber Delist tag."
   }
 }

@@ -9,14 +9,34 @@ import (
 // It appears in the Markets tag filter and in the Tags column.
 const TagDelist = "Delist"
 
+// DelistVisibleHorizon is how far ahead a scheduled delist is promoted onto
+// the default TRADING markets list (about one calendar month).
+const DelistVisibleHorizon = 31 * 24 * time.Hour
+
+// DelistPastHorizon is how long an already-halted pair stays on the Markets
+// list with a Delist tag (last 30 days).
+const DelistPastHorizon = 30 * 24 * time.Hour
+
 // SpotDelistEntry is a scheduled spot-pair delisting on a venue.
 type SpotDelistEntry struct {
-	// Exchange is the venue id (currently binance only).
+	// Exchange is the venue id (binance, bybit, …).
 	Exchange Exchange
 	// Symbol is the native pair id (e.g. ADAUSDT).
 	Symbol string
 	// DelistTime is when trading ceases (UTC).
 	DelistTime time.Time
+}
+
+// DelistVisibleOnTradingList is true when the pair should stay on the default
+// markets list with a Delist tag: delist is within the next month, or in the
+// last 30 days (already-removed pairs stay visible).
+func DelistVisibleOnTradingList(delist, now time.Time) bool {
+	if delist.IsZero() {
+		return false
+	}
+	t := delist.UTC()
+	n := now.UTC()
+	return !t.Before(n.Add(-DelistPastHorizon)) && !t.After(n.Add(DelistVisibleHorizon))
 }
 
 // SpotDelistSchedulePort loads scheduled spot delistings from a venue (e.g. Binance).

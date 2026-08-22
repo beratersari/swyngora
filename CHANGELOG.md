@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-exchange delist tags:** Binance official schedule (plus CMS “Will Delist” titles) and Bybit announcement dates (article HTML when the list feed is empty). Pairs that delist in the next ~31 days **or in the last 30 days** stay on the default Markets list with an amber Delist tag (and are injected if the venue already halted them). Coinbase / Nasdaq / BIST have no public calendar (`docs/features/delist-schedule.md`)
+
 ### Fixed
 - **Coin-detail candle first paint:** klines start immediately (no intervals waterfall), a 100-bar request paints the viewport while the 300-bar window loads, and the chart no longer waits on indicators or remounts when switching tabs (`docs/features/coin-detail.md`)
 - **Coin-detail EMA on pan:** EMA overlays are computed from every loaded candle so the line continues when you scroll into older history (`docs/features/coin-detail.md`)

@@ -217,7 +217,7 @@ export function CoinDetailPage() {
   const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const delistQuery = useListDelistScheduleQuery(
     { exchange: (exchange ?? 'binance') as MarketExchange },
-    { skip: !exchange || exchange !== 'binance' },
+    { skip: !exchange || isEquity },
   );
   const delistTime = useMemo(() => {
     if (!symbol || !delistQuery.data?.items?.length) return null;

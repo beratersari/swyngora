@@ -239,7 +239,12 @@ paths:
     get:
       summary: List scheduled spot delistings
       description: |
-        Cached Binance spot delist schedule (hourly when BINANCE_API_KEY is set).
+        Cached spot delist schedule per venue. Binance uses the official
+        wallet schedule when BINANCE_API_KEY is set. Bybit is parsed from
+        public delisting announcements (no key). Coinbase / Nasdaq / BIST
+        have no free future calendar. Pairs that delist in the next ~31 days
+        or in the last 30 days stay on the default TRADING markets list
+        with a Delist tag.
       operationId: listDelistSchedule
       tags: [Market]
       parameters:
@@ -6678,7 +6683,7 @@ components:
         exchange: { type: string }
         enabled:
           type: boolean
-          description: False when BINANCE_API_KEY is not configured
+          description: False when this venue has no delist feed (Binance needs BINANCE_API_KEY; Bybit is always on)
         items:
           type: array
           items:

@@ -105,9 +105,11 @@ export function MarketsPage() {
     pollingInterval: !visible ? 0 : livePrices ? SPOT_LIST_WS_REST_POLL_MS : DEFAULT_SPOT_POLL_MS,
     refetchOnFocus: true,
   });
+  const delistVenue =
+    state.exchange === 'binance' || state.exchange === 'bybit' || state.exchange === 'coinbase';
   const delistQuery = useListDelistScheduleQuery(
     { exchange: state.exchange },
-    { skip: state.exchange !== 'binance' },
+    { skip: !delistVenue },
   );
   const delistEnabled = delistQuery.data?.enabled !== false;
   const delistCount = delistQuery.data?.items?.length ?? 0;
@@ -252,7 +254,12 @@ export function MarketsPage() {
           description={t('markets:delist.disabledBody')}
         />
       ) : null}
-      {state.exchange === 'binance' && delistQuery.isSuccess && delistEnabled && delistCount > 0 ? (
+      {state.exchange === 'coinbase' && delistQuery.isSuccess && !delistEnabled ? (
+        <Text variant="caption" color="secondary">
+          {t('markets:delist.unsupportedBody')}
+        </Text>
+      ) : null}
+      {delistVenue && delistQuery.isSuccess && delistEnabled && delistCount > 0 ? (
         <Text variant="caption" color="secondary">
           {t('markets:delist.activeHint', { count: delistCount })}
         </Text>

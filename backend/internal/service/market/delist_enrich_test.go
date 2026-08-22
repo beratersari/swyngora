@@ -50,6 +50,56 @@ func TestEnrichDelistTimesAddsTagAndTime(t *testing.T) {
 	}
 }
 
+func TestInjectUpcomingDelistsAddsMissingSoonPair(t *testing.T) {
+	store := deliststore.NewMemory()
+	when := time.Now().UTC().Add(10 * 24 * time.Hour)
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "SOONUSDT", DelistTime: when},
+		{Symbol: "LATERUSDT", DelistTime: time.Now().UTC().Add(60 * 24 * time.Hour)},
+	})
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{}, nil).WithDelistStore(store)
+	items := []domain.SpotMarket{{Symbol: "BTCUSDT", Status: "TRADING"}}
+	got := svc.injectUpcomingDelists(domain.ExchangeBybit, items)
+	if len(got) != 2 {
+		t.Fatalf("len=%d %+v", len(got), got)
+	}
+	if got[1].Symbol != "SOONUSDT" || got[1].DelistTime == nil || got[1].Tags[0] != domain.TagDelist {
+		t.Fatalf("injected=%+v", got[1])
+	}
+}
+
+func TestInjectUpcomingDelistsAddsRecentPastPair(t *testing.T) {
+	store := deliststore.NewMemory()
+	when := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	store.ReplaceAll(domain.ExchangeBybit, []domain.SpotDelistEntry{
+		{Symbol: "GONEUSDT", DelistTime: when},
+		{Symbol: "ANCIENTUSDT", DelistTime: time.Now().UTC().Add(-40 * 24 * time.Hour)},
+	})
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{}, nil).WithDelistStore(store)
+	items := []domain.SpotMarket{{Symbol: "BTCUSDT", Status: "TRADING"}}
+	got := svc.injectUpcomingDelists(domain.ExchangeBybit, items)
+	if len(got) != 2 {
+		t.Fatalf("len=%d %+v", len(got), got)
+	}
+	if got[1].Symbol != "GONEUSDT" || got[1].DelistTime == nil || got[1].Tags[0] != domain.TagDelist {
+		t.Fatalf("injected=%+v", got[1])
+	}
+}
+
+func TestFilterSpotKeepsUpcomingDelistOnTradingQuery(t *testing.T) {
+	when := time.Now().UTC().Add(5 * 24 * time.Hour)
+	past := time.Now().UTC().Add(-10 * 24 * time.Hour)
+	all := []domain.SpotMarket{
+		{Symbol: "BTCUSDT", Status: "TRADING", QuoteAsset: "USDT"},
+		{Symbol: "DEADUSDT", Status: "BREAK", QuoteAsset: "USDT", DelistTime: &when, Tags: []string{domain.TagDelist}},
+		{Symbol: "GONEUSDT", Status: "BREAK", QuoteAsset: "USDT", DelistTime: &past, Tags: []string{domain.TagDelist}},
+	}
+	got := filterSpotMarkets(all, domain.SpotListQuery{Status: "TRADING", QuoteAsset: "USDT"})
+	if len(got) != 3 {
+		t.Fatalf("want BTC + upcoming + last-30d delist, got %+v", got)
+	}
+}
+
 func TestWithDelistFilterTag(t *testing.T) {
 	store := deliststore.NewMemory()
 	store.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
