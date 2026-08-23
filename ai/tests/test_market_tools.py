@@ -109,6 +109,15 @@ class _Transport(httpx.BaseTransport):
             )
         if request.url.path.endswith("/exchanges"):
             return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
+        if request.url.path.endswith("/absorption"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "summary": "bids absorbing market sells",
+                    "combined": {"current": {"kind": "bid", "score": 72}},
+                },
+            )
         if request.url.path.endswith("/volume-profile"):
             return httpx.Response(
                 200,
@@ -178,6 +187,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))
     assert lsr["venues"][0]["current"]["bias"] == "long"
+
+    assert "get_absorption" in by_name
+    absorb = json.loads(by_name["get_absorption"].invoke({"symbol": "BTCUSDT"}))
+    assert absorb["combined"]["current"]["kind"] == "bid"
 
     assert "get_volume_profile" in by_name
     vp = json.loads(

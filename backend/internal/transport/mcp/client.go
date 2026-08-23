@@ -340,6 +340,16 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.R
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
+// GetAbsorption returns aggressive volume versus price hold (who is absorbing).
+func (c *APIClient) GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/absorption", q)
+}
+
 // GetVolumeProfile returns traded volume by price (POC + value area).
 func (c *APIClient) GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error) {
 	q := url.Values{}

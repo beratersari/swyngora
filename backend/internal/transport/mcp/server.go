@@ -46,6 +46,7 @@ type DataPort interface {
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
+	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
@@ -619,6 +620,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_absorption",
+		mcp.WithDescription("When big market buys or sells hit but price barely moves: how much buy/sell volume came in, how far price moved, which side is absorbing (bids absorbing sells, or asks absorbing buys), and how strong that is (score 0–100, weak–extreme). Windows 15m / 1h / 4h / 24h plus the current consecutive run. Binance and Bybit separately plus combined; futures and spot. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetAbsorption(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

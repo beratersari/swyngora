@@ -63,6 +63,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
 - `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h); venue split and spot-vs-futures split. See [`cvd.md`](cvd.md).
 - `GET /api/v1/market/volume-profile` volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined. See [`volume-profile.md`](volume-profile.md).
+- `GET /api/v1/market/absorption` large market buys/sells versus little price move; which side is absorbing and how strong. See [`absorption.md`](absorption.md).
 - `GET /api/v1/market/basis` perp vs spot/index premium or discount. See [`basis.md`](basis.md).
 - `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
 - `GET /api/v1/market/breadth` how many followed coins are up vs down (1h / 4h / 24h). See [`breadth.md`](breadth.md).

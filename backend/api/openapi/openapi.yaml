@@ -1345,6 +1345,41 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/absorption:
+    get:
+      summary: Absorption (large flow, little price)
+      description: |
+        Detects **absorption**: large aggressive **market buys or sells**
+        while price barely moves — someone on the other side is taking
+        the flow. Each 15m / 1h / 4h / 24h window (and each 5-minute bar)
+        shows buy/sell notional, price change, which side is absorbing
+        (`bid` = bids absorbing sells, `ask` = asks absorbing buys),
+        `result` (`held` or `pushed` against the aggressive side), and a
+        0–100 `score` / `grade`. `current` is the latest consecutive run.
+        `exchange=all` (default) returns Binance and Bybit plus combined.
+        `venues` / `combined` are futures; `spotVenues` / `spotCombined`
+        are spot. Informational only.
+      operationId: getMarketAbsorption
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined absorption vs price
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/volume-profile:
     get:
       summary: Volume profile (volume by price)

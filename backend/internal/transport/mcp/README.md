@@ -28,6 +28,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `get_cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split, spot-vs-futures split, divergence duration |
 | `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined; `window` or `startTime`/`endTime` |
+| `get_absorption` | Large market buys/sells vs little price move; absorbing side + strength (15m/1h/4h/24h + current run) |
 | `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |

@@ -1270,6 +1270,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_absorption(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/absorption",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_volume_profile(
         symbol: str,
         exchange: str = "all",
@@ -2701,6 +2707,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "selling (or the reverse). Windows show 15m / 1h / 4h / 24h "
                 "change. Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_absorption,
+            name="get_absorption",
+            description=(
+                "When big market buys or sells hit but price barely moves: "
+                "how much buy/sell volume came in, how far price moved, "
+                "which side is absorbing (bids absorbing sells, or asks "
+                "absorbing buys), and how strong (score 0–100). Windows "
+                "15m / 1h / 4h / 24h plus the current run."
             ),
             args_schema=TakerFlowInput,
         ),
