@@ -49,7 +49,11 @@ func New(opts Options) *Client {
 	}
 	hc := opts.HTTPClient
 	if hc == nil {
-		hc = &http.Client{Timeout: 15 * time.Second}
+		hc = &http.Client{
+			Timeout: 15 * time.Second,
+			// HTTP/2 + default Go fingerprint gets an empty holders object from CMC.
+			Transport: &http.Transport{ForceAttemptHTTP2: false, Proxy: http.ProxyFromEnvironment},
+		}
 	}
 	return &Client{
 		baseURL:     base,
@@ -70,7 +74,14 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 	}
 	entry, err := c.catalog.LookupAsset(ctx, asset)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, domain.ErrCatalogUnmapped) {
+			return nil, err
+		}
+		key := domain.NormalizeAssetKey(asset)
+		if !isLikelyCMCSlug(key) {
+			return nil, err
+		}
+		entry = &domain.AssetCatalogEntry{Asset: key, Slug: strings.ToLower(key)}
 	}
 	key := entry.Asset
 	if hit, ok := c.holders.Get(key); ok {
@@ -171,7 +182,7 @@ func isHoldersLastGood(err error) bool {
 }
 
 func isHoldersUnpublished(err error) bool {
-	return errors.Is(err, domain.ErrHoldersUnpublished) || errors.Is(err, domain.ErrNotFound)
+	return errors.Is(err, domain.ErrHoldersUnpublished)
 }
 
 func (c *Client) fetchDetail(ctx context.Context, entry *domain.AssetCatalogEntry) (*domain.AssetHolders, error) {
@@ -186,13 +197,28 @@ func (c *Client) fetchDetailBody(ctx context.Context, entry *domain.AssetCatalog
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	u := fmt.Sprintf("%s%s?id=%d", c.baseURL, detailPath, entry.CMCID)
+	var u string
+	switch {
+	case entry != nil && entry.CMCID > 0:
+		u = fmt.Sprintf("%s%s?id=%d", c.baseURL, detailPath, entry.CMCID)
+	case entry != nil && strings.TrimSpace(entry.Slug) != "":
+		u = fmt.Sprintf("%s%s?slug=%s", c.baseURL, detailPath, strings.TrimSpace(entry.Slug))
+	default:
+		asset := ""
+		if entry != nil {
+			asset = entry.Asset
+		}
+		return nil, fmt.Errorf("%w: catalog for %q has no CoinMarketCap id or slug", domain.ErrCatalogUnmapped, asset)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: build cmc request: %v", domain.ErrUpstream, err)
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "swyngora-backend/0.1")
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Origin", "https://coinmarketcap.com")
+	req.Header.Set("Referer", "https://coinmarketcap.com/")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -207,7 +233,7 @@ func (c *Client) fetchDetailBody(ctx context.Context, entry *domain.AssetCatalog
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: cmc status %d", domain.ErrRateLimited, resp.StatusCode)
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, entry.Asset)
+		return nil, fmt.Errorf("%w: cmc detail missing for %q", domain.ErrNotFound, entry.Asset)
 	case resp.StatusCode >= 400:
 		return nil, fmt.Errorf("%w: cmc status %d: %s", domain.ErrUpstream, resp.StatusCode, truncate(string(body), 200))
 	}
@@ -321,10 +347,11 @@ type detailEnvelope struct {
 }
 
 type detailData struct {
-	ID      json.RawMessage `json:"id"`
-	Name    string          `json:"name"`
-	Symbol  string          `json:"symbol"`
-	Holders *holdersBlock   `json:"holders"`
+	ID             json.RawMessage `json:"id"`
+	Name           string          `json:"name"`
+	Symbol         string          `json:"symbol"`
+	Holders        *holdersBlock   `json:"holders"`
+	CdpTotalHolder json.RawMessage `json:"cdpTotalHolder"`
 }
 
 type holdersBlock struct {
@@ -355,23 +382,33 @@ func parseDetail(body []byte, entry *domain.AssetCatalogEntry) (*domain.AssetHol
 	if err := json.Unmarshal(env.Data, &data); err != nil {
 		return nil, fmt.Errorf("%w: decode cmc detail data: %v", domain.ErrUpstream, err)
 	}
-	if data.Holders == nil {
-		return nil, fmt.Errorf("%w: holders for %q not published", domain.ErrHoldersUnpublished, entry.Asset)
-	}
-
-	count, hasCount := parseOptionalInt(data.Holders.HolderCount)
-	list := make([]domain.AssetHolder, 0, len(data.Holders.HolderList))
-	for _, row := range data.Holders.HolderList {
-		addr := strings.TrimSpace(row.Address)
-		if addr == "" {
-			continue
+	var count int64
+	var hasCount bool
+	var list []domain.AssetHolder
+	var daily *int64
+	if data.Holders != nil {
+		count, hasCount = parseOptionalInt(data.Holders.HolderCount)
+		list = make([]domain.AssetHolder, 0, len(data.Holders.HolderList))
+		for _, row := range data.Holders.HolderList {
+			addr := strings.TrimSpace(row.Address)
+			if addr == "" {
+				continue
+			}
+			bal, _ := parseOptionalFloat(row.Balance)
+			share, _ := parseOptionalFloat(row.Share)
+			list = append(list, domain.AssetHolder{Address: addr, Balance: bal, SharePct: share})
 		}
-		bal, _ := parseOptionalFloat(row.Balance)
-		share, _ := parseOptionalFloat(row.Share)
-		list = append(list, domain.AssetHolder{Address: addr, Balance: bal, SharePct: share})
+		list = domain.CapHolderList(list, domain.MaxHolderList)
+		if active, ok := parseOptionalInt(data.Holders.DailyActive); ok && active >= 0 {
+			daily = &active
+		}
 	}
-	list = domain.CapHolderList(list, domain.MaxHolderList)
 	if (!hasCount || count <= 0) && len(list) == 0 {
+		if n, ok := parseOptionalInt(data.CdpTotalHolder); ok && n > 0 {
+			count, hasCount = n, true
+		}
+	}
+	if (!hasCount || count <= 0) && len(list) == 0 && daily == nil {
 		return nil, fmt.Errorf("%w: holders for %q empty", domain.ErrHoldersUnpublished, entry.Asset)
 	}
 
@@ -386,28 +423,50 @@ func parseDetail(body []byte, entry *domain.AssetCatalogEntry) (*domain.AssetHol
 	out := &domain.AssetHolders{
 		Asset:       entry.Asset,
 		Name:        name,
-		ProviderID:  strconv.FormatInt(entry.CMCID, 10),
+		ProviderID:  holdersProviderID(entry, data.ID),
 		HolderCount: count,
 		TopHolders:  list,
 		AsOf:        time.Now().UTC(),
 		Source:      "coinmarketcap",
 	}
-	if active, ok := parseOptionalInt(data.Holders.DailyActive); ok && active >= 0 {
-		out.DailyActive = &active
-	}
-	if v, ok := parseOptionalFloat(data.Holders.TopTenHolderRatio); ok {
-		out.TopTenSharePct = &v
-	}
-	if v, ok := parseOptionalFloat(data.Holders.TopTwentyHolderRatio); ok {
-		out.TopTwentySharePct = &v
-	}
-	if v, ok := parseOptionalFloat(data.Holders.TopFiftyHolderRatio); ok {
-		out.TopFiftySharePct = &v
-	}
-	if v, ok := parseOptionalFloat(data.Holders.TopHundredHolderRatio); ok {
-		out.TopHundredSharePct = &v
+	out.DailyActive = daily
+	if data.Holders != nil {
+		if v, ok := parseOptionalFloat(data.Holders.TopTenHolderRatio); ok {
+			out.TopTenSharePct = &v
+		}
+		if v, ok := parseOptionalFloat(data.Holders.TopTwentyHolderRatio); ok {
+			out.TopTwentySharePct = &v
+		}
+		if v, ok := parseOptionalFloat(data.Holders.TopFiftyHolderRatio); ok {
+			out.TopFiftySharePct = &v
+		}
+		if v, ok := parseOptionalFloat(data.Holders.TopHundredHolderRatio); ok {
+			out.TopHundredSharePct = &v
+		}
 	}
 	return out, nil
+}
+
+func isLikelyCMCSlug(asset string) bool {
+	if len(asset) < 2 || len(asset) > 16 {
+		return false
+	}
+	for _, r := range strings.ToLower(asset) {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func holdersProviderID(entry *domain.AssetCatalogEntry, rawID json.RawMessage) string {
+	if entry != nil && entry.CMCID > 0 {
+		return strconv.FormatInt(entry.CMCID, 10)
+	}
+	if n, ok := parseOptionalInt(rawID); ok && n > 0 {
+		return strconv.FormatInt(n, 10)
+	}
+	return ""
 }
 
 func parseOptionalFloat(raw json.RawMessage) (float64, bool) {

@@ -333,6 +333,35 @@ func TestRefresh_CatalogIdWithoutSupplyAndUnionAcrossRows(t *testing.T) {
 	}
 }
 
+func TestRefresh_CatalogSlugWithoutCMCId(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": "000000", "success": true,
+			"data": []map[string]any{
+				{
+					"name": "ACE", "fullName": "Fusionist", "symbol": "ACEUSDT",
+					"circulatingSupply": 1, "slug": "fusionist",
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+	catCache := cache.New[*domain.AssetCatalogEntry](time.Hour)
+	c := NewClient(Options{
+		ProductBaseURL: srv.URL,
+		HTTPClient:     srv.Client(),
+		SupplyCache:    cache.New[*domain.AssetSupply](time.Hour),
+		CatalogCache:   catCache,
+	})
+	if _, err := c.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	cat, err := c.LookupAsset(context.Background(), "ACEUSDT")
+	if err != nil || cat.CMCID != 0 || cat.Slug != "fusionist" {
+		t.Fatalf("ACE catalog=%+v err=%v", cat, err)
+	}
+}
+
 func TestGetSupply_ServesStaleAfterTTL(t *testing.T) {
 	supCache := cache.New[*domain.AssetSupply](time.Nanosecond)
 	supCache.Set("BTC", &domain.AssetSupply{Asset: "BTC", Source: "binance", CirculatingSupply: ptrF(21)})

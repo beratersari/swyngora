@@ -17,7 +17,11 @@ type AssetCatalogEntry struct {
 
 // AssetHolder is one wallet in a top-holder snapshot.
 type AssetHolder struct {
-	Address  string
+	Address string
+	// Label is a public attribution when the address is widely published
+	// (exchange cold wallet, genesis, seized hack). Empty when unknown.
+	// Not identity proof.
+	Label    string
 	Balance  float64
 	SharePct float64
 }

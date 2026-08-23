@@ -67,7 +67,7 @@
   },
   "holders": {
     "title": "Tutucular",
-    "subtitle": "Zincir üstü cüzdan sayısı ve en büyük adresler. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "subtitle": "Zincir üstü cüzdan sayısı ve en büyük adresler. Bilinen isimler (Binance, Bitfinex, …) kamuya açık atıflardır, kimlik kanıtı değildir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
     "count": "Adres sayısı",
     "dailyActive": "Günlük aktif",
     "topTen": "İlk 10 pay",

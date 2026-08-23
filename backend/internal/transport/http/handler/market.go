@@ -1233,6 +1233,7 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 
 type holderRowDTO struct {
 	Address  string  `json:"address"`
+	Label    string  `json:"label,omitempty"`
 	Balance  float64 `json:"balance"`
 	SharePct float64 `json:"sharePct"`
 }
@@ -1322,6 +1323,7 @@ func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
 	for _, row := range got.TopHolders {
 		rows = append(rows, holderRowDTO{
 			Address:  row.Address,
+			Label:    row.Label,
 			Balance:  row.Balance,
 			SharePct: row.SharePct,
 		})
@@ -1340,7 +1342,7 @@ func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
 		AsOf:               got.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:             got.Source,
 		Stale:              got.Stale,
-		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api. Mapped via Binance marketing cmcUniqueId. Crypto only; coverage varies by asset. Informational only. stale=true is last-good after a CMC blip.",
+		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api (id or slug). If CMC has no table, UTXO coins may use Chainz CryptoID (PIVX). label is a public attribution when known (exchange / genesis), not identity proof. Crypto only. Informational only. stale=true is last-good after a blip.",
 	})
 }
 

@@ -130,6 +130,7 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 	}
 	bestSupply := map[string]rowScore{}
 	bestCatalog := map[string]rowScore{}
+	bestSlug := map[string]rowScore{}
 	for _, row := range envelope.Data {
 		if hasNonCryptoTag(row.Tags) {
 			continue
@@ -156,6 +157,11 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 		if hasID && id > 0 {
 			if prev, ok := bestCatalog[base]; !ok || quoteScore > prev.score {
 				bestCatalog[base] = rowScore{row: row, score: quoteScore}
+			}
+		}
+		if slug := strings.TrimSpace(row.Slug); slug != "" {
+			if prev, ok := bestSlug[base]; !ok || quoteScore > prev.score {
+				bestSlug[base] = rowScore{row: row, score: quoteScore}
 			}
 		}
 	}
@@ -197,7 +203,7 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 		next[base] = sup
 	}
 
-	catalog := make(map[string]*domain.AssetCatalogEntry, len(bestCatalog))
+	catalog := make(map[string]*domain.AssetCatalogEntry, len(bestCatalog)+len(bestSlug))
 	for base, rs := range bestCatalog {
 		id, ok := parseOptionalInt(rs.row.CMCUniqueID)
 		if !ok || id <= 0 {
@@ -212,6 +218,25 @@ func (c *Client) fetchAndStoreSupply(ctx context.Context) (int, error) {
 			Name:  name,
 			CMCID: id,
 			Slug:  strings.TrimSpace(rs.row.Slug),
+		}
+	}
+	// Slug-only rows: no cmcUniqueId, but CMC still serves detail?slug=.
+	for base, rs := range bestSlug {
+		if _, exists := catalog[base]; exists {
+			continue
+		}
+		slug := strings.TrimSpace(rs.row.Slug)
+		if slug == "" {
+			continue
+		}
+		name := marketingRowName(rs.row, base)
+		if sup, has := next[base]; has && strings.TrimSpace(sup.Name) != "" {
+			name = sup.Name
+		}
+		catalog[base] = &domain.AssetCatalogEntry{
+			Asset: base,
+			Name:  name,
+			Slug:  slug,
 		}
 	}
 	if len(next) == 0 {

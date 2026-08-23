@@ -242,13 +242,30 @@ func TestGetHolders(t *testing.T) {
 	if !errors.Is(err, domain.ErrUpstream) {
 		t.Fatalf("nil port: %v", err)
 	}
-	svc = svc.WithHolders(&fakeHolders{snap: &domain.AssetHolders{Asset: "BTC", HolderCount: 9}})
+	svc = svc.WithHolders(&fakeHolders{snap: &domain.AssetHolders{
+		Asset:       "BTC",
+		HolderCount: 9,
+		TopHolders:  []domain.AssetHolder{{Address: "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo"}},
+	}})
 	_, err = svc.GetHolders(context.Background(), "")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("empty: %v", err)
 	}
 	got, err := svc.GetHolders(context.Background(), "BTC")
 	if err != nil || got.HolderCount != 9 {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+	if len(got.TopHolders) != 1 || got.TopHolders[0].Label != "Binance" {
+		t.Fatalf("label=%+v", got.TopHolders)
+	}
+}
+
+func TestGetHolders_FallbackWhenCMCUnpublished(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{}).
+		WithHolders(&fakeHolders{err: fmt.Errorf("%w: ACE", domain.ErrHoldersUnpublished)}).
+		WithHoldersFallback(&fakeHolders{snap: &domain.AssetHolders{Asset: "ACE", HolderCount: 120_664, Source: "cryptoid"}})
+	got, err := svc.GetHolders(context.Background(), "ACE")
+	if err != nil || got.HolderCount != 120_664 || got.Source != "cryptoid" {
 		t.Fatalf("got=%+v err=%v", got, err)
 	}
 }

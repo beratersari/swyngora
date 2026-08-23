@@ -9,8 +9,13 @@ same unauthenticated JSON the public coin pages use:
 
 `GET {CMC_BASE_URL}/data-api/v3/cryptocurrency/detail?id={cmcId}`
 
-Ticker → CMC id comes from the Binance marketing symbol list (`cmcUniqueId`),
-already refreshed daily for supply.
+or, when Binance has a marketing `slug` but no `cmcUniqueId`:
+
+`GET {CMC_BASE_URL}/data-api/v3/cryptocurrency/detail?slug={slug}`
+
+Ticker → CMC id/slug comes from the Binance marketing symbol list
+(`cmcUniqueId` / `slug`), already refreshed daily for supply. An empty
+`holders` object with a positive `cdpTotalHolder` still counts as a snapshot.
 
 ## Layout
 
@@ -37,7 +42,10 @@ cd backend && go test ./internal/adapter/cmc/
 | `CMC_BASE_URL` | `https://api.coinmarketcap.com` | Public data-api host |
 | `HOLDERS_CACHE_TTL` | `1h` | Per-asset snapshot |
 
-No API key. Response shape can change — keep parsing isolated and fixture-tested.
+No API key. CMC’s public data-api omits the `holders` table for the default
+Go HTTP/2 fingerprint; the client uses HTTP/1.1 plus browser `Origin` /
+`Referer` / `User-Agent` so the payload matches the public coin page.
+Response shape can change — keep parsing isolated and fixture-tested.
 
 ## Ownership
 

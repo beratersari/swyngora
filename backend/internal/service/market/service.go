@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
@@ -45,6 +46,7 @@ type Service struct {
 	fx             FxSource
 	fxCache        *cache.TTL[*domain.FxRates]
 	holders        domain.HoldersPort
+	holderFallback domain.HoldersPort
 	profile        domain.AssetProfilePort
 	oi             map[domain.Exchange]domain.OpenInterestPort
 	funding        map[domain.Exchange]domain.FundingRatePort
@@ -75,6 +77,14 @@ type LiquidationWatch interface {
 func (s *Service) WithHolders(h domain.HoldersPort) *Service {
 	if s != nil {
 		s.holders = h
+	}
+	return s
+}
+
+// WithHoldersFallback is used when CMC has no table or no catalog id (CryptoID).
+func (s *Service) WithHoldersFallback(h domain.HoldersPort) *Service {
+	if s != nil {
+		s.holderFallback = h
 	}
 	return s
 }
@@ -1039,7 +1049,23 @@ func (s *Service) GetHolders(ctx context.Context, asset string) (*domain.AssetHo
 	if s.holders == nil {
 		return nil, fmt.Errorf("%w: holders port not configured", domain.ErrUpstream)
 	}
-	return s.holders.GetHolders(ctx, asset)
+	got, err := s.holders.GetHolders(ctx, asset)
+	if err == nil {
+		domain.AnnotateHolderLabels(got)
+		return got, nil
+	}
+	if s.holderFallback == nil {
+		return nil, err
+	}
+	if !errors.Is(err, domain.ErrHoldersUnpublished) && !errors.Is(err, domain.ErrCatalogUnmapped) && !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	fb, fbErr := s.holderFallback.GetHolders(ctx, asset)
+	if fbErr != nil {
+		return nil, err
+	}
+	domain.AnnotateHolderLabels(fb)
+	return fb, nil
 }
 
 // ListIntervals returns supported candle intervals for an exchange.

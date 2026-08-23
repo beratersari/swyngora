@@ -1548,11 +1548,12 @@ paths:
       summary: Crypto holder count and top wallets
       description: |
         On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
-        Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
-        data-api (not a paid plan). Cache TTL default 1h; 429 / upstream / empty
-        CMC blips may serve last-good with `stale: true`. `404` `catalog_unmapped`
-        means no Binance `cmcUniqueId`; `404` `holders_unpublished` means CMC has
-        no holder table. Informational only.
+        Binance marketing list `cmcUniqueId` (or marketing `slug` via `detail?slug=`)
+        and fetched from CoinMarketCap's public data-api (not a paid plan). Cache TTL
+        default 1h; 429 / upstream / empty CMC blips may serve last-good with
+        `stale: true`. `404` `catalog_unmapped` means no Binance `cmcUniqueId` or
+        slug; `404` `holders_unpublished` means CMC has no holder table and no
+        `cdpTotalHolder`. Informational only.
       operationId: getHolders
       tags: [Market]
       parameters:
@@ -5835,6 +5836,9 @@ components:
       properties:
         address:
           type: string
+        label:
+          type: string
+          description: Public attribution when the address is widely published (exchange cold wallet, genesis, seized hack). Omitted when unknown. Not identity proof.
         balance:
           type: number
         sharePct:

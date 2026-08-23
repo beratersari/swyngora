@@ -890,11 +890,15 @@ func (b *Backend) GetHolders(ctx context.Context, asset string) (json.RawMessage
 	}
 	rows := make([]map[string]any, 0, len(got.TopHolders))
 	for _, row := range got.TopHolders {
-		rows = append(rows, map[string]any{
+		item := map[string]any{
 			"address":  row.Address,
 			"balance":  row.Balance,
 			"sharePct": row.SharePct,
-		})
+		}
+		if row.Label != "" {
+			item["label"] = row.Label
+		}
+		rows = append(rows, item)
 	}
 	return mustJSON(map[string]any{
 		"asset":              got.Asset,

@@ -40,7 +40,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
-| `get_holders` | Holder count, concentration, top wallets (crypto; CMC public snapshot) |
+| `get_holders` | Holder count, concentration, top wallets (CMC; CryptoID fallback for UTXO coins such as PIVX). `label` is a public attribution when known |
 | `get_asset_profile` | Logo URL, listing date, and published token contracts |
 | `list_spot_markets` | Search/sort spot/equity list (`binance` / `coinbase` / `bybit` / `nasdaq` / `bist`) |
 | `list_delist_schedule` | Scheduled spot delists per venue (halt `delistTime` + `announcedAt` when the notice was published) |

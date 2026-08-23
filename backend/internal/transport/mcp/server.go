@@ -784,7 +784,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_holders",
-		mcp.WithDescription("On-chain holder count, concentration (top 10/50/100 %), and top wallets for a crypto base asset (BTC, ETH, or BTCUSDT). CoinMarketCap public snapshot; 404 if unpublished or not a crypto asset. Informational only."),
+		mcp.WithDescription("On-chain holder count, concentration (top 10/50/100 %), and top wallets for a crypto base asset (BTC, ETH, or BTCUSDT). Each wallet may include a public label (Binance, Bitfinex, Satoshi genesis) when the address is widely published — not identity proof. CoinMarketCap public snapshot; CryptoID fallback for some UTXO coins. 404 if unpublished or not a crypto asset. Informational only."),
 		mcp.WithString("asset", mcp.Required(), mcp.Description("Base asset ticker e.g. BTC (pairs like BTCUSDT also work)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		asset, err := req.RequireString("asset")

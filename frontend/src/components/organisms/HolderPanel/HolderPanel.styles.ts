@@ -30,6 +30,20 @@ export const StatCard = styled.div`
   padding: ${({ theme }) => theme.spacing[1]}px 0;
 `;
 
+export const AddressWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`;
+
+export const AddressLabel = styled.span`
+  font-size: ${({ theme }) => theme.typeScale.caption.fontSize}px;
+  font-weight: ${({ theme }) => theme.fontWeights.semibold};
+  color: ${({ theme }) => theme.semantic.text.primary};
+  line-height: 1.2;
+`;
+
 export const AddressCell = styled.span`
   font-variant-numeric: tabular-nums;
 `;

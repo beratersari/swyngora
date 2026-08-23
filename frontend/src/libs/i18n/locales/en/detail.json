@@ -67,7 +67,7 @@
   },
   "holders": {
     "title": "Holders",
-    "subtitle": "On-chain wallet count and top addresses. Informational only — not financial advice.",
+    "subtitle": "On-chain wallet count and top addresses. Known names (Binance, Bitfinex, …) are public attributions, not identity proof. Informational only — not financial advice.",
     "count": "Addresses",
     "dailyActive": "Daily active",
     "topTen": "Top 10 share",

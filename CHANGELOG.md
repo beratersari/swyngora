@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Holder address names:** top wallets include a `label` when the address is a widely published attribution (Binance, Bitfinex, Robinhood, Upbit, OKX, Bybit, Crypto.com, Gate.io, Tether, Silk Road FBI, Satoshi genesis, and other public tags). Not identity proof (`docs/features/holders.md`)
 - **Post-delist movement:** after a venue halt, coin detail shows a labeled off-venue last price and candles (another listed venue or CoinGecko USD) instead of inventing flat Binance bars (`docs/features/delist-schedule.md`)
 - **Delist last print:** already-removed pairs keep last / high / low / volume from the venue kline at halt so Markets and coin detail are not blank (`docs/features/delist-schedule.md`)
 - **Delist market cap:** scheduled delist rows missing Binance circulating supply use CoinGecko public markets so the mcap column is not empty (`docs/features/delist-schedule.md`)
@@ -15,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Multi-exchange delist tags:** Binance official schedule (plus CMS “Will Delist” titles) and Bybit announcement dates (article HTML when the list feed is empty). Pairs that delist in the next ~31 days **or in the last 30 days** stay on the default Markets list with an amber Delist tag (and are injected if the venue already halted them). Coinbase / Nasdaq / BIST have no public calendar (`docs/features/delist-schedule.md`)
 
 ### Fixed
+- **Holders without `cmcUniqueId`:** Binance marketing slugs resolve CoinMarketCap detail (`?slug=`) and a positive `cdpTotalHolder` fills the count when the holder table is empty (`docs/features/holders.md`)
+- **Holders empty on many coins:** CMC’s public detail omitted the holder table for the default Go HTTP/2 client; requests now use HTTP/1.1 and browser Origin/Referer. ETH-style `dailyActive`-only payloads are shown instead of 404 (`docs/features/holders.md`)
+- **PIVX (and other catalog-miss UTXO coins):** Binance marketing has no `cmcUniqueId` for PIVX; holders now fall back to public Chainz CryptoID address counts and rich list (`docs/features/holders.md`)
 - **Delist chart after halt:** leftover venue klines after a midnight schedule stay visible on the home-venue chart; days after the last print come from the off-venue panel (`docs/features/delist-schedule.md`)
 - **Multi-book risk limits:** GET/PUT risk brakes and buy/margin guards no longer treat the book id as the actor; a second paper book cannot 400 the first book’s limits or block its buys (`docs/features/risk-limits.md`)
 - **Recurring buy overspend:** DCA sizes and fills on one last print so a ticker move between sizing and fill cannot debit more than the plan amount (`docs/features/recurring-buys.md`)

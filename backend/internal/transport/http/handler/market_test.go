@@ -103,7 +103,7 @@ func (stubHolders) GetHolders(_ context.Context, asset string) (*domain.AssetHol
 		Name:           "Bitcoin",
 		HolderCount:    50_000_000,
 		TopTenSharePct: &top10,
-		TopHolders:     []domain.AssetHolder{{Address: "34xp4vRo", Balance: 1, SharePct: 1.18}},
+		TopHolders:     []domain.AssetHolder{{Address: "34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo", Balance: 1, SharePct: 1.18}},
 		AsOf:           time.Unix(0, 0).UTC(),
 		Source:         "coinmarketcap",
 	}, nil
@@ -1044,6 +1044,9 @@ func TestGetHolders_OK(t *testing.T) {
 	}
 	if body.HolderCount != 50_000_000 || body.Asset != "BTCUSDT" || len(body.TopHolders) != 1 {
 		t.Fatalf("body=%+v", body)
+	}
+	if body.TopHolders[0].Label != "Binance" {
+		t.Fatalf("label=%q", body.TopHolders[0].Label)
 	}
 }
 

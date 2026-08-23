@@ -76,6 +76,9 @@ func TestGetHolders_ParsesSnapshot(t *testing.T) {
 		if r.URL.Query().Get("id") != "1" {
 			t.Fatalf("id=%s", r.URL.Query().Get("id"))
 		}
+		if r.Header.Get("Referer") == "" || r.Header.Get("Origin") == "" {
+			t.Fatalf("cmc request missing browser headers: %v", r.Header)
+		}
 		_, _ = w.Write(fixtureDetail())
 	}))
 	got, err := c.GetHolders(context.Background(), "BTCUSDT")
@@ -138,12 +141,35 @@ func TestGetAssetProfile_LogoFromCatalog(t *testing.T) {
 	}
 }
 
+func TestGetHolders_HTTP404IsNotUnpublishedCache(t *testing.T) {
+	var hits int
+	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		if hits == 1 {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write(fixtureDetail())
+	}))
+	_, err := c.GetHolders(context.Background(), "BTC")
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("first err=%v", err)
+	}
+	got, err := c.GetHolders(context.Background(), "BTC")
+	if err != nil || got.HolderCount != 50_708_169 {
+		t.Fatalf("second got=%+v err=%v", got, err)
+	}
+	if hits != 2 {
+		t.Fatalf("hits=%d want 2", hits)
+	}
+}
+
 func TestGetHolders_CatalogMiss(t *testing.T) {
 	c := New(Options{
 		Catalog: stubCatalog{err: fmt.Errorf("%w: AAPL", domain.ErrCatalogUnmapped)},
 		Cache:   cache.New[*domain.AssetHolders](time.Hour),
 	})
-	_, err := c.GetHolders(context.Background(), "AAPL")
+	_, err := c.GetHolders(context.Background(), "X")
 	if !errors.Is(err, domain.ErrCatalogUnmapped) {
 		t.Fatalf("err=%v", err)
 	}
@@ -170,6 +196,88 @@ func TestGetHolders_RateLimitServesStale(t *testing.T) {
 	}
 	if got.HolderCount != 1 || !got.Stale {
 		t.Fatalf("want stale last-good, got %+v", got)
+	}
+}
+
+func TestGetHolders_SlugFallbackOnCatalogMiss(t *testing.T) {
+	c := New(Options{
+		Catalog: stubCatalog{err: fmt.Errorf("%w: PIVX", domain.ErrCatalogUnmapped)},
+		Cache:   cache.New[*domain.AssetHolders](time.Hour),
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("slug") != "pivx" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_, _ = w.Write(fixtureDetail())
+	}))
+	t.Cleanup(srv.Close)
+	c.baseURL = srv.URL
+	c.httpClient = srv.Client()
+	got, err := c.GetHolders(context.Background(), "PIVXUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderCount != 50_708_169 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetHolders_FetchesBySlugWhenNoID(t *testing.T) {
+	c := New(Options{
+		HTTPClient: http.DefaultClient,
+		Catalog:    stubCatalog{entry: &domain.AssetCatalogEntry{Asset: "ACE", Name: "Fusionist", Slug: "fusionist"}},
+		Cache:      cache.New[*domain.AssetHolders](time.Hour),
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("slug") != "fusionist" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		if r.URL.Query().Get("id") != "" {
+			t.Fatalf("did not want id, got %s", r.URL.Query().Get("id"))
+		}
+		_, _ = w.Write(fixtureDetail())
+	}))
+	t.Cleanup(srv.Close)
+	c.baseURL = srv.URL
+	c.httpClient = srv.Client()
+	got, err := c.GetHolders(context.Background(), "ACE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderCount != 50_708_169 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestParseDetail_DailyActiveOnly(t *testing.T) {
+	body, _ := json.Marshal(map[string]any{
+		"data": map[string]any{
+			"id": 1027, "name": "Ethereum",
+			"holders": map[string]any{"dailyActive": 412_000},
+		},
+	})
+	got, err := parseDetail(body, &domain.AssetCatalogEntry{Asset: "ETH", CMCID: 1027})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderCount != 0 || got.DailyActive == nil || *got.DailyActive != 412_000 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestParseDetail_UsesCdpTotalHolder(t *testing.T) {
+	body, _ := json.Marshal(map[string]any{
+		"data": map[string]any{
+			"id": 28674, "name": "Fusionist", "holders": map[string]any{},
+			"cdpTotalHolder": "12345",
+		},
+	})
+	got, err := parseDetail(body, &domain.AssetCatalogEntry{Asset: "ACE", Slug: "fusionist"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderCount != 12345 || got.ProviderID != "28674" {
+		t.Fatalf("%+v", got)
 	}
 }
 

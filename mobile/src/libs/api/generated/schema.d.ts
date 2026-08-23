@@ -3236,6 +3236,10 @@ export interface components {
         };
         HolderWallet: {
             address?: string;
+            /**
+             * @description Public attribution when the address is widely published (exchange cold wallet, genesis, seized hack). Omitted when unknown. Not identity proof.
+             */
+            label?: string;
             balance?: number;
             /** @description Percent of supply held by this address */
             sharePct?: number;

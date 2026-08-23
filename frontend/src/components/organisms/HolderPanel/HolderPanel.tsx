@@ -10,7 +10,7 @@ import {
   holderUsdValue,
   resolveHolderBalance,
 } from './helpers';
-import { AddressCell, Panel, StatCard, StatsGrid, TitleRow } from './HolderPanel.styles';
+import { AddressCell, AddressLabel, AddressWrap, Panel, StatCard, StatsGrid, TitleRow } from './HolderPanel.styles';
 import type { HolderPanelProps } from './HolderPanel.types';
 
 function Stat({
@@ -113,10 +113,13 @@ export function HolderPanel({
             {
               title: t('holders.address'),
               dataIndex: 'address',
-              render: (addr: string) => (
-                <Typography.Text copyable={{ text: addr }}>
-                  <AddressCell>{formatHolderAddress(addr)}</AddressCell>
-                </Typography.Text>
+              render: (addr: string, row: { label?: string }) => (
+                <AddressWrap>
+                  {row.label ? <AddressLabel>{row.label}</AddressLabel> : null}
+                  <Typography.Text copyable={{ text: addr }}>
+                    <AddressCell>{formatHolderAddress(addr)}</AddressCell>
+                  </Typography.Text>
+                </AddressWrap>
               ),
             },
             {

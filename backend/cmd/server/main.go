@@ -18,6 +18,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cmc"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cryptoid"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
@@ -223,12 +224,11 @@ func main() {
 		domain.ExchangeBist:     bistClient,
 	}, binanceClient).WithDelistStore(delistStore).WithDelistSource(domain.ExchangeBinance, binanceDelist).WithDelistSource(domain.ExchangeBybit, true).WithDelistSupplyFallback(geckoClient).WithOffVenuePrice(geckoClient).WithLiquidations(liqBook, bybitLiq).WithFx(fxrates.New(httpClient))
 	cmcClient := cmc.New(cmc.Options{
-		BaseURL:    cfg.CMCBaseURL,
-		HTTPClient: httpClient,
-		Catalog:    binanceClient,
-		Cache:      holdersCache,
+		BaseURL: cfg.CMCBaseURL,
+		Catalog: binanceClient,
+		Cache:   holdersCache,
 	})
-	marketSvc = marketSvc.WithHolders(cmcClient).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+	marketSvc = marketSvc.WithHolders(cmcClient).WithHoldersFallback(cryptoid.New(cryptoid.Options{})).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
