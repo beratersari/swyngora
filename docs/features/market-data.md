@@ -131,7 +131,7 @@ Ticker and candle fetches **fail closed** when Yahoo is down — expired last-go
 
 ### Holders — `GET /api/v1/market/holders`
 
-- **Source:** CoinMarketCap public `data-api` detail, mapped by Binance marketing `cmcUniqueId`
+- **Source:** CoinMarketCap public `data-api` (id then slug), Coin Metrics, GeckoTerminal, Ethplorer, Routescan, then Tronscan
 - **Params:** `asset` or `symbol` (e.g. `BTC` or `BTCUSDT`)
 - **Returns:** holder count, optional daily-active, top 10/20/50/100 share %, up to 20 wallets
 - Cached 1h; 404 when unpublished. See [`holders.md`](holders.md).

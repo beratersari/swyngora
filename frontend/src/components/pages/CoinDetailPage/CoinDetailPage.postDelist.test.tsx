@@ -79,15 +79,19 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketCvdQuery: () => empty,
     useGetPumpEventsQuery: () => empty,
     useGetWatchlistQuery: () => ({ data: { items: [] }, isLoading: false }),
-    useListDelistScheduleQuery: () => ({
-      data: {
+    useListDelistScheduleQuery: () => {
+      const schedule = {
         exchange: 'binance',
         enabled: true,
         items: [{ symbol: 'VICUSDT', delistTime: '2026-08-17T00:00:00Z' }],
-      },
-      isLoading: false,
-      isError: false,
-    }),
+      };
+      return {
+        data: schedule,
+        currentData: schedule,
+        isLoading: false,
+        isError: false,
+      };
+    },
     useGetPostDelistQuery: () => ({
       data: {
         available: true,

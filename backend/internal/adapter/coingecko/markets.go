@@ -28,8 +28,9 @@ type Client struct {
 	baseURL     string
 	httpClient  *http.Client
 	cache       *cache.TTL[*domain.AssetSupply]
-	ohlcCache   *cache.TTL[[]domain.Candle]
-	changeCache *cache.TTL[*float64]
+	ohlcCache     *cache.TTL[[]domain.Candle]
+	changeCache   *cache.TTL[*float64]
+	contractCache *cache.TTL[[]domain.AssetContract]
 }
 
 // Options configures the public markets client.
@@ -57,8 +58,9 @@ func New(opts Options) *Client {
 		baseURL:     base,
 		httpClient:  hc,
 		cache:       cch,
-		ohlcCache:   cache.New[[]domain.Candle](ohlcCacheTTL),
-		changeCache: cache.New[*float64](cacheTTL),
+		ohlcCache:     cache.New[[]domain.Candle](ohlcCacheTTL),
+		changeCache:   cache.New[*float64](cacheTTL),
+		contractCache: cache.New[[]domain.AssetContract](cacheTTL),
 	}
 }
 

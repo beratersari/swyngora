@@ -25,14 +25,17 @@ The Binance marketing symbol list we already refresh for supply includes
 
 ## Consequences
 
-- Holder coverage matches CMC’s published tables, not every listed pair.
-- Same class of risk as the Binance marketing list: public web JSON can change.
+- First hop is still CMC public detail (id, then slug).
+- When CMC has no table, the holders cascade tries Coin Metrics `AdrBalCnt`,
+  GeckoTerminal `/info`, Ethplorer `freekey` (ERC-20), Routescan EVM
+  (including Chiliz), and Tronscan TRC-20 using published contracts.
+- Same class of risk as other public web JSON: shapes can change; parsing is isolated.
 - ADR 0001 still applies to **supply** (Binance only). Holders are a separate feed.
 
 ## Alternatives considered
 
 | Option | Why not |
 |---|---|
-| CoinGecko / GeckoTerminal holders | Free token info has no holder list; onchain holders are paid |
-| Ethplorer + Blockchair | Chain-specific, incomplete for CEX tickers |
+| CoinGecko / GeckoTerminal holders | GeckoTerminal `/info` now publishes `holders.count` (used as fallback 3). `/top_holders` is unauthorized without a paid CoinGecko plan and is not used. |
+| Ethplorer + Blockchair | Ethplorer `freekey` is used as fallback 4 for ERC-20 only. |
 | Official CMC Pro API | Paid plan — rejected by project policy |

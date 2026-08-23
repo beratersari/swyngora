@@ -11,6 +11,7 @@ export function PaperMarginForm({
   marginMode = 'isolated',
   modeLoading,
   isSubmitting,
+  disabled = false,
   submitError,
   onModeChange,
   onSubmit,
@@ -31,7 +32,7 @@ export function PaperMarginForm({
   const loading = Boolean(isSubmitting || busy);
 
   const submit = async () => {
-    if (inFlight.current || isSubmitting) return;
+    if (disabled || inFlight.current || isSubmitting) return;
     const sym = symbol.trim().toUpperCase();
     if (!sym || quantity == null || quantity <= 0 || leverage < 1 || leverage > 10) {
       setLocalError(t('portfolio:margin.validation'));
@@ -206,7 +207,7 @@ export function PaperMarginForm({
       </FieldRow>
 
       <Actions>
-        <Button type="primary" loading={loading} disabled={loading} onClick={() => void submit()}>
+        <Button type="primary" loading={loading} disabled={disabled || loading} onClick={() => void submit()}>
           {t('portfolio:margin.submit')}
         </Button>
       </Actions>

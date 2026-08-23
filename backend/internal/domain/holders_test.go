@@ -30,6 +30,18 @@ func TestCloneHolders(t *testing.T) {
 	}
 }
 
+func TestHoldersUseful(t *testing.T) {
+	if HoldersUseful(nil) || HoldersUseful(&AssetHolders{}) {
+		t.Fatal("empty snapshot is not useful")
+	}
+	if !HoldersUseful(&AssetHolders{HolderCount: 3}) {
+		t.Fatal("count should count")
+	}
+	if !HoldersUseful(&AssetHolders{TopHolders: []AssetHolder{{Address: "0x1"}}}) {
+		t.Fatal("list should count")
+	}
+}
+
 func TestCapHolderList(t *testing.T) {
 	list := make([]AssetHolder, 25)
 	got := CapHolderList(list, 0)

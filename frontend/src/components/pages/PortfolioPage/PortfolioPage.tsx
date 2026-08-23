@@ -86,6 +86,7 @@ export function PortfolioPage() {
   }, [books, selectedId]);
 
   const bookId = selectedId || undefined;
+  const needBook = books.length > 1 && !bookId;
   usePortfolioSubscription(bookId, visible && Boolean(bookId));
 
   const portfolioQuery = useGetPortfolioQuery(
@@ -141,6 +142,7 @@ export function PortfolioPage() {
   };
 
   const onTrade = async (values: PaperTradeFormValues) => {
+    if (needBook) return;
     const res = await placeOrder({
       portfolioId: bookId,
       exchange: values.exchange,
@@ -168,6 +170,7 @@ export function PortfolioPage() {
   };
 
   const onMargin = async (values: PaperMarginFormValues) => {
+    if (needBook) return;
     await placeMargin({
       portfolioId: bookId,
       exchange: values.exchange,
@@ -265,6 +268,10 @@ export function PortfolioPage() {
         />
       ) : null}
 
+      {needBook ? (
+        <Alert type="info" showIcon message={t('portfolio:books.select')} />
+      ) : null}
+
       {(books.length > 0 || view) && (
         <>
           <PortfolioSummaryStrip
@@ -277,6 +284,7 @@ export function PortfolioPage() {
             <PanelCard>
               <PaperTradeForm
                 isSubmitting={placeState.isLoading}
+                disabled={needBook}
                 submitError={placeState.isError ? placeState.error : undefined}
                 onSubmit={onTrade}
               />
@@ -285,13 +293,16 @@ export function PortfolioPage() {
               <PortfolioCashPanel
                 isDepositing={depositState.isLoading}
                 isWithdrawing={withdrawState.isLoading}
+                disabled={needBook}
                 depositError={depositState.isError ? depositState.error : undefined}
                 withdrawError={withdrawState.isError ? withdrawState.error : undefined}
                 onDeposit={async (amount, note) => {
+                  if (needBook) return;
                   await deposit({ amount, note, portfolioId: bookId }).unwrap();
                   void message.success(t('portfolio:cash.depositSuccess'));
                 }}
                 onWithdraw={async (amount, note) => {
+                  if (needBook) return;
                   await withdraw({ amount, note, portfolioId: bookId }).unwrap();
                   void message.success(t('portfolio:cash.withdrawSuccess'));
                 }}
@@ -305,6 +316,7 @@ export function PortfolioPage() {
                 marginMode={view?.marginMode}
                 modeLoading={marginModeState.isLoading}
                 isSubmitting={placeMarginState.isLoading}
+                disabled={needBook}
                 submitError={placeMarginState.isError ? placeMarginState.error : undefined}
                 onModeChange={async (mode) => {
                   await setMarginMode({ mode, portfolioId: bookId }).unwrap();

@@ -72,6 +72,14 @@ func CloneInt64Ptr(p *int64) *int64 {
 	return &v
 }
 
+// HoldersUseful is true when a snapshot has a count or at least one wallet.
+func HoldersUseful(h *AssetHolders) bool {
+	if h == nil {
+		return false
+	}
+	return h.HolderCount > 0 || len(h.TopHolders) > 0
+}
+
 // CapHolderList returns at most n wallets (n<=0 uses MaxHolderList).
 func CapHolderList(list []AssetHolder, n int) []AssetHolder {
 	if n <= 0 {

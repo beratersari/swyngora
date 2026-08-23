@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -72,18 +73,27 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 	if c.holders == nil {
 		return nil, fmt.Errorf("%w: holders cache not configured", domain.ErrUpstream)
 	}
-	entry, err := c.catalog.LookupAsset(ctx, asset)
-	if err != nil {
-		if !errors.Is(err, domain.ErrCatalogUnmapped) {
-			return nil, err
-		}
+	entry, catErr := c.lookupEntry(ctx, asset)
+	if entry == nil {
 		key := domain.NormalizeAssetKey(asset)
-		if !isLikelyCMCSlug(key) {
-			return nil, err
+		if isLikelyCMCSlug(key) {
+			entry = &domain.AssetCatalogEntry{Asset: key, Slug: strings.ToLower(key)}
+		} else {
+			entry = &domain.AssetCatalogEntry{Asset: key}
 		}
-		entry = &domain.AssetCatalogEntry{Asset: key, Slug: strings.ToLower(key)}
+	}
+	if entry == nil {
+		if catErr != nil {
+			return nil, catErr
+		}
+		return nil, fmt.Errorf("%w: catalog for %q not in Binance marketing snapshot", domain.ErrCatalogUnmapped, asset)
+	}
 	}
 	key := entry.Asset
+	if key == "" {
+		key = domain.NormalizeAssetKey(asset)
+		entry.Asset = key
+	}
 	if hit, ok := c.holders.Get(key); ok {
 		return domain.CloneHolders(hit), nil
 	}
@@ -111,6 +121,9 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 			}
 			if isHoldersUnpublished(fetchErr) && c.unpublished != nil {
 				c.unpublished.Set(key, struct{}{})
+			}
+			if entry.CMCID == 0 && catErr != nil {
+				return nil, catErr
 			}
 			return nil, fetchErr
 		}
@@ -185,31 +198,86 @@ func isHoldersUnpublished(err error) bool {
 	return errors.Is(err, domain.ErrHoldersUnpublished)
 }
 
-func (c *Client) fetchDetail(ctx context.Context, entry *domain.AssetCatalogEntry) (*domain.AssetHolders, error) {
-	body, err := c.fetchDetailBody(ctx, entry)
-	if err != nil {
-		return nil, err
+func (c *Client) lookupEntry(ctx context.Context, asset string) (*domain.AssetCatalogEntry, error) {
+	if c.catalog == nil {
+		return nil, fmt.Errorf("%w: holders catalog not configured", domain.ErrUpstream)
 	}
-	return parseDetail(body, entry)
+	return c.catalog.LookupAsset(ctx, asset)
+}
+
+func slugsFor(entry *domain.AssetCatalogEntry) []string {
+	if entry == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	var out []string
+	add := func(s string) {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			return
+		}
+		if _, ok := seen[s]; ok {
+			return
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	add(entry.Slug)
+	add(entry.Asset)
+	return out
+}
+
+func (c *Client) fetchDetail(ctx context.Context, entry *domain.AssetCatalogEntry) (*domain.AssetHolders, error) {
+	var last error
+	if entry.CMCID > 0 {
+		body, err := c.fetchDetailQuery(ctx, "id", strconv.FormatInt(entry.CMCID, 10))
+		if err == nil {
+			snap, perr := parseDetail(body, entry)
+			if perr == nil {
+				return snap, nil
+			}
+			if isHoldersUnpublished(perr) {
+				return nil, perr
+			}
+			last = perr
+		} else {
+			last = err
+		}
+	}
+	for _, slug := range slugsFor(entry) {
+		body, err := c.fetchDetailQuery(ctx, "slug", slug)
+		if err != nil {
+			last = err
+			continue
+		}
+		snap, perr := parseDetail(body, entry)
+		if perr == nil {
+			return snap, nil
+		}
+		last = perr
+	}
+	if last != nil {
+		return nil, last
+	}
+	return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, entry.Asset)
 }
 
 func (c *Client) fetchDetailBody(ctx context.Context, entry *domain.AssetCatalogEntry) ([]byte, error) {
+	if entry != nil && entry.CMCID > 0 {
+		return c.fetchDetailQuery(ctx, "id", strconv.FormatInt(entry.CMCID, 10))
+	}
+	slugs := slugsFor(entry)
+	if len(slugs) == 0 {
+		return nil, fmt.Errorf("%w: holders catalog id missing", domain.ErrHoldersUnpublished)
+	}
+	return c.fetchDetailQuery(ctx, "slug", slugs[0])
+}
+
+func (c *Client) fetchDetailQuery(ctx context.Context, key, value string) ([]byte, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	var u string
-	switch {
-	case entry != nil && entry.CMCID > 0:
-		u = fmt.Sprintf("%s%s?id=%d", c.baseURL, detailPath, entry.CMCID)
-	case entry != nil && strings.TrimSpace(entry.Slug) != "":
-		u = fmt.Sprintf("%s%s?slug=%s", c.baseURL, detailPath, strings.TrimSpace(entry.Slug))
-	default:
-		asset := ""
-		if entry != nil {
-			asset = entry.Asset
-		}
-		return nil, fmt.Errorf("%w: catalog for %q has no CoinMarketCap id or slug", domain.ErrCatalogUnmapped, asset)
-	}
+	u := fmt.Sprintf("%s%s?%s=%s", c.baseURL, detailPath, url.QueryEscape(key), url.QueryEscape(value))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%w: build cmc request: %v", domain.ErrUpstream, err)
@@ -233,7 +301,7 @@ func (c *Client) fetchDetailBody(ctx context.Context, entry *domain.AssetCatalog
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: cmc status %d", domain.ErrRateLimited, resp.StatusCode)
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, fmt.Errorf("%w: cmc detail missing for %q", domain.ErrNotFound, entry.Asset)
+		return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, value)
 	case resp.StatusCode >= 400:
 		return nil, fmt.Errorf("%w: cmc status %d: %s", domain.ErrUpstream, resp.StatusCode, truncate(string(body), 200))
 	}
@@ -308,9 +376,10 @@ func parseCMCContracts(raw json.RawMessage) []domain.AssetContract {
 		return nil
 	}
 	var rows []struct {
-		ContractAddress string `json:"contractAddress"`
-		Address         string `json:"address"`
-		Platform        struct {
+		ContractAddress  string `json:"contractAddress"`
+		Address          string `json:"address"`
+		ContractPlatform string `json:"contractPlatform"`
+		Platform         struct {
 			Name string `json:"name"`
 			Coin struct {
 				Symbol string `json:"symbol"`
@@ -330,13 +399,17 @@ func parseCMCContracts(raw json.RawMessage) []domain.AssetContract {
 		if addr == "" {
 			continue
 		}
-		chain := strings.TrimSpace(row.Platform.Name)
+		chain := strings.TrimSpace(row.ContractPlatform)
+		if chain == "" {
+			chain = strings.TrimSpace(row.Platform.Name)
+		}
 		if chain == "" {
 			chain = strings.TrimSpace(row.Platform.Coin.Symbol)
 		}
 		if chain == "" {
 			chain = strings.TrimSpace(row.Name)
 		}
+		chain = domain.InferContractChain(chain, addr)
 		out = append(out, domain.AssetContract{Chain: chain, Address: addr})
 	}
 	return out

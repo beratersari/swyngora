@@ -14,8 +14,11 @@ or, when Binance has a marketing `slug` but no `cmcUniqueId`:
 `GET {CMC_BASE_URL}/data-api/v3/cryptocurrency/detail?slug={slug}`
 
 Ticker → CMC id/slug comes from the Binance marketing symbol list
-(`cmcUniqueId` / `slug`), already refreshed daily for supply. An empty
-`holders` object with a positive `cdpTotalHolder` still counts as a snapshot.
+(`cmcUniqueId` / `slug`), already refreshed daily for supply. If that id is
+missing or the id payload has no holder table, the client retries `?slug=`
+(catalog slug, then lowercased ticker). An empty `holders` object with a
+positive `cdpTotalHolder` still counts as a snapshot. The holders cascade then
+tries Coin Metrics, GeckoTerminal, Ethplorer, Routescan, Tronscan, then CryptoID.
 
 ## Layout
 

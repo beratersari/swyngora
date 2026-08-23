@@ -127,6 +127,20 @@ func TestGetHolders_NotPublished(t *testing.T) {
 	}
 }
 
+func TestParseCMCContracts_UsesContractPlatform(t *testing.T) {
+	raw, _ := json.Marshal([]map[string]any{
+		{"contractAddress": "8WbNQtY7QmXMVKJFTSqFudierVZZtbuoyeepZEqJ1B2w", "contractPlatform": "Solana"},
+		{"contractAddress": "0x02300475d1EdD5b2E88EFdeBD3fFb549110D8Aa6", "contractPlatform": "Chiliz"},
+	})
+	got := parseCMCContracts(raw)
+	if len(got) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Chain != "solana" || got[1].Chain != "chiliz" || !strings.HasPrefix(got[1].Address, "0x") {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestGetAssetProfile_LogoFromCatalog(t *testing.T) {
 	c := New(Options{
 		Catalog: stubCatalog{entry: btcEntry()},
@@ -165,9 +179,29 @@ func TestGetHolders_HTTP404IsNotUnpublishedCache(t *testing.T) {
 }
 
 func TestGetHolders_CatalogMiss(t *testing.T) {
+	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("slug") == "pepe" {
+			_, _ = w.Write([]byte(`{"data":{"id":24478,"name":"Pepe","symbol":"PEPE","holders":{"holderCount":10,"holderList":[]}}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	c.catalog = stubCatalog{err: fmt.Errorf("%w: PEPE", domain.ErrCatalogUnmapped)}
+	got, err := c.GetHolders(context.Background(), "PEPE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HolderCount != 10 || got.Asset != "PEPE" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestGetHolders_CatalogMissAndSlugMiss(t *testing.T) {
 	c := New(Options{
-		Catalog: stubCatalog{err: fmt.Errorf("%w: AAPL", domain.ErrCatalogUnmapped)},
-		Cache:   cache.New[*domain.AssetHolders](time.Hour),
+		BaseURL:    "http://127.0.0.1:1",
+		HTTPClient: &http.Client{Timeout: 50 * time.Millisecond},
+		Catalog:    stubCatalog{err: fmt.Errorf("%w: AAPL", domain.ErrCatalogUnmapped)},
+		Cache:      cache.New[*domain.AssetHolders](time.Hour),
 	})
 	_, err := c.GetHolders(context.Background(), "X")
 	if !errors.Is(err, domain.ErrCatalogUnmapped) {

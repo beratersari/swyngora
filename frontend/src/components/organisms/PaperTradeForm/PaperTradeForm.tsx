@@ -30,6 +30,7 @@ export function PaperTradeForm({
   showLotMethod = true,
   advanced = true,
   isSubmitting = false,
+  disabled = false,
   submitError,
   compact = false,
   onSubmit,
@@ -87,7 +88,7 @@ export function PaperTradeForm({
     kind !== 'bracket';
 
   const submit = async (forcedSide?: 'buy' | 'sell') => {
-    if (inFlightRef.current || isSubmitting) return;
+    if (disabled || inFlightRef.current || isSubmitting) return;
     const s = forcedSide ?? side;
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
@@ -333,7 +334,7 @@ export function PaperTradeForm({
             <Button
               type="primary"
               loading={busy}
-              disabled={busy}
+              disabled={disabled || busy}
               onClick={() => void submit('buy')}
             >
               {t('portfolio:trade.submitBuy')}
@@ -341,7 +342,7 @@ export function PaperTradeForm({
             <Button
               danger
               loading={busy}
-              disabled={busy}
+              disabled={disabled || busy}
               onClick={() => void submit('sell')}
             >
               {t('portfolio:trade.submitSell')}
@@ -352,7 +353,7 @@ export function PaperTradeForm({
             type="primary"
             danger={showSide && side === 'sell'}
             loading={busy}
-            disabled={busy}
+            disabled={disabled || busy}
             onClick={() => void submit()}
           >
             {kind === 'market' || kind === 'limit'

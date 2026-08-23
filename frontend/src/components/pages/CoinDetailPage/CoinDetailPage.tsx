@@ -75,6 +75,7 @@ import {
   detailStateToSearchParams,
   filterValidApiCandles,
   preferLongerCandleSeries,
+  candleIntervalSeconds,
   intervalToSeconds,
   marketsBackPathFromSession,
   mergeCandleHistory,
@@ -234,14 +235,15 @@ export function CoinDetailPage() {
     { exchange: (exchange ?? 'binance') as MarketExchange },
     { skip: !exchange || isEquity },
   );
+  const delistSchedule = rtkCurrent(delistQuery);
   const delistHit = useMemo(() => {
-    if (!symbol || !delistQuery.data?.items?.length) return null;
+    if (!symbol || !delistSchedule?.items?.length) return null;
     return (
-      delistQuery.data.items.find(
+      delistSchedule.items.find(
         (it) => (it.symbol ?? '').toUpperCase() === String(symbol).toUpperCase(),
       ) ?? null
     );
-  }, [delistQuery.data?.items, symbol]);
+  }, [delistSchedule?.items, symbol]);
   const delistTime = delistHit?.delistTime ?? null;
   const announcedAt = delistHit?.announcedAt ?? null;
   const pastDelist = isPastDelist(delistTime);
@@ -934,6 +936,7 @@ export function CoinDetailPage() {
               overlays={overlays}
               markers={chartMarkers}
               vertLines={chartVertLines}
+              barDurationSec={candleIntervalSeconds(interval)}
               isLoading={seriesLoading}
               seriesKey={chartSeriesKey}
               isLoadingMore={isLoadingMore}
@@ -1152,6 +1155,7 @@ export function CoinDetailPage() {
                     /* ignore */
                   }
                 }}
+                placeholder={t('detail:paperTrade.selectBook')}
               />
               <Link to={`/portfolio?book=${encodeURIComponent(paperBookId || '')}`}>
                 <Button type="link" size="small">
@@ -1173,8 +1177,10 @@ export function CoinDetailPage() {
               advanced={false}
               showLotMethod={false}
               isSubmitting={placePaperState.isLoading}
+              disabled={books.length > 1 && !paperBookId}
               submitError={placePaperState.isError ? placePaperState.error : undefined}
               onSubmit={async (values: PaperTradeFormValues) => {
+                if (books.length > 1 && !paperBookId) return;
                 await placePaperOrder({
                   portfolioId: paperBookId || undefined,
                   exchange: values.exchange,

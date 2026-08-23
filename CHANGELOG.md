@@ -27,7 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Holders without `cmcUniqueId`:** Binance marketing slugs resolve CoinMarketCap detail (`?slug=`) and a positive `cdpTotalHolder` fills the count when the holder table is empty (`docs/features/holders.md`)
 - **Holders empty on many coins:** CMC’s public detail omitted the holder table for the default Go HTTP/2 client; requests now use HTTP/1.1 and browser Origin/Referer. ETH-style `dailyActive`-only payloads are shown instead of 404 (`docs/features/holders.md`)
-- **PIVX (and other catalog-miss UTXO coins):** Binance marketing has no `cmcUniqueId` for PIVX; holders now fall back to public Chainz CryptoID address counts and rich list (`docs/features/holders.md`)
+- **PIVX (and other catalog-miss UTXO coins):** Binance marketing has no `cmcUniqueId` for PIVX; holders then fall back to public Chainz CryptoID address counts and rich list (`docs/features/holders.md`)
+- **Holders coverage:** coin detail tries CoinMarketCap (id then slug), Coin Metrics address counts, GeckoTerminal, Ethplorer, Routescan (Chiliz/CITY), then Tronscan (`docs/features/holders.md`)
+- **Delist chart line:** announce/halt markers snap to the candle that contains the timestamp on every interval (1m–1M), not the nearest bar open (`docs/features/delist-schedule.md`)
+- **Coin-detail delist venue:** a previous exchange’s delist schedule is not treated as this venue’s halt while the new schedule loads (`docs/features/coin-detail.md`)
+- **Multi-book paper submits:** trade, cash, and margin tickets stay disabled until a book is selected (`docs/features/paper-trading.md`)
+- **AI paper book id:** LangChain paper/account tools accept `portfolio_id` without TypeError; margin open, recurring-buy create, basket create, and cancel-all send `portfolioId` (`docs/features/ai-assistant.md`)
 - **Delist chart after halt:** leftover venue klines after a midnight schedule stay visible on the home-venue chart; days after the last print come from the off-venue panel (`docs/features/delist-schedule.md`)
 - **Multi-book risk limits:** GET/PUT risk brakes and buy/margin guards no longer treat the book id as the actor; a second paper book cannot 400 the first book’s limits or block its buys (`docs/features/risk-limits.md`)
 - **Recurring buy overspend:** DCA sizes and fills on one last print so a ticker move between sizing and fill cannot debit more than the plan amount (`docs/features/recurring-buys.md`)

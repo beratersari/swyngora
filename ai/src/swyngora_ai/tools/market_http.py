@@ -902,6 +902,10 @@ class PortfolioGetInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class ClientIdInput(BaseModel):
+    client_id: str
+
+
 class PaperTradingCostsInput(BaseModel):
     exchange: str = Field(
         default="",
@@ -1062,6 +1066,7 @@ class PortfolioCancelAllInput(BaseModel):
     client_id: str
     symbol: str = ""
     exchange: str = Field(default="", description=EXCHANGE_VENUES)
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioOrderGetInput(BaseModel):
@@ -1109,6 +1114,7 @@ class RecurringBuyCreateInput(BaseModel):
     day_of_month: int = Field(default=0, description="Monthly salary day 1-31")
     interval_hours: int = Field(default=0, description="Interval frequency hours 1-168")
     start_at: str = Field(default="", description="RFC3339 first run; default now")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class RecurringBuyUpdateInput(BaseModel):
@@ -1129,6 +1135,7 @@ class BasketCreateInput(BaseModel):
     targets_json: str = Field(
         description='JSON array e.g. [{"asset":"BTC","weightPct":50},{"asset":"ETH","weightPct":30},{"asset":"USDT","weightPct":20}]'
     )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class BasketIdInput(BaseModel):
@@ -1167,6 +1174,7 @@ class MarginOrderInput(BaseModel):
     stop_loss: float = Field(default=0, description="Optional; 0 = omit")
     take_profit: float = Field(default=0, description="Optional; 0 = omit")
     idempotency_key: str = Field(default="", description="Optional retry key")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class MarginPositionIdInput(BaseModel):
@@ -2398,11 +2406,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/orders", q)
 
-    def cancel_portfolio_order(client_id: str, order_id: str) -> str:
-        return http.delete(
-            f"/api/v1/portfolio/orders/{order_id}",
-            {"clientId": client_id},
-        )
+    def cancel_portfolio_order(client_id: str, order_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.delete(f"/api/v1/portfolio/orders/{order_id}", q)
 
     def get_portfolio_order(client_id: str, order_id: str) -> str:
         return http.get(f"/api/v1/portfolio/orders/{order_id}", {"clientId": client_id})
@@ -2416,6 +2424,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         exchange: str = "binance",
         expires_at: str = "",
         idempotency_key: str = "",
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -2430,6 +2439,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["expiresAt"] = expires_at
         if idempotency_key:
             body["idempotencyKey"] = idempotency_key
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_bracket_order(
@@ -2442,6 +2453,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         exchange: str = "binance",
         expires_at: str = "",
         idempotency_key: str = "",
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -2457,6 +2469,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["expiresAt"] = expires_at
         if idempotency_key:
             body["idempotencyKey"] = idempotency_key
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/orders", body)
 
     def amend_portfolio_order(
@@ -2472,12 +2486,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["remainingQuantity"] = remaining_quantity
         return http.patch(f"/api/v1/portfolio/orders/{order_id}?clientId={client_id}", body)
 
-    def cancel_all_portfolio_orders(client_id: str, symbol: str = "", exchange: str = "") -> str:
+    def cancel_all_portfolio_orders(
+        client_id: str, symbol: str = "", exchange: str = "", portfolio_id: str = ""
+    ) -> str:
         body: dict[str, Any] = {"clientId": client_id}
         if symbol:
             body["symbol"] = symbol
         if exchange:
             body["exchange"] = exchange
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/orders/cancel-all", body)
 
     def preview_import(
@@ -2507,8 +2525,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def cancel_import(client_id: str, import_id: str) -> str:
         return http.post(f"/api/v1/import/{import_id}/cancel?clientId={client_id}", {})
 
-    def list_portfolio_trades(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/trades", {"clientId": client_id})
+    def list_portfolio_trades(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/trades", q)
 
     def create_recurring_buy(
         client_id: str,
@@ -2521,6 +2542,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         day_of_month: int = 0,
         interval_hours: int = 0,
         start_at: str = "",
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -2539,6 +2561,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["intervalHours"] = interval_hours
         if start_at:
             body["startAt"] = start_at
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/recurring-buys", body)
 
     def update_recurring_buy(
@@ -2572,8 +2596,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body,
         )
 
-    def list_recurring_buys(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/recurring-buys", {"clientId": client_id})
+    def list_recurring_buys(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/recurring-buys", q)
 
     def get_recurring_buy(client_id: str, plan_id: str) -> str:
         return http.get(
@@ -2608,15 +2635,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
         )
 
-    def create_portfolio_basket(client_id: str, name: str, targets_json: str) -> str:
+    def create_portfolio_basket(
+        client_id: str, name: str, targets_json: str, portfolio_id: str = ""
+    ) -> str:
         targets = json.loads(targets_json)
-        return http.post(
-            "/api/v1/portfolio/baskets",
-            {"clientId": client_id, "name": name, "targets": targets},
-        )
+        body: dict[str, Any] = {"clientId": client_id, "name": name, "targets": targets}
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        return http.post("/api/v1/portfolio/baskets", body)
 
-    def list_portfolio_baskets(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/baskets", {"clientId": client_id})
+    def list_portfolio_baskets(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/baskets", q)
 
     def get_portfolio_basket(client_id: str, basket_id: str) -> str:
         return http.get(
@@ -2667,6 +2699,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         stop_loss: float = 0,
         take_profit: float = 0,
         idempotency_key: str = "",
+        portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -2685,10 +2718,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["takeProfit"] = take_profit
         if idempotency_key:
             body["idempotencyKey"] = idempotency_key
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
         return http.post("/api/v1/portfolio/margin/orders", body)
 
-    def list_margin_positions(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/margin/positions", {"clientId": client_id})
+    def list_margin_positions(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/margin/positions", q)
 
     def close_margin_position(
         client_id: str, position_id: str, quantity: float = 0, idempotency_key: str = ""
@@ -2724,20 +2762,23 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body,
         )
 
-    def list_margin_orders(client_id: str, status: str = "open") -> str:
-        return http.get(
-            "/api/v1/portfolio/margin/orders",
-            {"clientId": client_id, "status": status},
-        )
+    def list_margin_orders(client_id: str, status: str = "open", portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id, "status": status}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/margin/orders", q)
 
-    def cancel_margin_order(client_id: str, order_id: str) -> str:
-        return http.delete(
-            f"/api/v1/portfolio/margin/orders/{order_id}",
-            {"clientId": client_id},
-        )
+    def cancel_margin_order(client_id: str, order_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.delete(f"/api/v1/portfolio/margin/orders/{order_id}", q)
 
-    def list_margin_trades(client_id: str) -> str:
-        return http.get("/api/v1/portfolio/margin/trades", {"clientId": client_id})
+    def list_margin_trades(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/margin/trades", q)
 
     def create_price_diff_watch(
         client_id: str,
@@ -3473,7 +3514,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_holders",
             description=(
                 "On-chain holder count, top 10/50/100 concentration, and top wallets "
-                "for a crypto asset (BTC or BTCUSDT). 404 if unpublished. Informational only."
+                "for a crypto asset (BTC or BTCUSDT). Tries CoinMarketCap, GeckoTerminal, "
+                "then Ethplorer. 404 if every source misses. Informational only."
             ),
             args_schema=SupplyInput,
         ),
@@ -3694,7 +3736,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_api_keys,
             name="list_api_keys",
             description="List named API keys for a client (no secrets).",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             revoke_api_key,
@@ -3712,7 +3754,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_portfolios,
             name="list_portfolios",
             description="List paper portfolios (id, name, cash). Use portfolio_id on other tools to select a book.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             rename_portfolio,
@@ -3754,7 +3796,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_shared_portfolios,
             name="list_shared_portfolios",
             description="List paper portfolios shared with you and your role.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             get_portfolio,
@@ -4047,7 +4089,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_price_diff_watches,
             name="list_price_diff_watches",
             description="List cross-exchange price difference watches for a clientId.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             get_price_diff_watch,
@@ -4126,7 +4168,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_scanner_rules,
             name="list_scanner_rules",
             description="List technical scanner rules for a clientId.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             delete_scanner_rule,
@@ -4138,7 +4180,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_scanner_results,
             name="list_scanner_results",
             description="List saved scanner match history (deduped by rule/symbol/bar).",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             detect_pump_events,

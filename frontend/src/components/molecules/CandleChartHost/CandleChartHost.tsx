@@ -56,6 +56,7 @@ export function CandleChartHost({
   overlays = [],
   markers = [],
   vertLines = [],
+  barDurationSec,
   height = DEFAULT_HEIGHT,
   className,
   isLoading = false,
@@ -406,6 +407,7 @@ export function CandleChartHost({
     const snapped = snapVertLinesToCandleTimes(
       vertLines,
       data.map((c) => c.time),
+      { barDurationSec },
     );
     const usedOnBar = new Map<number, number>();
     const stacked = snapped.map((line) => {
@@ -434,7 +436,7 @@ export function CandleChartHost({
       series.attachPrimitive(prim);
       vertPrimitivesRef.current.push(prim);
     }
-  }, [vertLines, data]);
+  }, [vertLines, data, barDurationSec]);
 
   const showSkeleton = isLoading && data.length === 0;
 

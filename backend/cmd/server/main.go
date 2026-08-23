@@ -18,14 +18,20 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cmc"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinbase"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinmetrics"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cryptoid"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/geckoterminal"
+	holderresolve "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/holders"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/routescan"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/tronscan"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
@@ -228,7 +234,18 @@ func main() {
 		Catalog: binanceClient,
 		Cache:   holdersCache,
 	})
-	marketSvc = marketSvc.WithHolders(cmcClient).WithHoldersFallback(cryptoid.New(cryptoid.Options{})).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+	holdersCascade := holderresolve.New(holderresolve.Options{
+		CMC:       cmcClient,
+		Metrics:   coinmetrics.New(coinmetrics.Options{HTTPClient: httpClient}),
+		Profile:   cmcClient,
+		Contracts: geckoClient,
+		GeckoTerm: geckoterminal.New(geckoterminal.Options{HTTPClient: httpClient}),
+		Ethplorer: ethplorer.New(ethplorer.Options{HTTPClient: httpClient}),
+		RouteScan: routescan.New(routescan.Options{HTTPClient: httpClient}),
+		TronScan:  tronscan.New(tronscan.Options{HTTPClient: httpClient}),
+		Cache:     holdersCache,
+	})
+	marketSvc = marketSvc.WithHolders(holdersCascade).WithHoldersFallback(cryptoid.New(cryptoid.Options{})).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{

@@ -1342,7 +1342,7 @@ func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
 		AsOf:               got.AsOf.UTC().Format(time.RFC3339Nano),
 		Source:             got.Source,
 		Stale:              got.Stale,
-		Note:               "On-chain holder count and top wallets from CoinMarketCap public data-api (id or slug). If CMC has no table, UTXO coins may use Chainz CryptoID (PIVX). label is a public attribution when known (exchange / genesis), not identity proof. Crypto only. Informational only. stale=true is last-good after a blip.",
+		Note:               "On-chain holder count and top wallets. Tries CoinMarketCap (catalog id, then public slug), Coin Metrics, GeckoTerminal, Ethplorer, Routescan, Tronscan, then CryptoID for some UTXO coins. label is a public attribution when known (exchange / genesis), not identity proof. Crypto only. Informational only. stale=true is last-good after a blip.",
 	})
 }
 

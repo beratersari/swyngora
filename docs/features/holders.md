@@ -9,19 +9,24 @@ concentration (top 10 / 50 / 100 %), and the largest wallets.
 
 - `GET /api/v1/market/holders?asset=BTC` (or `symbol=BTCUSDT`)
 - Crypto only. Equities skip the query in product UI.
-- `404` `catalog_unmapped`: no Binance marketing `cmcUniqueId` **and** no marketing `slug`.
-- `404` `holders_unpublished`: CMC answered but published no holder table (`holders` empty and `cdpTotalHolder` is 0/absent).
+- `404` `catalog_unmapped` / `holders_unpublished` only after every source misses.
 - Fetch uses `cmcUniqueId` when present, otherwise `GET …/detail?slug=` from the Binance marketing slug **or** the lowercased base ticker (so PIVXUSDT still hits CMC even when marketing has no id).
-- When the `holders` object is empty, a positive `cdpTotalHolder` is used as the wallet count.
-- If CMC still has no table (`holders_unpublished`) or no catalog row, **Chainz CryptoID** is tried (`/{ticker}/api.dws?q=addresses` + `q=rich`). That is how PIVX (and similar UTXO coins) get a holder count and top wallets.
+- When the CMC `holders` object is empty, a positive `cdpTotalHolder` is used as the wallet count.
 - Response includes `holderCount`, optional `dailyActive`, top-10/20/50/100 share
   percents, up to 20 `topHolders` (each may have a `label`), and `stale` when last-good is served.
 - `label` is a conservative public attribution when the exact address is widely
   published (BitInfoCharts / ChainQuery / Etherscan nametags, plus famous
   historical wallets). Unknown wallets stay unlabeled. This is **not** identity proof.
-- Ticker → CoinMarketCap id comes from the daily Binance marketing snapshot
-  (`cmcUniqueId`), including rows that have an id but no supply numbers.
-  Pair forms (`BTC-USD`, `ETHTRY`) normalize to the base asset.
+- Sources (in order, all free/public, no paid plan):
+  1. CoinMarketCap public detail by Binance marketing `cmcUniqueId`
+  2. Same CMC detail by `slug` (catalog slug, then lowercased ticker)
+  3. Coin Metrics community `AdrBalCnt` (addresses with a balance)
+  4. GeckoTerminal token `/info` holder count (CMC profile contracts, then CoinGecko)
+  5. Ethplorer ERC-20 count + top wallets (`freekey`)
+  6. Routescan EVM explorer (Chiliz fan tokens such as CITY, plus other mapped chains)
+  7. Tronscan public `token_trc20` (JST, SUN, WIN, and other TRC-20)
+  8. Chainz CryptoID (`/{ticker}/api.dws?q=addresses` + `q=rich`) for UTXO coins such as PIVX
+- Pair forms (`BTC-USD`, `ETHTRY`) normalize to the base asset.
 - Request path uses a 1h TTL cache (env `HOLDERS_CACHE_TTL`). A 429, upstream
   error, or empty CMC blip serves last-good (`stale: true`) when present.
   Unpublished assets are negative-cached so they do not hammer CMC.
@@ -32,8 +37,8 @@ concentration (top 10 / 50 / 100 %), and the largest wallets.
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/holders.go` |
-| Catalog | Binance marketing list (`LookupAsset`) |
-| Adapter | `backend/internal/adapter/cmc/` |
+| Catalog | Binance marketing list (`LookupAsset`) + CoinGecko platforms |
+| Adapter | `cmc`, `geckoterminal`, `ethplorer`, cascade `adapter/holders` |
 | Service | `GetHolders` |
 | HTTP | `GET /api/v1/market/holders` |
 | MCP / AI | `get_holders` |
@@ -52,19 +57,23 @@ Open `/markets/binance/BTCUSDT?tab=holders` — Holders tab. Wallet size uses sh
 
 ## Limits
 
-- Coverage follows CoinMarketCap’s published holder tables, not every Binance pair.
+- Coverage is best-effort. Coins missing from every public feed still 404. The API
+  response `source` field says which hop succeeded.
 - Go’s default HTTP/2 client used to get `"holders":{}` even when the public coin
-  page has a table (BTC, PEPE). The adapter now uses HTTP/1.1 plus browser
+  page has a table (BTC, PEPE). The CMC adapter now uses HTTP/1.1 plus browser
   `Origin` / `Referer` so the payload matches the website.
-- Some large coins still have **no CMC holder table** (`holdersFlag: false`,
-  empty `holders`). There is no free public explorer API that fills those
-  without a key-gated vendor (Etherscan v2, Mobula, Debank). ETH often has
-  **daily active** only (wallet count stays 0).
-- **Verified unpublished (CMC has no table):** ACE, SOL, ADA, AVAX, SUI, XRP, WIF, ARB
-  (and others with the same empty `holders` object).
-- **Verified unmapped (no Binance id/slug and no CryptoID coin):** EUR, UTK, TON
-  (plus other catalog misses such as NFP, LRC, HFT, VANRY). **PIVX** is catalog-unmapped
-  on Binance marketing but **is** fetched via CryptoID (do not treat it as permanently empty).
+- **2026-08-23 full venue scan** (783 unique Binance/Bybit/Coinbase bases):
+  364 published. Remaining gaps are classified in this file’s limits, not a
+  volume-top sample — mid-cap fan tokens such as CITY were previously omitted
+  from that sample.
+- **Hard gaps (no free address-count feed):** native L1s (SOL, AVAX, SUI, APT,
+  HBAR, STX, SEI, TIA, TON, VET, MINA, …), BRC-20 (ORDI, 1000SATS), tokenized
+  stocks (`AAPLB` / `TSLAX`), and Cosmos / Hedera / VeChain / similar chains.
+- **Often recoverable but flaky:** BSC/Base/Optimism tokens (ASTER, KAITO,
+  SAPIEN, LAZIO, AERO) when GeckoTerminal 429s. Retry the Holders tab.
+- **PIVX** is catalog-unmapped on Binance marketing but **is** fetched via CryptoID
+  (do not treat it as permanently empty).
+- ETH often has **daily active** only (wallet count stays 0) when no other hop has a table.
 - Stocks (`nasdaq` / `bist`) are skipped.
 - Public web JSON can change shape — parsing is isolated and fixture-tested.
 - Top wallets get a `label` from a curated map of public attributions: Binance

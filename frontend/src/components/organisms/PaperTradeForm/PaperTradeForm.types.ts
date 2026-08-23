@@ -28,6 +28,8 @@ export type PaperTradeFormProps = {
   /** Hide advanced types (OCO/bracket/trailing); still allow market + limit + stop. */
   advanced?: boolean;
   isSubmitting?: boolean;
+  /** When true, submit is blocked (e.g. 2+ books and none selected). */
+  disabled?: boolean;
   submitError?: unknown;
   compact?: boolean;
   onSubmit: (values: PaperTradeFormValues) => Promise<void>;

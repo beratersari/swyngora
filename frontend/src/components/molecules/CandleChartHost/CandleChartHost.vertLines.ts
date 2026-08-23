@@ -162,41 +162,57 @@ export class VertLinePrimitive implements ISeriesPrimitive<Time> {
   }
 }
 
+export type SnapVertLineOpts = {
+  /** Bar length in seconds (1m=60, 1h=3600, 1d=86400, …). */
+  barDurationSec?: number;
+};
+
 /**
- * Bind event times to an existing OHLC bar. Extra whitespace points on a
- * sibling series collapse the price scale and punch holes in the candles.
+ * Bind an event to the OHLC bar that contains it (latest open ≤ event).
+ * Nearest-open would move a late-bar halt (e.g. 20:00 on a 1d) onto the next candle.
+ * Events before the first bar, or after the last bar closes, are dropped.
  */
 export function snapVertLinesToCandleTimes<T extends { time: number }>(
   lines: readonly T[],
   candleTimes: readonly number[],
+  opts?: SnapVertLineOpts,
 ): T[] {
   const times = candleTimes.filter((t) => Number.isFinite(t) && t > 0);
   if (!lines.length || !times.length) return [];
   const sorted = times.slice().sort((a, b) => a - b);
-  const timeSet = new Set(sorted);
-  return lines
-    .filter((line) => Number.isFinite(line.time) && line.time > 0)
-    .map((line) => ({
-      ...line,
-      time: timeSet.has(line.time) ? line.time : nearestCandleTime(sorted, line.time),
-    }));
+  const barSec = opts?.barDurationSec && opts.barDurationSec > 0 ? opts.barDurationSec : 0;
+  const out: T[] = [];
+  for (const line of lines) {
+    if (!Number.isFinite(line.time) || line.time <= 0) continue;
+    const open = containingCandleOpen(sorted, line.time, barSec);
+    if (open == null) continue;
+    out.push({ ...line, time: open });
+  }
+  return out;
 }
 
-function nearestCandleTime(sortedTimes: number[], target: number): number {
+/** Latest candle open that contains `target`, or null if that bar is not loaded. */
+export function containingCandleOpen(
+  sortedOpens: readonly number[],
+  target: number,
+  barDurationSec = 0,
+): number | null {
+  if (!sortedOpens.length) return null;
+  const first = sortedOpens[0]!;
+  if (target < first) return null;
   let lo = 0;
-  let hi = sortedTimes.length - 1;
-  if (target <= sortedTimes[0]!) return sortedTimes[0]!;
-  if (target >= sortedTimes[hi]!) return sortedTimes[hi]!;
+  let hi = sortedOpens.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    const v = sortedTimes[mid]!;
+    const v = sortedOpens[mid]!;
     if (v === target) return v;
     if (v < target) lo = mid + 1;
     else hi = mid - 1;
   }
-  const a = sortedTimes[hi]!;
-  const b = sortedTimes[lo]!;
-  return Math.abs(a - target) <= Math.abs(b - target) ? a : b;
+  const open = sortedOpens[hi];
+  if (open == null) return null;
+  if (barDurationSec > 0 && target >= open + barDurationSec) return null;
+  return open;
 }
 
 export function isoToUnixSeconds(value: string | number | Date | null | undefined): number | null {

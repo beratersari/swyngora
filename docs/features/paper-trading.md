@@ -6,7 +6,7 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 ### Product web UI
 
-The React app exposes paper trading at **`/portfolio`** (`PortfolioPage`): multi-book select/create, cash deposit/withdraw, market orders, positions, open pending orders (cancel), trade history, cash ledger, and equity performance chart. Coin detail (`/markets/:exchange/:symbol`) includes a **Paper trade** panel that places market orders against the selected book. Realtime portfolio WS updates are subscribed when a book is selected.
+The React app exposes paper trading at **`/portfolio`** (`PortfolioPage`): multi-book select/create, cash deposit/withdraw, market orders, positions, open pending orders (cancel), trade history, cash ledger, and equity performance chart. Coin detail (`/markets/:exchange/:symbol`) includes a **Paper trade** panel that places market orders against the selected book. With **more than one book**, snapshot queries skip and trade/cash/margin submits stay disabled until a book is selected (the API returns 400 without `portfolioId`). Realtime portfolio WS updates are subscribed when a book is selected.
 
 Spot, pending, margin, and recurring-buy symbols must use the **same quote asset as the portfolio currency** (default `USDT`). `ETHBTC` on a USDT book is rejected. When a live mark cannot be fetched, margin positions are **not** marked at entry (liquidation is skipped until a real last price exists).
 

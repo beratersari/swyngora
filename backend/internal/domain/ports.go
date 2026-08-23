@@ -48,6 +48,12 @@ type HoldersPort interface {
 	GetHolders(ctx context.Context, asset string) (*AssetHolders, error)
 }
 
+// TokenContractPort resolves published token addresses for a base ticker.
+// Used by holder fallbacks when CoinMarketCap has no table.
+type TokenContractPort interface {
+	LookupContracts(ctx context.Context, asset string) ([]AssetContract, error)
+}
+
 // AssetProfilePort serves logo, listing date, and published contracts.
 type AssetProfilePort interface {
 	GetAssetProfile(ctx context.Context, asset string) (*AssetProfile, error)

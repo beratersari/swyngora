@@ -51,4 +51,4 @@ Swyngora needs candlesticks, 24h volume, spot listings, and supply metrics align
 
 After a venue has halted a pair it has no new trades. **Do not invent venue candles.** Off-venue movement is a separate labeled snapshot (`GET /api/v1/market/post-delist`): another listed venue if the pair still trades there, otherwise CoinGecko public `/coins/markets` last + `/coins/{id}/ohlc` (no key). The home-venue chart stays on leftover real klines only. Informational only — not financial advice.
 
-**Holder snapshots** are a separate feed (CoinMarketCap public data-api, mapped via marketing `cmcUniqueId`). See [0003](0003-coinmarketcap-holder-source.md).
+**Holder snapshots** are a separate feed (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan). See [0003](0003-coinmarketcap-holder-source.md).

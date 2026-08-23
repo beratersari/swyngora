@@ -102,7 +102,7 @@ After editing tokens in `.env`, **restart the server**. See [`docs/features/tele
 | 24h volume / ticker | Binance public Spot REST | Base + quote volume |
 | Spot order book | Binance / Coinbase / Bybit public depth | Backend-grouped steps + walls |
 | Circulating / total / max supply | Binance marketing symbol list | Daily snapshot @ 03:00 UTC (cache-only requests); max null when undefined |
-| Crypto holders | CoinMarketCap public data-api | Mapped via Binance `cmcUniqueId`; 1h cache; see [`docs/features/holders.md`](docs/features/holders.md) |
+| Crypto holders | CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan | Public feeds only; 1h cache; see [`docs/features/holders.md`](docs/features/holders.md) |
 
 See [docs/features/market-data.md](docs/features/market-data.md) and [docs/adr/0001-binance-and-coingecko-market-sources.md](docs/adr/0001-binance-and-coingecko-market-sources.md).
 

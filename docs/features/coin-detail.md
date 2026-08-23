@@ -53,7 +53,8 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Chart starts the kline fetch immediately (does not wait for the intervals list). A 100-bar first request paints the viewport, then the 300-bar live window replaces it. EMA overlays come from loaded candles so they do not block first paint. The overview chart stays mounted when switching detail tabs.
 - Partial errors per section; supply 404 is soft
-- After the venue halt, leftover real klines stay on the main chart. Later movement is a labeled **After delist** panel (other venue or CoinGecko), not invented home-venue bars.
+- After the venue halt, leftover real klines stay on the main chart. Later movement is a labeled **After delist** panel (other venue or CoinGecko), not invented home-venue bars. Announce/halt vertical lines sit on the **containing** candle for the selected interval (1m through 1M), not the nearest bar open.
+- Delist matching uses `rtkCurrent` on the current venue’s schedule so a previous exchange’s halt is not applied while the new schedule is in flight.
 
 ### Indicators (DET-B)
 
@@ -81,8 +82,8 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 
 - Indicators = RSI + EMA only  
 - Supply = Binance marketing-list coverage  
-- Holders = CoinMarketCap public snapshot when published; `catalog_unmapped` vs
-  `holders_unpublished` 404s; last-good marked `stale`
+- Holders = CMC, Coin Metrics, GeckoTerminal, Ethplorer, Routescan, then Tronscan; `catalog_unmapped` /
+  `holders_unpublished` 404s only after every source misses; last-good marked `stale`
 - Tape tab = OI, funding, liquidations, CVD (`exchange=all` Binance USD-M + Bybit linear)
 - Asset profile = CMC public logo, listing date, and contracts when the marketing id exists  
 - Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules). Live pump markers use the current pair only (`rtkCurrent` + exchange/symbol match) so a previous coin’s events cannot snap onto the new candles.  

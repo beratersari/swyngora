@@ -78,8 +78,8 @@
     "valueUsd": "Değer",
     "share": "Pay",
     "source": "Tutucu kaynağı: {{source}}",
-    "emptyWallets": "Tutucu sayısı yayımlanmış ama CoinMarketCap üst cüzdan listesi vermemiş.",
-    "stale": "Son iyi anlık görüntü gösteriliyor — CoinMarketCap gecikmeli veya kota dolu."
+    "emptyWallets": "Tutucu sayısı yayımlanmış ama üst cüzdan listesi yok.",
+    "stale": "Son iyi anlık görüntü gösteriliyor — kaynak gecikmeli veya kota dolu."
   },
   "indicators": {
     "title": "Teknik göstergeler",
@@ -104,8 +104,8 @@
   "errors": {
     "supply404": "Bu varlık için arz anlık görüntüsü yok (Binance pazarlama listesi kapsamı).",
     "supplyEquity": "Hisselerin Binance/CoinMarketCap arz anlık görüntüsü yoktur.",
-    "holders404": "CoinMarketCap bu varlık için tutucu tablosu yayımlamamış.",
-    "holdersUnmapped": "Bu ticker Binance pazarlama kataloğunda CoinMarketCap kimliği taşımıyor; tutucu verisi yüklenemez.",
+    "holders404": "CoinMarketCap, GeckoTerminal ve Ethplorer bu varlık için tutucu anlığı vermedi.",
+    "holdersUnmapped": "Bu ticker katalogda yok ve yedek tutucu kaynakları da anlık bulamadı.",
     "tickerHalted": "Durdurma öncesi son işlem — canlı 24s penceresi değil."
   },
   "pollingPaused": "Sekme gizliyken canlı yenileme duraklatıldı.",
@@ -195,6 +195,7 @@
     "openPortfolio": "Kağıt masasını aç",
     "book": "Defter",
     "noBook": "Önce Kağıt masasında bir defter oluşturun.",
+    "selectBook": "Kağıt defter seçin",
     "qty": "Miktar",
     "buy": "Kağıt al",
     "sell": "Kağıt sat",

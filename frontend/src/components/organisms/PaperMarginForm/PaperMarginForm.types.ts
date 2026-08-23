@@ -16,6 +16,8 @@ export type PaperMarginFormProps = {
   marginMode?: MarginMode | string;
   modeLoading?: boolean;
   isSubmitting?: boolean;
+  /** When true, open is blocked (e.g. 2+ books and none selected). */
+  disabled?: boolean;
   submitError?: unknown;
   onModeChange?: (mode: MarginMode) => Promise<void>;
   onSubmit: (values: PaperMarginFormValues) => Promise<void>;

@@ -28,6 +28,8 @@ export type CandleChartHostProps = WithLoadingProps & {
   markers?: CandleChartMarker[];
   /** Full-height vertical event lines (delist announce / halt). */
   vertLines?: CandleChartVertLine[];
+  /** Seconds per bar so delist lines snap to the containing candle, not the nearest open. */
+  barDurationSec?: number;
   height?: number;
   className?: string;
   /**

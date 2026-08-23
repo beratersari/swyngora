@@ -9,6 +9,7 @@ import type { PortfolioCashPanelProps } from './PortfolioCashPanel.types';
 export function PortfolioCashPanel({
   isDepositing,
   isWithdrawing,
+  disabled = false,
   depositError,
   withdrawError,
   onDeposit,
@@ -23,7 +24,7 @@ export function PortfolioCashPanel({
   const busy = isDepositing || isWithdrawing || localBusy;
 
   const run = async (kind: 'deposit' | 'withdraw') => {
-    if (amount == null || amount <= 0) return;
+    if (disabled || amount == null || amount <= 0) return;
     if (isDepositing || isWithdrawing || inFlightRef.current) return;
     inFlightRef.current = true;
     setLocalBusy(true);
@@ -66,14 +67,14 @@ export function PortfolioCashPanel({
           <Button
             type="primary"
             loading={isDepositing}
-            disabled={busy}
+            disabled={disabled || busy}
             onClick={() => void run('deposit')}
           >
             {t('portfolio:cash.deposit')}
           </Button>
           <Button
             loading={isWithdrawing}
-            disabled={busy}
+            disabled={disabled || busy}
             onClick={() => void run('withdraw')}
           >
             {t('portfolio:cash.withdraw')}

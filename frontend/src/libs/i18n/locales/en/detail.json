@@ -78,8 +78,8 @@
     "valueUsd": "Value",
     "share": "Share",
     "source": "Holder source: {{source}}",
-    "emptyWallets": "Holder count is published, but CoinMarketCap listed no top wallets.",
-    "stale": "Showing last-good snapshot — CoinMarketCap is stale or rate-limited."
+    "emptyWallets": "Holder count is published, but no top wallets were listed.",
+    "stale": "Showing last-good snapshot — the holder source is stale or rate-limited."
   },
   "indicators": {
     "title": "Technical indicators",
@@ -104,8 +104,8 @@
   "errors": {
     "supply404": "Supply snapshot not available for this asset (Binance marketing list coverage).",
     "supplyEquity": "Listed stocks do not have a Binance/CoinMarketCap supply snapshot.",
-    "holders404": "CoinMarketCap has not published a holder table for this asset.",
-    "holdersUnmapped": "This ticker has no CoinMarketCap id in the Binance marketing catalog, so holders cannot be loaded.",
+    "holders404": "No holder snapshot from CoinMarketCap, GeckoTerminal, or Ethplorer for this asset.",
+    "holdersUnmapped": "This ticker is not in the marketing catalog and fallback holder sources found no snapshot.",
     "tickerHalted": "Last print before halt — not a live 24h window."
   },
   "pollingPaused": "Live refresh paused while this tab is hidden.",
@@ -195,6 +195,7 @@
     "openPortfolio": "Open paper desk",
     "book": "Book",
     "noBook": "Create a paper book first on the Paper desk.",
+    "selectBook": "Select a paper book",
     "qty": "Quantity",
     "buy": "Paper buy",
     "sell": "Paper sell",
