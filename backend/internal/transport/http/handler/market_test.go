@@ -555,6 +555,33 @@ func TestGetAbsorption_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetLiquiditySweeps_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidity-sweeps?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquiditySweeps(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body liquiditySweepResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquiditySweeps_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidity-sweeps", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquiditySweeps(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetIcebergs_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", nil)

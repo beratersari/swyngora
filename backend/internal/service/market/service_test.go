@@ -905,6 +905,7 @@ type intervalSeriesMarket struct {
 }
 
 func (m *intervalSeriesMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	m.lastQ = q
 	if rows, ok := m.by[q.Symbol]; ok {
 		if c, ok := rows[q.Interval]; ok {
 			return c, nil

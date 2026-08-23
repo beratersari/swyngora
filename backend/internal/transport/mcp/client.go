@@ -340,6 +340,16 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.R
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
+// GetLiquiditySweeps returns pokes through a prior high/low that came back.
+func (c *APIClient) GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidity-sweeps", q)
+}
+
 // GetAbsorption returns aggressive volume versus price hold (who is absorbing).
 func (c *APIClient) GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

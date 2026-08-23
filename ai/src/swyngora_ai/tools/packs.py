@@ -23,6 +23,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "get_post_delist",
         "get_volume_profile",
         "get_absorption",
+        "get_liquidity_sweeps",
     }
 )
 

@@ -1276,6 +1276,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_liquidity_sweeps(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidity-sweeps",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_volume_profile(
         symbol: str,
         exchange: str = "all",
@@ -2707,6 +2713,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "selling (or the reverse). Windows show 15m / 1h / 4h / 24h "
                 "change. Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidity_sweeps,
+            name="get_liquidity_sweeps",
+            description=(
+                "Liquidity sweep: price pokes a little through a prior high "
+                "or low that had already turned it back, then comes back. "
+                "Returns the level, how far through, how long to reclaim, "
+                "and volume during that poke."
             ),
             args_schema=TakerFlowInput,
         ),

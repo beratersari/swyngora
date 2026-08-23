@@ -1345,6 +1345,42 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidity-sweeps:
+    get:
+      summary: Liquidity sweeps (poke through a prior high or low)
+      description: |
+        A **liquidity sweep** is when price pokes a little **through a
+        prior high or low** that had already turned it back, then comes
+        back. Each sweep names the **level**, how far price went through
+        (`excursion` / `excursionPct`), how long it stayed beyond
+        (`duration`), and **quote volume** (buy/sell when the venue
+        publishes taker-buy) during that poke. `tests` is how many times
+        the level turned price before the sweep. `status` is `swept`
+        (back) or `open` (still beyond). 15-minute spot candles, last
+        ~7 days. A poke that stays through for more than 2 hours is a
+        breakout, not a sweep. `exchange=all` (default) returns Binance
+        and Bybit separately. Informational only.
+      operationId: getMarketLiquiditySweeps
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue liquidity sweeps
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/absorption:
     get:
       summary: Absorption (large flow, little price)

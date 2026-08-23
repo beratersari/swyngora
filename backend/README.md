@@ -54,6 +54,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split and spot-vs-futures split |
 | `GET` | `/api/v1/market/volume-profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
+| `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
 | `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read |
 | `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
@@ -337,8 +338,8 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go` |
-| Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go` (fakes for ports) |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go` |
+| Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go`, `sweep_test.go` (fakes for ports) |
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go`, `openinterest_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
