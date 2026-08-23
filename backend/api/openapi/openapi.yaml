@@ -1345,6 +1345,59 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/volume-profile:
+    get:
+      summary: Volume profile (volume by price)
+      description: |
+        **Volume profile** shows **where** trading happened by **price**
+        over a time range you choose — not just how much traded over time.
+        Each row is quote (USDT) volume in a price band, with **buy** and
+        **sell** when the venue publishes taker-buy (Binance klines; Bybit
+        is total-only). `poc` is the price with the most volume. `valueArea`
+        is the contiguous block around the POC that holds about **70%** of
+        volume. `exchange=all` (default) returns Binance and Bybit separately
+        plus `combined`. Combined adds both venues at the same price levels.
+        Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or
+        `startTime` + `endTime`. Optional `tickSize` sets the row width.
+        Built from spot candles (volume spread across each bar's high–low),
+        not individual prints. Informational only.
+      operationId: getMarketVolumeProfile
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set.
+          schema: { type: string, default: "24h" }
+        - name: startTime
+          in: query
+          description: Range start (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: endTime
+          in: query
+          description: Range end (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: tickSize
+          in: query
+          description: Price row width (e.g. 50). Omit to pick one automatically.
+          schema: { type: number, example: 50 }
+      responses:
+        '200':
+          description: Per-venue and optional combined volume profile
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/venue-divergence:
     get:
       summary: Binance vs Bybit signal split

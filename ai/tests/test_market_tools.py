@@ -109,6 +109,17 @@ class _Transport(httpx.BaseTransport):
             )
         if request.url.path.endswith("/exchanges"):
             return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
+        if request.url.path.endswith("/volume-profile"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "window": request.url.params.get("window") or "24h",
+                    "poc": {"price": "65200", "volume": "150000"},
+                    "valueArea": {"low": "64800", "high": "66100"},
+                },
+            )
         return httpx.Response(404, json={"error": "not found"})
 
 
@@ -167,6 +178,15 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))
     assert lsr["venues"][0]["current"]["bias"] == "long"
+
+    assert "get_volume_profile" in by_name
+    vp = json.loads(
+        by_name["get_volume_profile"].invoke(
+            {"symbol": "BTCUSDT", "exchange": "all", "window": "4h"}
+        )
+    )
+    assert vp["symbol"] == "BTCUSDT"
+    assert vp["poc"]["price"] == "65200"
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"}))

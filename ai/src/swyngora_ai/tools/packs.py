@@ -21,6 +21,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "get_indicators",
         "list_delist_schedule",
         "get_post_delist",
+        "get_volume_profile",
     }
 )
 

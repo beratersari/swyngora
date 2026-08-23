@@ -45,6 +45,7 @@ type DataPort interface {
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
@@ -618,6 +619,26 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_volume_profile",
+		mcp.WithDescription("Where trading happened by price over a time range: total, buy, and sell quote volume in each price row, the point of control (price with the most volume), and the value area (the block around it that holds about 70% of volume). Works for BTC and other pairs. Binance and Bybit separately plus combined. Buy/sell is from Binance taker-buy; Bybit rows are total-only. Not tick-accurate — volume is spread across each candle's high–low. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set.")),
+		mcp.WithString("startTime", mcp.Description("Range start (RFC3339 or unix ms). Use with endTime.")),
+		mcp.WithString("endTime", mcp.Description("Range end (RFC3339 or unix ms).")),
+		mcp.WithNumber("tickSize", mcp.Description("Price row width (e.g. 50). Omit to pick one automatically.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVolumeProfile(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""), req.GetFloat("tickSize", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

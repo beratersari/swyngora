@@ -469,6 +469,65 @@ func TestGetCVD_BadSymbol(t *testing.T) {
 	}
 }
 
+type volumeProfileMarket struct {
+	stubMarket
+}
+
+func (volumeProfileMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	at := time.Now().UTC().Add(-2 * time.Hour)
+	return []domain.Candle{{
+		OpenTime: at, Open: "65000", High: "65300", Low: "65100", Close: "65200",
+		Volume: "10", CloseTime: at.Add(time.Minute), QuoteVolume: "80000", TakerBuyQuote: "50000",
+	}, {
+		OpenTime: at.Add(time.Hour), Open: "67800", High: "68000", Low: "67700", Close: "67900",
+		Volume: "2", CloseTime: at.Add(time.Hour + time.Minute), QuoteVolume: "10000", TakerBuyQuote: "2000",
+	}}, nil
+}
+
+func (volumeProfileMarket) GetTicker24h(_ context.Context, symbol string) (*domain.Ticker24h, error) {
+	return &domain.Ticker24h{Symbol: symbol, LastPrice: "65500"}, nil
+}
+
+func TestGetVolumeProfile_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&window=4h&tickSize=100", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeProfile(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volumeProfileResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "4h" || len(body.Venues) == 0 {
+		t.Fatalf("%+v", body)
+	}
+	if body.Venues[0].POC.Price == "" || body.Venues[0].ValueArea.Low == "" {
+		t.Fatalf("poc/va %+v", body.Venues[0])
+	}
+}
+
+func TestGetVolumeProfile_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeProfile(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetVolumeProfile_BadTick(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&tickSize=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeProfile(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetIcebergs_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", nil)

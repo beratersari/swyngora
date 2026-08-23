@@ -421,6 +421,30 @@ class TakerFlowInput(BaseModel):
     )
 
 
+class VolumeProfileInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="24h",
+        description="1h|4h|24h|7d|30d (default 24h). Ignored when start_time/end_time are set.",
+    )
+    start_time: str = Field(
+        default="",
+        description="Range start (RFC3339 or unix ms)",
+    )
+    end_time: str = Field(
+        default="",
+        description="Range end (RFC3339 or unix ms)",
+    )
+    tick_size: float = Field(
+        default=0,
+        description="Price row width (e.g. 50). Omit or 0 to pick one automatically.",
+    )
+
+
 class BasisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1245,6 +1269,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/cvd",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_volume_profile(
+        symbol: str,
+        exchange: str = "all",
+        window: str = "24h",
+        start_time: str = "",
+        end_time: str = "",
+        tick_size: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if window:
+            params["window"] = window
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        if tick_size:
+            params["tickSize"] = tick_size
+        return http.get("/api/v1/market/volume-profile", params)
 
     def get_basis(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -2660,6 +2703,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_volume_profile,
+            name="get_volume_profile",
+            description=(
+                "Where trading happened by price over a time range: total, "
+                "buy, and sell quote volume in each price row, the point of "
+                "control (most volume), and the 70% value area. Works for BTC "
+                "and other pairs. Binance and Bybit separately plus combined. "
+                "Use window 1h/4h/24h/7d/30d or start_time/end_time."
+            ),
+            args_schema=VolumeProfileInput,
         ),
         StructuredTool.from_function(
             get_basis,

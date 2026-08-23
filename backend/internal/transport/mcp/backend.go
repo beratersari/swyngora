@@ -322,6 +322,32 @@ func (b *Backend) GetCVD(ctx context.Context, exchange, symbol string) (json.Raw
 	return mustJSON(got)
 }
 
+func (b *Backend) GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var startPtr, endPtr *time.Time
+	if startTime != "" {
+		t, err := parseMCPTime(startTime)
+		if err != nil {
+			return nil, err
+		}
+		startPtr = &t
+	}
+	if endTime != "" {
+		t, err := parseMCPTime(endTime)
+		if err != nil {
+			return nil, err
+		}
+		endPtr = &t
+	}
+	got, err := b.Market.GetVolumeProfile(ctx, exchange, symbol, window, startPtr, endPtr, tickSize)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

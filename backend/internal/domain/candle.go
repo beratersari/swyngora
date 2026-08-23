@@ -40,6 +40,44 @@ func IsValidInterval(s string) bool {
 	return false
 }
 
+// IntervalDuration is the nominal length of one bar. Monthly is an upper bound.
+func IntervalDuration(iv CandleInterval) time.Duration {
+	switch iv {
+	case Interval1m:
+		return time.Minute
+	case Interval3m:
+		return 3 * time.Minute
+	case Interval5m:
+		return 5 * time.Minute
+	case Interval15m:
+		return 15 * time.Minute
+	case Interval30m:
+		return 30 * time.Minute
+	case Interval1h:
+		return time.Hour
+	case Interval2h:
+		return 2 * time.Hour
+	case Interval4h:
+		return 4 * time.Hour
+	case Interval6h:
+		return 6 * time.Hour
+	case Interval8h:
+		return 8 * time.Hour
+	case Interval12h:
+		return 12 * time.Hour
+	case Interval1d:
+		return 24 * time.Hour
+	case Interval3d:
+		return 3 * 24 * time.Hour
+	case Interval1w:
+		return 7 * 24 * time.Hour
+	case Interval1M:
+		return 31 * 24 * time.Hour
+	default:
+		return 0
+	}
+}
+
 // Candle is one OHLCV bar for a trading pair.
 type Candle struct {
 	OpenTime  time.Time

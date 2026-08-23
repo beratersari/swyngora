@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Volume profile:** traded quote volume by price over a chosen range — total plus buy/sell, point of control, and the 70% value area — for Binance, Bybit, and combined (`GET /api/v1/market/volume-profile`, MCP `get_volume_profile`) (`docs/features/volume-profile.md`)
 - **Spot vs futures CVD:** separate spot and futures tapes plus `spotFutures` when they move opposite ways; Binance spot from kline taker-buy volume, Bybit spot from live trades (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **CVD windows and venue split:** 15m / 1h / 4h / 24h CVD change (not only the latest total); `venueSplit` when Binance CVD rises and Bybit falls (or the reverse); divergence includes duration and how far price vs CVD moved (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **CVD divergence and venue share:** each 5m point and 1h / 4h / 24h window flags price-up/CVD-down or price-down/CVD-up; combined CVD shows how much Binance and Bybit each added (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)

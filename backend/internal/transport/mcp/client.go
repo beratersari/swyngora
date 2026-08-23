@@ -340,6 +340,28 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.R
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
+// GetVolumeProfile returns traded volume by price (POC + value area).
+func (c *APIClient) GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if startTime != "" {
+		q.Set("startTime", startTime)
+	}
+	if endTime != "" {
+		q.Set("endTime", endTime)
+	}
+	if tickSize > 0 {
+		q.Set("tickSize", strconv.FormatFloat(tickSize, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/volume-profile", q)
+}
+
 // GetBasis returns futures-vs-spot premium/discount per venue.
 func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
