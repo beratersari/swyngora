@@ -1284,3 +1284,29 @@ func TestPaperCosts_RecurringBuyIncludesFee(t *testing.T) {
 		t.Fatalf("run price=%v want slipped %v", runs[0].Price, fill)
 	}
 }
+type haltedPx struct {
+	price string
+}
+
+func (h haltedPx) GetTicker24h(_ context.Context, _, symbol string) (*domain.Ticker24h, error) {
+	p := h.price
+	if p == "" {
+		p = "100"
+	}
+	return &domain.Ticker24h{Symbol: symbol, LastPrice: p, Halted: true}, nil
+}
+
+func TestPlaceOrder_DoesNotFillHaltedLastPrintAsLive(t *testing.T) {
+	svc := newSvc(t, nil)
+	svc.market = haltedPx{price: "100"}
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "halt-fill", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	tr, view, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "halt-fill", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	})
+	if err == nil {
+		t.Fatalf("filled halted ticker as live: trade=%+v cash=%v", tr, view.CashBalance)
+	}
+}

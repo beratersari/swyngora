@@ -18,7 +18,7 @@ Open **http://localhost:5180** (or the WSL IP printed by Vite, e.g. `http://172.
 |--------|---------|
 | `npm run web` / `npm run dev` | Vite + **react-native-web** → Chrome |
 | `npm run build:web` | Production web build |
-| `npm test` | Vitest |
+| `npm test` | Vitest (includes `src/libs/api/baseApi.auth.e2e.test.ts` against a local HTTP server) |
 | `npm run lint` | ESLint (incl. import boundaries) |
 | `npm run typecheck` | `tsc` |
 | `npm run codegen:api` | OpenAPI → `src/libs/api/generated/` |

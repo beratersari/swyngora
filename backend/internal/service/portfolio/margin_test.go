@@ -1565,3 +1565,87 @@ func TestPaperCosts_MarginOpenCloseFeeAndSlippage(t *testing.T) {
 		t.Fatalf("realized should be after fees/slip: %v", tr.RealizedPnL)
 	}
 }
+
+func TestMargin_OpenDoesNotBackdateInterestCursor(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "mint-hour", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "mint-hour", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil || pos == nil {
+		t.Fatalf("open: %+v %v", pos, err)
+	}
+	if pos.LastInterestAt.IsZero() {
+		t.Fatal("expected last_interest_at to be set on open")
+	}
+	// Truncating to the clock hour puts the cursor before OpenedAt. The next
+	// hour boundary then counts a full hour of interest after minutes open.
+	if pos.LastInterestAt.Before(pos.OpenedAt.Add(-time.Millisecond)) {
+		t.Fatalf("LastInterestAt=%v is before OpenedAt=%v (truncated to %v); next hour would charge interest after only %v open",
+			pos.LastInterestAt, pos.OpenedAt, pos.OpenedAt.UTC().Truncate(time.Hour), pos.OpenedAt.Sub(pos.LastInterestAt))
+	}
+
+	// Even if the cursor equals open time, 2 minutes later must not accrue.
+	accrued, liq, err := svc.ProcessMarginInterest(ctx, pos.OpenedAt.Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accrued != 0 || liq != 0 {
+		t.Fatalf("interest after 2m: accrued=%d liquidated=%d", accrued, liq)
+	}
+	got, err := svc.GetMarginPosition(ctx, "mint-hour", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DebtInterest > 1e-15 {
+		t.Fatalf("charged interest %v after 2 minutes open", got.DebtInterest)
+	}
+}
+
+func TestMargin_HourTruncatedCursorChargesInterestEarly(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "mint-hour2", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, _, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "mint-hour2", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Force the production open cursor (now.Truncate(hour)) if the test is
+	// running near an hour boundary where LastInterestAt == OpenedAt.
+	truncated := pos.OpenedAt.UTC().Truncate(time.Hour)
+	if !pos.LastInterestAt.Equal(truncated) {
+		pos.LastInterestAt = truncated
+		if err := svc.store.UpdateMarginPosition(ctx, *pos); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !pos.OpenedAt.After(truncated.Add(time.Minute)) {
+		t.Skip("opened within 1m of the hour; truncation impact is not visible")
+	}
+	tick := truncated.Add(time.Hour + time.Second)
+	if !tick.Before(pos.OpenedAt.Add(time.Hour)) {
+		t.Skip("tick is a full hour after open")
+	}
+	accrued, _, err := svc.ProcessMarginInterest(ctx, tick)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetMarginPosition(ctx, "mint-hour2", pos.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if accrued == 0 && got.DebtInterest <= 1e-15 {
+		return
+	}
+	t.Fatalf("charged interest %v (accrued=%d) at %v after only %v open (opened=%v cursor=%v)",
+		got.DebtInterest, accrued, tick, tick.Sub(pos.OpenedAt), pos.OpenedAt, truncated)
+}

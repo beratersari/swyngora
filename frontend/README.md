@@ -118,7 +118,8 @@ npm run format:check   # CI-friendly check
 npm run lint           # ESLint (prettier-compatible)
 npm test               # Vitest unit/component tests
 npm run test:coverage  # Coverage (line + branch) via @vitest/coverage-v8
-npm run test:e2e       # Playwright smoke (see e2e/README.md; install browsers once)
+npm run test:e2e       # Playwright (see e2e/README.md; install browsers + OS libs once)
+# HTTP e2e (no Chromium): npx vitest run src/libs/api/mobileBaseApi.auth.http.test.ts
 ```
 
 Config: `.prettierrc.json` · ignore: `.prettierignore`

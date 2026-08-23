@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 import httpx
 
@@ -98,3 +99,67 @@ def test_worker_thread_keeps_bound_client_id(monkeypatch):
     assert sent == "chat-user-alice", (
         f"worker thread used model clientId {sent!r} instead of bound chat-user-alice (url={last.url})"
     )
+
+
+def test_overlapping_chat_threads_keep_their_own_bind(monkeypatch):
+    """Production /v1/chat: each request thread calls bind then invoke on itself.
+
+    Binding on thread A and invoking on thread B is not the live path and
+    must not be treated as a tenant leak.
+    """
+    transport = _RecordingTransport()
+    _install_transport(monkeypatch, transport)
+    tools = {t.name: t for t in build_market_tools(Settings(api_base_url="http://backend.test"))}
+
+    alice_bound = threading.Event()
+    bob_in = threading.Event()
+    box: dict[str, str] = {}
+
+    def chat_alice() -> None:
+        tok = bind_client_id("alice-readonly")
+        scope = bind_tool_scope(can_trade=False, can_manage_keys=False)
+        try:
+            alice_bound.set()
+            assert bob_in.wait(timeout=2)
+            time.sleep(0.05)
+            box["alice"] = tools["place_portfolio_order"].invoke(
+                {
+                    "client_id": "ignored-by-bind",
+                    "symbol": "BTCUSDT",
+                    "side": "buy",
+                    "quantity": 1,
+                }
+            )
+        finally:
+            reset_tool_scope(scope)
+            reset_bound_client_id(tok)
+
+    def chat_bob() -> None:
+        assert alice_bound.wait(timeout=2)
+        tok = bind_client_id("bob-trader")
+        scope = bind_tool_scope(can_trade=True, can_manage_keys=False)
+        try:
+            bob_in.set()
+            time.sleep(0.2)
+            box["bob"] = tools["get_portfolio"].invoke({"client_id": "ignored-by-bind"})
+        finally:
+            reset_tool_scope(scope)
+            reset_bound_client_id(tok)
+
+    t1 = threading.Thread(target=chat_alice)
+    t2 = threading.Thread(target=chat_bob)
+    t1.start()
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+    assert t1.is_alive() is False
+    assert t2.is_alive() is False
+
+    posts = [r for r in transport.requests if r.method == "POST"]
+    assert not posts, f"alice must stay read-only; posted={posts}"
+    assert "403" in box.get("alice", "")
+    assert "read-only" in box.get("alice", "")
+    assert transport.requests, f"expected bob GET, box={box!r}"
+    last = transport.requests[-1]
+    sent = last.headers.get("X-Client-Id") or last.url.params.get("clientId")
+    assert sent == "bob-trader"
