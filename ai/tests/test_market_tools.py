@@ -140,6 +140,14 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/vwap"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "combined": {"vwap": "65000", "distancePct": "+1.2", "volume": "1000000"},
+                },
+            )
         if request.url.path.endswith("/volume-profile"):
             return httpx.Response(
                 200,
@@ -224,6 +232,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_absorption" in by_name
     absorb = json.loads(by_name["get_absorption"].invoke({"symbol": "BTCUSDT"}))
     assert absorb["combined"]["current"]["kind"] == "bid"
+
+    assert "get_vwap" in by_name
+    vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))
+    assert vwap["combined"]["vwap"] == "65000"
 
     assert "get_volume_profile" in by_name
     vp = json.loads(

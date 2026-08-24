@@ -46,6 +46,7 @@ type DataPort interface {
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
+	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -686,6 +687,25 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetAbsorption(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_vwap",
+		mcp.WithDescription("Volume-weighted average price from a start time (or window 1h/4h/24h/7d/30d) until now. Prices with more quote volume pull the average more. Returns VWAP, last vs VWAP (distance and percent), and total volume. Binance and Bybit separately plus combined. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime is set.")),
+		mcp.WithString("startTime", mcp.Description("Range start (RFC3339 or unix ms). Use with optional endTime.")),
+		mcp.WithString("endTime", mcp.Description("Range end (RFC3339 or unix ms). Default now.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVWAP(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

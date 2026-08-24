@@ -22,6 +22,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "list_delist_schedule",
         "get_post_delist",
         "get_volume_profile",
+        "get_vwap",
         "get_absorption",
         "get_liquidity_sweeps",
         "get_volume_surge",

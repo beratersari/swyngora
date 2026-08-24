@@ -518,6 +518,36 @@ func TestGetVolumeProfile_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetVWAP_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/vwap?symbol=BTCUSDT&window=4h", nil)
+	rr := httptest.NewRecorder()
+	h.GetVWAP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body vwapResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "4h" || len(body.Venues) == 0 {
+		t.Fatalf("%+v", body)
+	}
+	if body.Venues[0].VWAP == "" || body.Venues[0].Volume == "" {
+		t.Fatalf("vwap %+v", body.Venues[0])
+	}
+}
+
+func TestGetVWAP_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/vwap", nil)
+	rr := httptest.NewRecorder()
+	h.GetVWAP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetVolumeProfile_BadTick(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&tickSize=nope", nil)

@@ -437,6 +437,26 @@ class VolumeSurgeScanInput(BaseModel):
     )
 
 
+class VWAPInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="24h",
+        description="1h|4h|24h|7d|30d (default 24h). Ignored when start_time is set.",
+    )
+    start_time: str = Field(
+        default="",
+        description="Range start (RFC3339 or unix ms)",
+    )
+    end_time: str = Field(
+        default="",
+        description="Range end (RFC3339 or unix ms). Default now.",
+    )
+
+
 class VolumeProfileInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1316,6 +1336,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/volume-surge/scan", params)
+
+    def get_vwap(
+        symbol: str,
+        exchange: str = "all",
+        window: str = "24h",
+        start_time: str = "",
+        end_time: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if window:
+            params["window"] = window
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        return http.get("/api/v1/market/vwap", params)
 
     def get_volume_profile(
         symbol: str,
@@ -2794,6 +2830,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "15m / 1h / 4h / 24h plus the current run."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_vwap,
+            name="get_vwap",
+            description=(
+                "Volume-weighted average price from a start time (or window) "
+                "until now. Prices with more trading pull the average more. "
+                "Returns VWAP, how far last is above or below it, and total "
+                "volume. Binance and Bybit separately plus combined."
+            ),
+            args_schema=VWAPInput,
         ),
         StructuredTool.from_function(
             get_volume_profile,

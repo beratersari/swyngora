@@ -1483,6 +1483,52 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/vwap:
+    get:
+      summary: Volume-weighted average price
+      description: |
+        **VWAP** from a start time (or named `window`) until now.
+        Each candle's typical price (high+low+close)/3 is weighted by
+        **quote volume**, so prices with more trading pull the average
+        more. Returns `vwap`, last vs VWAP (`distance`, `distancePct`,
+        `side`), and total volume. `exchange=all` (default) returns
+        Binance and Bybit separately plus `combined` (volume-weighted
+        across both). Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`,
+        default `24h`) or `startTime` (+ optional `endTime`).
+        Informational only.
+      operationId: getMarketVWAP
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime is set.
+          schema: { type: string, default: "24h" }
+        - name: startTime
+          in: query
+          description: Range start (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: endTime
+          in: query
+          description: Range end (RFC3339 or unix ms). Default now.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Per-venue and optional combined VWAP
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/volume-profile:
     get:
       summary: Volume profile (volume by price)

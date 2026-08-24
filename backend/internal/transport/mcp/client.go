@@ -388,6 +388,25 @@ func (c *APIClient) GetAbsorption(ctx context.Context, exchange, symbol string) 
 	return c.get(ctx, "/api/v1/market/absorption", q)
 }
 
+// GetVWAP returns volume-weighted average price from startTime (or window) to now.
+func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if startTime != "" {
+		q.Set("startTime", startTime)
+	}
+	if endTime != "" {
+		q.Set("endTime", endTime)
+	}
+	return c.get(ctx, "/api/v1/market/vwap", q)
+}
+
 // GetVolumeProfile returns traded volume by price (POC + value area).
 func (c *APIClient) GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error) {
 	q := url.Values{}
