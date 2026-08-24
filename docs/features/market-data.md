@@ -64,6 +64,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h); venue split and spot-vs-futures split. See [`cvd.md`](cvd.md).
 - `GET /api/v1/market/volume-profile` volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined. See [`volume-profile.md`](volume-profile.md).
 - `GET /api/v1/market/around` what happened around a time (before / during / after). See [`around.md`](around.md).
+- `GET /api/v1/market/around/compare` how two times / moves of the same coin differed. See [`around.md`](around.md).
 - `GET /api/v1/market/vwap` volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined. See [`vwap.md`](vwap.md).
 - `GET /api/v1/market/absorption` large market buys/sells versus little price move; which side is absorbing and how strong. See [`absorption.md`](absorption.md).
 - `GET /api/v1/market/liquidity-sweeps` poke through a prior high/low that comes back; level, excursion, reclaim time, volume. See [`liquidity-sweeps.md`](liquidity-sweeps.md).

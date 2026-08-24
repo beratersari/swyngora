@@ -579,6 +579,35 @@ func TestGetAround_MissingAt(t *testing.T) {
 	}
 }
 
+func TestGetAroundCompare_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	from := time.Now().UTC().Add(-3 * time.Hour).Format(time.RFC3339)
+	to := time.Now().UTC().Add(-90 * time.Minute).Format(time.RFC3339)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/compare?symbol=BTCUSDT&window=1h&during=15m&from="+from+"&to="+to, nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundCompare(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body aroundCompareResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.FromMove == nil || body.ToMove == nil || len(body.Venues) == 0 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetAroundCompare_MissingTimes(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/compare?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundCompare(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetVolumeProfile_BadTick(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&tickSize=nope", nil)

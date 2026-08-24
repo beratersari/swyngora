@@ -29,6 +29,162 @@ func (h *MarketHandler) GetAround(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, aroundToDTO(got))
 }
 
+// GetAroundCompare handles GET /api/v1/market/around/compare.
+func (h *MarketHandler) GetAroundCompare(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	fromRaw, toRaw := q.Get("from"), q.Get("to")
+	if fromRaw == "" || toRaw == "" {
+		writeError(w, fmt.Errorf("%w: from and to times are required", domain.ErrInvalidArgument))
+		return
+	}
+	from, err := parseTimeParam(fromRaw)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	to, err := parseTimeParam(toRaw)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.CompareAround(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("window"), q.Get("during"), from, to)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, aroundCompareToDTO(got))
+}
+
+type aroundCompareDeltaDTO struct {
+	Metric    string `json:"metric"`
+	Phase     string `json:"phase,omitempty"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Change    string `json:"change"`
+	ChangePct string `json:"changePct"`
+	Direction string `json:"direction"`
+	Summary   string `json:"summary"`
+}
+
+type aroundComparePhaseDTO struct {
+	Phase   string                  `json:"phase"`
+	From    aroundPhaseDTO          `json:"from"`
+	To      aroundPhaseDTO          `json:"to"`
+	Deltas  []aroundCompareDeltaDTO `json:"deltas"`
+	Summary string                  `json:"summary"`
+}
+
+type aroundCompareVenueDTO struct {
+	Exchange string                  `json:"exchange"`
+	Symbol   string                  `json:"symbol"`
+	Phases   []aroundComparePhaseDTO `json:"phases"`
+	State    []aroundCompareDeltaDTO `json:"state,omitempty"`
+	Book     *aroundBookDTO          `json:"book,omitempty"`
+	Summary  string                  `json:"summary"`
+	Error    string                  `json:"error,omitempty"`
+}
+
+type aroundCompareResponse struct {
+	Symbol   string                  `json:"symbol"`
+	Exchange string                  `json:"exchange"`
+	FromAt   time.Time               `json:"fromAt"`
+	ToAt     time.Time               `json:"toAt"`
+	Window   string                  `json:"window"`
+	During   string                  `json:"during"`
+	AsOf     time.Time               `json:"asOf"`
+	FromMove *aroundResponse         `json:"fromMove,omitempty"`
+	ToMove   *aroundResponse         `json:"toMove,omitempty"`
+	Venues   []aroundCompareVenueDTO `json:"venues"`
+	Combined *aroundCompareVenueDTO  `json:"combined,omitempty"`
+	Summary  string                  `json:"summary"`
+	Note     string                  `json:"note"`
+}
+
+func aroundCompareToDTO(a *domain.AroundCompareReport) aroundCompareResponse {
+	if a == nil {
+		return aroundCompareResponse{}
+	}
+	venues := make([]aroundCompareVenueDTO, 0, len(a.Venues))
+	for _, v := range a.Venues {
+		venues = append(venues, aroundCompareVenueToDTO(v))
+	}
+	out := aroundCompareResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange,
+		FromAt: a.FromAt.UTC(), ToAt: a.ToAt.UTC(),
+		Window: a.Window, During: a.During, AsOf: a.AsOf.UTC(),
+		Venues: venues, Summary: a.Summary, Note: a.Note,
+	}
+	if a.FromMove != nil {
+		m := aroundToDTO(a.FromMove)
+		out.FromMove = &m
+	}
+	if a.ToMove != nil {
+		m := aroundToDTO(a.ToMove)
+		out.ToMove = &m
+	}
+	if a.Combined != nil {
+		c := aroundCompareVenueToDTO(*a.Combined)
+		out.Combined = &c
+	}
+	return out
+}
+
+func aroundCompareVenueToDTO(v domain.AroundCompareVenue) aroundCompareVenueDTO {
+	phases := make([]aroundComparePhaseDTO, 0, len(v.Phases))
+	for _, p := range v.Phases {
+		phases = append(phases, aroundComparePhaseDTO{
+			Phase: p.Phase, From: aroundPhaseToDTO(p.From), To: aroundPhaseToDTO(p.To),
+			Deltas: aroundCompareDeltasToDTO(p.Deltas), Summary: p.Summary,
+		})
+	}
+	out := aroundCompareVenueDTO{
+		Exchange: string(v.Exchange), Symbol: v.Symbol,
+		Phases: phases, State: aroundCompareDeltasToDTO(v.State),
+		Summary: v.Summary, Error: v.Error,
+	}
+	if v.Book != nil {
+		out.Book = &aroundBookDTO{
+			FromMid: formatHistQty(v.Book.FromMid), ToMid: formatHistQty(v.Book.ToMid),
+			MidDelta: domain.FormatSignedQty(v.Book.MidDelta), MidDeltaPct: domain.FormatSignedPct(v.Book.MidDeltaPct),
+			BidNotionalDelta: domain.FormatSignedQty(v.Book.BidNotionalDelta),
+			AskNotionalDelta: domain.FormatSignedQty(v.Book.AskNotionalDelta),
+			ImbalanceDelta:   domain.FormatSignedQty(v.Book.ImbalanceDelta),
+			WallsAdded:       v.Book.WallsAdded, WallsRemoved: v.Book.WallsRemoved,
+			Summary: v.Book.Summary, Complete: v.Book.Complete,
+		}
+	}
+	return out
+}
+
+func aroundCompareDeltasToDTO(in []domain.AroundCompareDelta) []aroundCompareDeltaDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]aroundCompareDeltaDTO, 0, len(in))
+	for _, d := range in {
+		from, to := formatAroundCompareValue(d.Metric, d.From), formatAroundCompareValue(d.Metric, d.To)
+		out = append(out, aroundCompareDeltaDTO{
+			Metric: d.Metric, Phase: d.Phase, From: from, To: to,
+			Change: domain.FormatSignedQty(d.Change), ChangePct: domain.FormatSignedPct(d.ChangePct),
+			Direction: d.Direction, Summary: d.Summary,
+		})
+	}
+	return out
+}
+
+func formatAroundCompareValue(metric string, v float64) string {
+	switch metric {
+	case domain.AroundCompareMetricMove, domain.AroundCompareMetricRange,
+		domain.AroundCompareMetricOIChange, domain.AroundCompareMetricFunding,
+		domain.AroundCompareMetricLongPct:
+		return domain.FormatSignedPct(v)
+	case domain.AroundCompareMetricDelta, domain.AroundCompareMetricBookBid, domain.AroundCompareMetricBookAsk:
+		return domain.FormatSignedQty(v)
+	default:
+		return formatHistQty(v)
+	}
+}
+
 type aroundPriceDTO struct {
 	Open      string `json:"open"`
 	High      string `json:"high"`

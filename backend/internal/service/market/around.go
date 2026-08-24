@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -67,6 +68,109 @@ func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, durin
 	}
 	out.Summary = domain.ExplainAroundReport(*out)
 	return out, nil
+}
+
+const aroundCompareDisclaimer = "Compares two moves of the same coin: each time is an around-the-move tape (before / during / after). Differences cover price level, the move itself (net %, range, volume, vs typical, takers, POC), stored order-book mid/liquidity, and stored futures (OI, funding, long %, liquidations) when those archives have samples. from and to are the two event times — they do not have to be in order. Informational only — not financial advice."
+
+// CompareAround diffs two around-the-move tapes for the same coin.
+func (s *Service) CompareAround(ctx context.Context, exchange, symbol, window, during string, from, to time.Time) (*domain.AroundCompareReport, error) {
+	if from.IsZero() || to.IsZero() {
+		return nil, fmt.Errorf("%w: from and to times are required", domain.ErrInvalidArgument)
+	}
+	if from.UTC().Equal(to.UTC()) {
+		return nil, fmt.Errorf("%w: from and to must be different times", domain.ErrInvalidArgument)
+	}
+	type got struct {
+		rep *domain.AroundReport
+		err error
+	}
+	var a, b got
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		rep, err := s.GetAround(ctx, exchange, symbol, window, during, from)
+		a = got{rep, err}
+	}()
+	go func() {
+		defer wg.Done()
+		rep, err := s.GetAround(ctx, exchange, symbol, window, during, to)
+		b = got{rep, err}
+	}()
+	wg.Wait()
+	if a.err != nil {
+		return nil, a.err
+	}
+	if b.err != nil {
+		return nil, b.err
+	}
+	out := domain.CompareAroundReports(*a.rep, *b.rep)
+	s.attachCompareBooks(ctx, exchange, symbol, from, to, &out)
+	out.Note = aroundCompareDisclaimer
+	if out.Summary == "" {
+		out.Summary = domain.ExplainAroundCompare(out)
+	}
+	return &out, nil
+}
+
+func (s *Service) attachCompareBooks(ctx context.Context, exchange, symbol string, from, to time.Time, out *domain.AroundCompareReport) {
+	if s == nil || s.bookHist == nil || out == nil {
+		return
+	}
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if out.Exchange != "all" && out.Exchange != "" {
+		want = []domain.Exchange{domain.Exchange(out.Exchange)}
+	}
+	for _, ex := range want {
+		s.noteBook(ex, symbol)
+		diff, err := s.bookHist.Compare(ctx, string(ex), symbol, from.UTC(), to.UTC())
+		if err != nil || diff == nil {
+			continue
+		}
+		book := domain.BookFromDiff(*diff)
+		if book == nil {
+			continue
+		}
+		for i := range out.Venues {
+			if out.Venues[i].Exchange == ex {
+				out.Venues[i].Book = book
+				if mid, ok := findVenueState(&out.Venues[i], domain.AroundCompareMetricBookMid); !ok || mid.From == 0 {
+					out.Venues[i].State = append(out.Venues[i].State, domain.AroundCompareDelta{
+						Metric: domain.AroundCompareMetricBookMid,
+						From:   book.FromMid, To: book.ToMid,
+						Change: book.MidDelta, ChangePct: book.MidDeltaPct,
+						Direction: domainDir(book.MidDeltaPct),
+						Summary:   book.Summary,
+					})
+				}
+				out.Venues[i].Summary = domain.ExplainAroundCompareVenue(out.Venues[i])
+			}
+		}
+	}
+	_ = exchange
+}
+
+func findVenueState(v *domain.AroundCompareVenue, metric string) (domain.AroundCompareDelta, bool) {
+	if v == nil {
+		return domain.AroundCompareDelta{}, false
+	}
+	for _, d := range v.State {
+		if d.Metric == metric {
+			return d, true
+		}
+	}
+	return domain.AroundCompareDelta{}, false
+}
+
+func domainDir(pct float64) string {
+	switch {
+	case pct > 0.05:
+		return domain.CVDDirUp
+	case pct < -0.05:
+		return domain.CVDDirDown
+	default:
+		return domain.CVDDirFlat
+	}
 }
 
 func (s *Service) aroundVenue(ctx context.Context, ex domain.Exchange, symbol string, plan domain.AroundPlan, interval domain.CandleInterval) domain.AroundVenue {

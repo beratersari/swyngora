@@ -381,6 +381,25 @@ func (b *Backend) GetAround(ctx context.Context, exchange, symbol, at, window, d
 	return mustJSON(got)
 }
 
+func (b *Backend) CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	a, err := parseMCPTime(from)
+	if err != nil {
+		return nil, err
+	}
+	bAt, err := parseMCPTime(to)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.CompareAround(ctx, exchange, symbol, window, during, a, bAt)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

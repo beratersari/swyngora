@@ -48,6 +48,7 @@ type DataPort interface {
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
+	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -711,6 +712,34 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetAround(ctx, req.GetString("exchange", "all"), symbol, at, req.GetString("window", ""), req.GetString("during", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_around",
+		mcp.WithDescription("Compare two different times for the same coin: how the two moves differed in price, volume, vs typical, order book, open interest, funding, liquidations, and sweeps. from and to are the two event times. Same window/during as get_around. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("from", mcp.Required(), mcp.Description("First event time (RFC3339 or unix ms)")),
+		mcp.WithString("to", mcp.Required(), mcp.Description("Second event time (RFC3339 or unix ms)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("15m | 30m | 1h | 2h | 4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("5m | 15m | 30m | 1h (default 15m)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		from, err := req.RequireString("from")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		to, err := req.RequireString("to")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CompareAround(ctx, req.GetString("exchange", "all"), symbol, from, to, req.GetString("window", ""), req.GetString("during", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -1532,6 +1532,58 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/around/compare:
+    get:
+      summary: Compare two times (two moves of the same coin)
+      description: |
+        Pick a coin and **two event times** to see how those moves
+        differed. Each time is an around-the-move tape (before / during /
+        after). The response includes both tapes plus deltas for **price
+        level**, the **move** (net %, range, volume, vs typical, takers,
+        POC), **order-book** mid and liquidity, and **futures** (OI,
+        funding, long %, liquidations) when those archives have samples.
+        `from` and `to` are the two event times (RFC3339 or unix ms);
+        they do not have to be in chronological order. Same `window` /
+        `during` as `/around`. Informational only.
+      operationId: compareMarketAround
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: from
+          in: query
+          required: true
+          description: First event time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-20T12:00:00Z" }
+        - name: to
+          in: query
+          required: true
+          description: Second event time (RFC3339 or unix ms)
+          schema: { type: string, example: "2026-08-20T16:00:00Z" }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h)
+          schema: { type: string, default: "1h" }
+        - name: during
+          in: query
+          description: Move window starting at each time — 5m | 15m | 30m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+      responses:
+        '200':
+          description: Two-move comparison
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/vwap:
     get:
       summary: Volume-weighted average price

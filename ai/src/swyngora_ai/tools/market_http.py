@@ -437,6 +437,28 @@ class VolumeSurgeScanInput(BaseModel):
     )
 
 
+class AroundCompareInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    from_time: str = Field(
+        description="First event time (RFC3339 or unix ms)",
+    )
+    to_time: str = Field(
+        description="Second event time (RFC3339 or unix ms)",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="1h",
+        description="Before/after lookback: 15m|30m|1h|2h|4h (default 1h)",
+    )
+    during: str = Field(
+        default="15m",
+        description="Move window starting at each time: 5m|15m|30m|1h (default 15m)",
+    )
+
+
 class AroundInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     at: str = Field(
@@ -1373,6 +1395,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if during:
             params["during"] = during
         return http.get("/api/v1/market/around", params)
+
+    def compare_around(
+        symbol: str,
+        from_time: str,
+        to_time: str,
+        exchange: str = "all",
+        window: str = "1h",
+        during: str = "15m",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "from": from_time,
+            "to": to_time,
+            "exchange": exchange,
+        }
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        return http.get("/api/v1/market/around/compare", params)
 
     def get_vwap(
         symbol: str,
@@ -2880,6 +2922,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "during is the move starting at at (default 15m)."
             ),
             args_schema=AroundInput,
+        ),
+        StructuredTool.from_function(
+            compare_around,
+            name="compare_around",
+            description=(
+                "Compare two different times for the same coin: how the "
+                "two moves differed in price, volume, vs typical, order "
+                "book, open interest, funding, liquidations, and sweeps. "
+                "from_time and to_time are the two event times."
+            ),
+            args_schema=AroundCompareInput,
         ),
         StructuredTool.from_function(
             get_vwap,

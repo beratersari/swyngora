@@ -39,18 +39,37 @@ the future, `after` (and sometimes `during`) is clipped to now.
 
 Informational only — not financial advice.
 
+## Compare two times
+
+`GET /api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-20T12:00:00Z&to=2026-08-20T16:00:00Z`
+
+Same `window` / `during` / `exchange` as `/around`. Builds both tapes and
+diffs:
+
+- **state** at the two event times: price level, stored book mid, OI,
+  funding, long %
+- **during** (and before/after): net %, range, volume, vs typical, taker
+  delta, POC, book bid/ask change, OI change, liquidations, sweep /
+  absorption counts
+- stored **order book at from vs to** when the archive has samples
+- `fromMove` / `toMove`: the full around tapes
+
+`from` and `to` do not have to be in chronological order. MCP:
+`compare_around`.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around.go` |
+| Domain | `backend/internal/domain/around.go`, `around_compare.go` |
 | Service | `backend/internal/service/market/around.go` |
-| HTTP | `GET /api/v1/market/around` |
-| MCP / AI | `get_around` |
+| HTTP | `GET /api/v1/market/around`, `.../around/compare` |
+| MCP / AI | `get_around`, `compare_around` |
 
 ## How to verify
 
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -run Around
 curl "http://localhost:8080/api/v1/market/around?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
+curl "http://localhost:8080/api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-20T12:00:00Z&to=2026-08-20T16:00:00Z"
 ```

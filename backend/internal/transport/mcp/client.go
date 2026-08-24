@@ -405,6 +405,24 @@ func (c *APIClient) GetAround(ctx context.Context, exchange, symbol, at, window,
 	return c.get(ctx, "/api/v1/market/around", q)
 }
 
+// CompareAround diffs two around-the-move tapes for the same coin.
+func (c *APIClient) CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("from", from)
+	q.Set("to", to)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if during != "" {
+		q.Set("during", during)
+	}
+	return c.get(ctx, "/api/v1/market/around/compare", q)
+}
+
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.
 func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	q := url.Values{}

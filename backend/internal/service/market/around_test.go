@@ -139,6 +139,65 @@ func TestGetAround_RequiresAt(t *testing.T) {
 	}
 }
 
+func aroundQuietTape(at time.Time) []domain.Candle {
+	var out []domain.Candle
+	for i := 10; i >= 1; i-- {
+		t0 := at.Add(-time.Duration(i) * time.Hour)
+		out = append(out, aroundCandle(t0, "100", "100.4", "99.8", "100", "1000", "500"))
+	}
+	out = append(out, aroundCandle(at.Add(-30*time.Minute), "100", "100.3", "99.9", "100.1", "800", "400"))
+	out = append(out, aroundCandle(at, "100.1", "101", "100", "100.7", "1500", "800"))
+	out = append(out, aroundCandle(at.Add(20*time.Minute), "100.7", "100.8", "100.4", "100.5", "700", "300"))
+	return out
+}
+
+func TestCompareAround_SecondMoveIsLarger(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	quiet := now.Add(-6 * time.Hour)
+	loud := now.Add(-2 * time.Hour)
+	tape := append(aroundQuietTape(quiet), aroundTape(loud)...)
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.CompareAround(context.Background(), "binance", "BTCUSDT", "1h", "15m", quiet, loud)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.FromAt.Unix() != quiet.Unix() || got.ToAt.Unix() != loud.Unix() {
+		t.Fatalf("times %+v", got)
+	}
+	if got.FromMove == nil || got.ToMove == nil || len(got.Venues) == 0 {
+		t.Fatalf("moves %+v", got)
+	}
+	var during *domain.AroundComparePhase
+	for i := range got.Venues[0].Phases {
+		if got.Venues[0].Phases[i].Phase == domain.AroundPhaseDuring {
+			during = &got.Venues[0].Phases[i]
+		}
+	}
+	if during == nil {
+		t.Fatal("during")
+	}
+	var vol domain.AroundCompareDelta
+	for _, d := range during.Deltas {
+		if d.Metric == domain.AroundCompareMetricVolume {
+			vol = d
+		}
+	}
+	if vol.To <= vol.From {
+		t.Fatalf("expected louder second move %+v", during.Deltas)
+	}
+	if got.Summary == "" {
+		t.Fatal("summary")
+	}
+}
+
+func TestCompareAround_SameTimeRejected(t *testing.T) {
+	at := time.Now().UTC().Add(-2 * time.Hour)
+	svc := New(&fakeMarket{candles: aroundTape(at)}, &fakeSupply{})
+	if _, err := svc.CompareAround(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, at); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 type stubAroundBook struct {
 	from, to domain.BookHistorySnapshot
 }
