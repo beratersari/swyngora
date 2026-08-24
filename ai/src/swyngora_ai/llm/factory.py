@@ -23,6 +23,7 @@ def build_chat_model(settings: Settings | None = None) -> BaseChatModel:
             api_key=cfg.xai_api_key,
             temperature=cfg.temperature,
             extra_body={"reasoning_effort": cfg.grok_reasoning_effort},
+            max_retries=0,
         )
 
     from langchain_ollama import ChatOllama

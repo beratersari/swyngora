@@ -27,6 +27,7 @@ def test_grok_factory_sends_default_reasoning_effort(monkeypatch) -> None:
     assert isinstance(model, _Capture)
     assert captured["model"] == "grok-4.3"
     assert captured["extra_body"] == {"reasoning_effort": "low"}
+    assert captured["max_retries"] == 0
 
 
 def test_grok_factory_honors_reasoning_override(monkeypatch) -> None:

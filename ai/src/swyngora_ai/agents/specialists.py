@@ -30,6 +30,7 @@ from swyngora_ai.constants import (
     SPECIALIST_WEB,
     SPECIALIST_X,
 )
+from swyngora_ai.llm.retry import MODEL_RETRY
 from swyngora_ai.progress import emit
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
@@ -90,7 +91,12 @@ def _run_react(
     emit("thinking", f"{specialist}: {task[:200]}")
     agent = compiled
     if agent is None:
-        agent = create_agent(model, list(tools), system_prompt=system)
+        agent = create_agent(
+            model,
+            list(tools),
+            system_prompt=system,
+            middleware=[MODEL_RETRY],
+        )
     msgs = run_agent_with_progress(
         agent,
         [HumanMessage(content=task)],
@@ -157,7 +163,12 @@ class SpecialistRunner:
             leaf = list(tools)
             self._tools[name] = leaf
             self._systems[name] = system
-            self._compiled[name] = create_agent(self.model, leaf, system_prompt=system)
+            self._compiled[name] = create_agent(
+                self.model,
+                leaf,
+                system_prompt=system,
+                middleware=[MODEL_RETRY],
+            )
 
     def run(self, name: str, task: str) -> str:
         limit = self.settings.max_agent_iterations + 4

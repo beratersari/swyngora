@@ -37,14 +37,21 @@ _bind_lock = threading.Lock()
 _bind_stack: list[_ToolBind] = []
 
 
-def _push_bind(*, client_id: str | None = None, can_trade: bool | None = None, can_manage_keys: bool | None = None) -> None:
+def _push_bind(
+    *,
+    client_id: str | None = None,
+    can_trade: bool | None = None,
+    can_manage_keys: bool | None = None,
+) -> None:
     with _bind_lock:
         prev = _bind_stack[-1] if _bind_stack else _ToolBind("", True, True)
         _bind_stack.append(
             _ToolBind(
                 client_id=prev.client_id if client_id is None else client_id,
                 can_trade=prev.can_trade if can_trade is None else can_trade,
-                can_manage_keys=prev.can_manage_keys if can_manage_keys is None else can_manage_keys,
+                can_manage_keys=prev.can_manage_keys
+                if can_manage_keys is None
+                else can_manage_keys,
             )
         )
 
@@ -63,6 +70,7 @@ def _active_bind() -> _ToolBind:
         if _bind_stack:
             return _bind_stack[-1]
     return _ToolBind("", bound_can_trade.get(), bound_can_manage_keys.get())
+
 
 _READ_ONLY_DENY = (
     "ERROR 403: this AI session is read-only; a trade-permission API key is required "
@@ -794,14 +802,18 @@ class PortfolioPendingOrderInput(BaseModel):
     symbol: str
     order_type: str = Field(description="limit_buy | limit_sell | stop_loss | trailing_stop")
     quantity: float = Field(gt=0)
-    trigger_price: float = Field(default=0, description="Limit or stop price (omit for trailing_stop)")
+    trigger_price: float = Field(
+        default=0, description="Limit or stop price (omit for trailing_stop)"
+    )
     exchange: str = "binance"
     time_in_force: str = Field(default="gtc", description="gtc | ioc | fok")
     expires_at: str = Field(default="", description="RFC3339 expiry for GTC only")
     lot_method: str = Field(default="", description="fifo or lifo for sell types")
     idempotency_key: str = Field(default="", description="Optional retry key")
     trail_type: str = Field(default="", description="trailing_stop: percent | offset")
-    trail_value: float = Field(default=0, description="trailing_stop: fraction e.g. 0.05 or fixed offset")
+    trail_value: float = Field(
+        default=0, description="trailing_stop: fraction e.g. 0.05 or fixed offset"
+    )
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
