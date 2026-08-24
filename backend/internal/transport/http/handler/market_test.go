@@ -548,6 +548,37 @@ func TestGetVWAP_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetAround_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	at := time.Now().UTC().Add(-90 * time.Minute).Format(time.RFC3339)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around?symbol=BTCUSDT&window=1h&during=15m&at="+at, nil)
+	rr := httptest.NewRecorder()
+	h.GetAround(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body aroundResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "1h" || body.During != "15m" || len(body.Venues) == 0 {
+		t.Fatalf("%+v", body)
+	}
+	if len(body.Venues[0].Phases) != 3 {
+		t.Fatalf("phases %+v", body.Venues[0].Phases)
+	}
+}
+
+func TestGetAround_MissingAt(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetAround(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetVolumeProfile_BadTick(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&tickSize=nope", nil)

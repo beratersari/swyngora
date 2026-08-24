@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI tool scope on worker threads:** tenant id and read-only `canTrade` survive LangChain threads that drop ContextVars (`docs/features/ai-assistant.md`)
 - **Desk tape venue switch:** the sticky tape no longer relabels the previous venue’s prices as the newly selected venue (`frontend/src/libs/hooks/useDeskPriceTape.ts`)
 - **Coin-detail pump markers:** live pump events use the current pair only so BTC arrows cannot snap onto an ETH chart (`docs/features/coin-detail.md`)
+- **Liquidity sweep levels:** a later swing high/low no longer joins an older cluster and rewrites that shelf — a sweep that already printed keeps the level as it was at the poke (`docs/features/liquidity-sweeps.md`)
 - **CVD divergence runs:** a quiet gap no longer glues two same-kind splits into one long episode (`docs/features/cvd.md`)
 - **Combined CVD 5m buckets:** combined uses the overlapping time range and treats a missing 5-minute slot as 0. When both venues already have 24h, combined stays `complete` even if the first shared bucket is one bar late (`docs/features/cvd.md`)
 - **Combined CVD completeness:** combined CVD only uses the time range both Binance and Bybit have. It is not marked `complete` while Bybit history is still filling — a full Binance series no longer makes a Binance-heavy combined look finished (`docs/features/cvd.md`)
@@ -65,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Around a time:** pick a coin and a time to see what happened before, during, and after that move — price, volume, buy/sell, VWAP, volume vs typical, POC, sweeps, and stored book/futures history (`GET /api/v1/market/around`, MCP `get_around`) (`docs/features/around.md`)
 - **VWAP:** volume-weighted average price from a start time (or window) to now; last vs VWAP and total volume; Binance, Bybit, and combined (`GET /api/v1/market/vwap`, MCP `get_vwap`) (`docs/features/vwap.md`)
 - **Volume surge:** latest 5m / 15m / 1h quote volume versus that coin's own typical (median), with buy/sell split; scan ranks coins well above typical (`GET /api/v1/market/volume-surge`, `.../scan`, MCP `get_volume_surge` / `scan_volume_surges`) (`docs/features/volume-surge.md`)
 - **Liquidity sweeps:** poke through a prior high or low that had already turned price, then a return; level, excursion, time to reclaim, and volume (`GET /api/v1/market/liquidity-sweeps`, MCP `get_liquidity_sweeps`) (`docs/features/liquidity-sweeps.md`)

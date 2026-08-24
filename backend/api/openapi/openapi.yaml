@@ -1483,6 +1483,55 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/around:
+    get:
+      summary: What happened around a time (before / during / after)
+      description: |
+        Pick a coin and a time to see **what changed around that move**.
+        Returns three adjacent windows: **before** (`window` ending at `at`),
+        **during** (the move starting at `at`, default 15 minutes), and
+        **after** (the same `window` after the move). Each phase has price
+        (OHLC + %), quote volume, buy/sell when known, VWAP, volume versus
+        that coin's own typical, and a compact volume-profile POC / value
+        area. Liquidity sweeps that poked in the span are attached.
+        Stored order-book and futures history (OI, funding, long/short,
+        liquidations) are included when those archives have a sample.
+        `exchange=all` (default) returns Binance and Bybit separately plus
+        `combined`. Informational only.
+      operationId: getMarketAround
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: at
+          in: query
+          required: true
+          description: Event time (RFC3339 or unix ms) — start of the during window
+          schema: { type: string, example: "2026-08-20T14:00:00Z" }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h)
+          schema: { type: string, default: "1h" }
+        - name: during
+          in: query
+          description: Move window starting at `at` — 5m | 15m | 30m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+      responses:
+        '200':
+          description: Before / during / after tape
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/vwap:
     get:
       summary: Volume-weighted average price

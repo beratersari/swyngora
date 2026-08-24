@@ -388,6 +388,23 @@ func (c *APIClient) GetAbsorption(ctx context.Context, exchange, symbol string) 
 	return c.get(ctx, "/api/v1/market/absorption", q)
 }
 
+// GetAround returns before/during/after tape around an event time.
+func (c *APIClient) GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("at", at)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if during != "" {
+		q.Set("during", during)
+	}
+	return c.get(ctx, "/api/v1/market/around", q)
+}
+
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.
 func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	q := url.Values{}

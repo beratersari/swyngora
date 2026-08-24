@@ -366,6 +366,21 @@ func (b *Backend) GetAbsorption(ctx context.Context, exchange, symbol string) (j
 	return mustJSON(got)
 }
 
+func (b *Backend) GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	when, err := parseMCPTime(at)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.GetAround(ctx, exchange, symbol, window, during, when)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

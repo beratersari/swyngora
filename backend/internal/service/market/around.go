@@ -1,0 +1,224 @@
+package market
+
+import (
+	"context"
+	"sort"
+	"sync"
+	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+)
+
+const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Informational only — not financial advice."
+
+const aroundSweepLookback = 48 * time.Hour
+
+// GetAround assembles what changed before, during, and after a chosen time.
+func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, during string, at time.Time) (*domain.AroundReport, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseTakerExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	plan, err := domain.ResolveAroundPlan(window, during, at, now)
+	if err != nil {
+		return nil, err
+	}
+	s.noteFutures(symbol)
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" {
+		want = []domain.Exchange{domain.Exchange(ex)}
+	}
+	interval := domain.ProfileBarInterval(plan.To.Sub(plan.From.Add(-time.Duration(domain.AroundTypicalPriors) * plan.WindowDur)))
+
+	out := &domain.AroundReport{
+		Symbol: symbol, Exchange: ex, At: plan.At, Window: plan.Window, During: plan.During,
+		From: plan.From, To: plan.To, AsOf: now, Clipped: plan.Clipped,
+		Venues: make([]domain.AroundVenue, 0, len(want)),
+		Note:   aroundDisclaimer,
+	}
+
+	type fetched struct {
+		ex  domain.Exchange
+		ven domain.AroundVenue
+	}
+	got := make([]fetched, len(want))
+	var wg sync.WaitGroup
+	for i, v := range want {
+		wg.Add(1)
+		go func(i int, v domain.Exchange) {
+			defer wg.Done()
+			got[i] = fetched{ex: v, ven: s.aroundVenue(ctx, v, symbol, plan, interval)}
+		}(i, v)
+	}
+	wg.Wait()
+	for _, f := range got {
+		out.Venues = append(out.Venues, f.ven)
+	}
+	sort.Slice(out.Venues, func(i, j int) bool {
+		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
+	})
+	if ex == "all" && len(out.Venues) > 0 {
+		out.Combined = domain.CombineAroundVenues(symbol, out.Venues, plan, interval)
+	}
+	out.Summary = domain.ExplainAroundReport(*out)
+	return out, nil
+}
+
+func (s *Service) aroundVenue(ctx context.Context, ex domain.Exchange, symbol string, plan domain.AroundPlan, interval domain.CandleInterval) domain.AroundVenue {
+	lookbackFrom := plan.BeforeFrom.Add(-time.Duration(domain.AroundTypicalPriors) * plan.WindowDur)
+	var (
+		candles []domain.Candle
+		sweepC  []domain.Candle
+		cerr    error
+		wg      sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		candles, cerr = s.candlesForProfile(ctx, ex, symbol, interval, lookbackFrom, plan.To)
+	}()
+	go func() {
+		defer wg.Done()
+		sweepFrom := plan.From.Add(-aroundSweepLookback)
+		if sweepFrom.After(lookbackFrom) {
+			sweepFrom = lookbackFrom
+		}
+		var err error
+		sweepC, err = s.GetCandles(ctx, string(ex), symbol, "15m", domain.SweepCandleLimit, &sweepFrom, &plan.To)
+		if err != nil {
+			sweepC = nil
+		}
+	}()
+	wg.Wait()
+	if cerr != nil && len(candles) == 0 {
+		return domain.AroundVenue{
+			Exchange: ex, Symbol: symbol, Interval: string(interval),
+			Phases: []domain.AroundPhase{}, Error: cerr.Error(), Summary: cerr.Error(),
+		}
+	}
+	bars := domain.AroundBarsFromCandles(filterCandlesRange(candles, lookbackFrom, plan.To, interval))
+	ven := domain.BuildAroundVenue(ex, symbol, bars, plan, interval)
+	if ven.Error != "" {
+		return ven
+	}
+
+	if len(sweepC) > 0 {
+		sweeps := domain.DetectLiquiditySweeps(domain.SweepBarsFromCandles(sweepC), 15*time.Minute)
+		if evs := domain.AroundSweepsToEvents(sweeps, plan.From, plan.To); len(evs) > 0 {
+			domain.AttachAroundEvents(&ven, evs)
+		}
+	}
+
+	s.attachAroundBook(ctx, ex, symbol, plan, &ven)
+	s.attachAroundFutures(ctx, ex, symbol, plan, &ven)
+	ven.Summary = domain.ExplainAroundVenue(ven)
+	return ven
+}
+
+func (s *Service) attachAroundBook(ctx context.Context, ex domain.Exchange, symbol string, plan domain.AroundPlan, ven *domain.AroundVenue) {
+	if s == nil || s.bookHist == nil || ven == nil {
+		return
+	}
+	s.noteBook(ex, symbol)
+	for i := range ven.Phases {
+		ph := &ven.Phases[i]
+		if !ph.To.After(ph.From) {
+			continue
+		}
+		diff, err := s.bookHist.Compare(ctx, string(ex), symbol, ph.From, ph.To)
+		if err != nil || diff == nil {
+			continue
+		}
+		if b := domain.BookFromDiff(*diff); b != nil {
+			ph.Book = b
+			ph.Summary = domain.ExplainAroundPhase(*ph)
+		}
+	}
+}
+
+func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, symbol string, plan domain.AroundPlan, ven *domain.AroundVenue) {
+	if s == nil || s.futHist == nil || ven == nil {
+		return
+	}
+	pad := 15 * time.Minute
+	from := plan.From.Add(-pad)
+	to := plan.To.Add(pad)
+	oi := s.aroundFuturesSnaps(ctx, domain.FuturesMetricOpenInterest, string(ex), symbol, from, to)
+	fund := s.aroundFuturesSnaps(ctx, domain.FuturesMetricFunding, string(ex), symbol, from, to)
+	ls := s.aroundFuturesSnaps(ctx, domain.FuturesMetricLongShort, string(ex), symbol, from, to)
+	liqs := s.aroundFuturesLiqs(ctx, string(ex), symbol, plan.From, plan.To)
+	if len(oi) == 0 && len(fund) == 0 && len(ls) == 0 && len(liqs) == 0 {
+		return
+	}
+	for i := range ven.Phases {
+		ph := &ven.Phases[i]
+		if !ph.To.After(ph.From) {
+			continue
+		}
+		var phaseLiqs []domain.LiquidationEvent
+		for _, e := range liqs {
+			if e.Time.Before(ph.From) || !e.Time.Before(ph.To) {
+				continue
+			}
+			phaseLiqs = append(phaseLiqs, e)
+		}
+		got := domain.FuturesAcrossSamples(
+			domain.NearestFuturesSnapshot(oi, ph.From, pad),
+			domain.NearestFuturesSnapshot(oi, ph.To, pad),
+			domain.NearestFuturesSnapshot(fund, ph.From, pad),
+			domain.NearestFuturesSnapshot(fund, ph.To, pad),
+			domain.NearestFuturesSnapshot(ls, ph.From, pad),
+			domain.NearestFuturesSnapshot(ls, ph.To, pad),
+			phaseLiqs,
+		)
+		if got != nil {
+			ph.Futures = got
+			ph.Summary = domain.ExplainAroundPhase(*ph)
+		}
+	}
+}
+
+func (s *Service) aroundFuturesSnaps(ctx context.Context, metric, exchange, symbol string, from, to time.Time) []domain.FuturesSnapshot {
+	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+		Metric: metric, Exchange: exchange, Symbol: symbol, From: from, To: to, Limit: 200,
+	})
+	if err != nil || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []domain.FuturesSnapshot:
+		return v
+	case *[]domain.FuturesSnapshot:
+		if v == nil {
+			return nil
+		}
+		return *v
+	default:
+		return nil
+	}
+}
+
+func (s *Service) aroundFuturesLiqs(ctx context.Context, exchange, symbol string, from, to time.Time) []domain.LiquidationEvent {
+	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+		Metric: "liquidations", Exchange: exchange, Symbol: symbol, From: from, To: to, Limit: 500,
+	})
+	if err != nil || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []domain.LiquidationEvent:
+		return v
+	case *[]domain.LiquidationEvent:
+		if v == nil {
+			return nil
+		}
+		return *v
+	default:
+		return nil
+	}
+}

@@ -437,6 +437,25 @@ class VolumeSurgeScanInput(BaseModel):
     )
 
 
+class AroundInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    at: str = Field(
+        description="Event time (RFC3339 or unix ms). Start of the during window.",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="1h",
+        description="Before/after lookback: 15m|30m|1h|2h|4h (default 1h)",
+    )
+    during: str = Field(
+        default="15m",
+        description="Move window starting at at: 5m|15m|30m|1h (default 15m)",
+    )
+
+
 class VWAPInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1336,6 +1355,24 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/volume-surge/scan", params)
+
+    def get_around(
+        symbol: str,
+        at: str,
+        exchange: str = "all",
+        window: str = "1h",
+        during: str = "15m",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "at": at,
+            "exchange": exchange,
+        }
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        return http.get("/api/v1/market/around", params)
 
     def get_vwap(
         symbol: str,
@@ -2830,6 +2867,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "15m / 1h / 4h / 24h plus the current run."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_around,
+            name="get_around",
+            description=(
+                "What happened around a chosen time for a coin: before, "
+                "during, and after that move. Price, volume, buy/sell, VWAP, "
+                "volume vs typical, volume-profile POC, liquidity sweeps, "
+                "and stored book/futures history when available. `at` is "
+                "required. window is the lookback/lookforward (default 1h). "
+                "during is the move starting at at (default 15m)."
+            ),
+            args_schema=AroundInput,
         ),
         StructuredTool.from_function(
             get_vwap,

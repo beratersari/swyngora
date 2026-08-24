@@ -20,7 +20,8 @@ Useful when:
 - `exchange=all` (default): **Binance** and **Bybit** separately
 - 15-minute **spot** candles, last ~7 days
 - A level is a clustered swing high or low with **at least two** prior
-  turns
+  turns. The shelf is **frozen at the poke** — a later swing in the same
+  price area does not change a sweep that already happened
 - `side`: `high` (through a high, then back under) or `low` (through a
   low, then back over)
 - `level` / `tests` / `levelTime`: the shelf and how many times it held

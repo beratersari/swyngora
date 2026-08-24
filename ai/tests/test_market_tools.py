@@ -140,6 +140,22 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/around"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "at": request.url.params.get("at"),
+                    "summary": "BTC moved +2% during the window.",
+                    "combined": {
+                        "phases": [
+                            {"phase": "before"},
+                            {"phase": "during", "price": {"changePct": "+2.0"}},
+                            {"phase": "after"},
+                        ]
+                    },
+                },
+            )
         if request.url.path.endswith("/vwap"):
             return httpx.Response(
                 200,
@@ -232,6 +248,14 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_absorption" in by_name
     absorb = json.loads(by_name["get_absorption"].invoke({"symbol": "BTCUSDT"}))
     assert absorb["combined"]["current"]["kind"] == "bid"
+
+    assert "get_around" in by_name
+    around = json.loads(
+        by_name["get_around"].invoke(
+            {"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"}
+        )
+    )
+    assert around["combined"]["phases"][1]["phase"] == "during"
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

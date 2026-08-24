@@ -47,6 +47,7 @@ type DataPort interface {
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
+	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -687,6 +688,29 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetAbsorption(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_around",
+		mcp.WithDescription("What happened around a chosen time for a coin: before, during, and after that move on one tape. Price, volume, buy/sell, VWAP, volume vs typical, volume-profile POC, liquidity sweeps, and stored book/futures history when available. window is the lookback/lookforward (default 1h). during is the move starting at `at` (default 15m). Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("at", mcp.Required(), mcp.Description("Event time (RFC3339 or unix ms). Start of the during window.")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("15m | 30m | 1h | 2h | 4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("5m | 15m | 30m | 1h (default 15m)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		at, err := req.RequireString("at")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetAround(ctx, req.GetString("exchange", "all"), symbol, at, req.GetString("window", ""), req.GetString("during", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

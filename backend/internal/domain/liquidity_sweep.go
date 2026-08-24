@@ -323,16 +323,26 @@ func scanSweeps(bars []SweepBar, levels []sweepLevel, high bool, step time.Durat
 }
 
 func takeSweep(bars []SweepBar, from int, lv sweepLevel, high bool, step time.Duration) (*LiquiditySweep, int) {
-	if from >= len(bars) || lv.price <= 0 {
+	if from >= len(bars) {
+		return nil, from + 1
+	}
+	// Level is only the tests that already existed — later swings must not
+	// rewrite a poke that already printed.
+	price, tests, _ := snapshotLevel(lv, from)
+	if price <= 0 || tests < sweepMinTests {
 		return nil, from + 1
 	}
 	pierce := -1
 	for i := from; i < len(bars); i++ {
-		if high && bars[i].High > lv.price && excursionPct(bars[i].High, lv.price) >= sweepMinExcursionPct {
+		// If a new test prints before we pierce, freeze the shelf as of this bar.
+		if p, n, _ := snapshotLevel(lv, i); n >= sweepMinTests && p > 0 {
+			price, tests = p, n
+		}
+		if high && bars[i].High > price && excursionPct(bars[i].High, price) >= sweepMinExcursionPct {
 			pierce = i
 			break
 		}
-		if !high && bars[i].Low > 0 && bars[i].Low < lv.price && excursionPct(lv.price, bars[i].Low) >= sweepMinExcursionPct {
+		if !high && bars[i].Low > 0 && bars[i].Low < price && excursionPct(price, bars[i].Low) >= sweepMinExcursionPct {
 			pierce = i
 			break
 		}
@@ -340,6 +350,11 @@ func takeSweep(bars []SweepBar, from int, lv sweepLevel, high bool, step time.Du
 	if pierce < 0 {
 		return nil, len(bars)
 	}
+	price, tests, _ = snapshotLevel(lv, pierce)
+	if price <= 0 || tests < sweepMinTests {
+		return nil, pierce + 1
+	}
+	lvAtPierce := sweepLevel{price: price, highs: lv.highs, touches: touchesBefore(lv.touches, pierce)}
 	end := pierce
 	extreme := bars[pierce].High
 	if !high {
@@ -358,11 +373,11 @@ func takeSweep(bars []SweepBar, from int, lv sweepLevel, high bool, step time.Du
 		if !high && bars[j].Low > 0 && (extreme == 0 || bars[j].Low < extreme) {
 			extreme = bars[j].Low
 		}
-		if high && bars[j].Close < lv.price {
+		if high && bars[j].Close < price {
 			reclaimed = true
 			break
 		}
-		if !high && bars[j].Close > lv.price {
+		if !high && bars[j].Close > price {
 			reclaimed = true
 			break
 		}
@@ -374,7 +389,7 @@ func takeSweep(bars []SweepBar, from int, lv sweepLevel, high bool, step time.Du
 		}
 		// Recent poke, series still inside the 2h window.
 	}
-	sw := buildSweep(bars, lv, pierce, end, extreme, high, reclaimed, step)
+	sw := buildSweep(bars, lvAtPierce, pierce, end, extreme, high, reclaimed, step)
 	next := end + 1
 	if !reclaimed {
 		next = len(bars)
@@ -454,6 +469,35 @@ func sideWord(side string) string {
 		return "low"
 	}
 	return "high"
+}
+
+// snapshotLevel is the shelf as of beforeIdx: only tests that already printed.
+func snapshotLevel(lv sweepLevel, beforeIdx int) (price float64, tests int, last sweepTouch) {
+	for _, t := range lv.touches {
+		if t.idx >= beforeIdx {
+			continue
+		}
+		tests++
+		last = t
+		if lv.highs {
+			if t.price > price {
+				price = t.price
+			}
+		} else if price == 0 || t.price < price {
+			price = t.price
+		}
+	}
+	return price, tests, last
+}
+
+func touchesBefore(touches []sweepTouch, idx int) []sweepTouch {
+	out := make([]sweepTouch, 0, len(touches))
+	for _, t := range touches {
+		if t.idx < idx {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 func countTouchesBefore(touches []sweepTouch, idx int) int {

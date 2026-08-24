@@ -169,6 +169,63 @@ func TestBuildLiquiditySweepVenue_Summary(t *testing.T) {
 	}
 }
 
+func TestDetectLiquiditySweeps_LaterSwingDoesNotRewritePastSweep(t *testing.T) {
+	t0 := time.Date(2026, 8, 20, 10, 0, 0, 0, time.UTC)
+	// Shallow poke through 100.5 (100.55). A later swing at 100.64 is still
+	// inside the 0.15% cluster — it must not raise the old shelf and erase the sweep.
+	seq := [][5]float64{
+		{96, 96.2, 95.8, 96, 10},
+		{96, 97, 95.9, 97, 10},
+		{97, 98, 96.8, 98, 10},
+		{98, 99, 97.8, 99, 10},
+		{99, 100.5, 98.8, 99.2, 20},
+		{99.2, 99.3, 98.5, 98.8, 10},
+		{98.8, 98.9, 97.4, 97.8, 10},
+		{97.8, 98.6, 97.5, 98.4, 10},
+		{98.4, 100.4, 98.2, 99.1, 20},
+		{99.1, 99.2, 98.4, 98.7, 10},
+		{98.7, 98.8, 97.9, 98.2, 10},
+		{98.2, 99.1, 98.0, 98.9, 10},
+		{98.9, 100.55, 98.7, 99.3, 50}, // sweep — only just through 100.5
+		{99.3, 99.4, 98.8, 99.0, 10},
+		{99.0, 99.1, 98.4, 98.6, 10},
+		{98.6, 99.2, 98.5, 99.0, 10},
+		{99.0, 100.64, 98.8, 99.2, 20}, // later swing, same cluster
+		{99.2, 99.3, 98.7, 98.9, 10},
+		{98.9, 99.0, 98.5, 98.7, 10},
+	}
+	short := make([]SweepBar, 13)
+	full := make([]SweepBar, len(seq))
+	for i, r := range seq {
+		b := sweepAt(t0, i, r[0], r[1], r[2], r[3], r[4])
+		full[i] = b
+		if i < 13 {
+			short[i] = b
+		}
+	}
+	before := DetectLiquiditySweeps(short, 15*time.Minute)
+	if len(before) != 1 || before[0].Status != LiquiditySweepSwept || before[0].Level > 100.51 {
+		t.Fatalf("before %+v", before)
+	}
+	after := DetectLiquiditySweeps(full, 15*time.Minute)
+	var kept *LiquiditySweep
+	for i := range after {
+		if after[i].PiercedAt.Equal(before[0].PiercedAt) {
+			kept = &after[i]
+			break
+		}
+	}
+	if kept == nil {
+		t.Fatalf("past sweep disappeared after later swing joined the cluster: %+v", after)
+	}
+	if kept.Level != before[0].Level {
+		t.Fatalf("level rewritten %v -> %v", before[0].Level, kept.Level)
+	}
+	if kept.Status != LiquiditySweepSwept {
+		t.Fatalf("status %+v", kept)
+	}
+}
+
 func TestSweepBarsFromCandles_BuySell(t *testing.T) {
 	bars := SweepBarsFromCandles([]Candle{
 		{OpenTime: time.Unix(1, 0).UTC(), Open: "10", High: "11", Low: "9", Close: "10.5", QuoteVolume: "100", TakerBuyQuote: "70"},
