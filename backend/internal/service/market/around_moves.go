@@ -105,7 +105,7 @@ func (s *Service) FindAroundMoves(ctx context.Context, exchange, symbol, lookbac
 	return out, nil
 }
 
-const aroundPrecursorsDisclaimer = "Scans historical candles for strong up and down legs, then compares the tape in the window before each move. Singles are one condition at a time. Combos are conditions that fired together in the same before-window (volume + book + OI, etc.) and say whether that group shows up more before increases or drops. Common means at least 60% of those before-windows with 3 or more samples. Informational only — not financial advice."
+const aroundPrecursorsDisclaimer = "Scans historical candles for strong up and down legs, then compares the tape in the window before each move. Singles are one condition at a time. Combos are conditions that fired together in the same before-window (volume + book + OI, etc.) and say whether that group shows up more before increases or drops. Common on a combo is the overall hit rate (all sampled before-windows), not one side alone — at least 60% of those windows with 3 or more samples. Informational only — not financial advice."
 
 // GetAroundPrecursors finds important moves and what often changed before them.
 func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (*domain.AroundPrecursorReport, error) {
@@ -132,4 +132,41 @@ func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, loo
 	out.Note = aroundPrecursorsDisclaimer
 	out.Summary = domain.ExplainAroundPrecursors(out)
 	return &out, nil
+}
+
+const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves: volume vs typical, order-book liquidity change, open interest, takers, and price. Closest cases are ranked by similarity. After is what price did during that past move. Informational only — not financial advice."
+
+// GetAroundSimilar finds past important-move setups that look like the current tape.
+func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (*domain.AroundSimilarReport, error) {
+	if lookback == "" {
+		lookback = domain.DefaultAroundPrecursorsLookback
+	}
+	if window == "" {
+		window = domain.DefaultAroundWindow
+	}
+	now := time.Now().UTC()
+	curRep, err := s.GetAround(ctx, exchange, symbol, window, "15m", now.Add(-time.Second))
+	if err != nil {
+		return nil, err
+	}
+	current, ok := domain.AroundReportBefore(curRep)
+	if !ok {
+		return &domain.AroundSimilarReport{
+			Symbol: curRep.Symbol, Exchange: curRep.Exchange, Lookback: lookback, Window: window,
+			AsOf: now, Note: aroundSimilarDisclaimer,
+			Summary: "Not enough current tape to compare.",
+		}, nil
+	}
+	moves, err := s.FindAroundMoves(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, domain.MaxAroundMovesLimit, window, during)
+	if err != nil {
+		return nil, err
+	}
+	hits := domain.MatchAroundSimilar(current, moves.Moves, limit)
+	out := &domain.AroundSimilarReport{
+		Symbol: moves.Symbol, Exchange: moves.Exchange, Lookback: moves.Lookback,
+		Window: window, Interval: moves.Interval, MinReturnPct: moves.MinReturnPct,
+		AsOf: now, Current: current, Matches: hits, Note: aroundSimilarDisclaimer,
+	}
+	domain.FinishAroundSimilar(out)
+	return out, nil
 }

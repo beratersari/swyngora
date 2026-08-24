@@ -67,6 +67,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/around/compare` how two times / moves of the same coin differed. See [`around.md`](around.md).
 - `GET /api/v1/market/around/moves` strongest recent up/down legs plus what happened during each. See [`around.md`](around.md).
 - `GET /api/v1/market/around/precursors` what often changed before those moves, including conditions that fire together. See [`around.md`](around.md).
+- `GET /api/v1/market/around/similar` past important-move setups like the current tape, and what price did after. See [`around.md`](around.md).
 - `GET /api/v1/market/vwap` volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined. See [`vwap.md`](vwap.md).
 - `GET /api/v1/market/absorption` large market buys/sells versus little price move; which side is absorbing and how strong. See [`absorption.md`](absorption.md).
 - `GET /api/v1/market/liquidity-sweeps` poke through a prior high/low that comes back; level, excursion, reclaim time, volume. See [`liquidity-sweeps.md`](liquidity-sweeps.md).

@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI tool scope on worker threads:** tenant id and read-only `canTrade` survive LangChain threads that drop ContextVars (`docs/features/ai-assistant.md`)
 - **Desk tape venue switch:** the sticky tape no longer relabels the previous venue’s prices as the newly selected venue (`frontend/src/libs/hooks/useDeskPriceTape.ts`)
 - **Coin-detail pump markers:** live pump events use the current pair only so BTC arrows cannot snap onto an ETH chart (`docs/features/coin-detail.md`)
+- **Combo common rate:** a precursor combo is common only when it hits often **overall** (hits / all sampled before-windows ≥ 60%), not when it is frequent on just one side (`docs/features/around.md`)
 - **Liquidity sweep levels:** a later swing high/low no longer joins an older cluster and rewrites that shelf — a sweep that already printed keeps the level as it was at the poke (`docs/features/liquidity-sweeps.md`)
 - **CVD divergence runs:** a quiet gap no longer glues two same-kind splits into one long episode (`docs/features/cvd.md`)
 - **Combined CVD 5m buckets:** combined uses the overlapping time range and treats a missing 5-minute slot as 0. When both venues already have 24h, combined stays `complete` even if the first shared bucket is one bar late (`docs/features/cvd.md`)
@@ -66,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Similar past moves:** compare the current tape to the setup before past important moves and show what price did after the closest cases (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Move precursor combos:** conditions that often fire together before a move (volume + book + OI, …) and whether that group leans up or down (`GET /api/v1/market/around/precursors`, MCP `find_around_precursors`) (`docs/features/around.md`)
 - **Move precursors:** scan important up/down legs and list what often changed in the tape before them (`GET /api/v1/market/around/precursors`, MCP `find_around_precursors`) (`docs/features/around.md`)
 - **Important moves:** find the strongest recent up and down legs on a coin and attach the around-the-move tape for each (`GET /api/v1/market/around/moves`, MCP `find_around_moves`) (`docs/features/around.md`)

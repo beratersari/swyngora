@@ -38,7 +38,8 @@ type AroundPrecursorCombo struct {
 	Sample       int
 	UpSharePct   float64
 	DownSharePct float64
-	Lean         string // up | down | both | mixed
+	SharePct     float64 // overall hits / sample — used for common
+	Lean         string  // up | down | both | mixed
 	Common       bool
 	Summary      string
 }
@@ -122,7 +123,7 @@ func SummarizeAroundPrecursors(moves []AroundMoveHit) AroundPrecursorReport {
 		} else if hit.Direction == CVDDirDown {
 			out.DownMoves++
 		}
-		before, ok := aroundReportBefore(hit.Around)
+		before, ok := AroundReportBefore(hit.Around)
 		if !ok {
 			continue
 		}
@@ -220,7 +221,8 @@ func ExplainAroundPrecursors(r AroundPrecursorReport) string {
 	return head + " " + joinList(commons)
 }
 
-func aroundReportBefore(r *AroundReport) (AroundPhase, bool) {
+// AroundReportBefore returns the complete before-window from combined or a venue.
+func AroundReportBefore(r *AroundReport) (AroundPhase, bool) {
 	if r == nil {
 		return AroundPhase{}, false
 	}
@@ -341,15 +343,12 @@ func findAroundPrecursorCombos(rows []precursorFlags) []AroundPrecursorCombo {
 		if c.Sample < AroundPrecursorMinSample {
 			continue
 		}
-		best := c.UpSharePct
-		if c.DownSharePct > best {
-			best = c.DownSharePct
-		}
-		if best < 50 && c.Hits*100/maxInt(c.Sample, 1) < 50 {
+		if c.SharePct < 50 && c.UpSharePct < AroundPrecursorMinShare && c.DownSharePct < AroundPrecursorMinShare {
 			continue
 		}
-		c.Common = c.Sample >= AroundPrecursorMinSample && (c.UpSharePct >= AroundPrecursorMinShare || c.DownSharePct >= AroundPrecursorMinShare)
-		if !c.Common && best < AroundPrecursorMinShare {
+		// Common is overall frequency, not “often on one side only”.
+		c.Common = c.Sample >= AroundPrecursorMinSample && c.SharePct >= AroundPrecursorMinShare
+		if !c.Common && c.SharePct < 40 && c.UpSharePct < AroundPrecursorMinShare && c.DownSharePct < AroundPrecursorMinShare {
 			continue
 		}
 		c.Summary = explainPrecursorCombo(c)
@@ -417,6 +416,9 @@ func scorePrecursorCombo(rows []precursorFlags, metrics []string) AroundPrecurso
 	}
 	if c.DownSample > 0 {
 		c.DownSharePct = float64(c.DownHits) / float64(c.DownSample) * 100
+	}
+	if c.Sample > 0 {
+		c.SharePct = float64(c.Hits) / float64(c.Sample) * 100
 	}
 	c.Lean = precursorComboLean(c.UpSharePct, c.DownSharePct, c.UpSample, c.DownSample)
 	return c

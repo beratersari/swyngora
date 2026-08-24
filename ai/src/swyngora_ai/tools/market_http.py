@@ -1508,6 +1508,34 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["during"] = during
         return http.get("/api/v1/market/around/precursors", params)
 
+    def find_around_similar(
+        symbol: str,
+        exchange: str = "all",
+        lookback: str = "7d",
+        interval: str = "15m",
+        direction: str = "both",
+        min_return_pct: float = 0,
+        limit: int = 0,
+        window: str = "1h",
+        during: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if lookback:
+            params["lookback"] = lookback
+        if interval:
+            params["interval"] = interval
+        if direction:
+            params["direction"] = direction
+        if min_return_pct:
+            params["minReturnPct"] = min_return_pct
+        if limit:
+            params["limit"] = limit
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        return http.get("/api/v1/market/around/similar", params)
+
     def get_vwap(
         symbol: str,
         exchange: str = "all",
@@ -3046,6 +3074,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "that show up often — singles and combos that fire together "
                 "(volume + book + OI). Combos say whether the group is more "
                 "common before increases or drops. Default lookback 7d."
+            ),
+            args_schema=AroundMovesInput,
+        ),
+        StructuredTool.from_function(
+            find_around_similar,
+            name="find_around_similar",
+            description=(
+                "Compare the current market (volume, order book, open "
+                "interest, takers) to the setup before past important "
+                "moves. Returns the most similar cases and what price "
+                "did after those setups. Default lookback 7d."
             ),
             args_schema=AroundMovesInput,
         ),

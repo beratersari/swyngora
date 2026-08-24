@@ -83,8 +83,9 @@ each move and lists conditions that show up often:
 - bid or ask liquidity pulled
 - a sweep or absorption in the before-window
 
-`common` is **60%+** of those before-windows with **at least 3**
-samples. Default lookback **7d** (more history than `/moves`).
+`common` on a **combo** is the **overall** hit rate across every
+sampled before-window (not “often on one side only”) — **60%+** with
+**at least 3** samples. Default lookback **7d**.
 
 `combos` groups conditions that fired **together** in the same
 before-window (for example elevated volume + bid pulled + OI rising).
@@ -92,14 +93,24 @@ Each combo reports how often it showed up before **increases** vs
 **drops** (`lean`: `up` / `down` / `both`). MCP:
 `find_around_precursors`.
 
+## Similar past moves
+
+`GET /api/v1/market/around/similar?symbol=BTCUSDT`
+
+Compares the **current** tape (last `window`, default 1h) to the
+setup before past important moves — volume, order book, open interest,
+takers, and price. Returns the closest cases (`similarity` 0–100) and
+**what price did after** those setups (`afterReturnPct`). MCP:
+`find_around_similar`.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go`, `around_precursors.go` |
+| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go`, `around_precursors.go`, `around_similar.go` |
 | Service | `backend/internal/service/market/around.go`, `around_moves.go` |
-| HTTP | `GET /api/v1/market/around`, `.../compare`, `.../moves`, `.../precursors` |
-| MCP / AI | `get_around`, `compare_around`, `find_around_moves`, `find_around_precursors` |
+| HTTP | `GET /api/v1/market/around`, `.../compare`, `.../moves`, `.../precursors`, `.../similar` |
+| MCP / AI | `get_around`, `compare_around`, `find_around_moves`, `find_around_precursors`, `find_around_similar` |
 
 ## How to verify
 
@@ -109,4 +120,5 @@ curl "http://localhost:8080/api/v1/market/around?symbol=BTCUSDT&at=2026-08-20T14
 curl "http://localhost:8080/api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-20T12:00:00Z&to=2026-08-20T16:00:00Z"
 curl "http://localhost:8080/api/v1/market/around/moves?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
 ```

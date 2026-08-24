@@ -632,6 +632,23 @@ func TestGetAroundPrecursors_OK(t *testing.T) {
 	}
 }
 
+func TestGetAroundSimilar_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&lookback=24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundSimilar(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body aroundSimilarResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetAroundMoves_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/moves", nil)

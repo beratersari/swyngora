@@ -88,6 +88,35 @@ func (h *MarketHandler) GetAroundPrecursors(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, aroundPrecursorsToDTO(got))
 }
 
+// GetAroundSimilar handles GET /api/v1/market/around/similar.
+func (h *MarketHandler) GetAroundSimilar(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var minPct float64
+	if raw := q.Get("minReturnPct"); raw != "" {
+		n, err := parseAroundFloat(raw)
+		if err != nil || n < 0 {
+			writeError(w, fmt.Errorf("%w: minReturnPct must be a number >= 0", domain.ErrInvalidArgument))
+			return
+		}
+		minPct = n
+	}
+	var limit int
+	if raw := q.Get("limit"); raw != "" {
+		n, err := parseAroundInt(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, aroundSimilarToDTO(got))
+}
+
 // GetAroundCompare handles GET /api/v1/market/around/compare.
 func (h *MarketHandler) GetAroundCompare(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -593,7 +622,7 @@ func aroundPrecursorsToDTO(a *domain.AroundPrecursorReport) aroundPrecursorsResp
 			Title: c.Title, UpHits: c.UpHits, DownHits: c.DownHits,
 			UpSample: c.UpSample, DownSample: c.DownSample, Hits: c.Hits, Sample: c.Sample,
 			UpSharePct: formatHistQty(c.UpSharePct), DownSharePct: formatHistQty(c.DownSharePct),
-			Lean: c.Lean, Common: c.Common, Summary: c.Summary,
+			SharePct: formatHistQty(c.SharePct), Lean: c.Lean, Common: c.Common, Summary: c.Summary,
 		})
 	}
 	return aroundPrecursorsResponse{
@@ -629,6 +658,7 @@ type aroundPrecursorComboDTO struct {
 	Sample       int      `json:"sample"`
 	UpSharePct   string   `json:"upSharePct"`
 	DownSharePct string   `json:"downSharePct"`
+	SharePct     string   `json:"sharePct"`
 	Lean         string   `json:"lean"`
 	Common       bool     `json:"common"`
 	Summary      string   `json:"summary"`
@@ -652,6 +682,62 @@ type aroundPrecursorsResponse struct {
 	Moves        []aroundMoveHitDTO          `json:"moves"`
 	Summary      string                      `json:"summary"`
 	Note         string                      `json:"note"`
+}
+
+func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
+	if a == nil {
+		return aroundSimilarResponse{}
+	}
+	hits := make([]aroundSimilarHitDTO, 0, len(a.Matches))
+	for _, m := range a.Matches {
+		hits = append(hits, aroundSimilarHitDTO{
+			At: m.Move.At.UTC(), Until: m.Move.Until.UTC(), Direction: m.Move.Direction,
+			ReturnPct: domain.FormatSignedPct(m.Move.ReturnPct), Grade: m.Move.Grade,
+			Similarity: formatHistQty(m.Similarity), Matches: append([]string(nil), m.Matches...),
+			Before: aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
+			AfterReturnPct: domain.FormatSignedPct(m.AfterReturnPct), AfterDirection: m.AfterDirection,
+			Summary: m.Summary,
+		})
+	}
+	return aroundSimilarResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Window: a.Window,
+		Interval: a.Interval, MinReturnPct: formatHistQty(a.MinReturnPct), AsOf: a.AsOf.UTC(),
+		Current: aroundPhaseToDTO(a.Current), Matches: hits,
+		UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
+		Summary: a.Summary, Note: a.Note,
+	}
+}
+
+type aroundSimilarHitDTO struct {
+	At             time.Time      `json:"at"`
+	Until          time.Time      `json:"until"`
+	Direction      string         `json:"direction"`
+	ReturnPct      string         `json:"returnPct"`
+	Grade          string         `json:"grade"`
+	Similarity     string         `json:"similarity"`
+	Matches        []string       `json:"matches,omitempty"`
+	Before         aroundPhaseDTO `json:"before"`
+	After          aroundPhaseDTO `json:"after"`
+	AfterReturnPct string         `json:"afterReturnPct"`
+	AfterDirection string         `json:"afterDirection"`
+	Summary        string         `json:"summary"`
+}
+
+type aroundSimilarResponse struct {
+	Symbol         string                `json:"symbol"`
+	Exchange       string                `json:"exchange"`
+	Lookback       string                `json:"lookback"`
+	Window         string                `json:"window"`
+	Interval       string                `json:"interval"`
+	MinReturnPct   string                `json:"minReturnPct"`
+	AsOf           time.Time             `json:"asOf"`
+	Current        aroundPhaseDTO        `json:"current"`
+	Matches        []aroundSimilarHitDTO `json:"matches"`
+	UpAfter        int                   `json:"upAfter"`
+	DownAfter      int                   `json:"downAfter"`
+	MedianAfterPct string                `json:"medianAfterPct"`
+	Summary        string                `json:"summary"`
+	Note           string                `json:"note"`
 }
 
 func parseAroundFloat(raw string) (float64, error) {

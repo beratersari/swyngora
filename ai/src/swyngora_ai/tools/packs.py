@@ -27,6 +27,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "compare_around",
         "find_around_moves",
         "find_around_precursors",
+        "find_around_similar",
         "get_absorption",
         "get_liquidity_sweeps",
         "get_volume_surge",
