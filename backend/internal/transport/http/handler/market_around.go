@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -27,6 +28,35 @@ func (h *MarketHandler) GetAround(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, aroundToDTO(got))
+}
+
+// GetAroundMoves handles GET /api/v1/market/around/moves.
+func (h *MarketHandler) GetAroundMoves(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var minPct float64
+	if raw := q.Get("minReturnPct"); raw != "" {
+		n, err := parseAroundFloat(raw)
+		if err != nil || n < 0 {
+			writeError(w, fmt.Errorf("%w: minReturnPct must be a number >= 0", domain.ErrInvalidArgument))
+			return
+		}
+		minPct = n
+	}
+	var limit int
+	if raw := q.Get("limit"); raw != "" {
+		n, err := parseAroundInt(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.FindAroundMoves(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, aroundMovesToDTO(got))
 }
 
 // GetAroundCompare handles GET /api/v1/market/around/compare.
@@ -443,4 +473,72 @@ func formatAroundNum(metric string, v float64) string {
 	default:
 		return formatHistQty(v)
 	}
+}
+
+type aroundMoveHitDTO struct {
+	At        time.Time       `json:"at"`
+	Until     time.Time       `json:"until"`
+	Direction string          `json:"direction"`
+	Open      string          `json:"open"`
+	High      string          `json:"high"`
+	Low       string          `json:"low"`
+	Close     string          `json:"close"`
+	ReturnPct string          `json:"returnPct"`
+	Volume    string          `json:"volume"`
+	Bars      int             `json:"bars"`
+	Grade     string          `json:"grade"`
+	During    string          `json:"during"`
+	Title     string          `json:"title"`
+	Summary   string          `json:"summary"`
+	Around    *aroundResponse `json:"around,omitempty"`
+}
+
+type aroundMovesResponse struct {
+	Symbol       string             `json:"symbol"`
+	Exchange     string             `json:"exchange"`
+	Lookback     string             `json:"lookback"`
+	Interval     string             `json:"interval"`
+	Direction    string             `json:"direction"`
+	MinReturnPct string             `json:"minReturnPct"`
+	From         time.Time          `json:"from"`
+	To           time.Time          `json:"to"`
+	AsOf         time.Time          `json:"asOf"`
+	Moves        []aroundMoveHitDTO `json:"moves"`
+	Summary      string             `json:"summary"`
+	Note         string             `json:"note"`
+}
+
+func aroundMovesToDTO(a *domain.AroundMovesReport) aroundMovesResponse {
+	if a == nil {
+		return aroundMovesResponse{}
+	}
+	moves := make([]aroundMoveHitDTO, 0, len(a.Moves))
+	for _, m := range a.Moves {
+		row := aroundMoveHitDTO{
+			At: m.At.UTC(), Until: m.Until.UTC(), Direction: m.Direction,
+			Open: formatHistQty(m.Open), High: formatHistQty(m.High),
+			Low: formatHistQty(m.Low), Close: formatHistQty(m.Close),
+			ReturnPct: domain.FormatSignedPct(m.ReturnPct), Volume: formatHistQty(m.Volume),
+			Bars: m.Bars, Grade: m.Grade, During: m.During, Title: m.Title, Summary: m.Summary,
+		}
+		if m.Around != nil {
+			rep := aroundToDTO(m.Around)
+			row.Around = &rep
+		}
+		moves = append(moves, row)
+	}
+	return aroundMovesResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Interval: a.Interval,
+		Direction: a.Direction, MinReturnPct: formatHistQty(a.MinReturnPct),
+		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
+		Moves: moves, Summary: a.Summary, Note: a.Note,
+	}
+}
+
+func parseAroundFloat(raw string) (float64, error) {
+	return strconv.ParseFloat(raw, 64)
+}
+
+func parseAroundInt(raw string) (int, error) {
+	return strconv.Atoi(raw)
 }

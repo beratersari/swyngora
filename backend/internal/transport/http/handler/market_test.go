@@ -598,6 +598,33 @@ func TestGetAroundCompare_OK(t *testing.T) {
 	}
 }
 
+func TestGetAroundMoves_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/moves?symbol=BTCUSDT&lookback=24h&minReturnPct=1", nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundMoves(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body aroundMovesResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Lookback != "24h" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetAroundMoves_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/moves", nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundMoves(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetAroundCompare_MissingTimes(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/compare?symbol=BTCUSDT", nil)

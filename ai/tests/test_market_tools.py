@@ -140,6 +140,15 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/around/moves"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "summary": "3 important moves",
+                    "moves": [{"direction": "up", "returnPct": "+4.2", "at": "2026-08-20T14:00:00Z"}],
+                },
+            )
         if request.url.path.endswith("/around/compare"):
             return httpx.Response(
                 200,
@@ -279,6 +288,10 @@ def test_market_tools_hit_api(monkeypatch):
         )
     )
     assert compared["summary"] == "later move was larger"
+
+    assert "find_around_moves" in by_name
+    found = json.loads(by_name["find_around_moves"].invoke({"symbol": "BTCUSDT"}))
+    assert found["moves"][0]["direction"] == "up"
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

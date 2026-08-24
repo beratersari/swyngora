@@ -437,6 +437,42 @@ class VolumeSurgeScanInput(BaseModel):
     )
 
 
+class AroundMovesInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+    lookback: str = Field(
+        default="24h",
+        description="4h|12h|24h|3d|7d (default 24h)",
+    )
+    interval: str = Field(
+        default="15m",
+        description="15m|1h (default 15m)",
+    )
+    direction: str = Field(
+        default="both",
+        description="up|down|both (default both)",
+    )
+    min_return_pct: float = Field(
+        default=0,
+        description="Minimum |return| percent (default 1.5 on 15m, 2.5 on 1h)",
+    )
+    limit: int = Field(
+        default=0,
+        description="How many moves to keep (default 8, max 15)",
+    )
+    window: str = Field(
+        default="1h",
+        description="Around lookback 15m|30m|1h|2h|4h (default 1h)",
+    )
+    during: str = Field(
+        default="",
+        description="Override move window 5m|15m|30m|1h (default from the leg)",
+    )
+
+
 class AroundCompareInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     from_time: str = Field(
@@ -1415,6 +1451,34 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if during:
             params["during"] = during
         return http.get("/api/v1/market/around/compare", params)
+
+    def find_around_moves(
+        symbol: str,
+        exchange: str = "all",
+        lookback: str = "24h",
+        interval: str = "15m",
+        direction: str = "both",
+        min_return_pct: float = 0,
+        limit: int = 0,
+        window: str = "1h",
+        during: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if lookback:
+            params["lookback"] = lookback
+        if interval:
+            params["interval"] = interval
+        if direction:
+            params["direction"] = direction
+        if min_return_pct:
+            params["minReturnPct"] = min_return_pct
+        if limit:
+            params["limit"] = limit
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        return http.get("/api/v1/market/around/moves", params)
 
     def get_vwap(
         symbol: str,
@@ -2933,6 +2997,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "from_time and to_time are the two event times."
             ),
             args_schema=AroundCompareInput,
+        ),
+        StructuredTool.from_function(
+            find_around_moves,
+            name="find_around_moves",
+            description=(
+                "Find the important up and down moves in a coin's recent "
+                "history, then show what happened during each one (price, "
+                "volume, VWAP, vs typical, POC, sweeps, stored book/futures). "
+                "Ranked by |return|. lookback default 24h."
+            ),
+            args_schema=AroundMovesInput,
         ),
         StructuredTool.from_function(
             get_vwap,

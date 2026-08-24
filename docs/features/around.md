@@ -57,14 +57,26 @@ diffs:
 `from` and `to` do not have to be in chronological order. MCP:
 `compare_around`.
 
+## Important moves
+
+`GET /api/v1/market/around/moves?symbol=BTCUSDT`
+
+Walks recent 15m (or 1h) candles, groups same-direction legs, and keeps
+the strongest up and down stretches (default floor 1.5% on 15m / 2.5%
+on 1h, last 24h, up to 8 moves). Each hit includes the around-the-move
+tape so you see volume, VWAP, book, OI, and sweeps during that move.
+
+`lookback` `4h` / `12h` / `24h` / `3d` / `7d`. `direction` `up` /
+`down` / `both`. MCP: `find_around_moves`.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around.go`, `around_compare.go` |
-| Service | `backend/internal/service/market/around.go` |
-| HTTP | `GET /api/v1/market/around`, `.../around/compare` |
-| MCP / AI | `get_around`, `compare_around` |
+| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go` |
+| Service | `backend/internal/service/market/around.go`, `around_moves.go` |
+| HTTP | `GET /api/v1/market/around`, `.../around/compare`, `.../around/moves` |
+| MCP / AI | `get_around`, `compare_around`, `find_around_moves` |
 
 ## How to verify
 
@@ -72,4 +84,5 @@ diffs:
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -run Around
 curl "http://localhost:8080/api/v1/market/around?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
 curl "http://localhost:8080/api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-20T12:00:00Z&to=2026-08-20T16:00:00Z"
+curl "http://localhost:8080/api/v1/market/around/moves?symbol=BTCUSDT"
 ```

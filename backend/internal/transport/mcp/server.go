@@ -49,6 +49,7 @@ type DataPort interface {
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
+	FindAroundMoves(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -712,6 +713,29 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetAround(ctx, req.GetString("exchange", "all"), symbol, at, req.GetString("window", ""), req.GetString("during", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("find_around_moves",
+		mcp.WithDescription("Find the important up and down moves in a coin's recent history, then show what happened in the market during each one (price, volume, VWAP, vs typical, POC, sweeps, stored book/futures). Ranked by |return|. lookback 4h/12h/24h/3d/7d (default 24h). minReturnPct default 1.5 (15m) or 2.5 (1h). Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 24h)")),
+		mcp.WithString("interval", mcp.Description("15m | 1h (default 15m)")),
+		mcp.WithString("direction", mcp.Description("up | down | both (default both)")),
+		mcp.WithNumber("minReturnPct", mcp.Description("Minimum |return| %% (default 1.5 on 15m, 2.5 on 1h)")),
+		mcp.WithNumber("limit", mcp.Description("How many moves to keep (default 8, max 15)")),
+		mcp.WithString("window", mcp.Description("Around lookback 15m|30m|1h|2h|4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("Override move window 5m|15m|30m|1h (default from the leg)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.FindAroundMoves(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

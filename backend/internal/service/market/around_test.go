@@ -190,6 +190,32 @@ func TestCompareAround_SecondMoveIsLarger(t *testing.T) {
 	}
 }
 
+func TestFindAroundMoves_AttachesTape(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.FindAroundMoves(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 8, "1h", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Moves) == 0 {
+		t.Fatal("expected at least one important move")
+	}
+	if got.Moves[0].ReturnPct < 3 {
+		t.Fatalf("largest %+v", got.Moves[0])
+	}
+	if got.Moves[0].Around == nil || got.Summary == "" {
+		t.Fatalf("around/summary %+v", got.Moves[0])
+	}
+}
+
+func TestFindAroundMoves_BadSymbol(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	if _, err := svc.FindAroundMoves(context.Background(), "all", "  ", "24h", "15m", "both", 0, 0, "", ""); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestCompareAround_SameTimeRejected(t *testing.T) {
 	at := time.Now().UTC().Add(-2 * time.Hour)
 	svc := New(&fakeMarket{candles: aroundTape(at)}, &fakeSupply{})

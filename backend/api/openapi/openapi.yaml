@@ -1584,6 +1584,66 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/around/moves:
+    get:
+      summary: Important moves and what happened during them
+      description: |
+        Finds the strongest **up and down legs** in a coin's recent
+        history, then attaches the around-the-move tape (price, volume,
+        VWAP, vs typical, POC, sweeps, stored book/futures) for each one.
+        Legs are same-direction stretches of 15m or 1h candles, ranked
+        by |return|. Default lookback **24h**, default floor **1.5%**
+        (15m) or **2.5%** (1h). `direction` is `up`, `down`, or `both`.
+        Informational only.
+      operationId: findMarketAroundMoves
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: lookback
+          in: query
+          description: 4h | 12h | 24h | 3d | 7d (default 24h)
+          schema: { type: string, default: "24h" }
+        - name: interval
+          in: query
+          description: 15m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+        - name: direction
+          in: query
+          description: up | down | both (default both)
+          schema: { type: string, default: both }
+        - name: minReturnPct
+          in: query
+          description: Minimum |return| percent (default 1.5 on 15m, 2.5 on 1h)
+          schema: { type: number }
+        - name: limit
+          in: query
+          description: How many moves to keep (default 8, max 15)
+          schema: { type: integer, default: 8 }
+        - name: window
+          in: query
+          description: Around lookback 15m | 30m | 1h | 2h | 4h (default 1h)
+          schema: { type: string, default: "1h" }
+        - name: during
+          in: query
+          description: Override move window 5m | 15m | 30m | 1h (default from the leg)
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ranked important moves with around-the-move tapes
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/vwap:
     get:
       summary: Volume-weighted average price
