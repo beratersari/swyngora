@@ -69,14 +69,32 @@ tape so you see volume, VWAP, book, OI, and sweeps during that move.
 `lookback` `4h` / `12h` / `24h` / `3d` / `7d`. `direction` `up` /
 `down` / `both`. MCP: `find_around_moves`.
 
+## Common changes before moves
+
+`GET /api/v1/market/around/precursors?symbol=BTCUSDT`
+
+Same scan as `/around/moves`, then compares the **before** window of
+each move and lists conditions that show up often:
+
+- price already quiet / rising / falling
+- volume elevated vs typical
+- takers buying or selling
+- open interest rising or falling
+- bid or ask liquidity pulled
+- a sweep or absorption in the before-window
+
+`common` is **60%+** of those before-windows with **at least 3**
+samples. Default lookback **7d** (more history than `/moves`). MCP:
+`find_around_precursors`.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go` |
+| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go`, `around_precursors.go` |
 | Service | `backend/internal/service/market/around.go`, `around_moves.go` |
-| HTTP | `GET /api/v1/market/around`, `.../around/compare`, `.../around/moves` |
-| MCP / AI | `get_around`, `compare_around`, `find_around_moves` |
+| HTTP | `GET /api/v1/market/around`, `.../compare`, `.../moves`, `.../precursors` |
+| MCP / AI | `get_around`, `compare_around`, `find_around_moves`, `find_around_precursors` |
 
 ## How to verify
 
@@ -85,4 +103,5 @@ cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/t
 curl "http://localhost:8080/api/v1/market/around?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
 curl "http://localhost:8080/api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-20T12:00:00Z&to=2026-08-20T16:00:00Z"
 curl "http://localhost:8080/api/v1/market/around/moves?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
 ```

@@ -50,6 +50,7 @@ type DataPort interface {
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
 	FindAroundMoves(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
+	GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -736,6 +737,29 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.FindAroundMoves(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("find_around_precursors",
+		mcp.WithDescription("Scan a coin's candles for important up and down moves, compare the market tape before those moves, and list the conditions that show up often (elevated volume, taker side, quiet price, OI, book, sweeps). Common means at least 60% of before-windows with 3+ samples. Default lookback 7d. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),
+		mcp.WithString("interval", mcp.Description("15m | 1h (default 15m)")),
+		mcp.WithString("direction", mcp.Description("up | down | both (default both)")),
+		mcp.WithNumber("minReturnPct", mcp.Description("Minimum |return| %% (default 1.5 on 15m)")),
+		mcp.WithNumber("limit", mcp.Description("How many moves to scan (default 15)")),
+		mcp.WithString("window", mcp.Description("Before-window length 15m|30m|1h|2h|4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("Override move window 5m|15m|30m|1h")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetAroundPrecursors(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -104,3 +104,32 @@ func (s *Service) FindAroundMoves(ctx context.Context, exchange, symbol, lookbac
 	out.Summary = domain.ExplainAroundMovesReport(*out)
 	return out, nil
 }
+
+const aroundPrecursorsDisclaimer = "Scans historical candles for strong up and down legs, then compares the tape in the window before each move (volume vs typical, takers, price, OI, book, sweeps). Patterns marked common showed up in at least 60% of those before-windows with 3 or more samples. Informational only — not financial advice."
+
+// GetAroundPrecursors finds important moves and what often changed before them.
+func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (*domain.AroundPrecursorReport, error) {
+	if lookback == "" {
+		lookback = domain.DefaultAroundPrecursorsLookback
+	}
+	if limit <= 0 {
+		limit = domain.MaxAroundMovesLimit
+	}
+	moves, err := s.FindAroundMoves(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during)
+	if err != nil {
+		return nil, err
+	}
+	out := domain.SummarizeAroundPrecursors(moves.Moves)
+	out.Symbol = moves.Symbol
+	out.Exchange = moves.Exchange
+	out.Lookback = moves.Lookback
+	out.Interval = moves.Interval
+	out.Direction = moves.Direction
+	out.MinReturnPct = moves.MinReturnPct
+	out.From = moves.From
+	out.To = moves.To
+	out.AsOf = moves.AsOf
+	out.Note = aroundPrecursorsDisclaimer
+	out.Summary = domain.ExplainAroundPrecursors(out)
+	return &out, nil
+}

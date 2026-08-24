@@ -140,6 +140,15 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/around/precursors"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "summary": "volume was elevated before most up-moves",
+                    "patterns": [{"metric": "volume_elevated", "common": True, "side": "up"}],
+                },
+            )
         if request.url.path.endswith("/around/moves"):
             return httpx.Response(
                 200,
@@ -292,6 +301,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "find_around_moves" in by_name
     found = json.loads(by_name["find_around_moves"].invoke({"symbol": "BTCUSDT"}))
     assert found["moves"][0]["direction"] == "up"
+
+    assert "find_around_precursors" in by_name
+    prec = json.loads(by_name["find_around_precursors"].invoke({"symbol": "BTCUSDT"}))
+    assert prec["patterns"][0]["metric"] == "volume_elevated"
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

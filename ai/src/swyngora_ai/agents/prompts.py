@@ -82,6 +82,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `get_around` for what changed before / during / after a chosen time,
   `compare_around` for how two times / moves differed,
   `find_around_moves` for the strongest recent up/down legs and what happened during them,
+  `find_around_precursors` for what often changed in the tape before those moves,
   `get_vwap` for volume-weighted average price from a start time, etc.).
   Do not fetch extra intervals “for context.”
 - Venues: binance, coinbase, bybit, nasdaq, bist. Default binance unless the name is a cash equity
@@ -178,6 +179,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_around` → what happened around a time (before / during / after: price, volume, VWAP, vs typical, POC, sweeps, stored book/futures);
   `compare_around` → how two times / moves differed (price, volume, book, OI, sweeps);
   `find_around_moves` → strongest recent up/down legs plus the around tape for each;
+  `find_around_precursors` → what often changed before those moves (volume, takers, OI, book);
   `get_vwap` → volume-weighted average price from a start time; last vs VWAP; Binance/Bybit/combined;
   `get_supply` → supply; `get_holders` → holder count / top wallets (crypto only);
   `get_asset_profile` → name, logo, listing date, contracts;

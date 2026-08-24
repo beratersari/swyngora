@@ -454,6 +454,37 @@ func (c *APIClient) FindAroundMoves(ctx context.Context, exchange, symbol, lookb
 	return c.get(ctx, "/api/v1/market/around/moves", q)
 }
 
+// GetAroundPrecursors compares the tape before many important moves.
+func (c *APIClient) GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if lookback != "" {
+		q.Set("lookback", lookback)
+	}
+	if interval != "" {
+		q.Set("interval", interval)
+	}
+	if direction != "" {
+		q.Set("direction", direction)
+	}
+	if minReturnPct > 0 {
+		q.Set("minReturnPct", strconv.FormatFloat(minReturnPct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if during != "" {
+		q.Set("during", during)
+	}
+	return c.get(ctx, "/api/v1/market/around/precursors", q)
+}
+
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.
 func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	q := url.Values{}

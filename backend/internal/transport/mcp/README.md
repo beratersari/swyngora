@@ -31,6 +31,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_around` | What happened around a time: before / during / after (price, volume, VWAP, vs typical, POC, sweeps, stored book/futures) |
 | `compare_around` | Compare two times for the same coin: how the two moves differed (price, volume, book, OI, sweeps) |
 | `find_around_moves` | Find strong up/down legs and show what happened during each (around tape) |
+| `find_around_precursors` | What often changed before those moves (volume, takers, OI, book, sweeps) |
 | `get_vwap` | Volume-weighted average price from a start time (or window) to now; last vs VWAP; Binance, Bybit, combined |
 | `get_absorption` | Large market buys/sells vs little price move; absorbing side + strength (15m/1h/4h/24h + current run) |
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |

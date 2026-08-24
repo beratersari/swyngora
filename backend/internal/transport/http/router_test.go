@@ -120,6 +120,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/around?symbol=BTCUSDT&at=2026-08-23T12:00:00Z", http.StatusOK, nil},
 		{"/api/v1/market/around/compare?symbol=BTCUSDT&from=2026-08-22T12:00:00Z&to=2026-08-23T12:00:00Z", http.StatusOK, nil},
 		{"/api/v1/market/around/moves?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/around/precursors?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/absorption?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidity-sweeps?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/basis?symbol=BTCUSDT", http.StatusOK, nil},

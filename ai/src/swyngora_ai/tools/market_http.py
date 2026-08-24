@@ -1480,6 +1480,34 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["during"] = during
         return http.get("/api/v1/market/around/moves", params)
 
+    def find_around_precursors(
+        symbol: str,
+        exchange: str = "all",
+        lookback: str = "7d",
+        interval: str = "15m",
+        direction: str = "both",
+        min_return_pct: float = 0,
+        limit: int = 0,
+        window: str = "1h",
+        during: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if lookback:
+            params["lookback"] = lookback
+        if interval:
+            params["interval"] = interval
+        if direction:
+            params["direction"] = direction
+        if min_return_pct:
+            params["minReturnPct"] = min_return_pct
+        if limit:
+            params["limit"] = limit
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        return http.get("/api/v1/market/around/precursors", params)
+
     def get_vwap(
         symbol: str,
         exchange: str = "all",
@@ -3006,6 +3034,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "history, then show what happened during each one (price, "
                 "volume, VWAP, vs typical, POC, sweeps, stored book/futures). "
                 "Ranked by |return|. lookback default 24h."
+            ),
+            args_schema=AroundMovesInput,
+        ),
+        StructuredTool.from_function(
+            find_around_precursors,
+            name="find_around_precursors",
+            description=(
+                "Scan a coin's candles for important up and down moves, "
+                "compare the market tape before those moves, and list "
+                "conditions that show up often (elevated volume, takers, "
+                "quiet price, OI, book, sweeps). Common means 60%+ of "
+                "before-windows with 3+ samples. Default lookback 7d."
             ),
             args_schema=AroundMovesInput,
         ),

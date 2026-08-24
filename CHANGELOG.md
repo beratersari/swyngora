@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Move precursors:** scan important up/down legs and list what often changed in the tape before them (`GET /api/v1/market/around/precursors`, MCP `find_around_precursors`) (`docs/features/around.md`)
 - **Important moves:** find the strongest recent up and down legs on a coin and attach the around-the-move tape for each (`GET /api/v1/market/around/moves`, MCP `find_around_moves`) (`docs/features/around.md`)
 - **Compare two times:** how two moves of the same coin differed — price, volume, vs typical, order book, OI, funding, liquidations, and sweeps (`GET /api/v1/market/around/compare`, MCP `compare_around`) (`docs/features/around.md`)
 - **Around a time:** pick a coin and a time to see what happened before, during, and after that move — price, volume, buy/sell, VWAP, volume vs typical, POC, sweeps, and stored book/futures history (`GET /api/v1/market/around`, MCP `get_around`) (`docs/features/around.md`)

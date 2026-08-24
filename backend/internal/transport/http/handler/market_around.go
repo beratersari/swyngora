@@ -59,6 +59,35 @@ func (h *MarketHandler) GetAroundMoves(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, aroundMovesToDTO(got))
 }
 
+// GetAroundPrecursors handles GET /api/v1/market/around/precursors.
+func (h *MarketHandler) GetAroundPrecursors(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var minPct float64
+	if raw := q.Get("minReturnPct"); raw != "" {
+		n, err := parseAroundFloat(raw)
+		if err != nil || n < 0 {
+			writeError(w, fmt.Errorf("%w: minReturnPct must be a number >= 0", domain.ErrInvalidArgument))
+			return
+		}
+		minPct = n
+	}
+	var limit int
+	if raw := q.Get("limit"); raw != "" {
+		n, err := parseAroundInt(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetAroundPrecursors(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, aroundPrecursorsToDTO(got))
+}
+
 // GetAroundCompare handles GET /api/v1/market/around/compare.
 func (h *MarketHandler) GetAroundCompare(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -533,6 +562,68 @@ func aroundMovesToDTO(a *domain.AroundMovesReport) aroundMovesResponse {
 		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
 		Moves: moves, Summary: a.Summary, Note: a.Note,
 	}
+}
+
+func aroundPrecursorsToDTO(a *domain.AroundPrecursorReport) aroundPrecursorsResponse {
+	if a == nil {
+		return aroundPrecursorsResponse{}
+	}
+	pats := make([]aroundPrecursorPatternDTO, 0, len(a.Patterns))
+	for _, p := range a.Patterns {
+		pats = append(pats, aroundPrecursorPatternDTO{
+			Metric: p.Metric, Label: p.Label, Side: p.Side,
+			Hits: p.Hits, Sample: p.Sample, SharePct: formatHistQty(p.SharePct),
+			Median: formatHistQty(p.Median), Common: p.Common, Summary: p.Summary,
+		})
+	}
+	moves := make([]aroundMoveHitDTO, 0, len(a.Moves))
+	for _, m := range a.Moves {
+		moves = append(moves, aroundMoveHitDTO{
+			At: m.At.UTC(), Until: m.Until.UTC(), Direction: m.Direction,
+			Open: formatHistQty(m.Open), High: formatHistQty(m.High),
+			Low: formatHistQty(m.Low), Close: formatHistQty(m.Close),
+			ReturnPct: domain.FormatSignedPct(m.ReturnPct), Volume: formatHistQty(m.Volume),
+			Bars: m.Bars, Grade: m.Grade, During: m.During, Title: m.Title, Summary: m.Summary,
+		})
+	}
+	return aroundPrecursorsResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Interval: a.Interval,
+		Direction: a.Direction, MinReturnPct: formatHistQty(a.MinReturnPct),
+		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
+		UpMoves: a.UpMoves, DownMoves: a.DownMoves, Sampled: a.Sampled,
+		Patterns: pats, Moves: moves, Summary: a.Summary, Note: a.Note,
+	}
+}
+
+type aroundPrecursorPatternDTO struct {
+	Metric   string `json:"metric"`
+	Label    string `json:"label"`
+	Side     string `json:"side"`
+	Hits     int    `json:"hits"`
+	Sample   int    `json:"sample"`
+	SharePct string `json:"sharePct"`
+	Median   string `json:"median"`
+	Common   bool   `json:"common"`
+	Summary  string `json:"summary"`
+}
+
+type aroundPrecursorsResponse struct {
+	Symbol       string                      `json:"symbol"`
+	Exchange     string                      `json:"exchange"`
+	Lookback     string                      `json:"lookback"`
+	Interval     string                      `json:"interval"`
+	Direction    string                      `json:"direction"`
+	MinReturnPct string                      `json:"minReturnPct"`
+	From         time.Time                   `json:"from"`
+	To           time.Time                   `json:"to"`
+	AsOf         time.Time                   `json:"asOf"`
+	UpMoves      int                         `json:"upMoves"`
+	DownMoves    int                         `json:"downMoves"`
+	Sampled      int                         `json:"sampled"`
+	Patterns     []aroundPrecursorPatternDTO `json:"patterns"`
+	Moves        []aroundMoveHitDTO          `json:"moves"`
+	Summary      string                      `json:"summary"`
+	Note         string                      `json:"note"`
 }
 
 func parseAroundFloat(raw string) (float64, error) {

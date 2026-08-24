@@ -209,6 +209,26 @@ func TestFindAroundMoves_AttachesTape(t *testing.T) {
 	}
 }
 
+func TestGetAroundPrecursors_UsesBeforeWindows(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	var tape []domain.Candle
+	for _, hoursAgo := range []int{20, 14, 8, 3} {
+		at := now.Add(-time.Duration(hoursAgo) * time.Hour)
+		tape = append(tape, aroundTape(at)...)
+	}
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.GetAroundPrecursors(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 8, "1h", "15m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sampled == 0 || got.Summary == "" {
+		t.Fatalf("precursors %+v", got)
+	}
+	if got.Lookback != "24h" {
+		t.Fatalf("lookback %s", got.Lookback)
+	}
+}
+
 func TestFindAroundMoves_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	if _, err := svc.FindAroundMoves(context.Background(), "all", "  ", "24h", "15m", "both", 0, 0, "", ""); !errors.Is(err, domain.ErrInvalidArgument) {
