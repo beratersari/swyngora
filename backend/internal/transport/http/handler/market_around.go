@@ -586,12 +586,22 @@ func aroundPrecursorsToDTO(a *domain.AroundPrecursorReport) aroundPrecursorsResp
 			Bars: m.Bars, Grade: m.Grade, During: m.During, Title: m.Title, Summary: m.Summary,
 		})
 	}
+	combos := make([]aroundPrecursorComboDTO, 0, len(a.Combos))
+	for _, c := range a.Combos {
+		combos = append(combos, aroundPrecursorComboDTO{
+			Metrics: append([]string(nil), c.Metrics...), Labels: append([]string(nil), c.Labels...),
+			Title: c.Title, UpHits: c.UpHits, DownHits: c.DownHits,
+			UpSample: c.UpSample, DownSample: c.DownSample, Hits: c.Hits, Sample: c.Sample,
+			UpSharePct: formatHistQty(c.UpSharePct), DownSharePct: formatHistQty(c.DownSharePct),
+			Lean: c.Lean, Common: c.Common, Summary: c.Summary,
+		})
+	}
 	return aroundPrecursorsResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Interval: a.Interval,
 		Direction: a.Direction, MinReturnPct: formatHistQty(a.MinReturnPct),
 		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
 		UpMoves: a.UpMoves, DownMoves: a.DownMoves, Sampled: a.Sampled,
-		Patterns: pats, Moves: moves, Summary: a.Summary, Note: a.Note,
+		Patterns: pats, Combos: combos, Moves: moves, Summary: a.Summary, Note: a.Note,
 	}
 }
 
@@ -605,6 +615,23 @@ type aroundPrecursorPatternDTO struct {
 	Median   string `json:"median"`
 	Common   bool   `json:"common"`
 	Summary  string `json:"summary"`
+}
+
+type aroundPrecursorComboDTO struct {
+	Metrics      []string `json:"metrics"`
+	Labels       []string `json:"labels"`
+	Title        string   `json:"title"`
+	UpHits       int      `json:"upHits"`
+	DownHits     int      `json:"downHits"`
+	UpSample     int      `json:"upSample"`
+	DownSample   int      `json:"downSample"`
+	Hits         int      `json:"hits"`
+	Sample       int      `json:"sample"`
+	UpSharePct   string   `json:"upSharePct"`
+	DownSharePct string   `json:"downSharePct"`
+	Lean         string   `json:"lean"`
+	Common       bool     `json:"common"`
+	Summary      string   `json:"summary"`
 }
 
 type aroundPrecursorsResponse struct {
@@ -621,6 +648,7 @@ type aroundPrecursorsResponse struct {
 	DownMoves    int                         `json:"downMoves"`
 	Sampled      int                         `json:"sampled"`
 	Patterns     []aroundPrecursorPatternDTO `json:"patterns"`
+	Combos       []aroundPrecursorComboDTO   `json:"combos"`
 	Moves        []aroundMoveHitDTO          `json:"moves"`
 	Summary      string                      `json:"summary"`
 	Note         string                      `json:"note"`

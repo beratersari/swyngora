@@ -61,6 +61,62 @@ func TestSummarizeAroundPrecursors_FindsCommonVolumeAndTakers(t *testing.T) {
 	}
 }
 
+func TestSummarizeAroundPrecursors_ComboLeansUp(t *testing.T) {
+	var moves []AroundMoveHit
+	for i := 0; i < 5; i++ {
+		moves = append(moves, precursorHit(CVDDirUp, AroundPhase{
+			Price: AroundPrice{Direction: CVDDirFlat, ChangePct: 0.05},
+			Flow: AroundFlow{
+				TypicalKnown: true, VolumeRatio: 2.4, VolumeGrade: VolumeSurgeElevated,
+			},
+			Book:    &AroundBook{BidNotionalDelta: -2000, Complete: true},
+			Futures: &AroundFutures{OIDirection: CVDDirUp, OIChangePct: 4, Complete: true},
+		}))
+	}
+	for i := 0; i < 4; i++ {
+		moves = append(moves, precursorHit(CVDDirDown, AroundPhase{
+			Price:   AroundPrice{Direction: CVDDirFlat, ChangePct: -0.04},
+			Flow:    AroundFlow{TypicalKnown: true, VolumeRatio: 2.1, VolumeGrade: VolumeSurgeElevated},
+			Book:    &AroundBook{BidNotionalDelta: 500, Complete: true},
+			Futures: &AroundFutures{OIDirection: CVDDirDown, OIChangePct: -2, Complete: true},
+		}))
+	}
+	got := SummarizeAroundPrecursors(moves)
+	if len(got.Combos) == 0 {
+		t.Fatal("expected combos")
+	}
+	var trio *AroundPrecursorCombo
+	for i := range got.Combos {
+		c := &got.Combos[i]
+		if hasAllMetrics(c.Metrics, "volume_elevated", "oi_up", "bid_pulled") {
+			trio = c
+			break
+		}
+	}
+	if trio == nil {
+		t.Fatalf("missing volume+oi+bid combo %+v", got.Combos)
+	}
+	if trio.Lean != CVDDirUp || !trio.Common || trio.UpHits != 5 {
+		t.Fatalf("combo %+v", trio)
+	}
+	if got.Summary == "" {
+		t.Fatal("summary")
+	}
+}
+
+func hasAllMetrics(in []string, want ...string) bool {
+	have := map[string]bool{}
+	for _, m := range in {
+		have[m] = true
+	}
+	for _, w := range want {
+		if !have[w] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestSummarizeAroundPrecursors_NeedsSamples(t *testing.T) {
 	got := SummarizeAroundPrecursors([]AroundMoveHit{
 		{AroundMove: AroundMove{Direction: CVDDirUp}},

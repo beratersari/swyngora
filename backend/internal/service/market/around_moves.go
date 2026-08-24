@@ -105,7 +105,7 @@ func (s *Service) FindAroundMoves(ctx context.Context, exchange, symbol, lookbac
 	return out, nil
 }
 
-const aroundPrecursorsDisclaimer = "Scans historical candles for strong up and down legs, then compares the tape in the window before each move (volume vs typical, takers, price, OI, book, sweeps). Patterns marked common showed up in at least 60% of those before-windows with 3 or more samples. Informational only — not financial advice."
+const aroundPrecursorsDisclaimer = "Scans historical candles for strong up and down legs, then compares the tape in the window before each move. Singles are one condition at a time. Combos are conditions that fired together in the same before-window (volume + book + OI, etc.) and say whether that group shows up more before increases or drops. Common means at least 60% of those before-windows with 3 or more samples. Informational only — not financial advice."
 
 // GetAroundPrecursors finds important moves and what often changed before them.
 func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (*domain.AroundPrecursorReport, error) {

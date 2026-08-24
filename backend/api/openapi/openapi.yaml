@@ -1651,7 +1651,9 @@ paths:
         Scans historical candles for strong **up and down** legs, then
         compares the market tape in the window **before** each move
         (volume vs typical, takers, price, OI, book, sweeps). Returns
-        the conditions that show up **often**. `common` means at least
+        singles and **combos** — conditions that fired **together** in
+        the same before-window. Combos report how often they showed up
+        before increases vs drops (`lean`). `common` means at least
         **60%** of those before-windows with **3+** samples. Default
         lookback **7d**. Informational only.
       operationId: findMarketAroundPrecursors

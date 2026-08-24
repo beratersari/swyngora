@@ -3042,10 +3042,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="find_around_precursors",
             description=(
                 "Scan a coin's candles for important up and down moves, "
-                "compare the market tape before those moves, and list "
-                "conditions that show up often (elevated volume, takers, "
-                "quiet price, OI, book, sweeps). Common means 60%+ of "
-                "before-windows with 3+ samples. Default lookback 7d."
+                "compare the tape before those moves, and list conditions "
+                "that show up often — singles and combos that fire together "
+                "(volume + book + OI). Combos say whether the group is more "
+                "common before increases or drops. Default lookback 7d."
             ),
             args_schema=AroundMovesInput,
         ),

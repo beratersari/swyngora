@@ -84,7 +84,12 @@ each move and lists conditions that show up often:
 - a sweep or absorption in the before-window
 
 `common` is **60%+** of those before-windows with **at least 3**
-samples. Default lookback **7d** (more history than `/moves`). MCP:
+samples. Default lookback **7d** (more history than `/moves`).
+
+`combos` groups conditions that fired **together** in the same
+before-window (for example elevated volume + bid pulled + OI rising).
+Each combo reports how often it showed up before **increases** vs
+**drops** (`lean`: `up` / `down` / `both`). MCP:
 `find_around_precursors`.
 
 ## Where the code lives

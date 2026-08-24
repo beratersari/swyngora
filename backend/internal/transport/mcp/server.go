@@ -744,7 +744,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_precursors",
-		mcp.WithDescription("Scan a coin's candles for important up and down moves, compare the market tape before those moves, and list the conditions that show up often (elevated volume, taker side, quiet price, OI, book, sweeps). Common means at least 60% of before-windows with 3+ samples. Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Scan a coin's candles for important up and down moves, compare the tape before those moves, and list conditions that show up often — singles and combos that fire together (volume + book + OI, etc.). Combos say whether the group is more common before increases or drops. Common means 60%+ of before-windows with 3+ samples. Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),

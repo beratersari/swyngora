@@ -56,7 +56,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around` | What happened around a time (before / during / after): price, volume, VWAP, vs typical, POC, sweeps, stored book/futures |
 | `GET` | `/api/v1/market/around/compare` | How two times / moves of the same coin differed (price, volume, book, OI, sweeps) |
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
-| `GET` | `/api/v1/market/around/precursors` | What often changed in the tape before those important moves |
+| `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
