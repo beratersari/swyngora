@@ -24,6 +24,8 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "get_volume_profile",
         "get_absorption",
         "get_liquidity_sweeps",
+        "get_volume_surge",
+        "scan_volume_surges",
     }
 )
 

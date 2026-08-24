@@ -582,6 +582,50 @@ func TestGetLiquiditySweeps_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetVolumeSurge_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-surge?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeSurge(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volumeSurgeResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetVolumeSurge_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-surge", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeSurge(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestScanVolumeSurges_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-surge/scan", nil)
+	rr := httptest.NewRecorder()
+	h.ScanVolumeSurges(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volumeSurgeScanResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Quote != "USDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetIcebergs_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", nil)

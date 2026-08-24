@@ -65,6 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Volume surge:** latest 5m / 15m / 1h quote volume versus that coin's own typical (median), with buy/sell split; scan ranks coins well above typical (`GET /api/v1/market/volume-surge`, `.../scan`, MCP `get_volume_surge` / `scan_volume_surges`) (`docs/features/volume-surge.md`)
 - **Liquidity sweeps:** poke through a prior high or low that had already turned price, then a return; level, excursion, time to reclaim, and volume (`GET /api/v1/market/liquidity-sweeps`, MCP `get_liquidity_sweeps`) (`docs/features/liquidity-sweeps.md`)
 - **Absorption:** large market buys or sells versus how far price actually moved; which side is absorbing (`bid` / `ask`) and how strong (0–100); 15m / 1h / 4h / 24h plus the current run (`GET /api/v1/market/absorption`, MCP `get_absorption`) (`docs/features/absorption.md`)
 - **Volume profile:** traded quote volume by price over a chosen range — total plus buy/sell, point of control, and the 70% value area — for Binance, Bybit, and combined (`GET /api/v1/market/volume-profile`, MCP `get_volume_profile`) (`docs/features/volume-profile.md`)

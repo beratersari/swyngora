@@ -421,6 +421,22 @@ class TakerFlowInput(BaseModel):
     )
 
 
+class VolumeSurgeScanInput(BaseModel):
+    exchange: str = Field(
+        default="binance",
+        description="binance|bybit|all (default binance)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    min_ratio: float = Field(
+        default=0,
+        description="Minimum current/typical to include (default 2)",
+    )
+    limit: int = Field(
+        default=0,
+        description="How many top-volume coins to scan (default 30, max 50)",
+    )
+
+
 class VolumeProfileInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1281,6 +1297,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/liquidity-sweeps",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_volume_surge(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/volume-surge",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def scan_volume_surges(
+        exchange: str = "binance",
+        quote: str = "USDT",
+        min_ratio: float = 0,
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if min_ratio:
+            params["minRatio"] = min_ratio
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/volume-surge/scan", params)
 
     def get_volume_profile(
         symbol: str,
@@ -2715,6 +2750,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_volume_surge,
+            name="get_volume_surge",
+            description=(
+                "How much higher this coin's volume is than its own typical "
+                "over 5 minutes, 15 minutes, and 1 hour. Buy and sell are "
+                "separate when available so you can see if the spike is "
+                "one-sided."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            scan_volume_surges,
+            name="scan_volume_surges",
+            description=(
+                "Which coins have much more volume than their own typical "
+                "right now. Scans top 24h-volume pairs and ranks by "
+                "5m/15m/1h current-vs-median. min_ratio default 2."
+            ),
+            args_schema=VolumeSurgeScanInput,
         ),
         StructuredTool.from_function(
             get_liquidity_sweeps,

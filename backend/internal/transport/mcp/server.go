@@ -48,6 +48,8 @@ type DataPort interface {
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanVolumeSurges(ctx context.Context, exchange, quote string, minRatio float64, limit int) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
@@ -621,6 +623,37 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_volume_surge",
+		mcp.WithDescription("How much higher this coin's volume is than its own typical volume over 5 minutes, 15 minutes, and 1 hour. Typical is the median of the prior ~24 hours. Buy and sell are separate when the venue publishes taker-buy (Binance), so you can see if the spike is one-sided. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVolumeSurge(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_volume_surges",
+		mcp.WithDescription("Which coins have much more volume than their own typical right now. Scans top 24h-volume USDT pairs and ranks by 5m/15m/1h current-vs-median. Buy/sell split when available. minRatio default 2 (2x typical). Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default binance)")),
+		mcp.WithString("quote", mcp.Description("Quote asset (default USDT)")),
+		mcp.WithNumber("minRatio", mcp.Description("Minimum current/typical to include (default 2)")),
+		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan (default 30, max 50)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ex := req.GetString("exchange", "binance")
+		raw, err := api.ScanVolumeSurges(ctx, ex, req.GetString("quote", "USDT"), req.GetFloat("minRatio", 0), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

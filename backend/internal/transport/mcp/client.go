@@ -340,6 +340,34 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.R
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
+// GetVolumeSurge returns current vs typical volume (5m / 15m / 1h, buy/sell).
+func (c *APIClient) GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/volume-surge", q)
+}
+
+// ScanVolumeSurges ranks coins by how far above typical their volume is.
+func (c *APIClient) ScanVolumeSurges(ctx context.Context, exchange, quote string, minRatio float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if minRatio > 0 {
+		q.Set("minRatio", strconv.FormatFloat(minRatio, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/volume-surge/scan", q)
+}
+
 // GetLiquiditySweeps returns pokes through a prior high/low that came back.
 func (c *APIClient) GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

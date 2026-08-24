@@ -1345,6 +1345,73 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/volume-surge:
+    get:
+      summary: Volume versus typical (5m / 15m / 1h)
+      description: |
+        How much **higher** this coin's quote volume is than **its own
+        typical** (median of the prior ~24 hours) over **5 minutes**,
+        **15 minutes**, and **1 hour**. Buy and sell are split when the
+        venue publishes taker-buy (Binance klines; Bybit is total-only)
+        so a spike can be one-sided. `ratio` is current / typical.
+        `grade` is typical / elevated / high / extreme. Informational only.
+      operationId: getMarketVolumeSurge
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue current vs typical volume
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/volume-surge/scan:
+    get:
+      summary: Coins with much more volume than typical
+      description: |
+        Scans top 24h-volume pairs and ranks those whose latest 5m / 15m
+        / 1h volume is at least `minRatio` times their own typical
+        (default 2x). Use this to see **which coins** are running hot.
+        Default venue is Binance (buy/sell split). Informational only.
+      operationId: scanMarketVolumeSurges
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default binance)
+          schema: { type: string, default: binance }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: minRatio
+          in: query
+          description: Minimum current/typical (default 2)
+          schema: { type: number, default: 2 }
+        - name: limit
+          in: query
+          description: How many top-volume coins to scan (default 30, max 50)
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Ranked volume-surge hits
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/liquidity-sweeps:
     get:
       summary: Liquidity sweeps (poke through a prior high or low)

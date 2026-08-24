@@ -30,6 +30,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined; `window` or `startTime`/`endTime` |
 | `get_absorption` | Large market buys/sells vs little price move; absorbing side + strength (15m/1h/4h/24h + current run) |
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |
+| `get_volume_surge` | Current 5m/15m/1h volume vs that coin's typical (median); buy/sell split |
+| `scan_volume_surges` | Rank coins whose volume is much higher than typical |
 | `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |

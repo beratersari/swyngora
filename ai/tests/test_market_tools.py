@@ -109,6 +109,19 @@ class _Transport(httpx.BaseTransport):
             )
         if request.url.path.endswith("/exchanges"):
             return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
+        if request.url.path.endswith("/volume-surge/scan"):
+            return httpx.Response(
+                200,
+                json={"hits": [{"symbol": "HOTUSDT", "maxRatio": "5", "hottest": "5m"}]},
+            )
+        if request.url.path.endswith("/volume-surge"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "venues": [{"hottest": "5m", "maxRatio": "5", "windows": [{"window": "5m", "ratio": "5"}]}],
+                },
+            )
         if request.url.path.endswith("/liquidity-sweeps"):
             return httpx.Response(
                 200,
@@ -196,6 +209,13 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))
     assert lsr["venues"][0]["current"]["bias"] == "long"
+
+    assert "get_volume_surge" in by_name
+    surge = json.loads(by_name["get_volume_surge"].invoke({"symbol": "BTCUSDT"}))
+    assert surge["venues"][0]["maxRatio"] == "5"
+    assert "scan_volume_surges" in by_name
+    hot = json.loads(by_name["scan_volume_surges"].invoke({"exchange": "binance"}))
+    assert hot["hits"][0]["symbol"] == "HOTUSDT"
 
     assert "get_liquidity_sweeps" in by_name
     sweeps = json.loads(by_name["get_liquidity_sweeps"].invoke({"symbol": "BTCUSDT"}))

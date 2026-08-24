@@ -123,6 +123,8 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("POST /api/v1/market/indicators/batch", mh.PostIndicatorsBatch)
 	mux.HandleFunc("GET /api/v1/market/pumps", mh.GetPumpEvents)
 	mux.HandleFunc("GET /api/v1/market/pumps/scan", mh.ScanPumpEvents)
+	mux.HandleFunc("GET /api/v1/market/volume-surge/scan", mh.ScanVolumeSurges)
+	mux.HandleFunc("GET /api/v1/market/volume-surge", mh.GetVolumeSurge)
 	if opts.Swing != nil {
 		sh := handler.NewSwingHandler(opts.Swing)
 		mux.HandleFunc("GET /api/v1/market/swing", sh.Analyze)
