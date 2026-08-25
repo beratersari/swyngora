@@ -200,6 +200,35 @@ func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	}
 }
 
+func TestAPIClient_QuotePriceDiff(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/price-diff/quote" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		if q.Get("symbol") != "BTCUSDT" || q.Get("buyExchange") != "binance" || q.Get("notional") != "10000" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "averageBuyPrice": "100", "averageSellPrice": "101", "profitAfterFees": "8",
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.QuotePriceDiff(context.Background(), "BTCUSDT", "binance", "bybit", 10000, 0, 0.1, 0.1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["profitAfterFees"] != "8" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_EstimateOrderBookImpact(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/impact" {

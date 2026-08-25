@@ -4936,6 +4936,94 @@ paths:
                 $ref: '#/components/schemas/PriceDiffOpportunity'
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/price-diff/opportunities/{id}/quote:
+    get:
+      summary: Quote an executable size for a stored opportunity
+      description: |
+        Walks the live buy-venue asks and sell-venue bids for a size using the
+        watch fees. Returns average fill prices, slippage versus top of book,
+        profit after fees, and the largest size that still has a positive
+        after-fee edge. `notional` is quote currency spent on the buy book
+        before the buy fee (e.g. 10000 USDT). Provide `notional` or `quantity`,
+        not both. Simulated depth walk — not a fill or financial advice.
+      operationId: quotePriceDiffOpportunity
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: notional
+          in: query
+          schema: { type: number, exclusiveMinimum: 0 }
+          description: Quote currency to spend on the buy book before the buy fee
+        - name: quantity
+          in: query
+          schema: { type: number, exclusiveMinimum: 0 }
+          description: Base size to buy and sell (use instead of notional)
+      responses:
+        '200':
+          description: Executable quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffQuote'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/quote:
+    get:
+      summary: Quote a buy-on-A / sell-on-B size from live books
+      description: |
+        Same walk as the opportunity quote, without a stored opportunity.
+        Provide `notional` or `quantity`, not both. Informational only.
+      operationId: quotePriceDiff
+      tags: [PriceDiff]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: buyExchange
+          in: query
+          required: true
+          schema: { type: string, enum: [binance, coinbase, bybit] }
+        - name: sellExchange
+          in: query
+          required: true
+          schema: { type: string, enum: [binance, coinbase, bybit] }
+        - name: notional
+          in: query
+          schema: { type: number, exclusiveMinimum: 0, example: 10000 }
+        - name: quantity
+          in: query
+          schema: { type: number, exclusiveMinimum: 0 }
+        - name: feeBuyPct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.1 }
+        - name: feeSellPct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.1 }
+        - name: minNetDiffPct
+          in: query
+          schema: { type: number, minimum: 0 }
+          description: Optional threshold used only to set meetsMinNet
+      responses:
+        '200':
+          description: Executable quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffQuote'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/scanner/rules:
     post:
       summary: Create a technical scanner rule
@@ -7025,6 +7113,64 @@ components:
         openedAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time }
         closedAt: { type: string, format: date-time, nullable: true }
+    PriceDiffQuote:
+      type: object
+      description: Simulated two-venue market buy/sell from live spot books
+      properties:
+        symbol: { type: string }
+        buyExchange: { type: string, enum: [binance, coinbase, bybit] }
+        sellExchange: { type: string, enum: [binance, coinbase, bybit] }
+        requestedNotional: { type: string }
+        requestedQuantity: { type: string }
+        filledQuantity: { type: string }
+        filledRequested: { type: boolean }
+        averageBuyPrice: { type: string }
+        averageSellPrice: { type: string }
+        bestAsk: { type: string }
+        bestBid: { type: string }
+        buySlippagePct: { type: number, description: Adverse vs best ask }
+        sellSlippagePct: { type: number, description: Adverse vs best bid }
+        slippagePct: { type: number, description: buySlippagePct + sellSlippagePct }
+        buyNotional: { type: string }
+        sellNotional: { type: string }
+        buyFeePct: { type: number }
+        sellFeePct: { type: number }
+        buyFee: { type: string }
+        sellFee: { type: string }
+        costAfterFees: { type: string }
+        proceedsAfterFees: { type: string }
+        profitAfterFees: { type: string }
+        profitPct: { type: number }
+        grossProfit: { type: string }
+        grossPct: { type: number }
+        buyExhausted: { type: boolean }
+        sellExhausted: { type: boolean }
+        profitable: { type: boolean }
+        executable:
+          type: boolean
+          description: Full requested size filled on both books and profit after fees > 0
+        meetsMinNet: { type: boolean }
+        minNetDiffPct: { type: number }
+        live: { type: boolean }
+        buyLive: { type: boolean }
+        sellLive: { type: boolean }
+        asOf: { type: string, format: date-time }
+        visibleBuyQuantity: { type: string }
+        visibleBuyNotional: { type: string }
+        visibleSellQuantity: { type: string }
+        visibleSellNotional: { type: string }
+        maxQuantity:
+          type: string
+          description: Largest size where every increment still adds after-fee profit
+        maxNotional: { type: string, description: Buy-book spend at maxQuantity }
+        maxAverageBuyPrice: { type: string }
+        maxAverageSellPrice: { type: string }
+        maxProfitAfterFees: { type: string }
+        maxProfitPct: { type: number }
+        maxLimitedBy:
+          type: string
+          enum: [profit, buy_book, sell_book, both_books, empty_book]
+        note: { type: string }
     Watchlist:
       type: object
       properties:

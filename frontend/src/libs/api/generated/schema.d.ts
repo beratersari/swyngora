@@ -2200,6 +2200,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/price-diff/opportunities/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quote an executable size for a stored opportunity
+         * @description Walks the live buy-venue asks and sell-venue bids for a size using the
+         *     watch fees. Returns average fill prices, slippage versus top of book,
+         *     profit after fees, and the largest size that still has a positive
+         *     after-fee edge.
+         */
+        get: operations["quotePriceDiffOpportunity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Quote a buy-on-A / sell-on-B size from live books
+         * @description Same walk as the opportunity quote, without a stored opportunity.
+         *     Provide `notional` or `quantity`, not both. Informational only.
+         */
+        get: operations["quotePriceDiff"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/scanner/rules": {
         parameters: {
             query?: never;
@@ -3862,6 +3906,67 @@ export interface components {
             lastSeenAt?: string;
             /** Format: date-time */
             closedAt?: string | null;
+        };
+        /** Simulated two-venue market buy/sell from live spot books */
+        PriceDiffQuote: {
+            symbol?: string;
+            /** @enum {string} */
+            buyExchange?: "binance" | "coinbase" | "bybit";
+            /** @enum {string} */
+            sellExchange?: "binance" | "coinbase" | "bybit";
+            requestedNotional?: string;
+            requestedQuantity?: string;
+            filledQuantity?: string;
+            filledRequested?: boolean;
+            averageBuyPrice?: string;
+            averageSellPrice?: string;
+            bestAsk?: string;
+            bestBid?: string;
+            /** @description Adverse vs best ask */
+            buySlippagePct?: number;
+            /** @description Adverse vs best bid */
+            sellSlippagePct?: number;
+            /** @description buySlippagePct + sellSlippagePct */
+            slippagePct?: number;
+            buyNotional?: string;
+            sellNotional?: string;
+            buyFeePct?: number;
+            sellFeePct?: number;
+            buyFee?: string;
+            sellFee?: string;
+            costAfterFees?: string;
+            proceedsAfterFees?: string;
+            profitAfterFees?: string;
+            profitPct?: number;
+            grossProfit?: string;
+            grossPct?: number;
+            buyExhausted?: boolean;
+            sellExhausted?: boolean;
+            profitable?: boolean;
+            /** @description Full requested size filled on both books and profit after fees > 0 */
+            executable?: boolean;
+            meetsMinNet?: boolean;
+            minNetDiffPct?: number;
+            live?: boolean;
+            buyLive?: boolean;
+            sellLive?: boolean;
+            /** Format: date-time */
+            asOf?: string;
+            visibleBuyQuantity?: string;
+            visibleBuyNotional?: string;
+            visibleSellQuantity?: string;
+            visibleSellNotional?: string;
+            /** @description Largest size where every increment still adds after-fee profit */
+            maxQuantity?: string;
+            /** @description Buy-book spend at maxQuantity */
+            maxNotional?: string;
+            maxAverageBuyPrice?: string;
+            maxAverageSellPrice?: string;
+            maxProfitAfterFees?: string;
+            maxProfitPct?: number;
+            /** @enum {string} */
+            maxLimitedBy?: "profit" | "buy_book" | "sell_book" | "both_books" | "empty_book";
+            note?: string;
         };
         Watchlist: {
             /** @description List owner id (same as ownerClientId) */
@@ -8125,6 +8230,69 @@ export interface operations {
                 };
             };
             404: components["responses"]["Error"];
+        };
+    };
+    quotePriceDiffOpportunity: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                /** @description Quote currency to spend on the buy book before the buy fee */
+                notional?: number;
+                /** @description Base size to buy and sell (use instead of notional) */
+                quantity?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Executable quote */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffQuote"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    quotePriceDiff: {
+        parameters: {
+            query: {
+                symbol: string;
+                buyExchange: "binance" | "coinbase" | "bybit";
+                sellExchange: "binance" | "coinbase" | "bybit";
+                notional?: number;
+                quantity?: number;
+                feeBuyPct?: number;
+                feeSellPct?: number;
+                /** @description Optional threshold used only to set meetsMinNet */
+                minNetDiffPct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Executable quote */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffQuote"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     listScannerRules: {

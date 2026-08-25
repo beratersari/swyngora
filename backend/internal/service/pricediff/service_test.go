@@ -253,6 +253,142 @@ func TestSkipStaleOrMissingPrice(t *testing.T) {
 	}
 }
 
+type fakeBooks struct {
+	data map[string]*domain.RawOrderBook
+	err  map[string]error
+}
+
+func (f *fakeBooks) GetRawOrderBook(_ context.Context, exchange, symbol string) (*domain.RawOrderBook, error) {
+	k := exchange + "|" + symbol
+	if f.err != nil {
+		if e, ok := f.err[k]; ok {
+			return nil, e
+		}
+	}
+	if f.data == nil {
+		return nil, domain.ErrNotFound
+	}
+	b, ok := f.data[k]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	return b, nil
+}
+
+func quoteBooks() (buy, sell *domain.RawOrderBook) {
+	buy = &domain.RawOrderBook{
+		Symbol: "BTCUSDT", Live: true,
+		Asks: []domain.PriceLevel{{Price: 100, Quantity: 1}, {Price: 101, Quantity: 1}},
+	}
+	sell = &domain.RawOrderBook{
+		Symbol: "BTC-USD", Live: true,
+		Bids: []domain.PriceLevel{{Price: 103, Quantity: 1}, {Price: 102, Quantity: 1}},
+	}
+	return buy, sell
+}
+
+func TestQuote_WalksBothBooks(t *testing.T) {
+	buy, sell := quoteBooks()
+	svc := newSvc(t, &fakeTicker{})
+	svc.WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT":  buy,
+		"coinbase|BTC-USD": sell,
+	}})
+	got, err := svc.Quote(context.Background(), QuoteInput{
+		Symbol: "btcusdt", BuyExchange: "binance", SellExchange: "coinbase",
+		BuyFeePct: 0.1, SellFeePct: 0.1, Notional: 100,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AverageBuyPrice != "100" || got.AverageSellPrice != "103" || !got.Executable {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestQuote_MissingBooksStillQuotes(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{}})
+	got, err := svc.Quote(context.Background(), QuoteInput{
+		Symbol: "BTCUSDT", BuyExchange: "binance", SellExchange: "bybit", Notional: 10000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Executable || got.Profitable {
+		t.Fatalf("empty books should not be executable: %+v", got)
+	}
+	if got.MaxLimitedBy != domain.PriceDiffMaxLimitedByEmpty && got.MaxLimitedBy != domain.PriceDiffMaxLimitedByBuyBook {
+		t.Fatalf("limitedBy=%s", got.MaxLimitedBy)
+	}
+}
+
+func TestQuote_RejectsSameVenue(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{}})
+	_, err := svc.Quote(context.Background(), QuoteInput{
+		Symbol: "BTCUSDT", BuyExchange: "binance", SellExchange: "binance", Notional: 100,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestQuoteOpportunity_UsesWatchFees(t *testing.T) {
+	now := time.Now().UTC()
+	m := &fakeTicker{data: map[string]*domain.Ticker24h{
+		"binance|BTCUSDT":  freshTicker("100", now),
+		"coinbase|BTC-USD": freshTicker("103", now),
+		"bybit|BTCUSDT":    freshTicker("100.2", now),
+	}}
+	svc := newSvc(t, m)
+	buy, sell := quoteBooks()
+	svc.WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT":  buy,
+		"coinbase|BTC-USD": sell,
+	}})
+	ctx := context.Background()
+	if _, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "q1", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	opps, err := svc.ListOpportunities(ctx, "q1", "open", 20, 0)
+	if err != nil || len(opps) == 0 {
+		t.Fatalf("%+v %v", opps, err)
+	}
+	var id string
+	for _, o := range opps {
+		if o.BuyExchange == domain.ExchangeBinance && o.SellExchange == domain.ExchangeCoinbase {
+			id = o.ID
+			break
+		}
+	}
+	if id == "" {
+		t.Fatalf("no binance->coinbase in %+v", opps)
+	}
+	got, err := svc.QuoteOpportunity(ctx, "q1", id, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.BuyFeePct != 0.1 || got.SellFeePct != 0.1 || !got.Profitable {
+		t.Fatalf("%+v", got)
+	}
+	if got.MinNetDiffPct != 0.5 || !got.MeetsMinNet {
+		t.Fatalf("min net %+v", got)
+	}
+}
+
+func TestQuoteOpportunity_NotFound(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{}})
+	_, err := svc.QuoteOpportunity(context.Background(), "q1", "missing", 100, 0)
+	if err == nil {
+		t.Fatal("expected not found")
+	}
+}
+
 func TestOpenPersistsAcrossNewService(t *testing.T) {
 	// Simulates worker restart: same store, new service instance still sees open opp.
 	now := time.Now().UTC()

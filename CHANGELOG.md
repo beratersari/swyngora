@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Delist market cap:** scheduled delist rows missing Binance circulating supply use CoinGecko public markets so the mcap column is not empty (`docs/features/delist-schedule.md`)
 - **Delist announcement date:** amber Delist tags include when the venue published the notice (`announcedAt` from Binance CMS `releaseDate` and Bybit `publishTime`), not only the halt clock (`docs/features/delist-schedule.md`)
 - **Multi-exchange delist tags:** Binance official schedule (plus CMS “Will Delist” titles) and Bybit announcement dates (article HTML when the list feed is empty). Pairs that delist in the next ~31 days **or in the last 30 days** stay on the default Markets list with an amber Delist tag (and are injected if the venue already halted them). Coinbase / Nasdaq / BIST have no public calendar (`docs/features/delist-schedule.md`)
+- **Price-diff executable quote:** walk the buy venue asks and sell venue bids for a size (`notional` USDT or `quantity`) and return average buy/sell, slippage, profit after fees, and the largest still-profitable size (`GET /api/v1/price-diff/quote`, `GET /api/v1/price-diff/opportunities/{id}/quote`, MCP `quote_price_diff` / `quote_price_diff_opportunity`) (`docs/features/price-diff.md`)
 
 ### Fixed
 - **Holders without `cmcUniqueId`:** Binance marketing slugs resolve CoinMarketCap detail (`?slug=`) and a positive `cdpTotalHolder` fills the count when the holder table is empty (`docs/features/holders.md`)

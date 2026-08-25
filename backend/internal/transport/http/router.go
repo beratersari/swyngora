@@ -229,7 +229,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/price-diff/watches", pdh.ListWatches)
 		mux.HandleFunc("GET /api/v1/price-diff/watches/{id}", pdh.GetWatch)
 		mux.HandleFunc("DELETE /api/v1/price-diff/watches/{id}", pdh.DeleteWatch)
+		mux.HandleFunc("GET /api/v1/price-diff/quote", pdh.QuoteRoute)
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities", pdh.ListOpportunities)
+		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}/quote", pdh.QuoteOpportunity)
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}", pdh.GetOpportunity)
 	}
 

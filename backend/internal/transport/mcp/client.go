@@ -1842,6 +1842,43 @@ func (c *APIClient) GetPriceDiffOpportunity(ctx context.Context, clientID, id st
 	return c.get(ctx, "/api/v1/price-diff/opportunities/"+url.PathEscape(id), q)
 }
 
+// QuotePriceDiff walks two live books for a size.
+func (c *APIClient) QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellExchange string, notional, quantity, feeBuyPct, feeSellPct, minNetDiffPct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("buyExchange", buyExchange)
+	q.Set("sellExchange", sellExchange)
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if quantity > 0 {
+		q.Set("quantity", strconv.FormatFloat(quantity, 'f', -1, 64))
+	}
+	if feeBuyPct != 0 {
+		q.Set("feeBuyPct", strconv.FormatFloat(feeBuyPct, 'f', -1, 64))
+	}
+	if feeSellPct != 0 {
+		q.Set("feeSellPct", strconv.FormatFloat(feeSellPct, 'f', -1, 64))
+	}
+	if minNetDiffPct != 0 {
+		q.Set("minNetDiffPct", strconv.FormatFloat(minNetDiffPct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/price-diff/quote", q)
+}
+
+// QuotePriceDiffOpportunity quotes a stored opportunity at a size.
+func (c *APIClient) QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if quantity > 0 {
+		q.Set("quantity", strconv.FormatFloat(quantity, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/price-diff/opportunities/"+url.PathEscape(id)+"/quote", q)
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

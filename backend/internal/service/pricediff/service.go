@@ -2,6 +2,7 @@ package pricediff
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -16,6 +17,23 @@ import (
 // TickerFetcher loads last prices (usually *market.Service).
 type TickerFetcher interface {
 	GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error)
+}
+
+// BookFetcher loads a raw spot book for one venue (usually *market.Service).
+type BookFetcher interface {
+	GetRawOrderBook(ctx context.Context, exchange, symbol string) (*domain.RawOrderBook, error)
+}
+
+// QuoteInput is a standalone two-venue executable quote (no stored opportunity).
+type QuoteInput struct {
+	Symbol        string
+	BuyExchange   string
+	SellExchange  string
+	BuyFeePct     float64
+	SellFeePct    float64
+	Notional      float64
+	Quantity      float64
+	MinNetDiffPct float64
 }
 
 // CreateInput creates a cross-exchange price difference watch.
@@ -37,6 +55,7 @@ type AccountChecker interface {
 type Service struct {
 	store   domain.PriceDiffPort
 	market  TickerFetcher
+	books   BookFetcher
 	account AccountChecker
 	// MaxPriceAge rejects tickers older than this (default 2m).
 	MaxPriceAge time.Duration
@@ -44,11 +63,23 @@ type Service struct {
 
 // New constructs a price-diff service.
 func New(store domain.PriceDiffPort, market TickerFetcher) *Service {
-	return &Service{
+	s := &Service{
 		store:       store,
 		market:      market,
 		MaxPriceAge: domain.DefaultPriceDiffMaxAge,
 	}
+	if b, ok := market.(BookFetcher); ok {
+		s.books = b
+	}
+	return s
+}
+
+// WithBooks attaches a raw-book source for executable quotes.
+func (s *Service) WithBooks(b BookFetcher) *Service {
+	if s != nil {
+		s.books = b
+	}
+	return s
 }
 
 // SetAccountChecker wires account-closed skips for ProcessActiveWatches.
@@ -329,6 +360,113 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		}
 	}
 	return created, closed, touched, nil
+}
+
+// Quote walks live books for a buy/sell venue pair.
+func (s *Service) Quote(ctx context.Context, in QuoteInput) (*domain.PriceDiffQuote, error) {
+	if s == nil || s.books == nil {
+		return nil, fmt.Errorf("%w: order books not configured", domain.ErrUpstream)
+	}
+	buy := domain.ParseExchange(in.BuyExchange)
+	sell := domain.ParseExchange(in.SellExchange)
+	if buy == "" || sell == "" {
+		return nil, fmt.Errorf("%w: buyExchange and sellExchange must be known venues", domain.ErrInvalidArgument)
+	}
+	sym := domain.NormalizeSymbol(domain.ExchangeBinance, in.Symbol)
+	if sym == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	q := domain.PriceDiffQuoteQuery{
+		Symbol:        sym,
+		BuyExchange:   buy,
+		SellExchange:  sell,
+		BuyFeePct:     in.BuyFeePct,
+		SellFeePct:    in.SellFeePct,
+		Notional:      in.Notional,
+		Quantity:      in.Quantity,
+		MinNetDiffPct: in.MinNetDiffPct,
+	}
+	if err := domain.ValidatePriceDiffQuoteRoute(buy, sell, in.BuyFeePct, in.SellFeePct); err != nil {
+		return nil, err
+	}
+	if err := domain.ValidatePriceDiffQuoteSize(in.Notional, in.Quantity); err != nil {
+		return nil, err
+	}
+	buyBook, sellBook, err := s.fetchQuoteBooks(ctx, buy, sell, sym)
+	if err != nil {
+		return nil, err
+	}
+	return domain.QuotePriceDiffRoute(q, buyBook, sellBook)
+}
+
+// QuoteOpportunity loads a stored opportunity (and its watch fees) and quotes a size.
+func (s *Service) QuoteOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (*domain.PriceDiffQuote, error) {
+	opp, err := s.GetOpportunity(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	watch, err := s.store.GetWatch(ctx, clientID, opp.WatchID)
+	if err != nil {
+		return nil, err
+	}
+	quote, err := s.Quote(ctx, QuoteInput{
+		Symbol:        opp.Symbol,
+		BuyExchange:   string(opp.BuyExchange),
+		SellExchange:  string(opp.SellExchange),
+		BuyFeePct:     watch.FeePctFor(opp.BuyExchange),
+		SellFeePct:    watch.FeePctFor(opp.SellExchange),
+		Notional:      notional,
+		Quantity:      quantity,
+		MinNetDiffPct: watch.MinNetDiffPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return quote, nil
+}
+
+func (s *Service) fetchQuoteBooks(ctx context.Context, buy, sell domain.Exchange, symbol string) (*domain.RawOrderBook, *domain.RawOrderBook, error) {
+	type result struct {
+		book *domain.RawOrderBook
+		err  error
+	}
+	buyCh := make(chan result, 1)
+	sellCh := make(chan result, 1)
+	go func() {
+		b, err := s.books.GetRawOrderBook(ctx, string(buy), domain.PriceDiffSymbolForExchange(buy, symbol))
+		buyCh <- result{book: b, err: err}
+	}()
+	go func() {
+		b, err := s.books.GetRawOrderBook(ctx, string(sell), domain.PriceDiffSymbolForExchange(sell, symbol))
+		sellCh <- result{book: b, err: err}
+	}()
+	br := <-buyCh
+	sr := <-sellCh
+	buyBook, err := bookOrEmpty(br.book, br.err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: buy book %s: %v", domain.ErrUpstream, buy, err)
+	}
+	sellBook, err := bookOrEmpty(sr.book, sr.err)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: sell book %s: %v", domain.ErrUpstream, sell, err)
+	}
+	return buyBook, sellBook, nil
+}
+
+func bookOrEmpty(book *domain.RawOrderBook, err error) (*domain.RawOrderBook, error) {
+	if err == nil && book != nil {
+		return book, nil
+	}
+	if err != nil && errors.Is(err, domain.ErrNotFound) {
+		if book != nil {
+			return book, nil
+		}
+		return &domain.RawOrderBook{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &domain.RawOrderBook{}, nil
 }
 
 func routeKey(buy, sell domain.Exchange) string {

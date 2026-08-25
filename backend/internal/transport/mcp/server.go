@@ -179,6 +179,8 @@ type DataPort interface {
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellExchange string, notional, quantity, feeBuyPct, feeSellPct, minNetDiffPct float64) (json.RawMessage, error)
+	QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error)
 	AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
@@ -3416,6 +3418,60 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPriceDiffOpportunity(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("quote_price_diff",
+		mcp.WithDescription("Walk live spot books on two venues for a size (notional USDT or quantity). Returns average buy/sell, slippage, profit after fees, and the largest still-profitable size. Provide notional or quantity, not both. Informational only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("buyExchange", mcp.Required(), mcp.Description("Venue to buy on: binance | coinbase | bybit")),
+		mcp.WithString("sellExchange", mcp.Required(), mcp.Description("Venue to sell on: binance | coinbase | bybit")),
+		mcp.WithNumber("notional", mcp.Description("Quote currency to spend on the buy book before the buy fee e.g. 10000")),
+		mcp.WithNumber("quantity", mcp.Description("Base size to buy and sell (use instead of notional)")),
+		mcp.WithNumber("feeBuyPct", mcp.Description("Buy venue taker fee % e.g. 0.1")),
+		mcp.WithNumber("feeSellPct", mcp.Description("Sell venue taker fee % e.g. 0.1")),
+		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional threshold to flag meetsMinNet")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		buyEx, err := req.RequireString("buyExchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		sellEx, err := req.RequireString("sellExchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.QuotePriceDiff(ctx, symbol, buyEx, sellEx,
+			req.GetFloat("notional", 0), req.GetFloat("quantity", 0),
+			req.GetFloat("feeBuyPct", 0), req.GetFloat("feeSellPct", 0), req.GetFloat("minNetDiffPct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("quote_price_diff_opportunity",
+		mcp.WithDescription("Quote a stored price-diff opportunity at a size using that watch's fees and the live books. Provide notional (USDT on the buy book) or quantity. Informational only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("opportunityId", mcp.Required(), mcp.Description("Opportunity id")),
+		mcp.WithNumber("notional", mcp.Description("Quote currency to spend on the buy book before the buy fee e.g. 10000")),
+		mcp.WithNumber("quantity", mcp.Description("Base size to buy and sell (use instead of notional)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("opportunityId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.QuotePriceDiffOpportunity(ctx, clientID, id, req.GetFloat("notional", 0), req.GetFloat("quantity", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

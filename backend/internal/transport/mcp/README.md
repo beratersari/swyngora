@@ -141,6 +141,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `delete_price_diff_watch` | Delete watch and opportunities |
 | `list_price_diff_opportunities` | List open/closed opportunities |
 | `get_price_diff_opportunity` | Get one opportunity |
+| `quote_price_diff` | Walk two live spot books for a size: avg buy/sell, slippage, profit after fees, max profitable size |
+| `quote_price_diff_opportunity` | Same quote for a stored opportunity (uses that watch's fees) |
 | `create_scanner_rule` | Create RSI / MA / volume watchlist scanner rule |
 | `list_scanner_rules` | List scanner rules |
 | `delete_scanner_rule` | Delete scanner rule |

@@ -1695,6 +1695,25 @@ func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetRawOrderBook(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{},
+		domain.ExchangeCoinbase: &fakeMarket{},
+	}, &fakeSupply{})
+	got, err := svc.GetRawOrderBook(context.Background(), "binance", "btcusdt")
+	if err != nil || got == nil || len(got.Asks) == 0 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	cb, err := svc.GetRawOrderBook(context.Background(), "coinbase", "BTCUSDT")
+	if err != nil || cb == nil {
+		t.Fatalf("%v", err)
+	}
+	_, err = svc.GetRawOrderBook(context.Background(), "binance", "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestEstimateOrderBookImpact_Buy(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

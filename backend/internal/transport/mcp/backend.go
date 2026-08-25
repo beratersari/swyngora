@@ -3501,6 +3501,32 @@ func (b *Backend) GetPriceDiffOpportunity(ctx context.Context, clientID, id stri
 	return mustJSON(priceDiffOppMap(o))
 }
 
+func (b *Backend) QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellExchange string, notional, quantity, feeBuyPct, feeSellPct, minNetDiffPct float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	q, err := b.PriceDiff.Quote(ctx, pricediff.QuoteInput{
+		Symbol: symbol, BuyExchange: buyExchange, SellExchange: sellExchange,
+		BuyFeePct: feeBuyPct, SellFeePct: feeSellPct, Notional: notional, Quantity: quantity,
+		MinNetDiffPct: minNetDiffPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffQuoteMap(q))
+}
+
+func (b *Backend) QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	q, err := b.PriceDiff.QuoteOpportunity(ctx, clientID, id, notional, quantity)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffQuoteMap(q))
+}
+
 func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
 	return map[string]any{
 		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
@@ -3510,6 +3536,56 @@ func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+func priceDiffQuoteMap(q *domain.PriceDiffQuote) map[string]any {
+	if q == nil {
+		return map[string]any{}
+	}
+	m := map[string]any{
+		"symbol": q.Symbol, "buyExchange": string(q.BuyExchange), "sellExchange": string(q.SellExchange),
+		"filledQuantity": q.FilledQuantity, "filledRequested": q.FilledRequested,
+		"averageBuyPrice": q.AverageBuyPrice, "averageSellPrice": q.AverageSellPrice,
+		"buySlippagePct": q.BuySlippagePct, "sellSlippagePct": q.SellSlippagePct, "slippagePct": q.SlippagePct,
+		"buyNotional": q.BuyNotional, "sellNotional": q.SellNotional,
+		"buyFeePct": q.BuyFeePct, "sellFeePct": q.SellFeePct, "buyFee": q.BuyFee, "sellFee": q.SellFee,
+		"costAfterFees": q.CostAfterFees, "proceedsAfterFees": q.ProceedsAfterFees,
+		"profitAfterFees": q.ProfitAfterFees, "profitPct": q.ProfitPct,
+		"grossProfit": q.GrossProfit, "grossPct": q.GrossPct,
+		"buyExhausted": q.BuyExhausted, "sellExhausted": q.SellExhausted,
+		"profitable": q.Profitable, "executable": q.Executable, "meetsMinNet": q.MeetsMinNet,
+		"live": q.Live, "buyLive": q.BuyLive, "sellLive": q.SellLive,
+		"visibleBuyQuantity": q.VisibleBuyQty, "visibleBuyNotional": q.VisibleBuyNotional,
+		"visibleSellQuantity": q.VisibleSellQty, "visibleSellNotional": q.VisibleSellNotional,
+		"maxLimitedBy": q.MaxLimitedBy, "note": q.Note,
+	}
+	if q.RequestedNotional != "" {
+		m["requestedNotional"] = q.RequestedNotional
+	}
+	if q.RequestedQuantity != "" {
+		m["requestedQuantity"] = q.RequestedQuantity
+	}
+	if q.BestAsk != "" {
+		m["bestAsk"] = q.BestAsk
+	}
+	if q.BestBid != "" {
+		m["bestBid"] = q.BestBid
+	}
+	if q.MinNetDiffPct != 0 {
+		m["minNetDiffPct"] = q.MinNetDiffPct
+	}
+	if !q.AsOf.IsZero() {
+		m["asOf"] = q.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	if q.MaxQuantity != "" {
+		m["maxQuantity"] = q.MaxQuantity
+		m["maxNotional"] = q.MaxNotional
+		m["maxAverageBuyPrice"] = q.MaxAverageBuyPrice
+		m["maxAverageSellPrice"] = q.MaxAverageSellPrice
+		m["maxProfitAfterFees"] = q.MaxProfitAfterFees
+		m["maxProfitPct"] = q.MaxProfitPct
+	}
+	return m
 }
 
 func priceDiffOppMap(o *domain.PriceDiffOpportunity) map[string]any {

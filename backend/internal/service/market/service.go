@@ -488,6 +488,31 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 	return &book, nil
 }
 
+// GetRawOrderBook returns the ungrouped live (or REST) spot book for one venue.
+func (s *Service) GetRawOrderBook(ctx context.Context, exchange, symbol string) (*domain.RawOrderBook, error) {
+	ex, err := s.ResolveExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	pair := domain.PriceDiffSymbolForExchange(ex, symbol)
+	if pair == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	p, err := s.port(ex)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: pair, Limit: domain.MaxOrderBookRawLimit})
+	if err != nil {
+		return nil, err
+	}
+	if raw == nil || (len(raw.Bids) == 0 && len(raw.Asks) == 0) {
+		return nil, fmt.Errorf("%w: empty order book", domain.ErrNotFound)
+	}
+	s.noteBook(ex, pair)
+	return raw, nil
+}
+
 // GetOrderBookHeatmap returns recent resting bid/ask size over time.
 // It also samples the live book so the first column exists and the tape keeps filling.
 func (s *Service) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (*domain.OrderBookHeatmap, error) {

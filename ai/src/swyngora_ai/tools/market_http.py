@@ -1216,6 +1216,24 @@ class PriceDiffOppIdInput(BaseModel):
     opportunity_id: str
 
 
+class PriceDiffQuoteInput(BaseModel):
+    symbol: str
+    buy_exchange: str
+    sell_exchange: str
+    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
+    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    fee_buy_pct: float = Field(default=0, ge=0, description="Buy venue taker fee %")
+    fee_sell_pct: float = Field(default=0, ge=0, description="Sell venue taker fee %")
+    min_net_diff_pct: float = Field(default=0, ge=0, description="Optional threshold for meetsMinNet")
+
+
+class PriceDiffOppQuoteInput(BaseModel):
+    client_id: str
+    opportunity_id: str
+    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
+    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+
+
 class ScannerRuleCreateInput(BaseModel):
     client_id: str
     rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
@@ -2722,6 +2740,47 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id},
         )
 
+    def quote_price_diff(
+        symbol: str,
+        buy_exchange: str,
+        sell_exchange: str,
+        notional: float | None = None,
+        quantity: float | None = None,
+        fee_buy_pct: float = 0,
+        fee_sell_pct: float = 0,
+        min_net_diff_pct: float = 0,
+    ) -> str:
+        params: dict[str, str] = {
+            "symbol": symbol,
+            "buyExchange": buy_exchange,
+            "sellExchange": sell_exchange,
+            "feeBuyPct": str(fee_buy_pct),
+            "feeSellPct": str(fee_sell_pct),
+        }
+        if min_net_diff_pct:
+            params["minNetDiffPct"] = str(min_net_diff_pct)
+        if notional is not None:
+            params["notional"] = str(notional)
+        if quantity is not None:
+            params["quantity"] = str(quantity)
+        return http.get("/api/v1/price-diff/quote", params)
+
+    def quote_price_diff_opportunity(
+        client_id: str,
+        opportunity_id: str,
+        notional: float | None = None,
+        quantity: float | None = None,
+    ) -> str:
+        params: dict[str, str] = {"clientId": client_id}
+        if notional is not None:
+            params["notional"] = str(notional)
+        if quantity is not None:
+            params["quantity"] = str(quantity)
+        return http.get(
+            f"/api/v1/price-diff/opportunities/{opportunity_id}/quote",
+            params,
+        )
+
     def create_scanner_rule(
         client_id: str,
         rule_type: str,
@@ -3912,6 +3971,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_price_diff_opportunity",
             description="Get one price-diff opportunity by id.",
             args_schema=PriceDiffOppIdInput,
+        ),
+        StructuredTool.from_function(
+            quote_price_diff,
+            name="quote_price_diff",
+            description=(
+                "Walk live spot books on two venues for a size (notional USDT or quantity). "
+                "Returns average buy/sell, slippage, profit after fees, and max still-profitable size. "
+                "Provide notional or quantity, not both. Informational only."
+            ),
+            args_schema=PriceDiffQuoteInput,
+        ),
+        StructuredTool.from_function(
+            quote_price_diff_opportunity,
+            name="quote_price_diff_opportunity",
+            description=(
+                "Quote a stored price-diff opportunity at a size using that watch's fees "
+                "and the live books. Provide notional (USDT on the buy book) or quantity. "
+                "Informational only."
+            ),
+            args_schema=PriceDiffOppQuoteInput,
         ),
         StructuredTool.from_function(
             create_scanner_rule,
