@@ -114,13 +114,17 @@ weighted closeness of fields that actually had data. `minCoverage`
 must actually have data. Cases below that floor are **not** normal
 matches — they go in `skipped` with `missing` metrics and `coverage`.
 
-`afterHorizons` is what usually happened after those similar setups:
+Overlapping matches, or same-direction legs within **30 minutes**,
+are **one past event**. The hit with the highest similarity is kept.
+`events` is how many unique past events remain.
+
+`afterHorizons` is what usually happened after those unique events:
 how many went **up** vs **down**, plus **average** and **median**
 price change after **15m**, **1h**, and **4h**. A match is left out
 of a horizon when that tape is not long enough; each period reports
-`sample`. Each case still lists `used`, `missing`, `coverage`,
-per-field `compared` scores, and the move itself (`afterReturnPct`).
-MCP: `find_around_similar`.
+`sample` / `events` (unique events used). Each case still lists
+`used`, `missing`, `coverage`, per-field `compared` scores, and the
+move itself (`afterReturnPct`). MCP: `find_around_similar`.
 
 ## Where the code lives
 

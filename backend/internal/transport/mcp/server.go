@@ -769,7 +769,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_similar",
-		mcp.WithDescription("Compare the current market tape to the setup before past important moves. fields selects price,volume,takers,oi,book. weights sets importance (default book and oi 3). minCoverage (default 60) sends thin cases to skipped. Uncompared fields have no score. afterHorizons is how price usually moved 15m/1h/4h after those setups (up/down, avg, median, sample). Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Compare the current market tape to the setup before past important moves. fields selects price,volume,takers,oi,book. weights sets importance (default book and oi 3). minCoverage (default 60) sends thin cases to skipped. Uncompared fields have no score. Overlapping or same-move matches count as one event (highest similarity). afterHorizons is how price usually moved 15m/1h/4h after those unique events (up/down, avg, median, events). Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),

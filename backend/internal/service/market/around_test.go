@@ -267,6 +267,9 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 	if len(got.Matches) > 0 && len(got.AfterHorizons) != 3 {
 		t.Fatalf("afterHorizons %+v", got.AfterHorizons)
 	}
+	if got.Events != len(got.Matches) {
+		t.Fatalf("events %d matches %d", got.Events, len(got.Matches))
+	}
 }
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {

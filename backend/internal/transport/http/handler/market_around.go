@@ -695,7 +695,7 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 		MinReturnPct: formatHistQty(a.MinReturnPct), AsOf: a.AsOf.UTC(),
 		Current: aroundPhaseToDTO(a.Current),
 		Matches: aroundSimilarHitsToDTO(a.Matches), Skipped: aroundSimilarHitsToDTO(a.Skipped),
-		UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
+		Events: a.Events, UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
 		AfterHorizons: aroundSimilarHorizonsToDTO(a.AfterHorizons),
 		Summary:       a.Summary, Note: a.Note,
 	}
@@ -735,7 +735,7 @@ func aroundSimilarHorizonsToDTO(in []domain.AroundSimilarHorizonStat) []aroundSi
 	}
 	out := make([]aroundSimilarHorizonDTO, 0, len(in))
 	for _, h := range in {
-		row := aroundSimilarHorizonDTO{Horizon: h.Horizon, Sample: h.Sample, Up: h.Up, Down: h.Down}
+		row := aroundSimilarHorizonDTO{Horizon: h.Horizon, Sample: h.Sample, Events: h.Events, Up: h.Up, Down: h.Down}
 		if h.Sample > 0 {
 			row.AveragePct = domain.FormatSignedPct(h.AveragePct)
 			row.MedianPct = domain.FormatSignedPct(h.MedianPct)
@@ -798,6 +798,7 @@ type aroundSimilarResponse struct {
 	Current        aroundPhaseDTO            `json:"current"`
 	Matches        []aroundSimilarHitDTO     `json:"matches"`
 	Skipped        []aroundSimilarHitDTO     `json:"skipped,omitempty"`
+	Events         int                       `json:"events"`
 	UpAfter        int                       `json:"upAfter"`
 	DownAfter      int                       `json:"downAfter"`
 	MedianAfterPct string                    `json:"medianAfterPct"`
@@ -809,6 +810,7 @@ type aroundSimilarResponse struct {
 type aroundSimilarHorizonDTO struct {
 	Horizon    string `json:"horizon"`
 	Sample     int    `json:"sample"`
+	Events     int    `json:"events"`
 	Up         int    `json:"up"`
 	Down       int    `json:"down"`
 	AveragePct string `json:"averagePct,omitempty"`

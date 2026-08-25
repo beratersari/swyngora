@@ -1719,10 +1719,12 @@ paths:
         Similarity uses only fields that actually had data. `minCoverage`
         (default 60) sends cases that lack enough selected data to
         `skipped` (with `missing` and `coverage`), not `matches`.
-        `afterHorizons` is how price usually moved 15m / 1h / 4h after
-        those setups (up/down counts, average, median, and `sample` per
-        period). A case is left out of a horizon when that tape is not
-        long enough. Default lookback **7d**. Informational only.
+        Overlapping matches or same-move legs count as one past event
+        (highest similarity kept). `afterHorizons` is how price usually
+        moved 15m / 1h / 4h after those unique events (up/down counts,
+        average, median, and `sample` / `events` per period). A case is
+        left out of a horizon when that tape is not long enough. Default
+        lookback **7d**. Informational only.
       operationId: findMarketAroundSimilar
       tags: [Market]
       parameters:

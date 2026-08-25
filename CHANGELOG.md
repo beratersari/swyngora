@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desk tape venue switch:** the sticky tape no longer relabels the previous venue’s prices as the newly selected venue (`frontend/src/libs/hooks/useDeskPriceTape.ts`)
 - **Coin-detail pump markers:** live pump events use the current pair only so BTC arrows cannot snap onto an ETH chart (`docs/features/coin-detail.md`)
 - **Similar-move scores:** a thin overlap (only one field present) can no longer look like a high match — missing selected data counts as 0, and each case lists used / missing / coverage (`docs/features/around.md`)
+- **Similar-move unique events:** overlapping matches or same-move legs are one past event (highest similarity kept); 15m / 1h / 4h results report how many unique events were used (`docs/features/around.md`)
 - **Similar-move field scores:** a metric that was not compared no longer shows `score: 0`; similarity uses only fields that actually had data, and thin cases still need `minCoverage` (`docs/features/around.md`)
 - **Similar-move scores:** each case lists used / missing / coverage so a thin overlap is visible (`docs/features/around.md`)
 - **Combo common rate:** a precursor combo is common only when it hits often **overall** (hits / all sampled before-windows ≥ 60%), not when it is frequent on just one side (`docs/features/around.md`)

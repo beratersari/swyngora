@@ -23,7 +23,7 @@ func similarHit(at time.Time, ret float64, before, during AroundPhase) AroundMov
 	during.Complete = true
 	during.Price = AroundPrice{ChangePct: ret, Direction: changeDir(ret)}
 	return AroundMoveHit{
-		AroundMove: AroundMove{At: at, Direction: changeDir(ret), ReturnPct: ret},
+		AroundMove: AroundMove{At: at, Until: at.Add(30 * time.Minute), Direction: changeDir(ret), ReturnPct: ret},
 		Around: &AroundReport{
 			Combined: &AroundVenue{Phases: []AroundPhase{before, during}},
 		},
@@ -179,8 +179,38 @@ func TestFinishAroundSimilar_CountsAfter(t *testing.T) {
 		},
 	}
 	FinishAroundSimilar(&r)
-	if r.UpAfter != 1 || r.DownAfter != 1 || r.Summary == "" {
+	if r.UpAfter != 1 || r.DownAfter != 1 || r.Events != 2 || r.Summary == "" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestMatchAroundSimilar_CollapsesOverlapAndSameMove(t *testing.T) {
+	cur := similarPhase(2.3, 4, -1500, CVDDirUp)
+	cur.From = time.Date(2026, 8, 24, 13, 0, 0, 0, time.UTC)
+	t0 := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	best := similarHit(t0, 3.5, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
+	overlap := similarHit(t0.Add(15*time.Minute), 2.0, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
+	near := similarHit(t0.Add(50*time.Minute), 1.8, similarPhase(1.9, 2.8, -1100, CVDDirUp), AroundPhase{})
+	// Opposite-direction close by should stay a separate event.
+	opp := similarHit(t0.Add(50*time.Minute), -2.2, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
+	// Far later, same direction — a different event.
+	later := similarHit(t0.Add(4*time.Hour), 2.5, similarPhase(2.1, 3.2, -1300, CVDDirUp), AroundPhase{})
+
+	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{overlap, best, near, later}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(got) != 2 {
+		t.Fatalf("want 2 unique events, got %d %+v", len(got), got)
+	}
+	if !got[0].Move.At.Equal(t0) {
+		t.Fatalf("should keep highest similarity of the cluster %+v", got[0])
+	}
+	if !got[1].Move.At.Equal(t0.Add(4 * time.Hour)) {
+		t.Fatalf("far move should remain %+v", got[1])
+	}
+
+	// Opposite next to the cluster is its own event.
+	withOpp, _ := MatchAroundSimilar(cur, []AroundMoveHit{best, opp}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(withOpp) != 2 {
+		t.Fatalf("opposite nearby should stay separate %+v", withOpp)
 	}
 }
 
@@ -242,6 +272,18 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	if two[0].Sample != 2 || two[1].Sample != 2 || two[2].Sample != 1 {
 		t.Fatalf("per-horizon sample %+v", two)
 	}
+	if two[0].Events != 2 || two[2].Events != 1 {
+		t.Fatalf("per-horizon events %+v", two)
+	}
+
+	// Two overlapping starts count as one event for every horizon they can fill.
+	overlap := SummarizeAroundSimilarHorizons([]AroundSimilarHit{
+		{Move: AroundMove{At: start, Until: start.Add(30 * time.Minute), Open: 100, Direction: CVDDirUp}, Similarity: 90},
+		{Move: AroundMove{At: start.Add(15 * time.Minute), Until: start.Add(45 * time.Minute), Open: 101, Direction: CVDDirUp}, Similarity: 70},
+	}, longBars, start.Add(5*time.Hour))
+	if overlap[0].Events != 1 || overlap[0].Sample != 1 || overlap[1].Events != 1 {
+		t.Fatalf("overlap should be one event %+v", overlap)
+	}
 }
 
 func TestFinishAroundSimilar_ExplainsHorizons(t *testing.T) {
@@ -257,7 +299,7 @@ func TestFinishAroundSimilar_ExplainsHorizons(t *testing.T) {
 		},
 	}
 	FinishAroundSimilar(&r)
-	if !strings.Contains(r.Summary, "rose 2, fell 0") || !strings.Contains(r.Summary, "n=2") || !strings.Contains(r.Summary, "not enough data") {
+	if !strings.Contains(r.Summary, "rose 2, fell 0") || !strings.Contains(r.Summary, "2 unique event") || !strings.Contains(r.Summary, "not enough data") {
 		t.Fatalf("summary %q", r.Summary)
 	}
 }

@@ -14,6 +14,7 @@ const (
 	MaxAroundSimilarLimit           = 10
 	DefaultAroundSimilarMinCoverage = 60.0
 	aroundSimilarMinScore           = 40.0
+	aroundSimilarEventSlack         = 30 * time.Minute
 
 	AroundSimilarFieldPrice  = "price"
 	AroundSimilarFieldVolume = "volume"
@@ -65,7 +66,8 @@ type AroundSimilarFieldScore struct {
 // AroundSimilarHorizonStat is how price usually moved after similar setups.
 type AroundSimilarHorizonStat struct {
 	Horizon    string
-	Sample     int
+	Sample     int // unique past events with enough tape for this horizon
+	Events     int // same as Sample; unique events used in avg/median
 	Up         int
 	Down       int
 	AveragePct float64
@@ -103,6 +105,7 @@ type AroundSimilarReport struct {
 	Current        AroundPhase
 	Matches        []AroundSimilarHit
 	Skipped        []AroundSimilarHit
+	Events         int // unique past events after collapsing overlap / same-move
 	UpAfter        int
 	DownAfter      int
 	MedianAfterPct float64
@@ -366,12 +369,7 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 		}
 		keep = append(keep, row)
 	}
-	sort.SliceStable(keep, func(i, j int) bool {
-		if keep[i].Similarity == keep[j].Similarity {
-			return keep[i].Move.At.After(keep[j].Move.At)
-		}
-		return keep[i].Similarity > keep[j].Similarity
-	})
+	keep = collapseAroundSimilarHits(keep)
 	if len(keep) > limit {
 		keep = keep[:limit]
 	}
@@ -379,6 +377,64 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 		return drop[i].Coverage > drop[j].Coverage
 	})
 	return keep, drop
+}
+
+// collapseAroundSimilarHits keeps one hit per past event: highest similarity
+// wins when ranges overlap or same-direction legs sit within 30m.
+func collapseAroundSimilarHits(hits []AroundSimilarHit) []AroundSimilarHit {
+	if len(hits) < 2 {
+		return hits
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].Similarity == hits[j].Similarity {
+			return hits[i].Move.At.After(hits[j].Move.At)
+		}
+		return hits[i].Similarity > hits[j].Similarity
+	})
+	out := make([]AroundSimilarHit, 0, len(hits))
+	for _, h := range hits {
+		dup := false
+		for i := range out {
+			if aroundSimilarSameEvent(out[i], h) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+func aroundSimilarSameEvent(a, b AroundSimilarHit) bool {
+	aFrom, aTo := aroundSimilarMoveSpan(a.Move)
+	bFrom, bTo := aroundSimilarMoveSpan(b.Move)
+	if aFrom.IsZero() || bFrom.IsZero() {
+		return false
+	}
+	// [from, to) overlap.
+	if aFrom.Before(bTo) && bFrom.Before(aTo) {
+		return true
+	}
+	if a.Move.Direction == "" || a.Move.Direction != b.Move.Direction || a.Move.Direction == CVDDirFlat {
+		return false
+	}
+	gap := bFrom.Sub(aTo)
+	if gap < 0 {
+		gap = aFrom.Sub(bTo)
+	}
+	return gap >= 0 && gap <= aroundSimilarEventSlack
+}
+
+func aroundSimilarMoveSpan(m AroundMove) (time.Time, time.Time) {
+	from := m.At
+	to := m.Until
+	if to.IsZero() || !to.After(from) {
+		return from, from.Add(15 * time.Minute)
+	}
+	// Until is the last bar open; include that bar.
+	return from, to.Add(15 * time.Minute)
 }
 
 // ExplainAroundSimilarReport writes how similar past cases resolved.
@@ -394,15 +450,23 @@ func ExplainAroundSimilarReport(r AroundSimilarReport) string {
 		}
 		return name + ": no past important-move setup is similar enough to the current tape."
 	}
-	head := fmt.Sprintf("%s: %d similar past setup(s).", name, len(r.Matches))
+	n := r.Events
+	if n == 0 {
+		n = len(r.Matches)
+	}
+	head := fmt.Sprintf("%s: %d unique past event(s).", name, n)
 	if len(r.AfterHorizons) > 0 {
 		for _, h := range r.AfterHorizons {
-			if h.Sample == 0 {
+			ev := h.Events
+			if ev == 0 {
+				ev = h.Sample
+			}
+			if ev == 0 {
 				head += fmt.Sprintf(" After %s: not enough data.", h.Horizon)
 				continue
 			}
-			head += fmt.Sprintf(" After %s: rose %d, fell %d (avg %s%%, median %s%%, n=%d).",
-				h.Horizon, h.Up, h.Down, FormatSignedPct(h.AveragePct), FormatSignedPct(h.MedianPct), h.Sample)
+			head += fmt.Sprintf(" After %s: rose %d, fell %d (avg %s%%, median %s%%, %d unique event(s)).",
+				h.Horizon, h.Up, h.Down, FormatSignedPct(h.AveragePct), FormatSignedPct(h.MedianPct), ev)
 		}
 	} else if r.UpAfter+r.DownAfter > 0 {
 		head += fmt.Sprintf(" After those cases price rose %d time(s) and fell %d time(s)", r.UpAfter, r.DownAfter)
@@ -614,12 +678,16 @@ func FinishAroundSimilar(r *AroundSimilarReport) {
 		}
 	}
 	r.MedianAfterPct = medianFloat(vals)
+	if r.Events == 0 {
+		r.Events = len(r.Matches)
+	}
 	r.Summary = ExplainAroundSimilarReport(*r)
 }
 
 // SummarizeAroundSimilarHorizons averages price after similar setups at 15m / 1h / 4h.
 // A match is left out of a horizon when the tape does not reach that far.
 func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar, asOf time.Time) []AroundSimilarHorizonStat {
+	matches = collapseAroundSimilarHits(matches)
 	bars = sortAroundBars(bars)
 	barDur := aroundBarDuration(bars)
 	out := make([]AroundSimilarHorizonStat, 0, len(AroundSimilarHorizons))
@@ -649,6 +717,7 @@ func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar
 			}
 		}
 		st.Sample = len(vals)
+		st.Events = len(vals)
 		st.AveragePct = averageFloat(vals)
 		st.MedianPct = medianFloat(vals)
 		out = append(out, st)
