@@ -3142,8 +3142,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "important moves. fields selects price,volume,takers,oi,book "
                 "(e.g. volume,book,oi). weights sets importance "
                 "(default book and oi 3, takers 1.5, volume and price 1). "
-                "min_coverage (default 60) sends thin cases to skipped "
-                "with missing metrics, not matches. Returns what price did after."
+                "min_coverage (default 60) sends thin cases to skipped. "
+                "Uncompared fields have no score. afterHorizons is how "
+                "price usually moved 15m/1h/4h after those setups "
+                "(up/down, avg, median, sample)."
             ),
             args_schema=AroundSimilarInput,
         ),

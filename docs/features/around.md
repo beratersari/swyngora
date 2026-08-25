@@ -107,13 +107,20 @@ use (`price`, `volume`, `takers`, `oi`, `book`). Example:
 1.5**, **volume 1**, **price 1** — so order book and open interest
 move the score more than volume.
 
-Missing selected data **counts as 0**, so a thin overlap cannot look
-like a 90% match. `minCoverage` (default **60**, `0` = no floor) is
-the share of selected weight that must actually have data. Cases
-below that floor are **not** normal matches — they go in `skipped`
-with `missing` metrics and `coverage`. Each case lists `used`,
-`missing`, `coverage`, and per-field `compared` scores, plus **what
-price did after** (`afterReturnPct`). MCP: `find_around_similar`.
+A field that was not compared has **no score** (it is listed in
+`missing` / `used=false`, not as `score: 0`). Similarity is the
+weighted closeness of fields that actually had data. `minCoverage`
+(default **60**, `0` = no floor) is the share of selected weight that
+must actually have data. Cases below that floor are **not** normal
+matches — they go in `skipped` with `missing` metrics and `coverage`.
+
+`afterHorizons` is what usually happened after those similar setups:
+how many went **up** vs **down**, plus **average** and **median**
+price change after **15m**, **1h**, and **4h**. A match is left out
+of a horizon when that tape is not long enough; each period reports
+`sample`. Each case still lists `used`, `missing`, `coverage`,
+per-field `compared` scores, and the move itself (`afterReturnPct`).
+MCP: `find_around_similar`.
 
 ## Where the code lives
 

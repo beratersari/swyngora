@@ -696,7 +696,8 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 		Current: aroundPhaseToDTO(a.Current),
 		Matches: aroundSimilarHitsToDTO(a.Matches), Skipped: aroundSimilarHitsToDTO(a.Skipped),
 		UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
-		Summary: a.Summary, Note: a.Note,
+		AfterHorizons: aroundSimilarHorizonsToDTO(a.AfterHorizons),
+		Summary:       a.Summary, Note: a.Note,
 	}
 }
 
@@ -705,9 +706,11 @@ func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO 
 	for _, m := range in {
 		cmp := make([]aroundSimilarFieldDTO, 0, len(m.Compared))
 		for _, c := range m.Compared {
-			cmp = append(cmp, aroundSimilarFieldDTO{
-				Name: c.Name, Used: c.Used, Score: formatHistQty(c.Score), Weight: formatHistQty(c.Weight),
-			})
+			row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Weight: formatHistQty(c.Weight)}
+			if c.Used {
+				row.Score = formatHistQty(c.Score)
+			}
+			cmp = append(cmp, row)
 		}
 		out = append(out, aroundSimilarHitDTO{
 			At: m.Move.At.UTC(), Until: m.Move.Until.UTC(), Direction: m.Move.Direction,
@@ -722,6 +725,22 @@ func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO 
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+func aroundSimilarHorizonsToDTO(in []domain.AroundSimilarHorizonStat) []aroundSimilarHorizonDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]aroundSimilarHorizonDTO, 0, len(in))
+	for _, h := range in {
+		row := aroundSimilarHorizonDTO{Horizon: h.Horizon, Sample: h.Sample, Up: h.Up, Down: h.Down}
+		if h.Sample > 0 {
+			row.AveragePct = domain.FormatSignedPct(h.AveragePct)
+			row.MedianPct = domain.FormatSignedPct(h.MedianPct)
+		}
+		out = append(out, row)
 	}
 	return out
 }
@@ -766,24 +785,34 @@ type aroundSimilarHitDTO struct {
 }
 
 type aroundSimilarResponse struct {
-	Symbol         string                  `json:"symbol"`
-	Exchange       string                  `json:"exchange"`
-	Lookback       string                  `json:"lookback"`
-	Window         string                  `json:"window"`
-	Interval       string                  `json:"interval"`
-	Fields         []string                `json:"fields"`
-	Weights        []aroundSimilarFieldDTO `json:"weights,omitempty"`
-	MinCoverage    string                  `json:"minCoverage"`
-	MinReturnPct   string                  `json:"minReturnPct"`
-	AsOf           time.Time               `json:"asOf"`
-	Current        aroundPhaseDTO          `json:"current"`
-	Matches        []aroundSimilarHitDTO   `json:"matches"`
-	Skipped        []aroundSimilarHitDTO   `json:"skipped,omitempty"`
-	UpAfter        int                     `json:"upAfter"`
-	DownAfter      int                     `json:"downAfter"`
-	MedianAfterPct string                  `json:"medianAfterPct"`
-	Summary        string                  `json:"summary"`
-	Note           string                  `json:"note"`
+	Symbol         string                    `json:"symbol"`
+	Exchange       string                    `json:"exchange"`
+	Lookback       string                    `json:"lookback"`
+	Window         string                    `json:"window"`
+	Interval       string                    `json:"interval"`
+	Fields         []string                  `json:"fields"`
+	Weights        []aroundSimilarFieldDTO   `json:"weights,omitempty"`
+	MinCoverage    string                    `json:"minCoverage"`
+	MinReturnPct   string                    `json:"minReturnPct"`
+	AsOf           time.Time                 `json:"asOf"`
+	Current        aroundPhaseDTO            `json:"current"`
+	Matches        []aroundSimilarHitDTO     `json:"matches"`
+	Skipped        []aroundSimilarHitDTO     `json:"skipped,omitempty"`
+	UpAfter        int                       `json:"upAfter"`
+	DownAfter      int                       `json:"downAfter"`
+	MedianAfterPct string                    `json:"medianAfterPct"`
+	AfterHorizons  []aroundSimilarHorizonDTO `json:"afterHorizons,omitempty"`
+	Summary        string                    `json:"summary"`
+	Note           string                    `json:"note"`
+}
+
+type aroundSimilarHorizonDTO struct {
+	Horizon    string `json:"horizon"`
+	Sample     int    `json:"sample"`
+	Up         int    `json:"up"`
+	Down       int    `json:"down"`
+	AveragePct string `json:"averagePct,omitempty"`
+	MedianPct  string `json:"medianPct,omitempty"`
 }
 
 func parseAroundFloat(raw string) (float64, error) {

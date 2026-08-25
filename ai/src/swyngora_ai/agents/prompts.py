@@ -83,7 +83,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `compare_around` for how two times / moves differed,
   `find_around_moves` for the strongest recent up/down legs and what happened during them,
   `find_around_precursors` for what often changed before those moves, including groups that fire together,
-  `find_around_similar` for past setups like the current tape (pick fields/weights; min_coverage sends thin data to skipped) and what price did after,
+  `find_around_similar` for past setups like the current tape (fields/weights; thin data skipped; afterHorizons 15m/1h/4h) and what price did after,
   `get_vwap` for volume-weighted average price from a start time, etc.).
   Do not fetch extra intervals “for context.”
 - Venues: binance, coinbase, bybit, nasdaq, bist. Default binance unless the name is a cash equity
@@ -181,7 +181,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `compare_around` → how two times / moves differed (price, volume, book, OI, sweeps);
   `find_around_moves` → strongest recent up/down legs plus the around tape for each;
   `find_around_precursors` → what often changed before those moves, including combos that fire together and lean up or down;
-  `find_around_similar` → past important-move setups like now (weights + min coverage; thin cases in skipped), and what price did after;
+  `find_around_similar` → past important-move setups like now (weights + min coverage; afterHorizons 15m/1h/4h up/down avg/median), and what price did after;
   `get_vwap` → volume-weighted average price from a start time; last vs VWAP; Binance/Bybit/combined;
   `get_supply` → supply; `get_holders` → holder count / top wallets (crypto only);
   `get_asset_profile` → name, logo, listing date, contracts;

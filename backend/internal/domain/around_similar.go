@@ -20,7 +20,21 @@ const (
 	AroundSimilarFieldTakers = "takers"
 	AroundSimilarFieldOI     = "oi"
 	AroundSimilarFieldBook   = "book"
+
+	AroundSimilarHorizon15m = "15m"
+	AroundSimilarHorizon1h  = "1h"
+	AroundSimilarHorizon4h  = "4h"
 )
+
+// AroundSimilarHorizons are the forward windows we summarize after a match.
+var AroundSimilarHorizons = []struct {
+	ID  string
+	Dur time.Duration
+}{
+	{AroundSimilarHorizon15m, 15 * time.Minute},
+	{AroundSimilarHorizon1h, time.Hour},
+	{AroundSimilarHorizon4h, 4 * time.Hour},
+}
 
 // AroundSimilarFields is which tape pieces to compare.
 type AroundSimilarFields struct {
@@ -46,6 +60,16 @@ type AroundSimilarFieldScore struct {
 	Used   bool
 	Score  float64 // 0–100 closeness when used
 	Weight float64
+}
+
+// AroundSimilarHorizonStat is how price usually moved after similar setups.
+type AroundSimilarHorizonStat struct {
+	Horizon    string
+	Sample     int
+	Up         int
+	Down       int
+	AveragePct float64
+	MedianPct  float64
 }
 
 // AroundSimilarHit is a past move whose setup looks like the current tape.
@@ -82,6 +106,7 @@ type AroundSimilarReport struct {
 	UpAfter        int
 	DownAfter      int
 	MedianAfterPct float64
+	AfterHorizons  []AroundSimilarHorizonStat
 	Summary        string
 	Note           string
 }
@@ -370,7 +395,16 @@ func ExplainAroundSimilarReport(r AroundSimilarReport) string {
 		return name + ": no past important-move setup is similar enough to the current tape."
 	}
 	head := fmt.Sprintf("%s: %d similar past setup(s).", name, len(r.Matches))
-	if r.UpAfter+r.DownAfter > 0 {
+	if len(r.AfterHorizons) > 0 {
+		for _, h := range r.AfterHorizons {
+			if h.Sample == 0 {
+				head += fmt.Sprintf(" After %s: not enough data.", h.Horizon)
+				continue
+			}
+			head += fmt.Sprintf(" After %s: rose %d, fell %d (avg %s%%, median %s%%, n=%d).",
+				h.Horizon, h.Up, h.Down, FormatSignedPct(h.AveragePct), FormatSignedPct(h.MedianPct), h.Sample)
+		}
+	} else if r.UpAfter+r.DownAfter > 0 {
 		head += fmt.Sprintf(" After those cases price rose %d time(s) and fell %d time(s)", r.UpAfter, r.DownAfter)
 		if r.MedianAfterPct != 0 {
 			head += fmt.Sprintf(" (median %s%%)", FormatSignedPct(r.MedianAfterPct))
@@ -492,9 +526,12 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 	if selected <= 0 {
 		return out
 	}
-	// Missing selected fields count as 0 so a thin overlap cannot look like 90%+.
-	out.Similarity = 100 * ssum / selected
 	out.Coverage = 100 * usedW / selected
+	if usedW <= 0 {
+		return out
+	}
+	// Only fields that were actually compared contribute a score.
+	out.Similarity = 100 * ssum / usedW
 	if out.Similarity > 100 {
 		out.Similarity = 100
 	}
@@ -578,4 +615,126 @@ func FinishAroundSimilar(r *AroundSimilarReport) {
 	}
 	r.MedianAfterPct = medianFloat(vals)
 	r.Summary = ExplainAroundSimilarReport(*r)
+}
+
+// SummarizeAroundSimilarHorizons averages price after similar setups at 15m / 1h / 4h.
+// A match is left out of a horizon when the tape does not reach that far.
+func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar, asOf time.Time) []AroundSimilarHorizonStat {
+	bars = sortAroundBars(bars)
+	barDur := aroundBarDuration(bars)
+	out := make([]AroundSimilarHorizonStat, 0, len(AroundSimilarHorizons))
+	for _, h := range AroundSimilarHorizons {
+		st := AroundSimilarHorizonStat{Horizon: h.ID}
+		vals := make([]float64, 0, len(matches))
+		for _, m := range matches {
+			start := m.Move.At
+			if start.IsZero() {
+				continue
+			}
+			startPx := aroundStartPrice(bars, start, m.Move.Open)
+			if startPx <= 0 {
+				continue
+			}
+			endPx, ok := aroundCloseByHorizon(bars, start, h.Dur, barDur, asOf)
+			if !ok {
+				continue
+			}
+			pct := (endPx - startPx) / startPx * 100
+			vals = append(vals, pct)
+			switch changeDir(pct) {
+			case CVDDirUp:
+				st.Up++
+			case CVDDirDown:
+				st.Down++
+			}
+		}
+		st.Sample = len(vals)
+		st.AveragePct = averageFloat(vals)
+		st.MedianPct = medianFloat(vals)
+		out = append(out, st)
+	}
+	return out
+}
+
+func sortAroundBars(bars []AroundBar) []AroundBar {
+	out := append([]AroundBar(nil), bars...)
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	return out
+}
+
+func aroundBarDuration(bars []AroundBar) time.Duration {
+	for i := 1; i < len(bars); i++ {
+		if d := bars[i].Time.Sub(bars[i-1].Time); d > 0 {
+			return d
+		}
+	}
+	return 15 * time.Minute
+}
+
+func aroundStartPrice(bars []AroundBar, start time.Time, fallback float64) float64 {
+	var before float64
+	for _, b := range bars {
+		if !b.Time.Before(start) {
+			if b.Time.Equal(start) && b.Open > 0 {
+				return b.Open
+			}
+			break
+		}
+		if b.Close > 0 {
+			before = b.Close
+		}
+	}
+	if before > 0 {
+		return before
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 0
+}
+
+func aroundCloseByHorizon(bars []AroundBar, start time.Time, horizon, barDur time.Duration, asOf time.Time) (float64, bool) {
+	if barDur <= 0 {
+		barDur = 15 * time.Minute
+	}
+	target := start.Add(horizon)
+	if !asOf.IsZero() && asOf.Before(target) {
+		return 0, false
+	}
+	var endPx float64
+	var endAt time.Time
+	found := false
+	for _, b := range bars {
+		closeAt := b.Time.Add(barDur)
+		if closeAt.After(target) {
+			continue
+		}
+		if b.Close > 0 {
+			endPx = b.Close
+			endAt = closeAt
+			found = true
+		}
+	}
+	if !found {
+		return 0, false
+	}
+	slack := barDur / 2
+	if slack < time.Minute {
+		slack = time.Minute
+	}
+	if endAt.Before(target.Add(-slack)) {
+		return 0, false
+	}
+	return endPx, true
+}
+
+func averageFloat(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range xs {
+		sum += v
+	}
+	return sum / float64(len(xs))
 }

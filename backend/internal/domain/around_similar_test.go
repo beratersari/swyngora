@@ -69,9 +69,6 @@ func TestAroundPhaseSimilarity_ThinDataCannotScoreHigh(t *testing.T) {
 	a := AroundPhase{Complete: true, Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat}}
 	b := AroundPhase{Complete: true, Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat}}
 	sc := aroundPhaseSimilarity(a, b, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights())
-	if sc.Similarity >= 40 {
-		t.Fatalf("thin overlap scored too high %+v", sc)
-	}
 	if len(sc.Missing) < 2 || sc.Coverage > 30 {
 		t.Fatalf("coverage %+v", sc)
 	}
@@ -79,6 +76,10 @@ func TestAroundPhaseSimilarity_ThinDataCannotScoreHigh(t *testing.T) {
 	for _, c := range sc.Compared {
 		if c.Name == AroundSimilarFieldPrice && c.Used {
 			foundPrice = true
+			continue
+		}
+		if !c.Used && c.Score != 0 {
+			t.Fatalf("uncompared %s should not have a score %+v", c.Name, c)
 		}
 	}
 	if !foundPrice {
@@ -180,6 +181,84 @@ func TestFinishAroundSimilar_CountsAfter(t *testing.T) {
 	FinishAroundSimilar(&r)
 	if r.UpAfter != 1 || r.DownAfter != 1 || r.Summary == "" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
+	start := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	// 15m bars from 13:45 through 15:00 — enough for 15m and 1h, not 4h.
+	var bars []AroundBar
+	px := 100.0
+	for i := -1; i < 5; i++ {
+		open := px
+		if i >= 0 {
+			px = 100 + float64(i+1) // 101, 102, 103, 104, 105
+		}
+		bars = append(bars, AroundBar{
+			Time: start.Add(time.Duration(i) * 15 * time.Minute),
+			Open: open, Close: px,
+		})
+	}
+	matches := []AroundSimilarHit{{Move: AroundMove{At: start, Open: 100}}}
+	asOf := start.Add(2 * time.Hour)
+	got := SummarizeAroundSimilarHorizons(matches, bars, asOf)
+	if len(got) != 3 {
+		t.Fatalf("horizons %+v", got)
+	}
+	if got[0].Horizon != AroundSimilarHorizon15m || got[0].Sample != 1 || got[0].Up != 1 {
+		t.Fatalf("15m %+v", got[0])
+	}
+	if got[0].AveragePct < 0.5 {
+		t.Fatalf("15m avg %+v", got[0])
+	}
+	if got[1].Horizon != AroundSimilarHorizon1h || got[1].Sample != 1 {
+		t.Fatalf("1h %+v", got[1])
+	}
+	if got[2].Horizon != AroundSimilarHorizon4h || got[2].Sample != 0 {
+		t.Fatalf("4h should drop the short sample %+v", got[2])
+	}
+
+	// Too soon for 1h as well.
+	early := SummarizeAroundSimilarHorizons(matches, bars, start.Add(20*time.Minute))
+	if early[0].Sample != 1 || early[1].Sample != 0 || early[2].Sample != 0 {
+		t.Fatalf("as-of clip %+v", early)
+	}
+
+	startB := start.Add(2 * time.Hour)
+	longBars := append([]AroundBar(nil), bars...)
+	px = 105
+	for i := 5; i < 20; i++ {
+		open := px
+		px = 100 + float64(i+1)
+		longBars = append(longBars, AroundBar{
+			Time: start.Add(time.Duration(i) * 15 * time.Minute),
+			Open: open, Close: px,
+		})
+	}
+	two := SummarizeAroundSimilarHorizons([]AroundSimilarHit{
+		{Move: AroundMove{At: start, Open: 100}},
+		{Move: AroundMove{At: startB, Open: 108}},
+	}, longBars, start.Add(5*time.Hour))
+	if two[0].Sample != 2 || two[1].Sample != 2 || two[2].Sample != 1 {
+		t.Fatalf("per-horizon sample %+v", two)
+	}
+}
+
+func TestFinishAroundSimilar_ExplainsHorizons(t *testing.T) {
+	r := AroundSimilarReport{
+		Symbol: "BTCUSDT",
+		Matches: []AroundSimilarHit{
+			{AfterReturnPct: 4, AfterDirection: CVDDirUp, Similarity: 80, Move: AroundMove{At: time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)}},
+		},
+		AfterHorizons: []AroundSimilarHorizonStat{
+			{Horizon: AroundSimilarHorizon15m, Sample: 2, Up: 2, Down: 0, AveragePct: 1.2, MedianPct: 1.1},
+			{Horizon: AroundSimilarHorizon1h, Sample: 2, Up: 1, Down: 1, AveragePct: 0.4, MedianPct: 0.3},
+			{Horizon: AroundSimilarHorizon4h, Sample: 0},
+		},
+	}
+	FinishAroundSimilar(&r)
+	if !strings.Contains(r.Summary, "rose 2, fell 0") || !strings.Contains(r.Summary, "n=2") || !strings.Contains(r.Summary, "not enough data") {
+		t.Fatalf("summary %q", r.Summary)
 	}
 }
 

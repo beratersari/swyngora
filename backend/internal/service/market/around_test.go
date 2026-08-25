@@ -264,6 +264,9 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 	if bookW != 3 || volW != 1 {
 		t.Fatalf("weights %+v", got.Weights)
 	}
+	if len(got.Matches) > 0 && len(got.AfterHorizons) != 3 {
+		t.Fatalf("afterHorizons %+v", got.AfterHorizons)
+	}
 }
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {

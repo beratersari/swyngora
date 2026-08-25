@@ -44,6 +44,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Desk tape venue switch:** the sticky tape no longer relabels the previous venue’s prices as the newly selected venue (`frontend/src/libs/hooks/useDeskPriceTape.ts`)
 - **Coin-detail pump markers:** live pump events use the current pair only so BTC arrows cannot snap onto an ETH chart (`docs/features/coin-detail.md`)
 - **Similar-move scores:** a thin overlap (only one field present) can no longer look like a high match — missing selected data counts as 0, and each case lists used / missing / coverage (`docs/features/around.md`)
+- **Similar-move field scores:** a metric that was not compared no longer shows `score: 0`; similarity uses only fields that actually had data, and thin cases still need `minCoverage` (`docs/features/around.md`)
+- **Similar-move scores:** each case lists used / missing / coverage so a thin overlap is visible (`docs/features/around.md`)
 - **Combo common rate:** a precursor combo is common only when it hits often **overall** (hits / all sampled before-windows ≥ 60%), not when it is frequent on just one side (`docs/features/around.md`)
 - **Liquidity sweep levels:** a later swing high/low no longer joins an older cluster and rewrites that shelf — a sweep that already printed keeps the level as it was at the poke (`docs/features/liquidity-sweeps.md`)
 - **CVD divergence runs:** a quiet gap no longer glues two same-kind splits into one long episode (`docs/features/cvd.md`)
@@ -68,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Similar-move after horizons:** how similar past setups usually resolved — up/down counts plus average and median price after 15m / 1h / 4h, with per-period sample counts (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar-move weights and coverage:** each tape field has its own importance (default book and OI 3, takers 1.5, volume and price 1); `minCoverage` (default 60) sends thin cases to `skipped` with missing metrics instead of treating them as matches (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar-move field pick:** choose which tape to compare (`fields=volume,book,oi` skips price) (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar past moves:** compare the current tape to the setup before past important moves and show what price did after the closest cases (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)

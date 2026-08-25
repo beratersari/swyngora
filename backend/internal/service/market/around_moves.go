@@ -134,7 +134,7 @@ func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, loo
 	return &out, nil
 }
 
-const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves. fields selects which pieces to use (price, volume, takers, oi, book). weights sets importance (default book and oi 3, takers 1.5, volume and price 1). minCoverage (default 60) drops cases that lack enough selected data from matches into skipped, with missing metrics and coverage. After is what price did during that past move. Informational only — not financial advice."
+const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves. fields selects which pieces to use (price, volume, takers, oi, book). weights sets importance (default book and oi 3, takers 1.5, volume and price 1). minCoverage (default 60) drops cases that lack enough selected data from matches into skipped, with missing metrics and coverage. Uncompared fields have no score. afterHorizons is how price usually moved 15m / 1h / 4h after those setups (avg, median, up/down, sample); a case is left out of a horizon when that tape is not long enough. Informational only — not financial advice."
 
 // GetAroundSimilar finds past important-move setups that look like the current tape.
 func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights string, minCoverageRaw string) (*domain.AroundSimilarReport, error) {
@@ -182,6 +182,49 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 		MinReturnPct: moves.MinReturnPct,
 		AsOf:         now, Current: current, Matches: hits, Skipped: skipped, Note: aroundSimilarDisclaimer,
 	}
+	if len(hits) > 0 {
+		out.AfterHorizons = domain.SummarizeAroundSimilarHorizons(hits, s.aroundSimilarHorizonBars(ctx, moves.Exchange, moves.Symbol, hits, now), now)
+	}
 	domain.FinishAroundSimilar(out)
 	return out, nil
+}
+
+func (s *Service) aroundSimilarHorizonBars(ctx context.Context, exchange, symbol string, matches []domain.AroundSimilarHit, now time.Time) []domain.AroundBar {
+	var earliest, latest time.Time
+	for _, m := range matches {
+		if m.Move.At.IsZero() {
+			continue
+		}
+		if earliest.IsZero() || m.Move.At.Before(earliest) {
+			earliest = m.Move.At
+		}
+		if latest.IsZero() || m.Move.At.After(latest) {
+			latest = m.Move.At
+		}
+	}
+	if earliest.IsZero() {
+		return nil
+	}
+	from := earliest.Add(-30 * time.Minute)
+	to := latest.Add(4 * time.Hour)
+	if to.After(now) {
+		to = now
+	}
+	spotEx := domain.ExchangeBinance
+	if exchange != "" && exchange != "all" {
+		spotEx = domain.Exchange(exchange)
+	}
+	if _, err := s.port(spotEx); err != nil {
+		if exchange == "all" || exchange == "" {
+			spotEx = domain.ExchangeBybit
+		}
+		if _, err2 := s.port(spotEx); err2 != nil {
+			return nil
+		}
+	}
+	candles, err := s.GetCandles(ctx, string(spotEx), symbol, "15m", 1000, &from, &to)
+	if err != nil || len(candles) == 0 {
+		return nil
+	}
+	return domain.AroundBarsFromCandles(candles)
 }

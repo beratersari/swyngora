@@ -650,6 +650,13 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 	if len(body.Fields) != 3 || len(body.Weights) != 3 {
 		t.Fatalf("fields/weights %+v", body)
 	}
+	for _, hit := range append(append([]aroundSimilarHitDTO{}, body.Matches...), body.Skipped...) {
+		for _, c := range hit.Compared {
+			if !c.Used && c.Score != "" {
+				t.Fatalf("uncompared %s should not have score %+v", c.Name, c)
+			}
+		}
+	}
 }
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {

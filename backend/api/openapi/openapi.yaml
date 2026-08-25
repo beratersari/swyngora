@@ -1715,12 +1715,14 @@ paths:
         book, open interest, takers, and price. `fields` selects which
         pieces to use (e.g. `volume,book,oi` skips price). `weights` sets
         importance (`book:3,oi:3,volume:1`; defaults book and OI 3, takers
-        1.5, volume and price 1). Missing selected data counts as 0.
-        `minCoverage` (default 60) sends cases that lack enough selected
-        data to `skipped` (with `missing` and `coverage`), not `matches`.
-        Each case lists `used`, `missing`, `coverage`, and per-field
-        scores. Returns the closest cases and **what price did after**.
-        Default lookback **7d**. Informational only.
+        1.5, volume and price 1). Uncompared fields have no score.
+        Similarity uses only fields that actually had data. `minCoverage`
+        (default 60) sends cases that lack enough selected data to
+        `skipped` (with `missing` and `coverage`), not `matches`.
+        `afterHorizons` is how price usually moved 15m / 1h / 4h after
+        those setups (up/down counts, average, median, and `sample` per
+        period). A case is left out of a horizon when that tape is not
+        long enough. Default lookback **7d**. Informational only.
       operationId: findMarketAroundSimilar
       tags: [Market]
       parameters:
@@ -1774,7 +1776,7 @@ paths:
           schema: { type: number, default: 60, minimum: 0, maximum: 100 }
       responses:
         '200':
-          description: Similar past setups and what price did after (thin coverage in skipped)
+          description: Similar past setups, afterHorizons (15m/1h/4h), thin coverage in skipped
           content:
             application/json:
               schema: { type: object }

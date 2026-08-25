@@ -57,7 +57,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around/compare` | How two times / moves of the same coin differed (price, volume, book, OI, sweeps) |
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
 | `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
-| `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (weights + min coverage); thin cases in `skipped` |
+| `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape; afterHorizons 15m/1h/4h; thin cases in `skipped` |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
