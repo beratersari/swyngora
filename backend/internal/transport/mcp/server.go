@@ -181,8 +181,8 @@ type DataPort interface {
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellExchange string, notional, quantity, feeBuyPct, feeSellPct, minNetDiffPct float64) (json.RawMessage, error)
 	QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error)
-	ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct float64) (json.RawMessage, error)
-	QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity float64) (json.RawMessage, error)
+	ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct, minProfitPct, minProfitAmount float64) (json.RawMessage, error)
+	QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity, minProfitPct, minProfitAmount float64) (json.RawMessage, error)
 	AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
@@ -3467,6 +3467,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase taker fee % e.g. 0.6")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee % e.g. 0.1")),
 		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional threshold to flag meetsMinNet")),
+		mcp.WithNumber("minProfitPct", mcp.Description("Only list routes whose after-fee profit % is at least this")),
+		mcp.WithNumber("minProfitAmount", mcp.Description("Only list routes whose after-fee profit (USDT) is at least this")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -3475,7 +3477,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		raw, err := api.ScanPriceDiffQuotes(ctx, symbol,
 			req.GetFloat("notional", 0), req.GetFloat("quantity", 0),
 			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0),
-			req.GetFloat("minNetDiffPct", 0))
+			req.GetFloat("minNetDiffPct", 0), req.GetFloat("minProfitPct", 0), req.GetFloat("minProfitAmount", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3488,6 +3490,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
 		mcp.WithNumber("notional", mcp.Description("USDT to spend on the buy book before the buy fee e.g. 10000")),
 		mcp.WithNumber("quantity", mcp.Description("Base size to buy and sell (use instead of notional)")),
+		mcp.WithNumber("minProfitPct", mcp.Description("Only list routes whose after-fee profit % is at least this")),
+		mcp.WithNumber("minProfitAmount", mcp.Description("Only list routes whose after-fee profit (USDT) is at least this")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3497,7 +3501,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.QuotePriceDiffWatch(ctx, clientID, id, req.GetFloat("notional", 0), req.GetFloat("quantity", 0))
+		raw, err := api.QuotePriceDiffWatch(ctx, clientID, id, req.GetFloat("notional", 0), req.GetFloat("quantity", 0),
+			req.GetFloat("minProfitPct", 0), req.GetFloat("minProfitAmount", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

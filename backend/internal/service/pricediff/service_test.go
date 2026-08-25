@@ -365,6 +365,43 @@ func TestQuoteScan_RanksAllPairs(t *testing.T) {
 	}
 }
 
+func TestQuoteScan_MissingBookIsUnavailable(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 100, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 99, Quantity: 2}},
+		},
+		"bybit|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 101, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 100.5, Quantity: 2}},
+		},
+	}})
+	got, err := svc.QuoteScan(context.Background(), ScanInput{Symbol: "BTCUSDT", Notional: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.BestRoute != nil && (got.BestRoute.BuyExchange == domain.ExchangeCoinbase || got.BestRoute.SellExchange == domain.ExchangeCoinbase) {
+		t.Fatalf("best used missing venue: %+v", got.BestRoute)
+	}
+	found := false
+	for _, u := range got.Unavailable {
+		if u.Exchange == "coinbase" {
+			found = true
+			if u.Message == "" {
+				t.Fatal("expected load-failure message")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("unavailable=%+v", got.Unavailable)
+	}
+	for _, r := range got.Routes {
+		if r.BuyExchange == domain.ExchangeCoinbase || r.SellExchange == domain.ExchangeCoinbase {
+			t.Fatalf("missing venue listed as a route: %+v", r)
+		}
+	}
+}
+
 func TestQuoteWatch_UsesWatchFees(t *testing.T) {
 	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
 		"binance|BTCUSDT": {
@@ -388,7 +425,7 @@ func TestQuoteWatch_UsesWatchFees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := svc.QuoteWatch(ctx, "scan1", w.ID, 100, 0)
+	got, err := svc.QuoteWatch(ctx, "scan1", w.ID, ScanInput{Notional: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

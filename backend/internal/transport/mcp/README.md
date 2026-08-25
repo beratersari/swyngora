@@ -143,7 +143,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_price_diff_opportunity` | Get one opportunity |
 | `quote_price_diff` | Walk two live spot books for a size: avg buy/sell, slippage, profit after fees, usable money, max size |
 | `quote_price_diff_opportunity` | Same quote for a stored opportunity (uses that watch's fees) |
-| `scan_price_diff_quotes` | Rank every Binance/Coinbase/Bybit buy-sell route at one size (fees + depth + usable money) |
+| `scan_price_diff_quotes` | Rank every venue pair at one size; missing books listed as unavailable; optional minProfitPct / minProfitAmount |
 | `quote_price_diff_watch` | Same scan using a stored watch's symbol and fees |
 | `create_scanner_rule` | Create RSI / MA / volume watchlist scanner rule |
 | `list_scanner_rules` | List scanner rules |

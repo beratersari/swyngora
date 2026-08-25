@@ -213,7 +213,7 @@ func TestAPIClient_ScanPriceDiffQuotes(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := NewAPIClient(srv.URL, 0)
-	raw, err := c.ScanPriceDiffQuotes(context.Background(), "BTCUSDT", 10000, 0, 0.1, 0.6, 0.1, 0)
+	raw, err := c.ScanPriceDiffQuotes(context.Background(), "BTCUSDT", 10000, 0, 0.1, 0.6, 0.1, 0, 0.5, 10)
 	if err != nil {
 		t.Fatal(err)
 	}

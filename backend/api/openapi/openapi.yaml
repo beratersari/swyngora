@@ -4913,6 +4913,12 @@ paths:
         - name: quantity
           in: query
           schema: { type: number, exclusiveMinimum: 0 }
+        - name: minProfitPct
+          in: query
+          schema: { type: number, minimum: 0 }
+        - name: minProfitAmount
+          in: query
+          schema: { type: number, minimum: 0 }
       responses:
         '200':
           description: Ranked routes
@@ -5050,6 +5056,14 @@ paths:
         - name: minNetDiffPct
           in: query
           schema: { type: number, minimum: 0 }
+        - name: minProfitPct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.5 }
+          description: Only include routes whose after-fee profit percent is at least this
+        - name: minProfitAmount
+          in: query
+          schema: { type: number, minimum: 0, example: 10 }
+          description: Only include routes whose after-fee profit (quote currency) is at least this
       responses:
         '200':
           description: Ranked routes
@@ -7275,8 +7289,23 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PriceDiffQuote'
+        minProfitPct: { type: number }
+        minProfitAmount: { type: number }
         profitableCount: { type: integer }
+        skippedCount: { type: integer, description: Routes hidden because they missed the profit floor }
         venueCount: { type: integer }
+        loadedVenueCount: { type: integer }
+        unavailable:
+          type: array
+          description: Venues or routes whose order books could not be loaded (never ranked as best)
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              buyExchange: { type: string }
+              sellExchange: { type: string }
+              reason: { type: string, enum: [order_book_unavailable, no_asks, no_bids] }
+              message: { type: string }
         note: { type: string }
     Watchlist:
       type: object

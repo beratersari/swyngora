@@ -1242,6 +1242,8 @@ class PriceDiffScanInput(BaseModel):
     fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase taker fee %")
     fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit taker fee %")
     min_net_diff_pct: float = Field(default=0, ge=0, description="Optional threshold for meetsMinNet")
+    min_profit_pct: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit % is at least this")
+    min_profit_amount: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit (USDT) is at least this")
 
 
 class PriceDiffWatchQuoteInput(BaseModel):
@@ -1249,6 +1251,8 @@ class PriceDiffWatchQuoteInput(BaseModel):
     watch_id: str
     notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
     quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    min_profit_pct: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit % is at least this")
+    min_profit_amount: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit (USDT) is at least this")
 
 
 class ScannerRuleCreateInput(BaseModel):
@@ -2806,6 +2810,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         fee_coinbase_pct: float = 0,
         fee_bybit_pct: float = 0,
         min_net_diff_pct: float = 0,
+        min_profit_pct: float = 0,
+        min_profit_amount: float = 0,
     ) -> str:
         params: dict[str, str] = {
             "symbol": symbol,
@@ -2815,6 +2821,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         }
         if min_net_diff_pct:
             params["minNetDiffPct"] = str(min_net_diff_pct)
+        if min_profit_pct:
+            params["minProfitPct"] = str(min_profit_pct)
+        if min_profit_amount:
+            params["minProfitAmount"] = str(min_profit_amount)
         if notional is not None:
             params["notional"] = str(notional)
         if quantity is not None:
@@ -2826,12 +2836,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         watch_id: str,
         notional: float | None = None,
         quantity: float | None = None,
+        min_profit_pct: float = 0,
+        min_profit_amount: float = 0,
     ) -> str:
         params: dict[str, str] = {"clientId": client_id}
         if notional is not None:
             params["notional"] = str(notional)
         if quantity is not None:
             params["quantity"] = str(quantity)
+        if min_profit_pct:
+            params["minProfitPct"] = str(min_profit_pct)
+        if min_profit_amount:
+            params["minProfitAmount"] = str(min_profit_amount)
         return http.get(f"/api/v1/price-diff/watches/{watch_id}/quote", params)
 
     def create_scanner_rule(

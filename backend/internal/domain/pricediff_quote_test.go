@@ -253,10 +253,14 @@ func TestScanPriceDiffQuotes_RanksByProfit(t *testing.T) {
 	binance := &RawOrderBook{Asks: []PriceLevel{{Price: 100, Quantity: 2}}, Bids: []PriceLevel{{Price: 99, Quantity: 2}}, Live: true}
 	bybit := &RawOrderBook{Asks: []PriceLevel{{Price: 104, Quantity: 2}}, Bids: []PriceLevel{{Price: 103, Quantity: 2}}, Live: true}
 	coinbase := &RawOrderBook{Asks: []PriceLevel{{Price: 110, Quantity: 2}}, Bids: []PriceLevel{{Price: 109, Quantity: 2}}, Live: true}
-	got, err := ScanPriceDiffQuotes("BTCUSDT", 200, 0, map[Exchange]float64{
-		ExchangeBinance: 0.1, ExchangeBybit: 0.1, ExchangeCoinbase: 0.1,
-	}, 0, map[Exchange]*RawOrderBook{
-		ExchangeBinance: binance, ExchangeBybit: bybit, ExchangeCoinbase: coinbase,
+	got, err := ScanPriceDiffQuotes(PriceDiffScanQuery{
+		Symbol: "BTCUSDT", Notional: 200,
+		Fees: map[Exchange]float64{
+			ExchangeBinance: 0.1, ExchangeBybit: 0.1, ExchangeCoinbase: 0.1,
+		},
+		Books: map[Exchange]*RawOrderBook{
+			ExchangeBinance: binance, ExchangeBybit: bybit, ExchangeCoinbase: coinbase,
+		},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -272,6 +276,85 @@ func TestScanPriceDiffQuotes_RanksByProfit(t *testing.T) {
 	}
 	if got.Routes[0].profitAmount < got.Routes[len(got.Routes)-1].profitAmount {
 		t.Fatalf("routes not ranked by profit")
+	}
+}
+
+func TestScanPriceDiffQuotes_UnavailableVenueNotBest(t *testing.T) {
+	binance := &RawOrderBook{Asks: []PriceLevel{{Price: 100, Quantity: 2}}, Bids: []PriceLevel{{Price: 99, Quantity: 2}}, Live: true}
+	bybit := &RawOrderBook{Asks: []PriceLevel{{Price: 101, Quantity: 2}}, Bids: []PriceLevel{{Price: 100.5, Quantity: 2}}, Live: true}
+	got, err := ScanPriceDiffQuotes(PriceDiffScanQuery{
+		Symbol: "BTCUSDT", Notional: 100,
+		Fees: map[Exchange]float64{ExchangeBinance: 0.1, ExchangeBybit: 0.1},
+		Books: map[Exchange]*RawOrderBook{
+			ExchangeBinance: binance, ExchangeBybit: bybit,
+		},
+		Unavailable: []PriceDiffUnavailable{{
+			Exchange: "coinbase", Reason: PriceDiffUnavailableBook, Message: "order book could not be loaded",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LoadedVenueCount != 2 || len(got.Routes) != 2 {
+		t.Fatalf("loaded=%d routes=%d", got.LoadedVenueCount, len(got.Routes))
+	}
+	if got.BestRoute == nil || got.BestRoute.BuyExchange == ExchangeCoinbase || got.BestRoute.SellExchange == ExchangeCoinbase {
+		t.Fatalf("best must not use a missing book: %+v", got.BestRoute)
+	}
+	found := false
+	for _, u := range got.Unavailable {
+		if u.Exchange == "coinbase" && u.Reason == PriceDiffUnavailableBook {
+			found = true
+			if u.Message == "" {
+				t.Fatal("expected message")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("unavailable=%+v", got.Unavailable)
+	}
+}
+
+func TestScanPriceDiffQuotes_MinProfitFilters(t *testing.T) {
+	binance := &RawOrderBook{Asks: []PriceLevel{{Price: 100, Quantity: 1}}, Bids: []PriceLevel{{Price: 99, Quantity: 1}}}
+	bybit := &RawOrderBook{Asks: []PriceLevel{{Price: 100.2, Quantity: 1}}, Bids: []PriceLevel{{Price: 100.1, Quantity: 1}}}
+	coinbase := &RawOrderBook{Asks: []PriceLevel{{Price: 110, Quantity: 1}}, Bids: []PriceLevel{{Price: 109, Quantity: 1}}}
+	books := map[Exchange]*RawOrderBook{
+		ExchangeBinance: binance, ExchangeBybit: bybit, ExchangeCoinbase: coinbase,
+	}
+	fees := map[Exchange]float64{ExchangeBinance: 0, ExchangeBybit: 0, ExchangeCoinbase: 0}
+	all, err := ScanPriceDiffQuotes(PriceDiffScanQuery{Symbol: "BTCUSDT", Notional: 100, Fees: fees, Books: books})
+	if err != nil || all.BestRoute == nil {
+		t.Fatalf("%+v %v", all, err)
+	}
+	// Tiny bybit edge (~0.1%) should drop; coinbase still passes 1%.
+	got, err := ScanPriceDiffQuotes(PriceDiffScanQuery{
+		Symbol: "BTCUSDT", Notional: 100, Fees: fees, Books: books, MinProfitPct: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SkippedCount < 1 {
+		t.Fatalf("expected skipped tiny routes, skipped=%d routes=%d", got.SkippedCount, len(got.Routes))
+	}
+	for _, r := range got.Routes {
+		if r.ProfitPct+1e-12 < 1 {
+			t.Fatalf("route below floor still listed: %+v", r)
+		}
+	}
+	if got.BestRoute != nil && got.BestRoute.ProfitPct+1e-12 < 1 {
+		t.Fatalf("best below floor: %+v", got.BestRoute)
+	}
+	amt, err := ScanPriceDiffQuotes(PriceDiffScanQuery{
+		Symbol: "BTCUSDT", Notional: 100, Fees: fees, Books: books, MinProfitAmount: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range amt.Routes {
+		if r.profitAmount+1e-8 < 5 {
+			t.Fatalf("amount below floor: %+v", r)
+		}
 	}
 }
 

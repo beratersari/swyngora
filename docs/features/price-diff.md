@@ -20,7 +20,7 @@ Users want to know when the same coin trades at a meaningful price gap across **
 9. `minNetDiffPct` floor is **0.20%** so USDT≈USD noise does not open false opportunities.
 10. Open opportunities live in SQLite and **survive worker restarts**.
 11. **Executable quote:** walk the **buy venue asks** and **sell venue bids** for a size. `notional` is quote currency spent on the buy book **before** the buy fee (e.g. `10000` USDT). The same base quantity is sold on the other book (rematched if one side is thinner). **Max size** is the largest quantity whose **cumulative** after-fee profit is still positive — a later book level that loses money on its own is still taken while the running total stays above zero. The displayed fill is capped at that size. `usedNotional` / `usedPct` is how much of the entered money can actually be deployed; `unusedNotional` is the rest. `executable` is true only when the full requested size fills **and** profit after fees is positive.
-12. **All-venue scan:** one amount is walked on every Binance / Coinbase / Bybit buy→sell pair (fees + live depth). Routes are ranked by after-fee profit, then by usable money. `bestRoute` is the top row.
+12. **All-venue scan:** one amount is walked on every Binance / Coinbase / Bybit buy→sell pair (fees + live depth). Routes are ranked by after-fee profit, then by usable money. `bestRoute` is the top row. If a venue's order book cannot be loaded, that venue is listed in `unavailable` and is **never** shown as a normal route or chosen as best. Optional `minProfitPct` and/or `minProfitAmount` hide smaller fills (`skippedCount` is how many were dropped). Both filters must pass when both are set.
 
 ## API
 
@@ -34,7 +34,7 @@ Users want to know when the same coin trades at a meaningful price gap across **
 | `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
 | `GET` | `/api/v1/price-diff/opportunities/{id}/quote?notional=10000` | Executable quote for a stored opportunity (uses watch fees) |
 | `GET` | `/api/v1/price-diff/quote?symbol=BTCUSDT&buyExchange=binance&sellExchange=bybit&notional=10000&feeBuyPct=0.1&feeSellPct=0.1` | Executable quote without a stored opportunity |
-| `GET` | `/api/v1/price-diff/quote/scan?symbol=BTCUSDT&notional=10000&feeBinancePct=0.1&feeCoinbasePct=0.6&feeBybitPct=0.1` | Rank every venue pair at one size |
+| `GET` | `/api/v1/price-diff/quote/scan?symbol=BTCUSDT&notional=10000&feeBinancePct=0.1&feeCoinbasePct=0.6&feeBybitPct=0.1&minProfitPct=0.5` | Rank every venue pair at one size |
 | `GET` | `/api/v1/price-diff/watches/{id}/quote?notional=10000` | Same scan using a watch's symbol and fees |
 
 ## Code

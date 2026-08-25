@@ -1867,7 +1867,7 @@ func (c *APIClient) QuotePriceDiff(ctx context.Context, symbol, buyExchange, sel
 }
 
 // ScanPriceDiffQuotes compares every venue pair at one size.
-func (c *APIClient) ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct float64) (json.RawMessage, error) {
+func (c *APIClient) ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct, minProfitPct, minProfitAmount float64) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if notional > 0 {
@@ -1888,11 +1888,17 @@ func (c *APIClient) ScanPriceDiffQuotes(ctx context.Context, symbol string, noti
 	if minNetDiffPct != 0 {
 		q.Set("minNetDiffPct", strconv.FormatFloat(minNetDiffPct, 'f', -1, 64))
 	}
+	if minProfitPct != 0 {
+		q.Set("minProfitPct", strconv.FormatFloat(minProfitPct, 'f', -1, 64))
+	}
+	if minProfitAmount != 0 {
+		q.Set("minProfitAmount", strconv.FormatFloat(minProfitAmount, 'f', -1, 64))
+	}
 	return c.get(ctx, "/api/v1/price-diff/quote/scan", q)
 }
 
 // QuotePriceDiffWatch scans all pairs for a stored watch.
-func (c *APIClient) QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity float64) (json.RawMessage, error) {
+func (c *APIClient) QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity, minProfitPct, minProfitAmount float64) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("clientId", clientID)
 	if notional > 0 {
@@ -1900,6 +1906,12 @@ func (c *APIClient) QuotePriceDiffWatch(ctx context.Context, clientID, watchID s
 	}
 	if quantity > 0 {
 		q.Set("quantity", strconv.FormatFloat(quantity, 'f', -1, 64))
+	}
+	if minProfitPct != 0 {
+		q.Set("minProfitPct", strconv.FormatFloat(minProfitPct, 'f', -1, 64))
+	}
+	if minProfitAmount != 0 {
+		q.Set("minProfitAmount", strconv.FormatFloat(minProfitAmount, 'f', -1, 64))
 	}
 	return c.get(ctx, "/api/v1/price-diff/watches/"+url.PathEscape(watchID)+"/quote", q)
 }

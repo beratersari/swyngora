@@ -3990,10 +3990,24 @@ export interface components {
             symbol?: string;
             requestedNotional?: string;
             requestedQuantity?: string;
+            minProfitPct?: number;
+            minProfitAmount?: number;
             bestRoute?: components["schemas"]["PriceDiffQuote"];
             routes?: components["schemas"]["PriceDiffQuote"][];
+            /** @description Venues or routes whose order books could not be loaded (never ranked as best) */
+            unavailable?: {
+                exchange?: string;
+                buyExchange?: string;
+                sellExchange?: string;
+                /** @enum {string} */
+                reason?: "order_book_unavailable" | "no_asks" | "no_bids";
+                message?: string;
+            }[];
             profitableCount?: number;
+            /** @description Routes hidden because they missed the profit floor */
+            skippedCount?: number;
             venueCount?: number;
+            loadedVenueCount?: number;
             note?: string;
         };
         Watchlist: {
@@ -8282,6 +8296,8 @@ export interface operations {
                 feeCoinbasePct?: number;
                 feeBybitPct?: number;
                 minNetDiffPct?: number;
+                minProfitPct?: number;
+                minProfitAmount?: number;
             };
             header?: never;
             path?: never;

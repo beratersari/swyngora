@@ -576,55 +576,104 @@ func maxProfitableSize(buy, sell []ImpactSourceLevel, buyFeePct, sellFeePct floa
 	return out
 }
 
-// PriceDiffQuoteScan is every buy/sell venue pair quoted at the same size.
+const (
+	PriceDiffUnavailableBook  = "order_book_unavailable"
+	PriceDiffUnavailableNoAsk = "no_asks"
+	PriceDiffUnavailableNoBid = "no_bids"
+
+	priceDiffScanNote = "Each route walks live buy-venue asks and sell-venue bids at the same size, including fees and visible depth. Routes that meet the profit floor are ranked by after-fee profit, then by how much of the requested money can be used. Venues whose books could not be loaded are listed separately and are never chosen as best. Not a fill or financial advice."
+)
+
+// PriceDiffUnavailable is a venue or route that could not be quoted.
+type PriceDiffUnavailable struct {
+	Exchange     string
+	BuyExchange  string
+	SellExchange string
+	Reason       string
+	Message      string
+}
+
+// PriceDiffScanQuery quotes every loaded crypto-spot pair at one size.
+type PriceDiffScanQuery struct {
+	Symbol          string
+	Notional        float64
+	Quantity        float64
+	Fees            map[Exchange]float64
+	MinNetDiffPct   float64
+	MinProfitPct    float64
+	MinProfitAmount float64
+	Books           map[Exchange]*RawOrderBook
+	Unavailable     []PriceDiffUnavailable
+}
+
+// PriceDiffQuoteScan is every usable buy/sell venue pair quoted at the same size.
 type PriceDiffQuoteScan struct {
 	Symbol            string
 	RequestedNotional string
 	RequestedQuantity string
+	MinProfitPct      float64
+	MinProfitAmount   float64
 	BestRoute         *PriceDiffQuote
 	Routes            []PriceDiffQuote
+	Unavailable       []PriceDiffUnavailable
 	ProfitableCount   int
+	SkippedCount      int
 	VenueCount        int
+	LoadedVenueCount  int
 	Note              string
 }
 
-const priceDiffScanNote = "Each route walks live buy-venue asks and sell-venue bids at the same size, including fees and visible depth. Routes are ranked by after-fee profit, then by how much of the requested money can be used. Not a fill or financial advice."
-
-// ScanPriceDiffQuotes quotes every ordered crypto-spot pair from the given books.
-func ScanPriceDiffQuotes(symbol string, notional, quantity float64, fees map[Exchange]float64, minNet float64, books map[Exchange]*RawOrderBook) (*PriceDiffQuoteScan, error) {
-	symbol = strings.TrimSpace(symbol)
-	if symbol == "" {
+// ScanPriceDiffQuotes quotes every ordered pair whose books loaded.
+// Failed venues are listed in Unavailable and never ranked as best.
+// Routes below minProfitPct / minProfitAmount are omitted.
+func ScanPriceDiffQuotes(q PriceDiffScanQuery) (*PriceDiffQuoteScan, error) {
+	q.Symbol = strings.TrimSpace(q.Symbol)
+	if q.Symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", ErrInvalidArgument)
 	}
-	if err := ValidatePriceDiffQuoteSize(notional, quantity); err != nil {
+	if err := ValidatePriceDiffQuoteSize(q.Notional, q.Quantity); err != nil {
 		return nil, err
 	}
-	if minNet < 0 || math.IsNaN(minNet) || math.IsInf(minNet, 0) {
-		return nil, fmt.Errorf("%w: minNetDiffPct is invalid", ErrInvalidArgument)
+	if err := validateScanMins(q.MinNetDiffPct, q.MinProfitPct, q.MinProfitAmount); err != nil {
+		return nil, err
 	}
+	if q.Fees == nil {
+		q.Fees = map[Exchange]float64{}
+	}
+	unavailable := append([]PriceDiffUnavailable(nil), q.Unavailable...)
 	venues := make([]Exchange, 0, 3)
 	for _, ex := range SupportedExchanges {
 		if IsEquityExchange(ex) {
 			continue
 		}
-		if _, ok := books[ex]; ok {
-			venues = append(venues, ex)
+		book, ok := q.Books[ex]
+		if !ok || book == nil {
+			if !unavailableHasVenue(unavailable, ex) {
+				unavailable = append(unavailable, PriceDiffUnavailable{
+					Exchange: string(ex),
+					Reason:   PriceDiffUnavailableBook,
+					Message:  "order book could not be loaded",
+				})
+			}
+			continue
 		}
-	}
-	if len(venues) < 2 {
-		return nil, fmt.Errorf("%w: need books from at least two crypto venues", ErrInvalidArgument)
+		venues = append(venues, ex)
 	}
 	out := &PriceDiffQuoteScan{
-		Symbol:     symbol,
-		VenueCount: len(venues),
-		Routes:     make([]PriceDiffQuote, 0, len(venues)*(len(venues)-1)),
-		Note:       priceDiffScanNote,
+		Symbol:           q.Symbol,
+		MinProfitPct:     q.MinProfitPct,
+		MinProfitAmount:  q.MinProfitAmount,
+		VenueCount:       3,
+		LoadedVenueCount: len(venues),
+		Routes:           []PriceDiffQuote{},
+		Unavailable:      unavailable,
+		Note:             priceDiffScanNote,
 	}
-	if notional > 0 {
-		out.RequestedNotional = formatQty(notional)
+	if q.Notional > 0 {
+		out.RequestedNotional = formatQty(q.Notional)
 	}
-	if quantity > 0 {
-		out.RequestedQuantity = formatQty(quantity)
+	if q.Quantity > 0 {
+		out.RequestedQuantity = formatQty(q.Quantity)
 	}
 	for i := range venues {
 		for j := range venues {
@@ -632,18 +681,31 @@ func ScanPriceDiffQuotes(symbol string, notional, quantity float64, fees map[Exc
 				continue
 			}
 			buy, sell := venues[i], venues[j]
-			q, err := QuotePriceDiffRoute(PriceDiffQuoteQuery{
-				Symbol: symbol, BuyExchange: buy, SellExchange: sell,
-				BuyFeePct: fees[buy], SellFeePct: fees[sell],
-				Notional: notional, Quantity: quantity, MinNetDiffPct: minNet,
-			}, books[buy], books[sell])
-			if err != nil {
+			if skip, issue := routeBookIssue(buy, sell, q.Books[buy], q.Books[sell]); skip {
+				out.Unavailable = append(out.Unavailable, issue)
 				continue
 			}
-			if q.Profitable {
+			quote, err := QuotePriceDiffRoute(PriceDiffQuoteQuery{
+				Symbol: q.Symbol, BuyExchange: buy, SellExchange: sell,
+				BuyFeePct: q.Fees[buy], SellFeePct: q.Fees[sell],
+				Notional: q.Notional, Quantity: q.Quantity, MinNetDiffPct: q.MinNetDiffPct,
+			}, q.Books[buy], q.Books[sell])
+			if err != nil {
+				out.Unavailable = append(out.Unavailable, PriceDiffUnavailable{
+					BuyExchange: string(buy), SellExchange: string(sell),
+					Reason:  PriceDiffUnavailableBook,
+					Message: "order book could not be loaded",
+				})
+				continue
+			}
+			if !passesProfitFloor(quote, q.MinProfitPct, q.MinProfitAmount) {
+				out.SkippedCount++
+				continue
+			}
+			if quote.Profitable {
 				out.ProfitableCount++
 			}
-			out.Routes = append(out.Routes, *q)
+			out.Routes = append(out.Routes, *quote)
 		}
 	}
 	sortQuoteScan(out.Routes)
@@ -652,6 +714,82 @@ func ScanPriceDiffQuotes(symbol string, notional, quantity float64, fees map[Exc
 		out.BestRoute = &best
 	}
 	return out, nil
+}
+
+func validateScanMins(minNet, minPct, minAmt float64) error {
+	for _, v := range []float64{minNet, minPct} {
+		if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) || v > MaxPriceDiffNetPct {
+			return fmt.Errorf("%w: profit percent filter is invalid", ErrInvalidArgument)
+		}
+	}
+	if minAmt < 0 || math.IsNaN(minAmt) || math.IsInf(minAmt, 0) {
+		return fmt.Errorf("%w: minProfitAmount must be >= 0", ErrInvalidArgument)
+	}
+	return nil
+}
+
+func unavailableHasVenue(list []PriceDiffUnavailable, ex Exchange) bool {
+	for i := range list {
+		if list[i].Exchange == string(ex) && list[i].BuyExchange == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func routeBookIssue(buy, sell Exchange, buyBook, sellBook *RawOrderBook) (bool, PriceDiffUnavailable) {
+	if !bookHasAsks(buyBook) {
+		return true, PriceDiffUnavailable{
+			BuyExchange: string(buy), SellExchange: string(sell), Exchange: string(buy),
+			Reason:  PriceDiffUnavailableNoAsk,
+			Message: "order book could not be loaded",
+		}
+	}
+	if !bookHasBids(sellBook) {
+		return true, PriceDiffUnavailable{
+			BuyExchange: string(buy), SellExchange: string(sell), Exchange: string(sell),
+			Reason:  PriceDiffUnavailableNoBid,
+			Message: "order book could not be loaded",
+		}
+	}
+	return false, PriceDiffUnavailable{}
+}
+
+func bookHasAsks(b *RawOrderBook) bool {
+	if b == nil {
+		return false
+	}
+	for _, lv := range b.Asks {
+		if lv.Price > 0 && lv.Quantity > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func bookHasBids(b *RawOrderBook) bool {
+	if b == nil {
+		return false
+	}
+	for _, lv := range b.Bids {
+		if lv.Price > 0 && lv.Quantity > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func passesProfitFloor(q *PriceDiffQuote, minPct, minAmt float64) bool {
+	if q == nil {
+		return false
+	}
+	if minPct > 0 && q.ProfitPct+1e-12 < minPct {
+		return false
+	}
+	if minAmt > 0 && q.profitAmount+1e-8 < minAmt {
+		return false
+	}
+	return true
 }
 
 func sortQuoteScan(routes []PriceDiffQuote) {

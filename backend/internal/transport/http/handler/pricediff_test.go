@@ -39,9 +39,11 @@ func newPriceDiffHandler(t *testing.T) *PriceDiffHandler {
 		"binance|BTCUSDT": {
 			Symbol: "BTCUSDT", Live: true,
 			Asks: []domain.PriceLevel{{Price: 100, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 99, Quantity: 2}},
 		},
 		"bybit|BTCUSDT": {
 			Symbol: "BTCUSDT", Live: true,
+			Asks: []domain.PriceLevel{{Price: 104, Quantity: 2}},
 			Bids: []domain.PriceLevel{{Price: 103, Quantity: 2}},
 		},
 	}})
@@ -95,6 +97,11 @@ func TestQuoteScan_OK(t *testing.T) {
 	}
 	if body.BestRoute == nil || len(body.Routes) < 2 {
 		t.Fatalf("%+v", body)
+	}
+	for _, u := range body.Unavailable {
+		if u.Exchange == "coinbase" && u.Message == "" {
+			t.Fatalf("missing-book message empty: %+v", u)
+		}
 	}
 }
 

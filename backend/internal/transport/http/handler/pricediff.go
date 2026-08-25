@@ -330,28 +330,52 @@ func (h *PriceDiffHandler) QuoteRoute(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, quoteDTO(got))
 }
 
+type priceDiffUnavailableDTO struct {
+	Exchange     string `json:"exchange,omitempty"`
+	BuyExchange  string `json:"buyExchange,omitempty"`
+	SellExchange string `json:"sellExchange,omitempty"`
+	Reason       string `json:"reason"`
+	Message      string `json:"message"`
+}
+
 type priceDiffQuoteScanDTO struct {
-	Symbol            string              `json:"symbol"`
-	RequestedNotional string              `json:"requestedNotional,omitempty"`
-	RequestedQuantity string              `json:"requestedQuantity,omitempty"`
-	BestRoute         *priceDiffQuoteDTO  `json:"bestRoute,omitempty"`
-	Routes            []priceDiffQuoteDTO `json:"routes"`
-	ProfitableCount   int                 `json:"profitableCount"`
-	VenueCount        int                 `json:"venueCount"`
-	Note              string              `json:"note"`
+	Symbol            string                    `json:"symbol"`
+	RequestedNotional string                    `json:"requestedNotional,omitempty"`
+	RequestedQuantity string                    `json:"requestedQuantity,omitempty"`
+	MinProfitPct      float64                   `json:"minProfitPct,omitempty"`
+	MinProfitAmount   float64                   `json:"minProfitAmount,omitempty"`
+	BestRoute         *priceDiffQuoteDTO        `json:"bestRoute,omitempty"`
+	Routes            []priceDiffQuoteDTO       `json:"routes"`
+	Unavailable       []priceDiffUnavailableDTO `json:"unavailable"`
+	ProfitableCount   int                       `json:"profitableCount"`
+	SkippedCount      int                       `json:"skippedCount"`
+	VenueCount        int                       `json:"venueCount"`
+	LoadedVenueCount  int                       `json:"loadedVenueCount"`
+	Note              string                    `json:"note"`
 }
 
 func scanDTO(s *domain.PriceDiffQuoteScan) priceDiffQuoteScanDTO {
 	if s == nil {
-		return priceDiffQuoteScanDTO{Routes: []priceDiffQuoteDTO{}}
+		return priceDiffQuoteScanDTO{Routes: []priceDiffQuoteDTO{}, Unavailable: []priceDiffUnavailableDTO{}}
 	}
 	routes := make([]priceDiffQuoteDTO, 0, len(s.Routes))
 	for i := range s.Routes {
 		routes = append(routes, quoteDTO(&s.Routes[i]))
 	}
+	unavail := make([]priceDiffUnavailableDTO, 0, len(s.Unavailable))
+	for i := range s.Unavailable {
+		u := s.Unavailable[i]
+		unavail = append(unavail, priceDiffUnavailableDTO{
+			Exchange: u.Exchange, BuyExchange: u.BuyExchange, SellExchange: u.SellExchange,
+			Reason: u.Reason, Message: u.Message,
+		})
+	}
 	d := priceDiffQuoteScanDTO{
 		Symbol: s.Symbol, RequestedNotional: s.RequestedNotional, RequestedQuantity: s.RequestedQuantity,
-		Routes: routes, ProfitableCount: s.ProfitableCount, VenueCount: s.VenueCount, Note: s.Note,
+		MinProfitPct: s.MinProfitPct, MinProfitAmount: s.MinProfitAmount,
+		Routes: routes, Unavailable: unavail,
+		ProfitableCount: s.ProfitableCount, SkippedCount: s.SkippedCount,
+		VenueCount: s.VenueCount, LoadedVenueCount: s.LoadedVenueCount, Note: s.Note,
 	}
 	if s.BestRoute != nil {
 		best := quoteDTO(s.BestRoute)
@@ -388,9 +412,20 @@ func (h *PriceDiffHandler) QuoteScan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: minNetDiffPct must be a number", domain.ErrInvalidArgument))
 		return
 	}
+	minPct, err := parseOptionalFloat(q.Get("minProfitPct"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: minProfitPct must be a number", domain.ErrInvalidArgument))
+		return
+	}
+	minAmt, err := parseOptionalFloat(q.Get("minProfitAmount"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: minProfitAmount must be a number", domain.ErrInvalidArgument))
+		return
+	}
 	got, err := h.svc.QuoteScan(r.Context(), pricediff.ScanInput{
 		Symbol: q.Get("symbol"), Notional: notional, Quantity: quantity,
-		FeeBinancePct: feeB, FeeCoinbasePct: feeC, FeeBybitPct: feeY, MinNetDiffPct: minNet,
+		FeeBinancePct: feeB, FeeCoinbasePct: feeC, FeeBybitPct: feeY,
+		MinNetDiffPct: minNet, MinProfitPct: minPct, MinProfitAmount: minAmt,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -401,12 +436,25 @@ func (h *PriceDiffHandler) QuoteScan(w http.ResponseWriter, r *http.Request) {
 
 // QuoteWatch handles GET /api/v1/price-diff/watches/{id}/quote
 func (h *PriceDiffHandler) QuoteWatch(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
 	notional, quantity, err := parseQuoteSize(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	got, err := h.svc.QuoteWatch(r.Context(), clientIDFrom(r), r.PathValue("id"), notional, quantity)
+	minPct, err := parseOptionalFloat(q.Get("minProfitPct"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: minProfitPct must be a number", domain.ErrInvalidArgument))
+		return
+	}
+	minAmt, err := parseOptionalFloat(q.Get("minProfitAmount"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: minProfitAmount must be a number", domain.ErrInvalidArgument))
+		return
+	}
+	got, err := h.svc.QuoteWatch(r.Context(), clientIDFrom(r), r.PathValue("id"), pricediff.ScanInput{
+		Notional: notional, Quantity: quantity, MinProfitPct: minPct, MinProfitAmount: minAmt,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
