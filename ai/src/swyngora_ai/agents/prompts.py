@@ -83,7 +83,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `compare_around` for how two times / moves differed,
   `find_around_moves` for the strongest recent up/down legs and what happened during them,
   `find_around_precursors` for what often changed before those moves, including groups that fire together,
-  `find_around_similar` for past setups like the current tape and what price did after,
+  `find_around_similar` for past setups like the current tape (pick fields=volume,book,oi) and what price did after,
   `get_vwap` for volume-weighted average price from a start time, etc.).
   Do not fetch extra intervals “for context.”
 - Venues: binance, coinbase, bybit, nasdaq, bist. Default binance unless the name is a cash equity

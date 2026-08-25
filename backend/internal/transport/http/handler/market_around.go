@@ -109,7 +109,7 @@ func (h *MarketHandler) GetAroundSimilar(w http.ResponseWriter, r *http.Request)
 		}
 		limit = n
 	}
-	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"))
+	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -690,37 +690,57 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 	}
 	hits := make([]aroundSimilarHitDTO, 0, len(a.Matches))
 	for _, m := range a.Matches {
+		cmp := make([]aroundSimilarFieldDTO, 0, len(m.Compared))
+		for _, c := range m.Compared {
+			cmp = append(cmp, aroundSimilarFieldDTO{
+				Name: c.Name, Used: c.Used, Score: formatHistQty(c.Score), Weight: formatHistQty(c.Weight),
+			})
+		}
 		hits = append(hits, aroundSimilarHitDTO{
 			At: m.Move.At.UTC(), Until: m.Move.Until.UTC(), Direction: m.Move.Direction,
 			ReturnPct: domain.FormatSignedPct(m.Move.ReturnPct), Grade: m.Move.Grade,
-			Similarity: formatHistQty(m.Similarity), Matches: append([]string(nil), m.Matches...),
-			Before: aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
+			Similarity: formatHistQty(m.Similarity), Coverage: formatHistQty(m.Coverage),
+			Compared: cmp, Used: append([]string(nil), m.Used...), Missing: append([]string(nil), m.Missing...),
+			Matches: append([]string(nil), m.Matches...),
+			Before:  aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
 			AfterReturnPct: domain.FormatSignedPct(m.AfterReturnPct), AfterDirection: m.AfterDirection,
 			Summary: m.Summary,
 		})
 	}
 	return aroundSimilarResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Window: a.Window,
-		Interval: a.Interval, MinReturnPct: formatHistQty(a.MinReturnPct), AsOf: a.AsOf.UTC(),
+		Interval: a.Interval, Fields: append([]string(nil), a.Fields...),
+		MinReturnPct: formatHistQty(a.MinReturnPct), AsOf: a.AsOf.UTC(),
 		Current: aroundPhaseToDTO(a.Current), Matches: hits,
 		UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
 		Summary: a.Summary, Note: a.Note,
 	}
 }
 
+type aroundSimilarFieldDTO struct {
+	Name   string `json:"name"`
+	Used   bool   `json:"used"`
+	Score  string `json:"score"`
+	Weight string `json:"weight"`
+}
+
 type aroundSimilarHitDTO struct {
-	At             time.Time      `json:"at"`
-	Until          time.Time      `json:"until"`
-	Direction      string         `json:"direction"`
-	ReturnPct      string         `json:"returnPct"`
-	Grade          string         `json:"grade"`
-	Similarity     string         `json:"similarity"`
-	Matches        []string       `json:"matches,omitempty"`
-	Before         aroundPhaseDTO `json:"before"`
-	After          aroundPhaseDTO `json:"after"`
-	AfterReturnPct string         `json:"afterReturnPct"`
-	AfterDirection string         `json:"afterDirection"`
-	Summary        string         `json:"summary"`
+	At             time.Time               `json:"at"`
+	Until          time.Time               `json:"until"`
+	Direction      string                  `json:"direction"`
+	ReturnPct      string                  `json:"returnPct"`
+	Grade          string                  `json:"grade"`
+	Similarity     string                  `json:"similarity"`
+	Coverage       string                  `json:"coverage"`
+	Compared       []aroundSimilarFieldDTO `json:"compared"`
+	Used           []string                `json:"used,omitempty"`
+	Missing        []string                `json:"missing,omitempty"`
+	Matches        []string                `json:"matches,omitempty"`
+	Before         aroundPhaseDTO          `json:"before"`
+	After          aroundPhaseDTO          `json:"after"`
+	AfterReturnPct string                  `json:"afterReturnPct"`
+	AfterDirection string                  `json:"afterDirection"`
+	Summary        string                  `json:"summary"`
 }
 
 type aroundSimilarResponse struct {
@@ -729,6 +749,7 @@ type aroundSimilarResponse struct {
 	Lookback       string                `json:"lookback"`
 	Window         string                `json:"window"`
 	Interval       string                `json:"interval"`
+	Fields         []string              `json:"fields"`
 	MinReturnPct   string                `json:"minReturnPct"`
 	AsOf           time.Time             `json:"asOf"`
 	Current        aroundPhaseDTO        `json:"current"`

@@ -236,7 +236,7 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
 	}
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m")
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi")
 	if err != nil {
 		t.Fatal(err)
 	}

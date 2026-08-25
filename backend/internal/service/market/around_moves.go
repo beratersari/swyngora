@@ -134,15 +134,19 @@ func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, loo
 	return &out, nil
 }
 
-const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves: volume vs typical, order-book liquidity change, open interest, takers, and price. Closest cases are ranked by similarity. After is what price did during that past move. Informational only — not financial advice."
+const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves. fields selects which pieces to use (price, volume, takers, oi, book). Missing selected data counts as 0, so a thin overlap cannot look like a high match. Each case lists used, missing, coverage, and per-field scores. After is what price did during that past move. Informational only — not financial advice."
 
 // GetAroundSimilar finds past important-move setups that look like the current tape.
-func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (*domain.AroundSimilarReport, error) {
+func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields string) (*domain.AroundSimilarReport, error) {
 	if lookback == "" {
 		lookback = domain.DefaultAroundPrecursorsLookback
 	}
 	if window == "" {
 		window = domain.DefaultAroundWindow
+	}
+	want, err := domain.ParseAroundSimilarFields(fields)
+	if err != nil {
+		return nil, err
 	}
 	now := time.Now().UTC()
 	curRep, err := s.GetAround(ctx, exchange, symbol, window, "15m", now.Add(-time.Second))
@@ -153,7 +157,7 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 	if !ok {
 		return &domain.AroundSimilarReport{
 			Symbol: curRep.Symbol, Exchange: curRep.Exchange, Lookback: lookback, Window: window,
-			AsOf: now, Note: aroundSimilarDisclaimer,
+			Fields: want.IDs(), AsOf: now, Note: aroundSimilarDisclaimer,
 			Summary: "Not enough current tape to compare.",
 		}, nil
 	}
@@ -161,10 +165,10 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 	if err != nil {
 		return nil, err
 	}
-	hits := domain.MatchAroundSimilar(current, moves.Moves, limit)
+	hits := domain.MatchAroundSimilar(current, moves.Moves, limit, want)
 	out := &domain.AroundSimilarReport{
 		Symbol: moves.Symbol, Exchange: moves.Exchange, Lookback: moves.Lookback,
-		Window: window, Interval: moves.Interval, MinReturnPct: moves.MinReturnPct,
+		Window: window, Interval: moves.Interval, Fields: want.IDs(), MinReturnPct: moves.MinReturnPct,
 		AsOf: now, Current: current, Matches: hits, Note: aroundSimilarDisclaimer,
 	}
 	domain.FinishAroundSimilar(out)

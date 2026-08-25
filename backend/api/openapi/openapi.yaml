@@ -1712,9 +1712,12 @@ paths:
       description: |
         Compares the **current** market (last `window`, default 1h) to the
         setup **before** past important moves — volume vs typical, order
-        book, open interest, takers, and price. Returns the closest cases
-        and **what price did after** those setups. Default lookback **7d**.
-        Informational only.
+        book, open interest, takers, and price. `fields` selects which
+        pieces to use (e.g. `volume,book,oi` skips price). Missing selected
+        data counts as 0, so a thin overlap cannot look like a high match.
+        Each case lists `used`, `missing`, `coverage`, and per-field
+        scores. Returns the closest cases and **what price did after**.
+        Default lookback **7d**. Informational only.
       operationId: findMarketAroundSimilar
       tags: [Market]
       parameters:
@@ -1754,6 +1757,10 @@ paths:
           in: query
           description: Override past move window
           schema: { type: string }
+        - name: fields
+          in: query
+          description: Tape to compare — price,volume,takers,oi,book (default all). Example volume,book,oi
+          schema: { type: string, example: "volume,book,oi" }
       responses:
         '200':
           description: Similar past setups and what price did after

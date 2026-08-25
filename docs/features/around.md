@@ -98,10 +98,14 @@ Each combo reports how often it showed up before **increases** vs
 `GET /api/v1/market/around/similar?symbol=BTCUSDT`
 
 Compares the **current** tape (last `window`, default 1h) to the
-setup before past important moves — volume, order book, open interest,
-takers, and price. Returns the closest cases (`similarity` 0–100) and
-**what price did after** those setups (`afterReturnPct`). MCP:
-`find_around_similar`.
+setup before past important moves. `fields` selects which pieces to
+use (`price`, `volume`, `takers`, `oi`, `book`). Example:
+`fields=volume,book,oi` skips price.
+
+Missing selected data **counts as 0**, so a thin overlap cannot look
+like a 90% match. Each case lists `used`, `missing`, `coverage`, and
+per-field `compared` scores, plus **what price did after**
+(`afterReturnPct`). MCP: `find_around_similar`.
 
 ## Where the code lives
 
@@ -121,4 +125,5 @@ curl "http://localhost:8080/api/v1/market/around/compare?symbol=BTCUSDT&from=202
 curl "http://localhost:8080/api/v1/market/around/moves?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi"
 ```

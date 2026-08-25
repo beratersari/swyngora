@@ -473,6 +473,46 @@ class AroundMovesInput(BaseModel):
     )
 
 
+class AroundSimilarInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+    lookback: str = Field(
+        default="7d",
+        description="4h|12h|24h|3d|7d (default 7d)",
+    )
+    interval: str = Field(
+        default="15m",
+        description="15m|1h (default 15m)",
+    )
+    direction: str = Field(
+        default="both",
+        description="up|down|both (default both)",
+    )
+    min_return_pct: float = Field(
+        default=0,
+        description="Minimum |return| percent for past moves",
+    )
+    limit: int = Field(
+        default=0,
+        description="How many nearest cases (default 5, max 10)",
+    )
+    window: str = Field(
+        default="1h",
+        description="Current/before window 15m|30m|1h|2h|4h (default 1h)",
+    )
+    during: str = Field(
+        default="",
+        description="Override past move window",
+    )
+    fields: str = Field(
+        default="",
+        description="Tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi",
+    )
+
+
 class AroundCompareInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     from_time: str = Field(
@@ -1518,6 +1558,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         limit: int = 0,
         window: str = "1h",
         during: str = "",
+        fields: str = "",
     ) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
         if lookback:
@@ -1534,6 +1575,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["window"] = window
         if during:
             params["during"] = during
+        if fields:
+            params["fields"] = fields
         return http.get("/api/v1/market/around/similar", params)
 
     def get_vwap(
@@ -3081,12 +3124,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             find_around_similar,
             name="find_around_similar",
             description=(
-                "Compare the current market (volume, order book, open "
-                "interest, takers) to the setup before past important "
-                "moves. Returns the most similar cases and what price "
-                "did after those setups. Default lookback 7d."
+                "Compare the current market to the setup before past "
+                "important moves. fields selects price,volume,takers,oi,book "
+                "(e.g. volume,book,oi). Missing selected data lowers the "
+                "score. Returns used/missing fields and what price did after."
             ),
-            args_schema=AroundMovesInput,
+            args_schema=AroundSimilarInput,
         ),
         StructuredTool.from_function(
             get_vwap,
