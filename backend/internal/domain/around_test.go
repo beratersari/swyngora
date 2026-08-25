@@ -217,3 +217,18 @@ func TestExplainAroundReport_PrefersCombined(t *testing.T) {
 		t.Fatalf("%s", ExplainAroundReport(r))
 	}
 }
+
+func TestLatestFuturesSnapshotAtOrBefore_NeverUsesLaterSample(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	rows := []FuturesSnapshot{
+		{SampledAt: at.Add(-20 * time.Minute), Value: 100},
+		{SampledAt: at.Add(5 * time.Minute), Value: 200},
+	}
+	got := LatestFuturesSnapshotAtOrBefore(rows, at)
+	if got == nil || got.Value != 100 {
+		t.Fatalf("should keep last known before the move %+v", got)
+	}
+	if NearestFuturesSnapshot(rows, at, 10*time.Minute).Value != 200 {
+		t.Fatal("nearest still allowed to pick after (legacy)")
+	}
+}

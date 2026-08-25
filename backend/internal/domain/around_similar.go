@@ -85,6 +85,8 @@ type AroundSimilarHit struct {
 	Matches        []string
 	Before         AroundPhase
 	After          AroundPhase // the move itself (during)
+	DataFrom       time.Time   // start of tape used for the comparison (pre-move)
+	DataTo         time.Time   // end of tape used for the comparison (at move start)
 	AfterReturnPct float64
 	AfterDirection string
 	Summary        string
@@ -344,12 +346,16 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 		if !ok {
 			continue
 		}
+		before = clipAroundPhaseBeforeMove(before, hit.At)
+		if !before.Complete || !before.To.After(before.From) {
+			continue
+		}
 		after, afterOK := aroundReportDuring(hit.Around)
 		sc := aroundPhaseSimilarity(current, before, fields, weights)
 		row := AroundSimilarHit{
 			Move: hit.AroundMove, Similarity: sc.Similarity, Coverage: sc.Coverage,
 			Compared: sc.Compared, Used: sc.Used, Missing: sc.Missing, Matches: sc.Matches,
-			Before: before,
+			Before: before, DataFrom: before.From, DataTo: before.To,
 		}
 		if afterOK {
 			row.After = after
@@ -379,41 +385,64 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 	return keep, drop
 }
 
-// collapseAroundSimilarHits keeps one hit per past event: highest similarity
-// wins when ranges overlap or same-direction legs sit within 30m.
+// collapseAroundSimilarHits keeps one hit per past event (highest similarity).
+// Overlap, shared comparison windows, and close same-direction legs are
+// connected transitively so a chain of nearby legs is one event.
 func collapseAroundSimilarHits(hits []AroundSimilarHit) []AroundSimilarHit {
-	if len(hits) < 2 {
+	n := len(hits)
+	if n < 2 {
 		return hits
 	}
-	sort.SliceStable(hits, func(i, j int) bool {
-		if hits[i].Similarity == hits[j].Similarity {
-			return hits[i].Move.At.After(hits[j].Move.At)
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
 		}
-		return hits[i].Similarity > hits[j].Similarity
-	})
-	out := make([]AroundSimilarHit, 0, len(hits))
-	for _, h := range hits {
-		dup := false
-		for i := range out {
-			if aroundSimilarSameEvent(out[i], h) {
-				dup = true
-				break
+		return i
+	}
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			if aroundSimilarSameEvent(hits[i], hits[j]) {
+				ri, rj := find(i), find(j)
+				if ri != rj {
+					parent[rj] = ri
+				}
 			}
 		}
-		if !dup {
-			out = append(out, h)
+	}
+	best := make(map[int]int, n)
+	for i := range hits {
+		r := find(i)
+		prev, ok := best[r]
+		if !ok || hits[i].Similarity > hits[prev].Similarity ||
+			(hits[i].Similarity == hits[prev].Similarity && hits[i].Move.At.After(hits[prev].Move.At)) {
+			best[r] = i
 		}
 	}
+	out := make([]AroundSimilarHit, 0, len(best))
+	for _, i := range best {
+		out = append(out, hits[i])
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Similarity == out[j].Similarity {
+			return out[i].Move.At.After(out[j].Move.At)
+		}
+		return out[i].Similarity > out[j].Similarity
+	})
 	return out
 }
 
 func aroundSimilarSameEvent(a, b AroundSimilarHit) bool {
-	aFrom, aTo := aroundSimilarMoveSpan(a.Move)
-	bFrom, bTo := aroundSimilarMoveSpan(b.Move)
+	aFrom, aTo := aroundSimilarClusterSpan(a)
+	bFrom, bTo := aroundSimilarClusterSpan(b)
 	if aFrom.IsZero() || bFrom.IsZero() {
 		return false
 	}
-	// [from, to) overlap.
 	if aFrom.Before(bTo) && bFrom.Before(aTo) {
 		return true
 	}
@@ -425,6 +454,54 @@ func aroundSimilarSameEvent(a, b AroundSimilarHit) bool {
 		gap = aFrom.Sub(bTo)
 	}
 	return gap >= 0 && gap <= aroundSimilarEventSlack
+}
+
+func aroundSimilarClusterSpan(h AroundSimilarHit) (time.Time, time.Time) {
+	from, to := aroundSimilarMoveSpan(h.Move)
+	dFrom, dTo := h.DataFrom, h.DataTo
+	if dFrom.IsZero() {
+		dFrom = h.Before.From
+	}
+	if dTo.IsZero() {
+		dTo = h.Before.To
+	}
+	if !dFrom.IsZero() && (from.IsZero() || dFrom.Before(from)) {
+		from = dFrom
+	}
+	if !dTo.IsZero() && dTo.After(to) {
+		to = dTo
+	}
+	return from, to
+}
+
+// clipAroundPhaseBeforeMove drops anything after the move started.
+func clipAroundPhaseBeforeMove(p AroundPhase, moveAt time.Time) AroundPhase {
+	if moveAt.IsZero() {
+		return p
+	}
+	moveAt = moveAt.UTC()
+	if p.To.After(moveAt) {
+		p.To = moveAt
+		p.Book = nil
+		p.Futures = nil
+		p.Price = AroundPrice{}
+		p.Flow = AroundFlow{}
+		p.Profile = nil
+		p.Complete = p.To.After(p.From)
+	}
+	if len(p.Events) > 0 {
+		evs := make([]AroundEvent, 0, len(p.Events))
+		for _, ev := range p.Events {
+			if ev.At.IsZero() || !ev.At.After(moveAt) {
+				evs = append(evs, ev)
+			}
+		}
+		p.Events = evs
+	}
+	if !p.To.After(p.From) {
+		p.Complete = false
+	}
+	return p
 }
 
 func aroundSimilarMoveSpan(m AroundMove) (time.Time, time.Time) {
@@ -608,6 +685,9 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 func explainAroundSimilarHit(h AroundSimilarHit) string {
 	when := h.Move.At.UTC().Format("15:04")
 	bits := fmt.Sprintf("%s%% similar to the setup at %s", formatFixed(h.Similarity, 0), when)
+	if !h.DataFrom.IsZero() && h.DataTo.After(h.DataFrom) {
+		bits += fmt.Sprintf(" (data %s–%s)", h.DataFrom.UTC().Format("15:04"), h.DataTo.UTC().Format("15:04"))
+	}
 	if h.Coverage < 99 {
 		bits += fmt.Sprintf(" (%s%% of selected data present)", formatFixed(h.Coverage, 0))
 	}

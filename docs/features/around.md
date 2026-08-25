@@ -114,9 +114,15 @@ weighted closeness of fields that actually had data. `minCoverage`
 must actually have data. Cases below that floor are **not** normal
 matches — they go in `skipped` with `missing` metrics and `coverage`.
 
-Overlapping matches, or same-direction legs within **30 minutes**,
-are **one past event**. The hit with the highest similarity is kept.
-`events` is how many unique past events remain.
+Overlapping matches, shared setup windows, or same-direction legs
+within **30 minutes** are **one past event** (chains of nearby legs
+count as one). The hit with the highest similarity is kept. `events`
+is how many unique past events remain.
+
+Each past match uses **only tape already available before that move
+started**. `dataFrom` / `dataTo` are the start and end of that
+comparison window. Book and open-interest samples from after the
+move starts are not used.
 
 `afterHorizons` is what usually happened after those unique events:
 how many went **up** vs **down**, plus **average** and **median**

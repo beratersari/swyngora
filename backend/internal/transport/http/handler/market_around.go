@@ -719,6 +719,7 @@ func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO 
 			Compared: cmp, Used: append([]string(nil), m.Used...), Missing: append([]string(nil), m.Missing...),
 			Matches: append([]string(nil), m.Matches...),
 			Before:  aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
+			DataFrom: m.DataFrom.UTC(), DataTo: m.DataTo.UTC(),
 			AfterReturnPct: domain.FormatSignedPct(m.AfterReturnPct), AfterDirection: m.AfterDirection,
 			Summary: m.Summary,
 		})
@@ -779,6 +780,8 @@ type aroundSimilarHitDTO struct {
 	Matches        []string                `json:"matches,omitempty"`
 	Before         aroundPhaseDTO          `json:"before"`
 	After          aroundPhaseDTO          `json:"after"`
+	DataFrom       time.Time               `json:"dataFrom"`
+	DataTo         time.Time               `json:"dataTo"`
 	AfterReturnPct string                  `json:"afterReturnPct"`
 	AfterDirection string                  `json:"afterDirection"`
 	Summary        string                  `json:"summary"`

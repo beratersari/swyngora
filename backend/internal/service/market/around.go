@@ -234,11 +234,16 @@ func (s *Service) attachAroundBook(ctx context.Context, ex domain.Exchange, symb
 		if !ph.To.After(ph.From) {
 			continue
 		}
-		diff, err := s.bookHist.Compare(ctx, string(ex), symbol, ph.From, ph.To)
-		if err != nil || diff == nil {
+		fromSnap, err := s.bookHist.SnapshotAt(ctx, string(ex), symbol, ph.From)
+		if err != nil || fromSnap == nil || fromSnap.SampledAt.After(ph.To) {
 			continue
 		}
-		if b := domain.BookFromDiff(*diff); b != nil {
+		toSnap, err := s.bookHist.SnapshotAt(ctx, string(ex), symbol, ph.To)
+		if err != nil || toSnap == nil || toSnap.SampledAt.After(ph.To) {
+			continue
+		}
+		diff := domain.CompareBookHistory(*fromSnap, *toSnap)
+		if b := domain.BookFromDiff(diff); b != nil {
 			ph.Book = b
 			ph.Summary = domain.ExplainAroundPhase(*ph)
 		}
@@ -272,12 +277,12 @@ func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, s
 			phaseLiqs = append(phaseLiqs, e)
 		}
 		got := domain.FuturesAcrossSamples(
-			domain.NearestFuturesSnapshot(oi, ph.From, pad),
-			domain.NearestFuturesSnapshot(oi, ph.To, pad),
-			domain.NearestFuturesSnapshot(fund, ph.From, pad),
-			domain.NearestFuturesSnapshot(fund, ph.To, pad),
-			domain.NearestFuturesSnapshot(ls, ph.From, pad),
-			domain.NearestFuturesSnapshot(ls, ph.To, pad),
+			domain.LatestFuturesSnapshotAtOrBefore(oi, ph.From),
+			domain.LatestFuturesSnapshotAtOrBefore(oi, ph.To),
+			domain.LatestFuturesSnapshotAtOrBefore(fund, ph.From),
+			domain.LatestFuturesSnapshotAtOrBefore(fund, ph.To),
+			domain.LatestFuturesSnapshotAtOrBefore(ls, ph.From),
+			domain.LatestFuturesSnapshotAtOrBefore(ls, ph.To),
 			phaseLiqs,
 		)
 		if got != nil {

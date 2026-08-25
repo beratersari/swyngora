@@ -301,9 +301,21 @@ type stubAroundBook struct {
 	from, to domain.BookHistorySnapshot
 }
 
-func (s stubAroundBook) SnapshotAt(context.Context, string, string, time.Time) (*domain.BookHistorySnapshot, error) {
-	got := s.from
-	return &got, nil
+func (s stubAroundBook) SnapshotAt(_ context.Context, _, _ string, at time.Time) (*domain.BookHistorySnapshot, error) {
+	var best *domain.BookHistorySnapshot
+	for _, row := range []domain.BookHistorySnapshot{s.from, s.to} {
+		if row.SampledAt.IsZero() || row.SampledAt.After(at) {
+			continue
+		}
+		cp := row
+		if best == nil || cp.SampledAt.After(best.SampledAt) {
+			best = &cp
+		}
+	}
+	if best == nil {
+		return nil, domain.ErrNotFound
+	}
+	return best, nil
 }
 func (s stubAroundBook) List(context.Context, domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
 	return []domain.BookHistorySnapshot{s.from, s.to}, nil

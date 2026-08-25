@@ -22,6 +22,10 @@ func similarHit(at time.Time, ret float64, before, during AroundPhase) AroundMov
 	during.Phase = AroundPhaseDuring
 	during.Complete = true
 	during.Price = AroundPrice{ChangePct: ret, Direction: changeDir(ret)}
+	before.Phase = AroundPhaseBefore
+	before.Complete = true
+	before.From = at.Add(-time.Hour)
+	before.To = at
 	return AroundMoveHit{
 		AroundMove: AroundMove{At: at, Until: at.Add(30 * time.Minute), Direction: changeDir(ret), ReturnPct: ret},
 		Around: &AroundReport{
@@ -206,11 +210,48 @@ func TestMatchAroundSimilar_CollapsesOverlapAndSameMove(t *testing.T) {
 	if !got[1].Move.At.Equal(t0.Add(4 * time.Hour)) {
 		t.Fatalf("far move should remain %+v", got[1])
 	}
+	if got[0].DataTo.After(got[0].Move.At) || got[0].DataFrom.IsZero() {
+		t.Fatalf("data window must end at the move %+v", got[0])
+	}
 
-	// Opposite next to the cluster is its own event.
+	// Nearby opposite still shares the 1h setup window — one event.
 	withOpp, _ := MatchAroundSimilar(cur, []AroundMoveHit{best, opp}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
-	if len(withOpp) != 2 {
-		t.Fatalf("opposite nearby should stay separate %+v", withOpp)
+	if len(withOpp) != 1 {
+		t.Fatalf("overlapping setup windows should be one event %+v", withOpp)
+	}
+
+	// A chain of legs 20m apart is one event (transitive).
+	a := similarHit(t0, 3.2, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
+	b := similarHit(t0.Add(20*time.Minute), 2.4, similarPhase(2.1, 3.2, -1300, CVDDirUp), AroundPhase{})
+	c := similarHit(t0.Add(40*time.Minute), 2.1, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
+	chain, _ := MatchAroundSimilar(cur, []AroundMoveHit{c, a, b}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(chain) != 1 || !chain[0].Move.At.Equal(t0) {
+		t.Fatalf("chain should collapse to the first/best event %+v", chain)
+	}
+}
+
+func TestMatchAroundSimilar_ClipsPostMoveData(t *testing.T) {
+	cur := similarPhase(2.3, 4, -1500, CVDDirUp)
+	cur.From = time.Date(2026, 8, 24, 13, 0, 0, 0, time.UTC)
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	hit := similarHit(at, 3.5, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
+	if p, ok := AroundPhaseByID(*hit.Around.Combined, AroundPhaseBefore); ok {
+		p.To = at.Add(30 * time.Minute)
+		p.Events = []AroundEvent{{Kind: AroundEventSweep, At: at.Add(10 * time.Minute)}}
+		hit.Around.Combined.Phases[0] = p
+	}
+	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{hit}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(got) != 1 {
+		t.Fatalf("expected a clipped match %+v", got)
+	}
+	if !got[0].DataTo.Equal(at) || got[0].DataFrom.After(at) || !got[0].DataFrom.Before(got[0].DataTo) {
+		t.Fatalf("data window %+v–%+v", got[0].DataFrom, got[0].DataTo)
+	}
+	if got[0].Before.To.After(at) {
+		t.Fatalf("before leaked past the move %+v", got[0].Before)
+	}
+	if len(got[0].Before.Events) != 0 {
+		t.Fatalf("post-move event should be dropped %+v", got[0].Before.Events)
 	}
 }
 

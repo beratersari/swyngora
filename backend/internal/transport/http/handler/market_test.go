@@ -656,6 +656,9 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 				t.Fatalf("uncompared %s should not have score %+v", c.Name, c)
 			}
 		}
+		if !hit.DataTo.IsZero() && hit.DataTo.After(hit.At) {
+			t.Fatalf("dataTo after move start %+v", hit)
+		}
 	}
 }
 

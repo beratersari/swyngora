@@ -1314,6 +1314,26 @@ func NearestFuturesSnapshot(rows []FuturesSnapshot, at time.Time, slack time.Dur
 	return after
 }
 
+// LatestFuturesSnapshotAtOrBefore is the newest sample at or before at.
+// It never returns a sample from after at.
+func LatestFuturesSnapshotAtOrBefore(rows []FuturesSnapshot, at time.Time) *FuturesSnapshot {
+	if at.IsZero() || len(rows) == 0 {
+		return nil
+	}
+	at = at.UTC()
+	var best *FuturesSnapshot
+	for i := range rows {
+		r := &rows[i]
+		if r.SampledAt.IsZero() || r.SampledAt.UTC().After(at) {
+			continue
+		}
+		if best == nil || r.SampledAt.After(best.SampledAt) {
+			best = r
+		}
+	}
+	return best
+}
+
 func futuresOIValue(s FuturesSnapshot) float64 {
 	if s.Value > 0 {
 		return s.Value

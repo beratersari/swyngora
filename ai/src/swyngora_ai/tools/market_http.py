@@ -3143,11 +3143,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "(e.g. volume,book,oi). weights sets importance "
                 "(default book and oi 3, takers 1.5, volume and price 1). "
                 "min_coverage (default 60) sends thin cases to skipped. "
-                "Uncompared fields have no score. Overlapping or "
-                "same-move matches count as one event (highest "
-                "similarity). afterHorizons is how price usually "
-                "moved 15m/1h/4h after those unique events "
-                "(up/down, avg, median, events)."
+                "Uncompared fields have no score. Each past match "
+                "uses only tape available before that move "
+                "(dataFrom-dataTo). Overlapping or chained same-move "
+                "matches count as one event. afterHorizons is how "
+                "price usually moved 15m/1h/4h after those unique "
+                "events (up/down, avg, median, events)."
             ),
             args_schema=AroundSimilarInput,
         ),
