@@ -634,7 +634,7 @@ func TestGetAroundPrecursors_OK(t *testing.T) {
 
 func TestGetAroundSimilar_OK(t *testing.T) {
 	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&lookback=24h", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&lookback=24h&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60", nil)
 	rr := httptest.NewRecorder()
 	h.GetAroundSimilar(rr, req)
 	if rr.Code != http.StatusOK {
@@ -644,8 +644,21 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" {
+	if body.Symbol != "BTCUSDT" || body.MinCoverage != "60" {
 		t.Fatalf("%+v", body)
+	}
+	if len(body.Fields) != 3 || len(body.Weights) != 3 {
+		t.Fatalf("fields/weights %+v", body)
+	}
+}
+
+func TestGetAroundSimilar_BadWeights(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book&weights=price:2", nil)
+	rr := httptest.NewRecorder()
+	h.GetAroundSimilar(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

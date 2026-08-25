@@ -4,14 +4,16 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	DefaultAroundSimilarLimit = 5
-	MaxAroundSimilarLimit     = 10
-	aroundSimilarMinScore     = 40.0
+	DefaultAroundSimilarLimit       = 5
+	MaxAroundSimilarLimit           = 10
+	DefaultAroundSimilarMinCoverage = 60.0
+	aroundSimilarMinScore           = 40.0
 
 	AroundSimilarFieldPrice  = "price"
 	AroundSimilarFieldVolume = "volume"
@@ -27,6 +29,15 @@ type AroundSimilarFields struct {
 	Takers bool
 	OI     bool
 	Book   bool
+}
+
+// AroundSimilarWeights is how much each selected field counts.
+type AroundSimilarWeights struct {
+	Price  float64
+	Volume float64
+	Takers float64
+	OI     float64
+	Book   float64
 }
 
 // AroundSimilarFieldScore is one requested field on one match.
@@ -61,10 +72,13 @@ type AroundSimilarReport struct {
 	Window         string
 	Interval       string
 	Fields         []string
+	Weights        []AroundSimilarFieldScore
+	MinCoverage    float64
 	MinReturnPct   float64
 	AsOf           time.Time
 	Current        AroundPhase
 	Matches        []AroundSimilarHit
+	Skipped        []AroundSimilarHit
 	UpAfter        int
 	DownAfter      int
 	MedianAfterPct float64
@@ -75,6 +89,11 @@ type AroundSimilarReport struct {
 // DefaultAroundSimilarFields compares every tape piece.
 func DefaultAroundSimilarFields() AroundSimilarFields {
 	return AroundSimilarFields{Price: true, Volume: true, Takers: true, OI: true, Book: true}
+}
+
+// DefaultAroundSimilarWeights gives book and OI more say than volume.
+func DefaultAroundSimilarWeights() AroundSimilarWeights {
+	return AroundSimilarWeights{Price: 1, Volume: 1, Takers: 1.5, OI: 3, Book: 3}
 }
 
 // ParseAroundSimilarFields accepts a CSV of price, volume, takers, oi, book.
@@ -135,6 +154,135 @@ func (f AroundSimilarFields) IDs() []string {
 	return out
 }
 
+// ParseAroundSimilarWeights overlays book:3,oi:3,volume:1 (or book=3) on defaults
+// for the selected fields.
+func ParseAroundSimilarWeights(raw string, fields AroundSimilarFields) (AroundSimilarWeights, error) {
+	if !fields.Any() {
+		fields = DefaultAroundSimilarFields()
+	}
+	d := DefaultAroundSimilarWeights()
+	out := AroundSimilarWeights{}
+	if fields.Price {
+		out.Price = d.Price
+	}
+	if fields.Volume {
+		out.Volume = d.Volume
+	}
+	if fields.Takers {
+		out.Takers = d.Takers
+	}
+	if fields.OI {
+		out.OI = d.OI
+	}
+	if fields.Book {
+		out.Book = d.Book
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return out, nil
+	}
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		name, val, ok := splitWeightKV(part)
+		if !ok {
+			return AroundSimilarWeights{}, fmt.Errorf("%w: weights must look like book:3,oi:3,volume:1", ErrInvalidArgument)
+		}
+		w, err := parseSimilarWeight(val)
+		if err != nil {
+			return AroundSimilarWeights{}, err
+		}
+		switch name {
+		case AroundSimilarFieldPrice:
+			if !fields.Price {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for price but price is not in fields", ErrInvalidArgument)
+			}
+			out.Price = w
+		case AroundSimilarFieldVolume:
+			if !fields.Volume {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for volume but volume is not in fields", ErrInvalidArgument)
+			}
+			out.Volume = w
+		case AroundSimilarFieldTakers, "taker", "flow":
+			if !fields.Takers {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for takers but takers is not in fields", ErrInvalidArgument)
+			}
+			out.Takers = w
+		case AroundSimilarFieldOI, "open_interest", "openinterest", "open-interest":
+			if !fields.OI {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for oi but oi is not in fields", ErrInvalidArgument)
+			}
+			out.OI = w
+		case AroundSimilarFieldBook, "orderbook", "order_book", "order-book":
+			if !fields.Book {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for book but book is not in fields", ErrInvalidArgument)
+			}
+			out.Book = w
+		default:
+			return AroundSimilarWeights{}, fmt.Errorf("%w: unknown weight field %q", ErrInvalidArgument, name)
+		}
+	}
+	return out, nil
+}
+
+func splitWeightKV(part string) (name, val string, ok bool) {
+	for _, sep := range []string{":", "="} {
+		if i := strings.Index(part, sep); i > 0 {
+			return strings.ToLower(strings.TrimSpace(part[:i])), strings.TrimSpace(part[i+1:]), true
+		}
+	}
+	return "", "", false
+}
+
+func parseSimilarWeight(raw string) (float64, error) {
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v <= 0 || math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("%w: weight must be a number > 0", ErrInvalidArgument)
+	}
+	return v, nil
+}
+
+// ParseAroundSimilarMinCoverage is 0–100. Empty uses 60. 0 means no floor.
+func ParseAroundSimilarMinCoverage(raw string) (float64, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return DefaultAroundSimilarMinCoverage, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || v < 0 || v > 100 || math.IsNaN(v) {
+		return 0, fmt.Errorf("%w: minCoverage must be 0–100", ErrInvalidArgument)
+	}
+	return v, nil
+}
+
+func (w AroundSimilarWeights) of(name string) float64 {
+	switch name {
+	case AroundSimilarFieldPrice:
+		return w.Price
+	case AroundSimilarFieldVolume:
+		return w.Volume
+	case AroundSimilarFieldTakers:
+		return w.Takers
+	case AroundSimilarFieldOI:
+		return w.OI
+	case AroundSimilarFieldBook:
+		return w.Book
+	default:
+		return 0
+	}
+}
+
+// ListAroundSimilarWeights is selected fields with their weights, for the API.
+func ListAroundSimilarWeights(fields AroundSimilarFields, w AroundSimilarWeights) []AroundSimilarFieldScore {
+	out := make([]AroundSimilarFieldScore, 0, 5)
+	for _, id := range fields.IDs() {
+		out = append(out, AroundSimilarFieldScore{Name: id, Used: true, Weight: w.of(id)})
+	}
+	return out
+}
+
 // ClampAroundSimilarLimit bounds how many nearest cases we keep.
 func ClampAroundSimilarLimit(n int) int {
 	if n <= 0 {
@@ -147,15 +295,19 @@ func ClampAroundSimilarLimit(n int) int {
 }
 
 // MatchAroundSimilar ranks past move setups against the current before-window.
-func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fields AroundSimilarFields) []AroundSimilarHit {
+// Cases below minCoverage are returned in skipped, not as normal matches.
+func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fields AroundSimilarFields, weights AroundSimilarWeights, minCoverage float64) (matches, skipped []AroundSimilarHit) {
 	limit = ClampAroundSimilarLimit(limit)
 	if !fields.Any() {
 		fields = DefaultAroundSimilarFields()
 	}
-	if !current.Complete {
-		return nil
+	if minCoverage < 0 {
+		minCoverage = DefaultAroundSimilarMinCoverage
 	}
-	out := make([]AroundSimilarHit, 0, len(past))
+	if !current.Complete {
+		return nil, nil
+	}
+	var keep, drop []AroundSimilarHit
 	for _, hit := range past {
 		if !hit.At.IsZero() && !current.From.IsZero() && !hit.At.Before(current.From) {
 			continue
@@ -165,10 +317,7 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 			continue
 		}
 		after, afterOK := aroundReportDuring(hit.Around)
-		sc := aroundPhaseSimilarity(current, before, fields)
-		if sc.Similarity < aroundSimilarMinScore {
-			continue
-		}
+		sc := aroundPhaseSimilarity(current, before, fields, weights)
 		row := AroundSimilarHit{
 			Move: hit.AroundMove, Similarity: sc.Similarity, Coverage: sc.Coverage,
 			Compared: sc.Compared, Used: sc.Used, Missing: sc.Missing, Matches: sc.Matches,
@@ -183,18 +332,28 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 			row.AfterDirection = hit.Direction
 		}
 		row.Summary = explainAroundSimilarHit(row)
-		out = append(out, row)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Similarity == out[j].Similarity {
-			return out[i].Move.At.After(out[j].Move.At)
+		if minCoverage > 0 && sc.Coverage < minCoverage {
+			drop = append(drop, row)
+			continue
 		}
-		return out[i].Similarity > out[j].Similarity
-	})
-	if len(out) > limit {
-		out = out[:limit]
+		if sc.Similarity < aroundSimilarMinScore {
+			continue
+		}
+		keep = append(keep, row)
 	}
-	return out
+	sort.SliceStable(keep, func(i, j int) bool {
+		if keep[i].Similarity == keep[j].Similarity {
+			return keep[i].Move.At.After(keep[j].Move.At)
+		}
+		return keep[i].Similarity > keep[j].Similarity
+	})
+	if len(keep) > limit {
+		keep = keep[:limit]
+	}
+	sort.SliceStable(drop, func(i, j int) bool {
+		return drop[i].Coverage > drop[j].Coverage
+	})
+	return keep, drop
 }
 
 // ExplainAroundSimilarReport writes how similar past cases resolved.
@@ -204,6 +363,10 @@ func ExplainAroundSimilarReport(r AroundSimilarReport) string {
 		name = "This coin"
 	}
 	if len(r.Matches) == 0 {
+		if n := len(r.Skipped); n > 0 {
+			return fmt.Sprintf("%s: %d past setup(s) lacked enough selected data (min coverage %s%%).",
+				name, n, formatFixed(r.MinCoverage, 0))
+		}
 		return name + ": no past important-move setup is similar enough to the current tape."
 	}
 	head := fmt.Sprintf("%s: %d similar past setup(s).", name, len(r.Matches))
@@ -255,7 +418,7 @@ type aroundSimilarScore struct {
 	Matches    []string
 }
 
-func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields) aroundSimilarScore {
+func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundSimilarWeights) aroundSimilarScore {
 	type cand struct {
 		name   string
 		weight float64
@@ -264,8 +427,8 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields) aroundSim
 		match  bool
 	}
 	var cands []cand
-	if want.Volume {
-		c := cand{name: AroundSimilarFieldVolume, weight: 0.24}
+	if want.Volume && w.of(AroundSimilarFieldVolume) > 0 {
+		c := cand{name: AroundSimilarFieldVolume, weight: w.of(AroundSimilarFieldVolume)}
 		if a.Flow.TypicalKnown && b.Flow.TypicalKnown {
 			c.have = true
 			c.score = closenessRatio(a.Flow.VolumeRatio, b.Flow.VolumeRatio)
@@ -273,14 +436,14 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields) aroundSim
 		}
 		cands = append(cands, c)
 	}
-	if want.Price {
-		c := cand{name: AroundSimilarFieldPrice, weight: 0.14, have: true}
+	if want.Price && w.of(AroundSimilarFieldPrice) > 0 {
+		c := cand{name: AroundSimilarFieldPrice, weight: w.of(AroundSimilarFieldPrice), have: true}
 		c.score = closenessAbs(a.Price.ChangePct, b.Price.ChangePct, 3)
 		c.match = sameDir(a.Price.Direction, b.Price.Direction) || c.score >= 0.7
 		cands = append(cands, c)
 	}
-	if want.Takers {
-		c := cand{name: AroundSimilarFieldTakers, weight: 0.14}
+	if want.Takers && w.of(AroundSimilarFieldTakers) > 0 {
+		c := cand{name: AroundSimilarFieldTakers, weight: w.of(AroundSimilarFieldTakers)}
 		if a.Flow.BuySellKnown && b.Flow.BuySellKnown {
 			c.have = true
 			c.score = closenessAbs(a.Flow.BuyShare*100, b.Flow.BuyShare*100, 20)
@@ -288,8 +451,8 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields) aroundSim
 		}
 		cands = append(cands, c)
 	}
-	if want.OI {
-		c := cand{name: AroundSimilarFieldOI, weight: 0.24}
+	if want.OI && w.of(AroundSimilarFieldOI) > 0 {
+		c := cand{name: AroundSimilarFieldOI, weight: w.of(AroundSimilarFieldOI)}
 		if a.Futures != nil && a.Futures.Complete && b.Futures != nil && b.Futures.Complete {
 			c.have = true
 			c.score = closenessAbs(a.Futures.OIChangePct, b.Futures.OIChangePct, 6)
@@ -297,8 +460,8 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields) aroundSim
 		}
 		cands = append(cands, c)
 	}
-	if want.Book {
-		c := cand{name: AroundSimilarFieldBook, weight: 0.24}
+	if want.Book && w.of(AroundSimilarFieldBook) > 0 {
+		c := cand{name: AroundSimilarFieldBook, weight: w.of(AroundSimilarFieldBook)}
 		if a.Book != nil && a.Book.Complete && b.Book != nil && b.Book.Complete {
 			c.have = true
 			sb := closenessSigned(a.Book.BidNotionalDelta, b.Book.BidNotionalDelta)

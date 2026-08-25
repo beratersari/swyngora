@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestMatchAroundSimilar_RanksClosestAndReportsAfter(t *testing.T) {
 		similarHit(closeAt, 3.5, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{}),
 		similarHit(farAt, -2.8, similarPhase(0.8, -3, 2000, CVDDirDown), AroundPhase{}),
 	}
-	got := MatchAroundSimilar(nowBefore, past, 5, DefaultAroundSimilarFields())
+	got, _ := MatchAroundSimilar(nowBefore, past, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
 	if len(got) < 1 {
 		t.Fatal("expected a match")
 	}
@@ -57,7 +58,7 @@ func TestMatchAroundSimilar_SkipsCurrentWindow(t *testing.T) {
 	cur := similarPhase(2, 2, -100, CVDDirUp)
 	cur.From = time.Date(2026, 8, 24, 13, 0, 0, 0, time.UTC)
 	inside := similarHit(cur.From.Add(time.Minute), 2, similarPhase(2, 2, -100, CVDDirUp), AroundPhase{})
-	got := MatchAroundSimilar(cur, []AroundMoveHit{inside}, 5, DefaultAroundSimilarFields())
+	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{inside}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
 	if len(got) != 0 {
 		t.Fatalf("should skip current window %+v", got)
 	}
@@ -67,7 +68,7 @@ func TestAroundPhaseSimilarity_ThinDataCannotScoreHigh(t *testing.T) {
 	// Only price is present; volume/book/OI requested but missing.
 	a := AroundPhase{Complete: true, Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat}}
 	b := AroundPhase{Complete: true, Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat}}
-	sc := aroundPhaseSimilarity(a, b, DefaultAroundSimilarFields())
+	sc := aroundPhaseSimilarity(a, b, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights())
 	if sc.Similarity >= 40 {
 		t.Fatalf("thin overlap scored too high %+v", sc)
 	}
@@ -92,7 +93,8 @@ func TestAroundPhaseSimilarity_SelectedFieldsOnly(t *testing.T) {
 	a.Price.ChangePct = 2
 	b.Price.ChangePct = -2
 	want := AroundSimilarFields{Volume: true, Book: true, OI: true}
-	sc := aroundPhaseSimilarity(a, b, want)
+	w, _ := ParseAroundSimilarWeights("", want)
+	sc := aroundPhaseSimilarity(a, b, want, w)
 	if sc.Similarity < 70 {
 		t.Fatalf("volume+book+oi should still match %+v", sc)
 	}
@@ -100,6 +102,60 @@ func TestAroundPhaseSimilarity_SelectedFieldsOnly(t *testing.T) {
 		if n == AroundSimilarFieldPrice {
 			t.Fatalf("price was excluded %+v", sc)
 		}
+	}
+}
+
+func TestMatchAroundSimilar_LowCoverageIsSkipped(t *testing.T) {
+	cur := AroundPhase{
+		Complete: true, From: time.Date(2026, 8, 24, 13, 0, 0, 0, time.UTC),
+		Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat},
+	}
+	past := similarHit(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC), 3,
+		AroundPhase{Phase: AroundPhaseBefore, Complete: true, Price: AroundPrice{ChangePct: 0.1, Direction: CVDDirFlat}}, AroundPhase{})
+	keep, drop := MatchAroundSimilar(cur, []AroundMoveHit{past}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 60)
+	if len(keep) != 0 {
+		t.Fatalf("thin coverage should not be a normal match %+v", keep)
+	}
+	if len(drop) != 1 || drop[0].Coverage >= 60 || len(drop[0].Missing) == 0 {
+		t.Fatalf("expected skipped with missing %+v", drop)
+	}
+}
+
+func TestAroundPhaseSimilarity_BookAndOIWeighMoreThanVolume(t *testing.T) {
+	cur := similarPhase(2.2, 4, -1500, CVDDirUp)
+	volTwin := similarPhase(2.2, -4, 1500, CVDDirDown) // volume same, book+oi opposite
+	bookTwin := similarPhase(0.6, 4, -1500, CVDDirUp)  // volume different, book+oi same
+	fields := DefaultAroundSimilarFields()
+	w := DefaultAroundSimilarWeights()
+	volScore := aroundPhaseSimilarity(cur, volTwin, fields, w)
+	bookScore := aroundPhaseSimilarity(cur, bookTwin, fields, w)
+	if bookScore.Similarity <= volScore.Similarity {
+		t.Fatalf("book+oi should outweigh volume: book=%v vol=%v", bookScore.Similarity, volScore.Similarity)
+	}
+}
+
+func TestParseAroundSimilarWeightsAndCoverage(t *testing.T) {
+	f, _ := ParseAroundSimilarFields("volume,book,oi")
+	w, err := ParseAroundSimilarWeights("book:4,oi:4,volume:0.5", f)
+	if err != nil || w.Book != 4 || w.OI != 4 || w.Volume != 0.5 || w.Price != 0 {
+		t.Fatalf("%+v %v", w, err)
+	}
+	if _, err := ParseAroundSimilarWeights("price:2", f); err == nil {
+		t.Fatal("expected error for weight on unselected field")
+	}
+	if _, err := ParseAroundSimilarWeights("book:0", f); err == nil {
+		t.Fatal("expected error for non-positive weight")
+	}
+	c, err := ParseAroundSimilarMinCoverage("")
+	if err != nil || c != 60 {
+		t.Fatalf("default coverage %v %v", c, err)
+	}
+	zero, err := ParseAroundSimilarMinCoverage("0")
+	if err != nil || zero != 0 {
+		t.Fatalf("zero coverage %v %v", zero, err)
+	}
+	if _, err := ParseAroundSimilarMinCoverage("101"); err == nil {
+		t.Fatal("expected error for coverage > 100")
 	}
 }
 
@@ -124,5 +180,18 @@ func TestFinishAroundSimilar_CountsAfter(t *testing.T) {
 	FinishAroundSimilar(&r)
 	if r.UpAfter != 1 || r.DownAfter != 1 || r.Summary == "" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestFinishAroundSimilar_SkippedOnlyMentionsCoverage(t *testing.T) {
+	r := AroundSimilarReport{
+		Symbol: "BTCUSDT", MinCoverage: 60,
+		Skipped: []AroundSimilarHit{
+			{Coverage: 20, Missing: []string{AroundSimilarFieldBook, AroundSimilarFieldOI}},
+		},
+	}
+	FinishAroundSimilar(&r)
+	if !strings.Contains(r.Summary, "lacked enough") {
+		t.Fatalf("summary %q", r.Summary)
 	}
 }

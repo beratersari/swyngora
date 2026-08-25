@@ -102,10 +102,18 @@ setup before past important moves. `fields` selects which pieces to
 use (`price`, `volume`, `takers`, `oi`, `book`). Example:
 `fields=volume,book,oi` skips price.
 
+`weights` sets how much each selected field counts
+(`book:3,oi:3,volume:1`). Defaults: **book 3**, **oi 3**, **takers
+1.5**, **volume 1**, **price 1** — so order book and open interest
+move the score more than volume.
+
 Missing selected data **counts as 0**, so a thin overlap cannot look
-like a 90% match. Each case lists `used`, `missing`, `coverage`, and
-per-field `compared` scores, plus **what price did after**
-(`afterReturnPct`). MCP: `find_around_similar`.
+like a 90% match. `minCoverage` (default **60**, `0` = no floor) is
+the share of selected weight that must actually have data. Cases
+below that floor are **not** normal matches — they go in `skipped`
+with `missing` metrics and `coverage`. Each case lists `used`,
+`missing`, `coverage`, and per-field `compared` scores, plus **what
+price did after** (`afterReturnPct`). MCP: `find_around_similar`.
 
 ## Where the code lives
 
@@ -126,4 +134,5 @@ curl "http://localhost:8080/api/v1/market/around/moves?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60"
 ```

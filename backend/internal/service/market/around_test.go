@@ -236,7 +236,7 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
 	}
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi")
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,6 +245,34 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		if got.Note == "" {
 			t.Fatalf("%+v", got)
 		}
+	}
+	if got.MinCoverage != 60 {
+		t.Fatalf("minCoverage %v", got.MinCoverage)
+	}
+	if len(got.Fields) != 3 {
+		t.Fatalf("fields %+v", got.Fields)
+	}
+	var bookW, volW float64
+	for _, w := range got.Weights {
+		switch w.Name {
+		case domain.AroundSimilarFieldBook:
+			bookW = w.Weight
+		case domain.AroundSimilarFieldVolume:
+			volW = w.Weight
+		}
+	}
+	if bookW != 3 || volW != 1 {
+		t.Fatalf("weights %+v", got.Weights)
+	}
+}
+
+func TestGetAroundSimilar_BadWeights(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60"); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101"); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
 	}
 }
 

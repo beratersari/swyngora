@@ -511,6 +511,14 @@ class AroundSimilarInput(BaseModel):
         default="",
         description="Tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi",
     )
+    weights: str = Field(
+        default="",
+        description="Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)",
+    )
+    min_coverage: float = Field(
+        default=-1,
+        description="Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches. 0 disables the floor.",
+    )
 
 
 class AroundCompareInput(BaseModel):
@@ -1559,6 +1567,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         window: str = "1h",
         during: str = "",
         fields: str = "",
+        weights: str = "",
+        min_coverage: float = -1,
     ) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
         if lookback:
@@ -1577,6 +1587,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["during"] = during
         if fields:
             params["fields"] = fields
+        if weights:
+            params["weights"] = weights
+        if min_coverage >= 0:
+            params["minCoverage"] = min_coverage
         return http.get("/api/v1/market/around/similar", params)
 
     def get_vwap(
@@ -3126,8 +3140,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Compare the current market to the setup before past "
                 "important moves. fields selects price,volume,takers,oi,book "
-                "(e.g. volume,book,oi). Missing selected data lowers the "
-                "score. Returns used/missing fields and what price did after."
+                "(e.g. volume,book,oi). weights sets importance "
+                "(default book and oi 3, takers 1.5, volume and price 1). "
+                "min_coverage (default 60) sends thin cases to skipped "
+                "with missing metrics, not matches. Returns what price did after."
             ),
             args_schema=AroundSimilarInput,
         ),

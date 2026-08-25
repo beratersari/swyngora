@@ -68,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
+- **Similar-move weights and coverage:** each tape field has its own importance (default book and OI 3, takers 1.5, volume and price 1); `minCoverage` (default 60) sends thin cases to `skipped` with missing metrics instead of treating them as matches (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar-move field pick:** choose which tape to compare (`fields=volume,book,oi` skips price) (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar past moves:** compare the current tape to the setup before past important moves and show what price did after the closest cases (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Move precursor combos:** conditions that often fire together before a move (volume + book + OI, …) and whether that group leans up or down (`GET /api/v1/market/around/precursors`, MCP `find_around_precursors`) (`docs/features/around.md`)
