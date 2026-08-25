@@ -634,7 +634,7 @@ func TestGetAroundPrecursors_OK(t *testing.T) {
 
 func TestGetAroundSimilar_OK(t *testing.T) {
 	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&lookback=24h&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&lookback=24h&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60&horizons=30m,2h", nil)
 	rr := httptest.NewRecorder()
 	h.GetAroundSimilar(rr, req)
 	if rr.Code != http.StatusOK {
@@ -646,6 +646,9 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 	}
 	if body.Symbol != "BTCUSDT" || body.MinCoverage != "60" {
 		t.Fatalf("%+v", body)
+	}
+	if len(body.Horizons) != 2 || body.Horizons[0] != "30m" || body.Horizons[1] != "2h" {
+		t.Fatalf("horizons %+v", body.Horizons)
 	}
 	if len(body.Fields) != 3 || len(body.Weights) != 3 {
 		t.Fatalf("fields/weights %+v", body)

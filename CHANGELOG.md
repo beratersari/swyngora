@@ -46,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Similar-move scores:** a thin overlap (only one field present) can no longer look like a high match — missing selected data counts as 0, and each case lists used / missing / coverage (`docs/features/around.md`)
 - **Similar-move unique events:** overlapping matches or same-move legs are one past event (highest similarity kept); 15m / 1h / 4h results report how many unique events were used (`docs/features/around.md`)
 - **Similar-move unique events:** overlapping matches, shared setup windows, or chained nearby legs are one past event (highest similarity kept); 15m / 1h / 4h results report how many unique events were used (`docs/features/around.md`)
+- **Similar-move unique events:** two matches are one past event only when their price-move ranges overlap — shared setup windows no longer merge different moves (`docs/features/around.md`)
 - **Similar-move look-ahead:** a past match only uses tape available before that move started; each case reports `dataFrom` / `dataTo` (`docs/features/around.md`)
 - **Similar-move field scores:** a metric that was not compared no longer shows `score: 0`; similarity uses only fields that actually had data, and thin cases still need `minCoverage` (`docs/features/around.md`)
 - **Similar-move scores:** each case lists used / missing / coverage so a thin overlap is visible (`docs/features/around.md`)
@@ -73,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Holder balances:** high-supply tokens no longer show `0` / `0.004` for wallets that own a real share of supply; the table uses share × circulating supply and an estimated USD value
 
 ### Added
-- **Similar-move after horizons:** how similar past setups usually resolved — up/down counts plus average and median price after 15m / 1h / 4h, with per-period sample counts (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
+- **Similar-move after horizons:** pick the after-windows (`horizons=30m,2h,6h`, default 15m/1h/4h); each reports up/down, average, median, and sample (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar-move weights and coverage:** each tape field has its own importance (default book and OI 3, takers 1.5, volume and price 1); `minCoverage` (default 60) sends thin cases to `skipped` with missing metrics instead of treating them as matches (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar-move field pick:** choose which tape to compare (`fields=volume,book,oi` skips price) (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)
 - **Similar past moves:** compare the current tape to the setup before past important moves and show what price did after the closest cases (`GET /api/v1/market/around/similar`, MCP `find_around_similar`) (`docs/features/around.md`)

@@ -114,21 +114,22 @@ weighted closeness of fields that actually had data. `minCoverage`
 must actually have data. Cases below that floor are **not** normal
 matches — they go in `skipped` with `missing` metrics and `coverage`.
 
-Overlapping matches, shared setup windows, or same-direction legs
-within **30 minutes** are **one past event** (chains of nearby legs
-count as one). The hit with the highest similarity is kept. `events`
-is how many unique past events remain.
+Two matches are **one past event** only when their **price-move
+ranges overlap**. Shared setup (`dataFrom`–`dataTo`) windows do
+**not** merge different moves. The hit with the highest similarity
+is kept. `events` is how many unique past events remain.
 
 Each past match uses **only tape already available before that move
 started**. `dataFrom` / `dataTo` are the start and end of that
 comparison window. Book and open-interest samples from after the
 move starts are not used.
 
-`afterHorizons` is what usually happened after those unique events:
-how many went **up** vs **down**, plus **average** and **median**
-price change after **15m**, **1h**, and **4h**. A match is left out
-of a horizon when that tape is not long enough; each period reports
-`sample` / `events` (unique events used). Each case still lists
+`horizons` picks the after-windows (CSV, default `15m,1h,4h`).
+Example: `horizons=30m,2h,6h`. `afterHorizons` is what usually
+happened after those unique events: how many went **up** vs
+**down**, plus **average** and **median** price change, and
+`sample` (unique events with enough tape). A match is left out of
+a horizon when that tape is not long enough. Each case still lists
 `used`, `missing`, `coverage`, per-field `compared` scores, and the
 move itself (`afterReturnPct`). MCP: `find_around_similar`.
 
@@ -152,4 +153,5 @@ curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&horizons=30m,2h,6h"
 ```

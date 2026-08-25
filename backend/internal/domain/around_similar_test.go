@@ -162,6 +162,13 @@ func TestParseAroundSimilarWeightsAndCoverage(t *testing.T) {
 	if _, err := ParseAroundSimilarMinCoverage("101"); err == nil {
 		t.Fatal("expected error for coverage > 100")
 	}
+	hs, err := ParseAroundSimilarHorizons("6h,30m,2h,30m")
+	if err != nil || len(hs) != 3 || hs[0].ID != "30m" || hs[1].ID != "2h" || hs[2].ID != "6h" {
+		t.Fatalf("horizons %+v %v", hs, err)
+	}
+	if _, err := ParseAroundSimilarHorizons("rsi"); err == nil {
+		t.Fatal("expected bad horizon")
+	}
 }
 
 func TestParseAroundSimilarFields(t *testing.T) {
@@ -194,39 +201,45 @@ func TestMatchAroundSimilar_CollapsesOverlapAndSameMove(t *testing.T) {
 	t0 := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	best := similarHit(t0, 3.5, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
 	overlap := similarHit(t0.Add(15*time.Minute), 2.0, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
-	near := similarHit(t0.Add(50*time.Minute), 1.8, similarPhase(1.9, 2.8, -1100, CVDDirUp), AroundPhase{})
 	// Opposite-direction close by should stay a separate event.
 	opp := similarHit(t0.Add(50*time.Minute), -2.2, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
 	// Far later, same direction — a different event.
 	later := similarHit(t0.Add(4*time.Hour), 2.5, similarPhase(2.1, 3.2, -1300, CVDDirUp), AroundPhase{})
 
-	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{overlap, best, near, later}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{overlap, best, later}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
 	if len(got) != 2 {
-		t.Fatalf("want 2 unique events, got %d %+v", len(got), got)
+		t.Fatalf("want 2 distinct moves, got %d %+v", len(got), got)
 	}
 	if !got[0].Move.At.Equal(t0) {
-		t.Fatalf("should keep highest similarity of the cluster %+v", got[0])
-	}
-	if !got[1].Move.At.Equal(t0.Add(4 * time.Hour)) {
-		t.Fatalf("far move should remain %+v", got[1])
+		t.Fatalf("should keep highest similarity of the overlapping pair %+v", got[0])
 	}
 	if got[0].DataTo.After(got[0].Move.At) || got[0].DataFrom.IsZero() {
 		t.Fatalf("data window must end at the move %+v", got[0])
 	}
 
-	// Nearby opposite still shares the 1h setup window — one event.
-	withOpp, _ := MatchAroundSimilar(cur, []AroundMoveHit{best, opp}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
-	if len(withOpp) != 1 {
-		t.Fatalf("overlapping setup windows should be one event %+v", withOpp)
+	// Setup windows overlap; the price moves do not — two events.
+	sep := similarHit(t0.Add(45*time.Minute), 2.2, similarPhase(2.1, 3.2, -1300, CVDDirUp), AroundPhase{})
+	sep.AroundMove.Until = t0.Add(60 * time.Minute)
+	bestShort := similarHit(t0, 3.5, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
+	bestShort.AroundMove.Until = t0.Add(15 * time.Minute)
+	apart, _ := MatchAroundSimilar(cur, []AroundMoveHit{bestShort, sep}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(apart) != 2 {
+		t.Fatalf("distinct moves must stay distinct even if setup windows overlap %+v", apart)
 	}
 
-	// A chain of legs 20m apart is one event (transitive).
+	// Nearby opposite is a different price move.
+	withOpp, _ := MatchAroundSimilar(cur, []AroundMoveHit{bestShort, opp}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
+	if len(withOpp) != 2 {
+		t.Fatalf("opposite move should stay separate %+v", withOpp)
+	}
+
+	// Overlapping move ranges (not just setup windows) collapse.
 	a := similarHit(t0, 3.2, similarPhase(2.2, 3.5, -1400, CVDDirUp), AroundPhase{})
 	b := similarHit(t0.Add(20*time.Minute), 2.4, similarPhase(2.1, 3.2, -1300, CVDDirUp), AroundPhase{})
-	c := similarHit(t0.Add(40*time.Minute), 2.1, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
+	c := similarHit(t0.Add(25*time.Minute), 2.1, similarPhase(2.0, 3.0, -1200, CVDDirUp), AroundPhase{})
 	chain, _ := MatchAroundSimilar(cur, []AroundMoveHit{c, a, b}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
 	if len(chain) != 1 || !chain[0].Move.At.Equal(t0) {
-		t.Fatalf("chain should collapse to the first/best event %+v", chain)
+		t.Fatalf("overlapping move ranges should collapse %+v", chain)
 	}
 }
 
@@ -272,7 +285,7 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	}
 	matches := []AroundSimilarHit{{Move: AroundMove{At: start, Open: 100}}}
 	asOf := start.Add(2 * time.Hour)
-	got := SummarizeAroundSimilarHorizons(matches, bars, asOf)
+	got := SummarizeAroundSimilarHorizons(matches, bars, asOf, nil)
 	if len(got) != 3 {
 		t.Fatalf("horizons %+v", got)
 	}
@@ -290,7 +303,7 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	}
 
 	// Too soon for 1h as well.
-	early := SummarizeAroundSimilarHorizons(matches, bars, start.Add(20*time.Minute))
+	early := SummarizeAroundSimilarHorizons(matches, bars, start.Add(20*time.Minute), nil)
 	if early[0].Sample != 1 || early[1].Sample != 0 || early[2].Sample != 0 {
 		t.Fatalf("as-of clip %+v", early)
 	}
@@ -309,7 +322,7 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	two := SummarizeAroundSimilarHorizons([]AroundSimilarHit{
 		{Move: AroundMove{At: start, Open: 100}},
 		{Move: AroundMove{At: startB, Open: 108}},
-	}, longBars, start.Add(5*time.Hour))
+	}, longBars, start.Add(5*time.Hour), nil)
 	if two[0].Sample != 2 || two[1].Sample != 2 || two[2].Sample != 1 {
 		t.Fatalf("per-horizon sample %+v", two)
 	}
@@ -321,9 +334,21 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	overlap := SummarizeAroundSimilarHorizons([]AroundSimilarHit{
 		{Move: AroundMove{At: start, Until: start.Add(30 * time.Minute), Open: 100, Direction: CVDDirUp}, Similarity: 90},
 		{Move: AroundMove{At: start.Add(15 * time.Minute), Until: start.Add(45 * time.Minute), Open: 101, Direction: CVDDirUp}, Similarity: 70},
-	}, longBars, start.Add(5*time.Hour))
+	}, longBars, start.Add(5*time.Hour), nil)
 	if overlap[0].Events != 1 || overlap[0].Sample != 1 || overlap[1].Events != 1 {
 		t.Fatalf("overlap should be one event %+v", overlap)
+	}
+
+	custom, err := ParseAroundSimilarHorizons("30m,2h")
+	if err != nil || len(custom) != 2 {
+		t.Fatalf("parse horizons %v %v", custom, err)
+	}
+	picked := SummarizeAroundSimilarHorizons(matches, longBars, start.Add(5*time.Hour), custom)
+	if len(picked) != 2 || picked[0].Horizon != "30m" || picked[1].Horizon != "2h" {
+		t.Fatalf("custom horizons %+v", picked)
+	}
+	if picked[0].Sample != 1 || picked[0].Up+picked[0].Down == 0 {
+		t.Fatalf("30m stats %+v", picked[0])
 	}
 }
 

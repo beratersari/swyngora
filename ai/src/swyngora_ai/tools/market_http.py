@@ -519,6 +519,10 @@ class AroundSimilarInput(BaseModel):
         default=-1,
         description="Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches. 0 disables the floor.",
     )
+    horizons: str = Field(
+        default="",
+        description="After-windows CSV, e.g. 30m,2h,6h (default 15m,1h,4h). Each reports avg, median, up, down, sample.",
+    )
 
 
 class AroundCompareInput(BaseModel):
@@ -1569,6 +1573,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         fields: str = "",
         weights: str = "",
         min_coverage: float = -1,
+        horizons: str = "",
     ) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
         if lookback:
@@ -1591,6 +1596,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["weights"] = weights
         if min_coverage >= 0:
             params["minCoverage"] = min_coverage
+        if horizons:
+            params["horizons"] = horizons
         return http.get("/api/v1/market/around/similar", params)
 
     def get_vwap(
@@ -3147,8 +3154,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "uses only tape available before that move "
                 "(dataFrom-dataTo). Overlapping or chained same-move "
                 "matches count as one event. afterHorizons is how "
-                "price usually moved 15m/1h/4h after those unique "
-                "events (up/down, avg, median, events)."
+                "price usually moved after those unique events. "
+                "horizons is a CSV of after-windows (default "
+                "15m,1h,4h; e.g. 30m,2h,6h) with avg, median, "
+                "up, down, sample each."
             ),
             args_schema=AroundSimilarInput,
         ),

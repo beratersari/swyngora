@@ -14,7 +14,8 @@ const (
 	MaxAroundSimilarLimit           = 10
 	DefaultAroundSimilarMinCoverage = 60.0
 	aroundSimilarMinScore           = 40.0
-	aroundSimilarEventSlack         = 30 * time.Minute
+	MaxAroundSimilarHorizons        = 8
+	MaxAroundSimilarHorizon         = 24 * time.Hour
 
 	AroundSimilarFieldPrice  = "price"
 	AroundSimilarFieldVolume = "volume"
@@ -27,14 +28,19 @@ const (
 	AroundSimilarHorizon4h  = "4h"
 )
 
-// AroundSimilarHorizons are the forward windows we summarize after a match.
-var AroundSimilarHorizons = []struct {
+// AroundSimilarHorizon is one forward window after a match.
+type AroundSimilarHorizon struct {
 	ID  string
 	Dur time.Duration
-}{
-	{AroundSimilarHorizon15m, 15 * time.Minute},
-	{AroundSimilarHorizon1h, time.Hour},
-	{AroundSimilarHorizon4h, 4 * time.Hour},
+}
+
+// DefaultAroundSimilarHorizons is 15m, 1h, 4h when the caller does not pick times.
+func DefaultAroundSimilarHorizons() []AroundSimilarHorizon {
+	return []AroundSimilarHorizon{
+		{AroundSimilarHorizon15m, 15 * time.Minute},
+		{AroundSimilarHorizon1h, time.Hour},
+		{AroundSimilarHorizon4h, 4 * time.Hour},
+	}
 }
 
 // AroundSimilarFields is which tape pieces to compare.
@@ -103,6 +109,7 @@ type AroundSimilarReport struct {
 	Weights        []AroundSimilarFieldScore
 	MinCoverage    float64
 	MinReturnPct   float64
+	Horizons       []string
 	AsOf           time.Time
 	Current        AroundPhase
 	Matches        []AroundSimilarHit
@@ -287,6 +294,98 @@ func ParseAroundSimilarMinCoverage(raw string) (float64, error) {
 	return v, nil
 }
 
+// ParseAroundSimilarHorizons accepts a CSV of durations (15m,30m,1h,2h,6h).
+// Empty uses 15m, 1h, 4h. Sorted, unique, max 8, each 1m–24h.
+func ParseAroundSimilarHorizons(raw string) ([]AroundSimilarHorizon, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" || strings.EqualFold(s, "default") {
+		return DefaultAroundSimilarHorizons(), nil
+	}
+	seen := map[time.Duration]bool{}
+	out := make([]AroundSimilarHorizon, 0, 4)
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, dur, err := parseAroundSimilarHorizon(part)
+		if err != nil {
+			return nil, err
+		}
+		if seen[dur] {
+			continue
+		}
+		seen[dur] = true
+		out = append(out, AroundSimilarHorizon{ID: id, Dur: dur})
+	}
+	if len(out) == 0 {
+		return DefaultAroundSimilarHorizons(), nil
+	}
+	if len(out) > MaxAroundSimilarHorizons {
+		return nil, fmt.Errorf("%w: at most %d horizons", ErrInvalidArgument, MaxAroundSimilarHorizons)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Dur < out[j].Dur })
+	return out, nil
+}
+
+func parseAroundSimilarHorizon(raw string) (string, time.Duration, error) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	s = strings.ReplaceAll(s, " ", "")
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	if i == 0 {
+		return "", 0, fmt.Errorf("%w: horizons must look like 15m,30m,1h,2h,6h", ErrInvalidArgument)
+	}
+	n, err := strconv.Atoi(s[:i])
+	if err != nil || n <= 0 {
+		return "", 0, fmt.Errorf("%w: horizon must be a number > 0 plus m/h/d", ErrInvalidArgument)
+	}
+	var dur time.Duration
+	var id string
+	switch s[i:] {
+	case "m", "min", "mins", "minute", "minutes":
+		dur = time.Duration(n) * time.Minute
+		id = strconv.Itoa(n) + "m"
+	case "h", "hr", "hrs", "hour", "hours":
+		dur = time.Duration(n) * time.Hour
+		id = strconv.Itoa(n) + "h"
+	case "d", "day", "days":
+		dur = time.Duration(n) * 24 * time.Hour
+		id = strconv.Itoa(n) + "d"
+	default:
+		return "", 0, fmt.Errorf("%w: horizon unit must be m, h, or d (got %q)", ErrInvalidArgument, raw)
+	}
+	if dur < time.Minute || dur > MaxAroundSimilarHorizon {
+		return "", 0, fmt.Errorf("%w: each horizon must be between 1m and 24h", ErrInvalidArgument)
+	}
+	return id, dur, nil
+}
+
+// AroundSimilarHorizonIDs lists horizon ids in duration order.
+func AroundSimilarHorizonIDs(hs []AroundSimilarHorizon) []string {
+	out := make([]string, 0, len(hs))
+	for _, h := range hs {
+		out = append(out, h.ID)
+	}
+	return out
+}
+
+// AroundSimilarHorizonMax is the longest requested forward window.
+func AroundSimilarHorizonMax(hs []AroundSimilarHorizon) time.Duration {
+	var max time.Duration
+	for _, h := range hs {
+		if h.Dur > max {
+			max = h.Dur
+		}
+	}
+	if max <= 0 {
+		return 4 * time.Hour
+	}
+	return max
+}
+
 func (w AroundSimilarWeights) of(name string) float64 {
 	switch name {
 	case AroundSimilarFieldPrice:
@@ -385,9 +484,9 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 	return keep, drop
 }
 
-// collapseAroundSimilarHits keeps one hit per past event (highest similarity).
-// Overlap, shared comparison windows, and close same-direction legs are
-// connected transitively so a chain of nearby legs is one event.
+// collapseAroundSimilarHits keeps one hit per past price move (highest
+// similarity). Only overlapping move ranges are the same event — shared
+// setup/data windows do not merge different moves.
 func collapseAroundSimilarHits(hits []AroundSimilarHit) []AroundSimilarHit {
 	n := len(hits)
 	if n < 2 {
@@ -438,40 +537,13 @@ func collapseAroundSimilarHits(hits []AroundSimilarHit) []AroundSimilarHit {
 }
 
 func aroundSimilarSameEvent(a, b AroundSimilarHit) bool {
-	aFrom, aTo := aroundSimilarClusterSpan(a)
-	bFrom, bTo := aroundSimilarClusterSpan(b)
+	aFrom, aTo := aroundSimilarMoveSpan(a.Move)
+	bFrom, bTo := aroundSimilarMoveSpan(b.Move)
 	if aFrom.IsZero() || bFrom.IsZero() {
 		return false
 	}
-	if aFrom.Before(bTo) && bFrom.Before(aTo) {
-		return true
-	}
-	if a.Move.Direction == "" || a.Move.Direction != b.Move.Direction || a.Move.Direction == CVDDirFlat {
-		return false
-	}
-	gap := bFrom.Sub(aTo)
-	if gap < 0 {
-		gap = aFrom.Sub(bTo)
-	}
-	return gap >= 0 && gap <= aroundSimilarEventSlack
-}
-
-func aroundSimilarClusterSpan(h AroundSimilarHit) (time.Time, time.Time) {
-	from, to := aroundSimilarMoveSpan(h.Move)
-	dFrom, dTo := h.DataFrom, h.DataTo
-	if dFrom.IsZero() {
-		dFrom = h.Before.From
-	}
-	if dTo.IsZero() {
-		dTo = h.Before.To
-	}
-	if !dFrom.IsZero() && (from.IsZero() || dFrom.Before(from)) {
-		from = dFrom
-	}
-	if !dTo.IsZero() && dTo.After(to) {
-		to = dTo
-	}
-	return from, to
+	// [from, to) overlap of the price move itself — not the setup window.
+	return aFrom.Before(bTo) && bFrom.Before(aTo)
 }
 
 // clipAroundPhaseBeforeMove drops anything after the move started.
@@ -764,14 +836,17 @@ func FinishAroundSimilar(r *AroundSimilarReport) {
 	r.Summary = ExplainAroundSimilarReport(*r)
 }
 
-// SummarizeAroundSimilarHorizons averages price after similar setups at 15m / 1h / 4h.
+// SummarizeAroundSimilarHorizons averages price after similar setups at each horizon.
 // A match is left out of a horizon when the tape does not reach that far.
-func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar, asOf time.Time) []AroundSimilarHorizonStat {
+func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar, asOf time.Time, horizons []AroundSimilarHorizon) []AroundSimilarHorizonStat {
+	if len(horizons) == 0 {
+		horizons = DefaultAroundSimilarHorizons()
+	}
 	matches = collapseAroundSimilarHits(matches)
 	bars = sortAroundBars(bars)
 	barDur := aroundBarDuration(bars)
-	out := make([]AroundSimilarHorizonStat, 0, len(AroundSimilarHorizons))
-	for _, h := range AroundSimilarHorizons {
+	out := make([]AroundSimilarHorizonStat, 0, len(horizons))
+	for _, h := range horizons {
 		st := AroundSimilarHorizonStat{Horizon: h.ID}
 		vals := make([]float64, 0, len(matches))
 		for _, m := range matches {

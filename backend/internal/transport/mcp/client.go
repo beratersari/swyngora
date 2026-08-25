@@ -486,7 +486,7 @@ func (c *APIClient) GetAroundPrecursors(ctx context.Context, exchange, symbol, l
 }
 
 // GetAroundSimilar ranks past important-move setups against the current tape.
-func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage string) (json.RawMessage, error) {
+func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
@@ -521,6 +521,9 @@ func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, look
 	}
 	if minCoverage != "" {
 		q.Set("minCoverage", minCoverage)
+	}
+	if horizons != "" {
+		q.Set("horizons", horizons)
 	}
 	return c.get(ctx, "/api/v1/market/around/similar", q)
 }

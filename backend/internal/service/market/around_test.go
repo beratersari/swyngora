@@ -236,7 +236,7 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
 	}
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60")
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60", "30m,2h")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,10 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 	if bookW != 3 || volW != 1 {
 		t.Fatalf("weights %+v", got.Weights)
 	}
-	if len(got.Matches) > 0 && len(got.AfterHorizons) != 3 {
+	if len(got.Horizons) != 2 || got.Horizons[0] != "30m" || got.Horizons[1] != "2h" {
+		t.Fatalf("horizons %+v", got.Horizons)
+	}
+	if len(got.Matches) > 0 && len(got.AfterHorizons) != 2 {
 		t.Fatalf("afterHorizons %+v", got.AfterHorizons)
 	}
 	if got.Events != len(got.Matches) {
@@ -274,10 +277,13 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60"); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60", ""); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101"); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101", ""); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "60", "rsi"); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

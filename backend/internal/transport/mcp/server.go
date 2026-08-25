@@ -52,7 +52,7 @@ type DataPort interface {
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
 	FindAroundMoves(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
 	GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
-	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage string) (json.RawMessage, error)
+	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -769,7 +769,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_similar",
-		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book. Overlapping or chained same-move matches count as one event. afterHorizons is 15m/1h/4h after those unique events. Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 30m,2h,6h). Each horizon reports avg, median, up, down, sample. Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),
@@ -782,6 +782,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi")),
 		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)")),
 		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches.")),
+		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 30m,2h,6h (default 15m,1h,4h). Each reports avg, median, up, down, sample.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -791,7 +792,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if v := req.GetFloat("minCoverage", -1); v >= 0 {
 			minCov = strconv.FormatFloat(v, 'f', -1, 64)
 		}
-		raw, err := api.GetAroundSimilar(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""), req.GetString("fields", ""), req.GetString("weights", ""), minCov)
+		raw, err := api.GetAroundSimilar(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

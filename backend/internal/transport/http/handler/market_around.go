@@ -109,7 +109,7 @@ func (h *MarketHandler) GetAroundSimilar(w http.ResponseWriter, r *http.Request)
 		}
 		limit = n
 	}
-	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"))
+	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -692,7 +692,8 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Window: a.Window,
 		Interval: a.Interval, Fields: append([]string(nil), a.Fields...),
 		Weights: aroundSimilarWeightsToDTO(a.Weights), MinCoverage: formatHistQty(a.MinCoverage),
-		MinReturnPct: formatHistQty(a.MinReturnPct), AsOf: a.AsOf.UTC(),
+		MinReturnPct: formatHistQty(a.MinReturnPct), Horizons: append([]string(nil), a.Horizons...),
+		AsOf:    a.AsOf.UTC(),
 		Current: aroundPhaseToDTO(a.Current),
 		Matches: aroundSimilarHitsToDTO(a.Matches), Skipped: aroundSimilarHitsToDTO(a.Skipped),
 		Events: a.Events, UpAfter: a.UpAfter, DownAfter: a.DownAfter, MedianAfterPct: domain.FormatSignedPct(a.MedianAfterPct),
@@ -797,6 +798,7 @@ type aroundSimilarResponse struct {
 	Weights        []aroundSimilarFieldDTO   `json:"weights,omitempty"`
 	MinCoverage    string                    `json:"minCoverage"`
 	MinReturnPct   string                    `json:"minReturnPct"`
+	Horizons       []string                  `json:"horizons,omitempty"`
 	AsOf           time.Time                 `json:"asOf"`
 	Current        aroundPhaseDTO            `json:"current"`
 	Matches        []aroundSimilarHitDTO     `json:"matches"`
