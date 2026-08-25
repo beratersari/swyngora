@@ -1234,6 +1234,23 @@ class PriceDiffOppQuoteInput(BaseModel):
     quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
 
 
+class PriceDiffScanInput(BaseModel):
+    symbol: str
+    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
+    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    fee_binance_pct: float = Field(default=0, ge=0, description="Binance taker fee %")
+    fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase taker fee %")
+    fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit taker fee %")
+    min_net_diff_pct: float = Field(default=0, ge=0, description="Optional threshold for meetsMinNet")
+
+
+class PriceDiffWatchQuoteInput(BaseModel):
+    client_id: str
+    watch_id: str
+    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
+    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+
+
 class ScannerRuleCreateInput(BaseModel):
     client_id: str
     rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
@@ -2781,6 +2798,42 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params,
         )
 
+    def scan_price_diff_quotes(
+        symbol: str,
+        notional: float | None = None,
+        quantity: float | None = None,
+        fee_binance_pct: float = 0,
+        fee_coinbase_pct: float = 0,
+        fee_bybit_pct: float = 0,
+        min_net_diff_pct: float = 0,
+    ) -> str:
+        params: dict[str, str] = {
+            "symbol": symbol,
+            "feeBinancePct": str(fee_binance_pct),
+            "feeCoinbasePct": str(fee_coinbase_pct),
+            "feeBybitPct": str(fee_bybit_pct),
+        }
+        if min_net_diff_pct:
+            params["minNetDiffPct"] = str(min_net_diff_pct)
+        if notional is not None:
+            params["notional"] = str(notional)
+        if quantity is not None:
+            params["quantity"] = str(quantity)
+        return http.get("/api/v1/price-diff/quote/scan", params)
+
+    def quote_price_diff_watch(
+        client_id: str,
+        watch_id: str,
+        notional: float | None = None,
+        quantity: float | None = None,
+    ) -> str:
+        params: dict[str, str] = {"clientId": client_id}
+        if notional is not None:
+            params["notional"] = str(notional)
+        if quantity is not None:
+            params["quantity"] = str(quantity)
+        return http.get(f"/api/v1/price-diff/watches/{watch_id}/quote", params)
+
     def create_scanner_rule(
         client_id: str,
         rule_type: str,
@@ -3991,6 +4044,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Informational only."
             ),
             args_schema=PriceDiffOppQuoteInput,
+        ),
+        StructuredTool.from_function(
+            scan_price_diff_quotes,
+            name="scan_price_diff_quotes",
+            description=(
+                "Compare every Binance/Coinbase/Bybit buy-sell route at one size. "
+                "Walks both live books with per-venue fees, ranks by after-fee profit, "
+                "and shows how much of the entered money can actually be used. "
+                "Provide notional or quantity, not both. Informational only."
+            ),
+            args_schema=PriceDiffScanInput,
+        ),
+        StructuredTool.from_function(
+            quote_price_diff_watch,
+            name="quote_price_diff_watch",
+            description=(
+                "Scan all venue pairs for a stored watch at a size using that watch's fees. "
+                "Ranked by after-fee profit and usable money. Informational only."
+            ),
+            args_schema=PriceDiffWatchQuoteInput,
         ),
         StructuredTool.from_function(
             create_scanner_rule,

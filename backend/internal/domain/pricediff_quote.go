@@ -81,7 +81,14 @@ type PriceDiffQuote struct {
 	MaxProfitAfterFees  string
 	MaxProfitPct        float64
 	MaxLimitedBy        string
+	UsedNotional        string
+	UnusedNotional      string
+	UsedQuantity        string
+	UnusedQuantity      string
+	UsedPct             float64
 	Note                string
+	profitAmount        float64
+	usedNotionalAmount  float64
 }
 
 // ValidatePriceDiffQuoteSize requires exactly one of notional or quantity.
@@ -160,7 +167,7 @@ func QuotePriceDiffRoute(q PriceDiffQuoteQuery, buyBook, sellBook *RawOrderBook)
 	out.VisibleSellQty = formatQty(sVisQty)
 	out.VisibleSellNotional = formatQty(sVisN)
 
-	max := maxPositiveEdgeSize(buyLevels, sellLevels, q.BuyFeePct, q.SellFeePct)
+	max := maxProfitableSize(buyLevels, sellLevels, q.BuyFeePct, q.SellFeePct)
 	out.MaxLimitedBy = max.limitedBy
 	if max.qty > 0 {
 		out.MaxQuantity = formatQty(max.qty)
@@ -180,7 +187,9 @@ func QuotePriceDiffRoute(q PriceDiffQuoteQuery, buyBook, sellBook *RawOrderBook)
 	if err != nil {
 		return nil, err
 	}
+	fill = capFillToMax(fill, max, buyLevels, sellLevels, q.Notional, q.Quantity)
 	applyRequestedFill(out, fill, q.BuyFeePct, q.SellFeePct, q.MinNetDiffPct, q.Notional, q.Quantity)
+	applyUsedBudget(out, q.Notional, q.Quantity, fill, max)
 	return out, nil
 }
 
@@ -368,6 +377,7 @@ func applyRequestedFill(out *PriceDiffQuote, fill quoteFill, buyFeePct, sellFeeP
 	if cost > 0 {
 		out.ProfitPct = round4(profit / cost * 100)
 	}
+	out.profitAmount = profit
 	out.Profitable = profit > 1e-8
 	out.MeetsMinNet = out.Profitable && out.ProfitPct+1e-12 >= minNetPct
 
@@ -382,9 +392,78 @@ func applyRequestedFill(out *PriceDiffQuote, fill quoteFill, buyFeePct, sellFeeP
 	out.Executable = filledReq && out.Profitable
 }
 
-// maxPositiveEdgeSize is the largest size where every increment still adds
-// after-fee profit. The next crossed (or flat) increment is not taken.
-func maxPositiveEdgeSize(buy, sell []ImpactSourceLevel, buyFeePct, sellFeePct float64) maxFill {
+func capFillToMax(fill quoteFill, max maxFill, buy, sell []ImpactSourceLevel, notional, quantity float64) quoteFill {
+	if max.qty <= 0 {
+		return fill
+	}
+	if notional > 0 && quantity <= 0 {
+		if fill.buyN <= max.buyN+1e-8 {
+			return fill
+		}
+		capped, err := matchRequestedSize(buy, sell, max.buyN, 0)
+		if err != nil {
+			return fill
+		}
+		capped.bestAsk = fill.bestAsk
+		capped.bestBid = fill.bestBid
+		return capped
+	}
+	if quantity > 0 && fill.qty > max.qty+1e-12 {
+		capped, err := matchRequestedSize(buy, sell, 0, max.qty)
+		if err != nil {
+			return fill
+		}
+		capped.bestAsk = fill.bestAsk
+		capped.bestBid = fill.bestBid
+		return capped
+	}
+	return fill
+}
+
+func applyUsedBudget(out *PriceDiffQuote, reqNotional, reqQty float64, fill quoteFill, max maxFill) {
+	if out == nil {
+		return
+	}
+	usableN, usableQ := fill.buyN, fill.qty
+	if max.qty <= 0 {
+		usableN, usableQ = 0, 0
+	}
+	out.usedNotionalAmount = usableN
+	if reqNotional > 0 && reqQty <= 0 {
+		out.UsedNotional = formatQty(usableN)
+		unused := reqNotional - usableN
+		if unused < 0 {
+			unused = 0
+		}
+		out.UnusedNotional = formatQty(unused)
+		if reqNotional > 0 {
+			pct := usableN / reqNotional * 100
+			if pct > 100 {
+				pct = 100
+			}
+			out.UsedPct = round4(pct)
+		}
+		return
+	}
+	if reqQty > 0 {
+		out.UsedQuantity = formatQty(usableQ)
+		unused := reqQty - usableQ
+		if unused < 0 {
+			unused = 0
+		}
+		out.UnusedQuantity = formatQty(unused)
+		pct := usableQ / reqQty * 100
+		if pct > 100 {
+			pct = 100
+		}
+		out.UsedPct = round4(pct)
+	}
+}
+
+// maxProfitableSize is the largest size whose cumulative after-fee profit is
+// still positive. A later level that loses money on its own is still taken
+// while the running total stays above zero; a partial last clip is allowed.
+func maxProfitableSize(buy, sell []ImpactSourceLevel, buyFeePct, sellFeePct float64) maxFill {
 	out := maxFill{limitedBy: PriceDiffMaxLimitedByEmpty}
 	if len(buy) == 0 && len(sell) == 0 {
 		return out
@@ -429,18 +508,37 @@ func maxPositiveEdgeSize(buy, sell []ImpactSourceLevel, buyFeePct, sellFeePct fl
 		if take <= eps {
 			break
 		}
+		const profitFloor = 1e-8
+		p0 := out.sellN*(1-sf) - out.buyN*(1+bf)
 		edge := ps*(1-sf) - pb*(1+bf)
-		if edge <= 0 {
-			if out.qty <= 0 {
+		use := take
+		stopAfter := false
+		if edge < 0 {
+			if p0 <= profitFloor {
 				out.limitedBy = PriceDiffMaxLimitedByProfit
+				break
 			}
+			// p0 + use*edge = profitFloor
+			use = (profitFloor - p0) / edge
+			if use <= eps {
+				out.limitedBy = PriceDiffMaxLimitedByProfit
+				break
+			}
+			if use > take {
+				use = take
+			} else {
+				stopAfter = true
+			}
+		}
+		out.qty += use
+		out.buyN += use * pb
+		out.sellN += use * ps
+		bLeft -= use
+		sLeft -= use
+		if stopAfter {
+			out.limitedBy = PriceDiffMaxLimitedByProfit
 			break
 		}
-		out.qty += take
-		out.buyN += take * pb
-		out.sellN += take * ps
-		bLeft -= take
-		sLeft -= take
 		if bLeft <= eps {
 			bi++
 			if bi < len(buy) {
@@ -476,4 +574,101 @@ func maxPositiveEdgeSize(buy, sell []ImpactSourceLevel, buyFeePct, sellFeePct fl
 		out.limitedBy = PriceDiffMaxLimitedByProfit
 	}
 	return out
+}
+
+// PriceDiffQuoteScan is every buy/sell venue pair quoted at the same size.
+type PriceDiffQuoteScan struct {
+	Symbol            string
+	RequestedNotional string
+	RequestedQuantity string
+	BestRoute         *PriceDiffQuote
+	Routes            []PriceDiffQuote
+	ProfitableCount   int
+	VenueCount        int
+	Note              string
+}
+
+const priceDiffScanNote = "Each route walks live buy-venue asks and sell-venue bids at the same size, including fees and visible depth. Routes are ranked by after-fee profit, then by how much of the requested money can be used. Not a fill or financial advice."
+
+// ScanPriceDiffQuotes quotes every ordered crypto-spot pair from the given books.
+func ScanPriceDiffQuotes(symbol string, notional, quantity float64, fees map[Exchange]float64, minNet float64, books map[Exchange]*RawOrderBook) (*PriceDiffQuoteScan, error) {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", ErrInvalidArgument)
+	}
+	if err := ValidatePriceDiffQuoteSize(notional, quantity); err != nil {
+		return nil, err
+	}
+	if minNet < 0 || math.IsNaN(minNet) || math.IsInf(minNet, 0) {
+		return nil, fmt.Errorf("%w: minNetDiffPct is invalid", ErrInvalidArgument)
+	}
+	venues := make([]Exchange, 0, 3)
+	for _, ex := range SupportedExchanges {
+		if IsEquityExchange(ex) {
+			continue
+		}
+		if _, ok := books[ex]; ok {
+			venues = append(venues, ex)
+		}
+	}
+	if len(venues) < 2 {
+		return nil, fmt.Errorf("%w: need books from at least two crypto venues", ErrInvalidArgument)
+	}
+	out := &PriceDiffQuoteScan{
+		Symbol:     symbol,
+		VenueCount: len(venues),
+		Routes:     make([]PriceDiffQuote, 0, len(venues)*(len(venues)-1)),
+		Note:       priceDiffScanNote,
+	}
+	if notional > 0 {
+		out.RequestedNotional = formatQty(notional)
+	}
+	if quantity > 0 {
+		out.RequestedQuantity = formatQty(quantity)
+	}
+	for i := range venues {
+		for j := range venues {
+			if i == j {
+				continue
+			}
+			buy, sell := venues[i], venues[j]
+			q, err := QuotePriceDiffRoute(PriceDiffQuoteQuery{
+				Symbol: symbol, BuyExchange: buy, SellExchange: sell,
+				BuyFeePct: fees[buy], SellFeePct: fees[sell],
+				Notional: notional, Quantity: quantity, MinNetDiffPct: minNet,
+			}, books[buy], books[sell])
+			if err != nil {
+				continue
+			}
+			if q.Profitable {
+				out.ProfitableCount++
+			}
+			out.Routes = append(out.Routes, *q)
+		}
+	}
+	sortQuoteScan(out.Routes)
+	if len(out.Routes) > 0 {
+		best := out.Routes[0]
+		out.BestRoute = &best
+	}
+	return out, nil
+}
+
+func sortQuoteScan(routes []PriceDiffQuote) {
+	for i := 1; i < len(routes); i++ {
+		for j := i; j > 0 && quoteScanLess(routes[j], routes[j-1]); j-- {
+			routes[j], routes[j-1] = routes[j-1], routes[j]
+		}
+	}
+}
+
+// Higher after-fee profit first; if tied, more of the entered money used.
+func quoteScanLess(a, b PriceDiffQuote) bool {
+	if a.profitAmount != b.profitAmount {
+		return a.profitAmount > b.profitAmount
+	}
+	if a.usedNotionalAmount != b.usedNotionalAmount {
+		return a.usedNotionalAmount > b.usedNotionalAmount
+	}
+	return a.UsedPct > b.UsedPct
 }

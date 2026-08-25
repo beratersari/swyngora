@@ -200,6 +200,32 @@ func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	}
 }
 
+func TestAPIClient_ScanPriceDiffQuotes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/price-diff/quote/scan" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("notional") != "10000" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"symbol": "BTCUSDT", "profitableCount": 1})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.ScanPriceDiffQuotes(context.Background(), "BTCUSDT", 10000, 0, 0.1, 0.6, 0.1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["profitableCount"] != float64(1) {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_QuotePriceDiff(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/price-diff/quote" {

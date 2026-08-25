@@ -133,6 +133,8 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "get_price_diff_opportunity",
         "quote_price_diff",
         "quote_price_diff_opportunity",
+        "scan_price_diff_quotes",
+        "quote_price_diff_watch",
     }
 )
 

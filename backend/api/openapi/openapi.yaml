@@ -4885,6 +4885,45 @@ paths:
           description: Deleted
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}/quote:
+    get:
+      summary: Scan all venue pairs for a stored watch
+      description: |
+        Uses the watch symbol and per-exchange fees. Walks live books on
+        Binance, Coinbase, and Bybit for every buy/sell pair at the given size.
+        Routes are ranked by after-fee profit. `usedNotional` / `usedPct` show
+        how much of the entered money can still be deployed while the total
+        trade stays profitable.
+      operationId: quotePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: notional
+          in: query
+          schema: { type: number, exclusiveMinimum: 0, example: 10000 }
+        - name: quantity
+          in: query
+          schema: { type: number, exclusiveMinimum: 0 }
+      responses:
+        '200':
+          description: Ranked routes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffQuoteScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/price-diff/opportunities:
     get:
       summary: List price difference opportunities
@@ -4977,6 +5016,48 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/quote/scan:
+    get:
+      summary: Compare every venue pair at one size
+      description: |
+        Walks live Binance, Coinbase, and Bybit books for every buy/sell route
+        at the same notional or quantity. Includes fees, visible depth, after-fee
+        profit, and how much of the entered money can actually be used.
+        Ranked by profit after fees. Informational only.
+      operationId: scanPriceDiffQuotes
+      tags: [PriceDiff]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: notional
+          in: query
+          schema: { type: number, exclusiveMinimum: 0, example: 10000 }
+        - name: quantity
+          in: query
+          schema: { type: number, exclusiveMinimum: 0 }
+        - name: feeBinancePct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.1 }
+        - name: feeCoinbasePct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.6 }
+        - name: feeBybitPct
+          in: query
+          schema: { type: number, minimum: 0, example: 0.1 }
+        - name: minNetDiffPct
+          in: query
+          schema: { type: number, minimum: 0 }
+      responses:
+        '200':
+          description: Ranked routes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffQuoteScan'
+        '400':
           $ref: '#/components/responses/Error'
   /api/v1/price-diff/quote:
     get:
@@ -7170,6 +7251,32 @@ components:
         maxLimitedBy:
           type: string
           enum: [profit, buy_book, sell_book, both_books, empty_book]
+        usedNotional:
+          type: string
+          description: Buy-book spend that still leaves the whole trade profitable
+        unusedNotional:
+          type: string
+          description: Requested notional minus usedNotional
+        usedQuantity: { type: string }
+        unusedQuantity: { type: string }
+        usedPct:
+          type: number
+          description: Percent of the entered size that can really be used
+        note: { type: string }
+    PriceDiffQuoteScan:
+      type: object
+      properties:
+        symbol: { type: string }
+        requestedNotional: { type: string }
+        requestedQuantity: { type: string }
+        bestRoute:
+          $ref: '#/components/schemas/PriceDiffQuote'
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceDiffQuote'
+        profitableCount: { type: integer }
+        venueCount: { type: integer }
         note: { type: string }
     Watchlist:
       type: object

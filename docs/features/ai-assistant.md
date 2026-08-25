@@ -88,7 +88,7 @@ Recurring buys: `create_recurring_buy`, `update_recurring_buy`, `list_recurring_
 Allocation baskets: `create_portfolio_basket`, `list_portfolio_baskets`, `get_portfolio_basket`, `update_portfolio_basket`, `delete_portfolio_basket`, `preview_portfolio_rebalance`, `rebalance_portfolio_basket` (manual only). See `docs/features/allocation-baskets.md`.  
 Risk limits: `get_portfolio_risk_limits`, `set_portfolio_risk_limits`, `clear_portfolio_risk_limits`. See `docs/features/risk-limits.md`.  
 Paper margin: `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` (`place_margin_order` / `close_margin_position` accept `idempotencyKey`). See `docs/features/paper-margin.md`.  
-Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_diff_watch`, `delete_price_diff_watch`, `list_price_diff_opportunities`, `get_price_diff_opportunity`, `quote_price_diff`, `quote_price_diff_opportunity` (walk both books for a size: average buy/sell, slippage, profit after fees, max still-profitable size). See `docs/features/price-diff.md`.
+Price-diff: `create_price_diff_watch`, `list_price_diff_watches`, `get_price_diff_watch`, `delete_price_diff_watch`, `list_price_diff_opportunities`, `get_price_diff_opportunity`, `quote_price_diff`, `quote_price_diff_opportunity`, `scan_price_diff_quotes`, `quote_price_diff_watch` (walk books for a size or compare every venue pair: average buy/sell, slippage, profit after fees, usable money, max size). See `docs/features/price-diff.md`.
 
 ## Limitations / follow-ups
 

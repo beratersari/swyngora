@@ -181,6 +181,8 @@ type DataPort interface {
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellExchange string, notional, quantity, feeBuyPct, feeSellPct, minNetDiffPct float64) (json.RawMessage, error)
 	QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error)
+	ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct float64) (json.RawMessage, error)
+	QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity float64) (json.RawMessage, error)
 	AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
@@ -3450,6 +3452,52 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		raw, err := api.QuotePriceDiff(ctx, symbol, buyEx, sellEx,
 			req.GetFloat("notional", 0), req.GetFloat("quantity", 0),
 			req.GetFloat("feeBuyPct", 0), req.GetFloat("feeSellPct", 0), req.GetFloat("minNetDiffPct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_price_diff_quotes",
+		mcp.WithDescription("Compare every Binance/Coinbase/Bybit buy-sell route at one size. Walks both live books with per-venue fees and ranks by after-fee profit. Shows how much of the entered money can actually be used. Provide notional or quantity, not both. Informational only."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("notional", mcp.Description("USDT to spend on the buy book before the buy fee e.g. 10000")),
+		mcp.WithNumber("quantity", mcp.Description("Base size to buy and sell (use instead of notional)")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee % e.g. 0.1")),
+		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase taker fee % e.g. 0.6")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee % e.g. 0.1")),
+		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional threshold to flag meetsMinNet")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ScanPriceDiffQuotes(ctx, symbol,
+			req.GetFloat("notional", 0), req.GetFloat("quantity", 0),
+			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0),
+			req.GetFloat("minNetDiffPct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("quote_price_diff_watch",
+		mcp.WithDescription("Scan all venue pairs for a stored watch at a size using that watch's fees. Ranked by after-fee profit and usable money. Provide notional or quantity. Informational only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+		mcp.WithNumber("notional", mcp.Description("USDT to spend on the buy book before the buy fee e.g. 10000")),
+		mcp.WithNumber("quantity", mcp.Description("Base size to buy and sell (use instead of notional)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.QuotePriceDiffWatch(ctx, clientID, id, req.GetFloat("notional", 0), req.GetFloat("quantity", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

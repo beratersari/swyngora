@@ -3516,6 +3516,32 @@ func (b *Backend) QuotePriceDiff(ctx context.Context, symbol, buyExchange, sellE
 	return mustJSON(priceDiffQuoteMap(q))
 }
 
+func (b *Backend) ScanPriceDiffQuotes(ctx context.Context, symbol string, notional, quantity, feeBinance, feeCoinbase, feeBybit, minNetDiffPct float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	s, err := b.PriceDiff.QuoteScan(ctx, pricediff.ScanInput{
+		Symbol: symbol, Notional: notional, Quantity: quantity,
+		FeeBinancePct: feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+		MinNetDiffPct: minNetDiffPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffScanMap(s))
+}
+
+func (b *Backend) QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	s, err := b.PriceDiff.QuoteWatch(ctx, clientID, watchID, notional, quantity)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffScanMap(s))
+}
+
 func (b *Backend) QuotePriceDiffOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
@@ -3584,6 +3610,39 @@ func priceDiffQuoteMap(q *domain.PriceDiffQuote) map[string]any {
 		m["maxAverageSellPrice"] = q.MaxAverageSellPrice
 		m["maxProfitAfterFees"] = q.MaxProfitAfterFees
 		m["maxProfitPct"] = q.MaxProfitPct
+	}
+	if q.UsedNotional != "" {
+		m["usedNotional"] = q.UsedNotional
+		m["unusedNotional"] = q.UnusedNotional
+	}
+	if q.UsedQuantity != "" {
+		m["usedQuantity"] = q.UsedQuantity
+		m["unusedQuantity"] = q.UnusedQuantity
+	}
+	m["usedPct"] = q.UsedPct
+	return m
+}
+
+func priceDiffScanMap(s *domain.PriceDiffQuoteScan) map[string]any {
+	if s == nil {
+		return map[string]any{"routes": []any{}}
+	}
+	routes := make([]map[string]any, 0, len(s.Routes))
+	for i := range s.Routes {
+		routes = append(routes, priceDiffQuoteMap(&s.Routes[i]))
+	}
+	m := map[string]any{
+		"symbol": s.Symbol, "routes": routes,
+		"profitableCount": s.ProfitableCount, "venueCount": s.VenueCount, "note": s.Note,
+	}
+	if s.RequestedNotional != "" {
+		m["requestedNotional"] = s.RequestedNotional
+	}
+	if s.RequestedQuantity != "" {
+		m["requestedQuantity"] = s.RequestedQuantity
+	}
+	if s.BestRoute != nil {
+		m["bestRoute"] = priceDiffQuoteMap(s.BestRoute)
 	}
 	return m
 }

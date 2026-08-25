@@ -124,8 +124,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`DELETE` | `/api/v1/price-diff/watches/{id}` | Get / delete watch |
 | `GET` | `/api/v1/price-diff/opportunities` | List opportunities (`status=open\|closed\|all`) |
 | `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
-| `GET` | `/api/v1/price-diff/opportunities/{id}/quote` | Walk both books for a size (avg buy/sell, slippage, profit after fees, max size) |
+| `GET` | `/api/v1/price-diff/opportunities/{id}/quote` | Walk both books for a size (avg buy/sell, slippage, profit after fees, usable money, max size) |
 | `GET` | `/api/v1/price-diff/quote` | Same walk without a stored opportunity (`buyExchange` / `sellExchange` / `notional`) |
+| `GET` | `/api/v1/price-diff/quote/scan` | Rank every venue pair at one size (fees + live depth + how much money can be used) |
+| `GET` | `/api/v1/price-diff/watches/{id}/quote` | Same scan using a watch's symbol and fees |
 | `POST` | `/api/v1/scanner/rules` | Create RSI / MA crossover / volume scanner rule |
 | `GET` | `/api/v1/scanner/rules` | List scanner rules |
 | `GET` | `/api/v1/scanner/rules/{id}` | Get scanner rule |
@@ -167,7 +169,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts. Webhook URLs are **SSRF-hardened** (no loopback/RFC1918/link-local/metadata; no HTTP redirects). Set `WEBHOOK_ALLOW_PRIVATE=true` only for local tests.
 
-**Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`). **Executable quote** (`/price-diff/quote` or `/opportunities/{id}/quote`) walks the buy asks and sell bids for a `notional` or `quantity` and returns average prices, slippage, profit after fees, and max still-profitable size.
+**Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`). **Executable quote** (`/price-diff/quote` or `/opportunities/{id}/quote`) walks the buy asks and sell bids for a `notional` or `quantity` and returns average prices, slippage, profit after fees, usable money, and max still-profitable size. **Scan** (`/price-diff/quote/scan` or `/watches/{id}/quote`) ranks every venue pair at that size.
 
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price **plus per-exchange slippage and taker fee**, pending limit/stop orders with cash/position **reservations** (buy reserve covers slip + fee), **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`). Rates: `GET /api/v1/portfolio/trading-costs`.
 

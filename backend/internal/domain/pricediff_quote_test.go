@@ -87,23 +87,27 @@ func TestQuotePriceDiffRoute_WalksDeeperAndSlips(t *testing.T) {
 	}
 }
 
-func TestQuotePriceDiffRoute_MaxStopsBeforeLosingLevel(t *testing.T) {
+func TestQuotePriceDiffRoute_MaxContinuesWhileTotalProfitPositive(t *testing.T) {
 	buy, sell := testQuoteBooks()
 	got := mustQuote(t, PriceDiffQuoteQuery{
 		Symbol: "BTCUSDT", BuyExchange: ExchangeBinance, SellExchange: ExchangeCoinbase,
 		BuyFeePct: 0.1, SellFeePct: 0.1, Notional: 100,
 	}, buy, sell)
-	// First two levels still have positive edge; 110 vs 90 does not.
+	// First two levels earn ~3.59; 110 vs 90 loses ~20.2 per coin.
+	// Max should take ~0.178 of the losing level so total profit stays just above 0.
 	qty, err := strconv.ParseFloat(got.MaxQuantity, 64)
-	if err != nil || qty < 1.99 || qty > 2.01 {
-		t.Fatalf("max qty=%s err=%v", got.MaxQuantity, err)
+	if err != nil || qty <= 2.01 || qty >= 2.3 {
+		t.Fatalf("max qty=%s want ~2.18 (into the losing level), err=%v", got.MaxQuantity, err)
 	}
 	if got.MaxLimitedBy != PriceDiffMaxLimitedByProfit {
 		t.Fatalf("limitedBy=%s", got.MaxLimitedBy)
 	}
 	maxProfit, err := strconv.ParseFloat(got.MaxProfitAfterFees, 64)
-	if err != nil || maxProfit <= 0 {
-		t.Fatalf("max profit=%s", got.MaxProfitAfterFees)
+	if err != nil || maxProfit <= 0 || maxProfit > 0.01 {
+		t.Fatalf("max profit should be a small leftover, got %s", got.MaxProfitAfterFees)
+	}
+	if got.UsedNotional != "100" || got.UsedPct != 100 {
+		t.Fatalf("100 USDT should fully deploy on the first ask: used=%s pct=%v", got.UsedNotional, got.UsedPct)
 	}
 }
 
@@ -217,6 +221,57 @@ func TestQuotePriceDiffRoute_MeetsMinNet(t *testing.T) {
 	}, buy, sell)
 	if got.MeetsMinNet {
 		t.Fatalf("should miss 50%% min: profitPct=%v", got.ProfitPct)
+	}
+}
+
+func TestQuotePriceDiffRoute_UsedBudgetWhenCappedByProfit(t *testing.T) {
+	buy, sell := testQuoteBooks()
+	got := mustQuote(t, PriceDiffQuoteQuery{
+		Symbol: "BTCUSDT", BuyExchange: ExchangeBinance, SellExchange: ExchangeCoinbase,
+		BuyFeePct: 0.1, SellFeePct: 0.1, Notional: 10_000,
+	}, buy, sell)
+	used, _ := strconv.ParseFloat(got.UsedNotional, 64)
+	unused, _ := strconv.ParseFloat(got.UnusedNotional, 64)
+	if used <= 200 || used >= 400 {
+		t.Fatalf("usable should be first two levels plus a slice of the third, used=%s", got.UsedNotional)
+	}
+	if unused <= 9600 {
+		t.Fatalf("most of 10000 should be unused, unused=%s", got.UnusedNotional)
+	}
+	if used+unused < 9999 || used+unused > 10001 {
+		t.Fatalf("used+unused=%v+%v", used, unused)
+	}
+	if got.UsedPct >= 5 {
+		t.Fatalf("usedPct=%v", got.UsedPct)
+	}
+	if !got.Profitable || got.FilledRequested || got.Executable {
+		t.Fatalf("partial usable fill: %+v", got)
+	}
+}
+
+func TestScanPriceDiffQuotes_RanksByProfit(t *testing.T) {
+	binance := &RawOrderBook{Asks: []PriceLevel{{Price: 100, Quantity: 2}}, Bids: []PriceLevel{{Price: 99, Quantity: 2}}, Live: true}
+	bybit := &RawOrderBook{Asks: []PriceLevel{{Price: 104, Quantity: 2}}, Bids: []PriceLevel{{Price: 103, Quantity: 2}}, Live: true}
+	coinbase := &RawOrderBook{Asks: []PriceLevel{{Price: 110, Quantity: 2}}, Bids: []PriceLevel{{Price: 109, Quantity: 2}}, Live: true}
+	got, err := ScanPriceDiffQuotes("BTCUSDT", 200, 0, map[Exchange]float64{
+		ExchangeBinance: 0.1, ExchangeBybit: 0.1, ExchangeCoinbase: 0.1,
+	}, 0, map[Exchange]*RawOrderBook{
+		ExchangeBinance: binance, ExchangeBybit: bybit, ExchangeCoinbase: coinbase,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VenueCount != 3 || len(got.Routes) != 6 {
+		t.Fatalf("venues=%d routes=%d", got.VenueCount, len(got.Routes))
+	}
+	if got.BestRoute == nil || got.BestRoute.BuyExchange != ExchangeBinance || got.BestRoute.SellExchange != ExchangeCoinbase {
+		t.Fatalf("best=%+v", got.BestRoute)
+	}
+	if got.ProfitableCount < 1 {
+		t.Fatal("expected at least one profitable route")
+	}
+	if got.Routes[0].profitAmount < got.Routes[len(got.Routes)-1].profitAmount {
+		t.Fatalf("routes not ranked by profit")
 	}
 }
 

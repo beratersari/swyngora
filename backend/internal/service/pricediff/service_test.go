@@ -332,6 +332,79 @@ func TestQuote_RejectsSameVenue(t *testing.T) {
 	}
 }
 
+func TestQuoteScan_RanksAllPairs(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 100, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 99, Quantity: 2}},
+			Live: true,
+		},
+		"bybit|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 104, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 103, Quantity: 2}},
+			Live: true,
+		},
+		"coinbase|BTC-USD": {
+			Asks: []domain.PriceLevel{{Price: 110, Quantity: 2}},
+			Bids: []domain.PriceLevel{{Price: 109, Quantity: 2}},
+			Live: true,
+		},
+	}})
+	got, err := svc.QuoteScan(context.Background(), ScanInput{
+		Symbol: "BTCUSDT", Notional: 200,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.BestRoute == nil || got.BestRoute.BuyExchange != domain.ExchangeBinance || got.BestRoute.SellExchange != domain.ExchangeCoinbase {
+		t.Fatalf("best=%+v", got.BestRoute)
+	}
+	if len(got.Routes) != 6 || got.ProfitableCount < 1 {
+		t.Fatalf("routes=%d profitable=%d", len(got.Routes), got.ProfitableCount)
+	}
+}
+
+func TestQuoteWatch_UsesWatchFees(t *testing.T) {
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 100, Quantity: 1}},
+			Bids: []domain.PriceLevel{{Price: 99, Quantity: 1}},
+		},
+		"bybit|BTCUSDT": {
+			Asks: []domain.PriceLevel{{Price: 102, Quantity: 1}},
+			Bids: []domain.PriceLevel{{Price: 101, Quantity: 1}},
+		},
+		"coinbase|BTC-USD": {
+			Asks: []domain.PriceLevel{{Price: 103, Quantity: 1}},
+			Bids: []domain.PriceLevel{{Price: 102, Quantity: 1}},
+		},
+	}})
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "scan1", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.6, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.QuoteWatch(ctx, "scan1", w.ID, 100, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Symbol != "BTCUSDT" || len(got.Routes) != 6 {
+		t.Fatalf("%+v", got)
+	}
+	for i := range got.Routes {
+		if got.Routes[i].BuyExchange == domain.ExchangeBinance && got.Routes[i].BuyFeePct != 0.1 {
+			t.Fatalf("binance buy fee %+v", got.Routes[i])
+		}
+		if got.Routes[i].SellExchange == domain.ExchangeCoinbase && got.Routes[i].SellFeePct != 0.6 {
+			t.Fatalf("coinbase sell fee %+v", got.Routes[i])
+		}
+	}
+}
+
 func TestQuoteOpportunity_UsesWatchFees(t *testing.T) {
 	now := time.Now().UTC()
 	m := &fakeTicker{data: map[string]*domain.Ticker24h{

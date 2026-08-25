@@ -79,6 +79,25 @@ func TestQuoteRoute_BadSize(t *testing.T) {
 	}
 }
 
+func TestQuoteScan_OK(t *testing.T) {
+	h := newPriceDiffHandler(t)
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/price-diff/quote/scan?symbol=BTCUSDT&notional=100&feeBinancePct=0.1&feeBybitPct=0.1",
+		nil)
+	rr := httptest.NewRecorder()
+	h.QuoteScan(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body priceDiffQuoteScanDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.BestRoute == nil || len(body.Routes) < 2 {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestQuoteOpportunity_NotFound(t *testing.T) {
 	h := newPriceDiffHandler(t)
 	req := httptest.NewRequest(http.MethodGet,

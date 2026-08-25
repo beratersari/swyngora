@@ -399,6 +399,87 @@ func (s *Service) Quote(ctx context.Context, in QuoteInput) (*domain.PriceDiffQu
 	return domain.QuotePriceDiffRoute(q, buyBook, sellBook)
 }
 
+// ScanInput quotes every crypto venue pair at one size.
+type ScanInput struct {
+	Symbol         string
+	Notional       float64
+	Quantity       float64
+	FeeBinancePct  float64
+	FeeCoinbasePct float64
+	FeeBybitPct    float64
+	MinNetDiffPct  float64
+}
+
+// QuoteScan walks Binance, Coinbase, and Bybit books and ranks every buy/sell route.
+func (s *Service) QuoteScan(ctx context.Context, in ScanInput) (*domain.PriceDiffQuoteScan, error) {
+	if s == nil || s.books == nil {
+		return nil, fmt.Errorf("%w: order books not configured", domain.ErrUpstream)
+	}
+	sym := domain.NormalizeSymbol(domain.ExchangeBinance, in.Symbol)
+	if sym == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	for _, f := range []float64{in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct} {
+		if f < 0 || f > domain.MaxPriceDiffFeePct || math.IsNaN(f) || math.IsInf(f, 0) {
+			return nil, fmt.Errorf("%w: fees must be between 0 and %g percent", domain.ErrInvalidArgument, domain.MaxPriceDiffFeePct)
+		}
+	}
+	books, err := s.fetchAllQuoteBooks(ctx, sym)
+	if err != nil {
+		return nil, err
+	}
+	return domain.ScanPriceDiffQuotes(sym, in.Notional, in.Quantity, map[domain.Exchange]float64{
+		domain.ExchangeBinance:  in.FeeBinancePct,
+		domain.ExchangeCoinbase: in.FeeCoinbasePct,
+		domain.ExchangeBybit:    in.FeeBybitPct,
+	}, in.MinNetDiffPct, books)
+}
+
+// QuoteWatch scans all venue pairs using a stored watch's symbol and fees.
+func (s *Service) QuoteWatch(ctx context.Context, clientID, watchID string, notional, quantity float64) (*domain.PriceDiffQuoteScan, error) {
+	w, err := s.GetWatch(ctx, clientID, watchID)
+	if err != nil {
+		return nil, err
+	}
+	return s.QuoteScan(ctx, ScanInput{
+		Symbol: w.Symbol, Notional: notional, Quantity: quantity,
+		FeeBinancePct: w.FeeBinancePct, FeeCoinbasePct: w.FeeCoinbasePct, FeeBybitPct: w.FeeBybitPct,
+		MinNetDiffPct: w.MinNetDiffPct,
+	})
+}
+
+func (s *Service) fetchAllQuoteBooks(ctx context.Context, symbol string) (map[domain.Exchange]*domain.RawOrderBook, error) {
+	type result struct {
+		ex   domain.Exchange
+		book *domain.RawOrderBook
+		err  error
+	}
+	var venues []domain.Exchange
+	for _, ex := range domain.SupportedExchanges {
+		if !domain.IsEquityExchange(ex) {
+			venues = append(venues, ex)
+		}
+	}
+	ch := make(chan result, len(venues))
+	for _, ex := range venues {
+		ex := ex
+		go func() {
+			b, err := s.books.GetRawOrderBook(ctx, string(ex), domain.PriceDiffSymbolForExchange(ex, symbol))
+			ch <- result{ex: ex, book: b, err: err}
+		}()
+	}
+	out := make(map[domain.Exchange]*domain.RawOrderBook, len(venues))
+	for range venues {
+		r := <-ch
+		book, err := bookOrEmpty(r.book, r.err)
+		if err != nil {
+			book = &domain.RawOrderBook{}
+		}
+		out[r.ex] = book
+	}
+	return out, nil
+}
+
 // QuoteOpportunity loads a stored opportunity (and its watch fees) and quotes a size.
 func (s *Service) QuoteOpportunity(ctx context.Context, clientID, id string, notional, quantity float64) (*domain.PriceDiffQuote, error) {
 	opp, err := s.GetOpportunity(ctx, clientID, id)

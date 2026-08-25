@@ -2199,6 +2199,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/price-diff/watches/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scan all venue pairs for a stored watch */
+        get: operations["quotePriceDiffWatch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/quote/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare every venue pair at one size */
+        get: operations["scanPriceDiffQuotes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/price-diff/quote": {
         parameters: {
             query?: never;
@@ -3942,6 +3976,24 @@ export interface components {
             maxProfitPct?: number;
             /** @enum {string} */
             maxLimitedBy?: "profit" | "buy_book" | "sell_book" | "both_books" | "empty_book";
+            /** @description Buy-book spend that still leaves the whole trade profitable */
+            usedNotional?: string;
+            /** @description Requested notional minus usedNotional */
+            unusedNotional?: string;
+            usedQuantity?: string;
+            unusedQuantity?: string;
+            /** @description Percent of the entered size that can really be used */
+            usedPct?: number;
+            note?: string;
+        };
+        PriceDiffQuoteScan: {
+            symbol?: string;
+            requestedNotional?: string;
+            requestedQuantity?: string;
+            bestRoute?: components["schemas"]["PriceDiffQuote"];
+            routes?: components["schemas"]["PriceDiffQuote"][];
+            profitableCount?: number;
+            venueCount?: number;
             note?: string;
         };
         Watchlist: {
@@ -8188,6 +8240,65 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    quotePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                notional?: number;
+                quantity?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked routes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffQuoteScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    scanPriceDiffQuotes: {
+        parameters: {
+            query: {
+                symbol: string;
+                notional?: number;
+                quantity?: number;
+                feeBinancePct?: number;
+                feeCoinbasePct?: number;
+                feeBybitPct?: number;
+                minNetDiffPct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked routes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffQuoteScan"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     quotePriceDiff: {
