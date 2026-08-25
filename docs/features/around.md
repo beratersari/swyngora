@@ -125,13 +125,16 @@ comparison window. Book and open-interest samples from after the
 move starts are not used.
 
 `horizons` picks the after-windows (CSV, default `15m,1h,4h`).
-Example: `horizons=30m,2h,6h`. `afterHorizons` is what usually
-happened after those unique events: how many went **up** vs
-**down**, plus **average** and **median** price change, and
-`sample` (unique events with enough tape). A match is left out of
-a horizon when that tape is not long enough. Each case still lists
-`used`, `missing`, `coverage`, per-field `compared` scores, and the
-move itself (`afterReturnPct`). MCP: `find_around_similar`.
+Example: `horizons=5m,30m,2h`. Each horizon is measured on
+**matching candle size** (`5m` uses 5-minute bars, not 15-minute).
+`afterHorizons` is what usually happened after those unique events:
+how many went **up** vs **down**, plus **average** and **median**,
+and `sample`. The same stats are also split by similarity band
+(`40-60`, `60-80`, `80-100`) so you can see how the after-move
+changes as matches get closer. A match is left out of a horizon
+when that tape is not long enough. Each case still lists `used`,
+`missing`, `coverage`, per-field `compared` scores, and the move
+itself (`afterReturnPct`). MCP: `find_around_similar`.
 
 ## Where the code lives
 
@@ -153,5 +156,5 @@ curl "http://localhost:8080/api/v1/market/around/precursors?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60"
-curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&horizons=30m,2h,6h"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&horizons=5m,30m,2h"
 ```

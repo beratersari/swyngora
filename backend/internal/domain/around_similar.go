@@ -69,15 +69,46 @@ type AroundSimilarFieldScore struct {
 	Weight float64
 }
 
-// AroundSimilarHorizonStat is how price usually moved after similar setups.
-type AroundSimilarHorizonStat struct {
-	Horizon    string
-	Sample     int // unique past events with enough tape for this horizon
-	Events     int // same as Sample; unique events used in avg/median
+// AroundSimilarScoreBand is one similarity range, e.g. 40–60.
+type AroundSimilarScoreBand struct {
+	From float64 // inclusive
+	To   float64 // exclusive (last band includes 100)
+	ID   string
+}
+
+// AroundSimilarBandStat is after-move stats for one similarity range.
+type AroundSimilarBandStat struct {
+	From       float64
+	To         float64
+	Label      string
+	Sample     int
+	Events     int
 	Up         int
 	Down       int
 	AveragePct float64
 	MedianPct  float64
+}
+
+// AroundSimilarHorizonStat is how price usually moved after similar setups.
+type AroundSimilarHorizonStat struct {
+	Horizon    string
+	Interval   string // candle size used to measure this horizon
+	Sample     int    // unique past events with enough tape for this horizon
+	Events     int
+	Up         int
+	Down       int
+	AveragePct float64
+	MedianPct  float64
+	Bands      []AroundSimilarBandStat
+}
+
+// DefaultAroundSimilarBands is 40–60, 60–80, 80–100.
+func DefaultAroundSimilarBands() []AroundSimilarScoreBand {
+	return []AroundSimilarScoreBand{
+		{From: 40, To: 60, ID: "40-60"},
+		{From: 60, To: 80, ID: "60-80"},
+		{From: 80, To: 100, ID: "80-100"},
+	}
 }
 
 // AroundSimilarHit is a past move whose setup looks like the current tape.
@@ -386,6 +417,39 @@ func AroundSimilarHorizonMax(hs []AroundSimilarHorizon) time.Duration {
 	return max
 }
 
+// AroundSimilarBarInterval is the candle size that matches a forward window
+// (largest standard bar that is not longer than the horizon).
+func AroundSimilarBarInterval(d time.Duration) string {
+	if d <= 0 {
+		return string(Interval15m)
+	}
+	cands := []CandleInterval{
+		Interval1d, Interval12h, Interval8h, Interval6h, Interval4h,
+		Interval2h, Interval1h, Interval30m, Interval15m, Interval5m,
+		Interval3m, Interval1m,
+	}
+	for _, iv := range cands {
+		if IntervalDuration(iv) <= d {
+			return string(iv)
+		}
+	}
+	return string(Interval1m)
+}
+
+// AroundSimilarBarIntervalFor is the finest bar needed to cover every horizon.
+func AroundSimilarBarIntervalFor(hs []AroundSimilarHorizon) string {
+	if len(hs) == 0 {
+		hs = DefaultAroundSimilarHorizons()
+	}
+	min := hs[0].Dur
+	for _, h := range hs[1:] {
+		if h.Dur > 0 && h.Dur < min {
+			min = h.Dur
+		}
+	}
+	return AroundSimilarBarInterval(min)
+}
+
 func (w AroundSimilarWeights) of(name string) float64 {
 	switch name {
 	case AroundSimilarFieldPrice:
@@ -426,7 +490,6 @@ func ClampAroundSimilarLimit(n int) int {
 // MatchAroundSimilar ranks past move setups against the current before-window.
 // Cases below minCoverage are returned in skipped, not as normal matches.
 func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fields AroundSimilarFields, weights AroundSimilarWeights, minCoverage float64) (matches, skipped []AroundSimilarHit) {
-	limit = ClampAroundSimilarLimit(limit)
 	if !fields.Any() {
 		fields = DefaultAroundSimilarFields()
 	}
@@ -475,8 +538,11 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 		keep = append(keep, row)
 	}
 	keep = collapseAroundSimilarHits(keep)
-	if len(keep) > limit {
-		keep = keep[:limit]
+	if limit > 0 {
+		limit = ClampAroundSimilarLimit(limit)
+		if len(keep) > limit {
+			keep = keep[:limit]
+		}
 	}
 	sort.SliceStable(drop, func(i, j int) bool {
 		return drop[i].Coverage > drop[j].Coverage
@@ -616,6 +682,13 @@ func ExplainAroundSimilarReport(r AroundSimilarReport) string {
 			}
 			head += fmt.Sprintf(" After %s: rose %d, fell %d (avg %s%%, median %s%%, %d unique event(s)).",
 				h.Horizon, h.Up, h.Down, FormatSignedPct(h.AveragePct), FormatSignedPct(h.MedianPct), ev)
+			for _, b := range h.Bands {
+				if b.Sample == 0 {
+					continue
+				}
+				head += fmt.Sprintf(" Similarity %s: rose %d, fell %d (avg %s%%, n=%d).",
+					b.Label, b.Up, b.Down, FormatSignedPct(b.AveragePct), b.Sample)
+			}
 		}
 	} else if r.UpAfter+r.DownAfter > 0 {
 		head += fmt.Sprintf(" After those cases price rose %d time(s) and fell %d time(s)", r.UpAfter, r.DownAfter)
@@ -836,8 +909,14 @@ func FinishAroundSimilar(r *AroundSimilarReport) {
 	r.Summary = ExplainAroundSimilarReport(*r)
 }
 
+type aroundHorizonReturn struct {
+	pct float64
+	sim float64
+}
+
 // SummarizeAroundSimilarHorizons averages price after similar setups at each horizon.
 // A match is left out of a horizon when the tape does not reach that far.
+// bars should use AroundSimilarBarIntervalFor(horizons) so short windows are not measured on 15m candles.
 func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar, asOf time.Time, horizons []AroundSimilarHorizon) []AroundSimilarHorizonStat {
 	if len(horizons) == 0 {
 		horizons = DefaultAroundSimilarHorizons()
@@ -845,10 +924,18 @@ func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar
 	matches = collapseAroundSimilarHits(matches)
 	bars = sortAroundBars(bars)
 	barDur := aroundBarDuration(bars)
+	iv := AroundSimilarBarIntervalFor(horizons)
+	if barDur > 0 {
+		iv = aroundBarIntervalID(barDur)
+	}
+	bands := DefaultAroundSimilarBands()
 	out := make([]AroundSimilarHorizonStat, 0, len(horizons))
 	for _, h := range horizons {
-		st := AroundSimilarHorizonStat{Horizon: h.ID}
-		vals := make([]float64, 0, len(matches))
+		st := AroundSimilarHorizonStat{Horizon: h.ID, Interval: AroundSimilarBarInterval(h.Dur)}
+		if iv != "" {
+			st.Interval = iv
+		}
+		rows := make([]aroundHorizonReturn, 0, len(matches))
 		for _, m := range matches {
 			start := m.Move.At
 			if start.IsZero() {
@@ -863,21 +950,69 @@ func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar
 				continue
 			}
 			pct := (endPx - startPx) / startPx * 100
-			vals = append(vals, pct)
-			switch changeDir(pct) {
-			case CVDDirUp:
-				st.Up++
-			case CVDDirDown:
-				st.Down++
-			}
+			rows = append(rows, aroundHorizonReturn{pct: pct, sim: m.Similarity})
 		}
-		st.Sample = len(vals)
-		st.Events = len(vals)
-		st.AveragePct = averageFloat(vals)
-		st.MedianPct = medianFloat(vals)
+		fillAroundSimilarHorizonStat(&st, rows, bands)
 		out = append(out, st)
 	}
 	return out
+}
+
+func fillAroundSimilarHorizonStat(st *AroundSimilarHorizonStat, rows []aroundHorizonReturn, bands []AroundSimilarScoreBand) {
+	if st == nil {
+		return
+	}
+	vals := make([]float64, 0, len(rows))
+	for _, r := range rows {
+		vals = append(vals, r.pct)
+		switch changeDir(r.pct) {
+		case CVDDirUp:
+			st.Up++
+		case CVDDirDown:
+			st.Down++
+		}
+	}
+	st.Sample = len(vals)
+	st.Events = len(vals)
+	st.AveragePct = averageFloat(vals)
+	st.MedianPct = medianFloat(vals)
+	st.Bands = make([]AroundSimilarBandStat, 0, len(bands))
+	for i, b := range bands {
+		bs := AroundSimilarBandStat{From: b.From, To: b.To, Label: b.ID}
+		if bs.Label == "" {
+			bs.Label = formatFixed(b.From, 0) + "-" + formatFixed(b.To, 0)
+		}
+		var bvals []float64
+		last := i == len(bands)-1
+		for _, r := range rows {
+			if r.sim < b.From {
+				continue
+			}
+			if last {
+				if r.sim > b.To {
+					continue
+				}
+			} else if r.sim >= b.To {
+				continue
+			}
+			bvals = append(bvals, r.pct)
+			switch changeDir(r.pct) {
+			case CVDDirUp:
+				bs.Up++
+			case CVDDirDown:
+				bs.Down++
+			}
+		}
+		bs.Sample = len(bvals)
+		bs.Events = len(bvals)
+		bs.AveragePct = averageFloat(bvals)
+		bs.MedianPct = medianFloat(bvals)
+		st.Bands = append(st.Bands, bs)
+	}
+}
+
+func aroundBarIntervalID(d time.Duration) string {
+	return AroundSimilarBarInterval(d)
 }
 
 func sortAroundBars(bars []AroundBar) []AroundBar {

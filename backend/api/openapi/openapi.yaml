@@ -1724,8 +1724,10 @@ paths:
         moves.
         Each past match uses only tape available before that move
         (`dataFrom` / `dataTo`). `horizons` picks the after-windows
-        (default `15m,1h,4h`; e.g. `30m,2h,6h`). Each horizon reports
-        up/down, average, median, and `sample`. A case is left out of
+        (default `15m,1h,4h`; e.g. `5m,30m,2h`). Each horizon is
+        measured on matching candle size (5m uses 5m bars) and reports
+        up/down, average, median, `sample`, plus the same stats in
+        similarity bands 40–60 / 60–80 / 80–100. A case is left out of
         a horizon when that tape is not long enough. Default lookback
         **7d**. Informational only.
       operationId: findMarketAroundSimilar
@@ -1781,7 +1783,7 @@ paths:
           schema: { type: number, default: 60, minimum: 0, maximum: 100 }
         - name: horizons
           in: query
-          description: After-windows CSV (default 15m,1h,4h). Example 30m,2h,6h. Each reports avg, median, up, down, sample.
+          description: After-windows CSV (default 15m,1h,4h). Example 5m,30m,2h. Matching candle size; each reports avg, median, up, down, sample, and similarity bands.
           schema: { type: string, example: "30m,2h,6h" }
       responses:
         '200':

@@ -521,7 +521,7 @@ class AroundSimilarInput(BaseModel):
     )
     horizons: str = Field(
         default="",
-        description="After-windows CSV, e.g. 30m,2h,6h (default 15m,1h,4h). Each reports avg, median, up, down, sample.",
+        description="After-windows CSV, e.g. 5m,30m,2h (default 15m,1h,4h). Matching candle size. Each reports avg, median, up, down, sample, and similarity bands 40-60/60-80/80-100.",
     )
 
 
@@ -3156,8 +3156,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "matches count as one event. afterHorizons is how "
                 "price usually moved after those unique events. "
                 "horizons is a CSV of after-windows (default "
-                "15m,1h,4h; e.g. 30m,2h,6h) with avg, median, "
-                "up, down, sample each."
+                "15m,1h,4h; e.g. 5m,30m,2h) on matching candle "
+                "size, with avg, median, up, down, sample, and "
+                "similarity bands 40-60/60-80/80-100."
             ),
             args_schema=AroundSimilarInput,
         ),

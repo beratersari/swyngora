@@ -737,10 +737,24 @@ func aroundSimilarHorizonsToDTO(in []domain.AroundSimilarHorizonStat) []aroundSi
 	}
 	out := make([]aroundSimilarHorizonDTO, 0, len(in))
 	for _, h := range in {
-		row := aroundSimilarHorizonDTO{Horizon: h.Horizon, Sample: h.Sample, Events: h.Events, Up: h.Up, Down: h.Down}
+		row := aroundSimilarHorizonDTO{Horizon: h.Horizon, Interval: h.Interval, Sample: h.Sample, Events: h.Events, Up: h.Up, Down: h.Down}
 		if h.Sample > 0 {
 			row.AveragePct = domain.FormatSignedPct(h.AveragePct)
 			row.MedianPct = domain.FormatSignedPct(h.MedianPct)
+		}
+		if len(h.Bands) > 0 {
+			row.Bands = make([]aroundSimilarBandDTO, 0, len(h.Bands))
+			for _, b := range h.Bands {
+				bd := aroundSimilarBandDTO{
+					From: formatHistQty(b.From), To: formatHistQty(b.To), Label: b.Label,
+					Sample: b.Sample, Events: b.Events, Up: b.Up, Down: b.Down,
+				}
+				if b.Sample > 0 {
+					bd.AveragePct = domain.FormatSignedPct(b.AveragePct)
+					bd.MedianPct = domain.FormatSignedPct(b.MedianPct)
+				}
+				row.Bands = append(row.Bands, bd)
+			}
 		}
 		out = append(out, row)
 	}
@@ -813,7 +827,21 @@ type aroundSimilarResponse struct {
 }
 
 type aroundSimilarHorizonDTO struct {
-	Horizon    string `json:"horizon"`
+	Horizon    string                 `json:"horizon"`
+	Interval   string                 `json:"interval,omitempty"`
+	Sample     int                    `json:"sample"`
+	Events     int                    `json:"events"`
+	Up         int                    `json:"up"`
+	Down       int                    `json:"down"`
+	AveragePct string                 `json:"averagePct,omitempty"`
+	MedianPct  string                 `json:"medianPct,omitempty"`
+	Bands      []aroundSimilarBandDTO `json:"bands,omitempty"`
+}
+
+type aroundSimilarBandDTO struct {
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Label      string `json:"label"`
 	Sample     int    `json:"sample"`
 	Events     int    `json:"events"`
 	Up         int    `json:"up"`

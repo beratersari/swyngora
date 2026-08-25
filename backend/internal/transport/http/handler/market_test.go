@@ -650,6 +650,11 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 	if len(body.Horizons) != 2 || body.Horizons[0] != "30m" || body.Horizons[1] != "2h" {
 		t.Fatalf("horizons %+v", body.Horizons)
 	}
+	for _, h := range body.AfterHorizons {
+		if len(h.Bands) != 3 {
+			t.Fatalf("bands %+v", h)
+		}
+	}
 	if len(body.Fields) != 3 || len(body.Weights) != 3 {
 		t.Fatalf("fields/weights %+v", body)
 	}

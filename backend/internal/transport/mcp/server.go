@@ -769,7 +769,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_similar",
-		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 30m,2h,6h). Each horizon reports avg, median, up, down, sample. Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 5m,30m,2h) measured on matching candle size. Each horizon reports avg, median, up, down, sample, and the same stats for similarity 40-60, 60-80, 80-100. Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),
@@ -782,7 +782,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi")),
 		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)")),
 		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches.")),
-		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 30m,2h,6h (default 15m,1h,4h). Each reports avg, median, up, down, sample.")),
+		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 5m,30m,2h (default 15m,1h,4h). Matching candle size. Each reports avg, median, up, down, sample, and similarity bands.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {

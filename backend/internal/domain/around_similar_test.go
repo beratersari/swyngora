@@ -352,6 +352,80 @@ func TestSummarizeAroundSimilarHorizons_SkipsShortTape(t *testing.T) {
 	}
 }
 
+func TestAroundSimilarBarInterval_MatchesHorizon(t *testing.T) {
+	if AroundSimilarBarInterval(5*time.Minute) != "5m" {
+		t.Fatalf("5m -> %s", AroundSimilarBarInterval(5*time.Minute))
+	}
+	if AroundSimilarBarInterval(time.Hour) != "1h" {
+		t.Fatalf("1h -> %s", AroundSimilarBarInterval(time.Hour))
+	}
+	hs, _ := ParseAroundSimilarHorizons("5m,1h,4h")
+	if AroundSimilarBarIntervalFor(hs) != "5m" {
+		t.Fatalf("finest %s", AroundSimilarBarIntervalFor(hs))
+	}
+}
+
+func TestSummarizeAroundSimilarHorizons_UsesMatchingBarSize(t *testing.T) {
+	start := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var bars []AroundBar
+	px := 100.0
+	for i := -1; i < 4; i++ {
+		open := px
+		if i >= 0 {
+			px = 100 + float64(i+1)*0.5 // +0.5 each 5m
+		}
+		bars = append(bars, AroundBar{
+			Time: start.Add(time.Duration(i) * 5 * time.Minute),
+			Open: open, Close: px,
+		})
+	}
+	hs, _ := ParseAroundSimilarHorizons("5m")
+	got := SummarizeAroundSimilarHorizons([]AroundSimilarHit{
+		{Move: AroundMove{At: start, Open: 100}, Similarity: 90},
+	}, bars, start.Add(time.Hour), hs)
+	if len(got) != 1 || got[0].Sample != 1 || got[0].Interval != "5m" {
+		t.Fatalf("5m horizon %+v", got)
+	}
+	if got[0].AveragePct < 0.4 || got[0].AveragePct > 0.6 {
+		t.Fatalf("5m return should be ~0.5%%, got %+v", got[0])
+	}
+}
+
+func TestSummarizeAroundSimilarHorizons_SplitsSimilarityBands(t *testing.T) {
+	start := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var bars []AroundBar
+	for i := 0; i <= 4; i++ {
+		bars = append(bars, AroundBar{
+			Time: start.Add(time.Duration(i) * 15 * time.Minute),
+			Open: 100 + float64(i), Close: 101 + float64(i),
+		})
+	}
+	matches := []AroundSimilarHit{
+		{Move: AroundMove{At: start, Open: 100}, Similarity: 45},
+		{Move: AroundMove{At: start, Open: 100}, Similarity: 70},
+		{Move: AroundMove{At: start, Open: 100}, Similarity: 90},
+	}
+	// Same At would collapse — stagger slightly without overlapping Until.
+	matches[1].Move.At = start.Add(2 * time.Hour)
+	matches[2].Move.At = start.Add(4 * time.Hour)
+	// Extend bars so later starts have a 15m print.
+	for _, extra := range []time.Duration{2 * time.Hour, 4 * time.Hour} {
+		bars = append(bars, AroundBar{Time: start.Add(extra), Open: 100, Close: 101})
+		bars = append(bars, AroundBar{Time: start.Add(extra + 15*time.Minute), Open: 101, Close: 102})
+	}
+	hs, _ := ParseAroundSimilarHorizons("15m")
+	got := SummarizeAroundSimilarHorizons(matches, bars, start.Add(6*time.Hour), hs)
+	if len(got) != 1 || len(got[0].Bands) != 3 {
+		t.Fatalf("bands %+v", got)
+	}
+	if got[0].Bands[0].Sample != 1 || got[0].Bands[1].Sample != 1 || got[0].Bands[2].Sample != 1 {
+		t.Fatalf("band samples %+v", got[0].Bands)
+	}
+	if got[0].Bands[0].Label != "40-60" || got[0].Bands[2].Label != "80-100" {
+		t.Fatalf("labels %+v", got[0].Bands)
+	}
+}
+
 func TestFinishAroundSimilar_ExplainsHorizons(t *testing.T) {
 	r := AroundSimilarReport{
 		Symbol: "BTCUSDT",
