@@ -20,7 +20,7 @@ from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
 from swyngora_ai.llm.factory import build_chat_model
-from swyngora_ai.llm.retry import MODEL_RETRY
+from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import (
     emit,
@@ -224,15 +224,17 @@ class Orchestrator:
             self.memory = memory
         else:
             self.memory = FinMem(path=self.settings.memory_path)
+        injected = model is not None
         self.model = model or build_chat_model(self.settings)
-        self._runner = SpecialistRunner(self.model, self.settings)
+        self._middleware = [MODEL_RETRY] if injected else build_agent_middleware(self.settings)
+        self._runner = SpecialistRunner(self.model, self.settings, middleware=self._middleware)
         tools = self._runner.as_orchestrator_tools()
         system = ORCHESTRATOR_SYSTEM.format(client_id=self.settings.default_client_id)
         self._graph = create_agent(
             self.model,
             tools,
             system_prompt=system,
-            middleware=[MODEL_RETRY],
+            middleware=self._middleware,
         )
 
     def chat(

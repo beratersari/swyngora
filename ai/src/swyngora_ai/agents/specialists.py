@@ -84,6 +84,7 @@ def _run_react(
     specialist: str,
     recursion_limit: int = 12,
     compiled: Any | None = None,
+    middleware: Sequence[Any] | None = None,
 ) -> str:
     from swyngora_ai.graph.orchestrator import extract_trace, run_agent_with_progress
 
@@ -95,7 +96,7 @@ def _run_react(
             model,
             list(tools),
             system_prompt=system,
-            middleware=[MODEL_RETRY],
+            middleware=list(middleware) if middleware is not None else [MODEL_RETRY],
         )
     msgs = run_agent_with_progress(
         agent,
@@ -124,10 +125,16 @@ class TaskInput(BaseModel):
 class SpecialistRunner:
     """Compile each specialist once; run ReAct with a small tool pack."""
 
-    def __init__(self, model: BaseChatModel, settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        model: BaseChatModel,
+        settings: Settings | None = None,
+        middleware: Sequence[Any] | None = None,
+    ) -> None:
         self.model = model
         self.settings = settings or get_settings()
         self.client_id = self.settings.default_client_id
+        self._middleware = list(middleware) if middleware is not None else [MODEL_RETRY]
         self._compiled: dict[str, Any] = {}
         self._tools: dict[str, list[BaseTool]] = {}
         self._systems: dict[str, str] = {}
@@ -167,7 +174,7 @@ class SpecialistRunner:
                 self.model,
                 leaf,
                 system_prompt=system,
-                middleware=[MODEL_RETRY],
+                middleware=self._middleware,
             )
 
     def run(self, name: str, task: str) -> str:
@@ -185,6 +192,7 @@ class SpecialistRunner:
             specialist=name,
             recursion_limit=limit,
             compiled=compiled,
+            middleware=self._middleware,
         )
 
     def analyze(self, task: str) -> str:
