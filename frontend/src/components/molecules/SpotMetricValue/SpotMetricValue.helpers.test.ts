@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { asTagList, formatSpotMetricDisplay } from './SpotMetricValue.helpers';
+import { asTagList, formatSpotMetricDisplay, isHaltedDelist } from './SpotMetricValue.helpers';
 
 describe('formatSpotMetricDisplay', () => {
   it('formats price and change percent', () => {
@@ -16,6 +16,14 @@ describe('formatSpotMetricDisplay', () => {
     expect(formatSpotMetricDisplay('number', null)).toBe('—');
     expect(formatSpotMetricDisplay('number', 12)).toBe('12');
     expect(formatSpotMetricDisplay('tags', ['a'])).toBe('—');
+  });
+});
+
+describe('isHaltedDelist', () => {
+  it('is true only after the halt time', () => {
+    expect(isHaltedDelist('2026-08-17T00:00:00Z', Date.parse('2026-08-26T12:00:00Z'))).toBe(true);
+    expect(isHaltedDelist('2026-09-03T03:00:00Z', Date.parse('2026-08-26T12:00:00Z'))).toBe(false);
+    expect(isHaltedDelist(undefined)).toBe(false);
   });
 });
 

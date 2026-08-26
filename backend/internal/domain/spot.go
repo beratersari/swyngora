@@ -135,6 +135,21 @@ func ApplyTickerToSpot(m *SpotMarket, t Ticker24h) {
 	}
 }
 
+// BlankHaltedSpotChange drops rolling 24h change on already-halted rows so a
+// frozen last window is not shown as a live 24h move on Markets.
+func BlankHaltedSpotChange(items []SpotMarket, now time.Time) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	for i := range items {
+		if items[i].DelistTime == nil || items[i].DelistTime.After(now) {
+			continue
+		}
+		items[i].PriceChange = ""
+		items[i].PriceChangePercent = ""
+	}
+}
+
 // SpotListQuery filters, sorts, and pages the spot market list.
 type SpotListQuery struct {
 	// Query is a case-insensitive substring match on symbol, base, or quote.

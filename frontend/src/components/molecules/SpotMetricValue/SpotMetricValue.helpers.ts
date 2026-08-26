@@ -34,3 +34,10 @@ export function formatSpotMetricDisplay(
 export function asTagList(raw: unknown): string[] {
   return Array.isArray(raw) ? (raw as string[]) : [];
 }
+
+/** True when the pair already halted — 24h % is a frozen last window, not live. */
+export function isHaltedDelist(delistTime?: string | null, nowMs = Date.now()): boolean {
+  if (!delistTime) return false;
+  const t = Date.parse(delistTime);
+  return Number.isFinite(t) && t <= nowMs;
+}

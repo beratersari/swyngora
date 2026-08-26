@@ -34,7 +34,7 @@ Expose first market-data APIs so clients can:
 - Pass `exchange` on spot/candles/ticker/intervals/tags
 - **Product tags** come from the Binance marketing catalog and are **applied cross-venue by base asset** for **crypto** venues only (Coinbase/Bybit rows get the same tags as Binance when the base matches). Nasdaq/BIST never inherit crypto tags — `LINK` on BIST is Link Bilgisayar, not Chainlink.
 - **24h trade count** is only available from Binance public APIs; Coinbase/Bybit return 0 / UI shows "—"
-- **Coinbase high/low:** Advanced Trade public `products` leaves `high_24h`/`low_24h` empty; detail ticker fills them from Exchange `GET /products/{id}/stats`
+- **Coinbase high/low:** Advanced Trade public `products` often leaves `high_24h`/`low_24h` empty; the list copies them when present. Detail ticker fills open/high/low/last from Exchange `GET /products/{id}/stats` and **derives 24h % from that open/last** so it is not mixed with the products `%` window.
 
 ### Price heatmap (web)
 

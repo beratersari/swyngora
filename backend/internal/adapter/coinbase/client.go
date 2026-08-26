@@ -185,6 +185,8 @@ func (c *Client) fetchSpotMarkets(ctx context.Context) ([]domain.SpotMarket, err
 				Status:             "TRADING",
 				LastPrice:          p.Price,
 				PriceChangePercent: p.PricePercentageChange24h,
+				HighPrice:          strings.TrimSpace(p.High24h),
+				LowPrice:           strings.TrimSpace(p.Low24h),
 				Volume:             p.Volume24h,
 				QuoteVolume:        p.ApproximateQuote24hVolume,
 			}
@@ -290,15 +292,9 @@ func (c *Client) GetTicker24h(ctx context.Context, symbol string) (*domain.Ticke
 				}
 			}
 		}
-		// If % change empty but open+last known, derive approximate 24h change.
-		if t.PriceChangePercent == "" && t.OpenPrice != "" && t.LastPrice != "" {
-			if open, e1 := strconv.ParseFloat(t.OpenPrice, 64); e1 == nil && open != 0 {
-				if last, e2 := strconv.ParseFloat(t.LastPrice, 64); e2 == nil {
-					t.PriceChangePercent = strconv.FormatFloat((last-open)/open*100, 'f', -1, 64)
-					t.PriceChange = strconv.FormatFloat(last-open, 'f', -1, 64)
-				}
-			}
-		}
+		// Stats last/open/high/low are one 24h window; products % is another.
+		// Always derive change from the stats open/last we actually display.
+		domain.SyncTickerChangeFromOpenLast(t)
 
 		// Exchange ticker carries last-trade time (stats do not). Missing/unparseable → not fresh.
 		tickerPath := "/products/" + url.PathEscape(symbol) + "/ticker"

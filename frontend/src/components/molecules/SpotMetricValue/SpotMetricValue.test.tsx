@@ -72,6 +72,19 @@ describe('SpotMetricValue', () => {
     expect(container.querySelector('.ant-skeleton')).toBeTruthy();
   });
 
+  it('shows off-venue 24h change on a halted row', () => {
+    renderWithProviders(
+      <SpotMetricValue
+        metric={changeMetric}
+        spot={{
+          priceChangePercent: '-12.5',
+          delistTime: '2026-08-17T00:00:00Z',
+        }}
+      />,
+    );
+    expect(screen.getByText('-12.50%')).toBeInTheDocument();
+  });
+
   it('shows dash when tags empty', () => {
     renderWithProviders(<SpotMetricValue metric={tagsMetric} spot={{ tags: [] }} />);
     expect(screen.getByText('—')).toBeInTheDocument();

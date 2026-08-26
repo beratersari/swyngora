@@ -31,7 +31,21 @@ type OffVenueQuote struct {
 	ProviderID string
 	LastUSD    float64
 	ChangePct  *float64
+	ChangeAbs  *float64
 	AsOf       time.Time
+}
+
+// FillChangeAbs sets USD 24h delta from last and percent when the API omitted it.
+func (q *OffVenueQuote) FillChangeAbs() {
+	if q == nil || q.ChangeAbs != nil || q.ChangePct == nil {
+		return
+	}
+	p := *q.ChangePct / 100
+	if p <= -1 {
+		return
+	}
+	abs := q.LastUSD * p / (1 + p)
+	q.ChangeAbs = &abs
 }
 
 // OffVenuePricePort fetches a public price after a venue delist.

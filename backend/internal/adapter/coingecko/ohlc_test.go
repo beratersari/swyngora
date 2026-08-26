@@ -12,7 +12,7 @@ func TestQuoteByBase_UsesMarketsPrice(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == marketsPath:
-			_, _ = w.Write([]byte(`[{"id":"viction","symbol":"vic","name":"Viction","current_price":0.12,"price_change_percentage_24h":-3.5,"circulating_supply":97000000,"total_supply":210000000,"max_supply":210000000}]`))
+			_, _ = w.Write([]byte(`[{"id":"viction","symbol":"vic","name":"Viction","current_price":0.12,"price_change_24h":-0.00435,"price_change_percentage_24h":-3.5,"circulating_supply":97000000,"total_supply":210000000,"max_supply":210000000}]`))
 		default:
 			http.NotFound(w, r)
 		}
@@ -25,6 +25,9 @@ func TestQuoteByBase_UsesMarketsPrice(t *testing.T) {
 	}
 	if q.LastUSD != 0.12 || q.ChangePct == nil || *q.ChangePct != -3.5 {
 		t.Fatalf("quote=%+v", q)
+	}
+	if q.ChangeAbs == nil || *q.ChangeAbs != -0.00435 {
+		t.Fatalf("delta=%+v", q.ChangeAbs)
 	}
 }
 

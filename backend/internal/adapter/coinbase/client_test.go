@@ -24,6 +24,7 @@ func TestListSpotMarkets_OK(t *testing.T) {
 				{
 					"product_id": "BTC-USD", "price": "100", "price_percentage_change_24h": "1.5",
 					"volume_24h": "10", "approximate_quote_24h_volume": "1000",
+					"high_24h": "110", "low_24h": "90",
 					"base_currency_id": "BTC", "quote_currency_id": "USD",
 					"status": "online", "trading_disabled": false, "is_disabled": false, "product_type": "SPOT",
 				},
@@ -46,6 +47,9 @@ func TestListSpotMarkets_OK(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].Symbol != "BTC-USD" {
 		t.Fatalf("%+v", list)
+	}
+	if list[0].HighPrice != "110" || list[0].LowPrice != "90" {
+		t.Fatalf("list high/low=%q/%q", list[0].HighPrice, list[0].LowPrice)
 	}
 }
 
@@ -100,6 +104,9 @@ func TestGetTicker24h_UsesExchangeStatsForHighLow(t *testing.T) {
 	}
 	if tkr.LastPrice != "100" {
 		t.Fatalf("last from stats=%q", tkr.LastPrice)
+	}
+	if tkr.PriceChange != "10" || tkr.PriceChangePercent == "1.5" {
+		t.Fatalf("24h change must follow stats open/last, got change=%q pct=%q", tkr.PriceChange, tkr.PriceChangePercent)
 	}
 	if tkr.CloseTime.IsZero() {
 		t.Fatal("expected CloseTime from /ticker")

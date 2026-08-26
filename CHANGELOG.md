@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **Dashboard 24h on halted coins:** delisted rows use the same off-venue 24h **delta and %** as coin detail (other venue or CoinGecko `price_change_24h`), not a frozen home-book window or a blank; Coinbase last/open/high/low and % stay on one stats window (`docs/features/market-data.md`, `docs/features/delist-schedule.md`)
+- **AI concurrent tenant bind:** overlapping chats no longer send the master token plus the other user’s `X-Client-Id` (or inherit their `canTrade`) when desk gather runs on a thread pool (`docs/features/ai-assistant.md`)
 - **Holders without `cmcUniqueId`:** Binance marketing slugs resolve CoinMarketCap detail (`?slug=`) and a positive `cdpTotalHolder` fills the count when the holder table is empty (`docs/features/holders.md`)
 - **Holders empty on many coins:** CMC’s public detail omitted the holder table for the default Go HTTP/2 client; requests now use HTTP/1.1 and browser Origin/Referer. ETH-style `dailyActive`-only payloads are shown instead of 404 (`docs/features/holders.md`)
 - **PIVX (and other catalog-miss UTXO coins):** Binance marketing has no `cmcUniqueId` for PIVX; holders then fall back to public Chainz CryptoID address counts and rich list (`docs/features/holders.md`)

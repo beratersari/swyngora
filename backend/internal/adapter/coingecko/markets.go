@@ -29,7 +29,8 @@ type Client struct {
 	httpClient  *http.Client
 	cache       *cache.TTL[*domain.AssetSupply]
 	ohlcCache     *cache.TTL[[]domain.Candle]
-	changeCache   *cache.TTL[*float64]
+	changeCache    *cache.TTL[*float64]
+	changeAbsCache *cache.TTL[*float64]
 	contractCache *cache.TTL[[]domain.AssetContract]
 }
 
@@ -59,7 +60,8 @@ func New(opts Options) *Client {
 		httpClient:  hc,
 		cache:       cch,
 		ohlcCache:     cache.New[[]domain.Candle](ohlcCacheTTL),
-		changeCache:   cache.New[*float64](cacheTTL),
+		changeCache:    cache.New[*float64](cacheTTL),
+		changeAbsCache: cache.New[*float64](cacheTTL),
 		contractCache: cache.New[[]domain.AssetContract](cacheTTL),
 	}
 }
@@ -115,6 +117,9 @@ func (c *Client) SupplyBySymbols(ctx context.Context, symbols []string) (map[str
 			if row.PriceChangePct24h != nil {
 				c.changeCache.Set(sym, cloneF(row.PriceChangePct24h))
 			}
+			if row.PriceChange24h != nil {
+				c.changeAbsCache.Set(sym, cloneF(row.PriceChange24h))
+			}
 			out[sym] = cloneSupply(sup)
 		}
 	}
@@ -145,6 +150,7 @@ type marketRow struct {
 	Symbol            string   `json:"symbol"`
 	Name              string   `json:"name"`
 	CurrentPrice      *float64 `json:"current_price"`
+	PriceChange24h    *float64 `json:"price_change_24h"`
 	PriceChangePct24h *float64 `json:"price_change_percentage_24h"`
 	CirculatingSupply *float64 `json:"circulating_supply"`
 	TotalSupply       *float64 `json:"total_supply"`

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -66,5 +67,38 @@ func TestApplyTickerToSpotDoesNotOverwriteLive(t *testing.T) {
 	ApplyTickerToSpot(&m, Ticker24h{LastPrice: "9", Volume: "100"})
 	if m.LastPrice != "5" || m.Volume != "100" {
 		t.Fatalf("%+v", m)
+	}
+}
+
+func TestSyncTickerChangeFromOpenLast(t *testing.T) {
+	tkr := Ticker24h{OpenPrice: "90", LastPrice: "100", PriceChangePercent: "1.5"}
+	SyncTickerChangeFromOpenLast(&tkr)
+	if tkr.PriceChange != "10" {
+		t.Fatalf("change=%s", tkr.PriceChange)
+	}
+	pct, err := strconv.ParseFloat(tkr.PriceChangePercent, 64)
+	if err != nil || pct < 11.11 || pct > 11.12 {
+		t.Fatalf("pct=%s", tkr.PriceChangePercent)
+	}
+}
+
+func TestBlankHaltedSpotChange(t *testing.T) {
+	past := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	future := time.Date(2026, 9, 3, 0, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 8, 26, 12, 0, 0, 0, time.UTC)
+	items := []SpotMarket{
+		{Symbol: "BTCUSDT", PriceChangePercent: "1.2", PriceChange: "100"},
+		{Symbol: "PYRUSDT", PriceChangePercent: "-57.1", PriceChange: "-0.03", DelistTime: &past},
+		{Symbol: "ICXUSDT", PriceChangePercent: "-8.2", PriceChange: "-0.001", DelistTime: &future},
+	}
+	BlankHaltedSpotChange(items, now)
+	if items[0].PriceChangePercent != "1.2" {
+		t.Fatalf("live row cleared: %+v", items[0])
+	}
+	if items[1].PriceChangePercent != "" || items[1].PriceChange != "" {
+		t.Fatalf("halted 24h still live: %+v", items[1])
+	}
+	if items[2].PriceChangePercent != "-8.2" {
+		t.Fatalf("upcoming delist should keep 24h: %+v", items[2])
 	}
 }

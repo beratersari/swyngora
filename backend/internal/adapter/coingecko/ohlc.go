@@ -53,6 +53,12 @@ func quoteFromSupply(c *Client, base string, sup *domain.AssetSupply) *domain.Of
 			q.ChangePct = pct
 		}
 	}
+	if c != nil && c.changeAbsCache != nil {
+		if abs, ok := c.changeAbsCache.Get(base); ok {
+			q.ChangeAbs = abs
+		}
+	}
+	q.FillChangeAbs()
 	return q
 }
 
@@ -86,18 +92,19 @@ func (c *Client) quoteFromRows(base string, rows []marketRow) *domain.OffVenueQu
 		if row.PriceChangePct24h != nil && c.changeCache != nil {
 			c.changeCache.Set(base, cloneF(row.PriceChangePct24h))
 		}
+		if row.PriceChange24h != nil && c.changeAbsCache != nil {
+			c.changeAbsCache.Set(base, cloneF(row.PriceChange24h))
+		}
 		q := &domain.OffVenueQuote{
 			Symbol:     base,
 			Name:       strings.TrimSpace(row.Name),
 			ProviderID: row.ID,
 			LastUSD:    *row.CurrentPrice,
+			ChangePct:  cloneF(row.PriceChangePct24h),
+			ChangeAbs:  cloneF(row.PriceChange24h),
 			AsOf:       time.Now().UTC(),
 		}
-		if c.changeCache != nil {
-			if pct, ok := c.changeCache.Get(base); ok {
-				q.ChangePct = pct
-			}
-		}
+		q.FillChangeAbs()
 		return q
 	}
 	return nil

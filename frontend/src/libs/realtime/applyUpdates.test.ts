@@ -19,15 +19,22 @@ describe('patchSpotItem', () => {
     expect(Number(item.marketCapCirculating)).toBeCloseTo(1100);
   });
 
-  it('carries halted on a last-print tick', () => {
-    const tick: RealtimePriceTick = {
+  it('keeps off-venue 24h change on a halted tick', () => {
+    const item = {
+      symbol: 'PYRUSDT',
+      lastPrice: '0.05',
+      priceChangePercent: '-10',
+    };
+    patchSpotItem(item, {
       type: 'price',
       exchange: 'binance',
-      symbol: 'BTCUSDT',
-      lastPrice: '1.23',
+      symbol: 'PYRUSDT',
+      lastPrice: '0.021',
+      priceChangePercent: '-12.500',
       halted: true,
-    };
-    expect(tick.halted).toBe(true);
+    } as RealtimePriceTick);
+    expect(item.lastPrice).toBe('0.021');
+    expect(item.priceChangePercent).toBe('-12.500');
   });
 
   it('ignores other symbols', () => {

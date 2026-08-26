@@ -1031,6 +1031,10 @@ func (s *Service) GetTicker24h(ctx context.Context, exchange, symbol string) (*d
 		out := *tkr
 		if e, ok := s.delistEntry(ex, symbol); ok && !e.DelistTime.IsZero() && !e.DelistTime.After(time.Now().UTC()) {
 			out.Halted = true
+			// Frozen home-venue 24h is not live; use the same off-venue tape as coin detail.
+			tape := s.offVenueTape(ctx, ex, symbol)
+			out.PriceChange = tape.Change
+			out.PriceChangePercent = tape.Percent
 		}
 		return &out, nil
 	}
@@ -1275,6 +1279,8 @@ func (s *Service) ListSpotMarkets(ctx context.Context, exchange string, q domain
 	s.hydrateDelistQuotes(ctx, ex, all)
 	s.enrichDelistMcap(ctx, ex, all)
 	all = dropUnquotedDelistStubs(all)
+	domain.BlankHaltedSpotChange(all, time.Now().UTC())
+	s.fillHaltedOffVenueChange(ctx, ex, all)
 
 	filtered := filterSpotMarkets(all, q)
 

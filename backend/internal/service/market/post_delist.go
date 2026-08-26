@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -171,6 +172,129 @@ func barsAfter(bars []domain.Candle, halt time.Time) []domain.Candle {
 		}
 	}
 	return out
+}
+
+// offVenueTape is the same 24h last/change coin detail shows after halt:
+// another live venue first, then CoinGecko price_change_24h + percentage.
+type offVenueTape struct {
+	Change  string
+	Percent string
+}
+
+func (s *Service) offVenueTape(ctx context.Context, home domain.Exchange, symbol string) offVenueTape {
+	if s == nil {
+		return offVenueTape{}
+	}
+	order := []domain.Exchange{domain.ExchangeBybit, domain.ExchangeCoinbase, domain.ExchangeBinance}
+	for _, other := range order {
+		if other == home {
+			continue
+		}
+		p, err := s.port(other)
+		if err != nil {
+			continue
+		}
+		sym := normalizeSymbolForExchange(other, symbol)
+		if other == domain.ExchangeCoinbase && !strings.Contains(sym, "-") {
+			base, quote := inferDelistBaseQuote(home, symbol)
+			if quote == "USDT" || quote == "USDC" || quote == "" {
+				quote = "USD"
+			}
+			if base != "" {
+				sym = base + "-" + quote
+			}
+		}
+		if e, ok := s.delistEntry(other, sym); ok && !e.DelistTime.IsZero() && !e.DelistTime.After(time.Now().UTC()) {
+			continue
+		}
+		tkr, err := p.GetTicker24h(ctx, sym)
+		if err != nil || tkr == nil || strings.TrimSpace(tkr.LastPrice) == "" || tkr.Halted {
+			continue
+		}
+		tape := offVenueTape{
+			Change:  strings.TrimSpace(tkr.PriceChange),
+			Percent: strings.TrimSpace(tkr.PriceChangePercent),
+		}
+		if tape.Change == "" && tape.Percent != "" && strings.TrimSpace(tkr.LastPrice) != "" {
+			tape.Change = absChangeFromLastPct(tkr.LastPrice, tape.Percent)
+		}
+		if tape.Percent != "" || tape.Change != "" {
+			return tape
+		}
+	}
+	if s.offVenue == nil {
+		return offVenueTape{}
+	}
+	base, _ := inferDelistBaseQuote(home, symbol)
+	q, err := s.offVenue.QuoteByBase(ctx, base)
+	if err != nil || q == nil {
+		return offVenueTape{}
+	}
+	q.FillChangeAbs()
+	tape := offVenueTape{}
+	if q.ChangePct != nil {
+		tape.Percent = strconv.FormatFloat(*q.ChangePct, 'f', 3, 64)
+	}
+	if q.ChangeAbs != nil {
+		tape.Change = strconv.FormatFloat(*q.ChangeAbs, 'f', -1, 64)
+	}
+	return tape
+}
+
+func absChangeFromLastPct(last, pct string) string {
+	l, err1 := strconv.ParseFloat(strings.TrimSpace(last), 64)
+	p, err2 := strconv.ParseFloat(strings.TrimSpace(pct), 64)
+	if err1 != nil || err2 != nil {
+		return ""
+	}
+	frac := p / 100
+	if frac <= -1 {
+		return ""
+	}
+	return strconv.FormatFloat(l*frac/(1+frac), 'f', -1, 64)
+}
+
+func (s *Service) fillHaltedOffVenueChange(ctx context.Context, ex domain.Exchange, items []domain.SpotMarket) {
+	if s == nil || len(items) == 0 {
+		return
+	}
+	now := time.Now().UTC()
+	var idxs []int
+	for i := range items {
+		if items[i].DelistTime == nil || items[i].DelistTime.After(now) {
+			continue
+		}
+		if strings.TrimSpace(items[i].PriceChangePercent) != "" && strings.TrimSpace(items[i].PriceChange) != "" {
+			continue
+		}
+		idxs = append(idxs, i)
+	}
+	if len(idxs) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 8)
+	for _, i := range idxs {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			tape := s.offVenueTape(ctx, ex, items[i].Symbol)
+			if tape.Percent != "" {
+				items[i].PriceChangePercent = tape.Percent
+			}
+			if tape.Change != "" {
+				items[i].PriceChange = tape.Change
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func venueLabel(ex domain.Exchange) string {

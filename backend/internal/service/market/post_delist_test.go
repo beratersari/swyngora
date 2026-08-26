@@ -132,6 +132,30 @@ func TestGetPostDelist_PrefersLiveOtherVenue(t *testing.T) {
 	}
 }
 
+func TestFillHaltedOffVenueChangeUsesCoinGecko(t *testing.T) {
+	pct := 4.25
+	abs := 0.00489
+	past := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{tickerErr: domain.ErrNotFound},
+		domain.ExchangeBybit:    &fakeMarket{tickerErr: domain.ErrNotFound},
+		domain.ExchangeCoinbase: &fakeMarket{tickerErr: domain.ErrNotFound},
+	}, nil).WithOffVenuePrice(&fakeOffVenue{
+		quote: &domain.OffVenueQuote{LastUSD: 0.12, ChangePct: &pct, ChangeAbs: &abs},
+	})
+	items := []domain.SpotMarket{
+		{Symbol: "VICUSDT", BaseAsset: "VIC", QuoteAsset: "USDT", PriceChangePercent: "", DelistTime: &past},
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", PriceChangePercent: "1.2", PriceChange: "100"},
+	}
+	svc.fillHaltedOffVenueChange(context.Background(), domain.ExchangeBinance, items)
+	if items[0].PriceChangePercent != "4.250" || items[0].PriceChange != "0.00489" {
+		t.Fatalf("halted row=%+v", items[0])
+	}
+	if items[1].PriceChangePercent != "1.2" || items[1].PriceChange != "100" {
+		t.Fatalf("live row overwritten: %+v", items[1])
+	}
+}
+
 func TestBarsAfter_DropsPreHalt(t *testing.T) {
 	halt := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
 	got := barsAfter([]domain.Candle{

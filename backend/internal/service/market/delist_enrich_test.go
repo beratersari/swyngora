@@ -216,6 +216,60 @@ func TestGetTicker24hFallsBackToHaltCandle(t *testing.T) {
 	}
 }
 
+func TestGetTicker24hBlanksFrozenChangeWhenHalted(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	store.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
+		{Symbol: "PYRUSDT", DelistTime: halt},
+	})
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{
+			ticker: &domain.Ticker24h{
+				LastPrice: "0.021", PriceChangePercent: "-57.143", PriceChange: "-0.028",
+			},
+		},
+	}, nil).WithDelistStore(store)
+	tkr, err := svc.GetTicker24h(context.Background(), "binance", "PYRUSDT")
+	if err != nil || tkr == nil {
+		t.Fatalf("err=%v tkr=%+v", err, tkr)
+	}
+	if !tkr.Halted || tkr.LastPrice != "0.021" {
+		t.Fatalf("%+v", tkr)
+	}
+	if tkr.PriceChangePercent != "" || tkr.PriceChange != "" {
+		t.Fatalf("frozen 24h still live: %+v", tkr)
+	}
+}
+
+func TestGetTicker24hUsesCoinGeckoChangeWhenHalted(t *testing.T) {
+	store := deliststore.NewMemory()
+	halt := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	store.ReplaceAll(domain.ExchangeBinance, []domain.SpotDelistEntry{
+		{Symbol: "PYRUSDT", DelistTime: halt},
+	})
+	pct := -12.5
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  &fakeMarket{ticker: &domain.Ticker24h{LastPrice: "0.021", PriceChangePercent: "-57.143"}},
+		domain.ExchangeBybit:    &fakeMarket{tickerErr: domain.ErrNotFound},
+		domain.ExchangeCoinbase: &fakeMarket{tickerErr: domain.ErrNotFound},
+	}, nil).WithDelistStore(store).WithOffVenuePrice(&fakeOffVenue{
+		quote: &domain.OffVenueQuote{LastUSD: 0.03, ChangePct: &pct},
+	})
+	tkr, err := svc.GetTicker24h(context.Background(), "binance", "PYRUSDT")
+	if err != nil || tkr == nil {
+		t.Fatalf("err=%v tkr=%+v", err, tkr)
+	}
+	if !tkr.Halted || tkr.LastPrice != "0.021" {
+		t.Fatalf("%+v", tkr)
+	}
+	if tkr.PriceChangePercent != "-12.500" {
+		t.Fatalf("want CoinGecko 24h, got %+v", tkr)
+	}
+	if tkr.PriceChange == "" {
+		t.Fatalf("want 24h delta, got %+v", tkr)
+	}
+}
+
 type fakeSymbolSupply struct {
 	by map[string]*domain.AssetSupply
 }

@@ -51,3 +51,19 @@ func TickerFromLastCandle(symbol string, c Candle) Ticker24h {
 	}
 	return out
 }
+
+// SyncTickerChangeFromOpenLast sets PriceChange / PriceChangePercent from open and last
+// so a ticker never mixes last/open from one window with % from another.
+func SyncTickerChangeFromOpenLast(t *Ticker24h) {
+	if t == nil {
+		return
+	}
+	open, err1 := strconv.ParseFloat(strings.TrimSpace(t.OpenPrice), 64)
+	last, err2 := strconv.ParseFloat(strings.TrimSpace(t.LastPrice), 64)
+	if err1 != nil || err2 != nil || open == 0 {
+		return
+	}
+	chg := last - open
+	t.PriceChange = strconv.FormatFloat(chg, 'f', -1, 64)
+	t.PriceChangePercent = strconv.FormatFloat(chg/open*100, 'f', -1, 64)
+}
