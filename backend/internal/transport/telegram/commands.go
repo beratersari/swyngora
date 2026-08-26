@@ -132,6 +132,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdOpenInterest(ctx, args))
 	case "/funding", "/fr":
 		return textReply(r.cmdFunding(ctx, args))
+	case "/fundingarb", "/farb":
+		return textReply(r.cmdFundingArb(ctx, args))
 	case "/ls", "/longshort", "/long-short":
 		return textReply(r.cmdLongShort(ctx, args))
 	case "/exchanges":
@@ -411,6 +413,47 @@ func (r *Router) cmdFunding(ctx context.Context, args []string) string {
 		return friendlyErr(err)
 	}
 	return FormatFunding(got)
+}
+
+func (r *Router) cmdFundingArb(ctx context.Context, args []string) string {
+	if len(args) < 1 {
+		return "Usage: /fundingarb <symbol> [notional] [holdHours]\nExample: /fundingarb BTCUSDT 10000\nExample: /fundingarb scan 10000"
+	}
+	if strings.EqualFold(args[0], "scan") {
+		in := market.FundingArbScanParams{}
+		if len(args) > 1 {
+			n, err := strconv.ParseFloat(args[1], 64)
+			if err != nil {
+				return "notional must be a number"
+			}
+			in.Notional = n
+		}
+		got, err := r.market.ScanFundingArb(ctx, in)
+		if err != nil {
+			return friendlyErr(err)
+		}
+		return FormatFundingArbScan(got)
+	}
+	in := market.FundingArbParams{Symbol: strings.ToUpper(args[0])}
+	if len(args) > 1 {
+		n, err := strconv.ParseFloat(args[1], 64)
+		if err != nil {
+			return "notional must be a number"
+		}
+		in.Notional = n
+	}
+	if len(args) > 2 {
+		n, err := strconv.ParseFloat(args[2], 64)
+		if err != nil {
+			return "holdHours must be a number"
+		}
+		in.HoldHours = n
+	}
+	got, err := r.market.GetFundingArb(ctx, in)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatFundingArb(got)
 }
 
 func (r *Router) cmdLongShort(ctx context.Context, args []string) string {

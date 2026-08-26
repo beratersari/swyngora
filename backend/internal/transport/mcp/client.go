@@ -270,6 +270,49 @@ func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string,
 	return c.get(ctx, "/api/v1/market/funding-rate", q)
 }
 
+// GetFundingArb sizes a Binance/Bybit long-short funding trade.
+func (c *APIClient) GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if holdHours > 0 {
+		q.Set("holdHours", strconv.FormatFloat(holdHours, 'f', -1, 64))
+	}
+	if feeBinancePct != nil {
+		q.Set("feeBinancePct", strconv.FormatFloat(*feeBinancePct, 'f', -1, 64))
+	}
+	if feeBybitPct != nil {
+		q.Set("feeBybitPct", strconv.FormatFloat(*feeBybitPct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/funding-arb", q)
+}
+
+// ScanFundingArb ranks liquid coins by after-fee funding spread.
+func (c *APIClient) ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if holdHours > 0 {
+		q.Set("holdHours", strconv.FormatFloat(holdHours, 'f', -1, 64))
+	}
+	if feeBinancePct != nil {
+		q.Set("feeBinancePct", strconv.FormatFloat(*feeBinancePct, 'f', -1, 64))
+	}
+	if feeBybitPct != nil {
+		q.Set("feeBybitPct", strconv.FormatFloat(*feeBybitPct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/funding-arb/scan", q)
+}
+
 // GetLongShortRatio returns the latest account long/short ratio plus recent history.
 func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

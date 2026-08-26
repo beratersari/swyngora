@@ -966,6 +966,93 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/funding-arb:
+    get:
+      summary: Cross-exchange funding opportunity for one coin
+      description: |
+        Compare **Binance USD-M** and **Bybit linear** predicted funding, pick
+        which venue to **long** (cheaper funding) and which to **short** (richer
+        funding), then size the next settlement and a hold window on `notional`.
+        Subtracts taker-style fees (paper defaults 0.10% unless overridden) and
+        shows each venue's **spot vs perpetual** gap. `netHorizonIfBasisConverges`
+        is a possible extra if both perps move back to their own spot — not
+        guaranteed. `worthIt` is true only when predicted funding over
+        `holdHours` covers round-trip fees. Informational only.
+      operationId: getMarketFundingArb
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: notional
+          in: query
+          description: Quote-currency size to hold on each leg (default 10000)
+          schema: { type: number, example: 10000 }
+        - name: holdHours
+          in: query
+          description: How long to hold for the horizon payout (default 24)
+          schema: { type: number, example: 24 }
+        - name: feeBinancePct
+          in: query
+          description: Binance taker fee percent (default paper 0.10)
+          schema: { type: number, example: 0.1 }
+        - name: feeBybitPct
+          in: query
+          description: Bybit taker fee percent (default paper 0.10)
+          schema: { type: number, example: 0.1 }
+      responses:
+        '200':
+          description: Long/short venues and sized after-fee funding
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketFundingArb'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/funding-arb/scan:
+    get:
+      summary: Rank coins by after-fee funding spread
+      description: |
+        Walks top 24h-volume USDT pairs on Binance (that also have Bybit
+        funding) and ranks them by predicted funding over `holdHours` minus
+        round-trip taker fees. Same fee and size params as
+        `/api/v1/market/funding-arb`. Informational only.
+      operationId: scanMarketFundingArb
+      tags: [Market]
+      parameters:
+        - name: notional
+          in: query
+          schema: { type: number, example: 10000 }
+        - name: holdHours
+          in: query
+          schema: { type: number, example: 24 }
+        - name: feeBinancePct
+          in: query
+          schema: { type: number }
+        - name: feeBybitPct
+          in: query
+          schema: { type: number }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: limit
+          in: query
+          description: How many top-volume coins to scan (default 15, max 40)
+          schema: { type: integer, default: 15, minimum: 1, maximum: 40 }
+      responses:
+        '200':
+          description: Ranked funding-arb hits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketFundingArbScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/long-short-ratio:
     get:
       summary: Long/short account ratio and recent history
@@ -6431,6 +6518,117 @@ components:
           items: { $ref: '#/components/schemas/FundingPrint' }
         asOf: { type: string, format: date-time }
         venueCount: { type: integer }
+        note: { type: string }
+    MarketFundingArbVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        fundingRate: { type: string }
+        fundingRatePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        avgLast3: { type: string }
+        avgLast3Pct: { type: string }
+        intervalHours: { type: integer }
+        nextFundingTime: { type: string, format: date-time }
+        perpLast: { type: string }
+        perpMark: { type: string }
+        spot: { type: string }
+        spotSource: { type: string }
+        basis: { type: string }
+        basisPct: { type: string }
+        basisKind: { type: string }
+        feePct: { type: string }
+        error: { type: string }
+    MarketFundingArbTrade:
+      type: object
+      properties:
+        longExchange: { type: string }
+        shortExchange: { type: string }
+        longRate: { type: string }
+        longRatePct: { type: string }
+        shortRate: { type: string }
+        shortRatePct: { type: string }
+        spreadPct: { type: string }
+        spreadPerDayPct: { type: string }
+        longPerp: { type: string }
+        shortPerp: { type: string }
+        perpGapPct: { type: string }
+        perpGapAmount: { type: string }
+        longBasisPct: { type: string }
+        shortBasisPct: { type: string }
+        longSpot: { type: string }
+        shortSpot: { type: string }
+        openFeeAmount: { type: string }
+        openFeePct: { type: string }
+        roundTripFeeAmount: { type: string }
+        roundTripFeePct: { type: string }
+        notional: { type: string }
+        holdHours: { type: string }
+        nextFundingAmount: { type: string }
+        horizonFundingAmount: { type: string }
+        netNextAfterOpenFees: { type: string }
+        netNextAfterRoundTrip: { type: string }
+        netHorizonAfterRoundTrip: { type: string }
+        netHorizonIfBasisConverges: { type: string }
+        breakEvenSettlements: { type: string }
+        breakEvenHoldHours: { type: string }
+        worthIt: { type: boolean }
+        title: { type: string }
+        summary: { type: string }
+    MarketFundingArbCarry:
+      type: object
+      properties:
+        exchange: { type: string }
+        perpSide: { type: string, enum: [long, short] }
+        spotSide: { type: string, enum: [long, short] }
+        fundingRatePct: { type: string }
+        basisPct: { type: string }
+        nextFundingAmount: { type: string }
+        openFeeAmount: { type: string }
+        roundTripFeeAmount: { type: string }
+        basisCaptureAmount: { type: string }
+        netNextAfterRoundTrip: { type: string }
+        title: { type: string }
+        summary: { type: string }
+    MarketFundingArb:
+      type: object
+      description: Cross-exchange funding quote sized to a notional
+      properties:
+        symbol: { type: string }
+        notional: { type: string }
+        holdHours: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFundingArbVenue' }
+        trade: { $ref: '#/components/schemas/MarketFundingArbTrade' }
+        carry:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFundingArbCarry' }
+        summary: { type: string }
+        note: { type: string }
+    MarketFundingArbHit:
+      type: object
+      properties:
+        symbol: { type: string }
+        longExchange: { type: string }
+        shortExchange: { type: string }
+        spreadPct: { type: string }
+        horizonFundingAmount: { type: string }
+        netHorizonAfterRoundTrip: { type: string }
+        worthIt: { type: boolean }
+        summary: { type: string }
+    MarketFundingArbScan:
+      type: object
+      properties:
+        notional: { type: string }
+        holdHours: { type: string }
+        symbolLimit: { type: integer }
+        asOf: { type: string, format: date-time }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFundingArbHit' }
+        skipped: { type: integer }
         note: { type: string }
     LongShortLevel:
       type: object

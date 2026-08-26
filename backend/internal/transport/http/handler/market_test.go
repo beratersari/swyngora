@@ -292,6 +292,60 @@ func TestGetFundingRate_OK(t *testing.T) {
 	}
 }
 
+func TestGetFundingArb_OKWithoutPorts(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingArb(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body domain.FundingArbReport
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Trade != nil || body.Summary == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetFundingArb_MissingSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingArb(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetFundingArb_BadNotional(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb?symbol=BTCUSDT&notional=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingArb(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestScanFundingArb_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb/scan?notional=5000&limit=5", nil)
+	rr := httptest.NewRecorder()
+	h.ScanFundingArb(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body domain.FundingArbScan
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Note == "" || body.Notional == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetBasis_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/basis?symbol=BTCUSDT", nil)

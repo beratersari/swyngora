@@ -711,6 +711,34 @@ func longShortLevelsMap(in []domain.LongShortLevel) []map[string]any {
 	return out
 }
 
+func (b *Backend) GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetFundingArb(ctx, market.FundingArbParams{
+		Symbol: symbol, Notional: notional, HoldHours: holdHours,
+		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanFundingArb(ctx, market.FundingArbScanParams{
+		Quote: quote, Notional: notional, HoldHours: holdHours,
+		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct, SymbolLimit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

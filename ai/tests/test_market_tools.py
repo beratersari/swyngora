@@ -34,6 +34,23 @@ class _Transport(httpx.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/funding-arb/scan"):
+            return httpx.Response(
+                200,
+                json={"hits": [], "skipped": 0, "note": "informational only"},
+            )
+        if request.url.path.endswith("/funding-arb"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "trade": {
+                        "longExchange": "binance",
+                        "shortExchange": "bybit",
+                        "worthIt": False,
+                    },
+                },
+            )
         if request.url.path.endswith("/funding-rate"):
             return httpx.Response(
                 200,
@@ -277,6 +294,15 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_funding_rate" in by_name
     fr = json.loads(by_name["get_funding_rate"].invoke({"symbol": "BTCUSDT"}))
     assert fr["venues"][0]["current"]["payer"] == "long"
+
+    assert "get_funding_arb" in by_name
+    arb = json.loads(
+        by_name["get_funding_arb"].invoke({"symbol": "BTCUSDT", "notional": 10000})
+    )
+    assert arb["trade"]["longExchange"] == "binance"
+    assert "scan_funding_arb" in by_name
+    ranked = json.loads(by_name["scan_funding_arb"].invoke({"notional": 10000}))
+    assert ranked["hits"] == []
 
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))

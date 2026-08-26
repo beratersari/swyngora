@@ -54,6 +54,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/open-interest` current futures open interest plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear). Includes `funding`. See [`open-interest.md`](open-interest.md).
 - `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).
+- `GET /api/v1/market/funding-arb` long the cheaper-funding venue / short the richer one; sized after-fee payout + spot-perp. See [`funding-arb.md`](funding-arb.md).
 - `GET /api/v1/market/long-short-ratio` account long/short ratio plus recent 5m history. See [`long-short-ratio.md`](long-short-ratio.md).
 - `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
 - `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + rough desk result). See [`liquidation-hunt.md`](liquidation-hunt.md).

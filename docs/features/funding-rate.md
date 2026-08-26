@@ -12,6 +12,8 @@ so a user or the AI can ask “are longs paying to hold BTC?”
   - `exchange=all` (default) returns **each venue separately** (rates are not averaged)
   - `exchange=binance` or `bybit` hoists `current` + `history` to the top level
   - `limit` settled prints (default 12, max 30)
+- `GET /api/v1/market/funding-arb` sizes a long-one-venue / short-the-other trade
+  from the funding gap, after fees and spot-perp. See [`funding-arb.md`](funding-arb.md).
 - `GET /api/v1/market/open-interest` includes the same payload on `funding`
 - `current` is the **predicted next** payment (not yet settled)
 - `history` is settled payments, **newest first**

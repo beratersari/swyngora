@@ -23,6 +23,9 @@ Sources: Binance `premiumIndex` + mark/index 5m klines (`indexPriceKlines` uses
 `pair`); Bybit linear ticker + mark/index 5m klines. Venue spot last is attached
 when the spot pair exists.
 
+To turn the Binance vs Bybit funding gap (plus this basis) into a sized long/short
+read, see [`funding-arb.md`](funding-arb.md).
+
 ## Where the code lives
 
 | Layer | Path |

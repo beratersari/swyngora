@@ -70,6 +70,9 @@ func TestHelpHasLowmcap(t *testing.T) {
 	if !strings.Contains(help, "/funding") {
 		t.Fatal("help must document /funding")
 	}
+	if !strings.Contains(help, "/fundingarb") {
+		t.Fatal("help must document /fundingarb")
+	}
 	if !strings.Contains(help, "/ls") {
 		t.Fatal("help must document /ls long/short")
 	}
@@ -81,6 +84,26 @@ func TestHelpHasLowmcap(t *testing.T) {
 	}
 	if !strings.Contains(help, "/transfer") {
 		t.Fatal("help must document paper transfer")
+	}
+}
+
+func TestFormatFundingArb(t *testing.T) {
+	out := FormatFundingArb(&domain.FundingArbReport{
+		Symbol: "BTCUSDT", Notional: "10000", HoldHours: "24",
+		Trade: &domain.FundingArbTradeView{
+			Title:                    "Long Binance, short Bybit",
+			LongExchange:             "binance",
+			ShortExchange:            "bybit",
+			LongRatePct:              "0.01",
+			ShortRatePct:             "0.04",
+			NextFundingAmount:        "+3",
+			HorizonFundingAmount:     "+9",
+			RoundTripFeeAmount:       "40",
+			NetHorizonAfterRoundTrip: "-31",
+		},
+	})
+	if !strings.Contains(out, "BTCUSDT") || !strings.Contains(out, "binance") || !strings.Contains(out, "bybit") {
+		t.Fatalf("%s", out)
 	}
 }
 

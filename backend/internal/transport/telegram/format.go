@@ -636,6 +636,68 @@ func formatFundingVenues(s *domain.FundingSnapshot) string {
 	return b.String()
 }
 
+// FormatFundingArb formats the long/short funding quote.
+func FormatFundingArb(s *domain.FundingArbReport) string {
+	if s == nil {
+		return "No funding opportunity."
+	}
+	var b strings.Builder
+	b.WriteString(header("⚖️", s.Symbol+" funding arb"))
+	fmt.Fprintf(&b, "%s notional · %sh hold\n", code(s.Notional), code(s.HoldHours))
+	b.WriteString(divider())
+	if s.Trade != nil {
+		b.WriteString(bold(s.Trade.Title) + "\n")
+		b.WriteString(row("long", code(s.Trade.LongExchange)+"  "+code(s.Trade.LongRatePct+"%")))
+		b.WriteString(row("short", code(s.Trade.ShortExchange)+"  "+code(s.Trade.ShortRatePct+"%")))
+		b.WriteString(row("next funding", code(s.Trade.NextFundingAmount)))
+		b.WriteString(row("horizon funding", code(s.Trade.HorizonFundingAmount)))
+		b.WriteString(row("round-trip fees", code(s.Trade.RoundTripFeeAmount)))
+		b.WriteString(row("after fees", code(s.Trade.NetHorizonAfterRoundTrip)))
+		if s.Trade.PerpGapPct != "" {
+			b.WriteString(row("perp gap", code(s.Trade.PerpGapPct+"%")))
+		}
+		if s.Trade.WorthIt {
+			b.WriteString(row("cover fees?", italic("yes at predicted rates")))
+		} else if s.Trade.BreakEvenHoldHours != "" {
+			b.WriteString(row("cover fees?", italic("need ~"+s.Trade.BreakEvenHoldHours+"h")))
+		}
+	} else if s.Summary != "" {
+		b.WriteString(s.Summary + "\n")
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+// FormatFundingArbScan formats the ranked scan.
+func FormatFundingArbScan(s *domain.FundingArbScan) string {
+	if s == nil {
+		return "No funding scan."
+	}
+	var b strings.Builder
+	b.WriteString(header("⚖️", "funding arb scan"))
+	fmt.Fprintf(&b, "%s notional · %sh · top %d\n", code(s.Notional), code(s.HoldHours), s.SymbolLimit)
+	b.WriteString(divider())
+	if len(s.Hits) == 0 {
+		b.WriteString("No pairs with funding on both venues.\n")
+		b.WriteString(footer())
+		return b.String()
+	}
+	max := 8
+	if len(s.Hits) < max {
+		max = len(s.Hits)
+	}
+	for _, h := range s.Hits[:max] {
+		mark := ""
+		if h.WorthIt {
+			mark = "  " + italic("covers fees")
+		}
+		fmt.Fprintf(&b, "  %s  long %s / short %s  %s%s\n",
+			code(h.Symbol), code(h.LongExchange), code(h.ShortExchange), code(h.NetHorizonAfterRoundTrip), mark)
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
 func compactUSDT(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" || s == "0" {
@@ -791,6 +853,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
+	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short venues + after-fee funding"))
 	b.WriteString(cmdLine("/ls", "<symbol> [binance|bybit|all]", "long/short account ratio + recent history"))
 	b.WriteString(cmdLine("/exchanges", "", "list venues"))
 	b.WriteString("\n")

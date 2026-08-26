@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **AI retry status:** CLI spinner and Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…` (`docs/features/ai-assistant.md`)
+- **Funding arb:** compare Binance vs Bybit predicted funding, pick which venue to long and which to short, subtract taker fees and show spot-vs-perp, then size the after-funding payout on the amount you enter (`GET /api/v1/market/funding-arb`, `/funding-arb/scan`, MCP `get_funding_arb` / `scan_funding_arb`, Telegram `/fundingarb`) (`docs/features/funding-arb.md`)
 - **AI model fallback:** after the existing same-model retries are exhausted, `create_agent` tries the other allowed provider (`ChatXAI` ↔ `ChatOllama`) via LangChain `ModelFallbackMiddleware`. Ollama without `XAI_API_KEY` stays retry-only.
 - **AI model retries:** `create_agent` uses LangChain `ModelRetryMiddleware` (3 retries, exponential backoff) so a short Grok or Ollama blip does not abort the turn. Grok’s OpenAI-client retries are off (`max_retries=0`) so only the middleware retries.
 - **Holder address names:** top wallets include a `label` when the address is a widely published attribution (Binance, Bitfinex, Robinhood, Upbit, OKX, Bybit, Crypto.com, Gate.io, Tether, Silk Road FBI, Satoshi genesis, and other public tags). Not identity proof (`docs/features/holders.md`)

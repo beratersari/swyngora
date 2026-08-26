@@ -760,6 +760,47 @@ class FundingRateInput(BaseModel):
     limit: int = Field(default=12, ge=1, le=30, description="Settled history size")
 
 
+class FundingArbInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    notional: float = Field(
+        default=0,
+        description="Quote size on each leg (default 10000)",
+    )
+    hold_hours: float = Field(
+        default=0,
+        description="Hold window hours for the horizon payout (default 24)",
+    )
+    fee_binance_pct: float | None = Field(
+        default=None,
+        description="Binance taker fee percent (default paper 0.10)",
+    )
+    fee_bybit_pct: float | None = Field(
+        default=None,
+        description="Bybit taker fee percent (default paper 0.10)",
+    )
+
+
+class FundingArbScanInput(BaseModel):
+    notional: float = Field(
+        default=0,
+        description="Quote size on each leg (default 10000)",
+    )
+    hold_hours: float = Field(
+        default=0,
+        description="Hold window hours for the horizon payout (default 24)",
+    )
+    fee_binance_pct: float | None = Field(
+        default=None,
+        description="Binance taker fee percent (default paper 0.10)",
+    )
+    fee_bybit_pct: float | None = Field(
+        default=None,
+        description="Bybit taker fee percent (default paper 0.10)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    limit: int = Field(default=0, description="How many top-volume coins (default 15, max 40)")
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -1849,6 +1890,45 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/funding-rate",
             {"symbol": symbol, "exchange": exchange, "limit": limit},
         )
+
+    def get_funding_arb(
+        symbol: str,
+        notional: float = 0,
+        hold_hours: float = 0,
+        fee_binance_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol}
+        if notional:
+            params["notional"] = notional
+        if hold_hours:
+            params["holdHours"] = hold_hours
+        if fee_binance_pct is not None:
+            params["feeBinancePct"] = fee_binance_pct
+        if fee_bybit_pct is not None:
+            params["feeBybitPct"] = fee_bybit_pct
+        return http.get("/api/v1/market/funding-arb", params)
+
+    def scan_funding_arb(
+        notional: float = 0,
+        hold_hours: float = 0,
+        fee_binance_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+        quote: str = "USDT",
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"quote": quote}
+        if notional:
+            params["notional"] = notional
+        if hold_hours:
+            params["holdHours"] = hold_hours
+        if fee_binance_pct is not None:
+            params["feeBinancePct"] = fee_binance_pct
+        if fee_bybit_pct is not None:
+            params["feeBybitPct"] = fee_bybit_pct
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/funding-arb/scan", params)
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -3224,6 +3304,31 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange=all returns each venue separately (not averaged)."
             ),
             args_schema=FundingRateInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_arb,
+            name="get_funding_arb",
+            description=(
+                "Cross-exchange perpetual funding opportunity: which venue to "
+                "long (cheaper funding) and which to short (richer funding) on "
+                "Binance USD-M vs Bybit linear. Sizes the next settlement and a "
+                "hold window on the notional you enter, subtracts taker fees, "
+                "and shows each venue's spot vs perpetual gap. worthIt is true "
+                "only when predicted funding over holdHours covers round-trip "
+                "fees. Not an executable trade. Not financial advice."
+            ),
+            args_schema=FundingArbInput,
+        ),
+        StructuredTool.from_function(
+            scan_funding_arb,
+            name="scan_funding_arb",
+            description=(
+                "Rank liquid USDT coins by after-fee funding spread between "
+                "Binance and Bybit. Long the cheaper-funding venue, short the "
+                "richer one. Uses the notional you enter and holdHours "
+                "(default 24). Not financial advice."
+            ),
+            args_schema=FundingArbScanInput,
         ),
         StructuredTool.from_function(
             get_long_short_ratio,

@@ -50,6 +50,8 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "scan_pump_events",
         "get_open_interest",
         "get_funding_rate",
+        "get_funding_arb",
+        "scan_funding_arb",
         "get_long_short_ratio",
         "get_futures_history",
         "estimate_liquidation_hunt",
