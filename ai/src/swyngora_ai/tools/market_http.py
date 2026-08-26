@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import re
 import threading
-from contextvars import ContextVar
+from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
+from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import httpx
 from langchain_core.tools import BaseTool, StructuredTool
@@ -29,12 +31,28 @@ class _ToolBind:
     client_id: str
     can_trade: bool
     can_manage_keys: bool
+    ambiguous: bool = False
 
 
-# LangChain may run tools on threads that do not inherit ContextVars
-# (same hole progress.py already documents). The stack is the fallback.
+# LangChain / desk pool threads may not inherit ContextVars (same hole
+# progress.py documents). Each chat still pushes a stack frame so a *single*
+# in-flight bind can be recovered. Merge from this task's ContextVars, never
+# from stack[-1] (that is the other tenant under overlapping chats). Pop the
+# matching frame. If two tenants are on the stack and this task has no
+# ContextVar, refuse rather than guess X-Client-Id.
 _bind_lock = threading.Lock()
 _bind_stack: list[_ToolBind] = []
+_bind_live: ContextVar[bool] = ContextVar("bind_live", default=False)
+_P = TypeVar("_P")
+_AMBIGUOUS_BIND = _ToolBind("", False, False, ambiguous=True)
+
+
+def _context_bind() -> _ToolBind:
+    return _ToolBind(
+        client_id=bound_client_id.get(),
+        can_trade=bound_can_trade.get(),
+        can_manage_keys=bound_can_manage_keys.get(),
+    )
 
 
 def _push_bind(
@@ -42,34 +60,47 @@ def _push_bind(
     client_id: str | None = None,
     can_trade: bool | None = None,
     can_manage_keys: bool | None = None,
-) -> None:
+) -> _ToolBind:
+    prev = _context_bind()
+    frame = _ToolBind(
+        client_id=prev.client_id if client_id is None else client_id,
+        can_trade=prev.can_trade if can_trade is None else can_trade,
+        can_manage_keys=prev.can_manage_keys if can_manage_keys is None else can_manage_keys,
+    )
     with _bind_lock:
-        prev = _bind_stack[-1] if _bind_stack else _ToolBind("", True, True)
-        _bind_stack.append(
-            _ToolBind(
-                client_id=prev.client_id if client_id is None else client_id,
-                can_trade=prev.can_trade if can_trade is None else can_trade,
-                can_manage_keys=prev.can_manage_keys
-                if can_manage_keys is None
-                else can_manage_keys,
-            )
-        )
+        _bind_stack.append(frame)
+    return frame
 
 
-def _pop_bind() -> None:
+def _pop_matching(match: Callable[[_ToolBind], bool]) -> None:
     with _bind_lock:
-        if _bind_stack:
-            _bind_stack.pop()
+        for i in range(len(_bind_stack) - 1, -1, -1):
+            if match(_bind_stack[i]):
+                _bind_stack.pop(i)
+                return
 
 
 def _active_bind() -> _ToolBind:
-    cid = bound_client_id.get()
-    if cid:
-        return _ToolBind(cid, bound_can_trade.get(), bound_can_manage_keys.get())
+    if _bind_live.get() or bound_client_id.get():
+        return _context_bind()
     with _bind_lock:
-        if _bind_stack:
-            return _bind_stack[-1]
-    return _ToolBind("", bound_can_trade.get(), bound_can_manage_keys.get())
+        if not _bind_stack:
+            return _context_bind()
+        clients = {b.client_id for b in _bind_stack if b.client_id}
+        if len(clients) > 1:
+            return _AMBIGUOUS_BIND
+        return _bind_stack[-1]
+
+
+def submit_with_bound_context(
+    pool: ThreadPoolExecutor, fn: Callable[..., _P], /, *args: Any, **kwargs: Any
+) -> Future[_P]:
+    """Run fn on a pool worker with this task's ContextVars (tenant + scope)."""
+    ctx = copy_context()
+    if kwargs:
+        return pool.submit(ctx.run, lambda: fn(*args, **kwargs))
+    return pool.submit(ctx.run, fn, *args)
+
 
 
 _READ_ONLY_DENY = (
@@ -79,6 +110,9 @@ _READ_ONLY_DENY = (
 _KEY_ADMIN_DENY = (
     "ERROR 403: API key and account-admin tools are not available in this AI session "
     "(user keys cannot manage other keys)"
+)
+_AMBIGUOUS_DENY = (
+    "ERROR 403: tenant bind is ambiguous under concurrent chats; refusing to guess X-Client-Id"
 )
 
 # One-time secrets and similar must never reach the LLM / tool trace.
@@ -124,25 +158,43 @@ def bind_client_id(client_id: str) -> Any:
     """Force tenant tools to the authenticated subject for this chat turn."""
     cid = (client_id or "").strip()
     _push_bind(client_id=cid)
-    return bound_client_id.set(cid)
+    return bound_client_id.set(cid), _bind_live.set(True)
 
 
 def reset_bound_client_id(token: Any) -> None:
-    _pop_bind()
+    cid = bound_client_id.get()
+    _pop_matching(lambda b: b.client_id == cid)
+    if isinstance(token, tuple) and len(token) == 2:
+        bound_client_id.reset(token[0])
+        _bind_live.reset(token[1])
+        return
     bound_client_id.reset(token)
 
 
-def bind_tool_scope(*, can_trade: bool = True, can_manage_keys: bool = True) -> tuple[Any, Any]:
+def bind_tool_scope(*, can_trade: bool = True, can_manage_keys: bool = True) -> tuple[Any, ...]:
     """Bind trade + key-admin scope for one chat turn (returns tokens for reset)."""
     _push_bind(can_trade=bool(can_trade), can_manage_keys=bool(can_manage_keys))
-    return bound_can_trade.set(bool(can_trade)), bound_can_manage_keys.set(bool(can_manage_keys))
+    return (
+        bound_can_trade.set(bool(can_trade)),
+        bound_can_manage_keys.set(bool(can_manage_keys)),
+        _bind_live.set(True),
+    )
 
 
-def reset_tool_scope(tokens: tuple[Any, Any]) -> None:
-    trade_tok, keys_tok = tokens
-    _pop_bind()
+def reset_tool_scope(tokens: tuple[Any, ...]) -> None:
+    trade_tok, keys_tok = tokens[0], tokens[1]
+    want = _context_bind()
+    _pop_matching(
+        lambda b: (
+            b.client_id == want.client_id
+            and b.can_trade == want.can_trade
+            and b.can_manage_keys == want.can_manage_keys
+        )
+    )
     bound_can_trade.reset(trade_tok)
     bound_can_manage_keys.reset(keys_tok)
+    if len(tokens) > 2:
+        _bind_live.reset(tokens[2])
 
 
 def begin_tool_json_turn() -> Any:
@@ -201,6 +253,8 @@ class _HTTP:
 
     def _scope_error(self, path: str, *, mutating: bool) -> str | None:
         bind = _active_bind()
+        if bind.ambiguous:
+            return _AMBIGUOUS_DENY
         if _is_key_or_account_admin_path(path) and not bind.can_manage_keys:
             return _KEY_ADMIN_DENY
         if mutating and not bind.can_trade:

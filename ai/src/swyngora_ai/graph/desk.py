@@ -23,6 +23,7 @@ from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding
 from swyngora_ai.language import detect_reply_lang
 from swyngora_ai.progress import emit
+from swyngora_ai.tools.market_http import submit_with_bound_context
 
 
 class DeskState(TypedDict, total=False):
@@ -124,7 +125,7 @@ def build_desk_graph(runner: SpecialistRunner) -> Any:
             return out
 
         with ThreadPoolExecutor(max_workers=min(4, len(jobs))) as pool:
-            futs = [pool.submit(_one, job) for job in jobs]
+            futs = [submit_with_bound_context(pool, _one, job) for job in jobs]
             blobs: list[str] = []
             for fut in as_completed(futs):
                 key, text = fut.result()
