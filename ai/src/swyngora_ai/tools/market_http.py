@@ -1220,39 +1220,71 @@ class PriceDiffQuoteInput(BaseModel):
     symbol: str
     buy_exchange: str
     sell_exchange: str
-    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
-    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    notional: float | None = Field(
+        default=None, description="USDT to spend on the buy book before the buy fee"
+    )
+    quantity: float | None = Field(
+        default=None, description="Base size to buy and sell (instead of notional)"
+    )
     fee_buy_pct: float = Field(default=0, ge=0, description="Buy venue taker fee %")
     fee_sell_pct: float = Field(default=0, ge=0, description="Sell venue taker fee %")
-    min_net_diff_pct: float = Field(default=0, ge=0, description="Optional threshold for meetsMinNet")
+    min_net_diff_pct: float = Field(
+        default=0, ge=0, description="Optional threshold for meetsMinNet"
+    )
 
 
 class PriceDiffOppQuoteInput(BaseModel):
     client_id: str
     opportunity_id: str
-    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
-    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    notional: float | None = Field(
+        default=None, description="USDT to spend on the buy book before the buy fee"
+    )
+    quantity: float | None = Field(
+        default=None, description="Base size to buy and sell (instead of notional)"
+    )
 
 
 class PriceDiffScanInput(BaseModel):
     symbol: str
-    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
-    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
+    notional: float | None = Field(
+        default=None, description="USDT to spend on the buy book before the buy fee"
+    )
+    quantity: float | None = Field(
+        default=None, description="Base size to buy and sell (instead of notional)"
+    )
     fee_binance_pct: float = Field(default=0, ge=0, description="Binance taker fee %")
     fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase taker fee %")
     fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit taker fee %")
-    min_net_diff_pct: float = Field(default=0, ge=0, description="Optional threshold for meetsMinNet")
-    min_profit_pct: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit % is at least this")
-    min_profit_amount: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit (USDT) is at least this")
+    min_net_diff_pct: float = Field(
+        default=0, ge=0, description="Optional threshold for meetsMinNet"
+    )
+    min_profit_pct: float = Field(
+        default=0, ge=0, description="Only list routes whose after-fee profit % is at least this"
+    )
+    min_profit_amount: float = Field(
+        default=0,
+        ge=0,
+        description="Only list routes whose after-fee profit (USDT) is at least this",
+    )
 
 
 class PriceDiffWatchQuoteInput(BaseModel):
     client_id: str
     watch_id: str
-    notional: float | None = Field(default=None, description="USDT to spend on the buy book before the buy fee")
-    quantity: float | None = Field(default=None, description="Base size to buy and sell (instead of notional)")
-    min_profit_pct: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit % is at least this")
-    min_profit_amount: float = Field(default=0, ge=0, description="Only list routes whose after-fee profit (USDT) is at least this")
+    notional: float | None = Field(
+        default=None, description="USDT to spend on the buy book before the buy fee"
+    )
+    quantity: float | None = Field(
+        default=None, description="Base size to buy and sell (instead of notional)"
+    )
+    min_profit_pct: float = Field(
+        default=0, ge=0, description="Only list routes whose after-fee profit % is at least this"
+    )
+    min_profit_amount: float = Field(
+        default=0,
+        ge=0,
+        description="Only list routes whose after-fee profit (USDT) is at least this",
+    )
 
 
 class ScannerRuleCreateInput(BaseModel):

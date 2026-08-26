@@ -119,7 +119,13 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
-                    "venues": [{"hottest": "5m", "maxRatio": "5", "windows": [{"window": "5m", "ratio": "5"}]}],
+                    "venues": [
+                        {
+                            "hottest": "5m",
+                            "maxRatio": "5",
+                            "windows": [{"window": "5m", "ratio": "5"}],
+                        }
+                    ],
                 },
             )
         if request.url.path.endswith("/liquidity-sweeps"):
@@ -128,7 +134,9 @@ class _Transport(httpx.BaseTransport):
                 json={
                     "symbol": request.url.params.get("symbol"),
                     "summary": "swept high 65000",
-                    "venues": [{"exchange": "binance", "sweeps": [{"side": "high", "level": "65000"}]}],
+                    "venues": [
+                        {"exchange": "binance", "sweeps": [{"side": "high", "level": "65000"}]}
+                    ],
                 },
             )
         if request.url.path.endswith("/absorption"):
@@ -164,7 +172,9 @@ class _Transport(httpx.BaseTransport):
                 json={
                     "symbol": request.url.params.get("symbol"),
                     "summary": "3 important moves",
-                    "moves": [{"direction": "up", "returnPct": "+4.2", "at": "2026-08-20T14:00:00Z"}],
+                    "moves": [
+                        {"direction": "up", "returnPct": "+4.2", "at": "2026-08-20T14:00:00Z"}
+                    ],
                 },
             )
         if request.url.path.endswith("/around/compare"):
@@ -289,9 +299,7 @@ def test_market_tools_hit_api(monkeypatch):
 
     assert "get_around" in by_name
     around = json.loads(
-        by_name["get_around"].invoke(
-            {"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"}
-        )
+        by_name["get_around"].invoke({"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"})
     )
     assert around["combined"]["phases"][1]["phase"] == "during"
 
