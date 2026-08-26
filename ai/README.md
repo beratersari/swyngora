@@ -33,6 +33,7 @@ User
 3. LLM:
    - **Ollama**: `ollama pull qwen2.5` (or set `OLLAMA_MODEL`; avoid llama3.2 — weak tool calling)
    - **Grok**: set `XAI_API_KEY` and `AI_LLM_PROVIDER=grok`
+   - After the primary’s 4 tries fail, the agent tries the **other** provider (Grok ↔ Ollama). A leftover `XAI_API_KEY` while on Ollama will call Grok if Ollama is down.
 
 ## Setup
 
@@ -76,7 +77,7 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 | `OLLAMA_MODEL` | `qwen2.5` | Local model (needs tool calling) |
 | `AI_SERVICE_TOKEN` | empty | Shared secret with the Go proxy; empty = open localhost |
 | `AI_MEMORY_PATH` | empty | FinMem SQLite path (`data/ai-memory.db` or `:memory:`) |
-| `XAI_API_KEY` | — | **Required for Grok** (https://console.x.ai/) |
+| `XAI_API_KEY` | — | **Required for Grok** (https://console.x.ai/). Also enables Grok as the Ollama fallback. |
 | `GROK_MODEL` | `grok-4.3` | xAI model id (cheapest general chat) |
 | `GROK_REASONING_EFFORT` | `low` | Grok only: `none` \| `low` \| `medium` \| `high` |
 | `SWYNGORA_API_URL` | `http://localhost:8080` | Backend API |

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **AI model fallback:** after the existing same-model retries are exhausted, `create_agent` tries the other allowed provider (`ChatXAI` ↔ `ChatOllama`) via LangChain `ModelFallbackMiddleware`. Ollama without `XAI_API_KEY` stays retry-only.
 - **AI model retries:** `create_agent` uses LangChain `ModelRetryMiddleware` (3 retries, exponential backoff) so a short Grok or Ollama blip does not abort the turn. Grok’s OpenAI-client retries are off (`max_retries=0`) so only the middleware retries.
 - **Holder address names:** top wallets include a `label` when the address is a widely published attribution (Binance, Bitfinex, Robinhood, Upbit, OKX, Bybit, Crypto.com, Gate.io, Tether, Silk Road FBI, Satoshi genesis, and other public tags). Not identity proof (`docs/features/holders.md`)
 - **Post-delist movement:** after a venue halt, coin detail shows a labeled off-venue last price and candles (another listed venue or CoinGecko USD) instead of inventing flat Binance bars (`docs/features/delist-schedule.md`)

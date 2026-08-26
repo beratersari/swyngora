@@ -4,7 +4,7 @@ Closest wins for files under `ai/`.
 
 ## Scope
 
-Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only.
+Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only. `create_agent` retries the primary, then falls back to the other provider via `build_agent_middleware`.
 
 ## Rules
 

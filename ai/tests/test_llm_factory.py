@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from swyngora_ai.config import Settings
-from swyngora_ai.llm.factory import build_chat_model
+from swyngora_ai.llm.factory import build_chat_model, build_fallback_chat_model
 
 
 class _Capture:
@@ -58,3 +58,39 @@ def test_ollama_factory_does_not_set_reasoning(monkeypatch) -> None:
     build_chat_model(Settings(_env_file=None))
     assert "extra_body" not in captured
     assert "reasoning_effort" not in captured
+
+
+def test_fallback_none_when_ollama_has_no_key(monkeypatch) -> None:
+    monkeypatch.setenv("AI_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("XAI_API_KEY", "")
+    assert build_fallback_chat_model(Settings(_env_file=None)) is None
+
+
+def test_fallback_is_grok_when_primary_is_ollama(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_chat_xai(**kwargs: object) -> _Capture:
+        captured.update(kwargs)
+        return _Capture(**kwargs)
+
+    monkeypatch.setattr("langchain_xai.ChatXAI", fake_chat_xai)
+    monkeypatch.setenv("AI_LLM_PROVIDER", "ollama")
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    model = build_fallback_chat_model(Settings(_env_file=None))
+    assert isinstance(model, _Capture)
+    assert captured["max_retries"] == 0
+
+
+def test_fallback_is_ollama_when_primary_is_grok(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_chat_ollama(**kwargs: object) -> _Capture:
+        captured.update(kwargs)
+        return _Capture(**kwargs)
+
+    monkeypatch.setattr("langchain_ollama.ChatOllama", fake_chat_ollama)
+    monkeypatch.setenv("AI_LLM_PROVIDER", "grok")
+    monkeypatch.setenv("XAI_API_KEY", "test-key")
+    model = build_fallback_chat_model(Settings(_env_file=None))
+    assert isinstance(model, _Capture)
+    assert "extra_body" not in captured

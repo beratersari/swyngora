@@ -28,10 +28,11 @@ User → Orchestrator (create_agent)
 | Sources / grounding | `ai/src/swyngora_ai/sources/`, `grounding.py` |
 | FinMem | `ai/src/swyngora_ai/memory/` |
 | Go MCP server | `backend/cmd/mcp`, `backend/internal/transport/mcp` |
-| LLM factory | `ai/src/swyngora_ai/llm/factory.py` (Ollama \| Grok) |
+| LLM factory | `ai/src/swyngora_ai/llm/factory.py` (Ollama \| Grok; other provider is fallback) |
 
 ## Behavior
 
+- Each `create_agent` model step retries the current provider (1 try + 3 retries, exponential backoff), then calls the other of ChatXAI / ChatOllama if that client can be built. Next step starts on the primary again. `analyze()` is still a bare `invoke` (no retry or fallback).
 - Market numbers must come from tools (ticker, candles, supply, holders, indicators, spot).
 - Paper sell realized PnL uses tax lots (`list_portfolio_lots`, `lotMethod` fifo|lifo) after the sell fee; buy lot cost includes the buy fee. Per-exchange rates: `get_paper_trading_costs`.
 - Paper tools accept `portfolio_id` when the tenant has more than one book (same as HTTP `portfolioId`). Pending orders include `trailing_stop` + trail fields.
