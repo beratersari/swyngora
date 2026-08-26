@@ -88,7 +88,6 @@ func (c *Client) GetHolders(ctx context.Context, asset string) (*domain.AssetHol
 		}
 		return nil, fmt.Errorf("%w: catalog for %q not in Binance marketing snapshot", domain.ErrCatalogUnmapped, asset)
 	}
-	}
 	key := entry.Asset
 	if key == "" {
 		key = domain.NormalizeAssetKey(asset)
@@ -301,7 +300,7 @@ func (c *Client) fetchDetailQuery(ctx context.Context, key, value string) ([]byt
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("%w: cmc status %d", domain.ErrRateLimited, resp.StatusCode)
 	case resp.StatusCode == http.StatusNotFound:
-		return nil, fmt.Errorf("%w: holders for %q", domain.ErrHoldersUnpublished, value)
+		return nil, fmt.Errorf("%w: cmc detail missing for %q", domain.ErrNotFound, value)
 	case resp.StatusCode >= 400:
 		return nil, fmt.Errorf("%w: cmc status %d: %s", domain.ErrUpstream, resp.StatusCode, truncate(string(body), 200))
 	}

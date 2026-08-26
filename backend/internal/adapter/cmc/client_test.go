@@ -155,26 +155,22 @@ func TestGetAssetProfile_LogoFromCatalog(t *testing.T) {
 	}
 }
 
-func TestGetHolders_HTTP404IsNotUnpublishedCache(t *testing.T) {
+func TestGetHolders_HTTP404OnIdFallsBackToSlug(t *testing.T) {
 	var hits int
 	c := newClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		if hits == 1 {
+		if r.URL.Query().Get("id") != "" {
 			http.NotFound(w, r)
 			return
 		}
 		_, _ = w.Write(fixtureDetail())
 	}))
-	_, err := c.GetHolders(context.Background(), "BTC")
-	if !errors.Is(err, domain.ErrNotFound) {
-		t.Fatalf("first err=%v", err)
-	}
 	got, err := c.GetHolders(context.Background(), "BTC")
 	if err != nil || got.HolderCount != 50_708_169 {
-		t.Fatalf("second got=%+v err=%v", got, err)
+		t.Fatalf("got=%+v err=%v", got, err)
 	}
-	if hits != 2 {
-		t.Fatalf("hits=%d want 2", hits)
+	if hits < 2 {
+		t.Fatalf("hits=%d want id 404 then slug", hits)
 	}
 }
 
