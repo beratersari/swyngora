@@ -45,7 +45,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
-| `GET` | `/api/v1/market/funding-arb/scan` | Rank top-volume coins by after-fee funding spread |
+| `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |
+| `GET` | `/api/v1/market/funding-arb/history` | Past after-fee stretches for one coin (`from`/`to`) |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |

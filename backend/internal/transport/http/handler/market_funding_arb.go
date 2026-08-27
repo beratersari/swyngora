@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
@@ -55,6 +56,59 @@ func (h *MarketHandler) ScanFundingArb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, got)
+}
+
+// GetFundingArbHistory handles GET /api/v1/market/funding-arb/history.
+func (h *MarketHandler) GetFundingArbHistory(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	from, err := parseFundingArbTime(q.Get("from"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: from must be RFC3339, YYYY-MM-DD, or unix ms", domain.ErrInvalidArgument))
+		return
+	}
+	to, err := parseFundingArbTime(q.Get("to"))
+	if err != nil {
+		writeError(w, fmt.Errorf("%w: to must be RFC3339, YYYY-MM-DD, or unix ms", domain.ErrInvalidArgument))
+		return
+	}
+	base, err := parseFundingArbParams(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.GetFundingArbHistory(r.Context(), market.FundingArbHistoryParams{
+		Symbol:        q.Get("symbol"),
+		From:          from,
+		To:            to,
+		Notional:      base.Notional,
+		FeeBinancePct: base.FeeBinancePct,
+		FeeBybitPct:   base.FeeBybitPct,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, got)
+}
+
+func parseFundingArbTime(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("%w: time is required", domain.ErrInvalidArgument)
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		return t.UTC(), nil
+	}
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return time.UnixMilli(ms).UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("%w: time", domain.ErrInvalidArgument)
 }
 
 func parseFundingArbParams(r *http.Request) (market.FundingArbParams, error) {

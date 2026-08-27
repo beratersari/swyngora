@@ -417,7 +417,7 @@ func (r *Router) cmdFunding(ctx context.Context, args []string) string {
 
 func (r *Router) cmdFundingArb(ctx context.Context, args []string) string {
 	if len(args) < 1 {
-		return "Usage: /fundingarb <symbol> [notional] [holdHours]\nExample: /fundingarb BTCUSDT 10000\nExample: /fundingarb scan 10000"
+		return "Usage: /fundingarb <symbol> [notional] [holdHours]\nExample: /fundingarb BTCUSDT 10000\nExample: /fundingarb scan 10000\nExample: /fundingarb hist BTCUSDT 2026-08-01 2026-08-08 10000"
 	}
 	if strings.EqualFold(args[0], "scan") {
 		in := market.FundingArbScanParams{}
@@ -433,6 +433,32 @@ func (r *Router) cmdFundingArb(ctx context.Context, args []string) string {
 			return friendlyErr(err)
 		}
 		return FormatFundingArbScan(got)
+	}
+	if strings.EqualFold(args[0], "hist") || strings.EqualFold(args[0], "history") {
+		if len(args) < 4 {
+			return "Usage: /fundingarb hist <symbol> <from> <to> [notional]\nExample: /fundingarb hist BTCUSDT 2026-08-01 2026-08-08 10000"
+		}
+		from, err := parseTelegramFundingArbTime(args[2])
+		if err != nil {
+			return "from must be YYYY-MM-DD or RFC3339"
+		}
+		to, err := parseTelegramFundingArbTime(args[3])
+		if err != nil {
+			return "to must be YYYY-MM-DD or RFC3339"
+		}
+		in := market.FundingArbHistoryParams{Symbol: strings.ToUpper(args[1]), From: from, To: to}
+		if len(args) > 4 {
+			n, err := strconv.ParseFloat(args[4], 64)
+			if err != nil {
+				return "notional must be a number"
+			}
+			in.Notional = n
+		}
+		got, err := r.market.GetFundingArbHistory(ctx, in)
+		if err != nil {
+			return friendlyErr(err)
+		}
+		return FormatFundingArbHistory(got)
 	}
 	in := market.FundingArbParams{Symbol: strings.ToUpper(args[0])}
 	if len(args) > 1 {
@@ -454,6 +480,17 @@ func (r *Router) cmdFundingArb(ctx context.Context, args []string) string {
 		return friendlyErr(err)
 	}
 	return FormatFundingArb(got)
+}
+
+func parseTelegramFundingArbTime(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("time")
 }
 
 func (r *Router) cmdLongShort(ctx context.Context, args []string) string {

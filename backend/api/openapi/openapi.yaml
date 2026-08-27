@@ -970,14 +970,13 @@ paths:
     get:
       summary: Cross-exchange funding opportunity for one coin
       description: |
-        Compare **Binance USD-M** and **Bybit linear** predicted funding, pick
-        which venue to **long** (cheaper funding) and which to **short** (richer
-        funding), then size the next settlement and a hold window on `notional`.
-        Subtracts taker-style fees (paper defaults 0.10% unless overridden) and
-        shows each venue's **spot vs perpetual** gap. `netHorizonIfBasisConverges`
-        is a possible extra if both perps move back to their own spot — not
-        guaranteed. `worthIt` is true only when predicted funding over
-        `holdHours` covers round-trip fees. Informational only.
+        Compare **Binance USD-M** and **Bybit linear** predicted funding and
+        pick which venue to **long** (cheaper) and **short** (richer).
+        Funding is paid only at each venue's published settlement clock
+        (8h: 00:00/08:00/16:00 UTC; 4h: every four hours from 00:00 UTC).
+        `holdHours` counts those clocks in `(now, now+holdHours]`. No clock
+        means funding is **0**. `trade` is omitted unless after-fee net is
+        positive. Informational only.
       operationId: getMarketFundingArb
       tags: [Market]
       parameters:
@@ -1016,10 +1015,9 @@ paths:
     get:
       summary: Rank coins by after-fee funding spread
       description: |
-        Walks top 24h-volume USDT pairs on Binance (that also have Bybit
-        funding) and ranks them by predicted funding over `holdHours` minus
-        round-trip taker fees. Same fee and size params as
-        `/api/v1/market/funding-arb`. Informational only.
+        Walks top 24h-volume USDT pairs and returns **only after-fee winners**
+        (published settlements in `holdHours` beat round-trip taker fees).
+        Same fee and size params as `/api/v1/market/funding-arb`. Informational only.
       operationId: scanMarketFundingArb
       tags: [Market]
       parameters:
@@ -1049,6 +1047,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketFundingArbScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/funding-arb/history:
+    get:
+      summary: Past after-fee funding stretches for one coin
+      description: |
+        Settled Binance USD-M and Bybit linear funding prints in `[from, to]`.
+        Groups consecutive prints with the same long/short pair into a run and
+        lists a run only when settled funding minus round-trip taker fees is
+        positive. `from`/`to` are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max
+        30 days. Informational only.
+      operationId: getMarketFundingArbHistory
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, example: "2026-08-01" }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, example: "2026-08-08" }
+        - name: notional
+          in: query
+          schema: { type: number, example: 10000 }
+        - name: feeBinancePct
+          in: query
+          schema: { type: number }
+        - name: feeBybitPct
+          in: query
+          schema: { type: number }
+      responses:
+        '200':
+          description: After-fee winning stretches
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketFundingArbHistory'
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -6629,6 +6671,45 @@ components:
           type: array
           items: { $ref: '#/components/schemas/MarketFundingArbHit' }
         skipped: { type: integer }
+        note: { type: string }
+    MarketFundingArbHistoryPayment:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        exchange: { type: string }
+        rate: { type: string }
+        ratePct: { type: string }
+        amount: { type: string }
+        longExchange: { type: string }
+        shortExchange: { type: string }
+    MarketFundingArbHistoryRun:
+      type: object
+      properties:
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time }
+        durationHours: { type: string }
+        longExchange: { type: string }
+        shortExchange: { type: string }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFundingArbHistoryPayment' }
+        paymentCount: { type: integer }
+        fundingAmount: { type: string }
+        roundTripFees: { type: string }
+        netAfterFees: { type: string }
+        summary: { type: string }
+    MarketFundingArbHistory:
+      type: object
+      properties:
+        symbol: { type: string }
+        notional: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        runs:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFundingArbHistoryRun' }
+        skippedUnprofitable: { type: integer }
+        summary: { type: string }
         note: { type: string }
     LongShortLevel:
       type: object

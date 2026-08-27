@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // MarketDataPort fetches exchange market data (candles, 24h stats, spot listings).
 // Implemented by venue adapters (Binance, Coinbase, Bybit).
@@ -69,6 +72,8 @@ type OpenInterestPort interface {
 // Implemented by Binance USD-M and Bybit linear adapters.
 type FundingRatePort interface {
 	GetFundingSeries(ctx context.Context, symbol string, limit int) (*FundingSeries, error)
+	// ListFundingHistory returns settled funding prints in [from, to] (UTC), oldest first.
+	ListFundingHistory(ctx context.Context, symbol string, from, to time.Time) ([]FundingPoint, error)
 }
 
 // LongShortRatioPort loads the latest account long/short ratio plus recent history.

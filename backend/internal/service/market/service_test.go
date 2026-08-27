@@ -758,8 +758,9 @@ func TestGetOpenInterest_EmptyPorts(t *testing.T) {
 }
 
 type fakeFunding struct {
-	ser *domain.FundingSeries
-	err error
+	ser  *domain.FundingSeries
+	hist []domain.FundingPoint
+	err  error
 }
 
 func (f *fakeFunding) GetFundingSeries(_ context.Context, symbol string, _ int) (*domain.FundingSeries, error) {
@@ -769,6 +770,26 @@ func (f *fakeFunding) GetFundingSeries(_ context.Context, symbol string, _ int) 
 	cp := *f.ser
 	cp.Symbol = symbol
 	return &cp, nil
+}
+
+func (f *fakeFunding) ListFundingHistory(_ context.Context, _ string, from, to time.Time) ([]domain.FundingPoint, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.hist != nil {
+		return f.hist, nil
+	}
+	if f.ser == nil {
+		return nil, nil
+	}
+	out := make([]domain.FundingPoint, 0, len(f.ser.History))
+	for _, p := range f.ser.History {
+		if p.Time.Before(from) || p.Time.After(to) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out, nil
 }
 
 func TestGetFundingRate_Combined(t *testing.T) {

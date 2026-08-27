@@ -329,6 +329,33 @@ func TestGetFundingArb_BadNotional(t *testing.T) {
 	}
 }
 
+func TestGetFundingArbHistory_BadRange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb/history?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingArbHistory(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetFundingArbHistory_OKEmpty(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb/history?symbol=BTCUSDT&from=2026-08-01&to=2026-08-02", nil)
+	rr := httptest.NewRecorder()
+	h.GetFundingArbHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body domain.FundingArbHistoryReport
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Runs == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestScanFundingArb_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb/scan?notional=5000&limit=5", nil)

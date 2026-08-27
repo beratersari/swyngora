@@ -739,6 +739,48 @@ func (b *Backend) ScanFundingArb(ctx context.Context, quote string, notional, ho
 	return mustJSON(got)
 }
 
+func (b *Backend) GetFundingArbHistory(ctx context.Context, symbol, fromRaw, toRaw string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	from, err := parseFundingArbTime(fromRaw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: from", domain.ErrInvalidArgument)
+	}
+	to, err := parseFundingArbTime(toRaw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: to", domain.ErrInvalidArgument)
+	}
+	got, err := b.Market.GetFundingArbHistory(ctx, market.FundingArbHistoryParams{
+		Symbol: symbol, From: from, To: to, Notional: notional,
+		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func parseFundingArbTime(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, fmt.Errorf("empty")
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		return t.UTC(), nil
+	}
+	if ms, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return time.UnixMilli(ms).UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("time")
+}
+
 func (b *Backend) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

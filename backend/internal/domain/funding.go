@@ -170,6 +170,28 @@ func AverageFundingRate(hist []FundingPoint, n int) (float64, bool) {
 	return sum / float64(n), true
 }
 
+// SortFundingHistoryOldestFirst sorts by time ascending and drops zero times.
+func SortFundingHistoryOldestFirst(hist []FundingPoint) []FundingPoint {
+	if len(hist) == 0 {
+		return hist
+	}
+	sort.SliceStable(hist, func(i, j int) bool {
+		return hist[i].Time.Before(hist[j].Time)
+	})
+	out := hist[:0]
+	for _, p := range hist {
+		if p.Time.IsZero() {
+			continue
+		}
+		if len(out) > 0 && out[len(out)-1].Time.Equal(p.Time) {
+			out[len(out)-1] = p
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
 // SortFundingHistoryNewestFirst sorts and keeps the newest unique timestamp.
 func SortFundingHistoryNewestFirst(hist []FundingPoint) []FundingPoint {
 	if len(hist) == 0 {

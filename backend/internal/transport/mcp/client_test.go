@@ -109,6 +109,32 @@ func TestAPIClient_ScanFundingArb(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetFundingArbHistory(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/funding-arb/history" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" || r.URL.Query().Get("from") == "" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"symbol": "BTCUSDT", "runs": []any{}})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetFundingArbHistory(context.Background(), "BTCUSDT", "2026-08-01", "2026-08-08", 10000, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetFundingRate(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/funding-rate" {

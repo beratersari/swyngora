@@ -82,17 +82,22 @@ func TestGetFundingArb_BadNotional(t *testing.T) {
 
 func TestGetFundingArb_DefaultFeesAndNotional(t *testing.T) {
 	got, err := fundingArbSvc().GetFundingArb(context.Background(), FundingArbParams{Symbol: "ETHUSDT"})
-	if err != nil || got.Trade == nil {
-		t.Fatalf("%+v %v", got, err)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got.Notional == "" || got.HoldHours == "" || got.Trade.LongExchange == "" {
-		t.Fatalf("defaults %+v", got)
+	if got.Notional == "" || got.HoldHours == "" || got.Trade != nil {
+		t.Fatalf("default 0.10%% fees must not surface a losing trade %+v", got)
+	}
+	if !strings.Contains(got.Summary, "Not an opportunity") {
+		t.Fatalf("summary %s", got.Summary)
 	}
 }
 
 func TestScanFundingArb_RanksHits(t *testing.T) {
-	svc := fundingArbSvc()
-	got, err := svc.ScanFundingArb(context.Background(), FundingArbScanParams{SymbolLimit: 5})
+	fee := 0.01
+	got, err := fundingArbSvc().ScanFundingArb(context.Background(), FundingArbScanParams{
+		SymbolLimit: 5, FeeBinancePct: &fee, FeeBybitPct: &fee,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,9 +105,49 @@ func TestScanFundingArb_RanksHits(t *testing.T) {
 		t.Fatalf("expected hits %+v", got)
 	}
 	for _, h := range got.Hits {
-		if h.LongExchange == "" || h.ShortExchange == "" || h.Symbol == "" {
+		if !h.WorthIt || h.LongExchange == "" || h.ShortExchange == "" || h.Symbol == "" {
 			t.Fatalf("hit %+v", h)
 		}
+	}
+}
+
+func TestScanFundingArb_HidesLosers(t *testing.T) {
+	got, err := fundingArbSvc().ScanFundingArb(context.Background(), FundingArbScanParams{SymbolLimit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Hits) != 0 {
+		t.Fatalf("default fees must hide losers %+v", got.Hits)
+	}
+}
+
+func TestGetFundingArbHistory(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+	bin := &fakeFunding{hist: []domain.FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.0001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.0001},
+	}}
+	byb := &fakeFunding{hist: []domain.FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.002},
+		{Time: from.Add(16 * time.Hour), Rate: 0.002},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+	})
+	fee := 0.01
+	got, err := svc.GetFundingArbHistory(context.Background(), FundingArbHistoryParams{
+		Symbol: "BTCUSDT", From: from, To: to, Notional: 10_000,
+		FeeBinancePct: &fee, FeeBybitPct: &fee,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Runs) != 1 || got.Runs[0].LongExchange != "binance" {
+		t.Fatalf("%+v", got)
 	}
 }
 

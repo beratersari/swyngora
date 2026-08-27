@@ -313,6 +313,24 @@ func (c *APIClient) ScanFundingArb(ctx context.Context, quote string, notional, 
 	return c.get(ctx, "/api/v1/market/funding-arb/scan", q)
 }
 
+// GetFundingArbHistory lists past after-fee winning stretches.
+func (c *APIClient) GetFundingArbHistory(ctx context.Context, symbol, from, to string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("from", from)
+	q.Set("to", to)
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if feeBinancePct != nil {
+		q.Set("feeBinancePct", strconv.FormatFloat(*feeBinancePct, 'f', -1, 64))
+	}
+	if feeBybitPct != nil {
+		q.Set("feeBybitPct", strconv.FormatFloat(*feeBybitPct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/funding-arb/history", q)
+}
+
 // GetLongShortRatio returns the latest account long/short ratio plus recent history.
 func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

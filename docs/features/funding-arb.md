@@ -10,34 +10,38 @@ hold window.
 
 ## Behavior
 
+Funding is **not** prorated by the hour. Binance and Bybit pay only if you still
+hold at a published settlement:
+
+| Interval | Clocks (UTC) |
+|---|---|
+| 8h | 00:00, 08:00, 16:00 |
+| 4h | 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 |
+| 1h | on the hour |
+
+Fee at a clock: `notional × rate` (long pays when the rate is positive; short
+receives). A hold window with **no** clock in `(now, now+holdHours]` has
+**funding 0**.
+
 `GET /api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000`
 
-- Long the venue with the **cheaper** predicted funding, short the **richer** one
-- Positive funding: longs pay shorts. Collect `shortRate − longRate` per settlement
-- `notional` is the quote size held on **each** leg (default 10000)
-- `holdHours` (default 24) is how long the horizon payout assumes you hold
-- Fees default to paper taker (0.10% Binance, 0.10% Bybit). Override with
-  `feeBinancePct` / `feeBybitPct` (percent; `0` means zero fee)
-- Round-trip = open **and** close both legs (four taker fills)
-- Each venue shows perp last/mark vs spot/index (`basisPct`)
-- `perpGapPct` is short perp minus long perp (shorting the expensive book is extra
-  if they meet)
-- `netHorizonIfBasisConverges` adds that spot-perp gap if **both** perps move back
-  to their own spot — **not guaranteed**
-- `worthIt` is true only when predicted funding over `holdHours` covers
-  **round-trip** fees
-- `breakEvenSettlements` / `breakEvenHoldHours` say how long the same spread
-  must last to pay those fees
-- `carry` is the same-venue alternative (long spot / short perp when funding is
-  positive, or the reverse)
+- Long the cheaper predicted rate, short the richer one
+- Walks each venue's `nextFundingTime` plus its interval
+- Later clocks in the window use the current predicted rate (the only future
+  rate the venue publishes)
+- `trade` is omitted unless after-fee net is positive
+- Fees default to paper taker 0.10%; override with `feeBinancePct` / `feeBybitPct`
 
-`GET /api/v1/market/funding-arb/scan?notional=10000&limit=15`
+`GET /api/v1/market/funding-arb/scan` — same math; **only after-fee winners**
 
-- Walks top 24h-volume USDT pairs on Binance that also have Bybit funding
-- Ranks by `netHorizonAfterRoundTrip`
+`GET /api/v1/market/funding-arb/history?symbol=BTCUSDT&from=2026-08-01&to=2026-08-08`
 
-This is **not** an executable arb and **not** financial advice. Predicted rates
-can change before settlement.
+- Settled prints from Binance `/fapi/v1/fundingRate` and Bybit `/v5/market/funding/history`
+- Groups consecutive prints with the same long/short pair
+- Lists a run only when settled funding minus round-trip fees is positive
+- `from` / `to`: RFC3339, `YYYY-MM-DD` (UTC), or unix ms; max 30 days
+
+This is **not** an executable arb and **not** financial advice.
 
 ## Where the code lives
 
@@ -45,9 +49,9 @@ can change before settlement.
 |---|---|
 | Domain | `backend/internal/domain/funding_arb.go` |
 | Service | `backend/internal/service/market/funding_arb.go` |
-| HTTP | `GET /api/v1/market/funding-arb`, `GET /api/v1/market/funding-arb/scan` |
-| MCP / AI | `get_funding_arb`, `scan_funding_arb` |
-| Telegram | `/fundingarb <symbol> [notional] [holdHours]`, `/fundingarb scan [notional]` |
+| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history` |
+| MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history` |
+| Telegram | `/fundingarb`, `/fundingarb scan`, `/fundingarb hist <sym> <from> <to>` |
 
 ## How to verify
 
@@ -56,12 +60,13 @@ cd backend
 go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ ./internal/transport/mcp/ ./internal/transport/telegram/ -count=1 -run FundingArb
 curl "http://localhost:8080/api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000"
 curl "http://localhost:8080/api/v1/market/funding-arb/scan?notional=10000&limit=10"
+curl "http://localhost:8080/api/v1/market/funding-arb/history?symbol=BTCUSDT&from=2026-08-01&to=2026-08-08&notional=10000"
 ```
 
 ## Limits
 
 - Binance USD-M and Bybit linear only (not Coinbase, not inverse)
-- Uses the **predicted next** rate, not a locked payment
+- Live quote uses the **predicted next** rate on each future clock; history uses settled prints only
 - Default 0.10% taker fees often need several settlements to break even
 - Visible last/mark vs spot only — no live book walk for the perp legs
 - Informational only

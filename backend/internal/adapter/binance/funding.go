@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -160,5 +161,77 @@ func (c *Client) fetchFundingHist(ctx context.Context, symbol string, limit int)
 			MarkPrice: mark,
 		})
 	}
+	return out, nil
+}
+
+// ListFundingHistory returns settled USD-M funding prints in [from, to].
+func (c *Client) ListFundingHistory(ctx context.Context, symbol string, from, to time.Time) ([]domain.FundingPoint, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	}
+	from, to = from.UTC(), to.UTC()
+	if !to.After(from) {
+		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
+	}
+	const page = 1000
+	var out []domain.FundingPoint
+	cursor := from
+	for i := 0; i < 20; i++ {
+		q := url.Values{}
+		q.Set("symbol", symbol)
+		q.Set("startTime", strconv.FormatInt(cursor.UnixMilli(), 10))
+		q.Set("endTime", strconv.FormatInt(to.UnixMilli(), 10))
+		q.Set("limit", strconv.Itoa(page))
+		batch, err := c.fetchFundingHistRange(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		out = append(out, batch...)
+		last := batch[len(batch)-1].Time
+		if !last.After(cursor) || last.After(to) || len(batch) < page {
+			break
+		}
+		cursor = last.Add(time.Millisecond)
+	}
+	return domain.SortFundingHistoryOldestFirst(out), nil
+}
+
+func (c *Client) fetchFundingHistRange(ctx context.Context, q url.Values) ([]domain.FundingPoint, error) {
+	body, err := c.getFutures(ctx, "/fapi/v1/fundingRate", q)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		FundingRate string `json:"fundingRate"`
+		FundingTime int64  `json:"fundingTime"`
+		MarkPrice   string `json:"markPrice"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, fmt.Errorf("%w: funding hist decode: %v", domain.ErrUpstream, err)
+	}
+	out := make([]domain.FundingPoint, 0, len(rows))
+	for _, r := range rows {
+		rate, err := strconv.ParseFloat(r.FundingRate, 64)
+		if err != nil {
+			continue
+		}
+		if r.FundingTime <= 0 {
+			continue
+		}
+		mark, _ := strconv.ParseFloat(r.MarkPrice, 64)
+		out = append(out, domain.FundingPoint{
+			Time:      time.UnixMilli(r.FundingTime).UTC(),
+			Rate:      rate,
+			MarkPrice: mark,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
 	return out, nil
 }

@@ -103,6 +103,16 @@ func (f *fakeFund) GetFundingSeries(context.Context, string, int) (*domain.Fundi
 	return f.ser, f.err
 }
 
+func (f *fakeFund) ListFundingHistory(context.Context, string, time.Time, time.Time) ([]domain.FundingPoint, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.ser == nil {
+		return nil, nil
+	}
+	return f.ser.History, nil
+}
+
 type fakeLS struct {
 	ser *domain.LongShortSeries
 	err error

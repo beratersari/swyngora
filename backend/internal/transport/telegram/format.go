@@ -649,17 +649,13 @@ func FormatFundingArb(s *domain.FundingArbReport) string {
 		b.WriteString(bold(s.Trade.Title) + "\n")
 		b.WriteString(row("long", code(s.Trade.LongExchange)+"  "+code(s.Trade.LongRatePct+"%")))
 		b.WriteString(row("short", code(s.Trade.ShortExchange)+"  "+code(s.Trade.ShortRatePct+"%")))
-		b.WriteString(row("next funding", code(s.Trade.NextFundingAmount)))
-		b.WriteString(row("horizon funding", code(s.Trade.HorizonFundingAmount)))
+		b.WriteString(row("payments", code(strconv.Itoa(s.Trade.PaymentCount))))
+		b.WriteString(row("next clock", code(s.Trade.NextFundingAmount)))
+		b.WriteString(row("window funding", code(s.Trade.HorizonFundingAmount)))
 		b.WriteString(row("round-trip fees", code(s.Trade.RoundTripFeeAmount)))
 		b.WriteString(row("after fees", code(s.Trade.NetHorizonAfterRoundTrip)))
 		if s.Trade.PerpGapPct != "" {
 			b.WriteString(row("perp gap", code(s.Trade.PerpGapPct+"%")))
-		}
-		if s.Trade.WorthIt {
-			b.WriteString(row("cover fees?", italic("yes at predicted rates")))
-		} else if s.Trade.BreakEvenHoldHours != "" {
-			b.WriteString(row("cover fees?", italic("need ~"+s.Trade.BreakEvenHoldHours+"h")))
 		}
 	} else if s.Summary != "" {
 		b.WriteString(s.Summary + "\n")
@@ -693,6 +689,37 @@ func FormatFundingArbScan(s *domain.FundingArbScan) string {
 		}
 		fmt.Fprintf(&b, "  %s  long %s / short %s  %s%s\n",
 			code(h.Symbol), code(h.LongExchange), code(h.ShortExchange), code(h.NetHorizonAfterRoundTrip), mark)
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+// FormatFundingArbHistory formats past after-fee winning stretches.
+func FormatFundingArbHistory(s *domain.FundingArbHistoryReport) string {
+	if s == nil {
+		return "No funding history."
+	}
+	var b strings.Builder
+	b.WriteString(header("⚖️", s.Symbol+" funding history"))
+	fmt.Fprintf(&b, "%s → %s · %s notional\n",
+		code(s.From.UTC().Format("2006-01-02")), code(s.To.UTC().Format("2006-01-02")), code(s.Notional))
+	b.WriteString(divider())
+	if len(s.Runs) == 0 {
+		if s.Summary != "" {
+			b.WriteString(s.Summary + "\n")
+		} else {
+			b.WriteString("No after-fee winning stretch in that range.\n")
+		}
+		b.WriteString(footer())
+		return b.String()
+	}
+	max := 6
+	if len(s.Runs) < max {
+		max = len(s.Runs)
+	}
+	for _, run := range s.Runs[:max] {
+		fmt.Fprintf(&b, "  long %s / short %s  %s h  net %s\n",
+			code(run.LongExchange), code(run.ShortExchange), code(run.DurationHours), code(run.NetAfterFees))
 	}
 	b.WriteString(footer())
 	return b.String()
@@ -853,7 +880,8 @@ func HelpText() string {
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
-	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short venues + after-fee funding"))
+	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short if after-fee winner"))
+	b.WriteString(cmdLine("/fundingarb hist", "<sym> <from> <to>", "past after-fee funding stretches"))
 	b.WriteString(cmdLine("/ls", "<symbol> [binance|bybit|all]", "long/short account ratio + recent history"))
 	b.WriteString(cmdLine("/exchanges", "", "list venues"))
 	b.WriteString("\n")

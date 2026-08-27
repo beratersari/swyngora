@@ -58,6 +58,32 @@ func TestGetFundingSeries_OK(t *testing.T) {
 	}
 }
 
+func TestListFundingHistory_Range(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(16 * time.Hour)
+	stamp := from.Add(8 * time.Hour).UnixMilli()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v5/market/funding/history" {
+			t.Fatalf("path %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("startTime") == "" || r.URL.Query().Get("endTime") == "" {
+			t.Fatalf("query %s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"retCode": 0, "retMsg": "OK",
+			"result": map[string]any{"list": []map[string]any{
+				{"fundingRate": "0.0002", "fundingRateTimestamp": strconv.FormatInt(stamp, 10)},
+			}},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.ListFundingHistory(context.Background(), "BTCUSDT", from, to)
+	if err != nil || len(got) != 1 || got[0].Rate != 0.0002 {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestGetFundingSeries_InvalidSymbol(t *testing.T) {
 	c := NewClient(Options{BaseURL: "http://example.invalid"})
 	_, err := c.GetFundingSeries(context.Background(), "", 0)

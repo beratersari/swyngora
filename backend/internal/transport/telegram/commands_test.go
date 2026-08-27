@@ -105,6 +105,17 @@ func TestFundingArbCommand(t *testing.T) {
 	}
 }
 
+func TestFundingArbHistCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 13, 13, "/fundingarb hist BTCUSDT 2026-08-01 2026-08-02")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "BTCUSDT") && !strings.Contains(strings.ToLower(out), "funding") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestFundingArbScanCommand(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 13, 13, "/fundingarb scan 5000")

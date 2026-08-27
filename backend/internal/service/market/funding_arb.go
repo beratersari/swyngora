@@ -42,6 +42,70 @@ func (s *Service) GetFundingArb(ctx context.Context, in FundingArbParams) (*doma
 	return domain.BuildFundingArbReport(symbol, legs, notional, hold, time.Now().UTC()), nil
 }
 
+// FundingArbHistoryParams is a past-range lookup for one coin.
+type FundingArbHistoryParams struct {
+	Symbol        string
+	From          time.Time
+	To            time.Time
+	Notional      float64
+	FeeBinancePct *float64
+	FeeBybitPct   *float64
+}
+
+// GetFundingArbHistory lists after-fee winning stretches from settled funding.
+func (s *Service) GetFundingArbHistory(ctx context.Context, in FundingArbHistoryParams) (*domain.FundingArbHistoryReport, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(in.Symbol)
+	if err != nil {
+		return nil, err
+	}
+	from, to, err := domain.ResolveFundingArbRange(in.From, in.To)
+	if err != nil {
+		return nil, err
+	}
+	notional, _, fees, err := resolveFundingArbSizing(in.Notional, 0, in.FeeBinancePct, in.FeeBybitPct)
+	if err != nil {
+		return nil, err
+	}
+	s.noteFutures(symbol)
+	type histJob struct {
+		ex  domain.Exchange
+		pts []domain.FundingPoint
+		err error
+	}
+	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	ch := make(chan histJob, len(want))
+	for _, ex := range want {
+		go func() {
+			p := s.fundingPort(ex)
+			if p == nil {
+				ch <- histJob{ex: ex}
+				return
+			}
+			pts, err := p.ListFundingHistory(ctx, symbol, from, to)
+			ch <- histJob{ex: ex, pts: pts, err: err}
+		}()
+	}
+	var bin, byb []domain.FundingPoint
+	var lastErr error
+	for range want {
+		j := <-ch
+		if j.err != nil {
+			lastErr = j.err
+			continue
+		}
+		switch j.ex {
+		case domain.ExchangeBinance:
+			bin = j.pts
+		case domain.ExchangeBybit:
+			byb = j.pts
+		}
+	}
+	if bin == nil && byb == nil && lastErr != nil {
+		return nil, lastErr
+	}
+	return domain.BuildFundingArbHistory(symbol, bin, byb, notional, fees.binance, fees.bybit, from, to), nil
+}
+
 // ScanFundingArb ranks top-volume USDT pairs by after-fee horizon payout.
 func (s *Service) ScanFundingArb(ctx context.Context, in FundingArbScanParams) (*domain.FundingArbScan, error) {
 	notional, hold, fees, err := resolveFundingArbSizing(in.Notional, in.HoldHours, in.FeeBinancePct, in.FeeBybitPct)

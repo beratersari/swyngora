@@ -14,13 +14,15 @@ const (
 	MaxFundingArbHoldHours     = 24.0 * 30
 	FundingArbScanDefault      = 15
 	FundingArbScanMax          = 40
+	MaxFundingArbHistory       = 30 * 24 * time.Hour
 	fundingArbFeePctCap        = 5.0
 	fundingArbFlatRate         = 1e-12
 	fundingArbWorthEps         = 1e-9
+	fundingArbMaxClocks        = 200
 )
 
 // FundingArbDisclaimer is returned on every quote and scan.
-const FundingArbDisclaimer = "Cross-exchange perpetual funding: long the cheaper-funding venue and short the richer one. Earnings use the predicted next rate on the notional you enter. Fees are public taker-style paper defaults unless you override them (percent). Spot vs perpetual is shown per venue and as a possible extra if both perps move back to their own spot — that extra is not guaranteed. Predicted rates can change before settlement. Informational only — not financial advice and not an executable trade."
+const FundingArbDisclaimer = "Cross-exchange perpetual funding: long the cheaper-funding venue and short the richer one. Funding is paid only at each venue's published settlement (Binance and Bybit: 00:00/08:00/16:00 UTC on an 8h interval; 00:00/04:00/08:00/12:00/16:00/20:00 UTC on 4h; on the hour when the interval is 1h). Fee = notional × rate if you still hold at that timestamp. A hold window with no settlement pays 0. Later clocks in the window use the venue's current predicted rate (the only unpublished future rate the venue gives). Fees are paper taker defaults unless you override them. Scan and history list only after-fee winners. Informational only — not financial advice and not an executable trade."
 
 // FundingArbVenueInput is one venue's live funding + prices + fee.
 type FundingArbVenueInput struct {
@@ -61,39 +63,48 @@ type FundingArbVenueView struct {
 
 // FundingArbTradeView is the recommended long/short pair and sized payout.
 type FundingArbTradeView struct {
-	LongExchange               string `json:"longExchange"`
-	ShortExchange              string `json:"shortExchange"`
-	LongRate                   string `json:"longRate"`
-	LongRatePct                string `json:"longRatePct"`
-	ShortRate                  string `json:"shortRate"`
-	ShortRatePct               string `json:"shortRatePct"`
-	SpreadPct                  string `json:"spreadPct"`
-	SpreadPerDayPct            string `json:"spreadPerDayPct"`
-	LongPerp                   string `json:"longPerp,omitempty"`
-	ShortPerp                  string `json:"shortPerp,omitempty"`
-	PerpGapPct                 string `json:"perpGapPct,omitempty"`
-	PerpGapAmount              string `json:"perpGapAmount,omitempty"`
-	LongBasisPct               string `json:"longBasisPct,omitempty"`
-	ShortBasisPct              string `json:"shortBasisPct,omitempty"`
-	LongSpot                   string `json:"longSpot,omitempty"`
-	ShortSpot                  string `json:"shortSpot,omitempty"`
-	OpenFeeAmount              string `json:"openFeeAmount"`
-	OpenFeePct                 string `json:"openFeePct"`
-	RoundTripFeeAmount         string `json:"roundTripFeeAmount"`
-	RoundTripFeePct            string `json:"roundTripFeePct"`
-	Notional                   string `json:"notional"`
-	HoldHours                  string `json:"holdHours"`
-	NextFundingAmount          string `json:"nextFundingAmount"`
-	HorizonFundingAmount       string `json:"horizonFundingAmount"`
-	NetNextAfterOpenFees       string `json:"netNextAfterOpenFees"`
-	NetNextAfterRoundTrip      string `json:"netNextAfterRoundTrip"`
-	NetHorizonAfterRoundTrip   string `json:"netHorizonAfterRoundTrip"`
-	NetHorizonIfBasisConverges string `json:"netHorizonIfBasisConverges"`
-	BreakEvenSettlements       string `json:"breakEvenSettlements,omitempty"`
-	BreakEvenHoldHours         string `json:"breakEvenHoldHours,omitempty"`
-	WorthIt                    bool   `json:"worthIt"`
-	Title                      string `json:"title"`
-	Summary                    string `json:"summary"`
+	LongExchange               string                  `json:"longExchange"`
+	ShortExchange              string                  `json:"shortExchange"`
+	LongRate                   string                  `json:"longRate"`
+	LongRatePct                string                  `json:"longRatePct"`
+	ShortRate                  string                  `json:"shortRate"`
+	ShortRatePct               string                  `json:"shortRatePct"`
+	SpreadPct                  string                  `json:"spreadPct"`
+	LongPerp                   string                  `json:"longPerp,omitempty"`
+	ShortPerp                  string                  `json:"shortPerp,omitempty"`
+	PerpGapPct                 string                  `json:"perpGapPct,omitempty"`
+	PerpGapAmount              string                  `json:"perpGapAmount,omitempty"`
+	LongBasisPct               string                  `json:"longBasisPct,omitempty"`
+	ShortBasisPct              string                  `json:"shortBasisPct,omitempty"`
+	LongSpot                   string                  `json:"longSpot,omitempty"`
+	ShortSpot                  string                  `json:"shortSpot,omitempty"`
+	OpenFeeAmount              string                  `json:"openFeeAmount"`
+	OpenFeePct                 string                  `json:"openFeePct"`
+	RoundTripFeeAmount         string                  `json:"roundTripFeeAmount"`
+	RoundTripFeePct            string                  `json:"roundTripFeePct"`
+	Notional                   string                  `json:"notional"`
+	HoldHours                  string                  `json:"holdHours"`
+	Payments                   []FundingArbPaymentView `json:"payments"`
+	PaymentCount               int                     `json:"paymentCount"`
+	NextFundingAmount          string                  `json:"nextFundingAmount"`
+	HorizonFundingAmount       string                  `json:"horizonFundingAmount"`
+	NetNextAfterOpenFees       string                  `json:"netNextAfterOpenFees"`
+	NetNextAfterRoundTrip      string                  `json:"netNextAfterRoundTrip"`
+	NetHorizonAfterRoundTrip   string                  `json:"netHorizonAfterRoundTrip"`
+	NetHorizonIfBasisConverges string                  `json:"netHorizonIfBasisConverges"`
+	BreakEvenSettlements       string                  `json:"breakEvenSettlements,omitempty"`
+	WorthIt                    bool                    `json:"worthIt"`
+	Title                      string                  `json:"title"`
+	Summary                    string                  `json:"summary"`
+}
+
+// FundingArbPaymentView is one venue settlement that falls inside the hold window.
+type FundingArbPaymentView struct {
+	Time     string `json:"time"`
+	Exchange string `json:"exchange"`
+	Rate     string `json:"rate"`
+	RatePct  string `json:"ratePct"`
+	Amount   string `json:"amount"`
 }
 
 // FundingArbCarryView is same-venue cash-and-carry (spot vs perp).
@@ -114,15 +125,16 @@ type FundingArbCarryView struct {
 
 // FundingArbReport is one coin's cross-venue funding opportunity.
 type FundingArbReport struct {
-	Symbol    string                `json:"symbol"`
-	Notional  string                `json:"notional"`
-	HoldHours string                `json:"holdHours"`
-	AsOf      time.Time             `json:"asOf"`
-	Venues    []FundingArbVenueView `json:"venues"`
-	Trade     *FundingArbTradeView  `json:"trade,omitempty"`
-	Carry     []FundingArbCarryView `json:"carry,omitempty"`
-	Summary   string                `json:"summary"`
-	Note      string                `json:"note"`
+	Symbol    string                  `json:"symbol"`
+	Notional  string                  `json:"notional"`
+	HoldHours string                  `json:"holdHours"`
+	AsOf      time.Time               `json:"asOf"`
+	Venues    []FundingArbVenueView   `json:"venues"`
+	Payments  []FundingArbPaymentView `json:"payments"`
+	Trade     *FundingArbTradeView    `json:"trade,omitempty"`
+	Carry     []FundingArbCarryView   `json:"carry,omitempty"`
+	Summary   string                  `json:"summary"`
+	Note      string                  `json:"note"`
 	// HorizonNet is the raw after-fee hold-window payout used to rank scans.
 	HorizonNet float64 `json:"-"`
 }
@@ -230,11 +242,43 @@ func fundingArbInterval(in FundingArbVenueInput) int {
 	return DefaultFundingIntervalHrs
 }
 
-func fundingArbHourlyRate(rate float64, intervalHours int) float64 {
-	if intervalHours < 1 {
-		intervalHours = DefaultFundingIntervalHrs
+// FundingClocksInWindow lists venue settlement times in (from, to].
+// Clocks start at the venue's published nextFundingTime and step by its
+// funding interval (Binance / Bybit: 8h at 00:00/08:00/16:00 UTC, 4h at
+// 00:00/04:00/08:00/12:00/16:00/20:00 UTC, 1h on the hour). You are paid
+// only if you still hold at that timestamp. Empty when next is unknown or
+// no clock falls in the window.
+func FundingClocksInWindow(next time.Time, intervalHours int, from, to time.Time) []time.Time {
+	if next.IsZero() || intervalHours < 1 || !to.After(from) {
+		return nil
 	}
-	return rate / float64(intervalHours)
+	next = next.UTC()
+	from = from.UTC()
+	to = to.UTC()
+	step := time.Duration(intervalHours) * time.Hour
+	t := next
+	for t.After(from) {
+		prev := t.Add(-step)
+		if !prev.Before(t) {
+			break
+		}
+		t = prev
+	}
+	out := make([]time.Time, 0, 8)
+	for !t.After(to) {
+		if t.After(from) {
+			out = append(out, t)
+			if len(out) >= fundingArbMaxClocks {
+				break
+			}
+		}
+		nextT := t.Add(step)
+		if !nextT.After(t) {
+			break
+		}
+		t = nextT
+	}
+	return out
 }
 
 // BuildFundingArbVenueView formats one venue for the API.
@@ -297,10 +341,17 @@ func pickFundingArbPair(legs []FundingArbVenueInput) (long, short FundingArbVenu
 	return usable[0], usable[len(usable)-1], true
 }
 
+type fundingArbPay struct {
+	Time     time.Time
+	Exchange Exchange
+	Rate     float64
+	Amount   float64
+}
+
 type fundingArbTradeRaw struct {
 	long, short                        FundingArbVenueInput
 	notional, holdHours                float64
-	spread, dailySpread                float64
+	spread                             float64
 	openFee, rtFee                     float64
 	nextAmt, horizonAmt                float64
 	perpGapPct, perpGapAmt             float64
@@ -308,18 +359,42 @@ type fundingArbTradeRaw struct {
 	netBasisAmt                        float64
 	netNextOpen, netNextRT, netHorizon float64
 	netHorizonConverge                 float64
-	breakEvenN, breakEvenH             float64
+	breakEvenN                         float64
 	hasPerp, hasSpot                   bool
 	worthIt                            bool
+	pays                               []fundingArbPay
 }
 
-func computeFundingArbTrade(long, short FundingArbVenueInput, notional, holdHours float64) fundingArbTradeRaw {
+func computeFundingArbTrade(long, short FundingArbVenueInput, notional, holdHours float64, now time.Time) fundingArbTradeRaw {
 	out := fundingArbTradeRaw{long: long, short: short, notional: notional, holdHours: holdHours}
-	li, si := fundingArbInterval(long), fundingArbInterval(short)
 	out.spread = short.FundingRate - long.FundingRate
-	out.dailySpread = fundingArbHourlyRate(short.FundingRate, si)*24 - fundingArbHourlyRate(long.FundingRate, li)*24
-	out.nextAmt = notional * out.spread
-	out.horizonAmt = notional * (fundingArbHourlyRate(short.FundingRate, si)*holdHours - fundingArbHourlyRate(long.FundingRate, li)*holdHours)
+	end := now.Add(time.Duration(holdHours * float64(time.Hour)))
+	// Long pays (or receives if rate < 0) at each of its own clocks; short is the opposite.
+	for _, clk := range FundingClocksInWindow(long.NextFundingTime, fundingArbInterval(long), now, end) {
+		amt := -notional * long.FundingRate
+		out.pays = append(out.pays, fundingArbPay{Time: clk, Exchange: long.Exchange, Rate: long.FundingRate, Amount: amt})
+		out.horizonAmt += amt
+	}
+	for _, clk := range FundingClocksInWindow(short.NextFundingTime, fundingArbInterval(short), now, end) {
+		amt := notional * short.FundingRate
+		out.pays = append(out.pays, fundingArbPay{Time: clk, Exchange: short.Exchange, Rate: short.FundingRate, Amount: amt})
+		out.horizonAmt += amt
+	}
+	sort.SliceStable(out.pays, func(i, j int) bool {
+		if !out.pays[i].Time.Equal(out.pays[j].Time) {
+			return out.pays[i].Time.Before(out.pays[j].Time)
+		}
+		return string(out.pays[i].Exchange) < string(out.pays[j].Exchange)
+	})
+	if len(out.pays) > 0 {
+		// Next funding = the first clock's pair if both venues print then, else that one print.
+		first := out.pays[0].Time
+		for _, p := range out.pays {
+			if p.Time.Equal(first) {
+				out.nextAmt += p.Amount
+			}
+		}
+	}
 	out.openFee = notional * (long.FeeRate + short.FeeRate)
 	out.rtFee = out.openFee * 2
 	out.netNextOpen = out.nextAmt - out.openFee
@@ -352,11 +427,22 @@ func computeFundingArbTrade(long, short FundingArbVenueInput, notional, holdHour
 	if out.nextAmt > fundingArbWorthEps {
 		out.breakEvenN = out.rtFee / out.nextAmt
 	}
-	hourly := out.horizonAmt / holdHours
-	if holdHours > 0 && hourly > fundingArbWorthEps {
-		out.breakEvenH = out.rtFee / hourly
-	}
 	out.worthIt = out.netHorizon > fundingArbWorthEps
+	return out
+}
+
+func formatFundingArbPayments(pays []fundingArbPay) []FundingArbPaymentView {
+	out := make([]FundingArbPaymentView, 0, len(pays))
+	for _, p := range pays {
+		dec, pct := FormatFundingRate(p.Rate)
+		out = append(out, FundingArbPaymentView{
+			Time:     p.Time.UTC().Format(time.RFC3339Nano),
+			Exchange: string(p.Exchange),
+			Rate:     dec,
+			RatePct:  pct,
+			Amount:   FormatSignedQty(p.Amount),
+		})
+	}
 	return out
 }
 
@@ -372,7 +458,8 @@ func formatFundingArbTrade(raw fundingArbTradeRaw) FundingArbTradeView {
 		ShortRate:                  sDec,
 		ShortRatePct:               sPct,
 		SpreadPct:                  spreadPct,
-		SpreadPerDayPct:            formatFixed(raw.dailySpread*100, 6),
+		Payments:                   formatFundingArbPayments(raw.pays),
+		PaymentCount:               len(raw.pays),
 		OpenFeeAmount:              formatQty(raw.openFee),
 		OpenFeePct:                 formatFixed((raw.long.FeeRate+raw.short.FeeRate)*100, 4),
 		RoundTripFeeAmount:         formatQty(raw.rtFee),
@@ -406,9 +493,6 @@ func formatFundingArbTrade(raw fundingArbTradeRaw) FundingArbTradeView {
 	if raw.breakEvenN > 0 {
 		view.BreakEvenSettlements = formatFixed(raw.breakEvenN, 1)
 	}
-	if raw.breakEvenH > 0 {
-		view.BreakEvenHoldHours = formatFixed(raw.breakEvenH, 1)
-	}
 	view.Title = fmt.Sprintf("Long %s, short %s", fundingArbVenueName(raw.long.Exchange), fundingArbVenueName(raw.short.Exchange))
 	view.Summary = explainFundingArbTrade(raw)
 	return view
@@ -435,19 +519,24 @@ func explainFundingArbTrade(raw fundingArbTradeRaw) string {
 	_, lPct := FormatFundingRate(raw.long.FundingRate)
 	_, sPct := FormatFundingRate(raw.short.FundingRate)
 	_, spPct := FormatFundingRate(raw.spread)
-	head := fmt.Sprintf("Long %s (%s%%) and short %s (%s%%). Funding spread %s%% per settlement (~%s%%/day).",
-		longN, lPct, shortN, sPct, spPct, formatFixed(raw.dailySpread*100, 4))
-	head += fmt.Sprintf(" On %s notional, the next funding on both legs is about %s.",
-		formatQty(raw.notional), FormatSignedQty(raw.nextAmt))
+	head := fmt.Sprintf("Long %s (%s%%) and short %s (%s%%). Funding spread %s%% at each overlapping settlement.",
+		longN, lPct, shortN, sPct, spPct)
+	if len(raw.pays) == 0 {
+		head += fmt.Sprintf(" No Binance or Bybit funding payment falls in the next %s hours, so funding is 0.",
+			formatFixed(raw.holdHours, 1))
+	} else {
+		head += fmt.Sprintf(" %d published settlement(s) fall in the next %s hours.",
+			len(raw.pays), formatFixed(raw.holdHours, 1))
+		head += fmt.Sprintf(" On %s notional, the first clock pays %s; all clocks in the window pay %s (each at the current predicted rate).",
+			formatQty(raw.notional), FormatSignedQty(raw.nextAmt), FormatSignedQty(raw.horizonAmt))
+	}
 	head += fmt.Sprintf(" Opening both sides costs about %s in taker fees; round-trip (open and close) is about %s.",
 		formatQty(raw.openFee), formatQty(raw.rtFee))
-	head += fmt.Sprintf(" After %s hours of funding minus round-trip fees: %s.",
-		formatFixed(raw.holdHours, 1), FormatSignedQty(raw.netHorizon))
+	head += fmt.Sprintf(" After those settlements minus round-trip fees: %s.", FormatSignedQty(raw.netHorizon))
 	if raw.breakEvenN > 0 && !raw.worthIt {
-		head += fmt.Sprintf(" Need about %s settlements (~%s hours) of the same spread to cover those fees.",
-			formatFixed(raw.breakEvenN, 1), formatFixed(raw.breakEvenH, 1))
+		head += fmt.Sprintf(" Need about %s same-size first clocks to cover those fees.", formatFixed(raw.breakEvenN, 1))
 	} else if raw.worthIt {
-		head += " That hold window covers the fees at the predicted rates."
+		head += " Those settlements cover the fees at the predicted rates."
 	}
 	if raw.hasPerp && math.Abs(raw.perpGapPct) >= 0.005 {
 		if raw.perpGapPct > 0 {
@@ -466,7 +555,7 @@ func explainFundingArbTrade(raw fundingArbTradeRaw) string {
 	return head
 }
 
-func buildFundingArbCarry(in FundingArbVenueInput, notional float64) (FundingArbCarryView, bool) {
+func buildFundingArbCarry(in FundingArbVenueInput, notional, holdHours float64, now time.Time) (FundingArbCarryView, bool) {
 	if in.Error != "" || math.IsNaN(in.FundingRate) || math.Abs(in.FundingRate) <= fundingArbFlatRate {
 		return FundingArbCarryView{}, false
 	}
@@ -475,12 +564,17 @@ func buildFundingArbCarry(in FundingArbVenueInput, notional float64) (FundingArb
 	if perp <= 0 || spot <= 0 {
 		return FundingArbCarryView{}, false
 	}
+	end := now.Add(time.Duration(holdHours * float64(time.Hour)))
+	clocks := FundingClocksInWindow(in.NextFundingTime, fundingArbInterval(in), now, end)
+	if len(clocks) == 0 {
+		return FundingArbCarryView{}, false
+	}
 	_, basisPct, _ := ComputeBasis(perp, spot)
 	perpSide, spotSide := "short", "long"
 	if in.FundingRate < 0 {
 		perpSide, spotSide = "long", "short"
 	}
-	nextAmt := notional * math.Abs(in.FundingRate)
+	nextAmt := notional * math.Abs(in.FundingRate) * float64(len(clocks))
 	openFee := notional * (in.FeeRate + in.FeeRate) // perp + spot
 	rtFee := openFee * 2
 	basisCap := notional * basisPct / 100
@@ -488,6 +582,9 @@ func buildFundingArbCarry(in FundingArbVenueInput, notional float64) (FundingArb
 		basisCap = -basisCap
 	}
 	net := nextAmt - rtFee
+	if net <= fundingArbWorthEps {
+		return FundingArbCarryView{}, false
+	}
 	_, ratePct := FormatFundingRate(in.FundingRate)
 	name := fundingArbVenueName(in.Exchange)
 	title := fmt.Sprintf("%s %s perp, %s spot", name, perpSide, spotSide)
@@ -523,6 +620,7 @@ func BuildFundingArbReport(symbol string, legs []FundingArbVenueInput, notional,
 		HoldHours: formatFixed(holdHours, 1),
 		AsOf:      now,
 		Venues:    make([]FundingArbVenueView, 0, len(legs)),
+		Payments:  []FundingArbPaymentView{},
 		Carry:     []FundingArbCarryView{},
 		Note:      FundingArbDisclaimer,
 	}
@@ -532,7 +630,7 @@ func BuildFundingArbReport(symbol string, legs []FundingArbVenueInput, notional,
 	})
 	for _, v := range sorted {
 		out.Venues = append(out.Venues, BuildFundingArbVenueView(v))
-		if c, ok := buildFundingArbCarry(v, notional); ok {
+		if c, ok := buildFundingArbCarry(v, notional, holdHours, now); ok {
 			out.Carry = append(out.Carry, c)
 		}
 	}
@@ -545,11 +643,22 @@ func BuildFundingArbReport(symbol string, legs []FundingArbVenueInput, notional,
 		out.Summary = "Binance and Bybit predicted funding are the same, so there is no funding spread to collect."
 		return out
 	}
-	raw := computeFundingArbTrade(long, short, notional, holdHours)
+	raw := computeFundingArbTrade(long, short, notional, holdHours, now)
+	out.Payments = formatFundingArbPayments(raw.pays)
+	out.HorizonNet = raw.netHorizon
+	if !raw.worthIt {
+		if len(raw.pays) == 0 {
+			out.Summary = fmt.Sprintf("Not an opportunity: no Binance or Bybit funding payment falls in the next %s hours, so funding is 0 after fees of %s.",
+				formatFixed(holdHours, 1), formatQty(raw.rtFee))
+			return out
+		}
+		out.Summary = fmt.Sprintf("Not an opportunity: %d settlement(s) in the next %s hours pay %s before fees and %s after round-trip fees of %s.",
+			len(raw.pays), formatFixed(holdHours, 1), FormatSignedQty(raw.horizonAmt), FormatSignedQty(raw.netHorizon), formatQty(raw.rtFee))
+		return out
+	}
 	trade := formatFundingArbTrade(raw)
 	out.Trade = &trade
 	out.Summary = trade.Summary
-	out.HorizonNet = raw.netHorizon
 	return out
 }
 
@@ -567,7 +676,7 @@ func NewFundingArbScan(notional, holdHours float64, limit int, now time.Time) *F
 
 // FundingArbHitFromReport pulls the scan row from a quote.
 func FundingArbHitFromReport(r *FundingArbReport, rank float64) (FundingArbHit, bool) {
-	if r == nil || r.Trade == nil {
+	if r == nil || r.Trade == nil || !r.Trade.WorthIt {
 		return FundingArbHit{}, false
 	}
 	return FundingArbHit{

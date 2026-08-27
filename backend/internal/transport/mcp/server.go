@@ -40,6 +40,7 @@ type DataPort interface {
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error)
+	GetFundingArbHistory(ctx context.Context, symbol, from, to string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -507,7 +508,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_arb",
-		mcp.WithDescription("Cross-exchange perpetual funding opportunity: which venue to long (cheaper funding) and which to short (richer funding) on Binance USD-M vs Bybit linear. Sizes the next settlement and a hold window on the notional you enter, subtracts taker fees, and shows each venue's spot vs perpetual gap. worthIt is true only when predicted funding over holdHours covers round-trip fees. Not an executable trade. Not financial advice."),
+		mcp.WithDescription("Cross-exchange perpetual funding: long the cheaper-funding venue and short the richer one on Binance USD-M vs Bybit linear. Counts only published settlement clocks in the hold window (8h at 00:00/08:00/16:00 UTC, 4h at 00/04/08/12/16/20 UTC). No clock in the window means funding is 0. trade is omitted when after-fee net is not positive. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
 		mcp.WithNumber("holdHours", mcp.Description("Hold window for the horizon payout (default 24)")),
@@ -527,7 +528,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_funding_arb",
-		mcp.WithDescription("Rank liquid USDT coins by after-fee funding spread between Binance and Bybit. Long the cheaper-funding venue, short the richer one. Uses the notional you enter and holdHours (default 24). Not financial advice."),
+		mcp.WithDescription("Rank liquid USDT coins that are after-fee winners on the Binance vs Bybit funding spread. Only rows whose published settlements in holdHours beat round-trip taker fees. Not financial advice."),
 		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
 		mcp.WithNumber("holdHours", mcp.Description("Hold window for the horizon payout (default 24)")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
@@ -537,6 +538,35 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
 		raw, err := api.ScanFundingArb(ctx, req.GetString("quote", "USDT"), req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), fb, fy, int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_funding_arb_history",
+		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("from", mcp.Required(), mcp.Description("Range start RFC3339 or YYYY-MM-DD")),
+		mcp.WithString("to", mcp.Required(), mcp.Description("Range end RFC3339 or YYYY-MM-DD")),
+		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent (default paper 0.10)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		from, err := req.RequireString("from")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		to, err := req.RequireString("to")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
+		raw, err := api.GetFundingArbHistory(ctx, symbol, from, to, req.GetFloat("notional", 0), fb, fy)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

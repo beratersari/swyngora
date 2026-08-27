@@ -34,6 +34,11 @@ class _Transport(httpx.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/funding-arb/history"):
+            return httpx.Response(
+                200,
+                json={"symbol": request.url.params.get("symbol"), "runs": []},
+            )
         if request.url.path.endswith("/funding-arb/scan"):
             return httpx.Response(
                 200,
@@ -303,6 +308,13 @@ def test_market_tools_hit_api(monkeypatch):
     assert "scan_funding_arb" in by_name
     ranked = json.loads(by_name["scan_funding_arb"].invoke({"notional": 10000}))
     assert ranked["hits"] == []
+    assert "get_funding_arb_history" in by_name
+    hist = json.loads(
+        by_name["get_funding_arb_history"].invoke(
+            {"symbol": "BTCUSDT", "start": "2026-08-01", "end": "2026-08-08"}
+        )
+    )
+    assert hist["runs"] == []
 
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))

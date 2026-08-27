@@ -801,6 +801,15 @@ class FundingArbScanInput(BaseModel):
     limit: int = Field(default=0, description="How many top-volume coins (default 15, max 40)")
 
 
+class FundingArbHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    start: str = Field(description="Range start RFC3339 or YYYY-MM-DD (UTC)")
+    end: str = Field(description="Range end RFC3339 or YYYY-MM-DD (UTC)")
+    notional: float = Field(default=0, description="Quote size on each leg (default 10000)")
+    fee_binance_pct: float | None = Field(default=None)
+    fee_bybit_pct: float | None = Field(default=None)
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -1929,6 +1938,23 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/funding-arb/scan", params)
+
+    def get_funding_arb_history(
+        symbol: str,
+        start: str,
+        end: str,
+        notional: float = 0,
+        fee_binance_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "from": start, "to": end}
+        if notional:
+            params["notional"] = notional
+        if fee_binance_pct is not None:
+            params["feeBinancePct"] = fee_binance_pct
+        if fee_bybit_pct is not None:
+            params["feeBybitPct"] = fee_bybit_pct
+        return http.get("/api/v1/market/funding-arb/history", params)
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -3329,6 +3355,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "(default 24). Not financial advice."
             ),
             args_schema=FundingArbScanInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_arb_history,
+            name="get_funding_arb_history",
+            description=(
+                "Past Binance vs Bybit funding opportunities for one coin in a "
+                "date range. Uses settled funding prints only. Each run is a "
+                "stretch of the same long/short pair and is listed only when "
+                "settled funding minus round-trip fees is positive. start/end "
+                "are RFC3339 or YYYY-MM-DD (UTC), max 30 days."
+            ),
+            args_schema=FundingArbHistoryInput,
         ),
         StructuredTool.from_function(
             get_long_short_ratio,
