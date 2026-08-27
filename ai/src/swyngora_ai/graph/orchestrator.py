@@ -19,6 +19,7 @@ from swyngora_ai.graph.route import classify_route
 from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
+from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures, note_handlers_on
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
@@ -237,6 +238,12 @@ class Orchestrator:
             middleware=self._middleware,
         )
 
+    def _llm_note_handlers(self) -> list[NoteLLMError]:
+        models = [self.model]
+        for mw in self._middleware:
+            models.extend(getattr(mw, "models", []) or [])
+        return note_handlers_on(*models)
+
     def chat(
         self,
         user_message: str,
@@ -266,6 +273,8 @@ class Orchestrator:
                 on_event(ev)
 
         token = set_progress(_cb)
+        for handler in self._llm_note_handlers():
+            handler.reset()
         cid = (client_id or "").strip() or (self.settings.default_client_id or "").strip()
         public_session = (session_id or "default").strip() or "default"
         mem_key = memory_key(cid, public_session)
@@ -341,6 +350,11 @@ class Orchestrator:
                 session_id=public_session,
                 references=[r.as_dict() for r in refs],
             )
+        except Exception as exc:
+            both = format_llm_failures(self._llm_note_handlers())
+            if both:
+                raise RuntimeError(both) from exc
+            raise
         finally:
             reset_tool_json_turn(json_tok)
             reset_tool_scope(scope_toks)

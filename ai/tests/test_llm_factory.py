@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from swyngora_ai.config import Settings
+from swyngora_ai.llm.errors import NoteLLMError
 from swyngora_ai.llm.factory import build_chat_model, build_fallback_chat_model
 
 
@@ -28,6 +29,11 @@ def test_grok_factory_sends_default_reasoning_effort(monkeypatch) -> None:
     assert captured["model"] == "grok-4.3"
     assert captured["extra_body"] == {"reasoning_effort": "low"}
     assert captured["max_retries"] == 0
+    cbs = captured["callbacks"]
+    assert isinstance(cbs, list)
+    assert len(cbs) == 1
+    assert isinstance(cbs[0], NoteLLMError)
+    assert cbs[0].label == "grok-4.3"
 
 
 def test_grok_factory_honors_reasoning_override(monkeypatch) -> None:

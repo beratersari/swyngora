@@ -13,6 +13,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 
 from swyngora_ai.config import Settings
 from swyngora_ai.graph.orchestrator import Orchestrator, SessionMemory
+from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures
 from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
 from test_specialists_and_orchestrator import ScriptedModel
 
@@ -143,6 +144,60 @@ def test_both_providers_exhausted_raises() -> None:
         graph.invoke({"messages": [HumanMessage(content="q")]}, {"recursion_limit": 4})
     assert primary.calls == 4
     assert other.calls == 4
+
+
+def test_format_llm_failures_names_primary_then_fallback() -> None:
+    grok = NoteLLMError("grok-4.3")
+    local = NoteLLMError("llama3.2")
+    assert format_llm_failures([grok]) is None
+    grok.on_llm_error(TimeoutError("first"))
+    grok.on_llm_error(TimeoutError("bad key"))
+    local.on_llm_error(TimeoutError("model not found"))
+    assert format_llm_failures([grok, local]) == (
+        "primary grok-4.3: TimeoutError: bad key\nfallback llama3.2: TimeoutError: model not found"
+    )
+
+
+def test_stream_records_both_model_callback_errors() -> None:
+    grok_cb = NoteLLMError("grok-4.3")
+    local_cb = NoteLLMError("llama3.2")
+    primary = _CountingModel(error=TimeoutError("bad key"), callbacks=[grok_cb])
+    other = _CountingModel(error=TimeoutError("model not found"), callbacks=[local_cb])
+    graph = create_agent(primary, [], system_prompt="t", middleware=_retry_then_fallback(other))
+    stream = graph.stream_events(
+        {"messages": [HumanMessage(content="q")]},
+        {"recursion_limit": 4},
+        version="v3",
+    )
+    with pytest.raises(TimeoutError, match="model not found"):
+        list(stream)
+    msg = format_llm_failures([grok_cb, local_cb])
+    assert msg is not None
+    assert "primary grok-4.3: TimeoutError: bad key" in msg
+    assert "fallback llama3.2: TimeoutError: model not found" in msg
+
+
+def test_chat_prints_both_llm_errors(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "swyngora_ai.graph.orchestrator.format_llm_failures",
+        lambda _handlers: (
+            "primary grok-4.3: TimeoutError: bad key\n"
+            "fallback llama3.2: TimeoutError: model not found"
+        ),
+    )
+
+    def _boom(*_a: object, **_k: object) -> list[object]:
+        raise TimeoutError("model not found")
+
+    monkeypatch.setattr("swyngora_ai.graph.orchestrator.run_agent_with_progress", _boom)
+    orch = Orchestrator(
+        settings=Settings(_env_file=None),
+        memory=SessionMemory(),
+        model=ScriptedModel(responses=[AIMessage(content="unused")]),
+    )
+    with pytest.raises(RuntimeError, match="primary grok-4.3") as caught:
+        orch.chat("hi")
+    assert "fallback llama3.2: TimeoutError: model not found" in str(caught.value)
 
 
 def test_injected_orchestrator_model_skips_fallback(monkeypatch) -> None:

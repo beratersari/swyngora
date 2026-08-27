@@ -5,6 +5,7 @@ from __future__ import annotations
 from langchain_core.language_models.chat_models import BaseChatModel
 
 from swyngora_ai.config import Settings, get_settings
+from swyngora_ai.llm.errors import NoteLLMError
 
 
 def _build_grok(cfg: Settings) -> BaseChatModel:
@@ -16,6 +17,7 @@ def _build_grok(cfg: Settings) -> BaseChatModel:
         temperature=cfg.temperature,
         extra_body={"reasoning_effort": cfg.grok_reasoning_effort},
         max_retries=0,
+        callbacks=[NoteLLMError(cfg.grok_model)],
     )
 
 
@@ -26,6 +28,7 @@ def _build_ollama(cfg: Settings) -> BaseChatModel:
         model=cfg.ollama_model,
         base_url=cfg.ollama_base_url,
         temperature=cfg.temperature,
+        callbacks=[NoteLLMError(cfg.ollama_model)],
     )
 
 
