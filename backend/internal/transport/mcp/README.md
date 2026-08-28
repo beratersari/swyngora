@@ -156,7 +156,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `quote_price_diff_opportunity` | Same quote for a stored opportunity (uses that watch's fees) |
 | `scan_price_diff_quotes` | Rank every venue pair at one size; missing books listed as unavailable; optional minProfitPct / minProfitAmount |
 | `quote_price_diff_watch` | Same scan using a stored watch's symbol and fees |
-| `create_scanner_rule` | Create RSI / MA / volume watchlist scanner rule |
+| `create_scanner_rule` | Create watchlist scanner rule (conditions + matchMode all\|any) |
 | `list_scanner_rules` | List scanner rules |
 | `delete_scanner_rule` | Delete scanner rule |
 | `list_scanner_results` | Scanner match history |

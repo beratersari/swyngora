@@ -8382,7 +8382,15 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /** @enum {string} */
-                    type: "rsi" | "ma_crossover" | "volume_increase";
+                    type?: "rsi" | "ma_crossover" | "volume_increase" | "combo";
+                    /** @description Selected conditions. If omitted, `type` is used as the single condition. */
+                    conditions?: ("rsi" | "ma_crossover" | "volume_increase")[];
+                    /**
+                     * @description all = every selected condition; any = one is enough
+                     * @default all
+                     * @enum {string}
+                     */
+                    matchMode?: "all" | "any";
                     /** @default 1h */
                     interval?: string;
                     /** @default 14 */

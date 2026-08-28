@@ -53,11 +53,16 @@
   "types": {
     "rsi": "RSI eşiği",
     "ma_crossover": "EMA kesişimi",
-    "volume_increase": "Hacim artışı"
+    "volume_increase": "Hacim artışı",
+    "combo": "Birleşik"
   },
   "rules": {
     "createTitle": "Yeni kural",
-    "createHint": "Tek faktörlü kurallar birleşim ızgarasını besler. Salınım için trend + momentum + hacim ekleyin.",
+    "createHint": "RSI, EMA kesişimi ve/veya hacim seçin. Seçilenlerin tümü doğru olmalı mı, yoksa biri yeterli mi seçin. Kayıtlı eşleşme bu birleşime göre oluşur.",
+    "conditions": "Koşullar",
+    "matchMode": "Eşleşme",
+    "matchAll": "Seçilenlerin tümü doğru olmalı",
+    "matchAny": "Biri yeterli",
     "create": "Kural oluştur",
     "createSuccess": "Kural oluşturuldu",
     "createFailed": "Kural oluşturulamadı",

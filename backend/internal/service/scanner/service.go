@@ -58,12 +58,14 @@ func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string)
 
 // CreateInput creates a scanner rule for the client's watchlist.
 type CreateInput struct {
-	ClientID string
-	Type     string // rsi | ma_crossover | volume_increase
-	Interval string
+	ClientID   string
+	Type       string   // rsi | ma_crossover | volume_increase | combo (optional if Conditions set)
+	Conditions []string // subset of rsi, ma_crossover, volume_increase
+	MatchMode  string   // all | any
+	Interval   string
 	// RSI
 	RSIPeriod    int
-	RSICondition string  // above | below
+	RSICondition string // above | below
 	RSIThreshold float64
 	// MA
 	MAFastPeriod int
@@ -83,9 +85,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 	if err != nil {
 		return nil, err
 	}
-	typ := domain.ScannerRuleType(strings.ToLower(strings.TrimSpace(in.Type)))
-	if !domain.IsValidScannerRuleType(string(typ)) {
-		return nil, fmt.Errorf("%w: type must be rsi, ma_crossover, or volume_increase", domain.ErrInvalidArgument)
+	conds, typ, err := domain.ResolveScannerConditions(in.Type, in.Conditions)
+	if err != nil {
+		return nil, err
+	}
+	mode, err := domain.ResolveScannerMatchMode(in.MatchMode)
+	if err != nil {
+		return nil, err
 	}
 	interval := strings.TrimSpace(in.Interval)
 	if interval == "" {
@@ -103,14 +109,25 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 	}
 
 	rule := domain.ScannerRule{
-		ID:        uuid.NewString(),
-		ClientID:  clientID,
-		Type:      typ,
-		Interval:  interval,
-		Enabled:   true,
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
+		ID:         uuid.NewString(),
+		ClientID:   clientID,
+		Type:       typ,
+		Conditions: conds,
+		MatchMode:  mode,
+		Interval:   interval,
+		Enabled:    true,
+		CreatedAt:  time.Now().UTC(),
+		UpdatedAt:  time.Now().UTC(),
 	}
+	for _, c := range conds {
+		if err := applyScannerConditionParams(&rule, c, in); err != nil {
+			return nil, err
+		}
+	}
+	return s.store.CreateRule(ctx, rule)
+}
+
+func applyScannerConditionParams(rule *domain.ScannerRule, typ domain.ScannerRuleType, in CreateInput) error {
 	switch typ {
 	case domain.ScannerRuleRSI:
 		period := in.RSIPeriod
@@ -118,14 +135,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 			period = domain.DefaultRSIPeriod
 		}
 		if period < domain.MinIndicatorPeriod || period > domain.MaxIndicatorPeriod {
-			return nil, fmt.Errorf("%w: rsiPeriod out of range", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: rsiPeriod out of range", domain.ErrInvalidArgument)
 		}
 		cond := domain.AlertCondition(strings.ToLower(strings.TrimSpace(in.RSICondition)))
+		if cond == "" {
+			cond = domain.AlertBelow
+		}
 		if !domain.IsValidAlertCondition(string(cond)) {
-			return nil, fmt.Errorf("%w: rsiCondition must be above or below", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: rsiCondition must be above or below", domain.ErrInvalidArgument)
 		}
 		if in.RSIThreshold < 0 || in.RSIThreshold > 100 || math.IsNaN(in.RSIThreshold) {
-			return nil, fmt.Errorf("%w: rsiThreshold must be between 0 and 100", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: rsiThreshold must be between 0 and 100", domain.ErrInvalidArgument)
 		}
 		rule.RSIPeriod = period
 		rule.RSICondition = cond
@@ -140,14 +160,17 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 		}
 		if fast < domain.MinIndicatorPeriod || slow < domain.MinIndicatorPeriod ||
 			fast > domain.MaxIndicatorPeriod || slow > domain.MaxIndicatorPeriod {
-			return nil, fmt.Errorf("%w: ma periods out of range", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: ma periods out of range", domain.ErrInvalidArgument)
 		}
 		if fast >= slow {
-			return nil, fmt.Errorf("%w: maFastPeriod must be < maSlowPeriod", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: maFastPeriod must be < maSlowPeriod", domain.ErrInvalidArgument)
 		}
 		dir := strings.ToLower(strings.TrimSpace(in.MADirection))
+		if dir == "" {
+			dir = "golden_cross"
+		}
 		if !domain.IsValidMADirection(dir) {
-			return nil, fmt.Errorf("%w: maDirection must be golden_cross or death_cross", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: maDirection must be golden_cross or death_cross", domain.ErrInvalidArgument)
 		}
 		rule.MAFastPeriod = fast
 		rule.MASlowPeriod = slow
@@ -158,16 +181,22 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 			lb = 20
 		}
 		if lb < domain.MinVolumeLookback || lb > domain.MaxVolumeLookback {
-			return nil, fmt.Errorf("%w: volumeLookback out of range", domain.ErrInvalidArgument)
+			return fmt.Errorf("%w: volumeLookback out of range", domain.ErrInvalidArgument)
 		}
-		if in.VolumeMinRatio < domain.MinVolumeRatio || in.VolumeMinRatio > domain.MaxVolumeRatio ||
-			math.IsNaN(in.VolumeMinRatio) || math.IsInf(in.VolumeMinRatio, 0) {
-			return nil, fmt.Errorf("%w: volumeMinRatio out of range", domain.ErrInvalidArgument)
+		ratio := in.VolumeMinRatio
+		if ratio == 0 {
+			ratio = 2
+		}
+		if ratio < domain.MinVolumeRatio || ratio > domain.MaxVolumeRatio ||
+			math.IsNaN(ratio) || math.IsInf(ratio, 0) {
+			return fmt.Errorf("%w: volumeMinRatio out of range", domain.ErrInvalidArgument)
 		}
 		rule.VolumeLookback = lb
-		rule.VolumeMinRatio = in.VolumeMinRatio
+		rule.VolumeMinRatio = ratio
+	default:
+		return fmt.Errorf("%w: unknown scanner condition", domain.ErrInvalidArgument)
 	}
-	return s.store.CreateRule(ctx, rule)
+	return nil
 }
 
 // Get returns one rule.

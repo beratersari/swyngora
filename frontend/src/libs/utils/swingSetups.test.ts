@@ -6,6 +6,7 @@ import {
   countHitsSince,
   describeRule,
   gradeFromScore,
+  ruleFactorsShort,
   ruleTypeShort,
 } from './swingSetups';
 
@@ -36,6 +37,7 @@ describe('ruleTypeShort / describeRule', () => {
     expect(ruleTypeShort('rsi')).toBe('RSI');
     expect(ruleTypeShort('ma_crossover')).toBe('EMA');
     expect(ruleTypeShort('volume_increase')).toBe('VOL');
+    expect(ruleTypeShort('combo')).toBe('COMBO');
   });
 
   it('describes rule params', () => {
@@ -50,6 +52,25 @@ describe('ruleTypeShort / describeRule', () => {
         rsiThreshold: 40,
       }),
     ).toContain('RSI(14)');
+  });
+
+  it('joins combo conditions with match mode', () => {
+    const combo = {
+      id: '2',
+      type: 'combo' as const,
+      conditions: ['rsi', 'volume_increase'] as const,
+      matchMode: 'any' as const,
+      interval: '4h',
+      enabled: true,
+      rsiPeriod: 14,
+      rsiCondition: 'below' as const,
+      rsiThreshold: 40,
+      volumeMinRatio: 2,
+      volumeLookback: 20,
+    };
+    expect(describeRule(combo)).toContain(' or ');
+    expect(ruleFactorsShort(combo)).toBe('RSI+VOL');
+    expect(describeRule({ ...combo, matchMode: 'all' })).toContain(' and ');
   });
 });
 

@@ -1136,6 +1136,10 @@ paths:
                 limit: { type: integer, example: 15 }
                 notional: { type: number, example: 10000 }
                 holdHours: { type: number, example: 24 }
+                durationHours:
+                  type: number
+                  description: How long the follow should run from now. Omit or 0 to keep running.
+                  example: 48
                 minProfit:
                   type: number
                   exclusiveMinimum: 0
@@ -1228,6 +1232,9 @@ paths:
                 minProfit: { type: number, exclusiveMinimum: 0 }
                 notional: { type: number }
                 holdHours: { type: number }
+                durationHours:
+                  type: number
+                  description: Reset how long the follow should run from now. 0 clears the end time.
                 quote: { type: string }
                 limit: { type: integer }
                 feeBinancePct: { type: number, minimum: 0 }
@@ -5505,7 +5512,9 @@ paths:
       summary: Create a technical scanner rule
       description: |
         Creates a rule evaluated against the client's watchlist symbols.
-        Types: rsi, ma_crossover, volume_increase. Informational only - not financial advice.
+        Send `conditions` as one or more of rsi, ma_crossover, volume_increase
+        and `matchMode` `all` (every selected condition) or `any` (one is enough).
+        Legacy `type` of a single condition still works. Informational only.
       operationId: createScannerRule
       tags: [Scanner]
       requestBody:
@@ -5514,10 +5523,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [type]
               properties:
                 clientId: { type: string }
-                type: { type: string, enum: [rsi, ma_crossover, volume_increase] }
+                type: { type: string, enum: [rsi, ma_crossover, volume_increase, combo] }
+                conditions:
+                  type: array
+                  items: { type: string, enum: [rsi, ma_crossover, volume_increase] }
+                  description: Selected conditions. If omitted, `type` is used as the single condition.
+                matchMode:
+                  type: string
+                  enum: [all, any]
+                  default: all
+                  description: all = every selected condition; any = one is enough
                 interval: { type: string, default: 1h }
                 rsiPeriod: { type: integer, default: 14 }
                 rsiCondition: { type: string, enum: [above, below] }
@@ -6978,8 +6995,9 @@ components:
           description: Minimum after-fee profit in quote currency
         feeBinancePct: { type: number }
         feeBybitPct: { type: number }
-        status: { type: string, enum: [active, paused] }
+        status: { type: string, enum: [active, paused, expired] }
         armed: { type: boolean }
+        expiresAt: { type: string, format: date-time, nullable: true }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     FundingArbSignal:

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import type { ScannerRule } from '@/libs/api';
-import { describeRule, ruleTypeShort } from '@/libs/utils';
+import { describeRule, ruleFactorsShort } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import type { SignalsRulesTableProps } from './SignalsRulesTable.types';
 
@@ -21,7 +21,7 @@ export function SignalsRulesTable({
     {
       title: t('signals:rules.type'),
       key: 'type',
-      render: (_, row) => <BrandTag variant="status">{ruleTypeShort(row.type)}</BrandTag>,
+      render: (_, row) => <BrandTag variant="status">{ruleFactorsShort(row)}</BrandTag>,
     },
     {
       title: t('signals:interval'),

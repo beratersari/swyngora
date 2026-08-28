@@ -22,21 +22,23 @@ func NewScannerHandler(svc *scanner.Service) *ScannerHandler {
 }
 
 type scannerRuleDTO struct {
-	ID             string  `json:"id"`
-	ClientID       string  `json:"clientId"`
-	Type           string  `json:"type"`
-	Interval       string  `json:"interval"`
-	Enabled        bool    `json:"enabled"`
-	RSIPeriod      int     `json:"rsiPeriod,omitempty"`
-	RSICondition   string  `json:"rsiCondition,omitempty"`
-	RSIThreshold   float64 `json:"rsiThreshold,omitempty"`
-	MAFastPeriod   int     `json:"maFastPeriod,omitempty"`
-	MASlowPeriod   int     `json:"maSlowPeriod,omitempty"`
-	MADirection    string  `json:"maDirection,omitempty"`
-	VolumeLookback int     `json:"volumeLookback,omitempty"`
-	VolumeMinRatio float64 `json:"volumeMinRatio,omitempty"`
-	CreatedAt      string  `json:"createdAt"`
-	UpdatedAt      string  `json:"updatedAt"`
+	ID             string   `json:"id"`
+	ClientID       string   `json:"clientId"`
+	Type           string   `json:"type"`
+	Conditions     []string `json:"conditions"`
+	MatchMode      string   `json:"matchMode"`
+	Interval       string   `json:"interval"`
+	Enabled        bool     `json:"enabled"`
+	RSIPeriod      int      `json:"rsiPeriod,omitempty"`
+	RSICondition   string   `json:"rsiCondition,omitempty"`
+	RSIThreshold   float64  `json:"rsiThreshold,omitempty"`
+	MAFastPeriod   int      `json:"maFastPeriod,omitempty"`
+	MASlowPeriod   int      `json:"maSlowPeriod,omitempty"`
+	MADirection    string   `json:"maDirection,omitempty"`
+	VolumeLookback int      `json:"volumeLookback,omitempty"`
+	VolumeMinRatio float64  `json:"volumeMinRatio,omitempty"`
+	CreatedAt      string   `json:"createdAt"`
+	UpdatedAt      string   `json:"updatedAt"`
 }
 
 type scannerResultDTO struct {
@@ -54,18 +56,31 @@ type scannerResultDTO struct {
 }
 
 func ruleToDTO(r *domain.ScannerRule) scannerRuleDTO {
+	conds := r.SelectedConditions()
+	names := make([]string, 0, len(conds))
+	for _, c := range conds {
+		names = append(names, string(c))
+	}
+	mode := string(r.MatchMode)
+	if mode == "" {
+		mode = string(domain.ScannerMatchAll)
+	}
 	d := scannerRuleDTO{
-		ID: r.ID, ClientID: r.ClientID, Type: string(r.Type), Interval: r.Interval, Enabled: r.Enabled,
+		ID: r.ID, ClientID: r.ClientID, Type: string(r.Type),
+		Conditions: names, MatchMode: mode,
+		Interval: r.Interval, Enabled: r.Enabled,
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: r.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	switch r.Type {
-	case domain.ScannerRuleRSI:
-		d.RSIPeriod, d.RSICondition, d.RSIThreshold = r.RSIPeriod, string(r.RSICondition), r.RSIThreshold
-	case domain.ScannerRuleMACrossover:
-		d.MAFastPeriod, d.MASlowPeriod, d.MADirection = r.MAFastPeriod, r.MASlowPeriod, r.MADirection
-	case domain.ScannerRuleVolumeIncrease:
-		d.VolumeLookback, d.VolumeMinRatio = r.VolumeLookback, r.VolumeMinRatio
+	for _, c := range conds {
+		switch c {
+		case domain.ScannerRuleRSI:
+			d.RSIPeriod, d.RSICondition, d.RSIThreshold = r.RSIPeriod, string(r.RSICondition), r.RSIThreshold
+		case domain.ScannerRuleMACrossover:
+			d.MAFastPeriod, d.MASlowPeriod, d.MADirection = r.MAFastPeriod, r.MASlowPeriod, r.MADirection
+		case domain.ScannerRuleVolumeIncrease:
+			d.VolumeLookback, d.VolumeMinRatio = r.VolumeLookback, r.VolumeMinRatio
+		}
 	}
 	return d
 }
@@ -79,17 +94,19 @@ func resultToDTO(r *domain.ScannerResult) scannerResultDTO {
 }
 
 type createScannerRuleBody struct {
-	ClientID       string  `json:"clientId"`
-	Type           string  `json:"type"`
-	Interval       string  `json:"interval"`
-	RSIPeriod      int     `json:"rsiPeriod"`
-	RSICondition   string  `json:"rsiCondition"`
-	RSIThreshold   float64 `json:"rsiThreshold"`
-	MAFastPeriod   int     `json:"maFastPeriod"`
-	MASlowPeriod   int     `json:"maSlowPeriod"`
-	MADirection    string  `json:"maDirection"`
-	VolumeLookback int     `json:"volumeLookback"`
-	VolumeMinRatio float64 `json:"volumeMinRatio"`
+	ClientID       string   `json:"clientId"`
+	Type           string   `json:"type"`
+	Conditions     []string `json:"conditions"`
+	MatchMode      string   `json:"matchMode"`
+	Interval       string   `json:"interval"`
+	RSIPeriod      int      `json:"rsiPeriod"`
+	RSICondition   string   `json:"rsiCondition"`
+	RSIThreshold   float64  `json:"rsiThreshold"`
+	MAFastPeriod   int      `json:"maFastPeriod"`
+	MASlowPeriod   int      `json:"maSlowPeriod"`
+	MADirection    string   `json:"maDirection"`
+	VolumeLookback int      `json:"volumeLookback"`
+	VolumeMinRatio float64  `json:"volumeMinRatio"`
 }
 
 // Create handles POST /api/v1/scanner/rules
@@ -104,7 +121,7 @@ func (h *ScannerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rule, err := h.svc.Create(r.Context(), scanner.CreateInput{
-		ClientID: clientID, Type: body.Type, Interval: body.Interval,
+		ClientID: clientID, Type: body.Type, Conditions: body.Conditions, MatchMode: body.MatchMode, Interval: body.Interval,
 		RSIPeriod: body.RSIPeriod, RSICondition: body.RSICondition, RSIThreshold: body.RSIThreshold,
 		MAFastPeriod: body.MAFastPeriod, MASlowPeriod: body.MASlowPeriod, MADirection: body.MADirection,
 		VolumeLookback: body.VolumeLookback, VolumeMinRatio: body.VolumeMinRatio,

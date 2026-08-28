@@ -39,6 +39,7 @@ type CreateInput struct {
 	MinProfit     float64
 	Quote         string
 	SymbolLimit   int
+	DurationHours float64
 	FeeBinancePct *float64
 	FeeBybitPct   *float64
 }
@@ -123,6 +124,10 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Fund
 		quote = "USDT"
 	}
 	limit := domain.ClampFundingArbScanLimit(in.SymbolLimit)
+	dur, err := domain.ResolveFundingArbWatchHours(in.DurationHours)
+	if err != nil {
+		return nil, err
+	}
 	n, err := s.store.CountWatches(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -148,6 +153,7 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Fund
 		Notional: notional, HoldHours: hold, MinProfit: minP,
 		FeeBinancePct: fb * 100, FeeBybitPct: fy * 100,
 		Status: domain.FundingArbWatchActive, Armed: true,
+		ExpiresAt: domain.FundingArbWatchExpiresAt(now, dur),
 		CreatedAt: now, UpdatedAt: now,
 	})
 }
@@ -189,6 +195,7 @@ type UpdateInput struct {
 	MinProfit     *float64
 	Quote         *string
 	SymbolLimit   *int
+	DurationHours *float64
 	FeeBinancePct *float64
 	FeeBybitPct   *float64
 }
@@ -244,7 +251,18 @@ func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.Fund
 		}
 		w.FeeBybitPct = fy * 100
 	}
-	w.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	if in.DurationHours != nil {
+		dur, err := domain.ResolveFundingArbWatchHours(*in.DurationHours)
+		if err != nil {
+			return nil, err
+		}
+		w.ExpiresAt = domain.FundingArbWatchExpiresAt(now, dur)
+		if dur > 0 && w.Status == domain.FundingArbWatchExpired {
+			w.Status = domain.FundingArbWatchActive
+		}
+	}
+	w.UpdatedAt = now
 	return s.store.UpdateWatch(ctx, *w)
 }
 
@@ -262,6 +280,9 @@ func (s *Service) setWatchStatus(ctx context.Context, clientID, id string, st do
 	w, err := s.GetWatch(ctx, clientID, id)
 	if err != nil {
 		return nil, err
+	}
+	if st == domain.FundingArbWatchActive && (w.Status == domain.FundingArbWatchExpired || w.Expired(time.Now().UTC())) {
+		return nil, fmt.Errorf("%w: watch expired; set durationHours to keep running", domain.ErrInvalidArgument)
 	}
 	if w.Status == st {
 		return w, nil
@@ -333,6 +354,14 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (open
 		if tenantClosed(ctx, s.account, w.ClientID) {
 			continue
 		}
+		if w.Expired(now) {
+			c, eerr := s.expireWatch(ctx, w, now)
+			if eerr != nil {
+				return opened, closed, touched, eerr
+			}
+			closed += c
+			continue
+		}
 		touched++
 		o, c, err := s.processWatch(ctx, w, now)
 		if err != nil {
@@ -342,6 +371,25 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (open
 		closed += c
 	}
 	return opened, closed, touched, nil
+}
+
+func (s *Service) expireWatch(ctx context.Context, w domain.FundingArbWatch, now time.Time) (closed int, err error) {
+	opens, err := s.store.ListOpenSignals(ctx, w.ID)
+	if err != nil {
+		return 0, err
+	}
+	for i := range opens {
+		if err := s.store.CloseSignal(ctx, opens[i].ID, now); err != nil {
+			return closed, err
+		}
+		closed++
+	}
+	w.Status = domain.FundingArbWatchExpired
+	w.UpdatedAt = now
+	if _, err := s.store.UpdateWatch(ctx, w); err != nil {
+		return closed, err
+	}
+	return closed, nil
 }
 
 func (s *Service) processWatch(ctx context.Context, w domain.FundingArbWatch, now time.Time) (opened, closed int, err error) {

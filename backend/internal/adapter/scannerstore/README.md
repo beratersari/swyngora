@@ -1,6 +1,7 @@
 # Scanner store
 
 SQLite persistence for technical indicator scanner rules and match history.
+Rules store selected `conditions` and `match_mode` (`all` / `any`).
 Results are unique on `(rule_id, exchange, symbol, market_data_key)` so the same
 bar cannot produce a duplicate hit.
 

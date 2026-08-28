@@ -29,9 +29,9 @@ func (scanWatch) Get(_ context.Context, actorID, ownerID string) (*domain.Watchl
 		id = actorID
 	}
 	return &domain.WatchlistAccess{
-		Watchlist: domain.Watchlist{ClientID: id, Items: nil},
+		Watchlist:     domain.Watchlist{ClientID: id, Items: nil},
 		OwnerClientID: id,
-		Role: domain.WatchlistRoleOwner,
+		Role:          domain.WatchlistRoleOwner,
 	}, nil
 }
 
@@ -57,6 +57,32 @@ func TestScannerHTTP_CreateListDelete(t *testing.T) {
 	var created map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &created)
 	id := created["id"].(string)
+	if created["matchMode"] != "all" {
+		t.Fatalf("legacy matchMode %+v", created["matchMode"])
+	}
+
+	comboBody, _ := json.Marshal(map[string]any{
+		"clientId": "http-scan", "conditions": []string{"rsi", "volume_increase"},
+		"matchMode": "any", "interval": "4h",
+		"rsiPeriod": 14, "rsiCondition": "below", "rsiThreshold": 30,
+		"volumeLookback": 20, "volumeMinRatio": 2,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/scanner/rules", bytes.NewReader(comboBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("combo create %d %s", rr.Code, rr.Body.String())
+	}
+	var combo map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &combo)
+	if combo["type"] != "combo" || combo["matchMode"] != "any" {
+		t.Fatalf("combo %+v", combo)
+	}
+	conds, _ := combo["conditions"].([]any)
+	if len(conds) != 2 {
+		t.Fatalf("combo conditions %+v", combo["conditions"])
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/scanner/rules?clientId=http-scan", nil)
 	rr = httptest.NewRecorder()

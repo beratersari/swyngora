@@ -14,7 +14,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 |-----|----------|
 | Setups | Client-side confluence: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
-| Rules | Create/delete RSI, EMA crossover, volume rules. One-click **4h swing stack** adds the three expert long-side filters. |
+| Rules | Create/delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
 | Lab | Historical backtest on one symbol with 1/5/20d forward returns. |
 
 Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
@@ -36,7 +36,7 @@ Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/scanner/rules` | Create rule (`type`, `interval`, type-specific params) |
+| `POST` | `/api/v1/scanner/rules` | Create rule (`conditions` + `matchMode`, or legacy `type`) |
 | `GET` | `/api/v1/scanner/rules` | List rules |
 | `GET` | `/api/v1/scanner/rules/{id}` | Get one rule |
 | `DELETE` | `/api/v1/scanner/rules/{id}` | Delete rule (+ cascaded results) |
@@ -44,13 +44,24 @@ Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
 
 Tenancy: same `clientId` / `X-Client-Id` model as watchlists.
 
-## Rule types
+## Conditions
 
-| `type` | Params | Match condition |
-|--------|--------|-----------------|
+Select one or more of:
+
+| Condition | Params | Match |
+|-----------|--------|--------|
 | `rsi` | `rsiPeriod` (default 14), `rsiCondition` (`above`/`below`), `rsiThreshold` | Latest RSI vs threshold |
 | `ma_crossover` | `maFastPeriod`, `maSlowPeriod`, `maDirection` (`golden_cross`/`death_cross`) | EMA fast crosses slow on the latest bar |
 | `volume_increase` | `volumeLookback` (default 20), `volumeMinRatio` (default 2) | Last bar volume ≥ ratio × average of prior N bars |
+
+`matchMode`:
+
+| Mode | Result |
+|------|--------|
+| `all` (default) | Every selected condition must be true on the same bar |
+| `any` | One selected condition is enough |
+
+Send `conditions: ["rsi", "volume_increase"]` with `matchMode`. Legacy `type: rsi` (or `ma_crossover` / `volume_increase`) still creates a single-condition rule.
 
 `interval` defaults to `1h` (any supported candle interval).
 

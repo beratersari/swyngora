@@ -763,13 +763,13 @@ func (b *Backend) GetFundingArbHistory(ctx context.Context, symbol, fromRaw, toR
 	return mustJSON(got)
 }
 
-func (b *Backend) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+func (b *Backend) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, durationHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	if b.FundingArb == nil {
 		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
 	}
 	got, err := b.FundingArb.CreateWatch(ctx, fundingarb.CreateInput{
 		ClientID: clientID, Symbol: symbol, Notional: notional, HoldHours: holdHours, MinProfit: minProfit,
-		Quote: quote, SymbolLimit: limit,
+		Quote: quote, SymbolLimit: limit, DurationHours: durationHours,
 		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
 	})
 	if err != nil {
@@ -804,14 +804,14 @@ func (b *Backend) GetFundingArbWatch(ctx context.Context, clientID, id string) (
 	return mustJSON(fundingArbWatchMap(got))
 }
 
-func (b *Backend) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+func (b *Backend) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, durationHours *float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	if b.FundingArb == nil {
 		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
 	}
 	got, err := b.FundingArb.UpdateWatch(ctx, fundingarb.UpdateInput{
 		ClientID: clientID, ID: id,
 		Notional: notional, HoldHours: holdHours, MinProfit: minProfit,
-		Quote: quote, SymbolLimit: limit,
+		Quote: quote, SymbolLimit: limit, DurationHours: durationHours,
 		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
 	})
 	if err != nil {
@@ -875,7 +875,7 @@ func fundingArbWatchMap(w *domain.FundingArbWatch) map[string]any {
 	if w.IsScan() {
 		scope = "scan"
 	}
-	return map[string]any{
+	m := map[string]any{
 		"id": w.ID, "clientId": w.ClientID, "scope": scope, "symbol": w.Symbol,
 		"quote": w.Quote, "symbolLimit": w.SymbolLimit,
 		"notional": w.Notional, "holdHours": w.HoldHours, "minProfit": w.MinProfit,
@@ -884,6 +884,10 @@ func fundingArbWatchMap(w *domain.FundingArbWatch) map[string]any {
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if w.ExpiresAt != nil {
+		m["expiresAt"] = w.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
 }
 
 func fundingArbSignalMap(s *domain.FundingArbSignal) map[string]any {
@@ -3392,6 +3396,8 @@ func (b *Backend) CreateScannerRule(ctx context.Context, args map[string]any) (j
 	interval, _ := args["interval"].(string)
 	in := scanner.CreateInput{
 		ClientID: clientID, Type: typ, Interval: interval,
+		Conditions:     stringSliceFromAny(args["conditions"]),
+		MatchMode:      strFromAny(args["matchMode"], ""),
 		RSIPeriod:      intFromAny(args["rsiPeriod"], 14),
 		RSICondition:   strFromAny(args["rsiCondition"], "below"),
 		RSIThreshold:   floatFromAny(args["rsiThreshold"], 30),
@@ -3908,23 +3914,36 @@ func scannerRuleJSON(r *domain.ScannerRule) (json.RawMessage, error) {
 }
 
 func scannerRuleMap(r *domain.ScannerRule) (map[string]any, error) {
+	conds := r.SelectedConditions()
+	names := make([]string, 0, len(conds))
+	for _, c := range conds {
+		names = append(names, string(c))
+	}
+	mode := string(r.MatchMode)
+	if mode == "" {
+		mode = string(domain.ScannerMatchAll)
+	}
 	m := map[string]any{
-		"id": r.ID, "clientId": r.ClientID, "type": string(r.Type), "interval": r.Interval, "enabled": r.Enabled,
+		"id": r.ID, "clientId": r.ClientID, "type": string(r.Type),
+		"conditions": names, "matchMode": mode,
+		"interval": r.Interval, "enabled": r.Enabled,
 		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": r.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	switch r.Type {
-	case domain.ScannerRuleRSI:
-		m["rsiPeriod"] = r.RSIPeriod
-		m["rsiCondition"] = string(r.RSICondition)
-		m["rsiThreshold"] = r.RSIThreshold
-	case domain.ScannerRuleMACrossover:
-		m["maFastPeriod"] = r.MAFastPeriod
-		m["maSlowPeriod"] = r.MASlowPeriod
-		m["maDirection"] = r.MADirection
-	case domain.ScannerRuleVolumeIncrease:
-		m["volumeLookback"] = r.VolumeLookback
-		m["volumeMinRatio"] = r.VolumeMinRatio
+	for _, c := range conds {
+		switch c {
+		case domain.ScannerRuleRSI:
+			m["rsiPeriod"] = r.RSIPeriod
+			m["rsiCondition"] = string(r.RSICondition)
+			m["rsiThreshold"] = r.RSIThreshold
+		case domain.ScannerRuleMACrossover:
+			m["maFastPeriod"] = r.MAFastPeriod
+			m["maSlowPeriod"] = r.MASlowPeriod
+			m["maDirection"] = r.MADirection
+		case domain.ScannerRuleVolumeIncrease:
+			m["volumeLookback"] = r.VolumeLookback
+			m["volumeMinRatio"] = r.VolumeMinRatio
+		}
 	}
 	return m, nil
 }
@@ -3956,6 +3975,37 @@ func strFromAny(v any, def string) string {
 		return s
 	}
 	return def
+}
+
+func stringSliceFromAny(v any) []string {
+	switch t := v.(type) {
+	case []string:
+		return t
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok && strings.TrimSpace(s) != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		t = strings.TrimSpace(t)
+		if t == "" {
+			return nil
+		}
+		parts := strings.Split(t, ",")
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
 }
 
 func (b *Backend) AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {

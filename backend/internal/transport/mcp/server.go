@@ -42,10 +42,10 @@ type DataPort interface {
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error)
 	GetFundingArbHistory(ctx context.Context, symbol, from, to string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
-	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, durationHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, durationHours *float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	PauseFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ResumeFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -591,6 +591,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("holdHours", mcp.Description("Hold window for the horizon payout (default 24)")),
 		mcp.WithString("quote", mcp.Description("Scan quote asset (default USDT)")),
 		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan (default 15, max 40)")),
+		mcp.WithNumber("durationHours", mcp.Description("How long the follow should run; omit for no end")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent (default paper 0.10)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -603,7 +604,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
-		raw, err := api.CreateFundingArbWatch(ctx, clientID, req.GetString("symbol", ""), req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), minP, req.GetString("quote", ""), int(req.GetFloat("limit", 0)), fb, fy)
+		raw, err := api.CreateFundingArbWatch(ctx, clientID, req.GetString("symbol", ""), req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), minP, req.GetString("quote", ""), int(req.GetFloat("limit", 0)), req.GetFloat("durationHours", 0), fb, fy)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -654,6 +655,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("holdHours", mcp.Description("New hold window hours")),
 		mcp.WithString("quote", mcp.Description("Scan quote asset")),
 		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan")),
+		mcp.WithNumber("durationHours", mcp.Description("How long the follow should keep running from now; 0 = no end")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -676,7 +678,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		raw, err := api.UpdateFundingArbWatch(ctx, clientID, id,
 			optionalMCPFee(req, "notional"), optionalMCPFee(req, "holdHours"), optionalMCPFee(req, "minProfit"),
-			quote, limit, optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct"))
+			quote, limit, optionalMCPFee(req, "durationHours"), optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3250,9 +3252,11 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_scanner_rule",
-		mcp.WithDescription("Create a technical scanner rule for the client's watchlist: rsi, ma_crossover, or volume_increase."),
+		mcp.WithDescription("Create a technical scanner rule for the client's watchlist. Select one or more of rsi, ma_crossover, volume_increase via conditions (comma-separated). matchMode=all requires every selected condition; matchMode=any needs only one. Legacy type=rsi|ma_crossover|volume_increase still works."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
-		mcp.WithString("type", mcp.Required(), mcp.Description("rsi | ma_crossover | volume_increase")),
+		mcp.WithString("type", mcp.Description("rsi | ma_crossover | volume_increase | combo (optional if conditions set)")),
+		mcp.WithString("conditions", mcp.Description("Comma-separated rsi,ma_crossover,volume_increase")),
+		mcp.WithString("matchMode", mcp.Description("all (every condition) | any (one is enough)")),
 		mcp.WithString("interval", mcp.Description("Candle interval default 1h")),
 		mcp.WithNumber("rsiPeriod", mcp.Description("RSI period default 14")),
 		mcp.WithString("rsiCondition", mcp.Description("above | below")),
@@ -3267,12 +3271,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		typ, err := req.RequireString("type")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
 		args := map[string]any{
-			"clientId": clientID, "type": typ, "interval": req.GetString("interval", "1h"),
+			"clientId": clientID, "type": req.GetString("type", ""), "interval": req.GetString("interval", "1h"),
+			"conditions": req.GetString("conditions", ""), "matchMode": req.GetString("matchMode", ""),
 			"rsiPeriod": req.GetFloat("rsiPeriod", 14), "rsiCondition": req.GetString("rsiCondition", "below"),
 			"rsiThreshold": req.GetFloat("rsiThreshold", 30),
 			"maFastPeriod": req.GetFloat("maFastPeriod", 12), "maSlowPeriod": req.GetFloat("maSlowPeriod", 26),

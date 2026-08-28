@@ -25,6 +25,18 @@ export function gradeFromScore(score: number): SwingGrade {
   return 'C';
 }
 
+const ATOMIC_TYPES: ScannerRuleType[] = ['rsi', 'ma_crossover', 'volume_increase'];
+
+export function ruleConditions(rule: Pick<ScannerRule, 'type' | 'conditions'>): ScannerRuleType[] {
+  if (rule.conditions?.length) {
+    return rule.conditions.filter((c): c is ScannerRuleType => ATOMIC_TYPES.includes(c));
+  }
+  if (rule.type && ATOMIC_TYPES.includes(rule.type)) {
+    return [rule.type];
+  }
+  return [];
+}
+
 export function ruleTypeShort(type: ScannerRuleType | string | undefined): string {
   switch (type) {
     case 'rsi':
@@ -33,13 +45,24 @@ export function ruleTypeShort(type: ScannerRuleType | string | undefined): strin
       return 'EMA';
     case 'volume_increase':
       return 'VOL';
+    case 'combo':
+      return 'COMBO';
     default:
       return type?.toUpperCase() || '—';
   }
 }
 
-export function describeRule(rule: ScannerRule): string {
-  switch (rule.type) {
+/** Compact label for a rule's selected conditions (e.g. RSI+VOL). */
+export function ruleFactorsShort(rule: Pick<ScannerRule, 'type' | 'conditions'>): string {
+  const conds = ruleConditions(rule);
+  if (!conds.length) {
+    return ruleTypeShort(rule.type);
+  }
+  return conds.map((c) => ruleTypeShort(c)).join('+');
+}
+
+function describeCondition(rule: ScannerRule, type: ScannerRuleType): string {
+  switch (type) {
     case 'rsi':
       return `RSI(${rule.rsiPeriod ?? 14}) ${rule.rsiCondition ?? 'below'} ${rule.rsiThreshold ?? ''}`;
     case 'ma_crossover':
@@ -47,8 +70,21 @@ export function describeRule(rule: ScannerRule): string {
     case 'volume_increase':
       return `Volume ≥ ${rule.volumeMinRatio ?? 2}× / ${rule.volumeLookback ?? 20}`;
     default:
-      return rule.type;
+      return type;
   }
+}
+
+export function describeRule(rule: ScannerRule): string {
+  const conds = ruleConditions(rule);
+  if (!conds.length) {
+    return rule.type;
+  }
+  const parts = conds.map((c) => describeCondition(rule, c));
+  if (parts.length === 1) {
+    return parts[0] ?? rule.type;
+  }
+  const sep = rule.matchMode === 'any' ? ' or ' : ' and ';
+  return parts.join(sep);
 }
 
 function uniqueTypes(hits: readonly ScannerResult[]): ScannerRuleType[] {

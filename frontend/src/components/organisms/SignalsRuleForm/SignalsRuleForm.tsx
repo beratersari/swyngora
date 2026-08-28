@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { Alert, Button, InputNumber, Select } from 'antd';
+import { Alert, Button, Checkbox, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { rtkErrorMessage, type CreateScannerRuleArg, type ScannerRuleType } from '@/libs/api';
+import {
+  rtkErrorMessage,
+  type CreateScannerRuleArg,
+  type ScannerCondition,
+  type ScannerMatchMode,
+} from '@/libs/api';
 import { Field, FieldRow, FormStack } from './SignalsRuleForm.styles';
 import type { SignalsRuleFormProps } from './SignalsRuleForm.types';
 
-const TYPES: ScannerRuleType[] = ['rsi', 'ma_crossover', 'volume_increase'];
+const CONDITIONS: ScannerCondition[] = ['rsi', 'ma_crossover', 'volume_increase'];
 
 export function SignalsRuleForm({
   intervals,
@@ -16,7 +21,8 @@ export function SignalsRuleForm({
   onSubmit,
 }: SignalsRuleFormProps) {
   const { t } = useTranslation(['signals', 'common']);
-  const [type, setType] = useState<ScannerRuleType>('rsi');
+  const [conditions, setConditions] = useState<ScannerCondition[]>(['rsi']);
+  const [matchMode, setMatchMode] = useState<ScannerMatchMode>('all');
   const [interval, setInterval] = useState(defaultInterval);
   const [rsiPeriod, setRsiPeriod] = useState(14);
   const [rsiCondition, setRsiCondition] = useState<'above' | 'below'>('below');
@@ -32,17 +38,23 @@ export function SignalsRuleForm({
     label: iv,
   }));
 
+  const selected = new Set(conditions);
   const submit = async () => {
-    const body: CreateScannerRuleArg = { type, interval };
-    if (type === 'rsi') {
+    if (!conditions.length) {
+      return;
+    }
+    const body: CreateScannerRuleArg = { conditions, matchMode, interval };
+    if (selected.has('rsi')) {
       body.rsiPeriod = rsiPeriod;
       body.rsiCondition = rsiCondition;
       body.rsiThreshold = rsiThreshold;
-    } else if (type === 'ma_crossover') {
+    }
+    if (selected.has('ma_crossover')) {
       body.maFastPeriod = maFast;
       body.maSlowPeriod = maSlow;
       body.maDirection = maDir;
-    } else {
+    }
+    if (selected.has('volume_increase')) {
       body.volumeLookback = volLookback;
       body.volumeMinRatio = volRatio;
     }
@@ -57,17 +69,31 @@ export function SignalsRuleForm({
       <Text variant="caption" color="secondary">
         {t('signals:rules.createHint')}
       </Text>
+      <Field style={{ minWidth: '100%' }}>
+        <Text variant="caption" color="secondary">
+          {t('signals:rules.conditions')}
+        </Text>
+        <Checkbox.Group
+          value={conditions}
+          aria-label={t('signals:rules.conditions')}
+          options={CONDITIONS.map((v) => ({ value: v, label: t(`signals:types.${v}`) }))}
+          onChange={(vals) => setConditions(vals as ScannerCondition[])}
+        />
+      </Field>
       <FieldRow>
         <Field>
           <Text variant="caption" color="secondary">
-            {t('signals:rules.type')}
+            {t('signals:rules.matchMode')}
           </Text>
           <Select
-            value={type}
-            aria-label={t('signals:rules.type')}
+            value={matchMode}
+            aria-label={t('signals:rules.matchMode')}
             style={{ minWidth: 180 }}
-            options={TYPES.map((v) => ({ value: v, label: t(`signals:types.${v}`) }))}
-            onChange={setType}
+            options={[
+              { value: 'all', label: t('signals:rules.matchAll') },
+              { value: 'any', label: t('signals:rules.matchAny') },
+            ]}
+            onChange={setMatchMode}
           />
         </Field>
         <Field>
@@ -83,7 +109,7 @@ export function SignalsRuleForm({
             showSearch
           />
         </Field>
-        {type === 'rsi' ? (
+        {selected.has('rsi') ? (
           <>
             <Field>
               <Text variant="caption" color="secondary">
@@ -126,7 +152,7 @@ export function SignalsRuleForm({
             </Field>
           </>
         ) : null}
-        {type === 'ma_crossover' ? (
+        {selected.has('ma_crossover') ? (
           <>
             <Field>
               <Text variant="caption" color="secondary">
@@ -169,7 +195,7 @@ export function SignalsRuleForm({
             </Field>
           </>
         ) : null}
-        {type === 'volume_increase' ? (
+        {selected.has('volume_increase') ? (
           <>
             <Field>
               <Text variant="caption" color="secondary">
@@ -208,7 +234,12 @@ export function SignalsRuleForm({
         />
       ) : null}
       <div>
-        <Button type="primary" loading={isSubmitting} disabled={isSubmitting} onClick={() => void submit()}>
+        <Button
+          type="primary"
+          loading={isSubmitting}
+          disabled={isSubmitting || conditions.length === 0}
+          onClick={() => void submit()}
+        >
           {t('signals:rules.create')}
         </Button>
       </div>

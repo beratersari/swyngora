@@ -275,6 +275,44 @@ func TestPauseResumeAndUpdateWatch(t *testing.T) {
 	}
 }
 
+func TestExpireWatchClosesSignals(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	q := &fakeQuotes{rep: &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 12,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "bybit", WorthIt: true},
+	}}
+	svc := New(st, q)
+	w, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", Symbol: "BTCUSDT", Notional: 10000, HoldHours: 24, MinProfit: 5, DurationHours: 1,
+	})
+	if err != nil || w.ExpiresAt == nil {
+		t.Fatalf("create %+v %v", w, err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	opened, closed, touched, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC().Add(2*time.Hour))
+	if err != nil || opened != 0 || closed != 1 || touched != 0 {
+		t.Fatalf("expire open=%d close=%d touch=%d err=%v", opened, closed, touched, err)
+	}
+	got, err := svc.GetWatch(context.Background(), "client-a", w.ID)
+	if err != nil || got.Status != domain.FundingArbWatchExpired {
+		t.Fatalf("status %+v %v", got, err)
+	}
+	if _, err := svc.ResumeWatch(context.Background(), "client-a", w.ID); err == nil {
+		t.Fatal("resume expired")
+	}
+	dur := 8.0
+	updated, err := svc.UpdateWatch(context.Background(), UpdateInput{ClientID: "client-a", ID: w.ID, DurationHours: &dur})
+	if err != nil || updated.Status != domain.FundingArbWatchActive || updated.ExpiresAt == nil {
+		t.Fatalf("extend %+v %v", updated, err)
+	}
+}
+
 func TestCreateWatch_BadMinProfit(t *testing.T) {
 	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -141,7 +142,28 @@ CREATE INDEX IF NOT EXISTS idx_scanner_backtest_signals ON scanner_backtest_sign
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
-	return sqliteutil.SetUserVersion(s.db, 1)
+	v, err := sqliteutil.UserVersion(s.db)
+	if err != nil {
+		return err
+	}
+	if v < 1 {
+		if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+			return err
+		}
+		v = 1
+	}
+	if v < 2 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_rules ADD COLUMN conditions TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_rules ADD COLUMN match_mode TEXT NOT NULL DEFAULT 'all'`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Path returns absolute DB path.
@@ -174,12 +196,14 @@ func (s *SQLite) CreateRule(ctx context.Context, r domain.ScannerRule) (*domain.
 			id, client_id, rule_type, interval, enabled,
 			rsi_period, rsi_condition, rsi_threshold,
 			ma_fast_period, ma_slow_period, ma_direction,
-			volume_lookback, volume_min_ratio, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			volume_lookback, volume_min_ratio, conditions, match_mode,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, r.ID, r.ClientID, string(r.Type), r.Interval, en,
 		r.RSIPeriod, string(r.RSICondition), r.RSIThreshold,
 		r.MAFastPeriod, r.MASlowPeriod, r.MADirection,
 		r.VolumeLookback, r.VolumeMinRatio,
+		encodeScannerConditions(r.Conditions), string(r.MatchMode),
 		r.CreatedAt.UTC().Format(time.RFC3339Nano), r.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -708,7 +732,8 @@ const ruleSelect = `
 	SELECT id, client_id, rule_type, interval, enabled,
 		rsi_period, rsi_condition, rsi_threshold,
 		ma_fast_period, ma_slow_period, ma_direction,
-		volume_lookback, volume_min_ratio, created_at, updated_at
+		volume_lookback, volume_min_ratio, conditions, match_mode,
+		created_at, updated_at
 	FROM scanner_rules`
 
 type scannable interface {
@@ -717,13 +742,13 @@ type scannable interface {
 
 func scanRule(row scannable) (*domain.ScannerRule, error) {
 	var r domain.ScannerRule
-	var typ, cond, dir, cAt, uAt string
+	var typ, cond, dir, cAt, uAt, conds, mode string
 	var en int
 	if err := row.Scan(
 		&r.ID, &r.ClientID, &typ, &r.Interval, &en,
 		&r.RSIPeriod, &cond, &r.RSIThreshold,
 		&r.MAFastPeriod, &r.MASlowPeriod, &dir,
-		&r.VolumeLookback, &r.VolumeMinRatio, &cAt, &uAt,
+		&r.VolumeLookback, &r.VolumeMinRatio, &conds, &mode, &cAt, &uAt,
 	); err != nil {
 		return nil, err
 	}
@@ -731,9 +756,42 @@ func scanRule(row scannable) (*domain.ScannerRule, error) {
 	r.Enabled = en != 0
 	r.RSICondition = domain.AlertCondition(cond)
 	r.MADirection = dir
+	r.Conditions = decodeScannerConditions(conds)
+	r.MatchMode = domain.ScannerMatchMode(mode)
+	if r.MatchMode == "" {
+		r.MatchMode = domain.ScannerMatchAll
+	}
 	r.CreatedAt = parseTime(cAt)
 	r.UpdatedAt = parseTime(uAt)
 	return &r, nil
+}
+
+func encodeScannerConditions(in []domain.ScannerRuleType) string {
+	if len(in) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(in))
+	for _, c := range in {
+		parts = append(parts, string(c))
+	}
+	return strings.Join(parts, ",")
+}
+
+func decodeScannerConditions(raw string) []domain.ScannerRuleType {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]domain.ScannerRuleType, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, domain.ScannerRuleType(p))
+	}
+	return out
 }
 
 func scanRules(rows *sql.Rows) ([]domain.ScannerRule, error) {

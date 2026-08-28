@@ -165,7 +165,7 @@ func TestAPIClient_FundingArbWatches(t *testing.T) {
 	defer srv.Close()
 	c := NewAPIClient(srv.URL, 0)
 	ctx := context.Background()
-	raw, err := c.CreateFundingArbWatch(ctx, "c1", "BTCUSDT", 10000, 24, 10, "", 0, nil, nil)
+	raw, err := c.CreateFundingArbWatch(ctx, "c1", "BTCUSDT", 10000, 24, 10, "", 0, 0, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestAPIClient_FundingArbWatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	minP := 12.0
-	if _, err := c.UpdateFundingArbWatch(ctx, "c1", "w1", nil, nil, &minP, nil, nil, nil, nil); err != nil {
+	if _, err := c.UpdateFundingArbWatch(ctx, "c1", "w1", nil, nil, &minP, nil, nil, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.PauseFundingArbWatch(ctx, "c1", "w1"); err != nil {

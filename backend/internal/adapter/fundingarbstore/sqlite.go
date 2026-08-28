@@ -137,6 +137,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fa_sig_open ON funding_arb_signals(watch_i
 		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
 			return err
 		}
+		v = 2
+	}
+	if v < 3 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE funding_arb_watches ADD COLUMN expires_at TEXT`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -152,7 +161,7 @@ func parseTime(s string) time.Time {
 	return t.UTC()
 }
 
-const watchCols = `id, client_id, symbol, notional, hold_hours, min_profit, fee_binance_pct, fee_bybit_pct, quote, symbol_limit, status, armed, created_at, updated_at`
+const watchCols = `id, client_id, symbol, notional, hold_hours, min_profit, fee_binance_pct, fee_bybit_pct, quote, symbol_limit, status, armed, expires_at, created_at, updated_at`
 
 type scannable interface {
 	Scan(dest ...any) error
@@ -162,12 +171,17 @@ func scanWatch(row scannable) (*domain.FundingArbWatch, error) {
 	var w domain.FundingArbWatch
 	var st, cAt, uAt string
 	var armed int
+	var exp sql.NullString
 	if err := row.Scan(&w.ID, &w.ClientID, &w.Symbol, &w.Notional, &w.HoldHours, &w.MinProfit,
-		&w.FeeBinancePct, &w.FeeBybitPct, &w.Quote, &w.SymbolLimit, &st, &armed, &cAt, &uAt); err != nil {
+		&w.FeeBinancePct, &w.FeeBybitPct, &w.Quote, &w.SymbolLimit, &st, &armed, &exp, &cAt, &uAt); err != nil {
 		return nil, err
 	}
 	w.Status = domain.FundingArbWatchStatus(st)
 	w.Armed = armed != 0
+	if exp.Valid && exp.String != "" {
+		t := parseTime(exp.String)
+		w.ExpiresAt = &t
+	}
 	w.CreatedAt = parseTime(cAt)
 	w.UpdatedAt = parseTime(uAt)
 	return &w, nil
@@ -187,11 +201,15 @@ func (s *SQLite) CreateWatch(ctx context.Context, w domain.FundingArbWatch) (*do
 	if w.SymbolLimit <= 0 {
 		w.SymbolLimit = domain.FundingArbScanDefault
 	}
+	var exp any
+	if w.ExpiresAt != nil && !w.ExpiresAt.IsZero() {
+		exp = w.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO funding_arb_watches (`+watchCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, w.ID, w.ClientID, w.Symbol, w.Notional, w.HoldHours, w.MinProfit,
-		w.FeeBinancePct, w.FeeBybitPct, w.Quote, w.SymbolLimit, string(w.Status), armed,
+		w.FeeBinancePct, w.FeeBybitPct, w.Quote, w.SymbolLimit, string(w.Status), armed, exp,
 		w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -276,14 +294,18 @@ func (s *SQLite) UpdateWatch(ctx context.Context, w domain.FundingArbWatch) (*do
 	if w.SymbolLimit <= 0 {
 		w.SymbolLimit = domain.FundingArbScanDefault
 	}
+	var exp any
+	if w.ExpiresAt != nil && !w.ExpiresAt.IsZero() {
+		exp = w.ExpiresAt.UTC().Format(time.RFC3339Nano)
+	}
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE funding_arb_watches SET
 			notional = ?, hold_hours = ?, min_profit = ?,
 			fee_binance_pct = ?, fee_bybit_pct = ?,
-			quote = ?, symbol_limit = ?, status = ?, armed = ?, updated_at = ?
+			quote = ?, symbol_limit = ?, status = ?, armed = ?, expires_at = ?, updated_at = ?
 		WHERE id = ? AND client_id = ?
 	`, w.Notional, w.HoldHours, w.MinProfit, w.FeeBinancePct, w.FeeBybitPct,
-		w.Quote, w.SymbolLimit, string(w.Status), armed,
+		w.Quote, w.SymbolLimit, string(w.Status), armed, exp,
 		w.UpdatedAt.UTC().Format(time.RFC3339Nano), w.ID, w.ClientID)
 	if err != nil {
 		return nil, err

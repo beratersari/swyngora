@@ -27,15 +27,26 @@ const (
 	ScannerRuleRSI            ScannerRuleType = "rsi"
 	ScannerRuleMACrossover    ScannerRuleType = "ma_crossover"
 	ScannerRuleVolumeIncrease ScannerRuleType = "volume_increase"
+	ScannerRuleCombo          ScannerRuleType = "combo"
+)
+
+// ScannerMatchMode is how selected conditions are combined.
+type ScannerMatchMode string
+
+const (
+	ScannerMatchAll ScannerMatchMode = "all"
+	ScannerMatchAny ScannerMatchMode = "any"
 )
 
 // ScannerRule is a client-owned rule evaluated against watchlist symbols.
 type ScannerRule struct {
-	ID        string
-	ClientID  string
-	Type      ScannerRuleType
-	Interval  string // candle interval, e.g. 1h
-	Enabled   bool
+	ID         string
+	ClientID   string
+	Type       ScannerRuleType
+	Conditions []ScannerRuleType
+	MatchMode  ScannerMatchMode // all | any
+	Interval   string           // candle interval, e.g. 1h
+	Enabled    bool
 	// RSI
 	RSIPeriod    int
 	RSICondition AlertCondition // above | below
@@ -93,36 +104,36 @@ const MaxScannerBacktestsPerClient = 50
 
 // ScannerBacktest is a background historical test of one rule on one symbol.
 type ScannerBacktest struct {
-	ID             string
-	ClientID       string
-	RuleID         string
-	Exchange       Exchange
-	Symbol         string
-	Interval       string
-	RangeStart     time.Time
-	RangeEnd       time.Time
-	Status         ScannerBacktestStatus
-	ProgressPct    float64 // 0–100
-	ProcessedBars  int
-	TotalBars      int
-	SignalCount    int
-	ErrorMessage   string
-	CreatedAt      time.Time
-	StartedAt      *time.Time
-	FinishedAt     *time.Time
+	ID            string
+	ClientID      string
+	RuleID        string
+	Exchange      Exchange
+	Symbol        string
+	Interval      string
+	RangeStart    time.Time
+	RangeEnd      time.Time
+	Status        ScannerBacktestStatus
+	ProgressPct   float64 // 0–100
+	ProcessedBars int
+	TotalBars     int
+	SignalCount   int
+	ErrorMessage  string
+	CreatedAt     time.Time
+	StartedAt     *time.Time
+	FinishedAt    *time.Time
 }
 
 // ScannerBacktestSignal is one historical match with optional forward returns (%).
 type ScannerBacktestSignal struct {
-	ID          string
-	BacktestID  string
-	SignalAt    time.Time
-	ClosePrice  float64
-	Summary     string
-	Return1d    *float64 // percent change after 1 calendar day; nil if unavailable
-	Return5d    *float64
-	Return20d   *float64
-	Metrics     map[string]float64
+	ID         string
+	BacktestID string
+	SignalAt   time.Time
+	ClosePrice float64
+	Summary    string
+	Return1d   *float64 // percent change after 1 calendar day; nil if unavailable
+	Return5d   *float64
+	Return20d  *float64
+	Metrics    map[string]float64
 }
 
 // ScannerPort persists scanner rules, live results, and historical backtests.
@@ -196,11 +207,86 @@ func ForwardReturnPct(candles []Candle, signalIdx int, days int) *float64 {
 // IsValidScannerRuleType reports known rule types.
 func IsValidScannerRuleType(s string) bool {
 	switch ScannerRuleType(s) {
+	case ScannerRuleRSI, ScannerRuleMACrossover, ScannerRuleVolumeIncrease, ScannerRuleCombo:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAtomicScannerType(t ScannerRuleType) bool {
+	switch t {
 	case ScannerRuleRSI, ScannerRuleMACrossover, ScannerRuleVolumeIncrease:
 		return true
 	default:
 		return false
 	}
+}
+
+// ResolveScannerMatchMode defaults to all. Accepts all | any.
+func ResolveScannerMatchMode(s string) (ScannerMatchMode, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "all", "and":
+		return ScannerMatchAll, nil
+	case "any", "or":
+		return ScannerMatchAny, nil
+	default:
+		return "", fmt.Errorf("%w: matchMode must be all or any", ErrInvalidArgument)
+	}
+}
+
+// ResolveScannerConditions builds the selected set from conditions and/or type.
+// Legacy type-only rules keep a single condition.
+func ResolveScannerConditions(typ string, conds []string) ([]ScannerRuleType, ScannerRuleType, error) {
+	seen := map[ScannerRuleType]bool{}
+	out := make([]ScannerRuleType, 0, 3)
+	add := func(raw string) error {
+		t := ScannerRuleType(strings.ToLower(strings.TrimSpace(raw)))
+		if !isAtomicScannerType(t) {
+			return fmt.Errorf("%w: condition must be rsi, ma_crossover, or volume_increase", ErrInvalidArgument)
+		}
+		if seen[t] {
+			return nil
+		}
+		seen[t] = true
+		out = append(out, t)
+		return nil
+	}
+	for _, c := range conds {
+		if strings.TrimSpace(c) == "" {
+			continue
+		}
+		if err := add(c); err != nil {
+			return nil, "", err
+		}
+	}
+	if len(out) == 0 {
+		t := ScannerRuleType(strings.ToLower(strings.TrimSpace(typ)))
+		if t == ScannerRuleCombo {
+			return nil, "", fmt.Errorf("%w: conditions are required when type is combo", ErrInvalidArgument)
+		}
+		if !isAtomicScannerType(t) {
+			return nil, "", fmt.Errorf("%w: type must be rsi, ma_crossover, or volume_increase", ErrInvalidArgument)
+		}
+		out = []ScannerRuleType{t}
+	}
+	stored := ScannerRuleCombo
+	if len(out) == 1 {
+		stored = out[0]
+	}
+	return out, stored, nil
+}
+
+// SelectedConditions is the set EvaluateScannerRule runs. Empty Conditions
+// falls back to Type for rules created before combo support.
+func (r ScannerRule) SelectedConditions() []ScannerRuleType {
+	if len(r.Conditions) > 0 {
+		return r.Conditions
+	}
+	if isAtomicScannerType(r.Type) {
+		return []ScannerRuleType{r.Type}
+	}
+	return nil
 }
 
 // IsValidMADirection reports golden_cross | death_cross.
@@ -219,16 +305,74 @@ func EvaluateScannerRule(rule ScannerRule, candles []Candle) (*ScannerMatch, err
 	if len(candles) == 0 {
 		return nil, nil
 	}
-	switch rule.Type {
-	case ScannerRuleRSI:
-		return evalRSI(rule, candles)
-	case ScannerRuleMACrossover:
-		return evalMACrossover(rule, candles)
-	case ScannerRuleVolumeIncrease:
-		return evalVolumeIncrease(rule, candles)
-	default:
+	conds := rule.SelectedConditions()
+	if len(conds) == 0 {
 		return nil, fmt.Errorf("%w: unknown scanner rule type", ErrInvalidArgument)
 	}
+	mode := rule.MatchMode
+	if mode == "" {
+		mode = ScannerMatchAll
+	}
+	hits := make([]*ScannerMatch, 0, len(conds))
+	for _, c := range conds {
+		sub := rule
+		sub.Type = c
+		var (
+			m   *ScannerMatch
+			err error
+		)
+		switch c {
+		case ScannerRuleRSI:
+			m, err = evalRSI(sub, candles)
+		case ScannerRuleMACrossover:
+			m, err = evalMACrossover(sub, candles)
+		case ScannerRuleVolumeIncrease:
+			m, err = evalVolumeIncrease(sub, candles)
+		default:
+			return nil, fmt.Errorf("%w: unknown scanner rule type", ErrInvalidArgument)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if m != nil {
+			hits = append(hits, m)
+		} else if mode == ScannerMatchAll {
+			return nil, nil
+		}
+	}
+	if len(hits) == 0 {
+		return nil, nil
+	}
+	return combineScannerMatches(hits, mode), nil
+}
+
+func combineScannerMatches(hits []*ScannerMatch, mode ScannerMatchMode) *ScannerMatch {
+	if len(hits) == 1 {
+		return hits[0]
+	}
+	sep := " and "
+	if mode == ScannerMatchAny {
+		sep = " or "
+	}
+	out := &ScannerMatch{
+		MarketDataKey: hits[0].MarketDataKey,
+		Metrics:       map[string]float64{},
+	}
+	parts := make([]string, 0, len(hits))
+	for _, h := range hits {
+		if h == nil {
+			continue
+		}
+		if h.MarketDataKey != "" {
+			out.MarketDataKey = h.MarketDataKey
+		}
+		parts = append(parts, h.Summary)
+		for k, v := range h.Metrics {
+			out.Metrics[k] = v
+		}
+	}
+	out.Summary = strings.Join(parts, sep)
+	return out
 }
 
 func evalRSI(rule ScannerRule, candles []Candle) (*ScannerMatch, error) {
@@ -361,11 +505,11 @@ func evalVolumeIncrease(rule ScannerRule, candles []Candle) (*ScannerMatch, erro
 		MarketDataKey: marketDataKey(bar),
 		Summary:       fmt.Sprintf("Volume %.2fx avg of prior %d bars", ratio, lookback),
 		Metrics: map[string]float64{
-			"volume":     last,
-			"avgVolume":  avg,
-			"ratio":      ratio,
-			"lookback":   float64(lookback),
-			"minRatio":   rule.VolumeMinRatio,
+			"volume":    last,
+			"avgVolume": avg,
+			"ratio":     ratio,
+			"lookback":  float64(lookback),
+			"minRatio":  rule.VolumeMinRatio,
 		},
 	}, nil
 }

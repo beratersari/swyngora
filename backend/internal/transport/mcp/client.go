@@ -332,7 +332,7 @@ func (c *APIClient) GetFundingArbHistory(ctx context.Context, symbol, from, to s
 }
 
 // CreateFundingArbWatch creates a min-profit follow (omit symbol for the scan).
-func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, durationHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "minProfit": minProfit,
 	}
@@ -350,6 +350,9 @@ func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol 
 	}
 	if limit > 0 {
 		body["limit"] = limit
+	}
+	if durationHours > 0 {
+		body["durationHours"] = durationHours
 	}
 	if feeBinancePct != nil {
 		body["feeBinancePct"] = *feeBinancePct
@@ -375,7 +378,7 @@ func (c *APIClient) GetFundingArbWatch(ctx context.Context, clientID, id string)
 }
 
 // UpdateFundingArbWatch patches follow settings.
-func (c *APIClient) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+func (c *APIClient) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, durationHours *float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	body := map[string]any{"clientId": clientID}
 	if notional != nil {
 		body["notional"] = *notional
@@ -391,6 +394,9 @@ func (c *APIClient) UpdateFundingArbWatch(ctx context.Context, clientID, id stri
 	}
 	if limit != nil {
 		body["limit"] = *limit
+	}
+	if durationHours != nil {
+		body["durationHours"] = *durationHours
 	}
 	if feeBinancePct != nil {
 		body["feeBinancePct"] = *feeBinancePct

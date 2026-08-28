@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,5 +134,79 @@ func TestEvaluateNoMatch(t *testing.T) {
 	}, candles)
 	if err != nil || m != nil {
 		t.Fatalf("want no match %+v %v", m, err)
+	}
+}
+
+func TestResolveScannerConditionsAndMatchMode(t *testing.T) {
+	conds, typ, err := ResolveScannerConditions("rsi", nil)
+	if err != nil || typ != ScannerRuleRSI || len(conds) != 1 || conds[0] != ScannerRuleRSI {
+		t.Fatalf("legacy type %+v %s %v", conds, typ, err)
+	}
+	conds, typ, err = ResolveScannerConditions("", []string{"rsi", "volume_increase", "rsi"})
+	if err != nil || typ != ScannerRuleCombo || len(conds) != 2 {
+		t.Fatalf("combo %+v %s %v", conds, typ, err)
+	}
+	if _, _, err = ResolveScannerConditions("combo", nil); err == nil {
+		t.Fatal("combo type without conditions should fail")
+	}
+	if _, _, err = ResolveScannerConditions("", []string{"nope"}); err == nil {
+		t.Fatal("invalid condition should fail")
+	}
+	mode, err := ResolveScannerMatchMode("")
+	if err != nil || mode != ScannerMatchAll {
+		t.Fatalf("default mode %s %v", mode, err)
+	}
+	mode, err = ResolveScannerMatchMode("or")
+	if err != nil || mode != ScannerMatchAny {
+		t.Fatalf("or alias %s %v", mode, err)
+	}
+	if _, err = ResolveScannerMatchMode("maybe"); err == nil {
+		t.Fatal("invalid matchMode should fail")
+	}
+}
+
+func TestEvaluateCombo_AllAndAny(t *testing.T) {
+	candles := make([]Candle, 40)
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	price := 100.0
+	for i := 0; i < 40; i++ {
+		vol := "100"
+		if i == 39 {
+			vol = "500"
+		}
+		candles[i] = Candle{
+			OpenTime: t0.Add(time.Duration(i) * time.Hour),
+			Close:    fmt.Sprintf("%.8f", price),
+			Volume:   vol,
+		}
+		price -= 1
+	}
+	allRule := ScannerRule{
+		Conditions:     []ScannerRuleType{ScannerRuleRSI, ScannerRuleVolumeIncrease},
+		MatchMode:      ScannerMatchAll,
+		RSIPeriod:      14,
+		RSICondition:   AlertBelow,
+		RSIThreshold:   40,
+		VolumeLookback: 20,
+		VolumeMinRatio: 2,
+	}
+	m, err := EvaluateScannerRule(allRule, candles)
+	if err != nil || m == nil {
+		t.Fatalf("all should match %+v %v", m, err)
+	}
+	if !strings.Contains(m.Summary, "RSI") || !strings.Contains(m.Summary, "Volume") {
+		t.Fatalf("summary %s", m.Summary)
+	}
+	anyRule := allRule
+	anyRule.MatchMode = ScannerMatchAny
+	anyRule.VolumeMinRatio = 99
+	m, err = EvaluateScannerRule(anyRule, candles)
+	if err != nil || m == nil {
+		t.Fatalf("any RSI should match %+v %v", m, err)
+	}
+	allRule.VolumeMinRatio = 99
+	m, err = EvaluateScannerRule(allRule, candles)
+	if err != nil || m != nil {
+		t.Fatalf("all should miss when volume fails %+v %v", m, err)
 	}
 }

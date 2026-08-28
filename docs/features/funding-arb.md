@@ -58,7 +58,10 @@ only if net is really below `minProfit`. A **direction flip** closes the
 old signal and opens a new one. Optional `symbol` still follows one pair.
 `PATCH /api/v1/funding-arb/watches/{id}` edits min profit and other
 settings. `POST .../pause` and `POST .../resume` stop and start
-evaluation without deleting. Max 20 watches per client.
+evaluation without deleting. Optional `durationHours` is how long the
+follow should run; when that time is over, checking stops, open signals
+close, and status becomes `expired`. Omit it to keep running. Max 20
+watches per client.
 
 This is **not** an executable arb and **not** financial advice.
 

@@ -58,6 +58,23 @@ func TestSQLite_RulesAndDedupeResults(t *testing.T) {
 	if err != nil || len(list) != 2 {
 		t.Fatalf("%+v %v", list, err)
 	}
+	combo := domain.ScannerRule{
+		ID: "r2", ClientID: "c1", Type: domain.ScannerRuleCombo, Interval: "4h", Enabled: true,
+		Conditions: []domain.ScannerRuleType{domain.ScannerRuleRSI, domain.ScannerRuleVolumeIncrease},
+		MatchMode:  domain.ScannerMatchAny,
+		RSIPeriod:  14, RSICondition: domain.AlertBelow, RSIThreshold: 30,
+		VolumeLookback: 20, VolumeMinRatio: 2,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if _, err := s.CreateRule(ctx, combo); err != nil {
+		t.Fatal(err)
+	}
+	gotCombo, err := s.GetRule(ctx, "c1", "r2")
+	if err != nil || gotCombo.Type != domain.ScannerRuleCombo || gotCombo.MatchMode != domain.ScannerMatchAny ||
+		len(gotCombo.Conditions) != 2 {
+		t.Fatalf("combo %+v %v", gotCombo, err)
+	}
+
 	_ = s.Close()
 	s2, err := Open(path)
 	if err != nil {
@@ -67,5 +84,9 @@ func TestSQLite_RulesAndDedupeResults(t *testing.T) {
 	list, err = s2.ListResults(ctx, "c1", 10, 0)
 	if err != nil || len(list) != 2 {
 		t.Fatalf("persist %+v %v", list, err)
+	}
+	gotCombo, err = s2.GetRule(ctx, "c1", "r2")
+	if err != nil || gotCombo.MatchMode != domain.ScannerMatchAny || len(gotCombo.Conditions) != 2 {
+		t.Fatalf("combo persist %+v %v", gotCombo, err)
 	}
 }

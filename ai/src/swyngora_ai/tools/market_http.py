@@ -821,6 +821,10 @@ class FundingArbWatchCreateInput(BaseModel):
     hold_hours: float = Field(default=0, description="Hold window hours (default 24)")
     quote: str = Field(default="", description="Scan quote asset (default USDT)")
     limit: int = Field(default=0, description="How many top-volume coins to scan")
+    duration_hours: float = Field(
+        default=0,
+        description="How long the follow should run; 0 or omit to keep running",
+    )
     fee_binance_pct: float | None = Field(default=None)
     fee_bybit_pct: float | None = Field(default=None)
 
@@ -838,6 +842,10 @@ class FundingArbWatchUpdateInput(BaseModel):
     hold_hours: float | None = None
     quote: str | None = None
     limit: int | None = None
+    duration_hours: float | None = Field(
+        default=None,
+        description="Reset how long the follow should run from now; 0 = no end",
+    )
     fee_binance_pct: float | None = None
     fee_bybit_pct: float | None = None
 
@@ -1438,7 +1446,18 @@ class PriceDiffWatchQuoteInput(BaseModel):
 
 class ScannerRuleCreateInput(BaseModel):
     client_id: str
-    rule_type: str = Field(description="rsi | ma_crossover | volume_increase")
+    rule_type: str = Field(
+        default="",
+        description="rsi | ma_crossover | volume_increase | combo (optional if conditions set)",
+    )
+    conditions: str = Field(
+        default="",
+        description="Comma-separated rsi,ma_crossover,volume_increase",
+    )
+    match_mode: str = Field(
+        default="all",
+        description="all = every selected condition; any = one is enough",
+    )
     interval: str = "1h"
     rsi_period: int = 14
     rsi_condition: str = "below"
@@ -2002,6 +2021,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         hold_hours: float = 0,
         quote: str = "",
         limit: int = 0,
+        duration_hours: float = 0,
         fee_binance_pct: float | None = None,
         fee_bybit_pct: float | None = None,
     ) -> str:
@@ -2019,6 +2039,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["quote"] = quote
         if limit:
             body["limit"] = limit
+        if duration_hours:
+            body["durationHours"] = duration_hours
         if fee_binance_pct is not None:
             body["feeBinancePct"] = fee_binance_pct
         if fee_bybit_pct is not None:
@@ -2042,6 +2064,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         hold_hours: float | None = None,
         quote: str | None = None,
         limit: int | None = None,
+        duration_hours: float | None = None,
         fee_binance_pct: float | None = None,
         fee_bybit_pct: float | None = None,
     ) -> str:
@@ -2056,6 +2079,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["quote"] = quote
         if limit is not None:
             body["limit"] = limit
+        if duration_hours is not None:
+            body["durationHours"] = duration_hours
         if fee_binance_pct is not None:
             body["feeBinancePct"] = fee_binance_pct
         if fee_bybit_pct is not None:
@@ -3216,7 +3241,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def create_scanner_rule(
         client_id: str,
-        rule_type: str,
+        rule_type: str = "",
+        conditions: str = "",
+        match_mode: str = "all",
         interval: str = "1h",
         rsi_period: int = 14,
         rsi_condition: str = "below",
@@ -3227,22 +3254,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         volume_lookback: int = 20,
         volume_min_ratio: float = 2,
     ) -> str:
-        return http.post(
-            "/api/v1/scanner/rules",
-            {
-                "clientId": client_id,
-                "type": rule_type,
-                "interval": interval,
-                "rsiPeriod": rsi_period,
-                "rsiCondition": rsi_condition,
-                "rsiThreshold": rsi_threshold,
-                "maFastPeriod": ma_fast_period,
-                "maSlowPeriod": ma_slow_period,
-                "maDirection": ma_direction,
-                "volumeLookback": volume_lookback,
-                "volumeMinRatio": volume_min_ratio,
-            },
-        )
+        body: dict[str, object] = {
+            "clientId": client_id,
+            "interval": interval,
+            "matchMode": match_mode,
+            "rsiPeriod": rsi_period,
+            "rsiCondition": rsi_condition,
+            "rsiThreshold": rsi_threshold,
+            "maFastPeriod": ma_fast_period,
+            "maSlowPeriod": ma_slow_period,
+            "maDirection": ma_direction,
+            "volumeLookback": volume_lookback,
+            "volumeMinRatio": volume_min_ratio,
+        }
+        if rule_type:
+            body["type"] = rule_type
+        conds = [c.strip() for c in conditions.split(",") if c.strip()]
+        if conds:
+            body["conditions"] = conds
+        return http.post("/api/v1/scanner/rules", body)
 
     def list_scanner_rules(client_id: str) -> str:
         return http.get("/api/v1/scanner/rules", {"clientId": client_id})
@@ -3511,8 +3541,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "to scan liquid coins and notify when a new coin's after-fee "
                 "net is at least min_profit. Same coin + same long/short while "
                 "still above the floor does not re-notify; it must drop below "
-                "and come back to notify again. Optional symbol follows one "
-                "pair only. Not financial advice."
+                "and come back to notify again. duration_hours is how long "
+                "the follow should run (omit for no end). Optional symbol "
+                "follows one pair only. Not financial advice."
             ),
             args_schema=FundingArbWatchCreateInput,
         ),
@@ -4545,8 +4576,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             create_scanner_rule,
             name="create_scanner_rule",
             description=(
-                "Create a technical scanner rule for the client's watchlist: "
-                "rsi, ma_crossover, or volume_increase. Informational only."
+                "Create a technical scanner rule for the client's watchlist. "
+                "Pick one or more of rsi, ma_crossover, volume_increase via conditions. "
+                "match_mode=all requires every selected condition; match_mode=any needs only one. "
+                "Informational only."
             ),
             args_schema=ScannerRuleCreateInput,
         ),

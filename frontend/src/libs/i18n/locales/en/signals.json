@@ -53,11 +53,16 @@
   "types": {
     "rsi": "RSI threshold",
     "ma_crossover": "EMA crossover",
-    "volume_increase": "Volume increase"
+    "volume_increase": "Volume increase",
+    "combo": "Combined"
   },
   "rules": {
     "createTitle": "New rule",
-    "createHint": "Single-factor rules feed the confluence grid. Stack trend + momentum + volume for swing setups.",
+    "createHint": "Pick RSI, EMA crossover, and/or volume. Choose whether every selected condition must be true, or one is enough. The saved hit uses that combination.",
+    "conditions": "Conditions",
+    "matchMode": "Match",
+    "matchAll": "All selected must match",
+    "matchAny": "Any selected is enough",
     "create": "Create rule",
     "createSuccess": "Rule created",
     "createFailed": "Could not create rule",

@@ -308,6 +308,35 @@ func TestResolveFundingArbWatchSymbol(t *testing.T) {
 	}
 }
 
+func TestResolveFundingArbWatchHours(t *testing.T) {
+	got, err := ResolveFundingArbWatchHours(0)
+	if err != nil || got != 0 {
+		t.Fatalf("zero %v %v", got, err)
+	}
+	got, err = ResolveFundingArbWatchHours(24)
+	if err != nil || got != 24 {
+		t.Fatalf("24 %v %v", got, err)
+	}
+	if _, err := ResolveFundingArbWatchHours(-1); err == nil {
+		t.Fatal("neg")
+	}
+	if _, err := ResolveFundingArbWatchHours(MaxFundingArbWatchHours + 1); err == nil {
+		t.Fatal("max")
+	}
+	if FundingArbWatchExpiresAt(time.Now(), 0) != nil {
+		t.Fatal("no expiry")
+	}
+	now := time.Date(2026, 8, 27, 12, 0, 0, 0, time.UTC)
+	exp := FundingArbWatchExpiresAt(now, 8)
+	if exp == nil || !exp.Equal(now.Add(8*time.Hour)) {
+		t.Fatalf("exp %v", exp)
+	}
+	w := FundingArbWatch{ExpiresAt: exp}
+	if w.Expired(now) || !w.Expired(now.Add(8*time.Hour)) {
+		t.Fatal("expired")
+	}
+}
+
 func TestResolveFundingArbMinProfit(t *testing.T) {
 	got, err := ResolveFundingArbMinProfit(5)
 	if err != nil || got != 5 {

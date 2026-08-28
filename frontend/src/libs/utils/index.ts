@@ -126,6 +126,7 @@ export {
   SIGNALS_CONFLUENCE_WINDOW_MS,
   gradeFromScore,
   ruleTypeShort,
+  ruleFactorsShort,
   describeRule,
   buildSwingSetups,
   countHitsSince,

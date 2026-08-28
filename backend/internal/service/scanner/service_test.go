@@ -171,4 +171,17 @@ func TestScanner_CreateValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	combo, err := svc.Create(ctx, CreateInput{
+		ClientID:     "u",
+		Conditions:   []string{"rsi", "volume_increase"},
+		MatchMode:    "any",
+		RSICondition: "below", RSIThreshold: 30,
+		VolumeLookback: 20, VolumeMinRatio: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if combo.Type != domain.ScannerRuleCombo || combo.MatchMode != domain.ScannerMatchAny || len(combo.Conditions) != 2 {
+		t.Fatalf("%+v", combo)
+	}
 }

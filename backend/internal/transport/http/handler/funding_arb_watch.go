@@ -35,6 +35,7 @@ type fundingArbWatchDTO struct {
 	FeeBybitPct   float64 `json:"feeBybitPct"`
 	Status        string  `json:"status"`
 	Armed         bool    `json:"armed"`
+	ExpiresAt     *string `json:"expiresAt,omitempty"`
 	CreatedAt     string  `json:"createdAt"`
 	UpdatedAt     string  `json:"updatedAt"`
 }
@@ -59,7 +60,7 @@ func faWatchDTO(w *domain.FundingArbWatch) fundingArbWatchDTO {
 	if w.IsScan() {
 		scope = "scan"
 	}
-	return fundingArbWatchDTO{
+	d := fundingArbWatchDTO{
 		ID: w.ID, ClientID: w.ClientID, Scope: scope, Symbol: w.Symbol,
 		Quote: w.Quote, SymbolLimit: w.SymbolLimit,
 		Notional: w.Notional, HoldHours: w.HoldHours, MinProfit: w.MinProfit,
@@ -68,6 +69,11 @@ func faWatchDTO(w *domain.FundingArbWatch) fundingArbWatchDTO {
 		CreatedAt: w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: w.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if w.ExpiresAt != nil {
+		t := w.ExpiresAt.UTC().Format(time.RFC3339Nano)
+		d.ExpiresAt = &t
+	}
+	return d
 }
 
 func faSignalDTO(s *domain.FundingArbSignal) fundingArbSignalDTO {
@@ -93,6 +99,7 @@ type createFundingArbWatchBody struct {
 	MinProfit     float64  `json:"minProfit"`
 	Quote         string   `json:"quote"`
 	SymbolLimit   int      `json:"limit"`
+	DurationHours float64  `json:"durationHours"`
 	FeeBinancePct *float64 `json:"feeBinancePct"`
 	FeeBybitPct   *float64 `json:"feeBybitPct"`
 }
@@ -111,7 +118,7 @@ func (h *FundingArbWatchHandler) CreateWatch(w http.ResponseWriter, r *http.Requ
 	got, err := h.svc.CreateWatch(r.Context(), fundingarb.CreateInput{
 		ClientID: clientID,
 		Symbol:   body.Symbol, Notional: body.Notional, HoldHours: body.HoldHours, MinProfit: body.MinProfit,
-		Quote: body.Quote, SymbolLimit: body.SymbolLimit,
+		Quote: body.Quote, SymbolLimit: body.SymbolLimit, DurationHours: body.DurationHours,
 		FeeBinancePct: body.FeeBinancePct, FeeBybitPct: body.FeeBybitPct,
 	})
 	if err != nil {
@@ -152,6 +159,7 @@ type updateFundingArbWatchBody struct {
 	MinProfit     *float64 `json:"minProfit"`
 	Quote         *string  `json:"quote"`
 	SymbolLimit   *int     `json:"limit"`
+	DurationHours *float64 `json:"durationHours"`
 	FeeBinancePct *float64 `json:"feeBinancePct"`
 	FeeBybitPct   *float64 `json:"feeBybitPct"`
 }
@@ -170,7 +178,7 @@ func (h *FundingArbWatchHandler) UpdateWatch(w http.ResponseWriter, r *http.Requ
 	got, err := h.svc.UpdateWatch(r.Context(), fundingarb.UpdateInput{
 		ClientID: clientID, ID: r.PathValue("id"),
 		Notional: body.Notional, HoldHours: body.HoldHours, MinProfit: body.MinProfit,
-		Quote: body.Quote, SymbolLimit: body.SymbolLimit,
+		Quote: body.Quote, SymbolLimit: body.SymbolLimit, DurationHours: body.DurationHours,
 		FeeBinancePct: body.FeeBinancePct, FeeBybitPct: body.FeeBybitPct,
 	})
 	if err != nil {

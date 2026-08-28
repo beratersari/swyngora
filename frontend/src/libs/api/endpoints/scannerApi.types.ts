@@ -1,6 +1,10 @@
 /** Scanner DTOs — wire shapes from Go handler (OpenAPI ops lack named schemas). */
 
-export type ScannerRuleType = 'rsi' | 'ma_crossover' | 'volume_increase';
+export type ScannerCondition = 'rsi' | 'ma_crossover' | 'volume_increase';
+
+export type ScannerRuleType = ScannerCondition | 'combo';
+
+export type ScannerMatchMode = 'all' | 'any';
 
 export type ScannerRsiCondition = 'above' | 'below';
 
@@ -10,6 +14,8 @@ export type ScannerRule = {
   id: string;
   clientId?: string;
   type: ScannerRuleType;
+  conditions?: ScannerCondition[];
+  matchMode?: ScannerMatchMode;
   interval: string;
   enabled: boolean;
   rsiPeriod?: number;
@@ -78,7 +84,9 @@ export type ScannerBacktestSignal = {
 };
 
 export type CreateScannerRuleArg = {
-  type: ScannerRuleType;
+  type?: ScannerRuleType;
+  conditions?: ScannerCondition[];
+  matchMode?: ScannerMatchMode;
   interval?: string;
   rsiPeriod?: number;
   rsiCondition?: ScannerRsiCondition;

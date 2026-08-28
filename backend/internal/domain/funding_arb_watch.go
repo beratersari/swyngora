@@ -11,6 +11,7 @@ import (
 const (
 	MaxFundingArbWatchesPerClient = 20
 	MaxFundingArbMinProfit        = 1_000_000.0
+	MaxFundingArbWatchHours       = 24.0 * 90
 	// FundingArbWatchScanSymbol means follow every coin in the funding-arb scan.
 	FundingArbWatchScanSymbol = "*"
 )
@@ -19,8 +20,9 @@ const (
 type FundingArbWatchStatus string
 
 const (
-	FundingArbWatchActive FundingArbWatchStatus = "active"
-	FundingArbWatchPaused FundingArbWatchStatus = "paused"
+	FundingArbWatchActive  FundingArbWatchStatus = "active"
+	FundingArbWatchPaused  FundingArbWatchStatus = "paused"
+	FundingArbWatchExpired FundingArbWatchStatus = "expired"
 )
 
 // FundingArbSignalStatus is open while net stays at/above the watch minimum.
@@ -46,8 +48,14 @@ type FundingArbWatch struct {
 	FeeBybitPct   float64
 	Status        FundingArbWatchStatus
 	Armed         bool // re-arm after net falls below MinProfit (single-coin)
+	ExpiresAt     *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+// Expired reports whether the follow's optional run window has ended.
+func (w FundingArbWatch) Expired(now time.Time) bool {
+	return w.ExpiresAt != nil && !w.ExpiresAt.After(now.UTC())
 }
 
 // IsScan reports whether this watch follows the funding-arb scan.
@@ -91,6 +99,30 @@ func ResolveFundingArbMinProfit(v float64) (float64, error) {
 		return 0, fmt.Errorf("%w: minProfit must be <= %s", ErrInvalidArgument, formatQty(MaxFundingArbMinProfit))
 	}
 	return v, nil
+}
+
+// ResolveFundingArbWatchHours is how long the follow should run.
+// 0 means no end (keep working). Otherwise 0 < hours <= 90 days.
+func ResolveFundingArbWatchHours(v float64) (float64, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		return 0, fmt.Errorf("%w: durationHours must be a finite number >= 0", ErrInvalidArgument)
+	}
+	if v == 0 {
+		return 0, nil
+	}
+	if v > MaxFundingArbWatchHours {
+		return 0, fmt.Errorf("%w: durationHours must be <= %g", ErrInvalidArgument, MaxFundingArbWatchHours)
+	}
+	return v, nil
+}
+
+// FundingArbWatchExpiresAt is now+hours, or nil when hours is 0.
+func FundingArbWatchExpiresAt(now time.Time, hours float64) *time.Time {
+	if hours <= 0 {
+		return nil
+	}
+	t := now.UTC().Add(time.Duration(hours * float64(time.Hour)))
+	return &t
 }
 
 // FundingArbWatchPort persists watches and open/closed signals.
