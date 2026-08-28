@@ -24,7 +24,10 @@ func NewFundingArbWatchHandler(svc *fundingarb.Service) *FundingArbWatchHandler 
 type fundingArbWatchDTO struct {
 	ID            string  `json:"id"`
 	ClientID      string  `json:"clientId"`
+	Scope         string  `json:"scope"`
 	Symbol        string  `json:"symbol"`
+	Quote         string  `json:"quote,omitempty"`
+	SymbolLimit   int     `json:"symbolLimit,omitempty"`
 	Notional      float64 `json:"notional"`
 	HoldHours     float64 `json:"holdHours"`
 	MinProfit     float64 `json:"minProfit"`
@@ -52,8 +55,13 @@ type fundingArbSignalDTO struct {
 }
 
 func faWatchDTO(w *domain.FundingArbWatch) fundingArbWatchDTO {
+	scope := "symbol"
+	if w.IsScan() {
+		scope = "scan"
+	}
 	return fundingArbWatchDTO{
-		ID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
+		ID: w.ID, ClientID: w.ClientID, Scope: scope, Symbol: w.Symbol,
+		Quote: w.Quote, SymbolLimit: w.SymbolLimit,
 		Notional: w.Notional, HoldHours: w.HoldHours, MinProfit: w.MinProfit,
 		FeeBinancePct: w.FeeBinancePct, FeeBybitPct: w.FeeBybitPct,
 		Status: string(w.Status), Armed: w.Armed,
@@ -83,6 +91,8 @@ type createFundingArbWatchBody struct {
 	Notional      float64  `json:"notional"`
 	HoldHours     float64  `json:"holdHours"`
 	MinProfit     float64  `json:"minProfit"`
+	Quote         string   `json:"quote"`
+	SymbolLimit   int      `json:"limit"`
 	FeeBinancePct *float64 `json:"feeBinancePct"`
 	FeeBybitPct   *float64 `json:"feeBybitPct"`
 }
@@ -101,6 +111,7 @@ func (h *FundingArbWatchHandler) CreateWatch(w http.ResponseWriter, r *http.Requ
 	got, err := h.svc.CreateWatch(r.Context(), fundingarb.CreateInput{
 		ClientID: clientID,
 		Symbol:   body.Symbol, Notional: body.Notional, HoldHours: body.HoldHours, MinProfit: body.MinProfit,
+		Quote: body.Quote, SymbolLimit: body.SymbolLimit,
 		FeeBinancePct: body.FeeBinancePct, FeeBybitPct: body.FeeBybitPct,
 	})
 	if err != nil {

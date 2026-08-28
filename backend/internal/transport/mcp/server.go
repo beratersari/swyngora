@@ -42,7 +42,7 @@ type DataPort interface {
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error)
 	GetFundingArbHistory(ctx context.Context, symbol, from, to string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
-	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -580,20 +580,18 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_funding_arb_watch",
-		mcp.WithDescription("Follow a coin's Binance vs Bybit funding opportunity. Notifies via the client's alert webhook when after-fee net over holdHours is at least minProfit. Same long/short while still above the floor does not re-notify; a direction flip closes the old signal and opens a new one. Re-arms after net falls below the floor. Not financial advice."),
+		mcp.WithDescription("Follow funding-arb opportunities. Omit symbol (or use scan/*) to continuously scan liquid coins and notify when a new coin's after-fee net is at least minProfit. Same coin + same long/short while still above the floor does not re-notify; it must drop below and come back to notify again. Optional symbol follows one pair only. Not financial advice."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
-		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or omit / scan / * for the full scan follow")),
 		mcp.WithNumber("minProfit", mcp.Required(), mcp.Description("Minimum after-fee profit in quote currency (e.g. 10)")),
 		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
 		mcp.WithNumber("holdHours", mcp.Description("Hold window for the horizon payout (default 24)")),
+		mcp.WithString("quote", mcp.Description("Scan quote asset (default USDT)")),
+		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan (default 15, max 40)")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent (default paper 0.10)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -602,7 +600,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
-		raw, err := api.CreateFundingArbWatch(ctx, clientID, symbol, req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), minP, fb, fy)
+		raw, err := api.CreateFundingArbWatch(ctx, clientID, req.GetString("symbol", ""), req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), minP, req.GetString("quote", ""), int(req.GetFloat("limit", 0)), fb, fy)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -331,16 +331,25 @@ func (c *APIClient) GetFundingArbHistory(ctx context.Context, symbol, from, to s
 	return c.get(ctx, "/api/v1/market/funding-arb/history", q)
 }
 
-// CreateFundingArbWatch creates a min-profit follow on one pair.
-func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+// CreateFundingArbWatch creates a min-profit follow (omit symbol for the scan).
+func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	body := map[string]any{
-		"clientId": clientID, "symbol": symbol, "minProfit": minProfit,
+		"clientId": clientID, "minProfit": minProfit,
+	}
+	if symbol != "" {
+		body["symbol"] = symbol
 	}
 	if notional > 0 {
 		body["notional"] = notional
 	}
 	if holdHours > 0 {
 		body["holdHours"] = holdHours
+	}
+	if quote != "" {
+		body["quote"] = quote
+	}
+	if limit > 0 {
+		body["limit"] = limit
 	}
 	if feeBinancePct != nil {
 		body["feeBinancePct"] = *feeBinancePct

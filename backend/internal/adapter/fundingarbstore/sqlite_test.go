@@ -38,7 +38,7 @@ func TestWatchAndSignalLifecycle(t *testing.T) {
 	if err != nil || n != 1 {
 		t.Fatalf("%d %v", n, err)
 	}
-	if _, err := s.GetOpenSignal(ctx, "w1"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := s.GetOpenSignal(ctx, "w1", "BTCUSDT"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("open %v", err)
 	}
 	sig, err := s.CreateSignal(ctx, domain.FundingArbSignal{
@@ -53,14 +53,27 @@ func TestWatchAndSignalLifecycle(t *testing.T) {
 	if err := s.TouchSignal(ctx, "s1", 13, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	open, err := s.GetOpenSignal(ctx, "w1")
+	open, err := s.GetOpenSignal(ctx, "w1", "BTCUSDT")
 	if err != nil || open.NetAfterFees != 13 {
 		t.Fatalf("%+v %v", open, err)
+	}
+	sig2, err := s.CreateSignal(ctx, domain.FundingArbSignal{
+		ID: "s2", WatchID: "w1", ClientID: "c1", Symbol: "ETHUSDT",
+		LongExchange: domain.ExchangeBybit, ShortExchange: domain.ExchangeBinance,
+		NetAfterFees: 8, MinProfit: 5, Status: domain.FundingArbSignalOpen,
+		OpenedAt: now, LastSeenAt: now,
+	})
+	if err != nil || sig2.Symbol != "ETHUSDT" {
+		t.Fatalf("second open %+v %v", sig2, err)
+	}
+	opens, err := s.ListOpenSignals(ctx, "w1")
+	if err != nil || len(opens) != 2 {
+		t.Fatalf("two open coins %+v %v", opens, err)
 	}
 	if err := s.CloseSignal(ctx, "s1", now.Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.GetOpenSignal(ctx, "w1"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := s.GetOpenSignal(ctx, "w1", "BTCUSDT"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatal(err)
 	}
 	if err := s.SetWatchArmed(ctx, "w1", false, now); err != nil {
@@ -70,6 +83,7 @@ func TestWatchAndSignalLifecycle(t *testing.T) {
 	if err != nil || got.Armed {
 		t.Fatalf("%+v %v", got, err)
 	}
+
 	if err := s.PurgeClient(ctx, "c1"); err != nil {
 		t.Fatal(err)
 	}

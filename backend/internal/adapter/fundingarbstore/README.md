@@ -2,6 +2,9 @@
 
 SQLite persistence for funding-arb watches and open/closed signals.
 
+A watch with `symbol=*` follows the funding-arb scan (one open signal per
+coin). Schema v2 unique-indexes open signals on `(watch_id, symbol)`.
+
 ## Layout
 
 - `sqlite.go` — watches + signals (FK cascade on watch delete)

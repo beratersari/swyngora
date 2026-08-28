@@ -1105,12 +1105,15 @@ paths:
     post:
       summary: Follow a funding-arb opportunity
       description: |
-        Evaluates Binance vs Bybit after-fee funding on a background interval.
-        When horizon net is at least `minProfit` and `trade` is present, opens
-        a signal and enqueues the client's alert webhook (`type=funding_arb.triggered`).
-        Same long/short while still above the floor does not re-notify. A
-        direction flip closes the old signal and opens a new one. Re-arms after
-        net falls below the floor. Max 20 watches per client. Informational only.
+        Omit `symbol` (or set `scan` / `*`) to follow the funding-arb scan:
+        every liquid coin is re-quoted on a background interval. When a coin's
+        after-fee net first reaches `minProfit`, opens a signal and enqueues
+        the client's alert webhook (`type=funding_arb.triggered`). Same coin
+        plus same long/short while still above the floor does not re-notify.
+        After net falls below the floor the signal closes; a later re-cross
+        notifies again. A direction flip closes the old signal and opens a
+        new one. Optional `symbol` follows one pair only. One scan follow
+        per client. Max 20 watches per client. Informational only.
       operationId: createFundingArbWatch
       tags: [FundingArb]
       requestBody:
@@ -1119,10 +1122,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol, minProfit]
+              required: [minProfit]
               properties:
                 clientId: { type: string }
-                symbol: { type: string, example: BTCUSDT }
+                symbol:
+                  type: string
+                  description: Pair to follow, or omit / scan / * for the full scan
+                  example: BTCUSDT
+                quote: { type: string, example: USDT }
+                limit: { type: integer, example: 15 }
                 notional: { type: number, example: 10000 }
                 holdHours: { type: number, example: 24 }
                 minProfit:
@@ -6863,7 +6871,10 @@ components:
       properties:
         id: { type: string }
         clientId: { type: string }
+        scope: { type: string, enum: [scan, symbol] }
         symbol: { type: string }
+        quote: { type: string }
+        symbolLimit: { type: integer }
         notional: { type: number }
         holdHours: { type: number }
         minProfit:

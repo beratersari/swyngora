@@ -763,12 +763,13 @@ func (b *Backend) GetFundingArbHistory(ctx context.Context, symbol, fromRaw, toR
 	return mustJSON(got)
 }
 
-func (b *Backend) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+func (b *Backend) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
 	if b.FundingArb == nil {
 		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
 	}
 	got, err := b.FundingArb.CreateWatch(ctx, fundingarb.CreateInput{
 		ClientID: clientID, Symbol: symbol, Notional: notional, HoldHours: holdHours, MinProfit: minProfit,
+		Quote: quote, SymbolLimit: limit,
 		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
 	})
 	if err != nil {
@@ -832,8 +833,13 @@ func fundingArbWatchMap(w *domain.FundingArbWatch) map[string]any {
 	if w == nil {
 		return map[string]any{}
 	}
+	scope := "symbol"
+	if w.IsScan() {
+		scope = "scan"
+	}
 	return map[string]any{
-		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
+		"id": w.ID, "clientId": w.ClientID, "scope": scope, "symbol": w.Symbol,
+		"quote": w.Quote, "symbolLimit": w.SymbolLimit,
 		"notional": w.Notional, "holdHours": w.HoldHours, "minProfit": w.MinProfit,
 		"feeBinancePct": w.FeeBinancePct, "feeBybitPct": w.FeeBybitPct,
 		"status": string(w.Status), "armed": w.Armed,

@@ -812,10 +812,15 @@ class FundingArbHistoryInput(BaseModel):
 
 class FundingArbWatchCreateInput(BaseModel):
     client_id: str
-    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    symbol: str = Field(
+        default="",
+        description="Pair e.g. BTCUSDT, or omit / scan / * to follow the full scan",
+    )
     min_profit: float = Field(gt=0, description="Minimum after-fee profit in quote currency")
     notional: float = Field(default=0, description="Quote size on each leg (default 10000)")
     hold_hours: float = Field(default=0, description="Hold window hours (default 24)")
+    quote: str = Field(default="", description="Scan quote asset (default USDT)")
+    limit: int = Field(default=0, description="How many top-volume coins to scan")
     fee_binance_pct: float | None = Field(default=None)
     fee_bybit_pct: float | None = Field(default=None)
 
@@ -1979,22 +1984,29 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def create_funding_arb_watch(
         client_id: str,
-        symbol: str,
         min_profit: float,
+        symbol: str = "",
         notional: float = 0,
         hold_hours: float = 0,
+        quote: str = "",
+        limit: int = 0,
         fee_binance_pct: float | None = None,
         fee_bybit_pct: float | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
-            "symbol": symbol,
             "minProfit": min_profit,
         }
+        if symbol:
+            body["symbol"] = symbol
         if notional:
             body["notional"] = notional
         if hold_hours:
             body["holdHours"] = hold_hours
+        if quote:
+            body["quote"] = quote
+        if limit:
+            body["limit"] = limit
         if fee_binance_pct is not None:
             body["feeBinancePct"] = fee_binance_pct
         if fee_bybit_pct is not None:
@@ -3443,12 +3455,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             create_funding_arb_watch,
             name="create_funding_arb_watch",
             description=(
-                "Follow a coin's Binance vs Bybit funding opportunity. Notifies "
-                "via the client's alert webhook when after-fee net over "
-                "hold_hours is at least min_profit. Same long/short while "
-                "still above the floor does not re-notify; a direction flip "
-                "closes the old signal and opens a new one. Re-arms after net "
-                "falls below the floor. Not financial advice."
+                "Follow funding-arb opportunities. Omit symbol (or use scan/*) "
+                "to scan liquid coins and notify when a new coin's after-fee "
+                "net is at least min_profit. Same coin + same long/short while "
+                "still above the floor does not re-notify; it must drop below "
+                "and come back to notify again. Optional symbol follows one "
+                "pair only. Not financial advice."
             ),
             args_schema=FundingArbWatchCreateInput,
         ),

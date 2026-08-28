@@ -82,6 +82,25 @@ func TestFundingArbWatchHTTP_CreateListGetDelete(t *testing.T) {
 	}
 }
 
+func TestFundingArbWatchHTTP_CreateScanFollow(t *testing.T) {
+	h := newFundingArbWatchHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "fa-client", "minProfit": 10, "notional": 10000,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/funding-arb/watches", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "fa-client")
+	rr := httptest.NewRecorder()
+	h.CreateWatch(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var created fundingArbWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil || created.Scope != "scan" || created.Symbol != "*" {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+}
+
 func TestFundingArbWatchHTTP_BadMinProfit(t *testing.T) {
 	h := newFundingArbWatchHandler(t)
 	body, _ := json.Marshal(map[string]any{

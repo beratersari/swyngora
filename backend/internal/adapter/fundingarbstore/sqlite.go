@@ -111,7 +111,34 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fa_sig_open ON funding_arb_signals(watch_i
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
-	return sqliteutil.SetUserVersion(s.db, 1)
+	v, err := sqliteutil.UserVersion(s.db)
+	if err != nil {
+		return err
+	}
+	if v < 1 {
+		if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+			return err
+		}
+		v = 1
+	}
+	if v < 2 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE funding_arb_watches ADD COLUMN quote TEXT NOT NULL DEFAULT 'USDT'`); err != nil {
+			return err
+		}
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE funding_arb_watches ADD COLUMN symbol_limit INTEGER NOT NULL DEFAULT 15`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`DROP INDEX IF EXISTS idx_fa_sig_open`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_fa_sig_open ON funding_arb_signals(watch_id, symbol) WHERE status = 'open'`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseTime(s string) time.Time {
@@ -125,7 +152,7 @@ func parseTime(s string) time.Time {
 	return t.UTC()
 }
 
-const watchCols = `id, client_id, symbol, notional, hold_hours, min_profit, fee_binance_pct, fee_bybit_pct, status, armed, created_at, updated_at`
+const watchCols = `id, client_id, symbol, notional, hold_hours, min_profit, fee_binance_pct, fee_bybit_pct, quote, symbol_limit, status, armed, created_at, updated_at`
 
 type scannable interface {
 	Scan(dest ...any) error
@@ -136,7 +163,7 @@ func scanWatch(row scannable) (*domain.FundingArbWatch, error) {
 	var st, cAt, uAt string
 	var armed int
 	if err := row.Scan(&w.ID, &w.ClientID, &w.Symbol, &w.Notional, &w.HoldHours, &w.MinProfit,
-		&w.FeeBinancePct, &w.FeeBybitPct, &st, &armed, &cAt, &uAt); err != nil {
+		&w.FeeBinancePct, &w.FeeBybitPct, &w.Quote, &w.SymbolLimit, &st, &armed, &cAt, &uAt); err != nil {
 		return nil, err
 	}
 	w.Status = domain.FundingArbWatchStatus(st)
@@ -154,11 +181,17 @@ func (s *SQLite) CreateWatch(ctx context.Context, w domain.FundingArbWatch) (*do
 	if w.Armed {
 		armed = 1
 	}
+	if w.Quote == "" {
+		w.Quote = "USDT"
+	}
+	if w.SymbolLimit <= 0 {
+		w.SymbolLimit = domain.FundingArbScanDefault
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO funding_arb_watches (`+watchCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, w.ID, w.ClientID, w.Symbol, w.Notional, w.HoldHours, w.MinProfit,
-		w.FeeBinancePct, w.FeeBybitPct, string(w.Status), armed,
+		w.FeeBinancePct, w.FeeBybitPct, w.Quote, w.SymbolLimit, string(w.Status), armed,
 		w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err
@@ -264,14 +297,32 @@ func scanSignal(row scannable) (*domain.FundingArbSignal, error) {
 	return &s, nil
 }
 
-// GetOpenSignal returns the open signal for a watch or ErrNotFound.
-func (s *SQLite) GetOpenSignal(ctx context.Context, watchID string) (*domain.FundingArbSignal, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT `+sigCols+` FROM funding_arb_signals WHERE watch_id = ? AND status = 'open'`, watchID)
+// GetOpenSignal returns the open signal for a watch+symbol or ErrNotFound.
+func (s *SQLite) GetOpenSignal(ctx context.Context, watchID, symbol string) (*domain.FundingArbSignal, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT `+sigCols+` FROM funding_arb_signals WHERE watch_id = ? AND symbol = ? AND status = 'open'`, watchID, symbol)
 	sig, err := scanSignal(row)
 	if err == sql.ErrNoRows {
 		return nil, domain.ErrNotFound
 	}
 	return sig, err
+}
+
+// ListOpenSignals returns every open signal for a watch.
+func (s *SQLite) ListOpenSignals(ctx context.Context, watchID string) ([]domain.FundingArbSignal, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+sigCols+` FROM funding_arb_signals WHERE watch_id = ? AND status = 'open'`, watchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []domain.FundingArbSignal{}
+	for rows.Next() {
+		sig, err := scanSignal(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *sig)
+	}
+	return out, rows.Err()
 }
 
 // CreateSignal inserts an open signal.

@@ -293,6 +293,21 @@ func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 	}
 }
 
+func TestResolveFundingArbWatchSymbol(t *testing.T) {
+	got, err := ResolveFundingArbWatchSymbol("")
+	if err != nil || got != FundingArbWatchScanSymbol {
+		t.Fatalf("empty %q %v", got, err)
+	}
+	got, err = ResolveFundingArbWatchSymbol("scan")
+	if err != nil || got != FundingArbWatchScanSymbol {
+		t.Fatalf("scan %q %v", got, err)
+	}
+	got, err = ResolveFundingArbWatchSymbol("btcusdt")
+	if err != nil || got != "BTCUSDT" {
+		t.Fatalf("pair %q %v", got, err)
+	}
+}
+
 func TestResolveFundingArbMinProfit(t *testing.T) {
 	got, err := ResolveFundingArbMinProfit(5)
 	if err != nil || got != 5 {

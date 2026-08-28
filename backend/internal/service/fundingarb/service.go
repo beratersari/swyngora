@@ -14,9 +14,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 )
 
-// QuoteFetcher evaluates a live funding-arb quote (usually *market.Service).
+// QuoteFetcher evaluates live funding-arb quotes and scans (usually *market.Service).
 type QuoteFetcher interface {
 	GetFundingArb(ctx context.Context, in market.FundingArbParams) (*domain.FundingArbReport, error)
+	ScanFundingArb(ctx context.Context, in market.FundingArbScanParams) (*domain.FundingArbScan, error)
 }
 
 // AccountChecker reports whether a tenant is closed.
@@ -36,6 +37,8 @@ type CreateInput struct {
 	Notional      float64
 	HoldHours     float64
 	MinProfit     float64
+	Quote         string
+	SymbolLimit   int
 	FeeBinancePct *float64
 	FeeBybitPct   *float64
 }
@@ -91,7 +94,7 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Fund
 	if err != nil {
 		return nil, err
 	}
-	symbol, err := domain.ValidateOpenInterestSymbol(in.Symbol)
+	symbol, err := domain.ResolveFundingArbWatchSymbol(in.Symbol)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +118,11 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Fund
 	if err != nil {
 		return nil, err
 	}
+	quote := strings.ToUpper(strings.TrimSpace(in.Quote))
+	if quote == "" {
+		quote = "USDT"
+	}
+	limit := domain.ClampFundingArbScanLimit(in.SymbolLimit)
 	n, err := s.store.CountWatches(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -122,9 +130,21 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Fund
 	if n >= domain.MaxFundingArbWatchesPerClient {
 		return nil, fmt.Errorf("%w: max %d funding-arb watches per client", domain.ErrInvalidArgument, domain.MaxFundingArbWatchesPerClient)
 	}
+	if symbol == domain.FundingArbWatchScanSymbol {
+		existing, err := s.store.ListWatches(ctx, clientID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range existing {
+			if existing[i].IsScan() {
+				return nil, fmt.Errorf("%w: a scan follow already exists (delete it first)", domain.ErrInvalidArgument)
+			}
+		}
+	}
 	now := time.Now().UTC()
 	return s.store.CreateWatch(ctx, domain.FundingArbWatch{
 		ID: uuid.NewString(), ClientID: clientID, Symbol: symbol,
+		Quote: quote, SymbolLimit: limit,
 		Notional: notional, HoldHours: hold, MinProfit: minP,
 		FeeBinancePct: fb * 100, FeeBybitPct: fy * 100,
 		Status: domain.FundingArbWatchActive, Armed: true,
@@ -223,76 +243,126 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (open
 			continue
 		}
 		touched++
-		fb, fy := w.FeeBinancePct, w.FeeBybitPct
-		rep, qerr := s.quotes.GetFundingArb(ctx, market.FundingArbParams{
-			Symbol: w.Symbol, Notional: w.Notional, HoldHours: w.HoldHours,
-			FeeBinancePct: &fb, FeeBybitPct: &fy,
-		})
-		if qerr != nil || rep == nil {
-			continue
+		o, c, err := s.processWatch(ctx, w, now)
+		if err != nil {
+			return opened, closed, touched, err
 		}
-		net := rep.HorizonNet
-		above := net >= w.MinProfit && rep.Trade != nil
-		open, oerr := s.store.GetOpenSignal(ctx, w.ID)
-		if oerr != nil && !errors.Is(oerr, domain.ErrNotFound) {
-			return opened, closed, touched, oerr
-		}
-		if above {
-			long := domain.Exchange(rep.Trade.LongExchange)
-			short := domain.Exchange(rep.Trade.ShortExchange)
-			if open != nil && (open.LongExchange != long || open.ShortExchange != short) {
-				if err := s.store.CloseSignal(ctx, open.ID, now); err != nil {
-					return opened, closed, touched, err
-				}
-				closed++
-				open = nil
-				w.Armed = true
-			}
-			if open == nil {
-				if !w.Armed {
-					continue
-				}
-				sig := domain.FundingArbSignal{
-					ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
-					LongExchange: long, ShortExchange: short,
-					NetAfterFees: net, MinProfit: w.MinProfit,
-					Status: domain.FundingArbSignalOpen, OpenedAt: now, LastSeenAt: now,
-				}
-				if _, err := s.store.CreateSignal(ctx, sig); err != nil {
-					return opened, closed, touched, err
-				}
-				_ = s.store.SetWatchArmed(ctx, w.ID, false, now)
-				s.fire(ctx, w, rep, net)
-				opened++
-			} else {
-				_ = s.store.TouchSignal(ctx, open.ID, net, now)
-			}
-			continue
-		}
-		if open != nil {
-			_ = s.store.CloseSignal(ctx, open.ID, now)
-			closed++
-		}
-		if !w.Armed {
-			_ = s.store.SetWatchArmed(ctx, w.ID, true, now)
-		}
+		opened += o
+		closed += c
 	}
 	return opened, closed, touched, nil
 }
 
-func (s *Service) fire(ctx context.Context, w domain.FundingArbWatch, rep *domain.FundingArbReport, net float64) {
+func (s *Service) processWatch(ctx context.Context, w domain.FundingArbWatch, now time.Time) (opened, closed int, err error) {
+	fb, fy := w.FeeBinancePct, w.FeeBybitPct
+	if w.IsScan() {
+		scan, qerr := s.quotes.ScanFundingArb(ctx, market.FundingArbScanParams{
+			Quote: w.Quote, Notional: w.Notional, HoldHours: w.HoldHours,
+			FeeBinancePct: &fb, FeeBybitPct: &fy, SymbolLimit: w.SymbolLimit,
+		})
+		if qerr != nil || scan == nil {
+			return 0, 0, nil
+		}
+		above := map[string]domain.FundingArbHit{}
+		for _, h := range scan.Hits {
+			if h.RankScore >= w.MinProfit && h.LongExchange != "" && h.ShortExchange != "" {
+				above[h.Symbol] = h
+			}
+		}
+		openList, lerr := s.store.ListOpenSignals(ctx, w.ID)
+		if lerr != nil {
+			return 0, 0, lerr
+		}
+		openBy := map[string]domain.FundingArbSignal{}
+		for _, sig := range openList {
+			openBy[sig.Symbol] = sig
+		}
+		for _, h := range above {
+			o, c, aerr := s.applyHit(ctx, w, h.Symbol, domain.Exchange(h.LongExchange), domain.Exchange(h.ShortExchange), h.RankScore, h.Summary, now)
+			if aerr != nil {
+				return opened, closed, aerr
+			}
+			opened += o
+			closed += c
+			delete(openBy, h.Symbol)
+		}
+		for _, leftover := range openBy {
+			if err := s.store.CloseSignal(ctx, leftover.ID, now); err != nil {
+				return opened, closed, err
+			}
+			closed++
+		}
+		return opened, closed, nil
+	}
+	rep, qerr := s.quotes.GetFundingArb(ctx, market.FundingArbParams{
+		Symbol: w.Symbol, Notional: w.Notional, HoldHours: w.HoldHours,
+		FeeBinancePct: &fb, FeeBybitPct: &fy,
+	})
+	if qerr != nil || rep == nil {
+		return 0, 0, nil
+	}
+	if rep.HorizonNet >= w.MinProfit && rep.Trade != nil {
+		return s.applyHit(ctx, w, w.Symbol, domain.Exchange(rep.Trade.LongExchange), domain.Exchange(rep.Trade.ShortExchange), rep.HorizonNet, rep.Summary, now)
+	}
+	open, oerr := s.store.GetOpenSignal(ctx, w.ID, w.Symbol)
+	if oerr != nil && !errors.Is(oerr, domain.ErrNotFound) {
+		return 0, 0, oerr
+	}
+	if open != nil {
+		if err := s.store.CloseSignal(ctx, open.ID, now); err != nil {
+			return 0, 0, err
+		}
+		closed = 1
+	}
+	if !w.Armed {
+		_ = s.store.SetWatchArmed(ctx, w.ID, true, now)
+	}
+	return 0, closed, nil
+}
+
+func (s *Service) applyHit(ctx context.Context, w domain.FundingArbWatch, symbol string, long, short domain.Exchange, net float64, summary string, now time.Time) (opened, closed int, err error) {
+	open, oerr := s.store.GetOpenSignal(ctx, w.ID, symbol)
+	if oerr != nil && !errors.Is(oerr, domain.ErrNotFound) {
+		return 0, 0, oerr
+	}
+	if open != nil && (open.LongExchange != long || open.ShortExchange != short) {
+		if err := s.store.CloseSignal(ctx, open.ID, now); err != nil {
+			return 0, 0, err
+		}
+		closed = 1
+		open = nil
+	}
+	if open == nil {
+		sig := domain.FundingArbSignal{
+			ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: symbol,
+			LongExchange: long, ShortExchange: short,
+			NetAfterFees: net, MinProfit: w.MinProfit,
+			Status: domain.FundingArbSignalOpen, OpenedAt: now, LastSeenAt: now,
+		}
+		if _, err := s.store.CreateSignal(ctx, sig); err != nil {
+			return opened, closed, err
+		}
+		_ = s.store.SetWatchArmed(ctx, w.ID, false, now)
+		s.fire(ctx, w, symbol, string(long), string(short), net, summary)
+		return opened + 1, closed, nil
+	}
+	_ = s.store.TouchSignal(ctx, open.ID, net, now)
+	return 0, closed, nil
+}
+
+func (s *Service) fire(ctx context.Context, w domain.FundingArbWatch, symbol, long, short string, net float64, summary string) {
 	if s.notify == nil {
 		return
 	}
 	payload, err := json.Marshal(map[string]any{
-		"type": "funding_arb.triggered", "watchId": w.ID, "symbol": w.Symbol,
-		"longExchange": rep.Trade.LongExchange, "shortExchange": rep.Trade.ShortExchange,
+		"type": "funding_arb.triggered", "watchId": w.ID, "symbol": symbol,
+		"longExchange": long, "shortExchange": short,
 		"notional": w.Notional, "holdHours": w.HoldHours,
 		"minProfit": w.MinProfit, "netAfterFees": net,
-		"summary": rep.Summary,
+		"summary": summary, "scan": w.IsScan(),
 	})
 	if err != nil {
 		return
 	}
-	_ = s.notify.NotifyClient(ctx, w.ClientID, w.ID, string(payload))
+	_ = s.notify.NotifyClient(ctx, w.ClientID, w.ID+":"+symbol, string(payload))
 }

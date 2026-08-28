@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 )
 
 const (
 	MaxFundingArbWatchesPerClient = 20
 	MaxFundingArbMinProfit        = 1_000_000.0
+	// FundingArbWatchScanSymbol means follow every coin in the funding-arb scan.
+	FundingArbWatchScanSymbol = "*"
 )
 
 // FundingArbWatchStatus is active (evaluated) or paused.
@@ -28,21 +31,39 @@ const (
 	FundingArbSignalClosed FundingArbSignalStatus = "closed"
 )
 
-// FundingArbWatch is a tenant follow on one pair: notify when after-fee
-// funding in the hold window is at least MinProfit.
+// FundingArbWatch is a tenant follow. Symbol FundingArbWatchScanSymbol
+// follows every coin in the funding-arb scan; any other symbol is one pair.
 type FundingArbWatch struct {
 	ID            string
 	ClientID      string
 	Symbol        string
+	Quote         string
+	SymbolLimit   int
 	Notional      float64
 	HoldHours     float64
 	MinProfit     float64 // quote currency after round-trip fees
 	FeeBinancePct float64
 	FeeBybitPct   float64
 	Status        FundingArbWatchStatus
-	Armed         bool // re-arm after net falls below MinProfit
+	Armed         bool // re-arm after net falls below MinProfit (single-coin)
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+// IsScan reports whether this watch follows the funding-arb scan.
+func (w FundingArbWatch) IsScan() bool {
+	return w.Symbol == FundingArbWatchScanSymbol || w.Symbol == ""
+}
+
+// ResolveFundingArbWatchSymbol treats empty / * / scan / all as a scan follow.
+func ResolveFundingArbWatchSymbol(raw string) (string, error) {
+	s := strings.ToUpper(strings.TrimSpace(raw))
+	switch s {
+	case "", "*", "SCAN", "ALL":
+		return FundingArbWatchScanSymbol, nil
+	default:
+		return ValidateOpenInterestSymbol(s)
+	}
 }
 
 // FundingArbSignal is one crossing above MinProfit for a watch.
@@ -82,7 +103,8 @@ type FundingArbWatchPort interface {
 	CountWatches(ctx context.Context, clientID string) (int, error)
 	SetWatchArmed(ctx context.Context, id string, armed bool, at time.Time) error
 
-	GetOpenSignal(ctx context.Context, watchID string) (*FundingArbSignal, error)
+	GetOpenSignal(ctx context.Context, watchID, symbol string) (*FundingArbSignal, error)
+	ListOpenSignals(ctx context.Context, watchID string) ([]FundingArbSignal, error)
 	CreateSignal(ctx context.Context, s FundingArbSignal) (*FundingArbSignal, error)
 	TouchSignal(ctx context.Context, id string, net float64, at time.Time) error
 	CloseSignal(ctx context.Context, id string, at time.Time) error

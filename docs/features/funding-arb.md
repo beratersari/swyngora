@@ -47,15 +47,14 @@ receives). A hold window with **no** clock in `(now, now+holdHours]` has
 - Lists a run only when later settled funding minus round-trip fees is positive
 - `from` / `to`: RFC3339, `YYYY-MM-DD` (UTC), or unix ms; max 30 days
 
-`POST /api/v1/funding-arb/watches` — follow one pair; notify when after-fee
-horizon net ≥ `minProfit` (quote currency). The checker re-quotes on
-`FUNDING_ARB_CHECK_INTERVAL` (default 30s). Crossing opens a signal and
-enqueues the client's alert webhook (`type=funding_arb.triggered`). When net
-stays above the floor in the **same** long/short pair, the open signal is
-updated and no second notify is sent. A **direction flip** while still above
-the floor closes the old signal and opens a new one (notifies once for the
-new sides). When net falls below the floor the signal closes and the watch
-re-arms. Max 20 watches per client.
+`POST /api/v1/funding-arb/watches` — omit `symbol` (or set `scan` / `*`) to
+follow the **funding-arb scan** (one scan follow per client). The checker
+re-scans on `FUNDING_ARB_CHECK_INTERVAL` (default 30s) and notifies when a
+**new coin** first has after-fee net ≥ `minProfit`. Same coin + same
+long/short while still above the floor is not notified again. After it
+drops below the floor the signal closes; a later re-cross notifies again.
+A **direction flip** closes the old signal and opens a new one. Optional
+`symbol` still follows one pair. Max 20 watches per client.
 
 This is **not** an executable arb and **not** financial advice.
 
@@ -66,7 +65,7 @@ This is **not** an executable arb and **not** financial advice.
 | Domain | `backend/internal/domain/funding_arb.go`, `funding_arb_history.go`, `funding_arb_watch.go` |
 | Quote | `backend/internal/service/market/funding_arb.go` |
 | Watches | `backend/internal/service/fundingarb/`, `backend/internal/adapter/fundingarbstore/` |
-| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history`; `POST/GET/DELETE /api/v1/funding-arb/watches`, `GET /api/v1/funding-arb/signals` |
+| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history`; `POST /api/v1/funding-arb/watches` (omit `symbol` = scan follow) |
 | MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`, `list_funding_arb_watches`, `get_funding_arb_watch`, `delete_funding_arb_watch`, `list_funding_arb_signals` |
 | Telegram | `/fundingarb`, `/fundingarb scan`, `/fundingarb hist <sym> <from> <to>` |
 

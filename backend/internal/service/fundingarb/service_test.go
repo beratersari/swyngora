@@ -13,12 +13,17 @@ import (
 )
 
 type fakeQuotes struct {
-	rep *domain.FundingArbReport
-	err error
+	rep  *domain.FundingArbReport
+	scan *domain.FundingArbScan
+	err  error
 }
 
 func (f *fakeQuotes) GetFundingArb(context.Context, market.FundingArbParams) (*domain.FundingArbReport, error) {
 	return f.rep, f.err
+}
+
+func (f *fakeQuotes) ScanFundingArb(context.Context, market.FundingArbScanParams) (*domain.FundingArbScan, error) {
+	return f.scan, f.err
 }
 
 type fakeNotify struct {
@@ -159,6 +164,56 @@ func TestProcessActiveWatches_DirectionFlipOpensNewSignal(t *testing.T) {
 	}
 	if n.n != 2 {
 		t.Fatalf("same direction must not notify again %d", n.n)
+	}
+}
+
+func TestProcessScanWatch_NewCoinAndReentry(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	q := &fakeQuotes{scan: &domain.FundingArbScan{Hits: []domain.FundingArbHit{
+		{Symbol: "BTCUSDT", LongExchange: "binance", ShortExchange: "bybit", RankScore: 12, Summary: "btc"},
+		{Symbol: "ETHUSDT", LongExchange: "bybit", ShortExchange: "binance", RankScore: 8, Summary: "eth"},
+	}}}
+	n := &fakeNotify{}
+	svc := New(st, q)
+	svc.SetNotifier(n)
+	w, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", MinProfit: 5, Notional: 10000, HoldHours: 24,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !w.IsScan() {
+		t.Fatalf("expected scan watch %+v", w)
+	}
+	opened, closed, _, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 2 || closed != 0 || n.n != 2 {
+		t.Fatalf("first scan open=%d close=%d n=%d err=%v", opened, closed, n.n, err)
+	}
+	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 0 || closed != 0 || n.n != 2 {
+		t.Fatalf("same hits must not re-notify open=%d close=%d n=%d err=%v", opened, closed, n.n, err)
+	}
+	q.scan = &domain.FundingArbScan{Hits: []domain.FundingArbHit{
+		{Symbol: "ETHUSDT", LongExchange: "bybit", ShortExchange: "binance", RankScore: 9, Summary: "eth"},
+	}}
+	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 0 || closed != 1 {
+		t.Fatalf("btc drop open=%d close=%d err=%v", opened, closed, err)
+	}
+	q.scan = &domain.FundingArbScan{Hits: []domain.FundingArbHit{
+		{Symbol: "BTCUSDT", LongExchange: "binance", ShortExchange: "bybit", RankScore: 15, Summary: "btc back"},
+		{Symbol: "ETHUSDT", LongExchange: "bybit", ShortExchange: "binance", RankScore: 9, Summary: "eth"},
+	}}
+	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 1 || closed != 0 || n.n != 3 {
+		t.Fatalf("btc re-entry open=%d close=%d n=%d err=%v", opened, closed, n.n, err)
+	}
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{ClientID: "client-a", MinProfit: 6}); err == nil {
+		t.Fatal("second scan follow")
 	}
 }
 
