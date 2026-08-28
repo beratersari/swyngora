@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Any
 
 import pytest
@@ -164,13 +165,18 @@ def test_stream_records_both_model_callback_errors() -> None:
     primary = _CountingModel(error=TimeoutError("bad key"), callbacks=[grok_cb])
     other = _CountingModel(error=TimeoutError("model not found"), callbacks=[local_cb])
     graph = create_agent(primary, [], system_prompt="t", middleware=_retry_then_fallback(other))
-    stream = graph.stream_events(
-        {"messages": [HumanMessage(content="q")]},
-        {"recursion_limit": 4},
-        version="v3",
-    )
-    with pytest.raises(TimeoutError, match="model not found"):
-        list(stream)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="The v3 streaming protocol on Pregel is experimental.",
+        )
+        stream = graph.stream_events(
+            {"messages": [HumanMessage(content="q")]},
+            {"recursion_limit": 4},
+            version="v3",
+        )
+        with pytest.raises(TimeoutError, match="model not found"):
+            list(stream)
     msg = format_llm_failures([grok_cb, local_cb])
     assert msg is not None
     assert "primary grok-4.3: TimeoutError: bad key" in msg
