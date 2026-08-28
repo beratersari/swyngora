@@ -34,6 +34,7 @@ Reserved tenant names (`default`, `anonymous`, `http-default`, `ai-assistant`, e
 - User API keys  
 - Paper books (positions, orders, recurring plans, margin)  
 - Price-diff watches  
+- Funding-arb watches and signals  
 - Account row removed  
 
 ## Where the code lives
@@ -70,4 +71,4 @@ go test ./internal/service/account/... -count=1
 - MCP tools with `clientId` are blocked while closed (same `RequireActive` error as REST).  
 - Telegram uses the same `RequireActive` check after resolving the mapped tenant id, including `/buy` `/sell` **Confirm** (pending preview is discarded if the account closed in the meantime). Public market commands (`/price`, `/rsi`, …) stay available.  
 - Paper books are frozen on close (plans paused, open orders canceled) and purged after grace.  
-- Background workers skip closed tenants: price-alert checker, webhook deliverer, scanner `RunOnce`, price-diff `ProcessActiveWatches`. Rows stay until purge so reopen works.
+- Background workers skip closed tenants: price-alert checker, webhook deliverer, scanner `RunOnce`, price-diff `ProcessActiveWatches`, funding-arb `ProcessActiveWatches`. Rows stay until purge so reopen works.

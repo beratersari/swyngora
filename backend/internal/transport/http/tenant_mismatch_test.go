@@ -36,7 +36,7 @@ func newTenantPaperRouter(t *testing.T) (http.Handler, *portfolio.Service, *acco
 	paper.SetAccountChecker(acct)
 	keys := apikey.New(acctStore)
 	watch := watchlist.New(watchliststore.NewMemory())
-	mcpSrv := mcp.NewInProcessServer(evidenceMarket(), watch, nil, paper, nil, nil, nil, nil, keys, acct, nil)
+	mcpSrv := mcp.NewInProcessServer(evidenceMarket(), watch, nil, paper, nil, nil, nil, nil, keys, acct, nil, nil)
 	h := NewRouterWithOptions(evidenceMarket(), watch, RouterOptions{
 		RateLimitRPS: 0, APIAuthToken: evidenceMaster,
 		Portfolio: paper, Accounts: acct, APIKeys: keys,

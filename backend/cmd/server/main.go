@@ -24,6 +24,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fundingarbstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/geckoterminal"
@@ -45,6 +46,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/delistjob"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/futureshist"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
@@ -367,6 +369,19 @@ func main() {
 	priceDiffSvc := pricediff.New(priceDiffStore, marketSvc)
 	logger.Info("price-diff store ready", "driver", "sqlite", "path", priceDiffStore.Path())
 
+	fundingArbStore, err := fundingarbstore.Open(cfg.FundingArbDBPath)
+	if err != nil {
+		logger.Error("funding-arb sqlite open failed", "path", cfg.FundingArbDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := fundingArbStore.Close(); err != nil {
+			logger.Error("funding-arb sqlite close", "err", err)
+		}
+	}()
+	fundingArbSvc := fundingarb.New(fundingArbStore, marketSvc)
+	logger.Info("funding-arb watch store ready", "driver", "sqlite", "path", fundingArbStore.Path())
+
 	exportStore, err := exportstore.Open(cfg.ExportDBPath)
 	if err != nil {
 		logger.Error("export sqlite open failed", "path", cfg.ExportDBPath, "err", err)
@@ -435,13 +450,16 @@ func main() {
 		Exports:   exportStore,
 		Imports:   importStore,
 		APIKeys:   accountStore,
-		Paper:     portfolioSvc,
-		PriceDiff: priceDiffSvc,
+		Paper:      portfolioSvc,
+		PriceDiff:  priceDiffSvc,
+		FundingArb: fundingArbSvc,
 	})
 	watchSvc.SetAccountChecker(accountSvc)
 	portfolioSvc.SetAccountChecker(accountSvc)
 	scannerSvc.SetAccountChecker(accountSvc)
 	priceDiffSvc.SetAccountChecker(accountSvc)
+	fundingArbSvc.SetAccountChecker(accountSvc)
+	fundingArbSvc.SetNotifier(alertSvc)
 	logger.Info("account store ready", "driver", "sqlite", "path", accountStore.Path(), "grace", domain.AccountCloseGrace.String())
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -525,6 +543,13 @@ func main() {
 	}
 	go priceDiffChecker.Start(ctx)
 
+	fundingArbChecker := &fundingarb.Checker{
+		Service:  fundingArbSvc,
+		Interval: cfg.FundingArbCheckInterval,
+		Logger:   logger,
+	}
+	go fundingArbChecker.Start(ctx)
+
 	backtestWorker := &scanner.BacktestWorker{
 		Scanner:  scannerSvc,
 		Interval: 2 * time.Second,
@@ -575,7 +600,7 @@ func main() {
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler
 	if cfg.MCPEnabled {
-		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc, swingSvc)
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc, swingSvc, fundingArbSvc)
 		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
 	}
 
@@ -591,6 +616,7 @@ func main() {
 		Alerts:           alertSvc,
 		Portfolio:        portfolioSvc,
 		PriceDiff:        priceDiffSvc,
+		FundingArb:       fundingArbSvc,
 		Scanner:          scannerSvc,
 		Swing:            swingSvc,
 		Export:           exportSvc,

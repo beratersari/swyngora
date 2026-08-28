@@ -266,7 +266,8 @@ func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 		{Time: from.Add(8 * time.Hour), Rate: 0.002},
 		{Time: from.Add(16 * time.Hour), Rate: 0.002},
 	}
-	// 2 overlapping clocks × 10000 × 0.0019 = 38. Fees 4. Net 34.
+	// 08:00 is the entry signal (not collected). 16:00 is the first hold:
+	// 10000 × 0.0019 = 19. Fees 4. Net 15.
 	got := BuildFundingArbHistory("BTCUSDT", bin, byb, 10_000, 0.0001, 0.0001, from, to)
 	if len(got.Runs) != 1 {
 		t.Fatalf("%+v", got)
@@ -275,14 +276,52 @@ func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 	if run.LongExchange != "binance" || run.ShortExchange != "bybit" {
 		t.Fatalf("sides %+v", run)
 	}
-	if run.PaymentCount != 4 {
-		t.Fatalf("pays %d", run.PaymentCount)
+	if run.PaymentCount != 2 {
+		t.Fatalf("pays %d (08:00 must not be collected)", run.PaymentCount)
+	}
+	if !strings.Contains(run.StartedAt, "T08:00") {
+		t.Fatalf("startedAt should be the 08:00 entry signal, got %s", run.StartedAt)
+	}
+	if len(run.Payments) == 0 || !strings.Contains(run.Payments[0].Time, "T16:00") {
+		t.Fatalf("first collected payment must be 16:00, got %+v", run.Payments)
 	}
 	if run.DurationHours != "8" && run.DurationHours != "8.0" {
 		t.Fatalf("duration %s", run.DurationHours)
 	}
-	if !strings.Contains(run.NetAfterFees, "34") {
+	if !strings.Contains(run.NetAfterFees, "15") {
 		t.Fatalf("net %s fund=%s", run.NetAfterFees, run.FundingAmount)
+	}
+}
+
+func TestResolveFundingArbMinProfit(t *testing.T) {
+	got, err := ResolveFundingArbMinProfit(5)
+	if err != nil || got != 5 {
+		t.Fatalf("%v %v", got, err)
+	}
+	if _, err := ResolveFundingArbMinProfit(0); err == nil {
+		t.Fatal("zero")
+	}
+	if _, err := ResolveFundingArbMinProfit(-1); err == nil {
+		t.Fatal("neg")
+	}
+	if _, err := ResolveFundingArbMinProfit(math.NaN()); err == nil {
+		t.Fatal("nan")
+	}
+	if _, err := ResolveFundingArbMinProfit(MaxFundingArbMinProfit + 1); err == nil {
+		t.Fatal("max")
+	}
+}
+
+func TestBuildFundingArbHistory_SameClockNotProfit(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+	at := from.Add(8 * time.Hour)
+	got := BuildFundingArbHistory("BTCUSDT",
+		[]FundingPoint{{Time: at, Rate: 0.0001}},
+		[]FundingPoint{{Time: at, Rate: 0.05}},
+		10_000, 0, 0, from, to)
+	if len(got.Runs) != 0 {
+		t.Fatalf("08:00 start=end must not collect that payment %+v", got.Runs)
 	}
 }
 

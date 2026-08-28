@@ -46,7 +46,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |
-| `GET` | `/api/v1/market/funding-arb/history` | Past after-fee stretches for one coin (`from`/`to`) |
+| `GET` | `/api/v1/market/funding-arb/history` | Past after-fee stretches for one coin (`from`/`to`; first clock is entry only) |
+| `POST`/`GET` | `/api/v1/funding-arb/watches` | Follow a pair; notify when after-fee net ≥ `minProfit` |
+| `GET`/`DELETE` | `/api/v1/funding-arb/watches/{id}` | Get / delete a funding-arb follow |
+| `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
@@ -174,6 +177,8 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) compare last prices on Binance, Coinbase, and Bybit after fees; opportunities record buy/sell venues when net edge exceeds `minNetDiffPct`. Open state is durable; no duplicate while open; re-opens after the edge drops and returns. Stale/missing prices skip that venue. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`). **Executable quote** (`/price-diff/quote` or `/opportunities/{id}/quote`) walks the buy asks and sell bids for a `notional` or `quantity` and returns average prices, slippage, profit after fees, usable money, and max still-profitable size. **Scan** (`/price-diff/quote/scan` or `/watches/{id}/quote`) ranks every venue pair at that size.
 
+**Funding-arb follows:** `POST /api/v1/funding-arb/watches` stores a pair + `minProfit`. A background checker (`FUNDING_ARB_CHECK_INTERVAL`, default `30s`) re-quotes Binance vs Bybit and notifies the client's alert webhook (`type=funding_arb.triggered`) when after-fee horizon net is at least that floor and `trade` is present. Signals close and the watch re-arms when net falls below. SQLite path `FUNDING_ARB_DB_PATH` (default `data/fundingarb.db`). See `docs/features/funding-arb.md`.
+
 **Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price **plus per-exchange slippage and taker fee**, pending limit/stop orders with cash/position **reservations** (buy reserve covers slip + fee), **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`). Rates: `GET /api/v1/portfolio/trading-costs`.
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). A background job evaluates rules on `SCANNER_CHECK_INTERVAL` (default `60s`), writes matches to history (`/api/v1/scanner/results`), and skips duplicates for the same rule + symbol + candle (`marketDataKey`). **Historical backtests** (`/api/v1/scanner/backtests`) re-run a rule over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
@@ -184,7 +189,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe (portfolios: merge skips existing id/name; replace recreates owned books; extra non-UUID or globally colliding book ids are reminted so they cannot occupy another tenant’s first book). See `docs/features/user-data-import.md`.
 
-**Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; paper recurring plans are paused and open paper/margin orders canceled; workers skip the tenant. `X-Client-Id`, `?clientId=`, and JSON `clientId` must agree (else 400). Paper `PlaceOrder` and Telegram Confirm also refuse a closed owner. After grace, watchlists/shares/alerts/backtests/import-export files, paper books, and price-diff watches are purged. See `docs/features/account-close.md`.
+**Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; paper recurring plans are paused and open paper/margin orders canceled; workers skip the tenant. `X-Client-Id`, `?clientId=`, and JSON `clientId` must agree (else 400). Paper `PlaceOrder` and Telegram Confirm also refuse a closed owner. After grace, watchlists/shares/alerts/backtests/import-export files, paper books, price-diff watches, and funding-arb watches are purged. See `docs/features/account-close.md`.
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`** (service mutex + store write lock); optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); closed `clientId`s are blocked on tenant REST and on MCP tools that send `clientId`; **`MCP_ENABLED=false`** unmounts MCP.
 
@@ -298,6 +303,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `MARGIN_INTEREST_INTERVAL` | `1m` | How often margin debt interest is catch-up accrued (O(1) per position) |
 | `PRICE_DIFF_DB_PATH` | `data/pricediff.db` | SQLite for cross-exchange price difference watches/opportunities |
 | `PRICE_DIFF_CHECK_INTERVAL` | `30s` | How often active price-diff watches are evaluated |
+| `FUNDING_ARB_DB_PATH` | `data/fundingarb.db` | SQLite for funding-arb follow watches/signals |
+| `FUNDING_ARB_CHECK_INTERVAL` | `30s` | How often active funding-arb watches are evaluated |
 | `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |
 | `EXPORT_DB_PATH` | `data/export.db` | SQLite file for user data export jobs |
 | `EXPORT_FILE_DIR` | `data/exports` | Directory for export download files |
@@ -356,12 +363,14 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 |---|---|---|
 | Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go` |
 | Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go`, `sweep_test.go`, `volumesurge_test.go`, `vwap_test.go`, `around_test.go`, `funding_arb_test.go` (fakes for ports) |
+| Application | `internal/service/fundingarb` | `service_test.go` (create, min-profit notify, re-arm) |
+| Infrastructure | `internal/adapter/fundingarbstore` | `sqlite_test.go` |
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go`, `openinterest_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
 | Infrastructure | `internal/adapter/alertstore` | `sqlite_test.go` (CRUD, one-shot trigger, reopen) |
 | Application | `internal/service/pricealert` | `service_test.go` (validation, max, checker once-only) |
-| Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go`, `pricediff_test.go` |
+| Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go`, `pricediff_test.go`, `funding_arb_watch_test.go` |
 | Transport middleware | `internal/transport/http/middleware` | `cors_test.go`, `ratelimit_test.go` |
 | Transport router | `internal/transport/http` | `router_test.go` |
 | Platform | `internal/platform/config` | `config_test.go` |

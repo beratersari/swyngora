@@ -16,6 +16,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -41,6 +42,11 @@ type DataPort interface {
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error)
 	GetFundingArbHistory(ctx context.Context, symbol, from, to string, notional float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -225,9 +231,9 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service, swingSvc *swing.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service, swingSvc *swing.Service, fundingArbSvc *fundingarb.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc, Swing: swingSvc},
+		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc, Swing: swingSvc, FundingArb: fundingArbSvc},
 		Accounts: accountSvc,
 		Name:     "swyngora-mcp",
 	})
@@ -545,7 +551,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_arb_history",
-		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
+		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. The first clock of a run is the entry signal — that payment is not collected because the position was not open before it. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("from", mcp.Required(), mcp.Description("Range start RFC3339 or YYYY-MM-DD")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Range end RFC3339 or YYYY-MM-DD")),
@@ -567,6 +573,108 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
 		raw, err := api.GetFundingArbHistory(ctx, symbol, from, to, req.GetFloat("notional", 0), fb, fy)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_funding_arb_watch",
+		mcp.WithDescription("Follow a coin's Binance vs Bybit funding opportunity. Notifies via the client's alert webhook when after-fee net over holdHours is at least minProfit. Re-arms after net falls below the floor. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("minProfit", mcp.Required(), mcp.Description("Minimum after-fee profit in quote currency (e.g. 10)")),
+		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
+		mcp.WithNumber("holdHours", mcp.Description("Hold window for the horizon payout (default 24)")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent (default paper 0.10)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		minP, err := req.RequireFloat("minProfit")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		fb, fy := optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct")
+		raw, err := api.CreateFundingArbWatch(ctx, clientID, symbol, req.GetFloat("notional", 0), req.GetFloat("holdHours", 0), minP, fb, fy)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_funding_arb_watches",
+		mcp.WithDescription("List funding-arb follow watches for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListFundingArbWatches(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_funding_arb_watch",
+		mcp.WithDescription("Get one funding-arb follow watch by id."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFundingArbWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("delete_funding_arb_watch",
+		mcp.WithDescription("Delete a funding-arb follow watch and its signals."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeleteFundingArbWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_funding_arb_signals",
+		mcp.WithDescription("List funding-arb crossings above minProfit (status open|closed|all)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("status", mcp.Description("open | closed | all")),
+		mcp.WithNumber("limit", mcp.Description("Max rows (default 50)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListFundingArbSignals(ctx, clientID, req.GetString("status", ""), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

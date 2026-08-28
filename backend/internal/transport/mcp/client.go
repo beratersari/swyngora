@@ -331,6 +331,66 @@ func (c *APIClient) GetFundingArbHistory(ctx context.Context, symbol, from, to s
 	return c.get(ctx, "/api/v1/market/funding-arb/history", q)
 }
 
+// CreateFundingArbWatch creates a min-profit follow on one pair.
+func (c *APIClient) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "symbol": symbol, "minProfit": minProfit,
+	}
+	if notional > 0 {
+		body["notional"] = notional
+	}
+	if holdHours > 0 {
+		body["holdHours"] = holdHours
+	}
+	if feeBinancePct != nil {
+		body["feeBinancePct"] = *feeBinancePct
+	}
+	if feeBybitPct != nil {
+		body["feeBybitPct"] = *feeBybitPct
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/funding-arb/watches", body)
+}
+
+// ListFundingArbWatches lists follow watches.
+func (c *APIClient) ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/funding-arb/watches", q)
+}
+
+// GetFundingArbWatch gets one follow watch.
+func (c *APIClient) GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/funding-arb/watches/"+url.PathEscape(id), q)
+}
+
+// DeleteFundingArbWatch deletes a follow watch.
+func (c *APIClient) DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/funding-arb/watches/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+// ListFundingArbSignals lists min-profit crossings.
+func (c *APIClient) ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/funding-arb/signals", q)
+}
+
 // GetLongShortRatio returns the latest account long/short ratio plus recent history.
 func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

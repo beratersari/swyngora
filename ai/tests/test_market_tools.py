@@ -44,6 +44,16 @@ class _Transport(httpx.BaseTransport):
                 200,
                 json={"hits": [], "skipped": 0, "note": "informational only"},
             )
+        if "/funding-arb/watches" in request.url.path:
+            if request.method == "POST":
+                return httpx.Response(
+                    201, json={"id": "w1", "symbol": "BTCUSDT", "minProfit": 10}
+                )
+            if request.method == "DELETE":
+                return httpx.Response(200, json={"deleted": True})
+            return httpx.Response(200, json={"id": "w1", "watches": []})
+        if request.url.path.endswith("/funding-arb/signals"):
+            return httpx.Response(200, json={"signals": []})
         if request.url.path.endswith("/funding-arb"):
             return httpx.Response(
                 200,
@@ -315,6 +325,20 @@ def test_market_tools_hit_api(monkeypatch):
         )
     )
     assert hist["runs"] == []
+    assert "create_funding_arb_watch" in by_name
+    watch = json.loads(
+        by_name["create_funding_arb_watch"].invoke(
+            {"client_id": "c1", "symbol": "BTCUSDT", "min_profit": 10}
+        )
+    )
+    assert watch["id"] == "w1"
+    listed = json.loads(
+        by_name["list_funding_arb_watches"].invoke({"client_id": "c1"})
+    )
+    assert "watches" in listed
+    assert json.loads(
+        by_name["list_funding_arb_signals"].invoke({"client_id": "c1"})
+    )["signals"] == []
 
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))

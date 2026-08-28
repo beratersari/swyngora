@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
@@ -43,6 +44,8 @@ type RouterOptions struct {
 	Portfolio *portfolio.Service
 	// PriceDiff enables cross-exchange price difference tracking when non-nil.
 	PriceDiff *pricediff.Service
+	// FundingArb enables funding-arb follow watches when non-nil.
+	FundingArb *fundingarb.Service
 	// Scanner enables technical indicator scanner routes when non-nil.
 	Scanner *scanner.Service
 	// Swing enables swing-setup scan routes when non-nil.
@@ -238,6 +241,15 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities", pdh.ListOpportunities)
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}/quote", pdh.QuoteOpportunity)
 		mux.HandleFunc("GET /api/v1/price-diff/opportunities/{id}", pdh.GetOpportunity)
+	}
+
+	if opts.FundingArb != nil {
+		fah := handler.NewFundingArbWatchHandler(opts.FundingArb)
+		mux.HandleFunc("POST /api/v1/funding-arb/watches", fah.CreateWatch)
+		mux.HandleFunc("GET /api/v1/funding-arb/watches", fah.ListWatches)
+		mux.HandleFunc("GET /api/v1/funding-arb/watches/{id}", fah.GetWatch)
+		mux.HandleFunc("DELETE /api/v1/funding-arb/watches/{id}", fah.DeleteWatch)
+		mux.HandleFunc("GET /api/v1/funding-arb/signals", fah.ListSignals)
 	}
 
 	if opts.Swing != nil {

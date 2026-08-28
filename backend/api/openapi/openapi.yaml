@@ -37,6 +37,9 @@ info:
       Bybit; when net edge after fees exceeds a threshold, store a buy/sell opportunity.
       Open opportunities persist across restarts; no duplicate while open; re-open after
       the edge falls below the limit and rises again. Stale or missing prices skip signals.
+    - Funding-arb follows: watch Binance vs Bybit after-fee funding; notify via the
+      alert webhook when horizon net is at least `minProfit`. The first clock of a
+      history run is the entry signal (not collected profit).
     - Technical indicator scanner: RSI, EMA crossover, and volume-increase rules over the
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
     - Swing engine: 4h+1d pattern detection (Wilder RSI/ADX/ATR, SuperTrend, MACD), BTC regime
@@ -1058,8 +1061,10 @@ paths:
         Settled Binance USD-M and Bybit linear funding prints in `[from, to]`.
         Groups consecutive prints with the same long/short pair into a run and
         lists a run only when settled funding minus round-trip taker fees is
-        positive. `from`/`to` are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max
-        30 days. Informational only.
+        positive. The first clock of a run is the entry signal — that payment
+        is not collected (the position was not open before it). A run that
+        starts and ends on the same clock is not profit. `from`/`to` are
+        RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
       operationId: getMarketFundingArbHistory
       tags: [Market]
       parameters:
@@ -1094,6 +1099,146 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
         '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/watches:
+    post:
+      summary: Follow a funding-arb opportunity
+      description: |
+        Evaluates Binance vs Bybit after-fee funding on a background interval.
+        When horizon net is at least `minProfit` and `trade` is present, opens
+        a signal and enqueues the client's alert webhook (`type=funding_arb.triggered`).
+        Re-arms after net falls below the floor. Max 20 watches per client.
+        Informational only.
+      operationId: createFundingArbWatch
+      tags: [FundingArb]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, minProfit]
+              properties:
+                clientId: { type: string }
+                symbol: { type: string, example: BTCUSDT }
+                notional: { type: number, example: 10000 }
+                holdHours: { type: number, example: 24 }
+                minProfit:
+                  type: number
+                  exclusiveMinimum: 0
+                  description: Minimum after-fee profit in quote currency
+                  example: 10
+                feeBinancePct: { type: number, minimum: 0, example: 0.1 }
+                feeBybitPct: { type: number, minimum: 0, example: 0.1 }
+      responses:
+        '201':
+          description: Created watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbWatch'
+        '400':
+          $ref: '#/components/responses/Error'
+    get:
+      summary: List funding-arb follow watches
+      operationId: listFundingArbWatches
+      tags: [FundingArb]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Watch list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  watches:
+                    type: array
+                    items: { $ref: '#/components/schemas/FundingArbWatch' }
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/watches/{id}:
+    get:
+      summary: Get a funding-arb follow watch
+      operationId: getFundingArbWatch
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbWatch'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a funding-arb follow watch
+      description: Removes the watch and its signals.
+      operationId: deleteFundingArbWatch
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/signals:
+    get:
+      summary: List funding-arb min-profit crossings
+      operationId: listFundingArbSignals
+      tags: [FundingArb]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, closed, all] }
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Signal list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  signals:
+                    type: array
+                    items: { $ref: '#/components/schemas/FundingArbSignal' }
+        '400':
           $ref: '#/components/responses/Error'
   /api/v1/market/long-short-ratio:
     get:
@@ -6711,6 +6856,38 @@ components:
         skippedUnprofitable: { type: integer }
         summary: { type: string }
         note: { type: string }
+    FundingArbWatch:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        symbol: { type: string }
+        notional: { type: number }
+        holdHours: { type: number }
+        minProfit:
+          type: number
+          description: Minimum after-fee profit in quote currency
+        feeBinancePct: { type: number }
+        feeBybitPct: { type: number }
+        status: { type: string, enum: [active, paused] }
+        armed: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    FundingArbSignal:
+      type: object
+      properties:
+        id: { type: string }
+        watchId: { type: string }
+        clientId: { type: string }
+        symbol: { type: string }
+        longExchange: { type: string }
+        shortExchange: { type: string }
+        netAfterFees: { type: number }
+        minProfit: { type: number }
+        status: { type: string, enum: [open, closed] }
+        openedAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time, nullable: true }
     LongShortLevel:
       type: object
       properties:

@@ -38,8 +38,18 @@ receives). A hold window with **no** clock in `(now, now+holdHours]` has
 
 - Settled prints from Binance `/fapi/v1/fundingRate` and Bybit `/v5/market/funding/history`
 - Groups consecutive prints with the same long/short pair
-- Lists a run only when settled funding minus round-trip fees is positive
+- The **first clock of a run is the entry signal** — that payment is not
+  collected (the position was not open before it). A stretch that starts and
+  ends at the same clock (e.g. 08:00–08:00) is not profit.
+- Lists a run only when later settled funding minus round-trip fees is positive
 - `from` / `to`: RFC3339, `YYYY-MM-DD` (UTC), or unix ms; max 30 days
+
+`POST /api/v1/funding-arb/watches` — follow one pair; notify when after-fee
+horizon net ≥ `minProfit` (quote currency). The checker re-quotes on
+`FUNDING_ARB_CHECK_INTERVAL` (default 30s). Crossing opens a signal and
+enqueues the client's alert webhook (`type=funding_arb.triggered`). When net
+falls below the floor the signal closes and the watch re-arms. Max 20 watches
+per client.
 
 This is **not** an executable arb and **not** financial advice.
 
@@ -47,17 +57,18 @@ This is **not** an executable arb and **not** financial advice.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/funding_arb.go` |
-| Service | `backend/internal/service/market/funding_arb.go` |
-| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history` |
-| MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history` |
+| Domain | `backend/internal/domain/funding_arb.go`, `funding_arb_history.go`, `funding_arb_watch.go` |
+| Quote | `backend/internal/service/market/funding_arb.go` |
+| Watches | `backend/internal/service/fundingarb/`, `backend/internal/adapter/fundingarbstore/` |
+| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history`; `POST/GET/DELETE /api/v1/funding-arb/watches`, `GET /api/v1/funding-arb/signals` |
+| MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`, `list_funding_arb_watches`, `get_funding_arb_watch`, `delete_funding_arb_watch`, `list_funding_arb_signals` |
 | Telegram | `/fundingarb`, `/fundingarb scan`, `/fundingarb hist <sym> <from> <to>` |
 
 ## How to verify
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ ./internal/transport/mcp/ ./internal/transport/telegram/ -count=1 -run FundingArb
+go test ./internal/domain/ ./internal/service/market/ ./internal/service/fundingarb/ ./internal/adapter/fundingarbstore/ ./internal/transport/http/handler/ ./internal/transport/mcp/ ./internal/transport/telegram/ -count=1 -run 'FundingArb|WatchAndSignal'
 curl "http://localhost:8080/api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000"
 curl "http://localhost:8080/api/v1/market/funding-arb/scan?notional=10000&limit=10"
 curl "http://localhost:8080/api/v1/market/funding-arb/history?symbol=BTCUSDT&from=2026-08-01&to=2026-08-08&notional=10000"

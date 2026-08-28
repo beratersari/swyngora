@@ -30,7 +30,8 @@ type DataPurgeDeps struct {
 	Imports   domain.ImportPort
 	APIKeys   domain.APIKeyPort
 	Paper     PaperBooks
-	PriceDiff ClientPurge
+	PriceDiff   ClientPurge
+	FundingArb  ClientPurge
 }
 
 // Service manages account close, reopen, and grace purges.
@@ -253,6 +254,11 @@ func (s *Service) purgeOne(ctx context.Context, clientID string) error {
 	}
 	if s.data.Paper != nil {
 		if err := s.data.Paper.PurgeClient(ctx, clientID); err != nil {
+			return err
+		}
+	}
+	if s.data.FundingArb != nil {
+		if err := s.data.FundingArb.PurgeClient(ctx, clientID); err != nil {
 			return err
 		}
 	}

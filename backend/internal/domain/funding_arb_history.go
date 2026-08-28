@@ -154,7 +154,10 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 			flush()
 		}
 		if cur == nil {
+			// First clock of a run is the signal to enter. The position is not
+			// open before that payment, so that print is not collected profit.
 			cur = &rawRun{long: long, short: short, start: t, end: t}
+			continue
 		}
 		for _, e := range batch {
 			amt := 0.0

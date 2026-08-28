@@ -12,6 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
@@ -23,16 +24,17 @@ import (
 
 // Backend is an in-process facade for MCP tools (no second process, no self-HTTP).
 type Backend struct {
-	Market    *market.Service
-	Watch     *watchlist.Service
-	Alerts    *pricealert.Service
-	Portfolio *portfolio.Service
-	Scanner   *scanner.Service
-	Export    *exportsvc.Service
-	Import    *dataimport.Service
-	PriceDiff *pricediff.Service
-	Swing     *swing.Service
-	APIKeys   *apikey.Service
+	Market     *market.Service
+	Watch      *watchlist.Service
+	Alerts     *pricealert.Service
+	Portfolio  *portfolio.Service
+	Scanner    *scanner.Service
+	Export     *exportsvc.Service
+	Import     *dataimport.Service
+	PriceDiff  *pricediff.Service
+	Swing      *swing.Service
+	APIKeys    *apikey.Service
+	FundingArb *fundingarb.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -759,6 +761,102 @@ func (b *Backend) GetFundingArbHistory(ctx context.Context, symbol, fromRaw, toR
 		return nil, err
 	}
 	return mustJSON(got)
+}
+
+func (b *Backend) CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.CreateWatch(ctx, fundingarb.CreateInput{
+		ClientID: clientID, Symbol: symbol, Notional: notional, HoldHours: holdHours, MinProfit: minProfit,
+		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbWatchMap(got))
+}
+
+func (b *Backend) ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.ListWatches(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(got))
+	for i := range got {
+		items = append(items, fundingArbWatchMap(&got[i]))
+	}
+	return mustJSON(map[string]any{"watches": items, "count": len(items)})
+}
+
+func (b *Backend) GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbWatchMap(got))
+}
+
+func (b *Backend) DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	if err := b.FundingArb.DeleteWatch(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"deleted": true, "id": id})
+}
+
+func (b *Backend) ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.ListSignals(ctx, clientID, status, limit)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(got))
+	for i := range got {
+		items = append(items, fundingArbSignalMap(&got[i]))
+	}
+	return mustJSON(map[string]any{"signals": items, "count": len(items)})
+}
+
+func fundingArbWatchMap(w *domain.FundingArbWatch) map[string]any {
+	if w == nil {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
+		"notional": w.Notional, "holdHours": w.HoldHours, "minProfit": w.MinProfit,
+		"feeBinancePct": w.FeeBinancePct, "feeBybitPct": w.FeeBybitPct,
+		"status": string(w.Status), "armed": w.Armed,
+		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func fundingArbSignalMap(s *domain.FundingArbSignal) map[string]any {
+	if s == nil {
+		return map[string]any{}
+	}
+	m := map[string]any{
+		"id": s.ID, "watchId": s.WatchID, "clientId": s.ClientID, "symbol": s.Symbol,
+		"longExchange": string(s.LongExchange), "shortExchange": string(s.ShortExchange),
+		"netAfterFees": s.NetAfterFees, "minProfit": s.MinProfit, "status": string(s.Status),
+		"openedAt":   s.OpenedAt.UTC().Format(time.RFC3339Nano),
+		"lastSeenAt": s.LastSeenAt.UTC().Format(time.RFC3339Nano),
+	}
+	if s.ClosedAt != nil {
+		m["closedAt"] = s.ClosedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
 }
 
 func parseFundingArbTime(raw string) (time.Time, error) {

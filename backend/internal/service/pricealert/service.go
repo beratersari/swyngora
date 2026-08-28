@@ -384,6 +384,45 @@ func (s *Service) FailDigest(ctx context.Context, id string, lastErr string) err
 	return s.store.FailDigest(ctx, id, lastErr)
 }
 
+// NotifyClient enqueues a webhook payload on the client's registered alert
+// webhook (immediate or digest). No-op when no URL is set.
+func (s *Service) NotifyClient(ctx context.Context, clientID, sourceID, payloadJSON string) error {
+	if s == nil || s.store == nil {
+		return nil
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return err
+	}
+	sourceID = strings.TrimSpace(sourceID)
+	if sourceID == "" {
+		sourceID = uuid.NewString()
+	}
+	wh, err := s.store.GetWebhook(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if wh == nil || strings.TrimSpace(wh.URL) == "" {
+		return nil
+	}
+	now := time.Now().UTC()
+	mode := wh.DeliveryMode
+	if mode == "" {
+		mode = domain.DeliveryImmediate
+	}
+	if mode == domain.DeliveryHourlyDigest {
+		_, err = s.store.AddDigestItem(ctx, clientID, wh.URL, sourceID, payloadJSON, now)
+		return err
+	}
+	nextAt := domain.NextAllowedDeliveryTime(now, wh)
+	_, err = s.store.EnqueueNotification(ctx, domain.AlertNotification{
+		ID: uuid.NewString(), AlertID: sourceID, ClientID: clientID,
+		WebhookURL: wh.URL, PayloadJSON: payloadJSON,
+		Status: domain.NotificationPending, Attempts: 0, NextAttemptAt: nextAt, CreatedAt: now,
+	})
+	return err
+}
+
 func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.PriceAlert) error {
 	if a == nil {
 		return nil

@@ -107,7 +107,8 @@ You ONLY use book/flow tools.
   `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`,
   `detect_pump_events` / `scan_pump_events`, `analyze_swing`.
 - Flow / derivatives: `get_open_interest`, `get_funding_rate`, `get_funding_arb`,
-  `scan_funding_arb`, `get_long_short_ratio`,
+  `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`,
+  `list_funding_arb_watches`, `list_funding_arb_signals`, `get_long_short_ratio`,
   `get_cvd`, `get_taker_flow`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
@@ -162,7 +163,8 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 - Prefer: `get_ticker` → live quote; `get_liquidations` → long/short futures liquidations in 5m/1h/4h/24h (Binance USD-M + Bybit linear);
   `get_open_interest` → current futures open interest plus 5m/1h/4h/24h change (contracts + USDT notional; includes funding; Binance USD-M + Bybit linear);
   `get_funding_rate` → predicted next perpetual funding plus recent settlements (rate / ratePct / payer);
-  `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history needs start/end;
+  `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history first clock is entry only (not collected profit); history needs start/end;
+  `create_funding_arb_watch` / `list_funding_arb_watches` / `list_funding_arb_signals` → follow a pair and notify when after-fee net ≥ min_profit;
   `get_long_short_ratio` → share of accounts that are long vs short (ratio / bias);
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
   `get_orderbook_heatmap` → resting bid/ask size over the last few minutes (not executed volume);

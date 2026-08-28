@@ -21,7 +21,12 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |
 | `scan_funding_arb` | Rank liquid USDT coins that beat fees on published settlements |
-| `get_funding_arb_history` | Past after-fee winning stretches from settled Binance/Bybit prints |
+| `get_funding_arb_history` | Past after-fee winning stretches from settled Binance/Bybit prints (first clock is entry only) |
+| `create_funding_arb_watch` | Follow a pair; notify when after-fee net ≥ minProfit |
+| `list_funding_arb_watches` | List funding-arb follow watches |
+| `get_funding_arb_watch` | Get one funding-arb follow watch |
+| `delete_funding_arb_watch` | Delete watch and its signals |
+| `list_funding_arb_signals` | List min-profit crossings (open/closed/all) |
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -132,6 +133,51 @@ func TestAPIClient_GetFundingArbHistory(t *testing.T) {
 	}
 	if m["symbol"] != "BTCUSDT" {
 		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_FundingArbWatches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/funding-arb/watches":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "symbol": "BTCUSDT", "minProfit": 10})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/funding-arb/watches":
+			if r.URL.Query().Get("clientId") != "c1" {
+				t.Fatalf("query=%s", r.URL.RawQuery)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"watches": []any{}})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/funding-arb/watches/w1":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1"})
+		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/funding-arb/watches/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"deleted": true})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/funding-arb/signals":
+			_ = json.NewEncoder(w).Encode(map[string]any{"signals": []any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	ctx := context.Background()
+	raw, err := c.CreateFundingArbWatch(ctx, "c1", "BTCUSDT", 10000, 24, 10, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var created map[string]any
+	if err := json.Unmarshal(raw, &created); err != nil || created["id"] != "w1" {
+		t.Fatalf("%s %v", raw, err)
+	}
+	if _, err := c.ListFundingArbWatches(ctx, "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.GetFundingArbWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.DeleteFundingArbWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ListFundingArbSignals(ctx, "c1", "open", 10); err != nil {
+		t.Fatal(err)
 	}
 }
 

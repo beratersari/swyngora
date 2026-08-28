@@ -810,6 +810,27 @@ class FundingArbHistoryInput(BaseModel):
     fee_bybit_pct: float | None = Field(default=None)
 
 
+class FundingArbWatchCreateInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    min_profit: float = Field(gt=0, description="Minimum after-fee profit in quote currency")
+    notional: float = Field(default=0, description="Quote size on each leg (default 10000)")
+    hold_hours: float = Field(default=0, description="Hold window hours (default 24)")
+    fee_binance_pct: float | None = Field(default=None)
+    fee_bybit_pct: float | None = Field(default=None)
+
+
+class FundingArbWatchIdInput(BaseModel):
+    client_id: str
+    watch_id: str
+
+
+class FundingArbSignalListInput(BaseModel):
+    client_id: str
+    status: str = Field(default="open", description="open | closed | all")
+    limit: int = 50
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -1955,6 +1976,53 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if fee_bybit_pct is not None:
             params["feeBybitPct"] = fee_bybit_pct
         return http.get("/api/v1/market/funding-arb/history", params)
+
+    def create_funding_arb_watch(
+        client_id: str,
+        symbol: str,
+        min_profit: float,
+        notional: float = 0,
+        hold_hours: float = 0,
+        fee_binance_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "minProfit": min_profit,
+        }
+        if notional:
+            body["notional"] = notional
+        if hold_hours:
+            body["holdHours"] = hold_hours
+        if fee_binance_pct is not None:
+            body["feeBinancePct"] = fee_binance_pct
+        if fee_bybit_pct is not None:
+            body["feeBybitPct"] = fee_bybit_pct
+        return http.post("/api/v1/funding-arb/watches", body)
+
+    def list_funding_arb_watches(client_id: str) -> str:
+        return http.get("/api/v1/funding-arb/watches", {"clientId": client_id})
+
+    def get_funding_arb_watch(client_id: str, watch_id: str) -> str:
+        return http.get(
+            f"/api/v1/funding-arb/watches/{watch_id}",
+            {"clientId": client_id},
+        )
+
+    def delete_funding_arb_watch(client_id: str, watch_id: str) -> str:
+        return http.delete(
+            f"/api/v1/funding-arb/watches/{watch_id}",
+            {"clientId": client_id},
+        )
+
+    def list_funding_arb_signals(
+        client_id: str, status: str = "open", limit: int = 50
+    ) -> str:
+        params: dict[str, Any] = {"clientId": client_id, "status": status}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/funding-arb/signals", params)
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -3363,10 +3431,46 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Past Binance vs Bybit funding opportunities for one coin in a "
                 "date range. Uses settled funding prints only. Each run is a "
                 "stretch of the same long/short pair and is listed only when "
-                "settled funding minus round-trip fees is positive. start/end "
-                "are RFC3339 or YYYY-MM-DD (UTC), max 30 days."
+                "settled funding minus round-trip fees is positive. The first "
+                "clock of a run is the entry signal and is not collected "
+                "profit. start/end are RFC3339 or YYYY-MM-DD (UTC), max 30 days."
             ),
             args_schema=FundingArbHistoryInput,
+        ),
+        StructuredTool.from_function(
+            create_funding_arb_watch,
+            name="create_funding_arb_watch",
+            description=(
+                "Follow a coin's Binance vs Bybit funding opportunity. Notifies "
+                "via the client's alert webhook when after-fee net over "
+                "hold_hours is at least min_profit. Re-arms after net falls "
+                "below the floor. Not financial advice."
+            ),
+            args_schema=FundingArbWatchCreateInput,
+        ),
+        StructuredTool.from_function(
+            list_funding_arb_watches,
+            name="list_funding_arb_watches",
+            description="List funding-arb follow watches for a clientId.",
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_arb_watch,
+            name="get_funding_arb_watch",
+            description="Get one funding-arb follow watch by id.",
+            args_schema=FundingArbWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            delete_funding_arb_watch,
+            name="delete_funding_arb_watch",
+            description="Delete a funding-arb follow watch and its signals.",
+            args_schema=FundingArbWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            list_funding_arb_signals,
+            name="list_funding_arb_signals",
+            description="List funding-arb crossings above minProfit (status open|closed|all).",
+            args_schema=FundingArbSignalListInput,
         ),
         StructuredTool.from_function(
             get_long_short_ratio,

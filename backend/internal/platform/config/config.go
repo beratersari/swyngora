@@ -119,6 +119,11 @@ type Config struct {
 	// PriceDiffCheckInterval is how often active price-diff watches are evaluated.
 	PriceDiffCheckInterval time.Duration
 
+	// FundingArbDBPath is the SQLite file for funding-arb follow watches.
+	FundingArbDBPath string
+	// FundingArbCheckInterval is how often active funding-arb watches are evaluated.
+	FundingArbCheckInterval time.Duration
+
 	// ExportDBPath is the SQLite file for user data export job metadata.
 	ExportDBPath string
 	// ExportFileDir is the directory where export download files are written.
@@ -263,6 +268,9 @@ func Load() Config {
 
 		PriceDiffDBPath:        getenv("PRICE_DIFF_DB_PATH", "data/pricediff.db"),
 		PriceDiffCheckInterval: positiveDurationEnv("PRICE_DIFF_CHECK_INTERVAL", 30*time.Second),
+
+		FundingArbDBPath:        getenv("FUNDING_ARB_DB_PATH", "data/fundingarb.db"),
+		FundingArbCheckInterval: positiveDurationEnv("FUNDING_ARB_CHECK_INTERVAL", 30*time.Second),
 
 		ExportDBPath:         getenv("EXPORT_DB_PATH", "data/export.db"),
 		ExportFileDir:        getenv("EXPORT_FILE_DIR", "data/exports"),
