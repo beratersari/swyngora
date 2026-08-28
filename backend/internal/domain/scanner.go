@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -121,6 +122,8 @@ type ScannerBacktest struct {
 	CreatedAt     time.Time
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
+	// RuleJSON is the rule as queued. The worker uses this, not the live rule.
+	RuleJSON string
 }
 
 // ScannerBacktestSignal is one historical match with optional forward returns (%).
@@ -348,6 +351,92 @@ func IsValidMADirection(s string) bool {
 	default:
 		return false
 	}
+}
+
+// EvaluateScannerRuleOnset matches only when the latest bar newly satisfies
+// the rule and the previous bar did not (false → true). A condition that
+// stays true does not produce another hit until it goes false and true again.
+func EvaluateScannerRuleOnset(rule ScannerRule, candles []Candle) (*ScannerMatch, error) {
+	curr, err := EvaluateScannerRule(rule, candles)
+	if err != nil || curr == nil {
+		return curr, err
+	}
+	if len(candles) < 2 {
+		return curr, nil
+	}
+	prev, err := EvaluateScannerRule(rule, candles[:len(candles)-1])
+	if err != nil {
+		return nil, err
+	}
+	if prev != nil {
+		return nil, nil
+	}
+	return curr, nil
+}
+
+// scannerRuleSnapshot is the queued copy of a rule used by backtests.
+type scannerRuleSnapshot struct {
+	Type           string   `json:"type"`
+	Conditions     []string `json:"conditions"`
+	MatchMode      string   `json:"matchMode"`
+	Interval       string   `json:"interval"`
+	RSIPeriod      int      `json:"rsiPeriod"`
+	RSICondition   string   `json:"rsiCondition"`
+	RSIThreshold   float64  `json:"rsiThreshold"`
+	MAFastPeriod   int      `json:"maFastPeriod"`
+	MASlowPeriod   int      `json:"maSlowPeriod"`
+	MADirection    string   `json:"maDirection"`
+	VolumeLookback int      `json:"volumeLookback"`
+	VolumeMinRatio float64  `json:"volumeMinRatio"`
+}
+
+// EncodeScannerRuleSnapshot freezes rule params for a backtest job.
+func EncodeScannerRuleSnapshot(r ScannerRule) (string, error) {
+	conds := r.SelectedConditions()
+	names := make([]string, 0, len(conds))
+	for _, c := range conds {
+		names = append(names, string(c))
+	}
+	mode := string(r.MatchMode)
+	if mode == "" {
+		mode = string(ScannerMatchAll)
+	}
+	b, err := json.Marshal(scannerRuleSnapshot{
+		Type: string(r.Type), Conditions: names, MatchMode: mode, Interval: r.Interval,
+		RSIPeriod: r.RSIPeriod, RSICondition: string(r.RSICondition), RSIThreshold: r.RSIThreshold,
+		MAFastPeriod: r.MAFastPeriod, MASlowPeriod: r.MASlowPeriod, MADirection: r.MADirection,
+		VolumeLookback: r.VolumeLookback, VolumeMinRatio: r.VolumeMinRatio,
+	})
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// DecodeScannerRuleSnapshot restores a queued rule. Empty input is an error.
+func DecodeScannerRuleSnapshot(raw string) (*ScannerRule, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("%w: missing scanner rule snapshot", ErrInvalidArgument)
+	}
+	var snap scannerRuleSnapshot
+	if err := json.Unmarshal([]byte(raw), &snap); err != nil {
+		return nil, fmt.Errorf("%w: invalid scanner rule snapshot", ErrInvalidArgument)
+	}
+	conds, typ, err := ResolveScannerConditions(snap.Type, snap.Conditions)
+	if err != nil {
+		return nil, err
+	}
+	mode, err := ResolveScannerMatchMode(snap.MatchMode)
+	if err != nil {
+		return nil, err
+	}
+	return &ScannerRule{
+		Type: typ, Conditions: conds, MatchMode: mode, Interval: snap.Interval,
+		RSIPeriod: snap.RSIPeriod, RSICondition: AlertCondition(snap.RSICondition), RSIThreshold: snap.RSIThreshold,
+		MAFastPeriod: snap.MAFastPeriod, MASlowPeriod: snap.MASlowPeriod, MADirection: snap.MADirection,
+		VolumeLookback: snap.VolumeLookback, VolumeMinRatio: snap.VolumeMinRatio,
+	}, nil
 }
 
 // EvaluateScannerRule evaluates the latest bar(s) of candles for a rule.

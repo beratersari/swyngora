@@ -72,11 +72,16 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 		return nil, fmt.Errorf("%w: max %d backtests per client", domain.ErrInvalidArgument, domain.MaxScannerBacktestsPerClient)
 	}
 
+	snap, err := domain.EncodeScannerRuleSnapshot(*rule)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	job := domain.ScannerBacktest{
 		ID: uuid.NewString(), ClientID: clientID, RuleID: rule.ID,
 		Exchange: ex, Symbol: sym, Interval: rule.Interval,
 		RangeStart: start, RangeEnd: end, Status: domain.BacktestPending, CreatedAt: now,
+		RuleJSON: snap,
 	}
 	return s.store.CreateBacktest(ctx, job)
 }
@@ -226,7 +231,7 @@ func (w *BacktestWorker) RunOnce(ctx context.Context) {
 
 func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBacktest) error {
 	id := job.ID
-	rule, err := s.store.GetRule(ctx, job.ClientID, job.RuleID)
+	rule, err := resolveBacktestRule(ctx, s.store, job)
 	if err != nil {
 		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
 		return err
@@ -277,7 +282,7 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 			return nil
 		}
 
-		match, err := domain.EvaluateScannerRule(*rule, candles[:i+1])
+		match, err := domain.EvaluateScannerRuleOnset(*rule, candles[:i+1])
 		if err == nil && match != nil {
 			closePx, _ := strconv.ParseFloat(strings.TrimSpace(candles[i].Close), 64)
 			if math.IsNaN(closePx) {
@@ -286,8 +291,8 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 			sig := domain.ScannerBacktestSignal{
 				ID: uuid.NewString(), BacktestID: id, SignalAt: candles[i].OpenTime.UTC(),
 				ClosePrice: closePx, Summary: match.Summary, Metrics: match.Metrics,
-				Return1d: domain.ForwardReturnPct(candles, i, 1),
-				Return5d: domain.ForwardReturnPct(candles, i, 5),
+				Return1d:  domain.ForwardReturnPct(candles, i, 1),
+				Return5d:  domain.ForwardReturnPct(candles, i, 5),
 				Return20d: domain.ForwardReturnPct(candles, i, 20),
 			}
 			if err := s.store.InsertBacktestSignal(ctx, sig); err == nil {
@@ -307,6 +312,16 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 	}
 	_ = s.store.UpdateBacktestProgress(ctx, id, total, total, signalCount, 100)
 	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+}
+
+func resolveBacktestRule(ctx context.Context, store domain.ScannerPort, job domain.ScannerBacktest) (*domain.ScannerRule, error) {
+	if snap, err := domain.DecodeScannerRuleSnapshot(job.RuleJSON); err == nil {
+		return snap, nil
+	}
+	if store == nil {
+		return nil, fmt.Errorf("%w: missing scanner rule snapshot", domain.ErrInvalidArgument)
+	}
+	return store.GetRule(ctx, job.ClientID, job.RuleID)
 }
 
 func (s *Service) fetchCandlesRange(ctx context.Context, exchange, symbol, interval string, start, end time.Time) ([]domain.Candle, error) {

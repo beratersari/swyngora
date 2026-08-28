@@ -163,6 +163,14 @@ CREATE INDEX IF NOT EXISTS idx_scanner_backtest_signals ON scanner_backtest_sign
 			return err
 		}
 	}
+	if v < 3 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_backtests ADD COLUMN rule_json TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -371,7 +379,7 @@ func (s *SQLite) CountResults(ctx context.Context, clientID string) (int, error)
 const backtestSelect = `
 	SELECT id, client_id, rule_id, exchange, symbol, interval, range_start, range_end,
 		status, progress_pct, processed_bars, total_bars, signal_count, error_message,
-		created_at, started_at, finished_at
+		created_at, started_at, finished_at, rule_json
 	FROM scanner_backtests`
 
 // CreateBacktest inserts a pending job.
@@ -388,12 +396,12 @@ func (s *SQLite) CreateBacktest(ctx context.Context, b domain.ScannerBacktest) (
 		INSERT INTO scanner_backtests (
 			id, client_id, rule_id, exchange, symbol, interval, range_start, range_end,
 			status, progress_pct, processed_bars, total_bars, signal_count, error_message,
-			created_at, started_at, finished_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, started_at, finished_at, rule_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, b.ID, b.ClientID, b.RuleID, string(b.Exchange), b.Symbol, b.Interval,
 		b.RangeStart.UTC().Format(time.RFC3339Nano), b.RangeEnd.UTC().Format(time.RFC3339Nano),
 		string(b.Status), b.ProgressPct, b.ProcessedBars, b.TotalBars, b.SignalCount, b.ErrorMessage,
-		b.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(b.StartedAt), nullTime(b.FinishedAt))
+		b.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(b.StartedAt), nullTime(b.FinishedAt), b.RuleJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -666,7 +674,7 @@ func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	if err := row.Scan(
 		&b.ID, &b.ClientID, &b.RuleID, &ex, &b.Symbol, &b.Interval, &rStart, &rEnd,
 		&st, &b.ProgressPct, &b.ProcessedBars, &b.TotalBars, &b.SignalCount, &b.ErrorMessage,
-		&cAt, &started, &finished,
+		&cAt, &started, &finished, &b.RuleJSON,
 	); err != nil {
 		return nil, err
 	}

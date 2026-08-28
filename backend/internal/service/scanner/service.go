@@ -432,7 +432,7 @@ func (s *Service) RunOnce(ctx context.Context) (int, error) {
 				if len(candles) == 0 {
 					continue
 				}
-				match, err := domain.EvaluateScannerRule(rule, candles)
+				match, err := domain.EvaluateScannerRuleOnset(rule, candles)
 				if err != nil || match == nil {
 					continue
 				}

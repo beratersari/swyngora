@@ -97,7 +97,7 @@ func TestScanner_CreateRunDedupe(t *testing.T) {
 		t.Fatalf("%+v", list[0])
 	}
 
-	// New bar → new result allowed
+	// Same condition still true on the next bar — no new result
 	candles2 := append([]domain.Candle{}, candles...)
 	next := candles[24]
 	next.OpenTime = candles[24].OpenTime.Add(time.Hour)
@@ -105,8 +105,27 @@ func TestScanner_CreateRunDedupe(t *testing.T) {
 	candles2 = append(candles2, next)
 	market.byKey["binance|BTCUSDT|1h"] = candles2
 	n, err = svc.RunOnce(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("still-true bar n=%d err=%v", n, err)
+	}
+	// Condition goes false, then true again — new result
+	quiet := candles2[len(candles2)-1]
+	quiet.OpenTime = quiet.OpenTime.Add(time.Hour)
+	quiet.Volume = "100"
+	candles2 = append(candles2, quiet)
+	market.byKey["binance|BTCUSDT|1h"] = candles2
+	n, err = svc.RunOnce(ctx)
+	if err != nil || n != 0 {
+		t.Fatalf("false bar n=%d err=%v", n, err)
+	}
+	again := quiet
+	again.OpenTime = quiet.OpenTime.Add(time.Hour)
+	again.Volume = "600"
+	candles2 = append(candles2, again)
+	market.byKey["binance|BTCUSDT|1h"] = candles2
+	n, err = svc.RunOnce(ctx)
 	if err != nil || n != 1 {
-		t.Fatalf("new bar n=%d err=%v", n, err)
+		t.Fatalf("re-trigger n=%d err=%v", n, err)
 	}
 }
 

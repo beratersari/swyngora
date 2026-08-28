@@ -123,6 +123,73 @@ func TestEvaluateVolumeIncrease(t *testing.T) {
 	}
 }
 
+func TestEvaluateScannerRuleOnset_OnlyFalseToTrue(t *testing.T) {
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	candles := make([]Candle, 26)
+	for i := 0; i < 26; i++ {
+		vol := "100"
+		if i >= 24 {
+			vol = "500"
+		}
+		candles[i] = Candle{
+			OpenTime: t0.Add(time.Duration(i) * time.Hour),
+			Close:    "10",
+			Volume:   vol,
+		}
+	}
+	rule := ScannerRule{
+		Type: ScannerRuleVolumeIncrease, VolumeLookback: 20, VolumeMinRatio: 2,
+	}
+	onset, err := EvaluateScannerRuleOnset(rule, candles[:25])
+	if err != nil || onset == nil {
+		t.Fatalf("first true bar should fire %+v %v", onset, err)
+	}
+	held, err := EvaluateScannerRuleOnset(rule, candles)
+	if err != nil || held != nil {
+		t.Fatalf("still-true bar must not fire again %+v %v", held, err)
+	}
+	candles = append(candles, Candle{
+		OpenTime: t0.Add(26 * time.Hour), Close: "10", Volume: "100",
+	})
+	off, err := EvaluateScannerRuleOnset(rule, candles)
+	if err != nil || off != nil {
+		t.Fatalf("false bar %+v %v", off, err)
+	}
+	candles = append(candles, Candle{
+		OpenTime: t0.Add(27 * time.Hour), Close: "10", Volume: "600",
+	})
+	again, err := EvaluateScannerRuleOnset(rule, candles)
+	if err != nil || again == nil {
+		t.Fatalf("true after false should fire again %+v %v", again, err)
+	}
+}
+
+func TestEncodeDecodeScannerRuleSnapshot(t *testing.T) {
+	in := ScannerRule{
+		Type: ScannerRuleCombo, Conditions: []ScannerRuleType{ScannerRuleRSI, ScannerRuleVolumeIncrease},
+		MatchMode: ScannerMatchAny, Interval: "4h",
+		RSIPeriod: 21, RSICondition: AlertBelow, RSIThreshold: 35,
+		VolumeLookback: 30, VolumeMinRatio: 2.5,
+	}
+	raw, err := EncodeScannerRuleSnapshot(in)
+	if err != nil || raw == "" {
+		t.Fatal(err)
+	}
+	got, err := DecodeScannerRuleSnapshot(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != ScannerRuleCombo || got.MatchMode != ScannerMatchAny || len(got.Conditions) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.RSIPeriod != 21 || got.RSIThreshold != 35 || got.VolumeLookback != 30 {
+		t.Fatalf("params %+v", got)
+	}
+	if _, err := DecodeScannerRuleSnapshot(""); err == nil {
+		t.Fatal("empty snapshot should fail")
+	}
+}
+
 func TestEvaluateNoMatch(t *testing.T) {
 	candles := make([]Candle, 30)
 	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)

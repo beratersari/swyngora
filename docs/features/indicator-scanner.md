@@ -72,11 +72,13 @@ Combo evaluation loads enough candles for the **longest** selected condition (fo
 
 ## Deduping
 
-Each result has `marketDataKey` = candle **open time**. Unique constraint:
+A hit is stored only when the rule **becomes** true (previous bar false, latest bar true). If the same condition stays true on later candles, no new row is written. After it goes false and then true again, a new result is stored.
+
+Each result also has `marketDataKey` = candle **open time**. Unique constraint:
 
 `(ruleId, exchange, symbol, marketDataKey)`
 
-Re-running the scanner on the same closed bar does not create another row. A new bar can produce a new result.
+Re-running the scanner on the same bar does not create another row.
 
 ## Background job
 
@@ -114,6 +116,8 @@ Run a saved rule over a symbol and date range to see past signals and what price
 
 ### Behavior
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).
+- The rule is **snapshotted when the job is queued**. Editing the live rule before the worker starts does not change this run.
+- Signals use the same false→true onset as live hits (a condition that stays true is one signal).
 - **No duplicate run** for the same client + rule + symbol + date range while status is pending/running/completed (returns existing job).
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.

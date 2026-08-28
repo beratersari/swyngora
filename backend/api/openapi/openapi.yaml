@@ -5647,8 +5647,9 @@ paths:
     get:
       summary: List scanner match history
       description: |
-        Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
-        (candle open time) so the same bar is not stored twice.
+        Saved matches for watchlist symbols. A row is written when the rule becomes
+        true (previous bar false). A condition that stays true on later bars does not
+        add another row. Also unique on ruleId + exchange + symbol + marketDataKey.
       operationId: listScannerResults
       tags: [Scanner]
       parameters:
@@ -5671,7 +5672,8 @@ paths:
     post:
       summary: Start a historical scanner backtest
       description: |
-        Runs a rule over a symbol and date range in the background. Identical jobs
+        Runs a rule over a symbol and date range in the background. The rule is
+        snapshotted at queue time; later edits do not change this job. Identical jobs
         (same client, rule, symbol, range) return the existing pending/running/completed job.
         Progress and signalCount update while running. Informational only.
       operationId: startScannerBacktest

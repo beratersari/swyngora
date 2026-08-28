@@ -93,3 +93,58 @@ func TestBacktest_StartRunCancelDedupe(t *testing.T) {
 		t.Fatalf("%+v %v", canceled, err)
 	}
 }
+
+func TestBacktest_UsesQueuedRuleNotLaterEdit(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	t0 := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	candles := make([]domain.Candle, 40)
+	for i := 0; i < 40; i++ {
+		vol := "100"
+		if i == 25 {
+			vol = "500"
+		}
+		candles[i] = domain.Candle{
+			OpenTime: t0.Add(time.Duration(i) * 24 * time.Hour),
+			Close:    "10",
+			Volume:   vol,
+		}
+	}
+	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
+		"binance|ETHUSDT|1d": candles,
+	}}, &fakeWatch{})
+	ctx := context.Background()
+	rule, err := svc.Create(ctx, CreateInput{
+		ClientID: "bt-snap", Type: "volume_increase", Interval: "1d",
+		VolumeLookback: 10, VolumeMinRatio: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-snap", RuleID: rule.ID, Exchange: "binance", Symbol: "ETHUSDT",
+		RangeStart: t0.Add(15 * 24 * time.Hour), RangeEnd: t0.Add(35 * 24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.RuleJSON == "" {
+		t.Fatal("queued job must store a rule snapshot")
+	}
+	high := 99.0
+	if _, err := svc.Update(ctx, UpdateInput{ClientID: "bt-snap", ID: rule.ID, VolumeMinRatio: &high}); err != nil {
+		t.Fatal(err)
+	}
+	(&BacktestWorker{Scanner: svc, Interval: time.Hour}).RunOnce(ctx)
+	got, err := svc.GetBacktest(ctx, "bt-snap", job.ID)
+	if err != nil || got.Status != domain.BacktestCompleted {
+		t.Fatalf("status %+v err=%v", got, err)
+	}
+	if got.SignalCount < 1 {
+		t.Fatalf("edit after queue must not erase the original 2x spike: %+v", got)
+	}
+}
