@@ -3887,6 +3887,8 @@ export interface components {
             notional?: number;
             /** @description Minimum after-fee profit in quote currency */
             minProfit?: number;
+            /** @description Seconds the fill must stay qualifying before opening */
+            minDurationSec?: number;
             /** @description Optional extra profit % floor */
             minNetDiffPct?: number;
             feeBinancePct?: number;
@@ -8107,6 +8109,11 @@ export interface operations {
                      * @example 20
                      */
                     minProfit: number;
+                    /**
+                     * @description Seconds the qualifying fill must hold before opening; 0 = first tick
+                     * @example 60
+                     */
+                    minDurationSec?: number;
                     /**
                      * @description Optional extra profit percent floor
                      * @example 0.5

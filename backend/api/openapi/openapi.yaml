@@ -5175,13 +5175,15 @@ paths:
     post:
       summary: Create a cross-exchange price difference watch
       description: |
-        Tracks a symbol on Binance, Coinbase, and Bybit. Walks live books for
+        Tracks a symbol on Binance, Coinbase, and Bybit. Walks **fresh** live books for
         `notional` and opens an opportunity only when that size can be bought
         and sold and after-fee profit (including slippage) is at least `minProfit`.
+        Stale books (FetchedAt older than 2 minutes) are ignored. `minDurationSec`
+        requires the fill to stay qualifying that long; a break resets the timer.
         Does not open from ticker last-price gaps alone. Does not create a
         duplicate while open. When the book fill no longer meets the floor the
-        opportunity closes; a later re-cross opens a new one. Missing books skip
-        that venue. Informational only — not financial advice.
+        opportunity closes; a later re-cross opens a new one. Missing or stale
+        books skip that venue. Informational only — not financial advice.
       operationId: createPriceDiffWatch
       tags: [PriceDiff]
       requestBody:
@@ -5204,6 +5206,11 @@ paths:
                   minimum: 0
                   description: Minimum after-fee profit in quote currency
                   example: 20
+                minDurationSec:
+                  type: number
+                  minimum: 0
+                  description: Seconds the qualifying fill must hold before opening; 0 = first tick
+                  example: 60
                 minNetDiffPct:
                   type: number
                   minimum: 0
@@ -7825,6 +7832,7 @@ components:
         symbol: { type: string }
         notional: { type: number, description: Quote size walked on live books }
         minProfit: { type: number, description: Minimum after-fee profit in quote currency }
+        minDurationSec: { type: number, description: Seconds the fill must stay qualifying before opening }
         minNetDiffPct:
           type: number
           description: Optional extra profit % floor

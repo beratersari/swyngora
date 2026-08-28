@@ -186,7 +186,7 @@ type DataPort interface {
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
+	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
 	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3610,11 +3610,12 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_price_diff_watch",
-		mcp.WithDescription("Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when that notional can be bought and sold on live books and after-fee profit (including slippage) is at least minProfit."),
+		mcp.WithDescription("Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when that notional can be bought and sold on fresh live books and after-fee profit (including slippage) is at least minProfit. minDurationSec requires the fill to stay qualifying that long; a break resets the timer."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("notional", mcp.Required(), mcp.Description("Quote size to walk on the buy book e.g. 10000")),
 		mcp.WithNumber("minProfit", mcp.Required(), mcp.Description("Minimum after-fee profit in quote currency e.g. 20")),
+		mcp.WithNumber("minDurationSec", mcp.Description("Seconds the fill must stay qualifying before opening; 0 = first tick")),
 		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional extra profit % floor")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee % e.g. 0.1")),
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee % e.g. 0.6")),
@@ -3637,7 +3638,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, notional, minProfit,
-			req.GetFloat("minNetDiffPct", 0),
+			req.GetFloat("minNetDiffPct", 0), req.GetFloat("minDurationSec", 0),
 			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

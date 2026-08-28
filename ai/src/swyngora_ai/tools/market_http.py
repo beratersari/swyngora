@@ -1352,6 +1352,11 @@ class PriceDiffWatchCreateInput(BaseModel):
     symbol: str
     notional: float = Field(gt=0, description="Quote size to walk on live books e.g. 10000")
     min_profit: float = Field(ge=0, description="Minimum after-fee profit in quote currency e.g. 20")
+    min_duration_sec: float = Field(
+        default=0,
+        ge=0,
+        description="Seconds the fill must stay qualifying before opening; 0 = first tick",
+    )
     min_net_diff_pct: float = Field(default=0, ge=0, description="Optional extra profit % floor")
     fee_binance_pct: float = Field(default=0, ge=0, description="Binance fee %")
     fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase fee %")
@@ -3123,6 +3128,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         symbol: str,
         notional: float,
         min_profit: float,
+        min_duration_sec: float = 0,
         min_net_diff_pct: float = 0,
         fee_binance_pct: float = 0,
         fee_coinbase_pct: float = 0,
@@ -3135,6 +3141,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "symbol": symbol,
                 "notional": notional,
                 "minProfit": min_profit,
+                "minDurationSec": min_duration_sec,
                 "minNetDiffPct": min_net_diff_pct,
                 "feeBinancePct": fee_binance_pct,
                 "feeCoinbasePct": fee_coinbase_pct,
@@ -4567,8 +4574,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="create_price_diff_watch",
             description=(
                 "Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when "
-                "the notional can be bought and sold on live books and after-fee profit "
-                "(including slippage) is at least min_profit."
+                "the notional can be bought and sold on fresh live books and after-fee profit "
+                "(including slippage) is at least min_profit. min_duration_sec keeps the fill "
+                "qualifying that long before opening; a break resets the timer."
             ),
             args_schema=PriceDiffWatchCreateInput,
         ),

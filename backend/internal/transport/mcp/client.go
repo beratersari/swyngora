@@ -1974,10 +1974,10 @@ func (c *APIClient) ListMarginTrades(ctx context.Context, clientID string, limit
 }
 
 // CreatePriceDiffWatch creates a cross-exchange price difference watch.
-func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", map[string]any{
 		"clientId": clientID, "symbol": symbol, "notional": notional, "minProfit": minProfit,
-		"minNetDiffPct": minNetDiffPct,
+		"minNetDiffPct": minNetDiffPct, "minDurationSec": minDurationSec,
 		"feeBinancePct": feeBinance, "feeCoinbasePct": feeCoinbase, "feeBybitPct": feeBybit,
 	})
 }

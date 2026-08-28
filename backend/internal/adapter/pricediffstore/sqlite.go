@@ -138,11 +138,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pd_opp_open_route
 			return err
 		}
 	}
+	if v < 3 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE price_diff_watches ADD COLUMN min_duration_sec REAL NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS price_diff_route_arms (
+	watch_id      TEXT NOT NULL,
+	buy_exchange  TEXT NOT NULL,
+	sell_exchange TEXT NOT NULL,
+	armed_at      TEXT NOT NULL,
+	PRIMARY KEY (watch_id, buy_exchange, sell_exchange),
+	FOREIGN KEY (watch_id) REFERENCES price_diff_watches(id) ON DELETE CASCADE
+)`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 const watchCols = `id, client_id, symbol, min_net_diff_pct, fee_binance_pct, fee_coinbase_pct,
-	fee_bybit_pct, status, created_at, updated_at, notional, min_profit`
+	fee_bybit_pct, status, created_at, updated_at, notional, min_profit, min_duration_sec`
 
 type scannable interface {
 	Scan(dest ...any) error
@@ -153,7 +172,7 @@ func scanWatch(row scannable) (*domain.PriceDiffWatch, error) {
 	var st, cAt, uAt string
 	if err := row.Scan(
 		&w.ID, &w.ClientID, &w.Symbol, &w.MinNetDiffPct, &w.FeeBinancePct, &w.FeeCoinbasePct,
-		&w.FeeBybitPct, &st, &cAt, &uAt, &w.Notional, &w.MinProfit,
+		&w.FeeBybitPct, &st, &cAt, &uAt, &w.Notional, &w.MinProfit, &w.MinDurationSec,
 	); err != nil {
 		return nil, err
 	}
@@ -180,10 +199,10 @@ func (s *SQLite) CreateWatch(ctx context.Context, w domain.PriceDiffWatch) (*dom
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_diff_watches (`+watchCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, w.ID, w.ClientID, w.Symbol, w.MinNetDiffPct, w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct,
 		string(w.Status), w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		w.Notional, w.MinProfit)
+		w.Notional, w.MinProfit, w.MinDurationSec)
 	if err != nil {
 		return nil, err
 	}
@@ -444,4 +463,54 @@ func scanOpps(rows *sql.Rows) ([]domain.PriceDiffOpportunity, error) {
 		out = append(out, *o)
 	}
 	return out, rows.Err()
+}
+
+// ListRouteArms returns first-seen times for qualifying routes on a watch.
+func (s *SQLite) ListRouteArms(ctx context.Context, watchID string) ([]domain.PriceDiffRouteArm, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT watch_id, buy_exchange, sell_exchange, armed_at
+		FROM price_diff_route_arms WHERE watch_id = ?
+	`, watchID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.PriceDiffRouteArm
+	for rows.Next() {
+		var a domain.PriceDiffRouteArm
+		var buy, sell, at string
+		if err := rows.Scan(&a.WatchID, &buy, &sell, &at); err != nil {
+			return nil, err
+		}
+		a.BuyExchange = domain.Exchange(buy)
+		a.SellExchange = domain.Exchange(sell)
+		a.ArmedAt = parseTime(at)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// SetRouteArm records first-seen time; an existing row is left unchanged.
+func (s *SQLite) SetRouteArm(ctx context.Context, arm domain.PriceDiffRouteArm) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if arm.ArmedAt.IsZero() {
+		arm.ArmedAt = time.Now().UTC()
+	}
+	_, err := s.db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO price_diff_route_arms (watch_id, buy_exchange, sell_exchange, armed_at)
+		VALUES (?, ?, ?, ?)
+	`, arm.WatchID, string(arm.BuyExchange), string(arm.SellExchange), arm.ArmedAt.UTC().Format(time.RFC3339Nano))
+	return err
+}
+
+// ClearRouteArm drops a pending arm when the condition breaks or an opportunity opens.
+func (s *SQLite) ClearRouteArm(ctx context.Context, watchID string, buy, sell domain.Exchange) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM price_diff_route_arms
+		WHERE watch_id = ? AND buy_exchange = ? AND sell_exchange = ?
+	`, watchID, string(buy), string(sell))
+	return err
 }

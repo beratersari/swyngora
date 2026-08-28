@@ -17,7 +17,8 @@ const (
 	MinPriceDiffNotional         = 1.0
 	MaxPriceDiffNotional         = 1e9
 	MaxPriceDiffMinProfit        = 1e9
-	// DefaultPriceDiffMaxAge is how fresh a ticker CloseTime must be to count.
+	MaxPriceDiffMinDurationSec   = 24 * 60 * 60 // 24h
+	// DefaultPriceDiffMaxAge is how fresh a ticker CloseTime or book FetchedAt must be.
 	DefaultPriceDiffMaxAge = 2 * time.Minute
 )
 
@@ -48,12 +49,21 @@ type PriceDiffWatch struct {
 	Notional       float64
 	MinProfit      float64
 	MinNetDiffPct  float64
+	MinDurationSec float64 // condition must stay true this long before open; 0 = immediate
 	FeeBinancePct  float64
 	FeeCoinbasePct float64
 	FeeBybitPct    float64
 	Status         PriceDiffWatchStatus
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// PriceDiffRouteArm is when a watch first saw a qualifying book fill on a route.
+type PriceDiffRouteArm struct {
+	WatchID      string
+	BuyExchange  Exchange
+	SellExchange Exchange
+	ArmedAt      time.Time
 }
 
 // PriceDiffOpportunity is a detected buy/sell route across two exchanges.
@@ -195,6 +205,41 @@ func IsFreshTicker(t *Ticker24h, now time.Time, maxAge time.Duration) bool {
 	return age >= 0 && age <= maxAge
 }
 
+// IsFreshOrderBook reports whether the book's FetchedAt is within maxAge of now.
+// Zero FetchedAt is not fresh.
+func IsFreshOrderBook(b *RawOrderBook, now time.Time, maxAge time.Duration) bool {
+	if b == nil || maxAge <= 0 {
+		return false
+	}
+	if b.FetchedAt.IsZero() {
+		return false
+	}
+	age := now.UTC().Sub(b.FetchedAt.UTC())
+	if age < 0 {
+		return true
+	}
+	return age <= maxAge
+}
+
+// ResolvePriceDiffMinDuration accepts seconds (0 = open on first qualifying tick).
+func ResolvePriceDiffMinDuration(sec float64) (time.Duration, error) {
+	if sec < 0 || sec > MaxPriceDiffMinDurationSec || math.IsNaN(sec) || math.IsInf(sec, 0) {
+		return 0, fmt.Errorf("%w: minDurationSec must be between 0 and %d", ErrInvalidArgument, MaxPriceDiffMinDurationSec)
+	}
+	return time.Duration(sec * float64(time.Second)), nil
+}
+
+// PriceDiffHeldLongEnough is true when min is 0, or since has been true for min.
+func PriceDiffHeldLongEnough(since, now time.Time, min time.Duration) bool {
+	if min <= 0 {
+		return true
+	}
+	if since.IsZero() {
+		return false
+	}
+	return !now.UTC().Before(since.UTC().Add(min))
+}
+
 // PriceDiffPort persists watches and opportunities.
 type PriceDiffPort interface {
 	CreateWatch(ctx context.Context, w PriceDiffWatch) (*PriceDiffWatch, error)
@@ -216,4 +261,10 @@ type PriceDiffPort interface {
 	ListOpenOpportunitiesForWatch(ctx context.Context, watchID string) ([]PriceDiffOpportunity, error)
 	ListOpportunities(ctx context.Context, clientID string, status PriceDiffOppStatus, limit, offset int) ([]PriceDiffOpportunity, error)
 	GetOpportunity(ctx context.Context, clientID, id string) (*PriceDiffOpportunity, error)
+
+	// Route arms remember when a qualifying fill first appeared so min duration can elapse.
+	ListRouteArms(ctx context.Context, watchID string) ([]PriceDiffRouteArm, error)
+	// SetRouteArm records first-seen time; an existing arm is left unchanged.
+	SetRouteArm(ctx context.Context, arm PriceDiffRouteArm) error
+	ClearRouteArm(ctx context.Context, watchID string, buy, sell Exchange) error
 }

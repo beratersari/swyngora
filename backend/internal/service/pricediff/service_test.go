@@ -303,6 +303,87 @@ func TestThinBookDoesNotOpen(t *testing.T) {
 	}
 }
 
+func TestStaleBookDoesNotOpen(t *testing.T) {
+	now := time.Now().UTC()
+	books := booksAt(now.Add(-10*time.Minute), 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 2 * time.Minute
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "stale-book", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, _, _, err := svc.ProcessActiveWatches(context.Background(), now)
+	if err != nil || c != 0 {
+		t.Fatalf("stale books must not open, created=%d err=%v", c, err)
+	}
+}
+
+func TestMinDurationHoldsThenOpensAndResets(t *testing.T) {
+	t0 := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	books := booksAt(t0, 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 10 * time.Minute
+	ctx := context.Background()
+	if _, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "hold", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		MinDurationSec: 60,
+		FeeBinancePct:  0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stampBooks(books, t0)
+	c, _, _, err := svc.ProcessActiveWatches(ctx, t0)
+	if err != nil || c != 0 {
+		t.Fatalf("first tick must wait, created=%d err=%v", c, err)
+	}
+	stampBooks(books, t0.Add(30*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(30*time.Second))
+	if err != nil || c != 0 {
+		t.Fatalf("30s < 60s, created=%d err=%v", c, err)
+	}
+	stampBooks(books, t0.Add(60*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(60*time.Second))
+	if err != nil || c < 1 {
+		t.Fatalf("held 60s should open, created=%d err=%v", c, err)
+	}
+
+	// Close then one-tick spike must not open until duration holds again.
+	stampBooks(books, t0.Add(70*time.Second))
+	books.data["coinbase|BTC-USD"] = venueBook(100, 100, 1000, t0.Add(70*time.Second))
+	_, cl, _, err := svc.ProcessActiveWatches(ctx, t0.Add(70*time.Second))
+	if err != nil || cl < 1 {
+		t.Fatalf("expected close after break, closed=%d err=%v", cl, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(110, 110, 1000, t0.Add(80*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(80*time.Second))
+	if err != nil || c != 0 {
+		t.Fatalf("re-arm first tick must wait, created=%d err=%v", c, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(100, 100, 1000, t0.Add(90*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(90*time.Second))
+	if err != nil || c != 0 {
+		t.Fatalf("break should reset arm, created=%d err=%v", c, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(110, 110, 1000, t0.Add(100*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(100*time.Second))
+	if err != nil || c != 0 {
+		t.Fatalf("new arm first tick, created=%d err=%v", c, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(110, 110, 1000, t0.Add(160*time.Second))
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t0.Add(160*time.Second))
+	if err != nil || c < 1 {
+		t.Fatalf("held again should open, created=%d err=%v", c, err)
+	}
+}
+
+func stampBooks(f *fakeBooks, now time.Time) {
+	for _, b := range f.data {
+		b.FetchedAt = now
+	}
+}
+
 type fakeBooks struct {
 	data map[string]*domain.RawOrderBook
 	err  map[string]error
@@ -326,12 +407,13 @@ func (f *fakeBooks) GetRawOrderBook(_ context.Context, exchange, symbol string) 
 }
 
 func quoteBooks() (buy, sell *domain.RawOrderBook) {
+	now := time.Now().UTC()
 	buy = &domain.RawOrderBook{
-		Symbol: "BTCUSDT", Live: true,
+		Symbol: "BTCUSDT", Live: true, FetchedAt: now,
 		Asks: []domain.PriceLevel{{Price: 100, Quantity: 1}, {Price: 101, Quantity: 1}},
 	}
 	sell = &domain.RawOrderBook{
-		Symbol: "BTC-USD", Live: true,
+		Symbol: "BTC-USD", Live: true, FetchedAt: now,
 		Bids: []domain.PriceLevel{{Price: 103, Quantity: 1}, {Price: 102, Quantity: 1}},
 	}
 	return buy, sell

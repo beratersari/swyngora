@@ -43,6 +43,7 @@ type CreateInput struct {
 	Notional       float64
 	MinProfit      float64
 	MinNetDiffPct  float64
+	MinDurationSec float64
 	FeeBinancePct  float64
 	FeeCoinbasePct float64
 	FeeBybitPct    float64
@@ -140,6 +141,10 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 		math.IsNaN(in.MinNetDiffPct) || math.IsInf(in.MinNetDiffPct, 0) {
 		return nil, fmt.Errorf("%w: minNetDiffPct must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffNetPct)
 	}
+	minDur, err := domain.ResolvePriceDiffMinDuration(in.MinDurationSec)
+	if err != nil {
+		return nil, err
+	}
 	for _, f := range []float64{in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct} {
 		if f < 0 || f > domain.MaxPriceDiffFeePct || math.IsNaN(f) || math.IsInf(f, 0) {
 			return nil, fmt.Errorf("%w: fees must be between 0 and %g percent", domain.ErrInvalidArgument, domain.MaxPriceDiffFeePct)
@@ -156,7 +161,8 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 	w := domain.PriceDiffWatch{
 		ID: uuid.NewString(), ClientID: clientID, Symbol: sym,
 		Notional: in.Notional, MinProfit: in.MinProfit, MinNetDiffPct: in.MinNetDiffPct,
-		FeeBinancePct: in.FeeBinancePct, FeeCoinbasePct: in.FeeCoinbasePct, FeeBybitPct: in.FeeBybitPct,
+		MinDurationSec: minDur.Seconds(),
+		FeeBinancePct:  in.FeeBinancePct, FeeCoinbasePct: in.FeeCoinbasePct, FeeBybitPct: in.FeeBybitPct,
 		Status: domain.PriceDiffWatchActive, CreatedAt: now, UpdatedAt: now,
 	}
 	return s.store.CreateWatch(ctx, w)
@@ -284,6 +290,14 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 	if s.books == nil || w.Notional < domain.MinPriceDiffNotional {
 		return 0, 0, 0, nil
 	}
+	maxAge := s.MaxPriceAge
+	if maxAge <= 0 {
+		maxAge = domain.DefaultPriceDiffMaxAge
+	}
+	minDur, err := domain.ResolvePriceDiffMinDuration(w.MinDurationSec)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 	books, _, err := s.fetchAllQuoteBooks(ctx, w.Symbol)
 	if err != nil {
 		return 0, 0, 0, err
@@ -302,9 +316,14 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		if domain.IsEquityExchange(ex) {
 			continue
 		}
-		if b := books[ex]; b != nil && (len(b.Bids) > 0 || len(b.Asks) > 0) {
-			venues = append(venues, ex)
+		b := books[ex]
+		if b == nil || (len(b.Bids) == 0 && len(b.Asks) == 0) {
+			continue
 		}
+		if !domain.IsFreshOrderBook(b, now, maxAge) {
+			continue
+		}
+		venues = append(venues, ex)
 	}
 	if len(venues) < 2 {
 		return 0, 0, 0, nil
@@ -334,6 +353,17 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		}
 	}
 
+	armByKey := map[string]time.Time{}
+	if minDur > 0 {
+		arms, aerr := s.store.ListRouteArms(ctx, w.ID)
+		if aerr != nil {
+			return 0, 0, 0, aerr
+		}
+		for _, a := range arms {
+			armByKey[routeKey(a.BuyExchange, a.SellExchange)] = a.ArmedAt
+		}
+	}
+
 	open, err := s.store.ListOpenOpportunitiesForWatch(ctx, w.ID)
 	if err != nil {
 		return 0, 0, 0, err
@@ -347,6 +377,7 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 			continue
 		}
 		if _, ok := active[k]; !ok {
+			_ = s.store.ClearRouteArm(ctx, w.ID, open[i].BuyExchange, open[i].SellExchange)
 			if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e == nil {
 				closed++
 			}
@@ -362,6 +393,18 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		if _, exists := openByKey[k]; exists {
 			continue
 		}
+		if minDur > 0 {
+			since, ok := armByKey[k]
+			if !ok {
+				_ = s.store.SetRouteArm(ctx, domain.PriceDiffRouteArm{
+					WatchID: w.ID, BuyExchange: q.BuyExchange, SellExchange: q.SellExchange, ArmedAt: now,
+				})
+				continue
+			}
+			if !domain.PriceDiffHeldLongEnough(since, now, minDur) {
+				continue
+			}
+		}
 		buyP, sellP := quoteFillPrices(q)
 		opp := domain.PriceDiffOpportunity{
 			ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
@@ -373,7 +416,14 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		}
 		if _, e := s.store.CreateOpportunity(ctx, opp); e == nil {
 			created++
+			_ = s.store.ClearRouteArm(ctx, w.ID, q.BuyExchange, q.SellExchange)
 		}
+	}
+	for k, q := range quoted {
+		if _, ok := active[k]; ok {
+			continue
+		}
+		_ = s.store.ClearRouteArm(ctx, w.ID, q.BuyExchange, q.SellExchange)
 	}
 	return created, closed, touched, nil
 }

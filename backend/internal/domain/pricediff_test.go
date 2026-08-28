@@ -73,3 +73,41 @@ func TestIsFreshTicker(t *testing.T) {
 		t.Fatal("nil not fresh")
 	}
 }
+
+func TestIsFreshOrderBook(t *testing.T) {
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	ok := &RawOrderBook{FetchedAt: now.Add(-30 * time.Second)}
+	if !IsFreshOrderBook(ok, now, 2*time.Minute) {
+		t.Fatal("expected fresh book")
+	}
+	stale := &RawOrderBook{FetchedAt: now.Add(-5 * time.Minute)}
+	if IsFreshOrderBook(stale, now, 2*time.Minute) {
+		t.Fatal("expected stale book")
+	}
+	if IsFreshOrderBook(&RawOrderBook{}, now, 2*time.Minute) {
+		t.Fatal("zero FetchedAt not fresh")
+	}
+	if IsFreshOrderBook(nil, now, 2*time.Minute) {
+		t.Fatal("nil book not fresh")
+	}
+	newer := &RawOrderBook{FetchedAt: now.Add(time.Second)}
+	if !IsFreshOrderBook(newer, now, 2*time.Minute) {
+		t.Fatal("book fetched after now is still fresh")
+	}
+}
+
+func TestPriceDiffHeldLongEnough(t *testing.T) {
+	now := time.Date(2024, 6, 1, 12, 0, 0, 0, time.UTC)
+	if !PriceDiffHeldLongEnough(time.Time{}, now, 0) {
+		t.Fatal("zero min should open immediately")
+	}
+	if PriceDiffHeldLongEnough(time.Time{}, now, time.Minute) {
+		t.Fatal("missing arm should wait")
+	}
+	if PriceDiffHeldLongEnough(now.Add(-30*time.Second), now, time.Minute) {
+		t.Fatal("30s < 60s")
+	}
+	if !PriceDiffHeldLongEnough(now.Add(-time.Minute), now, time.Minute) {
+		t.Fatal("60s should be enough")
+	}
+}

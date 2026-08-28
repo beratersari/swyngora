@@ -27,6 +27,7 @@ type priceDiffWatchDTO struct {
 	Notional       float64 `json:"notional"`
 	MinProfit      float64 `json:"minProfit"`
 	MinNetDiffPct  float64 `json:"minNetDiffPct,omitempty"`
+	MinDurationSec float64 `json:"minDurationSec,omitempty"`
 	FeeBinancePct  float64 `json:"feeBinancePct"`
 	FeeCoinbasePct float64 `json:"feeCoinbasePct"`
 	FeeBybitPct    float64 `json:"feeBybitPct"`
@@ -57,7 +58,8 @@ func watchDTO(w *domain.PriceDiffWatch) priceDiffWatchDTO {
 	return priceDiffWatchDTO{
 		ID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
 		Notional: w.Notional, MinProfit: w.MinProfit, MinNetDiffPct: w.MinNetDiffPct,
-		FeeBinancePct: w.FeeBinancePct, FeeCoinbasePct: w.FeeCoinbasePct, FeeBybitPct: w.FeeBybitPct,
+		MinDurationSec: w.MinDurationSec,
+		FeeBinancePct:  w.FeeBinancePct, FeeCoinbasePct: w.FeeCoinbasePct, FeeBybitPct: w.FeeBybitPct,
 		Status:    string(w.Status),
 		CreatedAt: w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: w.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -87,6 +89,7 @@ type createWatchBody struct {
 	Notional       float64 `json:"notional"`
 	MinProfit      float64 `json:"minProfit"`
 	MinNetDiffPct  float64 `json:"minNetDiffPct"`
+	MinDurationSec float64 `json:"minDurationSec"`
 	FeeBinancePct  float64 `json:"feeBinancePct"`
 	FeeCoinbasePct float64 `json:"feeCoinbasePct"`
 	FeeBybitPct    float64 `json:"feeBybitPct"`
@@ -105,7 +108,7 @@ func (h *PriceDiffHandler) CreateWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	watch, err := h.svc.CreateWatch(r.Context(), pricediff.CreateInput{
 		ClientID: clientID, Symbol: body.Symbol, Notional: body.Notional, MinProfit: body.MinProfit,
-		MinNetDiffPct: body.MinNetDiffPct,
+		MinNetDiffPct: body.MinNetDiffPct, MinDurationSec: body.MinDurationSec,
 		FeeBinancePct: body.FeeBinancePct, FeeCoinbasePct: body.FeeCoinbasePct, FeeBybitPct: body.FeeBybitPct,
 	})
 	if err != nil {
