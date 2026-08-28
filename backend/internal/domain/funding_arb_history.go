@@ -101,6 +101,30 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 		skip int
 		runs = []FundingArbHistoryRun{}
 	)
+	collect := func(run *rawRun, batch []fundingHistEv, long, short Exchange) {
+		if run == nil {
+			return
+		}
+		for _, e := range batch {
+			amt := 0.0
+			switch e.Exchange {
+			case long:
+				amt = -notional * e.Rate
+			case short:
+				amt = notional * e.Rate
+			default:
+				continue
+			}
+			dec, pct := FormatFundingRate(e.Rate)
+			run.pays = append(run.pays, FundingArbHistoryPayment{
+				Time: e.Time.UTC().Format(time.RFC3339Nano), Exchange: string(e.Exchange),
+				Rate: dec, RatePct: pct, Amount: FormatSignedQty(amt),
+				LongExchange: string(long), ShortExchange: string(short),
+			})
+			run.funding += amt
+			run.end = e.Time
+		}
+	}
 	flush := func() {
 		if cur == nil {
 			return
@@ -151,6 +175,9 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 			continue
 		}
 		if cur != nil && (cur.long != long || cur.short != short) {
+			// Direction flips at this settlement. The old position was already
+			// open, so this clock still pays the old sides, then the run ends.
+			collect(cur, batch, cur.long, cur.short)
 			flush()
 		}
 		if cur == nil {
@@ -159,25 +186,7 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 			cur = &rawRun{long: long, short: short, start: t, end: t}
 			continue
 		}
-		for _, e := range batch {
-			amt := 0.0
-			switch e.Exchange {
-			case long:
-				amt = -notional * e.Rate
-			case short:
-				amt = notional * e.Rate
-			default:
-				continue
-			}
-			dec, pct := FormatFundingRate(e.Rate)
-			cur.pays = append(cur.pays, FundingArbHistoryPayment{
-				Time: e.Time.UTC().Format(time.RFC3339Nano), Exchange: string(e.Exchange),
-				Rate: dec, RatePct: pct, Amount: FormatSignedQty(amt),
-				LongExchange: string(long), ShortExchange: string(short),
-			})
-			cur.funding += amt
-			cur.end = e.Time
-		}
+		collect(cur, batch, long, short)
 	}
 	flush()
 

@@ -41,6 +41,9 @@ receives). A hold window with **no** clock in `(now, now+holdHours]` has
 - The **first clock of a run is the entry signal** — that payment is not
   collected (the position was not open before it). A stretch that starts and
   ends at the same clock (e.g. 08:00–08:00) is not profit.
+- When long/short **flips at a settlement**, that clock still pays the **old**
+  sides (the position was already open), then the run ends and the new
+  direction starts as an entry signal.
 - Lists a run only when later settled funding minus round-trip fees is positive
 - `from` / `to`: RFC3339, `YYYY-MM-DD` (UTC), or unix ms; max 30 days
 
@@ -48,8 +51,11 @@ receives). A hold window with **no** clock in `(now, now+holdHours]` has
 horizon net ≥ `minProfit` (quote currency). The checker re-quotes on
 `FUNDING_ARB_CHECK_INTERVAL` (default 30s). Crossing opens a signal and
 enqueues the client's alert webhook (`type=funding_arb.triggered`). When net
-falls below the floor the signal closes and the watch re-arms. Max 20 watches
-per client.
+stays above the floor in the **same** long/short pair, the open signal is
+updated and no second notify is sent. A **direction flip** while still above
+the floor closes the old signal and opens a new one (notifies once for the
+new sides). When net falls below the floor the signal closes and the watch
+re-arms. Max 20 watches per client.
 
 This is **not** an executable arb and **not** financial advice.
 

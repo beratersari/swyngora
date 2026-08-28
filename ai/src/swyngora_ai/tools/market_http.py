@@ -3433,7 +3433,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "stretch of the same long/short pair and is listed only when "
                 "settled funding minus round-trip fees is positive. The first "
                 "clock of a run is the entry signal and is not collected "
-                "profit. start/end are RFC3339 or YYYY-MM-DD (UTC), max 30 days."
+                "profit. A direction flip at settlement still pays the old "
+                "sides, then starts a new run. start/end are RFC3339 or "
+                "YYYY-MM-DD (UTC), max 30 days."
             ),
             args_schema=FundingArbHistoryInput,
         ),
@@ -3443,8 +3445,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Follow a coin's Binance vs Bybit funding opportunity. Notifies "
                 "via the client's alert webhook when after-fee net over "
-                "hold_hours is at least min_profit. Re-arms after net falls "
-                "below the floor. Not financial advice."
+                "hold_hours is at least min_profit. Same long/short while "
+                "still above the floor does not re-notify; a direction flip "
+                "closes the old signal and opens a new one. Re-arms after net "
+                "falls below the floor. Not financial advice."
             ),
             args_schema=FundingArbWatchCreateInput,
         ),

@@ -551,7 +551,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_arb_history",
-		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. The first clock of a run is the entry signal — that payment is not collected because the position was not open before it. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
+		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. The first clock of a run is the entry signal — that payment is not collected because the position was not open before it. A direction flip at settlement still pays the old sides, then starts a new run. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("from", mcp.Required(), mcp.Description("Range start RFC3339 or YYYY-MM-DD")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Range end RFC3339 or YYYY-MM-DD")),
@@ -580,7 +580,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_funding_arb_watch",
-		mcp.WithDescription("Follow a coin's Binance vs Bybit funding opportunity. Notifies via the client's alert webhook when after-fee net over holdHours is at least minProfit. Re-arms after net falls below the floor. Not financial advice."),
+		mcp.WithDescription("Follow a coin's Binance vs Bybit funding opportunity. Notifies via the client's alert webhook when after-fee net over holdHours is at least minProfit. Same long/short while still above the floor does not re-notify; a direction flip closes the old signal and opens a new one. Re-arms after net falls below the floor. Not financial advice."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("minProfit", mcp.Required(), mcp.Description("Minimum after-fee profit in quote currency (e.g. 10)")),

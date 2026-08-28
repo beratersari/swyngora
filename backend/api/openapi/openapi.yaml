@@ -1063,8 +1063,9 @@ paths:
         lists a run only when settled funding minus round-trip taker fees is
         positive. The first clock of a run is the entry signal — that payment
         is not collected (the position was not open before it). A run that
-        starts and ends on the same clock is not profit. `from`/`to` are
-        RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
+        starts and ends on the same clock is not profit. A direction flip at
+        settlement still pays the old sides, then starts a new run. `from`/`to`
+        are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
       operationId: getMarketFundingArbHistory
       tags: [Market]
       parameters:
@@ -1107,8 +1108,9 @@ paths:
         Evaluates Binance vs Bybit after-fee funding on a background interval.
         When horizon net is at least `minProfit` and `trade` is present, opens
         a signal and enqueues the client's alert webhook (`type=funding_arb.triggered`).
-        Re-arms after net falls below the floor. Max 20 watches per client.
-        Informational only.
+        Same long/short while still above the floor does not re-notify. A
+        direction flip closes the old signal and opens a new one. Re-arms after
+        net falls below the floor. Max 20 watches per client. Informational only.
       operationId: createFundingArbWatch
       tags: [FundingArb]
       requestBody:

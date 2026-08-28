@@ -110,6 +110,58 @@ func TestProcessActiveWatches_NoTradeIsNotNotify(t *testing.T) {
 	}
 }
 
+func TestProcessActiveWatches_DirectionFlipOpensNewSignal(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	q := &fakeQuotes{rep: &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 12,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "bybit", WorthIt: true},
+	}}
+	n := &fakeNotify{}
+	svc := New(st, q)
+	svc.SetNotifier(n)
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", Symbol: "BTCUSDT", Notional: 10000, HoldHours: 24, MinProfit: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if n.n != 1 {
+		t.Fatalf("first notify %d", n.n)
+	}
+	q.rep = &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 18,
+		Trade: &domain.FundingArbTradeView{LongExchange: "bybit", ShortExchange: "binance", WorthIt: true},
+	}
+	opened, closed, _, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 1 || closed != 1 {
+		t.Fatalf("flip open=%d close=%d err=%v", opened, closed, err)
+	}
+	if n.n != 2 {
+		t.Fatalf("flip must notify new direction %d", n.n)
+	}
+	sigs, err := svc.ListSignals(context.Background(), "client-a", "open", 10)
+	if err != nil || len(sigs) != 1 || sigs[0].LongExchange != domain.ExchangeBybit {
+		t.Fatalf("open signal %+v %v", sigs, err)
+	}
+	q.rep = &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 22,
+		Trade: &domain.FundingArbTradeView{LongExchange: "bybit", ShortExchange: "binance", WorthIt: true},
+	}
+	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 0 || closed != 0 {
+		t.Fatalf("same direction open=%d close=%d err=%v", opened, closed, err)
+	}
+	if n.n != 2 {
+		t.Fatalf("same direction must not notify again %d", n.n)
+	}
+}
+
 func TestCreateWatch_BadMinProfit(t *testing.T) {
 	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
 	if err != nil {

@@ -336,10 +336,45 @@ func TestBuildFundingArbHistory_SkipLosersAndFlip(t *testing.T) {
 		{Time: from.Add(8 * time.Hour), Rate: 0.00012},
 		{Time: from.Add(16 * time.Hour), Rate: 0.0001},
 	}
-	// First print pair: tiny spread, will lose after 40 of default-like fees.
-	// Second print: long bybit / short binance, one print of 10000*(0.003-0.0001)=29, still lose vs 40.
+	// 08:00 entry (not collected). 16:00 flips: old long binance / short bybit
+	// still receives that clock (-30 + 1 = -29) then the run ends. Fees 40.
 	got := BuildFundingArbHistory("ETHUSDT", bin, byb, 10_000, 0.001, 0.001, from, to)
 	if len(got.Runs) != 0 || got.SkippedUnprofitable < 1 {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestBuildFundingArbHistory_FlipCollectsOldPayment(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(2 * 24 * time.Hour)
+	bin := []FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.0001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.0001},
+		{Time: from.Add(24 * time.Hour), Rate: 0.00012},
+	}
+	byb := []FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.002},
+		{Time: from.Add(16 * time.Hour), Rate: 0.002},
+		{Time: from.Add(24 * time.Hour), Rate: 0.00011},
+	}
+	// 08:00 entry. 16:00 same sides: 19. 00:00 flip: old sides still get
+	// -1.2 + 1.1 = -0.1. Fees 0. Net 18.9. New run starts at 00:00 (no collect).
+	got := BuildFundingArbHistory("BTCUSDT", bin, byb, 10_000, 0, 0, from, to)
+	if len(got.Runs) != 1 {
+		t.Fatalf("%+v", got)
+	}
+	run := got.Runs[0]
+	if run.LongExchange != "binance" || run.ShortExchange != "bybit" {
+		t.Fatalf("sides %+v", run)
+	}
+	if run.PaymentCount != 4 {
+		t.Fatalf("pays %d want 16:00+00:00 venue prints", run.PaymentCount)
+	}
+	if !strings.Contains(run.EndedAt, "T00:00") {
+		t.Fatalf("flip clock must end the old run, endedAt=%s", run.EndedAt)
+	}
+	last := run.Payments[len(run.Payments)-1]
+	if !strings.Contains(last.Time, "T00:00") {
+		t.Fatalf("last collected payment must be the flip clock %+v", last)
 	}
 }

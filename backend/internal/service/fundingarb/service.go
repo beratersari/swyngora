@@ -238,15 +238,24 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (open
 			return opened, closed, touched, oerr
 		}
 		if above {
+			long := domain.Exchange(rep.Trade.LongExchange)
+			short := domain.Exchange(rep.Trade.ShortExchange)
+			if open != nil && (open.LongExchange != long || open.ShortExchange != short) {
+				if err := s.store.CloseSignal(ctx, open.ID, now); err != nil {
+					return opened, closed, touched, err
+				}
+				closed++
+				open = nil
+				w.Armed = true
+			}
 			if open == nil {
 				if !w.Armed {
 					continue
 				}
 				sig := domain.FundingArbSignal{
 					ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
-					LongExchange:  domain.Exchange(rep.Trade.LongExchange),
-					ShortExchange: domain.Exchange(rep.Trade.ShortExchange),
-					NetAfterFees:  net, MinProfit: w.MinProfit,
+					LongExchange: long, ShortExchange: short,
+					NetAfterFees: net, MinProfit: w.MinProfit,
 					Status: domain.FundingArbSignalOpen, OpenedAt: now, LastSeenAt: now,
 				}
 				if _, err := s.store.CreateSignal(ctx, sig); err != nil {

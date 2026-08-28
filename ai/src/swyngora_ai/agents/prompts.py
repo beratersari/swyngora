@@ -163,7 +163,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 - Prefer: `get_ticker` → live quote; `get_liquidations` → long/short futures liquidations in 5m/1h/4h/24h (Binance USD-M + Bybit linear);
   `get_open_interest` → current futures open interest plus 5m/1h/4h/24h change (contracts + USDT notional; includes funding; Binance USD-M + Bybit linear);
   `get_funding_rate` → predicted next perpetual funding plus recent settlements (rate / ratePct / payer);
-  `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history first clock is entry only (not collected profit); history needs start/end;
+  `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history first clock is entry only; a flip at settlement still pays the old sides; history needs start/end;
   `create_funding_arb_watch` / `list_funding_arb_watches` / `list_funding_arb_signals` → follow a pair and notify when after-fee net ≥ min_profit;
   `get_long_short_ratio` → share of accounts that are long vs short (ratio / bias);
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
