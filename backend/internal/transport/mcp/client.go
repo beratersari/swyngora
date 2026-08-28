@@ -557,6 +557,30 @@ func (c *APIClient) ScanVolumeSurges(ctx context.Context, exchange, quote string
 	return c.get(ctx, "/api/v1/market/volume-surge/scan", q)
 }
 
+// GetRSIHeatmap returns a ranked Wilder RSI scatter for top listed pairs.
+func (c *APIClient) GetRSIHeatmap(ctx context.Context, exchange, quote, interval, sort string, limit, period int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if interval != "" {
+		q.Set("interval", interval)
+	}
+	if sort != "" {
+		q.Set("sort", sort)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if period > 0 {
+		q.Set("period", strconv.Itoa(period))
+	}
+	return c.get(ctx, "/api/v1/market/rsi-heatmap", q)
+}
+
 // GetLiquiditySweeps returns pokes through a prior high/low that came back.
 func (c *APIClient) GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

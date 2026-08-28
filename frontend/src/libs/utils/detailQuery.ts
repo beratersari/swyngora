@@ -137,6 +137,57 @@ const SUPPLY_QUOTE_SUFFIXES = [
   'BNB',
 ] as const;
 
+const CRYPTO_QUOTE_SUFFIXES = new Set(['BTC', 'ETH', 'BNB']);
+
+/** Left sides of BTC/ETH/BNB pairs. Wrapped tails (WBTC, STETH) are omitted. */
+const CRYPTO_PAIR_BASES = new Set([
+  'BTC',
+  'ETH',
+  'BNB',
+  'SOL',
+  'XRP',
+  'ADA',
+  'DOGE',
+  'AVAX',
+  'DOT',
+  'LINK',
+  'ATOM',
+  'LTC',
+  'BCH',
+  'UNI',
+  'APT',
+  'SUI',
+  'NEAR',
+  'FIL',
+  'INJ',
+  'TIA',
+  'SEI',
+  'OP',
+  'ARB',
+  'AAVE',
+  'MKR',
+  'LDO',
+  'TRX',
+  'TON',
+  'HBAR',
+  'ICP',
+  'XLM',
+  'ETC',
+  'APE',
+  'PEPE',
+  'SHIB',
+  'WIF',
+  'BONK',
+  'JUP',
+  'FET',
+  'GRT',
+  'SAND',
+  'MANA',
+  'CRV',
+  'SNX',
+  'IMX',
+]);
+
 export function toSupplyAsset(symbol: string): string {
   const s = symbol.trim().toUpperCase();
   if (!s) return '';
@@ -148,7 +199,9 @@ export function toSupplyAsset(symbol: string): string {
   for (const q of SUPPLY_QUOTE_SUFFIXES) {
     if (s.length > q.length && s.endsWith(q)) {
       const base = s.slice(0, -q.length);
-      if (base && base !== q) return base;
+      if (!base || base === q) continue;
+      if (CRYPTO_QUOTE_SUFFIXES.has(q) && !CRYPTO_PAIR_BASES.has(base)) continue;
+      return base;
     }
   }
   return s;

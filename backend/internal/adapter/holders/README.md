@@ -13,6 +13,9 @@ Cascades public holder snapshots for `GET /api/v1/market/holders`.
 
 Contracts for 3–4 come from the CMC asset profile, then CoinGecko platforms.
 
+Cache keys use `NormalizeAssetKey`: `WBTCUSDT` and `WBTC` share an entry;
+`WBTC` and `W` do not.
+
 ```bash
 cd backend && go test ./internal/adapter/holders/ ./internal/adapter/geckoterminal/ ./internal/adapter/ethplorer/ ./internal/adapter/cmc/
 ```

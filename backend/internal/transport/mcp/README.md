@@ -49,6 +49,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |
 | `get_volume_surge` | Current 5m/15m/1h volume vs that coin's typical (median); buy/sell split |
 | `scan_volume_surges` | Rank coins whose volume is much higher than typical |
+| `get_rsi_heatmap` | Ranked Wilder RSI scatter for top listed pairs (stables omitted) |
 | `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |

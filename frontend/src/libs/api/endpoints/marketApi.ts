@@ -30,6 +30,8 @@ import type {
   PumpEventsResponse,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
+  RSIHeatmapQuery,
+  RSIHeatmapResponse,
   SpotListQuery,
   SpotListResponse,
   Supply,
@@ -91,6 +93,8 @@ export type {
   PumpScanHitDto,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
+  RSIHeatmapQuery,
+  RSIHeatmapResponse,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -297,6 +301,13 @@ export const marketApi = baseApi.injectEndpoints({
       keepUnusedDataFor: 300,
     }),
 
+    getRSIHeatmap: build.query<RSIHeatmapResponse, RSIHeatmapQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/rsi-heatmap',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     postIndicatorsBatch: build.mutation<
       {
         exchange?: string;
@@ -350,5 +361,6 @@ export const {
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,
+  useGetRSIHeatmapQuery,
   usePostIndicatorsBatchMutation,
 } = marketApi;

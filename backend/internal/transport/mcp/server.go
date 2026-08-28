@@ -69,6 +69,7 @@ type DataPort interface {
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanVolumeSurges(ctx context.Context, exchange, quote string, minRatio float64, limit int) (json.RawMessage, error)
+	GetRSIHeatmap(ctx context.Context, exchange, quote, intervals, sort string, limit, period int) (json.RawMessage, error)
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
@@ -909,6 +910,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetVolumeSurge(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_rsi_heatmap",
+		mcp.WithDescription("Ranked Wilder RSI scatter for top listed pairs on one venue. Each item is one coin (stables omitted) with market-cap rank and RSI on a single interval (default 1h). Cached about 60s. Informational only — not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | nasdaq | bist (default binance)")),
+		mcp.WithString("quote", mcp.Description("Quote asset (default USDT)")),
+		mcp.WithString("interval", mcp.Description("Candle interval (default 1h)")),
+		mcp.WithNumber("limit", mcp.Description("How many top pairs (default 24, max 40)")),
+		mcp.WithNumber("period", mcp.Description("RSI period (default 14)")),
+		mcp.WithString("sort", mcp.Description("quoteVolume or marketCapCirculating (default quoteVolume)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetRSIHeatmap(ctx, req.GetString("exchange", "binance"), req.GetString("quote", "USDT"), req.GetString("interval", req.GetString("intervals", "")), req.GetString("sort", ""), int(req.GetFloat("limit", 0)), int(req.GetFloat("period", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

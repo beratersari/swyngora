@@ -474,6 +474,24 @@ class TakerFlowInput(BaseModel):
     )
 
 
+class RSIHeatmapInput(BaseModel):
+    exchange: str = Field(
+        default="binance",
+        description="binance|coinbase|bybit|nasdaq|bist (default binance)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    interval: str = Field(
+        default="1h",
+        description="Candle interval (default 1h)",
+    )
+    limit: int = Field(default=0, description="How many top pairs (default 24, max 40)")
+    period: int = Field(default=0, description="RSI period (default 14)")
+    sort: str = Field(
+        default="",
+        description="quoteVolume or marketCapCirculating",
+    )
+
+
 class VolumeSurgeScanInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -1718,6 +1736,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/volume-surge",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_rsi_heatmap(
+        exchange: str = "binance",
+        quote: str = "USDT",
+        interval: str = "1h",
+        limit: int = 0,
+        period: int = 0,
+        sort: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if interval:
+            params["interval"] = interval
+        if limit:
+            params["limit"] = limit
+        if period:
+            params["period"] = period
+        if sort:
+            params["sort"] = sort
+        return http.get("/api/v1/market/rsi-heatmap", params)
 
     def scan_volume_surges(
         exchange: str = "binance",
@@ -3754,6 +3791,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "one-sided."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_rsi_heatmap,
+            name="get_rsi_heatmap",
+            description=(
+                "Ranked Wilder RSI scatter for top listed pairs. Each "
+                "item is one coin (stables omitted) with rank and RSI "
+                "on a single interval (default 1h). Informational only."
+            ),
+            args_schema=RSIHeatmapInput,
         ),
         StructuredTool.from_function(
             scan_volume_surges,

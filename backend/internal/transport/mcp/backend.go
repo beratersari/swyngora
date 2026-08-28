@@ -346,6 +346,17 @@ func (b *Backend) ScanVolumeSurges(ctx context.Context, exchange, quote string, 
 	return mustJSON(got)
 }
 
+func (b *Backend) GetRSIHeatmap(ctx context.Context, exchange, quote, intervals, sort string, limit, period int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetRSIHeatmap(ctx, exchange, quote, intervals, sort, limit, period)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

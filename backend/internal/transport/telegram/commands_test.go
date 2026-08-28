@@ -151,6 +151,17 @@ func TestRSIArgOrder_EitherWay(t *testing.T) {
 	}
 }
 
+func TestRSIHeatCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 12, 12, "/rsiheat binance USDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "RSI") && !strings.Contains(out, "AAAUSDT") {
+		t.Fatalf("expected heatmap grid: %s", out)
+	}
+}
+
 func TestWatchUsesStableUnguessableClientID(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 99, 42, "/watch add BTCUSDT")

@@ -38,7 +38,7 @@ Tokens: `src/styles/tokens/colors.ts` · Motion: `src/styles/tokens/motion.ts` �
 | Package agent rules | `frontend/AGENTS.md`                    |
 | System design       | `docs/design/frontend-system-design.md` |
 | Local tasks / board | `project-management/board.md`           |
-| Features            | Markets · heatmap · detail · watchlist · paper trading · pumps · AI chat |
+| Features            | Markets · heatmap (price + RSI) · detail · watchlist · paper trading · pumps · AI chat |
 
 ## Intended layout
 

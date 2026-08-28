@@ -9,6 +9,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
   return {
     ...actual,
+    useGetRSIHeatmapQuery: () => ({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useListSpotMarketsQuery: () => ({
       data: { items: [{ symbol: 'BTC-USD', lastPrice: '100', priceChangePercent: '1' }] },
       currentData: { items: [{ symbol: 'BTC-USD', lastPrice: '100', priceChangePercent: '1' }] },

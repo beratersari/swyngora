@@ -64,6 +64,8 @@ export type PumpEventsQuery = NonNullable<operations['getPumpEvents']['parameter
 export type ScanPumpEventsQuery = NonNullable<
   operations['scanPumpEvents']['parameters']['query']
 >;
+export type RSIHeatmapQuery = NonNullable<operations['getRSIHeatmap']['parameters']['query']>;
+export type RSIHeatmapResponse = components['schemas']['RSIHeatmap'];
 
 export type IntervalsResponse = {
   exchange: string;

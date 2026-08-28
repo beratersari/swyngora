@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **RSI heatmap:** CoinGlass-style scatter — one timeframe, each pair a ranked dot, stables omitted, ~300-bar Wilder RSI (`GET /api/v1/market/rsi-heatmap`, MCP `get_rsi_heatmap`, web `/heatmap?view=rsi`, Telegram `/rsiheat`) (`docs/features/rsi-heatmap.md`)
 - **AI retry status:** CLI spinner and Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…` (`docs/features/ai-assistant.md`)
 - **Scanner combo rules:** pick RSI, MA crossover, and/or volume increase on one rule and choose `matchMode` `all` (every selected condition) or `any` (one is enough) (`POST /api/v1/scanner/rules`, MCP `create_scanner_rule`) (`docs/features/indicator-scanner.md`)
 - **Scanner rule edit:** enable/disable a rule without deleting it, and change interval, conditions, periods, and thresholds later (`PATCH /api/v1/scanner/rules/{id}`, MCP `update_scanner_rule`)
@@ -32,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **Holders cache key:** `WBTC` / `STETH` / `WSTETH` no longer share the 1h holders cache with `W` / `ST` / `WST`. Pair forms still normalize (`ETHBTC` → ETH, `WBTCUSDT` → WBTC) (`docs/features/holders.md`)
 - **AI both-LLM error:** when Grok and the Ollama fallback both fail, the CLI prints both errors (primary then fallback), not only the last Ollama message (`docs/features/ai-assistant.md`)
 - **Dashboard 24h on halted coins:** delisted rows use the same off-venue 24h **delta and %** as coin detail (other venue or CoinGecko `price_change_24h`), not a frozen home-book window or a blank; Coinbase last/open/high/low and % stay on one stats window (`docs/features/market-data.md`, `docs/features/delist-schedule.md`)
 - **AI concurrent tenant bind:** overlapping chats no longer send the master token plus the other user’s `X-Client-Id` (or inherit their `canTrade`) when desk gather runs on a thread pool (`docs/features/ai-assistant.md`)

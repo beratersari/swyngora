@@ -19,7 +19,9 @@ The Binance marketing symbol list we already refresh for supply includes
 1. Map `BTC` / `BTCUSDT` → CMC id from the Binance marketing snapshot (cache-only).
 2. Fetch holders from the **unauthenticated** CoinMarketCap website API:
    `GET https://api.coinmarketcap.com/data-api/v3/cryptocurrency/detail?id=`.
-3. Cache per asset (default 1h). Serve last-good on 429 / upstream errors.
+3. Cache per normalized base (default 1h). `WBTC` and `W` are different keys
+   (`NormalizeAssetKey` does not peel `BTC`/`ETH`/`BNB` off wrapped tickers).
+   Serve last-good on 429 / upstream errors.
 4. Do not add paid-plan selection or API keys for this source.
 5. Keep parsing in `adapter/cmc` with fixtures.
 

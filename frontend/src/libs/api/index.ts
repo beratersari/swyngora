@@ -28,6 +28,7 @@ export {
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,
+  useGetRSIHeatmapQuery,
   usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
 export type {
@@ -72,6 +73,8 @@ export type {
   PumpScanHitDto,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
+  RSIHeatmapQuery,
+  RSIHeatmapResponse,
 } from './endpoints/marketApi';
 export {
   useGetWatchlistQuery,

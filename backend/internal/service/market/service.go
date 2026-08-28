@@ -61,6 +61,7 @@ type Service struct {
 	delistQuote    *cache.TTL[*domain.Ticker24h]
 	delistSupplyFB domain.SymbolSupplyFallback
 	offVenue       domain.OffVenuePricePort
+	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -263,6 +264,7 @@ func NewMulti(markets map[domain.Exchange]domain.MarketDataPort, supply domain.S
 		wallWatch:    map[string]wallWatch{},
 		heatUniverse: map[domain.Exchange][]string{},
 		delistQuote:  cache.New[*domain.Ticker24h](time.Hour),
+		rsiHeat:      cache.New[*domain.RSIHeatmap](domain.RSIHeatmapCacheTTL),
 	}
 }
 

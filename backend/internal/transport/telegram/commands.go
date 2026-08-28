@@ -128,6 +128,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdMcap(ctx, args))
 	case "/rsi":
 		return textReply(r.cmdRSI(ctx, args))
+	case "/rsiheat", "/rsiheatmap":
+		return textReply(r.cmdRSIHeat(ctx, args))
 	case "/oi", "/openinterest", "/open-interest":
 		return textReply(r.cmdOpenInterest(ctx, args))
 	case "/funding", "/fr":
@@ -529,6 +531,28 @@ func (r *Router) cmdRSI(ctx context.Context, args []string) string {
 		return friendlyErr(err)
 	}
 	return FormatIndicators(ser)
+}
+
+func (r *Router) cmdRSIHeat(ctx context.Context, args []string) string {
+	exchange := r.defaultExchange()
+	quote := ""
+	interval := "1h"
+	for _, a := range args {
+		if isExchange(a) {
+			exchange = strings.ToLower(a)
+			continue
+		}
+		if strings.Contains(a, ",") || strings.HasSuffix(a, "m") || strings.HasSuffix(a, "h") || strings.HasSuffix(a, "d") {
+			interval = a
+			continue
+		}
+		quote = strings.ToUpper(a)
+	}
+	got, err := r.market.GetRSIHeatmap(ctx, exchange, quote, interval, "marketCapCirculating", 50, 14)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatRSIHeatmap(got)
 }
 
 func (r *Router) cmdExchanges() string {
