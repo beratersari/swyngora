@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -17,6 +18,15 @@ from swyngora_ai.graph.orchestrator import Orchestrator, SessionMemory
 from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures
 from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
 from test_specialists_and_orchestrator import ScriptedModel
+
+
+@pytest.fixture(autouse=True)
+def _reset_note_llm_handlers() -> Iterator[None]:
+    for handler in list(NoteLLMError._live):
+        handler.reset()
+    yield
+    for handler in list(NoteLLMError._live):
+        handler.reset()
 
 
 class _CountingModel(BaseChatModel):
@@ -157,6 +167,34 @@ def test_format_llm_failures_names_primary_then_fallback() -> None:
     assert format_llm_failures([grok, local]) == (
         "primary grok-4.3: TimeoutError: bad key\nfallback llama3.2: TimeoutError: model not found"
     )
+
+
+def test_note_llm_error_emits_retry_then_exhausted(monkeypatch) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr("swyngora_ai.llm.errors.emit", lambda _t, text="": seen.append(text))
+    grok = NoteLLMError("grok-4.3")
+    for _ in range(3):
+        grok.on_llm_error(TimeoutError("blip"))
+    assert seen == [
+        "Retrying grok-4.3 (2/4)…",
+        "Retrying grok-4.3 (3/4)…",
+        "Retrying grok-4.3 (4/4)…",
+    ]
+    grok.on_llm_error(TimeoutError("dead"))
+    assert seen[-1] == "grok-4.3 failed after 4 tries"
+
+
+def test_note_llm_error_emits_fallback_then_retry(monkeypatch) -> None:
+    seen: list[str] = []
+    monkeypatch.setattr("swyngora_ai.llm.errors.emit", lambda _t, text="": seen.append(text))
+    grok = NoteLLMError("grok-4.3")
+    local = NoteLLMError("llama3.2")
+    for _ in range(4):
+        grok.on_llm_error(TimeoutError("bad key"))
+    local.on_llm_error(TimeoutError("missing"))
+    assert "Falling back to llama3.2…" in seen
+    assert "Retrying llama3.2 (2/4)…" in seen
+    assert seen[-2:] == ["Falling back to llama3.2…", "Retrying llama3.2 (2/4)…"]
 
 
 def test_stream_records_both_model_callback_errors() -> None:

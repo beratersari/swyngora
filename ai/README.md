@@ -33,7 +33,7 @@ User
 3. LLM:
    - **Ollama**: `ollama pull qwen2.5` (or set `OLLAMA_MODEL`; avoid llama3.2 — weak tool calling)
    - **Grok**: set `XAI_API_KEY` and `AI_LLM_PROVIDER=grok`
-   - After the primary’s 4 tries fail, the agent tries the **other** provider (Grok ↔ Ollama). A leftover `XAI_API_KEY` while on Ollama will call Grok if Ollama is down. If both fail, the CLI lists both errors.
+   - After the primary’s 4 tries fail, the agent tries the **other** provider (Grok ↔ Ollama). The spinner shows retries and fallback. A leftover `XAI_API_KEY` while on Ollama will call Grok if Ollama is down. If both fail, the CLI lists both errors.
 
 ## Setup
 
