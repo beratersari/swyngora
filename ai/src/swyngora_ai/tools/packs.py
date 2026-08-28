@@ -181,6 +181,7 @@ ACCOUNT_TOOLS: frozenset[str] = frozenset(
         "revoke_api_key",
         "create_scanner_rule",
         "list_scanner_rules",
+        "update_scanner_rule",
         "delete_scanner_rule",
         "list_scanner_results",
     }

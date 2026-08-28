@@ -1,6 +1,7 @@
 import { baseApi } from '../baseApi';
 import type {
   CreateScannerRuleArg,
+  UpdateScannerRuleArg,
   ScannerBacktest,
   ScannerBacktestListResponse,
   ScannerBacktestSignalListResponse,
@@ -12,6 +13,7 @@ import type {
 
 export type {
   CreateScannerRuleArg,
+  UpdateScannerRuleArg,
   ScannerBacktest,
   ScannerBacktestSignal,
   ScannerBacktestStatus,
@@ -35,6 +37,14 @@ export const scannerApi = baseApi.injectEndpoints({
       query: (body) => ({
         url: '/api/v1/scanner/rules',
         method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['ScannerRule'],
+    }),
+    updateScannerRule: build.mutation<ScannerRule, UpdateScannerRuleArg>({
+      query: ({ id, ...body }) => ({
+        url: `/api/v1/scanner/rules/${encodeURIComponent(id)}`,
+        method: 'PATCH',
         body,
       }),
       invalidatesTags: ['ScannerRule'],
@@ -103,6 +113,7 @@ export const scannerApi = baseApi.injectEndpoints({
 export const {
   useListScannerRulesQuery,
   useCreateScannerRuleMutation,
+  useUpdateScannerRuleMutation,
   useDeleteScannerRuleMutation,
   useListScannerResultsQuery,
   useListScannerBacktestsQuery,

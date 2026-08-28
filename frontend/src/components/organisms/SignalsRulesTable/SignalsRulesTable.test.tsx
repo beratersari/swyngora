@@ -19,6 +19,8 @@ describe('SignalsRulesTable', () => {
           },
         ]}
         onDelete={() => undefined}
+        onToggle={() => undefined}
+        onEdit={() => undefined}
       />,
     );
     expect(screen.getByText(/RSI\(14\)/)).toBeInTheDocument();

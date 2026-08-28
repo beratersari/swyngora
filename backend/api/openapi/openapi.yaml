@@ -5581,6 +5581,51 @@ paths:
           description: Rule
         '404':
           $ref: '#/components/responses/Error'
+    patch:
+      summary: Update a scanner rule
+      description: |
+        Enable or disable a rule without deleting it, or edit interval,
+        conditions, matchMode, and indicator settings (periods, thresholds).
+        Omitted fields stay unchanged.
+      operationId: updateScannerRule
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                enabled: { type: boolean }
+                interval: { type: string }
+                conditions:
+                  type: array
+                  items: { type: string, enum: [rsi, ma_crossover, volume_increase] }
+                matchMode: { type: string, enum: [all, any] }
+                rsiPeriod: { type: integer }
+                rsiCondition: { type: string, enum: [above, below] }
+                rsiThreshold: { type: number }
+                maFastPeriod: { type: integer }
+                maSlowPeriod: { type: integer }
+                maDirection: { type: string, enum: [golden_cross, death_cross] }
+                volumeLookback: { type: integer }
+                volumeMinRatio: { type: number }
+      responses:
+        '200':
+          description: Updated rule
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete a scanner rule
       operationId: deleteScannerRule

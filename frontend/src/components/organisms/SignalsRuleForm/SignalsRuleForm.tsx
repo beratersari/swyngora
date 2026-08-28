@@ -7,31 +7,48 @@ import {
   type CreateScannerRuleArg,
   type ScannerCondition,
   type ScannerMatchMode,
+  type ScannerRule,
 } from '@/libs/api';
+import { ruleConditions } from '@/libs/utils';
 import { Field, FieldRow, FormStack } from './SignalsRuleForm.styles';
 import type { SignalsRuleFormProps } from './SignalsRuleForm.types';
 
 const CONDITIONS: ScannerCondition[] = ['rsi', 'ma_crossover', 'volume_increase'];
 
+function conditionsFromRule(rule?: ScannerRule): ScannerCondition[] {
+  if (!rule) {
+    return ['rsi'];
+  }
+  const conds = ruleConditions(rule).filter((c): c is ScannerCondition =>
+    CONDITIONS.includes(c as ScannerCondition),
+  );
+  return conds.length ? conds : ['rsi'];
+}
+
 export function SignalsRuleForm({
   intervals,
   defaultInterval = '4h',
+  initialRule,
   isSubmitting = false,
   submitError,
   onSubmit,
+  onCancel,
 }: SignalsRuleFormProps) {
   const { t } = useTranslation(['signals', 'common']);
-  const [conditions, setConditions] = useState<ScannerCondition[]>(['rsi']);
-  const [matchMode, setMatchMode] = useState<ScannerMatchMode>('all');
-  const [interval, setInterval] = useState(defaultInterval);
-  const [rsiPeriod, setRsiPeriod] = useState(14);
-  const [rsiCondition, setRsiCondition] = useState<'above' | 'below'>('below');
-  const [rsiThreshold, setRsiThreshold] = useState(40);
-  const [maFast, setMaFast] = useState(12);
-  const [maSlow, setMaSlow] = useState(26);
-  const [maDir, setMaDir] = useState<'golden_cross' | 'death_cross'>('golden_cross');
-  const [volLookback, setVolLookback] = useState(20);
-  const [volRatio, setVolRatio] = useState(2);
+  const editing = initialRule != null;
+  const [conditions, setConditions] = useState<ScannerCondition[]>(() => conditionsFromRule(initialRule));
+  const [matchMode, setMatchMode] = useState<ScannerMatchMode>(initialRule?.matchMode ?? 'all');
+  const [interval, setInterval] = useState(initialRule?.interval ?? defaultInterval);
+  const [rsiPeriod, setRsiPeriod] = useState(initialRule?.rsiPeriod ?? 14);
+  const [rsiCondition, setRsiCondition] = useState<'above' | 'below'>(initialRule?.rsiCondition ?? 'below');
+  const [rsiThreshold, setRsiThreshold] = useState(initialRule?.rsiThreshold ?? 40);
+  const [maFast, setMaFast] = useState(initialRule?.maFastPeriod ?? 12);
+  const [maSlow, setMaSlow] = useState(initialRule?.maSlowPeriod ?? 26);
+  const [maDir, setMaDir] = useState<'golden_cross' | 'death_cross'>(
+    initialRule?.maDirection ?? 'golden_cross',
+  );
+  const [volLookback, setVolLookback] = useState(initialRule?.volumeLookback ?? 20);
+  const [volRatio, setVolRatio] = useState(initialRule?.volumeMinRatio ?? 2);
 
   const intervalOptions = (intervals.length ? intervals : [interval]).map((iv) => ({
     value: iv,
@@ -64,7 +81,7 @@ export function SignalsRuleForm({
   return (
     <FormStack>
       <Text variant="h4" color="primary">
-        {t('signals:rules.createTitle')}
+        {editing ? t('signals:rules.editTitle') : t('signals:rules.createTitle')}
       </Text>
       <Text variant="caption" color="secondary">
         {t('signals:rules.createHint')}
@@ -229,7 +246,7 @@ export function SignalsRuleForm({
         <Alert
           type="error"
           showIcon
-          message={t('signals:rules.createFailed')}
+          message={editing ? t('signals:rules.updateFailed') : t('signals:rules.createFailed')}
           description={rtkErrorMessage(submitError, { resource: t('signals:resource') })}
         />
       ) : null}
@@ -240,8 +257,13 @@ export function SignalsRuleForm({
           disabled={isSubmitting || conditions.length === 0}
           onClick={() => void submit()}
         >
-          {t('signals:rules.create')}
+          {editing ? t('signals:rules.save') : t('signals:rules.create')}
         </Button>
+        {editing && onCancel ? (
+          <Button style={{ marginLeft: 8 }} onClick={onCancel} disabled={isSubmitting}>
+            {t('common:actions.cancel')}
+          </Button>
+        ) : null}
       </div>
     </FormStack>
   );

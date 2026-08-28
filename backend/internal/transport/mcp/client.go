@@ -2201,6 +2201,15 @@ func (c *APIClient) ListScannerRules(ctx context.Context, clientID string) (json
 	return c.get(ctx, "/api/v1/scanner/rules", q)
 }
 
+// UpdateScannerRule patches a scanner rule via HTTP.
+func (c *APIClient) UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error) {
+	id, _ := args["id"].(string)
+	if id == "" {
+		id, _ = args["ruleId"].(string)
+	}
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/scanner/rules/"+url.PathEscape(id), args)
+}
+
 // DeleteScannerRule deletes a scanner rule.
 func (c *APIClient) DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

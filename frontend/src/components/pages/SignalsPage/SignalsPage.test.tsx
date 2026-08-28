@@ -40,6 +40,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isFetching: false,
     }),
     useCreateScannerRuleMutation: () => [vi.fn(), { isLoading: false, isError: false }],
+    useUpdateScannerRuleMutation: () => [vi.fn(), { isLoading: false, isError: false }],
     useDeleteScannerRuleMutation: () => [vi.fn(), { isLoading: false }],
     useStartScannerBacktestMutation: () => [vi.fn(), { isLoading: false, isError: false }],
     useCancelScannerBacktestMutation: () => [vi.fn(), { isLoading: false }],

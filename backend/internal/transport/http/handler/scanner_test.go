@@ -84,6 +84,28 @@ func TestScannerHTTP_CreateListDelete(t *testing.T) {
 		t.Fatalf("combo conditions %+v", combo["conditions"])
 	}
 
+	comboID := combo["id"].(string)
+	off := false
+	patch, _ := json.Marshal(map[string]any{
+		"clientId": "http-scan", "enabled": off, "rsiThreshold": 18.0, "rsiPeriod": 21,
+	})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/scanner/rules/"+comboID+"?clientId=http-scan", bytes.NewReader(patch))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", comboID)
+	rr = httptest.NewRecorder()
+	h.Update(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch %d %s", rr.Code, rr.Body.String())
+	}
+	var updated map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &updated)
+	if updated["enabled"] != false {
+		t.Fatalf("want disabled %+v", updated)
+	}
+	if updated["rsiThreshold"] != 18.0 || updated["rsiPeriod"] != float64(21) {
+		t.Fatalf("params %+v", updated)
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/scanner/rules?clientId=http-scan", nil)
 	rr = httptest.NewRecorder()
 	h.ListRules(rr, req)

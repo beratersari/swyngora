@@ -1,4 +1,4 @@
-import { Button, Popconfirm } from 'antd';
+import { Button, Popconfirm, Switch } from 'antd';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +13,10 @@ export function SignalsRulesTable({
   items,
   loading,
   deleteLoading,
+  toggleLoading,
   onDelete,
+  onToggle,
+  onEdit,
 }: SignalsRulesTableProps) {
   const { t } = useTranslation(['signals', 'common']);
 
@@ -42,25 +45,34 @@ export function SignalsRulesTable({
       title: t('signals:rules.enabled'),
       key: 'enabled',
       render: (_, row) => (
-        <BrandTag variant={row.enabled ? 'live' : 'paused'}>
-          {row.enabled ? t('signals:rules.on') : t('signals:rules.off')}
-        </BrandTag>
+        <Switch
+          size="small"
+          checked={row.enabled}
+          loading={toggleLoading}
+          aria-label={row.enabled ? t('signals:rules.disable') : t('signals:rules.enable')}
+          onChange={(checked) => row.id && onToggle(row.id, checked)}
+        />
       ),
     },
     {
       title: t('signals:actions'),
       key: 'actions',
       render: (_, row) => (
-        <Popconfirm
-          title={t('signals:rules.deleteConfirm')}
-          okText={t('signals:rules.delete')}
-          cancelText={t('common:actions.cancel')}
-          onConfirm={() => row.id && onDelete(row.id)}
-        >
-          <Button size="small" danger loading={deleteLoading}>
-            {t('signals:rules.delete')}
+        <>
+          <Button size="small" style={{ marginRight: 8 }} onClick={() => onEdit(row)}>
+            {t('signals:rules.edit')}
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title={t('signals:rules.deleteConfirm')}
+            okText={t('signals:rules.delete')}
+            cancelText={t('common:actions.cancel')}
+            onConfirm={() => row.id && onDelete(row.id)}
+          >
+            <Button size="small" danger loading={deleteLoading}>
+              {t('signals:rules.delete')}
+            </Button>
+          </Popconfirm>
+        </>
       ),
     },
   ];

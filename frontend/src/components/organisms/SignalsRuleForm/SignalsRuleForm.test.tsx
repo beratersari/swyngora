@@ -27,6 +27,39 @@ describe('SignalsRuleForm', () => {
     expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty('type');
   });
 
+  it('saves edits to an existing rule', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithProviders(
+      <SignalsRuleForm
+        intervals={['4h']}
+        defaultInterval="4h"
+        initialRule={{
+          id: 'r1',
+          type: 'rsi',
+          conditions: ['rsi'],
+          matchMode: 'all',
+          interval: '4h',
+          enabled: true,
+          rsiPeriod: 14,
+          rsiCondition: 'below',
+          rsiThreshold: 40,
+        }}
+        onSubmit={onSubmit}
+        onCancel={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /save|kaydet/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /save|kaydet/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conditions: ['rsi'],
+        matchMode: 'all',
+        rsiThreshold: 40,
+      }),
+    );
+  });
+
   it('disables create when no condition is selected', async () => {
     const user = userEvent.setup();
     renderWithProviders(

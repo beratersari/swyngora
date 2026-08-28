@@ -183,6 +183,7 @@ export type {
 export {
   useListScannerRulesQuery,
   useCreateScannerRuleMutation,
+  useUpdateScannerRuleMutation,
   useDeleteScannerRuleMutation,
   useListScannerResultsQuery,
   useListScannerBacktestsQuery,
@@ -193,6 +194,7 @@ export {
 } from './endpoints/scannerApi';
 export type {
   CreateScannerRuleArg,
+  UpdateScannerRuleArg,
   ScannerBacktest,
   ScannerBacktestSignal,
   ScannerBacktestStatus,

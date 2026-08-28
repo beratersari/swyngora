@@ -2291,7 +2291,8 @@ export interface paths {
         delete: operations["deleteScannerRule"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update a scanner rule */
+        patch: operations["updateScannerRule"];
         trace?: never;
     };
     "/api/v1/scanner/results": {
@@ -8442,6 +8443,51 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    enabled?: boolean;
+                    interval?: string;
+                    conditions?: ("rsi" | "ma_crossover" | "volume_increase")[];
+                    /** @enum {string} */
+                    matchMode?: "all" | "any";
+                    rsiPeriod?: number;
+                    /** @enum {string} */
+                    rsiCondition?: "above" | "below";
+                    rsiThreshold?: number;
+                    maFastPeriod?: number;
+                    maSlowPeriod?: number;
+                    /** @enum {string} */
+                    maDirection?: "golden_cross" | "death_cross";
+                    volumeLookback?: number;
+                    volumeMinRatio?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated rule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

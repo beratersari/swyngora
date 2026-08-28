@@ -14,6 +14,7 @@ import {
   rtkErrorMessage,
   useCancelScannerBacktestMutation,
   useCreateScannerRuleMutation,
+  useUpdateScannerRuleMutation,
   useDeleteScannerRuleMutation,
   useGetWatchlistQuery,
   useListIntervalsQuery,
@@ -24,6 +25,7 @@ import {
   useStartScannerBacktestMutation,
   useListSwingSetupsQuery,
   type CreateScannerRuleArg,
+  type ScannerRule,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { backtestRangeIso, buildSwingSetups, countHitsSince } from '@/libs/utils';
@@ -48,6 +50,7 @@ export function SignalsPage() {
   const visible = useDocumentVisible();
   const [tab, setTab] = useState('setups');
   const [selectedBacktestId, setSelectedBacktestId] = useState<string | null>(null);
+  const [editingRule, setEditingRule] = useState<ScannerRule | null>(null);
 
   const watchlist = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const intervalsQuery = useListIntervalsQuery({ exchange: 'binance' });
@@ -73,6 +76,7 @@ export function SignalsPage() {
   });
 
   const [createRule, createState] = useCreateScannerRuleMutation();
+  const [updateRule, updateState] = useUpdateScannerRuleMutation();
   const [deleteRule, deleteState] = useDeleteScannerRuleMutation();
   const [startBacktest, startState] = useStartScannerBacktestMutation();
   const [cancelBacktest, cancelState] = useCancelScannerBacktestMutation();
@@ -252,13 +256,30 @@ export function SignalsPage() {
             children: (
               <DeskSplit>
                 <SignalsRuleForm
+                  key={editingRule?.id ?? 'create'}
                   intervals={intervals}
                   defaultInterval={intervals.includes('4h') ? '4h' : intervals[0]}
-                  isSubmitting={createState.isLoading}
-                  submitError={createState.isError ? createState.error : undefined}
+                  initialRule={editingRule ?? undefined}
+                  isSubmitting={editingRule ? updateState.isLoading : createState.isLoading}
+                  submitError={
+                    editingRule
+                      ? updateState.isError
+                        ? updateState.error
+                        : undefined
+                      : createState.isError
+                        ? createState.error
+                        : undefined
+                  }
+                  onCancel={() => setEditingRule(null)}
                   onSubmit={async (values: CreateScannerRuleArg) => {
-                    await createRule(values).unwrap();
-                    void message.success(t('signals:rules.createSuccess'));
+                    if (editingRule?.id) {
+                      await updateRule({ id: editingRule.id, ...values }).unwrap();
+                      void message.success(t('signals:rules.updateSuccess'));
+                      setEditingRule(null);
+                    } else {
+                      await createRule(values).unwrap();
+                      void message.success(t('signals:rules.createSuccess'));
+                    }
                     void rulesQuery.refetch();
                   }}
                 />
@@ -270,6 +291,23 @@ export function SignalsPage() {
                     items={rules}
                     loading={rulesQuery.isLoading}
                     deleteLoading={deleteState.isLoading}
+                    toggleLoading={updateState.isLoading}
+                    onEdit={(rule) => setEditingRule(rule)}
+                    onToggle={(id, enabled) => {
+                      void updateRule({ id, enabled })
+                        .unwrap()
+                        .then(() => {
+                          void message.success(
+                            enabled ? t('signals:rules.enableSuccess') : t('signals:rules.disableSuccess'),
+                          );
+                          void rulesQuery.refetch();
+                        })
+                        .catch((err: unknown) => {
+                          void message.error(
+                            rtkErrorMessage(err, { resource: t('signals:resource') }),
+                          );
+                        });
+                    }}
                     onDelete={(id) => {
                       void deleteRule({ id })
                         .unwrap()

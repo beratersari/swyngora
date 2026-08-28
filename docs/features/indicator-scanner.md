@@ -14,7 +14,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 |-----|----------|
 | Setups | Client-side confluence: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
-| Rules | Create/delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
+| Rules | Create, edit, enable/disable, or delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
 | Lab | Historical backtest on one symbol with 1/5/20d forward returns. |
 
 Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
@@ -39,6 +39,7 @@ Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
 | `POST` | `/api/v1/scanner/rules` | Create rule (`conditions` + `matchMode`, or legacy `type`) |
 | `GET` | `/api/v1/scanner/rules` | List rules |
 | `GET` | `/api/v1/scanner/rules/{id}` | Get one rule |
+| `PATCH` | `/api/v1/scanner/rules/{id}` | Enable/disable or edit interval, conditions, periods, thresholds |
 | `DELETE` | `/api/v1/scanner/rules/{id}` | Delete rule (+ cascaded results) |
 | `GET` | `/api/v1/scanner/results` | Match history (`limit`, `offset`) |
 
@@ -65,6 +66,10 @@ Send `conditions: ["rsi", "volume_increase"]` with `matchMode`. Legacy `type: rs
 
 `interval` defaults to `1h` (any supported candle interval).
 
+Edit later with `PATCH`: `enabled` pauses or resumes the rule without deleting it. Periods, thresholds, `matchMode`, `conditions`, and `interval` can change in place.
+
+Combo evaluation loads enough candles for the **longest** selected condition (for example MA slow 200 → 230 bars), not a fixed 100.
+
 ## Deduping
 
 Each result has `marketDataKey` = candle **open time**. Unique constraint:
@@ -86,7 +91,7 @@ Re-running the scanner on the same closed bar does not create another row. A new
 | Store | `backend/internal/adapter/scannerstore` |
 | Service | `backend/internal/service/scanner` |
 | HTTP | `backend/internal/transport/http/handler/scanner.go` |
-| MCP | `create_scanner_rule`, `list_scanner_rules`, `delete_scanner_rule`, `list_scanner_results` |
+| MCP | `create_scanner_rule`, `list_scanner_rules`, `update_scanner_rule`, `delete_scanner_rule`, `list_scanner_results` |
 
 ## Config
 

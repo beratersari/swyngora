@@ -232,7 +232,7 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 		return err
 	}
 
-	warmup := candleNeed(*rule) + 5
+	warmup := domain.ScannerCandleNeed(*rule) + 5
 	ivDur := intervalApprox(rule.Interval)
 	fetchStart := job.RangeStart.Add(-time.Duration(warmup) * ivDur)
 	fetchEnd := job.RangeEnd.Add(21 * 24 * time.Hour)

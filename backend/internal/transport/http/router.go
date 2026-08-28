@@ -265,6 +265,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/scanner/rules", sh.Create)
 		mux.HandleFunc("GET /api/v1/scanner/rules", sh.ListRules)
 		mux.HandleFunc("GET /api/v1/scanner/rules/{id}", sh.GetRule)
+		mux.HandleFunc("PATCH /api/v1/scanner/rules/{id}", sh.Update)
 		mux.HandleFunc("DELETE /api/v1/scanner/rules/{id}", sh.DeleteRule)
 		mux.HandleFunc("GET /api/v1/scanner/results", sh.ListResults)
 		// Backtests: static subpaths before {id} where needed

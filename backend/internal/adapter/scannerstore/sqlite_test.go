@@ -89,4 +89,14 @@ func TestSQLite_RulesAndDedupeResults(t *testing.T) {
 	if err != nil || gotCombo.MatchMode != domain.ScannerMatchAny || len(gotCombo.Conditions) != 2 {
 		t.Fatalf("combo persist %+v %v", gotCombo, err)
 	}
+	gotCombo.Enabled = false
+	gotCombo.RSIThreshold = 22
+	gotCombo.UpdatedAt = now.Add(time.Minute)
+	if _, err := s2.UpdateRule(ctx, *gotCombo); err != nil {
+		t.Fatal(err)
+	}
+	again, err := s2.GetRule(ctx, "c1", "r2")
+	if err != nil || again.Enabled || again.RSIThreshold != 22 {
+		t.Fatalf("update persist %+v %v", again, err)
+	}
 }

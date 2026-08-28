@@ -1474,6 +1474,26 @@ class ScannerRuleDeleteInput(BaseModel):
     rule_id: str
 
 
+class ScannerRuleUpdateInput(BaseModel):
+    client_id: str
+    rule_id: str
+    enabled: bool | None = Field(default=None, description="true to run the rule, false to pause it")
+    interval: str | None = None
+    conditions: str | None = Field(
+        default=None,
+        description="Comma-separated rsi,ma_crossover,volume_increase",
+    )
+    match_mode: str | None = Field(default=None, description="all | any")
+    rsi_period: int | None = None
+    rsi_condition: str | None = None
+    rsi_threshold: float | None = None
+    ma_fast_period: int | None = None
+    ma_slow_period: int | None = None
+    ma_direction: str | None = None
+    volume_lookback: int | None = None
+    volume_min_ratio: float | None = None
+
+
 class AlertWebhookSetInput(BaseModel):
     client_id: str
     url: str = Field(description="Absolute http(s) webhook URL")
@@ -3277,6 +3297,49 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def list_scanner_rules(client_id: str) -> str:
         return http.get("/api/v1/scanner/rules", {"clientId": client_id})
 
+    def update_scanner_rule(
+        client_id: str,
+        rule_id: str,
+        enabled: bool | None = None,
+        interval: str | None = None,
+        conditions: str | None = None,
+        match_mode: str | None = None,
+        rsi_period: int | None = None,
+        rsi_condition: str | None = None,
+        rsi_threshold: float | None = None,
+        ma_fast_period: int | None = None,
+        ma_slow_period: int | None = None,
+        ma_direction: str | None = None,
+        volume_lookback: int | None = None,
+        volume_min_ratio: float | None = None,
+    ) -> str:
+        body: dict[str, object] = {"clientId": client_id}
+        if enabled is not None:
+            body["enabled"] = enabled
+        if interval:
+            body["interval"] = interval
+        if conditions:
+            body["conditions"] = [c.strip() for c in conditions.split(",") if c.strip()]
+        if match_mode:
+            body["matchMode"] = match_mode
+        if rsi_period is not None:
+            body["rsiPeriod"] = rsi_period
+        if rsi_condition:
+            body["rsiCondition"] = rsi_condition
+        if rsi_threshold is not None:
+            body["rsiThreshold"] = rsi_threshold
+        if ma_fast_period is not None:
+            body["maFastPeriod"] = ma_fast_period
+        if ma_slow_period is not None:
+            body["maSlowPeriod"] = ma_slow_period
+        if ma_direction:
+            body["maDirection"] = ma_direction
+        if volume_lookback is not None:
+            body["volumeLookback"] = volume_lookback
+        if volume_min_ratio is not None:
+            body["volumeMinRatio"] = volume_min_ratio
+        return http.patch(f"/api/v1/scanner/rules/{rule_id}", body)
+
     def delete_scanner_rule(client_id: str, rule_id: str) -> str:
         return http.delete(f"/api/v1/scanner/rules/{rule_id}", {"clientId": client_id})
 
@@ -4588,6 +4651,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_scanner_rules",
             description="List technical scanner rules for a clientId.",
             args_schema=ClientIdInput,
+        ),
+        StructuredTool.from_function(
+            update_scanner_rule,
+            name="update_scanner_rule",
+            description=(
+                "Enable or disable a scanner rule, or edit its conditions, "
+                "match mode, interval, periods, and thresholds without deleting it."
+            ),
+            args_schema=ScannerRuleUpdateInput,
         ),
         StructuredTool.from_function(
             delete_scanner_rule,

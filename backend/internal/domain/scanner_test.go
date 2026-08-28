@@ -137,6 +137,28 @@ func TestEvaluateNoMatch(t *testing.T) {
 	}
 }
 
+func TestScannerCandleNeed_ComboUsesLongestCondition(t *testing.T) {
+	rsi := ScannerRule{Type: ScannerRuleRSI, RSIPeriod: 14}
+	if n := ScannerCandleNeed(rsi); n != 14+30 {
+		t.Fatalf("rsi need %d", n)
+	}
+	combo := ScannerRule{
+		Type:           ScannerRuleCombo,
+		Conditions:     []ScannerRuleType{ScannerRuleRSI, ScannerRuleMACrossover, ScannerRuleVolumeIncrease},
+		RSIPeriod:      14,
+		MAFastPeriod:   12,
+		MASlowPeriod:   200,
+		VolumeLookback: 20,
+	}
+	if n := ScannerCandleNeed(combo); n != 200+30 {
+		t.Fatalf("combo should follow MA slow, got %d", n)
+	}
+	vol := ScannerRule{Type: ScannerRuleVolumeIncrease, VolumeLookback: 80}
+	if n := ScannerCandleNeed(vol); n != 85 {
+		t.Fatalf("volume need %d", n)
+	}
+}
+
 func TestResolveScannerConditionsAndMatchMode(t *testing.T) {
 	conds, typ, err := ResolveScannerConditions("rsi", nil)
 	if err != nil || typ != ScannerRuleRSI || len(conds) != 1 || conds[0] != ScannerRuleRSI {

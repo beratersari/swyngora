@@ -174,6 +174,7 @@ type DataPort interface {
 	RepayMarginDebt(ctx context.Context, clientID, positionID string, amount float64) (json.RawMessage, error)
 	CreateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	ListScannerRules(ctx context.Context, clientID string) (json.RawMessage, error)
+	UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error)
@@ -3296,6 +3297,53 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListScannerRules(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("update_scanner_rule",
+		mcp.WithDescription("Enable/disable a scanner rule or edit its conditions, matchMode, interval, periods, and thresholds without deleting it."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("ruleId", mcp.Required(), mcp.Description("Rule id")),
+		mcp.WithBoolean("enabled", mcp.Description("true to run the rule, false to pause it")),
+		mcp.WithString("interval", mcp.Description("Candle interval")),
+		mcp.WithString("conditions", mcp.Description("Comma-separated rsi,ma_crossover,volume_increase")),
+		mcp.WithString("matchMode", mcp.Description("all | any")),
+		mcp.WithNumber("rsiPeriod", mcp.Description("RSI period")),
+		mcp.WithString("rsiCondition", mcp.Description("above | below")),
+		mcp.WithNumber("rsiThreshold", mcp.Description("RSI threshold 0-100")),
+		mcp.WithNumber("maFastPeriod", mcp.Description("EMA fast period")),
+		mcp.WithNumber("maSlowPeriod", mcp.Description("EMA slow period")),
+		mcp.WithString("maDirection", mcp.Description("golden_cross | death_cross")),
+		mcp.WithNumber("volumeLookback", mcp.Description("Bars for volume average")),
+		mcp.WithNumber("volumeMinRatio", mcp.Description("Min last/avg volume ratio")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ruleID, err := req.RequireString("ruleId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		args := map[string]any{"clientId": clientID, "id": ruleID}
+		rawArgs := req.GetArguments()
+		copyIfPresent := func(key string) {
+			if v, ok := rawArgs[key]; ok {
+				args[key] = v
+			}
+		}
+		for _, key := range []string{
+			"enabled", "interval", "conditions", "matchMode",
+			"rsiPeriod", "rsiCondition", "rsiThreshold",
+			"maFastPeriod", "maSlowPeriod", "maDirection",
+			"volumeLookback", "volumeMinRatio",
+		} {
+			copyIfPresent(key)
+		}
+		raw, err := api.UpdateScannerRule(ctx, args)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

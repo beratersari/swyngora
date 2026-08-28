@@ -3433,6 +3433,69 @@ func (b *Backend) ListScannerRules(ctx context.Context, clientID string) (json.R
 	return mustJSON(map[string]any{"clientId": clientID, "rules": items, "count": len(items)})
 }
 
+func (b *Backend) UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	in := scanner.UpdateInput{
+		ClientID: strFromAny(args["clientId"], ""),
+		ID:       strFromAny(args["id"], strFromAny(args["ruleId"], "")),
+	}
+	if v, ok := args["enabled"]; ok {
+		if en, parsed := boolFromAny(v); parsed {
+			in.Enabled = &en
+		}
+	}
+	if v, ok := args["interval"]; ok {
+		s := strFromAny(v, "")
+		in.Interval = &s
+	}
+	if _, ok := args["conditions"]; ok {
+		in.Conditions = stringSliceFromAny(args["conditions"])
+	}
+	if v, ok := args["matchMode"]; ok {
+		s := strFromAny(v, "")
+		in.MatchMode = &s
+	}
+	if v, ok := args["rsiPeriod"]; ok {
+		n := intFromAny(v, 0)
+		in.RSIPeriod = &n
+	}
+	if v, ok := args["rsiCondition"]; ok {
+		s := strFromAny(v, "")
+		in.RSICondition = &s
+	}
+	if v, ok := args["rsiThreshold"]; ok {
+		n := floatFromAny(v, 0)
+		in.RSIThreshold = &n
+	}
+	if v, ok := args["maFastPeriod"]; ok {
+		n := intFromAny(v, 0)
+		in.MAFastPeriod = &n
+	}
+	if v, ok := args["maSlowPeriod"]; ok {
+		n := intFromAny(v, 0)
+		in.MASlowPeriod = &n
+	}
+	if v, ok := args["maDirection"]; ok {
+		s := strFromAny(v, "")
+		in.MADirection = &s
+	}
+	if v, ok := args["volumeLookback"]; ok {
+		n := intFromAny(v, 0)
+		in.VolumeLookback = &n
+	}
+	if v, ok := args["volumeMinRatio"]; ok {
+		n := floatFromAny(v, 0)
+		in.VolumeMinRatio = &n
+	}
+	rule, err := b.Scanner.Update(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return scannerRuleJSON(rule)
+}
+
 func (b *Backend) DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Scanner == nil {
 		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
@@ -3946,6 +4009,21 @@ func scannerRuleMap(r *domain.ScannerRule) (map[string]any, error) {
 		}
 	}
 	return m, nil
+}
+
+func boolFromAny(v any) (bool, bool) {
+	switch t := v.(type) {
+	case bool:
+		return t, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(t)) {
+		case "true", "1", "yes", "on":
+			return true, true
+		case "false", "0", "no", "off":
+			return false, true
+		}
+	}
+	return false, false
 }
 
 func intFromAny(v any, def int) int {

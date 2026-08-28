@@ -127,6 +127,105 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.ScannerRu
 	return s.store.CreateRule(ctx, rule)
 }
 
+// UpdateInput patches an existing rule. Nil / omitted fields stay unchanged.
+type UpdateInput struct {
+	ClientID       string
+	ID             string
+	Enabled        *bool
+	Interval       *string
+	Conditions     []string // nil = keep; non-nil replaces the selected set
+	MatchMode      *string
+	RSIPeriod      *int
+	RSICondition   *string
+	RSIThreshold   *float64
+	MAFastPeriod   *int
+	MASlowPeriod   *int
+	MADirection    *string
+	VolumeLookback *int
+	VolumeMinRatio *float64
+}
+
+// Update enables/disables a rule or edits its conditions and thresholds.
+func (s *Service) Update(ctx context.Context, in UpdateInput) (*domain.ScannerRule, error) {
+	rule, err := s.Get(ctx, in.ClientID, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Enabled != nil {
+		rule.Enabled = *in.Enabled
+	}
+	if in.Interval != nil {
+		interval := strings.TrimSpace(*in.Interval)
+		if interval == "" {
+			interval = domain.DefaultScannerInterval
+		}
+		if !domain.IsValidInterval(interval) {
+			return nil, fmt.Errorf("%w: invalid interval", domain.ErrInvalidArgument)
+		}
+		rule.Interval = interval
+	}
+	if in.MatchMode != nil {
+		mode, err := domain.ResolveScannerMatchMode(*in.MatchMode)
+		if err != nil {
+			return nil, err
+		}
+		rule.MatchMode = mode
+	}
+	if in.Conditions != nil {
+		conds, typ, err := domain.ResolveScannerConditions("", in.Conditions)
+		if err != nil {
+			return nil, err
+		}
+		rule.Conditions = conds
+		rule.Type = typ
+	}
+	snap := createInputFromRule(*rule)
+	if in.RSIPeriod != nil {
+		snap.RSIPeriod = *in.RSIPeriod
+	}
+	if in.RSICondition != nil {
+		snap.RSICondition = *in.RSICondition
+	}
+	if in.RSIThreshold != nil {
+		snap.RSIThreshold = *in.RSIThreshold
+	}
+	if in.MAFastPeriod != nil {
+		snap.MAFastPeriod = *in.MAFastPeriod
+	}
+	if in.MASlowPeriod != nil {
+		snap.MASlowPeriod = *in.MASlowPeriod
+	}
+	if in.MADirection != nil {
+		snap.MADirection = *in.MADirection
+	}
+	if in.VolumeLookback != nil {
+		snap.VolumeLookback = *in.VolumeLookback
+	}
+	if in.VolumeMinRatio != nil {
+		snap.VolumeMinRatio = *in.VolumeMinRatio
+	}
+	for _, c := range rule.SelectedConditions() {
+		if err := applyScannerConditionParams(rule, c, snap); err != nil {
+			return nil, err
+		}
+	}
+	rule.UpdatedAt = time.Now().UTC()
+	return s.store.UpdateRule(ctx, *rule)
+}
+
+func createInputFromRule(r domain.ScannerRule) CreateInput {
+	return CreateInput{
+		RSIPeriod:      r.RSIPeriod,
+		RSICondition:   string(r.RSICondition),
+		RSIThreshold:   r.RSIThreshold,
+		MAFastPeriod:   r.MAFastPeriod,
+		MASlowPeriod:   r.MASlowPeriod,
+		MADirection:    r.MADirection,
+		VolumeLookback: r.VolumeLookback,
+		VolumeMinRatio: r.VolumeMinRatio,
+	}
+}
+
 func applyScannerConditionParams(rule *domain.ScannerRule, typ domain.ScannerRuleType, in CreateInput) error {
 	switch typ {
 	case domain.ScannerRuleRSI:
@@ -316,14 +415,16 @@ func (s *Service) RunOnce(ctx context.Context) (int, error) {
 			continue
 		}
 		for _, rule := range clientRules {
-			need := candleNeed(rule)
+			need := domain.ScannerCandleNeed(rule)
 			for _, item := range acc.Items {
 				key := ck{ex: string(item.Exchange), sym: item.Symbol, iv: rule.Interval}
 				candles, ok := candleCache[key]
-				if !ok {
+				if !ok || (candles != nil && len(candles) < need) {
 					candles, err = s.market.GetCandles(ctx, key.ex, key.sym, key.iv, need, nil, nil)
 					if err != nil {
-						candleCache[key] = nil
+						if !ok {
+							candleCache[key] = nil
+						}
 						continue
 					}
 					candleCache[key] = candles
@@ -359,31 +460,6 @@ func (s *Service) RunOnce(ctx context.Context) (int, error) {
 		}
 	}
 	return inserted, nil
-}
-
-func candleNeed(rule domain.ScannerRule) int {
-	switch rule.Type {
-	case domain.ScannerRuleRSI:
-		p := rule.RSIPeriod
-		if p <= 0 {
-			p = domain.DefaultRSIPeriod
-		}
-		return p + 30
-	case domain.ScannerRuleMACrossover:
-		slow := rule.MASlowPeriod
-		if slow <= 0 {
-			slow = domain.DefaultEMASlow
-		}
-		return slow + 30
-	case domain.ScannerRuleVolumeIncrease:
-		lb := rule.VolumeLookback
-		if lb <= 0 {
-			lb = 20
-		}
-		return lb + 5
-	default:
-		return 100
-	}
 }
 
 func normalizeClientID(id string) (string, error) {

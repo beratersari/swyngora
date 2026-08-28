@@ -212,6 +212,42 @@ func (s *SQLite) CreateRule(ctx context.Context, r domain.ScannerRule) (*domain.
 	return &cp, nil
 }
 
+// UpdateRule persists enable/disable and parameter edits.
+func (s *SQLite) UpdateRule(ctx context.Context, r domain.ScannerRule) (*domain.ScannerRule, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if r.UpdatedAt.IsZero() {
+		r.UpdatedAt = time.Now().UTC()
+	}
+	en := 0
+	if r.Enabled {
+		en = 1
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE scanner_rules SET
+			rule_type = ?, interval = ?, enabled = ?,
+			rsi_period = ?, rsi_condition = ?, rsi_threshold = ?,
+			ma_fast_period = ?, ma_slow_period = ?, ma_direction = ?,
+			volume_lookback = ?, volume_min_ratio = ?, conditions = ?, match_mode = ?,
+			updated_at = ?
+		WHERE client_id = ? AND id = ?
+	`, string(r.Type), r.Interval, en,
+		r.RSIPeriod, string(r.RSICondition), r.RSIThreshold,
+		r.MAFastPeriod, r.MASlowPeriod, r.MADirection,
+		r.VolumeLookback, r.VolumeMinRatio,
+		encodeScannerConditions(r.Conditions), string(r.MatchMode),
+		r.UpdatedAt.UTC().Format(time.RFC3339Nano), r.ClientID, r.ID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	cp := r
+	return &cp, nil
+}
+
 // GetRule returns one rule or ErrNotFound.
 func (s *SQLite) GetRule(ctx context.Context, clientID, id string) (*domain.ScannerRule, error) {
 	row := s.db.QueryRowContext(ctx, ruleSelect+` WHERE client_id = ? AND id = ?`, clientID, id)

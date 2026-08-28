@@ -140,6 +140,7 @@ type ScannerBacktestSignal struct {
 type ScannerPort interface {
 	CreateRule(ctx context.Context, r ScannerRule) (*ScannerRule, error)
 	GetRule(ctx context.Context, clientID, id string) (*ScannerRule, error)
+	UpdateRule(ctx context.Context, r ScannerRule) (*ScannerRule, error)
 	ListRules(ctx context.Context, clientID string) ([]ScannerRule, error)
 	ListEnabledRules(ctx context.Context) ([]ScannerRule, error)
 	DeleteRule(ctx context.Context, clientID, id string) error
@@ -275,6 +276,56 @@ func ResolveScannerConditions(typ string, conds []string) ([]ScannerRuleType, Sc
 		stored = out[0]
 	}
 	return out, stored, nil
+}
+
+const (
+	scannerRSIWarmup     = 30
+	scannerMAWarmup      = 30
+	scannerVolumePad     = 5
+	scannerCandleNeedMin = 20
+	scannerCandleNeedMax = 1000
+)
+
+// ScannerCandleNeed is how many latest candles EvaluateScannerRule needs.
+// Combo rules use the longest selected condition (not a fixed 100).
+func ScannerCandleNeed(rule ScannerRule) int {
+	need := 0
+	for _, c := range rule.SelectedConditions() {
+		n := 0
+		switch c {
+		case ScannerRuleRSI:
+			p := rule.RSIPeriod
+			if p <= 0 {
+				p = DefaultRSIPeriod
+			}
+			n = p + scannerRSIWarmup
+		case ScannerRuleMACrossover:
+			slow := rule.MASlowPeriod
+			if slow <= 0 {
+				slow = DefaultEMASlow
+			}
+			n = slow + scannerMAWarmup
+		case ScannerRuleVolumeIncrease:
+			lb := rule.VolumeLookback
+			if lb <= 0 {
+				lb = 20
+			}
+			n = lb + scannerVolumePad
+		}
+		if n > need {
+			need = n
+		}
+	}
+	if need == 0 {
+		return 100
+	}
+	if need < scannerCandleNeedMin {
+		return scannerCandleNeedMin
+	}
+	if need > scannerCandleNeedMax {
+		return scannerCandleNeedMax
+	}
+	return need
 }
 
 // SelectedConditions is the set EvaluateScannerRule runs. Empty Conditions

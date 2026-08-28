@@ -98,6 +98,11 @@ export type CreateScannerRuleArg = {
   volumeMinRatio?: number;
 };
 
+export type UpdateScannerRuleArg = CreateScannerRuleArg & {
+  id: string;
+  enabled?: boolean;
+};
+
 export type StartScannerBacktestArg = {
   ruleId: string;
   symbol: string;

@@ -112,6 +112,9 @@ func (f *fakeScanner) CreateRule(context.Context, domain.ScannerRule) (*domain.S
 func (f *fakeScanner) GetRule(context.Context, string, string) (*domain.ScannerRule, error) {
 	return nil, domain.ErrNotFound
 }
+func (f *fakeScanner) UpdateRule(context.Context, domain.ScannerRule) (*domain.ScannerRule, error) {
+	return nil, domain.ErrNotFound
+}
 func (f *fakeScanner) ListRules(context.Context, string) ([]domain.ScannerRule, error) {
 	return nil, nil
 }

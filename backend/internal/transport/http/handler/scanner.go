@@ -133,6 +133,47 @@ func (h *ScannerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, ruleToDTO(rule))
 }
 
+type updateScannerRuleBody struct {
+	ClientID       string   `json:"clientId"`
+	Enabled        *bool    `json:"enabled"`
+	Interval       *string  `json:"interval"`
+	Conditions     []string `json:"conditions"`
+	MatchMode      *string  `json:"matchMode"`
+	RSIPeriod      *int     `json:"rsiPeriod"`
+	RSICondition   *string  `json:"rsiCondition"`
+	RSIThreshold   *float64 `json:"rsiThreshold"`
+	MAFastPeriod   *int     `json:"maFastPeriod"`
+	MASlowPeriod   *int     `json:"maSlowPeriod"`
+	MADirection    *string  `json:"maDirection"`
+	VolumeLookback *int     `json:"volumeLookback"`
+	VolumeMinRatio *float64 `json:"volumeMinRatio"`
+}
+
+// Update handles PATCH /api/v1/scanner/rules/{id}
+func (h *ScannerHandler) Update(w http.ResponseWriter, r *http.Request) {
+	var body updateScannerRuleBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
+	}
+	rule, err := h.svc.Update(r.Context(), scanner.UpdateInput{
+		ClientID: clientID, ID: strings.TrimSpace(r.PathValue("id")),
+		Enabled: body.Enabled, Interval: body.Interval, Conditions: body.Conditions, MatchMode: body.MatchMode,
+		RSIPeriod: body.RSIPeriod, RSICondition: body.RSICondition, RSIThreshold: body.RSIThreshold,
+		MAFastPeriod: body.MAFastPeriod, MASlowPeriod: body.MASlowPeriod, MADirection: body.MADirection,
+		VolumeLookback: body.VolumeLookback, VolumeMinRatio: body.VolumeMinRatio,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ruleToDTO(rule))
+}
+
 // ListRules handles GET /api/v1/scanner/rules
 func (h *ScannerHandler) ListRules(w http.ResponseWriter, r *http.Request) {
 	list, err := h.svc.List(r.Context(), clientIDFrom(r))

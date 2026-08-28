@@ -127,6 +127,7 @@ export {
   gradeFromScore,
   ruleTypeShort,
   ruleFactorsShort,
+  ruleConditions,
   describeRule,
   buildSwingSetups,
   countHitsSince,

@@ -158,6 +158,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `quote_price_diff_watch` | Same scan using a stored watch's symbol and fees |
 | `create_scanner_rule` | Create watchlist scanner rule (conditions + matchMode all\|any) |
 | `list_scanner_rules` | List scanner rules |
+| `update_scanner_rule` | Enable/disable a rule or edit conditions, periods, and thresholds |
 | `delete_scanner_rule` | Delete scanner rule |
 | `list_scanner_results` | Scanner match history |
 | `start_export` | Start JSON/CSV export of watchlist, shares, alerts, backtests, portfolios |

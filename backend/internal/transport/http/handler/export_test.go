@@ -88,6 +88,9 @@ type emptyScanner struct{}
 func (emptyScanner) CreateRule(context.Context, domain.ScannerRule) (*domain.ScannerRule, error) {
 	return nil, nil
 }
+func (emptyScanner) UpdateRule(context.Context, domain.ScannerRule) (*domain.ScannerRule, error) {
+	return nil, domain.ErrNotFound
+}
 func (emptyScanner) GetRule(context.Context, string, string) (*domain.ScannerRule, error) {
 	return nil, domain.ErrNotFound
 }
