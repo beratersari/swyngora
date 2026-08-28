@@ -83,6 +83,13 @@ func TestWatchAndSignalLifecycle(t *testing.T) {
 	if err != nil || got.Armed {
 		t.Fatalf("%+v %v", got, err)
 	}
+	got.Status = domain.FundingArbWatchPaused
+	got.MinProfit = 9
+	got.UpdatedAt = now
+	got, err = s.UpdateWatch(ctx, *got)
+	if err != nil || got.Status != domain.FundingArbWatchPaused || got.MinProfit != 9 {
+		t.Fatalf("update %+v %v", got, err)
+	}
 
 	if err := s.PurgeClient(ctx, "c1"); err != nil {
 		t.Fatal(err)

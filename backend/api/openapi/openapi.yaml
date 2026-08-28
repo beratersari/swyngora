@@ -1111,9 +1111,12 @@ paths:
         the client's alert webhook (`type=funding_arb.triggered`). Same coin
         plus same long/short while still above the floor does not re-notify.
         After net falls below the floor the signal closes; a later re-cross
-        notifies again. A direction flip closes the old signal and opens a
-        new one. Optional `symbol` follows one pair only. One scan follow
-        per client. Max 20 watches per client. Informational only.
+        notifies again. A coin missing from the volume-limited scan is
+        re-quoted on its own and closed only when net is really below the
+        floor. A direction flip closes the old signal and opens a new one.
+        Optional `symbol` follows one pair only. Pause/resume and PATCH
+        settings without deleting. One scan follow per client. Max 20
+        watches per client. Informational only.
       operationId: createFundingArbWatch
       tags: [FundingArb]
       requestBody:
@@ -1198,6 +1201,48 @@ paths:
                 $ref: '#/components/schemas/FundingArbWatch'
         '404':
           $ref: '#/components/responses/Error'
+    patch:
+      summary: Update funding-arb follow settings
+      description: Change minProfit, notional, holdHours, fees, or scan size. Does not delete signals.
+      operationId: updateFundingArbWatch
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                minProfit: { type: number, exclusiveMinimum: 0 }
+                notional: { type: number }
+                holdHours: { type: number }
+                quote: { type: string }
+                limit: { type: integer }
+                feeBinancePct: { type: number, minimum: 0 }
+                feeBybitPct: { type: number, minimum: 0 }
+      responses:
+        '200':
+          description: Updated watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbWatch'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete a funding-arb follow watch
       description: Removes the watch and its signals.
@@ -1217,6 +1262,57 @@ paths:
       responses:
         '200':
           description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/watches/{id}/pause:
+    post:
+      summary: Pause a funding-arb follow
+      description: Stops evaluation without deleting the watch or its signals.
+      operationId: pauseFundingArbWatch
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paused watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbWatch'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/watches/{id}/resume:
+    post:
+      summary: Resume a funding-arb follow
+      operationId: resumeFundingArbWatch
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbWatch'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/funding-arb/signals:

@@ -374,6 +374,59 @@ func (c *APIClient) GetFundingArbWatch(ctx context.Context, clientID, id string)
 	return c.get(ctx, "/api/v1/funding-arb/watches/"+url.PathEscape(id), q)
 }
 
+// UpdateFundingArbWatch patches follow settings.
+func (c *APIClient) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID}
+	if notional != nil {
+		body["notional"] = *notional
+	}
+	if holdHours != nil {
+		body["holdHours"] = *holdHours
+	}
+	if minProfit != nil {
+		body["minProfit"] = *minProfit
+	}
+	if quote != nil {
+		body["quote"] = *quote
+	}
+	if limit != nil {
+		body["limit"] = *limit
+	}
+	if feeBinancePct != nil {
+		body["feeBinancePct"] = *feeBinancePct
+	}
+	if feeBybitPct != nil {
+		body["feeBybitPct"] = *feeBybitPct
+	}
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/funding-arb/watches/"+url.PathEscape(id), body)
+}
+
+// PauseFundingArbWatch pauses a follow without deleting it.
+func (c *APIClient) PauseFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/funding-arb/watches/" + url.PathEscape(id) + "/pause"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+// ResumeFundingArbWatch resumes a paused follow.
+func (c *APIClient) ResumeFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/funding-arb/watches/" + url.PathEscape(id) + "/resume"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
 // DeleteFundingArbWatch deletes a follow watch.
 func (c *APIClient) DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

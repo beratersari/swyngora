@@ -4,6 +4,8 @@ SQLite persistence for funding-arb watches and open/closed signals.
 
 A watch with `symbol=*` follows the funding-arb scan (one open signal per
 coin). Schema v2 unique-indexes open signals on `(watch_id, symbol)`.
+`UpdateWatch` writes min profit and other settings; `status` is `active` or
+`paused`.
 
 ## Layout
 

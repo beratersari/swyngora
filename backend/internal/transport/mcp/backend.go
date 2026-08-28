@@ -804,6 +804,44 @@ func (b *Backend) GetFundingArbWatch(ctx context.Context, clientID, id string) (
 	return mustJSON(fundingArbWatchMap(got))
 }
 
+func (b *Backend) UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.UpdateWatch(ctx, fundingarb.UpdateInput{
+		ClientID: clientID, ID: id,
+		Notional: notional, HoldHours: holdHours, MinProfit: minProfit,
+		Quote: quote, SymbolLimit: limit,
+		FeeBinancePct: feeBinancePct, FeeBybitPct: feeBybitPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbWatchMap(got))
+}
+
+func (b *Backend) PauseFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.PauseWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbWatchMap(got))
+}
+
+func (b *Backend) ResumeFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.ResumeWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbWatchMap(got))
+}
+
 func (b *Backend) DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.FundingArb == nil {
 		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)

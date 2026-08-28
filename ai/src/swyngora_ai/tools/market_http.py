@@ -830,6 +830,18 @@ class FundingArbWatchIdInput(BaseModel):
     watch_id: str
 
 
+class FundingArbWatchUpdateInput(BaseModel):
+    client_id: str
+    watch_id: str
+    min_profit: float | None = Field(default=None, description="New after-fee profit floor")
+    notional: float | None = None
+    hold_hours: float | None = None
+    quote: str | None = None
+    limit: int | None = None
+    fee_binance_pct: float | None = None
+    fee_bybit_pct: float | None = None
+
+
 class FundingArbSignalListInput(BaseModel):
     client_id: str
     status: str = Field(default="open", description="open | closed | all")
@@ -2020,6 +2032,46 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             f"/api/v1/funding-arb/watches/{watch_id}",
             {"clientId": client_id},
+        )
+
+    def update_funding_arb_watch(
+        client_id: str,
+        watch_id: str,
+        min_profit: float | None = None,
+        notional: float | None = None,
+        hold_hours: float | None = None,
+        quote: str | None = None,
+        limit: int | None = None,
+        fee_binance_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+    ) -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if min_profit is not None:
+            body["minProfit"] = min_profit
+        if notional is not None:
+            body["notional"] = notional
+        if hold_hours is not None:
+            body["holdHours"] = hold_hours
+        if quote:
+            body["quote"] = quote
+        if limit is not None:
+            body["limit"] = limit
+        if fee_binance_pct is not None:
+            body["feeBinancePct"] = fee_binance_pct
+        if fee_bybit_pct is not None:
+            body["feeBybitPct"] = fee_bybit_pct
+        return http.patch(f"/api/v1/funding-arb/watches/{watch_id}", body)
+
+    def pause_funding_arb_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/funding-arb/watches/{watch_id}/pause?clientId={client_id}",
+            {},
+        )
+
+    def resume_funding_arb_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/funding-arb/watches/{watch_id}/resume?clientId={client_id}",
+            {},
         )
 
     def delete_funding_arb_watch(client_id: str, watch_id: str) -> str:
@@ -3474,6 +3526,24 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_funding_arb_watch,
             name="get_funding_arb_watch",
             description="Get one funding-arb follow watch by id.",
+            args_schema=FundingArbWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            update_funding_arb_watch,
+            name="update_funding_arb_watch",
+            description="Change minProfit and other settings on an existing funding-arb follow without deleting it.",
+            args_schema=FundingArbWatchUpdateInput,
+        ),
+        StructuredTool.from_function(
+            pause_funding_arb_watch,
+            name="pause_funding_arb_watch",
+            description="Pause a funding-arb follow without deleting it or its signals.",
+            args_schema=FundingArbWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            resume_funding_arb_watch,
+            name="resume_funding_arb_watch",
+            description="Resume a paused funding-arb follow.",
             args_schema=FundingArbWatchIdInput,
         ),
         StructuredTool.from_function(

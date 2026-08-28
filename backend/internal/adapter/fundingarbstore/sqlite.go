@@ -262,6 +262,39 @@ func (s *SQLite) CountWatches(ctx context.Context, clientID string) (int, error)
 	return n, err
 }
 
+// UpdateWatch writes mutable watch fields.
+func (s *SQLite) UpdateWatch(ctx context.Context, w domain.FundingArbWatch) (*domain.FundingArbWatch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	armed := 0
+	if w.Armed {
+		armed = 1
+	}
+	if w.Quote == "" {
+		w.Quote = "USDT"
+	}
+	if w.SymbolLimit <= 0 {
+		w.SymbolLimit = domain.FundingArbScanDefault
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE funding_arb_watches SET
+			notional = ?, hold_hours = ?, min_profit = ?,
+			fee_binance_pct = ?, fee_bybit_pct = ?,
+			quote = ?, symbol_limit = ?, status = ?, armed = ?, updated_at = ?
+		WHERE id = ? AND client_id = ?
+	`, w.Notional, w.HoldHours, w.MinProfit, w.FeeBinancePct, w.FeeBybitPct,
+		w.Quote, w.SymbolLimit, string(w.Status), armed,
+		w.UpdatedAt.UTC().Format(time.RFC3339Nano), w.ID, w.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getWatchUnlocked(ctx, w.ClientID, w.ID)
+}
+
 // SetWatchArmed updates the re-arm flag.
 func (s *SQLite) SetWatchArmed(ctx context.Context, id string, armed bool, at time.Time) error {
 	s.mu.Lock()

@@ -180,6 +180,97 @@ func (s *Service) GetWatch(ctx context.Context, clientID, id string) (*domain.Fu
 	return s.store.GetWatch(ctx, clientID, id)
 }
 
+// UpdateInput patches watch settings. Nil fields stay unchanged.
+type UpdateInput struct {
+	ClientID      string
+	ID            string
+	Notional      *float64
+	HoldHours     *float64
+	MinProfit     *float64
+	Quote         *string
+	SymbolLimit   *int
+	FeeBinancePct *float64
+	FeeBybitPct   *float64
+}
+
+// UpdateWatch changes min profit and other settings without deleting the follow.
+func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.FundingArbWatch, error) {
+	w, err := s.GetWatch(ctx, in.ClientID, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if in.Notional != nil {
+		n, err := domain.ResolveFundingArbNotional(*in.Notional)
+		if err != nil {
+			return nil, err
+		}
+		w.Notional = n
+	}
+	if in.HoldHours != nil {
+		h, err := domain.ResolveFundingArbHoldHours(*in.HoldHours)
+		if err != nil {
+			return nil, err
+		}
+		w.HoldHours = h
+	}
+	if in.MinProfit != nil {
+		p, err := domain.ResolveFundingArbMinProfit(*in.MinProfit)
+		if err != nil {
+			return nil, err
+		}
+		w.MinProfit = p
+	}
+	if in.Quote != nil {
+		q := strings.ToUpper(strings.TrimSpace(*in.Quote))
+		if q == "" {
+			q = "USDT"
+		}
+		w.Quote = q
+	}
+	if in.SymbolLimit != nil {
+		w.SymbolLimit = domain.ClampFundingArbScanLimit(*in.SymbolLimit)
+	}
+	if in.FeeBinancePct != nil {
+		fb, err := domain.ResolveFundingArbFeeRate(domain.ExchangeBinance, in.FeeBinancePct)
+		if err != nil {
+			return nil, err
+		}
+		w.FeeBinancePct = fb * 100
+	}
+	if in.FeeBybitPct != nil {
+		fy, err := domain.ResolveFundingArbFeeRate(domain.ExchangeBybit, in.FeeBybitPct)
+		if err != nil {
+			return nil, err
+		}
+		w.FeeBybitPct = fy * 100
+	}
+	w.UpdatedAt = time.Now().UTC()
+	return s.store.UpdateWatch(ctx, *w)
+}
+
+// PauseWatch stops evaluation without deleting the follow or its signals.
+func (s *Service) PauseWatch(ctx context.Context, clientID, id string) (*domain.FundingArbWatch, error) {
+	return s.setWatchStatus(ctx, clientID, id, domain.FundingArbWatchPaused)
+}
+
+// ResumeWatch starts evaluating a paused follow again.
+func (s *Service) ResumeWatch(ctx context.Context, clientID, id string) (*domain.FundingArbWatch, error) {
+	return s.setWatchStatus(ctx, clientID, id, domain.FundingArbWatchActive)
+}
+
+func (s *Service) setWatchStatus(ctx context.Context, clientID, id string, st domain.FundingArbWatchStatus) (*domain.FundingArbWatch, error) {
+	w, err := s.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	if w.Status == st {
+		return w, nil
+	}
+	w.Status = st
+	w.UpdatedAt = time.Now().UTC()
+	return s.store.UpdateWatch(ctx, *w)
+}
+
 // DeleteWatch removes a watch.
 func (s *Service) DeleteWatch(ctx context.Context, clientID, id string) error {
 	if s.store == nil {
@@ -287,10 +378,14 @@ func (s *Service) processWatch(ctx context.Context, w domain.FundingArbWatch, no
 			delete(openBy, h.Symbol)
 		}
 		for _, leftover := range openBy {
-			if err := s.store.CloseSignal(ctx, leftover.ID, now); err != nil {
-				return opened, closed, err
+			// Missing from the volume-limited scan is not enough to close.
+			// Re-quote that pair and close only when net is really below min.
+			o, c, rerr := s.recheckSymbol(ctx, w, leftover.Symbol, now)
+			if rerr != nil {
+				return opened, closed, rerr
 			}
-			closed++
+			opened += o
+			closed += c
 		}
 		return opened, closed, nil
 	}
@@ -318,6 +413,31 @@ func (s *Service) processWatch(ctx context.Context, w domain.FundingArbWatch, no
 		_ = s.store.SetWatchArmed(ctx, w.ID, true, now)
 	}
 	return 0, closed, nil
+}
+
+func (s *Service) recheckSymbol(ctx context.Context, w domain.FundingArbWatch, symbol string, now time.Time) (opened, closed int, err error) {
+	fb, fy := w.FeeBinancePct, w.FeeBybitPct
+	rep, qerr := s.quotes.GetFundingArb(ctx, market.FundingArbParams{
+		Symbol: symbol, Notional: w.Notional, HoldHours: w.HoldHours,
+		FeeBinancePct: &fb, FeeBybitPct: &fy,
+	})
+	if qerr != nil || rep == nil {
+		return 0, 0, nil
+	}
+	if rep.HorizonNet >= w.MinProfit && rep.Trade != nil {
+		return s.applyHit(ctx, w, symbol, domain.Exchange(rep.Trade.LongExchange), domain.Exchange(rep.Trade.ShortExchange), rep.HorizonNet, rep.Summary, now)
+	}
+	open, oerr := s.store.GetOpenSignal(ctx, w.ID, symbol)
+	if oerr != nil && !errors.Is(oerr, domain.ErrNotFound) {
+		return 0, 0, oerr
+	}
+	if open == nil {
+		return 0, 0, nil
+	}
+	if err := s.store.CloseSignal(ctx, open.ID, now); err != nil {
+		return 0, 0, err
+	}
+	return 0, 1, nil
 }
 
 func (s *Service) applyHit(ctx context.Context, w domain.FundingArbWatch, symbol string, long, short domain.Exchange, net float64, summary string, now time.Time) (opened, closed int, err error) {

@@ -200,9 +200,18 @@ func TestProcessScanWatch_NewCoinAndReentry(t *testing.T) {
 	q.scan = &domain.FundingArbScan{Hits: []domain.FundingArbHit{
 		{Symbol: "ETHUSDT", LongExchange: "bybit", ShortExchange: "binance", RankScore: 9, Summary: "eth"},
 	}}
+	q.rep = &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 11,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "bybit", WorthIt: true},
+	}
+	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 0 || closed != 0 || n.n != 2 {
+		t.Fatalf("missing from scan but still above must keep open=%d close=%d n=%d err=%v", opened, closed, n.n, err)
+	}
+	q.rep = &domain.FundingArbReport{Symbol: "BTCUSDT", HorizonNet: 0, Summary: "below"}
 	opened, closed, _, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
 	if err != nil || opened != 0 || closed != 1 {
-		t.Fatalf("btc drop open=%d close=%d err=%v", opened, closed, err)
+		t.Fatalf("btc below min open=%d close=%d err=%v", opened, closed, err)
 	}
 	q.scan = &domain.FundingArbScan{Hits: []domain.FundingArbHit{
 		{Symbol: "BTCUSDT", LongExchange: "binance", ShortExchange: "bybit", RankScore: 15, Summary: "btc back"},
@@ -214,6 +223,55 @@ func TestProcessScanWatch_NewCoinAndReentry(t *testing.T) {
 	}
 	if _, err := svc.CreateWatch(context.Background(), CreateInput{ClientID: "client-a", MinProfit: 6}); err == nil {
 		t.Fatal("second scan follow")
+	}
+}
+
+func TestPauseResumeAndUpdateWatch(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	q := &fakeQuotes{rep: &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 12,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "bybit", WorthIt: true},
+	}}
+	n := &fakeNotify{}
+	svc := New(st, q)
+	svc.SetNotifier(n)
+	w, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", Symbol: "BTCUSDT", Notional: 10000, HoldHours: 24, MinProfit: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	paused, err := svc.PauseWatch(context.Background(), "client-a", w.ID)
+	if err != nil || paused.Status != domain.FundingArbWatchPaused {
+		t.Fatalf("%+v %v", paused, err)
+	}
+	q.rep = &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 30,
+		Trade: &domain.FundingArbTradeView{LongExchange: "bybit", ShortExchange: "binance", WorthIt: true},
+	}
+	opened, closed, touched, err := svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 0 || closed != 0 || touched != 0 {
+		t.Fatalf("paused must skip open=%d close=%d touch=%d err=%v", opened, closed, touched, err)
+	}
+	minP := 7.0
+	updated, err := svc.UpdateWatch(context.Background(), UpdateInput{ClientID: "client-a", ID: w.ID, MinProfit: &minP})
+	if err != nil || updated.MinProfit != 7 {
+		t.Fatalf("update %+v %v", updated, err)
+	}
+	resumed, err := svc.ResumeWatch(context.Background(), "client-a", w.ID)
+	if err != nil || resumed.Status != domain.FundingArbWatchActive || resumed.MinProfit != 7 {
+		t.Fatalf("resume %+v %v", resumed, err)
+	}
+	opened, _, touched, err = svc.ProcessActiveWatches(context.Background(), time.Now().UTC())
+	if err != nil || opened != 1 || touched != 1 {
+		t.Fatalf("resume process open=%d touch=%d err=%v", opened, touched, err)
 	}
 }
 

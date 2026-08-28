@@ -101,6 +101,7 @@ type FundingArbWatchPort interface {
 	ListActiveWatches(ctx context.Context) ([]FundingArbWatch, error)
 	DeleteWatch(ctx context.Context, clientID, id string) error
 	CountWatches(ctx context.Context, clientID string) (int, error)
+	UpdateWatch(ctx context.Context, w FundingArbWatch) (*FundingArbWatch, error)
 	SetWatchArmed(ctx context.Context, id string, armed bool, at time.Time) error
 
 	GetOpenSignal(ctx context.Context, watchID, symbol string) (*FundingArbSignal, error)

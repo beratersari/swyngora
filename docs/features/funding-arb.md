@@ -53,8 +53,12 @@ re-scans on `FUNDING_ARB_CHECK_INTERVAL` (default 30s) and notifies when a
 **new coin** first has after-fee net ≥ `minProfit`. Same coin + same
 long/short while still above the floor is not notified again. After it
 drops below the floor the signal closes; a later re-cross notifies again.
-A **direction flip** closes the old signal and opens a new one. Optional
-`symbol` still follows one pair. Max 20 watches per client.
+A coin missing from the volume-limited scan is **re-quoted** and closed
+only if net is really below `minProfit`. A **direction flip** closes the
+old signal and opens a new one. Optional `symbol` still follows one pair.
+`PATCH /api/v1/funding-arb/watches/{id}` edits min profit and other
+settings. `POST .../pause` and `POST .../resume` stop and start
+evaluation without deleting. Max 20 watches per client.
 
 This is **not** an executable arb and **not** financial advice.
 

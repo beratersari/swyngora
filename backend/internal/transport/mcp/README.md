@@ -25,6 +25,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `create_funding_arb_watch` | Follow the scan (omit symbol) or one pair; notify when after-fee net ≥ minProfit |
 | `list_funding_arb_watches` | List funding-arb follow watches |
 | `get_funding_arb_watch` | Get one funding-arb follow watch |
+| `update_funding_arb_watch` | Change minProfit and other settings without deleting |
+| `pause_funding_arb_watch` | Pause a follow without deleting it |
+| `resume_funding_arb_watch` | Resume a paused follow |
 | `delete_funding_arb_watch` | Delete watch and its signals |
 | `list_funding_arb_signals` | List min-profit crossings (open/closed/all) |
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |

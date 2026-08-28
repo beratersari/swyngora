@@ -9,10 +9,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/apikey"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/dataimport"
 	exportsvc "gitlab.com/trace-analysis/swyngora/backend/internal/service/export"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/service/fundingarb"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
@@ -247,6 +247,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		fah := handler.NewFundingArbWatchHandler(opts.FundingArb)
 		mux.HandleFunc("POST /api/v1/funding-arb/watches", fah.CreateWatch)
 		mux.HandleFunc("GET /api/v1/funding-arb/watches", fah.ListWatches)
+		mux.HandleFunc("PATCH /api/v1/funding-arb/watches/{id}", fah.UpdateWatch)
+		mux.HandleFunc("POST /api/v1/funding-arb/watches/{id}/pause", fah.PauseWatch)
+		mux.HandleFunc("POST /api/v1/funding-arb/watches/{id}/resume", fah.ResumeWatch)
 		mux.HandleFunc("GET /api/v1/funding-arb/watches/{id}", fah.GetWatch)
 		mux.HandleFunc("DELETE /api/v1/funding-arb/watches/{id}", fah.DeleteWatch)
 		mux.HandleFunc("GET /api/v1/funding-arb/signals", fah.ListSignals)

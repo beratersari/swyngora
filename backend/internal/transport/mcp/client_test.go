@@ -148,6 +148,12 @@ func TestAPIClient_FundingArbWatches(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"watches": []any{}})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/funding-arb/watches/w1":
 			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1"})
+		case r.Method == http.MethodPatch && r.URL.Path == "/api/v1/funding-arb/watches/w1":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "minProfit": 12})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/pause"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "status": "paused"})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/resume"):
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "status": "active"})
 		case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/api/v1/funding-arb/watches/"):
 			_ = json.NewEncoder(w).Encode(map[string]any{"deleted": true})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/funding-arb/signals":
@@ -171,6 +177,16 @@ func TestAPIClient_FundingArbWatches(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := c.GetFundingArbWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	minP := 12.0
+	if _, err := c.UpdateFundingArbWatch(ctx, "c1", "w1", nil, nil, &minP, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PauseFundingArbWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ResumeFundingArbWatch(ctx, "c1", "w1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.DeleteFundingArbWatch(ctx, "c1", "w1"); err != nil {

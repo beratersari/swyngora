@@ -45,6 +45,9 @@ type DataPort interface {
 	CreateFundingArbWatch(ctx context.Context, clientID, symbol string, notional, holdHours, minProfit float64, quote string, limit int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ListFundingArbWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	UpdateFundingArbWatch(ctx context.Context, clientID, id string, notional, holdHours, minProfit *float64, quote *string, limit *int, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
+	PauseFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ResumeFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
@@ -636,6 +639,84 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetFundingArbWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("update_funding_arb_watch",
+		mcp.WithDescription("Change minProfit, notional, holdHours, fees, or scan size on an existing funding-arb follow. Does not delete signals."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+		mcp.WithNumber("minProfit", mcp.Description("New after-fee profit floor")),
+		mcp.WithNumber("notional", mcp.Description("New quote size on each leg")),
+		mcp.WithNumber("holdHours", mcp.Description("New hold window hours")),
+		mcp.WithString("quote", mcp.Description("Scan quote asset")),
+		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var quote *string
+		if q := strings.TrimSpace(req.GetString("quote", "")); q != "" {
+			quote = &q
+		}
+		var limit *int
+		if _, ok := req.GetArguments()["limit"]; ok {
+			n := int(req.GetFloat("limit", 0))
+			limit = &n
+		}
+		raw, err := api.UpdateFundingArbWatch(ctx, clientID, id,
+			optionalMCPFee(req, "notional"), optionalMCPFee(req, "holdHours"), optionalMCPFee(req, "minProfit"),
+			quote, limit, optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeBybitPct"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("pause_funding_arb_watch",
+		mcp.WithDescription("Pause a funding-arb follow without deleting it or its signals."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PauseFundingArbWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("resume_funding_arb_watch",
+		mcp.WithDescription("Resume a paused funding-arb follow."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ResumeFundingArbWatch(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

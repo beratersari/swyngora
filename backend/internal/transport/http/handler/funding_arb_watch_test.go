@@ -82,6 +82,63 @@ func TestFundingArbWatchHTTP_CreateListGetDelete(t *testing.T) {
 	}
 }
 
+func TestFundingArbWatchHTTP_PauseResumeAndPatch(t *testing.T) {
+	h := newFundingArbWatchHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "fa-client", "symbol": "BTCUSDT", "minProfit": 10,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/funding-arb/watches", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "fa-client")
+	rr := httptest.NewRecorder()
+	h.CreateWatch(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	var created fundingArbWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/funding-arb/watches/"+created.ID+"/pause", nil)
+	req.Header.Set("X-Client-Id", "fa-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.PauseWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("pause %d %s", rr.Code, rr.Body.String())
+	}
+	var paused fundingArbWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &paused); err != nil || paused.Status != "paused" {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+	patch, _ := json.Marshal(map[string]any{"minProfit": 12})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/funding-arb/watches/"+created.ID, bytes.NewReader(patch))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "fa-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.UpdateWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch %d %s", rr.Code, rr.Body.String())
+	}
+	var updated fundingArbWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil || updated.MinProfit != 12 || updated.Status != "paused" {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/funding-arb/watches/"+created.ID+"/resume", nil)
+	req.Header.Set("X-Client-Id", "fa-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.ResumeWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("resume %d %s", rr.Code, rr.Body.String())
+	}
+	var resumed fundingArbWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &resumed); err != nil || resumed.Status != "active" || resumed.MinProfit != 12 {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+}
+
 func TestFundingArbWatchHTTP_CreateScanFollow(t *testing.T) {
 	h := newFundingArbWatchHandler(t)
 	body, _ := json.Marshal(map[string]any{

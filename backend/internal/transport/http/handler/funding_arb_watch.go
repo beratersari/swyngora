@@ -145,6 +145,61 @@ func (h *FundingArbWatchHandler) GetWatch(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, faWatchDTO(got))
 }
 
+type updateFundingArbWatchBody struct {
+	ClientID      string   `json:"clientId"`
+	Notional      *float64 `json:"notional"`
+	HoldHours     *float64 `json:"holdHours"`
+	MinProfit     *float64 `json:"minProfit"`
+	Quote         *string  `json:"quote"`
+	SymbolLimit   *int     `json:"limit"`
+	FeeBinancePct *float64 `json:"feeBinancePct"`
+	FeeBybitPct   *float64 `json:"feeBybitPct"`
+}
+
+// UpdateWatch handles PATCH /api/v1/funding-arb/watches/{id}
+func (h *FundingArbWatchHandler) UpdateWatch(w http.ResponseWriter, r *http.Request) {
+	var body updateFundingArbWatchBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid json", domain.ErrInvalidArgument))
+		return
+	}
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
+	}
+	got, err := h.svc.UpdateWatch(r.Context(), fundingarb.UpdateInput{
+		ClientID: clientID, ID: r.PathValue("id"),
+		Notional: body.Notional, HoldHours: body.HoldHours, MinProfit: body.MinProfit,
+		Quote: body.Quote, SymbolLimit: body.SymbolLimit,
+		FeeBinancePct: body.FeeBinancePct, FeeBybitPct: body.FeeBybitPct,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, faWatchDTO(got))
+}
+
+// PauseWatch handles POST /api/v1/funding-arb/watches/{id}/pause
+func (h *FundingArbWatchHandler) PauseWatch(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.PauseWatch(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, faWatchDTO(got))
+}
+
+// ResumeWatch handles POST /api/v1/funding-arb/watches/{id}/resume
+func (h *FundingArbWatchHandler) ResumeWatch(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.ResumeWatch(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, faWatchDTO(got))
+}
+
 // DeleteWatch handles DELETE /api/v1/funding-arb/watches/{id}
 func (h *FundingArbWatchHandler) DeleteWatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
