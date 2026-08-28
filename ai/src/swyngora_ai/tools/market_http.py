@@ -98,9 +98,8 @@ def submit_with_bound_context(
     """Run fn on a pool worker with this task's ContextVars (tenant + scope)."""
     ctx = copy_context()
     if kwargs:
-        return pool.submit(ctx.run, lambda: fn(*args, **kwargs))
-    return pool.submit(ctx.run, fn, *args)
-
+        return pool.submit(ctx.run, lambda: fn(*args, **kwargs))  # ty: ignore[invalid-return-type]
+    return pool.submit(ctx.run, fn, *args)  # ty: ignore[invalid-return-type]
 
 
 _READ_ONLY_DENY = (

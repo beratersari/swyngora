@@ -160,7 +160,9 @@ def test_arch_review_schema_portfolio_id_matches_function_signature():
         assert schema is not None, name
         fields = getattr(schema, "model_fields", {})
         assert "portfolio_id" in fields, f"{name} schema lost portfolio_id"
-        params = inspect.signature(tool.func).parameters
+        func = getattr(tool, "func", None)
+        assert callable(func), name
+        params = inspect.signature(func).parameters
         if "portfolio_id" not in params and "kwargs" not in params:
             mismatches.append(name)
     assert not mismatches, (
