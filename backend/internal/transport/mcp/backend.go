@@ -3747,6 +3747,44 @@ func (b *Backend) GetPriceDiffWatch(ctx context.Context, clientID, id string) (j
 	return mustJSON(priceDiffWatchMap(w))
 }
 
+func (b *Backend) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.UpdateWatch(ctx, pricediff.UpdateInput{
+		ClientID: clientID, ID: id,
+		Notional: notional, MinProfit: minProfit, MinNetDiffPct: minNetDiffPct,
+		MinDurationSec: minDurationSec,
+		FeeBinancePct:  feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.PauseWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.ResumeWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
 func (b *Backend) DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)

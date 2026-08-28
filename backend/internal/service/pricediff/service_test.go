@@ -378,6 +378,125 @@ func TestMinDurationHoldsThenOpensAndResets(t *testing.T) {
 	}
 }
 
+func TestPauseClosesOpenAndStopsSearch(t *testing.T) {
+	now := time.Now().UTC()
+	books := booksAt(now, 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 2 * time.Minute
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "pause-u", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _, _, err := svc.ProcessActiveWatches(ctx, now)
+	if err != nil || c < 1 {
+		t.Fatalf("setup open created=%d err=%v", c, err)
+	}
+	paused, err := svc.PauseWatch(ctx, "pause-u", w.ID)
+	if err != nil || paused.Status != domain.PriceDiffWatchPaused {
+		t.Fatalf("%+v %v", paused, err)
+	}
+	open, err := svc.ListOpportunities(ctx, "pause-u", "open", 20, 0)
+	if err != nil || len(open) != 0 {
+		t.Fatalf("pause must close open opps: %+v %v", open, err)
+	}
+	closed, err := svc.ListOpportunities(ctx, "pause-u", "closed", 20, 0)
+	if err != nil || len(closed) < 1 {
+		t.Fatalf("expected closed rows: %+v %v", closed, err)
+	}
+	c2, cl2, _, err := svc.ProcessActiveWatches(ctx, now.Add(time.Second))
+	if err != nil || c2 != 0 || cl2 != 0 {
+		t.Fatalf("paused watch must not be evaluated created=%d closed=%d err=%v", c2, cl2, err)
+	}
+}
+
+func TestResumeStartsDurationFromScratch(t *testing.T) {
+	t0 := time.Date(2024, 6, 2, 12, 0, 0, 0, time.UTC)
+	books := booksAt(t0, 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 10 * time.Minute
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "resume-u", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		MinDurationSec: 60,
+		FeeBinancePct:  0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stampBooks(books, t0)
+	if c, _, _, err := svc.ProcessActiveWatches(ctx, t0); err != nil || c != 0 {
+		t.Fatalf("arm first tick created=%d err=%v", c, err)
+	}
+	if _, err := svc.PauseWatch(ctx, "resume-u", w.ID); err != nil {
+		t.Fatal(err)
+	}
+	resumed, err := svc.ResumeWatch(ctx, "resume-u", w.ID)
+	if err != nil || resumed.Status != domain.PriceDiffWatchActive {
+		t.Fatalf("%+v %v", resumed, err)
+	}
+	t1 := t0.Add(60 * time.Second)
+	stampBooks(books, t1)
+	c, _, _, err := svc.ProcessActiveWatches(ctx, t1)
+	if err != nil || c != 0 {
+		t.Fatalf("resume must not inherit pre-pause wait, created=%d err=%v", c, err)
+	}
+	t2 := t1.Add(60 * time.Second)
+	stampBooks(books, t2)
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t2)
+	if err != nil || c < 1 {
+		t.Fatalf("held 60s after resume should open, created=%d err=%v", c, err)
+	}
+}
+
+func TestUpdateWatchSettingsAndResetArm(t *testing.T) {
+	t0 := time.Date(2024, 6, 3, 12, 0, 0, 0, time.UTC)
+	books := booksAt(t0, 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 10 * time.Minute
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "edit-u", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		MinDurationSec: 60,
+		FeeBinancePct:  0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stampBooks(books, t0)
+	if c, _, _, err := svc.ProcessActiveWatches(ctx, t0); err != nil || c != 0 {
+		t.Fatalf("arm first tick created=%d err=%v", c, err)
+	}
+	notional, minP, dur, fee := 20000.0, 5.0, 60.0, 0.2
+	got, err := svc.UpdateWatch(ctx, UpdateInput{
+		ClientID: "edit-u", ID: w.ID,
+		Notional: &notional, MinProfit: &minP, MinDurationSec: &dur,
+		FeeBinancePct: &fee, FeeBybitPct: &fee,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Notional != 20000 || got.MinProfit != 5 || got.MinDurationSec != 60 ||
+		got.FeeBinancePct != 0.2 || got.FeeBybitPct != 0.2 || got.FeeCoinbasePct != 0.1 {
+		t.Fatalf("%+v", got)
+	}
+	t1 := t0.Add(60 * time.Second)
+	stampBooks(books, t1)
+	c, _, _, err := svc.ProcessActiveWatches(ctx, t1)
+	if err != nil || c != 0 {
+		t.Fatalf("settings change must reset wait, created=%d err=%v", c, err)
+	}
+	t2 := t1.Add(60 * time.Second)
+	stampBooks(books, t2)
+	c, _, _, err = svc.ProcessActiveWatches(ctx, t2)
+	if err != nil || c < 1 {
+		t.Fatalf("held after edit should open, created=%d err=%v", c, err)
+	}
+}
+
 func stampBooks(f *fakeBooks, now time.Time) {
 	for _, b := range f.data {
 		b.FetchedAt = now

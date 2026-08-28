@@ -16,8 +16,11 @@ Users want to know when the same coin trades at a meaningful price gap across **
 8. When a qualifying fill later holds for `minDurationSec` again: a **new** opportunity is created.
 9. If a venue **book is missing or stale**: that venue is skipped; incomplete data does **not** open, close, or reset the timer.
 10. Open opportunities live in SQLite and **survive worker restarts**.
-11. **Executable quote:** walk the **buy venue asks** and **sell venue bids** for a size. `notional` is quote currency spent on the buy book **before** the buy fee (e.g. `10000` USDT). The same base quantity is sold on the other book (rematched if one side is thinner). **Max size** is the largest quantity whose **cumulative** after-fee profit is still positive — a later book level that loses money on its own is still taken while the running total stays above zero. The displayed fill is capped at that size. `usedNotional` / `usedPct` is how much of the entered money can actually be deployed; `unusedNotional` is the rest. `executable` is true only when the full requested size fills **and** profit after fees is positive.
-12. **All-venue scan:** one amount is walked on every Binance / Coinbase / Bybit buy→sell pair (fees + live depth). Routes are ranked by after-fee profit, then by usable money. `bestRoute` is the top row. If a venue's order book cannot be loaded, that venue is listed in `unavailable` and is **never** shown as a normal route or chosen as best. Optional `minProfitPct` and/or `minProfitAmount` hide smaller fills (`skippedCount` is how many were dropped). Both filters must pass when both are set.
+11. **Edit settings** (`PATCH /watches/{id}`): change `notional`, `minProfit`, `minDurationSec`, `minNetDiffPct`, and/or fees. The duration timer **resets** so the next hold starts from zero. Status is unchanged.
+12. **Pause** (`POST /watches/{id}/pause`): the worker does **not** evaluate the watch. Any **open** opportunity is **closed**. The duration timer is dropped.
+13. **Resume** (`POST /watches/{id}/resume`): evaluation starts again. The duration timer starts **from zero** — it does not continue a wait from before pause.
+14. **Executable quote:** walk the **buy venue asks** and **sell venue bids** for a size. `notional` is quote currency spent on the buy book **before** the buy fee (e.g. `10000` USDT). The same base quantity is sold on the other book (rematched if one side is thinner). **Max size** is the largest quantity whose **cumulative** after-fee profit is still positive — a later book level that loses money on its own is still taken while the running total stays above zero. The displayed fill is capped at that size. `usedNotional` / `usedPct` is how much of the entered money can actually be deployed; `unusedNotional` is the rest. `executable` is true only when the full requested size fills **and** profit after fees is positive.
+15. **All-venue scan:** one amount is walked on every Binance / Coinbase / Bybit buy→sell pair (fees + live depth). Routes are ranked by after-fee profit, then by usable money. `bestRoute` is the top row. If a venue's order book cannot be loaded, that venue is listed in `unavailable` and is **never** shown as a normal route or chosen as best. Optional `minProfitPct` and/or `minProfitAmount` hide smaller fills (`skippedCount` is how many were dropped). Both filters must pass when both are set.
 
 ## API
 
@@ -26,6 +29,9 @@ Users want to know when the same coin trades at a meaningful price gap across **
 | `POST` | `/api/v1/price-diff/watches` | Create watch |
 | `GET` | `/api/v1/price-diff/watches` | List watches |
 | `GET` | `/api/v1/price-diff/watches/{id}` | Get watch |
+| `PATCH` | `/api/v1/price-diff/watches/{id}` | Edit notional, minProfit, minDurationSec, fees |
+| `POST` | `/api/v1/price-diff/watches/{id}/pause` | Pause (close open opps, stop searching) |
+| `POST` | `/api/v1/price-diff/watches/{id}/resume` | Resume (duration timer starts from zero) |
 | `DELETE` | `/api/v1/price-diff/watches/{id}` | Delete watch (+ opportunities) |
 | `GET` | `/api/v1/price-diff/opportunities?status=open\|closed\|all` | List opportunities |
 | `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
@@ -43,7 +49,7 @@ Users want to know when the same coin trades at a meaningful price gap across **
 | Service | `backend/internal/service/pricediff` |
 | Worker | `backend/internal/service/pricediff/checker.go` |
 | HTTP | `backend/internal/transport/http/handler/pricediff.go` |
-| MCP | `create_price_diff_watch`, `list_price_diff_watches`, `get_price_diff_watch`, `delete_price_diff_watch`, `list_price_diff_opportunities`, `get_price_diff_opportunity`, `quote_price_diff`, `quote_price_diff_opportunity`, `scan_price_diff_quotes`, `quote_price_diff_watch` |
+| MCP | `create_price_diff_watch`, `list_price_diff_watches`, `get_price_diff_watch`, `update_price_diff_watch`, `pause_price_diff_watch`, `resume_price_diff_watch`, `delete_price_diff_watch`, `list_price_diff_opportunities`, `get_price_diff_opportunity`, `quote_price_diff`, `quote_price_diff_opportunity`, `scan_price_diff_quotes`, `quote_price_diff_watch` |
 
 ## Config
 
@@ -56,7 +62,7 @@ Users want to know when the same coin trades at a meaningful price gap across **
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/pricediff/ ./internal/transport/http/handler/ -run 'PriceDiff|NetDiff|Fresh|Opportunity|Skip|Persist|Quote' -count=1
+go test ./internal/domain/ ./internal/service/pricediff/ ./internal/transport/http/handler/ -run 'PriceDiff|NetDiff|Fresh|Opportunity|Skip|Persist|Quote|Pause|Resume|UpdateWatch' -count=1
 ```
 
 ## Limitations

@@ -5269,6 +5269,51 @@ paths:
                 $ref: '#/components/schemas/PriceDiffWatch'
         '404':
           $ref: '#/components/responses/Error'
+    patch:
+      summary: Update price-diff watch settings
+      description: |
+        Change notional, minProfit, minDurationSec, minNetDiffPct, or per-venue fees
+        without deleting the watch. Clears the duration timer so the next hold
+        starts from zero. Does not change status.
+      operationId: updatePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                notional: { type: number, exclusiveMinimum: 0 }
+                minProfit: { type: number, minimum: 0 }
+                minDurationSec: { type: number, minimum: 0 }
+                minNetDiffPct: { type: number, minimum: 0 }
+                feeBinancePct: { type: number, minimum: 0 }
+                feeCoinbasePct: { type: number, minimum: 0 }
+                feeBybitPct: { type: number, minimum: 0 }
+      responses:
+        '200':
+          description: Updated watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete a price difference watch
       description: Removes the watch and its opportunities.
@@ -5288,6 +5333,62 @@ paths:
       responses:
         '200':
           description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}/pause:
+    post:
+      summary: Pause a price-diff watch
+      description: |
+        Stops evaluating the watch. Open opportunities are closed. The duration
+        timer is dropped so resume starts a new wait.
+      operationId: pausePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paused watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}/resume:
+    post:
+      summary: Resume a price-diff watch
+      description: |
+        Starts evaluating again. Does not continue a duration wait from before
+        pause — the timer starts from zero.
+      operationId: resumePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/price-diff/watches/{id}/quote:

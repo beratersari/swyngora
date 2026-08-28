@@ -248,6 +248,8 @@ type PriceDiffPort interface {
 	ListActiveWatches(ctx context.Context) ([]PriceDiffWatch, error)
 	DeleteWatch(ctx context.Context, clientID, id string) error
 	CountWatches(ctx context.Context, clientID string) (int, error)
+	// UpdateWatch writes mutable settings and status.
+	UpdateWatch(ctx context.Context, w PriceDiffWatch) (*PriceDiffWatch, error)
 
 	// GetOpenOpportunity returns open opp for (watch, buy, sell) or ErrNotFound.
 	GetOpenOpportunity(ctx context.Context, watchID string, buy, sell Exchange) (*PriceDiffOpportunity, error)
@@ -267,4 +269,6 @@ type PriceDiffPort interface {
 	// SetRouteArm records first-seen time; an existing arm is left unchanged.
 	SetRouteArm(ctx context.Context, arm PriceDiffRouteArm) error
 	ClearRouteArm(ctx context.Context, watchID string, buy, sell Exchange) error
+	// ClearRouteArms drops every pending duration timer for a watch.
+	ClearRouteArms(ctx context.Context, watchID string) error
 }

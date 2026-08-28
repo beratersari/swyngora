@@ -2139,6 +2139,54 @@ export interface paths {
         delete: operations["deletePriceDiffWatch"];
         options?: never;
         head?: never;
+        /**
+         * Update price-diff watch settings
+         * @description Change notional, minProfit, minDurationSec, minNetDiffPct, or per-venue fees
+         *     without deleting the watch. Clears the duration timer so the next hold
+         *     starts from zero. Does not change status.
+         */
+        patch: operations["updatePriceDiffWatch"];
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a price-diff watch
+         * @description Stops evaluating the watch. Open opportunities are closed. The duration
+         *     timer is dropped so resume starts a new wait.
+         */
+        post: operations["pausePriceDiffWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a price-diff watch
+         * @description Starts evaluating again. Does not continue a duration wait from before
+         *     pause — the timer starts from zero.
+         */
+        post: operations["resumePriceDiffWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -8189,6 +8237,101 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updatePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    notional?: number;
+                    minProfit?: number;
+                    minDurationSec?: number;
+                    minNetDiffPct?: number;
+                    feeBinancePct?: number;
+                    feeCoinbasePct?: number;
+                    feeBybitPct?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    pausePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    resumePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
             };
             404: components["responses"]["Error"];
         };

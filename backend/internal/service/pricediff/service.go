@@ -128,27 +128,21 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 	if sym == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	if in.Notional < domain.MinPriceDiffNotional || in.Notional > domain.MaxPriceDiffNotional ||
-		math.IsNaN(in.Notional) || math.IsInf(in.Notional, 0) {
-		return nil, fmt.Errorf("%w: notional must be between %g and %g", domain.ErrInvalidArgument,
-			domain.MinPriceDiffNotional, domain.MaxPriceDiffNotional)
+	if err := validateWatchNotional(in.Notional); err != nil {
+		return nil, err
 	}
-	if in.MinProfit < 0 || in.MinProfit > domain.MaxPriceDiffMinProfit ||
-		math.IsNaN(in.MinProfit) || math.IsInf(in.MinProfit, 0) {
-		return nil, fmt.Errorf("%w: minProfit must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffMinProfit)
+	if err := validateWatchMinProfit(in.MinProfit); err != nil {
+		return nil, err
 	}
-	if in.MinNetDiffPct < 0 || in.MinNetDiffPct > domain.MaxPriceDiffNetPct ||
-		math.IsNaN(in.MinNetDiffPct) || math.IsInf(in.MinNetDiffPct, 0) {
-		return nil, fmt.Errorf("%w: minNetDiffPct must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffNetPct)
+	if err := validateWatchMinNet(in.MinNetDiffPct); err != nil {
+		return nil, err
 	}
 	minDur, err := domain.ResolvePriceDiffMinDuration(in.MinDurationSec)
 	if err != nil {
 		return nil, err
 	}
-	for _, f := range []float64{in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct} {
-		if f < 0 || f > domain.MaxPriceDiffFeePct || math.IsNaN(f) || math.IsInf(f, 0) {
-			return nil, fmt.Errorf("%w: fees must be between 0 and %g percent", domain.ErrInvalidArgument, domain.MaxPriceDiffFeePct)
-		}
+	if err := validateWatchFees(in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct); err != nil {
+		return nil, err
 	}
 	n, err := s.store.CountWatches(ctx, clientID)
 	if err != nil {
@@ -210,6 +204,132 @@ func (s *Service) DeleteWatch(ctx context.Context, clientID, id string) error {
 		return fmt.Errorf("%w: watch id is required", domain.ErrInvalidArgument)
 	}
 	return s.store.DeleteWatch(ctx, clientID, id)
+}
+
+// UpdateInput patches watch settings. Nil fields stay unchanged.
+type UpdateInput struct {
+	ClientID       string
+	ID             string
+	Notional       *float64
+	MinProfit      *float64
+	MinNetDiffPct  *float64
+	MinDurationSec *float64
+	FeeBinancePct  *float64
+	FeeCoinbasePct *float64
+	FeeBybitPct    *float64
+}
+
+// UpdateWatch changes notional, min profit, duration, and fees without deleting.
+// A settings change clears the duration timer so the next hold starts from zero.
+func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.PriceDiffWatch, error) {
+	w, err := s.GetWatch(ctx, in.ClientID, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	changed := false
+	if in.Notional != nil {
+		if err := validateWatchNotional(*in.Notional); err != nil {
+			return nil, err
+		}
+		w.Notional = *in.Notional
+		changed = true
+	}
+	if in.MinProfit != nil {
+		if err := validateWatchMinProfit(*in.MinProfit); err != nil {
+			return nil, err
+		}
+		w.MinProfit = *in.MinProfit
+		changed = true
+	}
+	if in.MinNetDiffPct != nil {
+		if err := validateWatchMinNet(*in.MinNetDiffPct); err != nil {
+			return nil, err
+		}
+		w.MinNetDiffPct = *in.MinNetDiffPct
+		changed = true
+	}
+	if in.MinDurationSec != nil {
+		minDur, err := domain.ResolvePriceDiffMinDuration(*in.MinDurationSec)
+		if err != nil {
+			return nil, err
+		}
+		w.MinDurationSec = minDur.Seconds()
+		changed = true
+	}
+	if in.FeeBinancePct != nil || in.FeeCoinbasePct != nil || in.FeeBybitPct != nil {
+		fb, fc, fy := w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct
+		if in.FeeBinancePct != nil {
+			fb = *in.FeeBinancePct
+		}
+		if in.FeeCoinbasePct != nil {
+			fc = *in.FeeCoinbasePct
+		}
+		if in.FeeBybitPct != nil {
+			fy = *in.FeeBybitPct
+		}
+		if err := validateWatchFees(fb, fc, fy); err != nil {
+			return nil, err
+		}
+		w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct = fb, fc, fy
+		changed = true
+	}
+	if !changed {
+		return w, nil
+	}
+	if err := s.store.ClearRouteArms(ctx, w.ID); err != nil {
+		return nil, err
+	}
+	w.UpdatedAt = time.Now().UTC()
+	return s.store.UpdateWatch(ctx, *w)
+}
+
+// PauseWatch stops evaluation, closes open opportunities, and drops the duration timer.
+func (s *Service) PauseWatch(ctx context.Context, clientID, id string) (*domain.PriceDiffWatch, error) {
+	w, err := s.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	if err := s.closeOpenAndClearArms(ctx, w.ID, now); err != nil {
+		return nil, err
+	}
+	if w.Status == domain.PriceDiffWatchPaused {
+		return w, nil
+	}
+	w.Status = domain.PriceDiffWatchPaused
+	w.UpdatedAt = now
+	return s.store.UpdateWatch(ctx, *w)
+}
+
+// ResumeWatch starts evaluating again. The duration timer starts from zero
+// (it does not continue any wait that was in progress before pause).
+func (s *Service) ResumeWatch(ctx context.Context, clientID, id string) (*domain.PriceDiffWatch, error) {
+	w, err := s.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	if w.Status == domain.PriceDiffWatchActive {
+		return w, nil
+	}
+	if err := s.store.ClearRouteArms(ctx, w.ID); err != nil {
+		return nil, err
+	}
+	w.Status = domain.PriceDiffWatchActive
+	w.UpdatedAt = time.Now().UTC()
+	return s.store.UpdateWatch(ctx, *w)
+}
+
+func (s *Service) closeOpenAndClearArms(ctx context.Context, watchID string, now time.Time) error {
+	open, err := s.store.ListOpenOpportunitiesForWatch(ctx, watchID)
+	if err != nil {
+		return err
+	}
+	for i := range open {
+		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e != nil && !errors.Is(e, domain.ErrNotFound) {
+			return e
+		}
+	}
+	return s.store.ClearRouteArms(ctx, watchID)
 }
 
 // ListOpportunities lists opportunities for a client (status: open|closed|"" for all).
@@ -671,4 +791,36 @@ func routeKey(buy, sell domain.Exchange) string {
 
 func normalizeClientID(id string) (string, error) {
 	return domain.NormalizeClientID(id)
+}
+
+func validateWatchNotional(v float64) error {
+	if v < domain.MinPriceDiffNotional || v > domain.MaxPriceDiffNotional ||
+		math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("%w: notional must be between %g and %g", domain.ErrInvalidArgument,
+			domain.MinPriceDiffNotional, domain.MaxPriceDiffNotional)
+	}
+	return nil
+}
+
+func validateWatchMinProfit(v float64) error {
+	if v < 0 || v > domain.MaxPriceDiffMinProfit || math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("%w: minProfit must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffMinProfit)
+	}
+	return nil
+}
+
+func validateWatchMinNet(v float64) error {
+	if v < 0 || v > domain.MaxPriceDiffNetPct || math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("%w: minNetDiffPct must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffNetPct)
+	}
+	return nil
+}
+
+func validateWatchFees(binance, coinbase, bybit float64) error {
+	for _, f := range []float64{binance, coinbase, bybit} {
+		if f < 0 || f > domain.MaxPriceDiffFeePct || math.IsNaN(f) || math.IsInf(f, 0) {
+			return fmt.Errorf("%w: fees must be between 0 and %g percent", domain.ErrInvalidArgument, domain.MaxPriceDiffFeePct)
+		}
+	}
+	return nil
 }

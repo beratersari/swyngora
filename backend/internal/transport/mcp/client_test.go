@@ -337,6 +337,40 @@ func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	}
 }
 
+func TestAPIClient_UpdatePauseResumePriceDiffWatch(t *testing.T) {
+	var saw []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		saw = append(saw, r.Method+" "+r.URL.Path)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "status": "paused"})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	ctx := context.Background()
+	minP := 8.0
+	if _, err := c.UpdatePriceDiffWatch(ctx, "c1", "w1", nil, &minP, nil, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PausePriceDiffWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ResumePriceDiffWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"PATCH /api/v1/price-diff/watches/w1",
+		"POST /api/v1/price-diff/watches/w1/pause",
+		"POST /api/v1/price-diff/watches/w1/resume",
+	}
+	if len(saw) != len(want) {
+		t.Fatalf("saw=%v", saw)
+	}
+	for i := range want {
+		if saw[i] != want[i] {
+			t.Fatalf("saw=%v want=%v", saw, want)
+		}
+	}
+}
+
 func TestAPIClient_ScanPriceDiffQuotes(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/price-diff/quote/scan" {

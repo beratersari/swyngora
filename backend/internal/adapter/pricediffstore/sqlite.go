@@ -280,6 +280,29 @@ func (s *SQLite) DeleteWatch(ctx context.Context, clientID, id string) error {
 	return nil
 }
 
+// UpdateWatch writes mutable settings and status.
+func (s *SQLite) UpdateWatch(ctx context.Context, w domain.PriceDiffWatch) (*domain.PriceDiffWatch, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE price_diff_watches SET
+			notional = ?, min_profit = ?, min_net_diff_pct = ?, min_duration_sec = ?,
+			fee_binance_pct = ?, fee_coinbase_pct = ?, fee_bybit_pct = ?,
+			status = ?, updated_at = ?
+		WHERE id = ? AND client_id = ?
+	`, w.Notional, w.MinProfit, w.MinNetDiffPct, w.MinDurationSec,
+		w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct,
+		string(w.Status), w.UpdatedAt.UTC().Format(time.RFC3339Nano), w.ID, w.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getWatchUnlocked(ctx, w.ClientID, w.ID)
+}
+
 // CountWatches counts watches for a client.
 func (s *SQLite) CountWatches(ctx context.Context, clientID string) (int, error) {
 	var n int
@@ -512,5 +535,13 @@ func (s *SQLite) ClearRouteArm(ctx context.Context, watchID string, buy, sell do
 		DELETE FROM price_diff_route_arms
 		WHERE watch_id = ? AND buy_exchange = ? AND sell_exchange = ?
 	`, watchID, string(buy), string(sell))
+	return err
+}
+
+// ClearRouteArms drops every pending duration timer for a watch.
+func (s *SQLite) ClearRouteArms(ctx context.Context, watchID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `DELETE FROM price_diff_route_arms WHERE watch_id = ?`, watchID)
 	return err
 }

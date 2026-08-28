@@ -189,6 +189,9 @@ type DataPort interface {
 	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
 	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error)
+	PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3675,6 +3678,76 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("update_price_diff_watch",
+		mcp.WithDescription("Change notional, minProfit, minDurationSec, or fees on an existing price-diff watch. Resets the duration timer. Does not change pause/active status."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+		mcp.WithNumber("notional", mcp.Description("New quote size to walk")),
+		mcp.WithNumber("minProfit", mcp.Description("New after-fee profit floor")),
+		mcp.WithNumber("minDurationSec", mcp.Description("Seconds the fill must stay qualifying; 0 = first tick")),
+		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional extra profit % floor")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee %")),
+		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee %")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee %")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.UpdatePriceDiffWatch(ctx, clientID, id,
+			optionalMCPFee(req, "notional"), optionalMCPFee(req, "minProfit"),
+			optionalMCPFee(req, "minNetDiffPct"), optionalMCPFee(req, "minDurationSec"),
+			optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeCoinbasePct"), optionalMCPFee(req, "feeBybitPct"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("pause_price_diff_watch",
+		mcp.WithDescription("Pause a price-diff watch. Stops searching. Closes any open opportunity. Resume starts the duration timer from zero."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PausePriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("resume_price_diff_watch",
+		mcp.WithDescription("Resume a paused price-diff watch. Does not continue a duration wait from before pause."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ResumePriceDiffWatch(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

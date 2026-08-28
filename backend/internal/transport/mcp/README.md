@@ -149,6 +149,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `create_price_diff_watch` | Track a coin; open only when a fresh-book fill meets minProfit for minDurationSec |
 | `list_price_diff_watches` | List price-diff watches |
 | `get_price_diff_watch` | Get one price-diff watch |
+| `update_price_diff_watch` | Change notional, minProfit, minDurationSec, or fees; resets duration timer |
+| `pause_price_diff_watch` | Pause; close open opportunities; stop searching |
+| `resume_price_diff_watch` | Resume; duration timer starts from zero |
 | `delete_price_diff_watch` | Delete watch and opportunities |
 | `list_price_diff_opportunities` | List open/closed opportunities |
 | `get_price_diff_opportunity` | Get one opportunity |

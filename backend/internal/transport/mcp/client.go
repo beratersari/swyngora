@@ -1996,6 +1996,59 @@ func (c *APIClient) GetPriceDiffWatch(ctx context.Context, clientID, id string) 
 	return c.get(ctx, "/api/v1/price-diff/watches/"+url.PathEscape(id), q)
 }
 
+// UpdatePriceDiffWatch patches watch settings.
+func (c *APIClient) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID}
+	if notional != nil {
+		body["notional"] = *notional
+	}
+	if minProfit != nil {
+		body["minProfit"] = *minProfit
+	}
+	if minNetDiffPct != nil {
+		body["minNetDiffPct"] = *minNetDiffPct
+	}
+	if minDurationSec != nil {
+		body["minDurationSec"] = *minDurationSec
+	}
+	if feeBinance != nil {
+		body["feeBinancePct"] = *feeBinance
+	}
+	if feeCoinbase != nil {
+		body["feeCoinbasePct"] = *feeCoinbase
+	}
+	if feeBybit != nil {
+		body["feeBybitPct"] = *feeBybit
+	}
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/price-diff/watches/"+url.PathEscape(id), body)
+}
+
+// PausePriceDiffWatch pauses a watch and closes open opportunities.
+func (c *APIClient) PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/price-diff/watches/" + url.PathEscape(id) + "/pause"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+// ResumePriceDiffWatch resumes a paused watch with a fresh duration timer.
+func (c *APIClient) ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/price-diff/watches/" + url.PathEscape(id) + "/resume"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
 // DeletePriceDiffWatch deletes a watch.
 func (c *APIClient) DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

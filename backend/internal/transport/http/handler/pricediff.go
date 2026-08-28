@@ -144,6 +144,61 @@ func (h *PriceDiffHandler) GetWatch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, watchDTO(watch))
 }
 
+type updateWatchBody struct {
+	ClientID       string   `json:"clientId"`
+	Notional       *float64 `json:"notional"`
+	MinProfit      *float64 `json:"minProfit"`
+	MinNetDiffPct  *float64 `json:"minNetDiffPct"`
+	MinDurationSec *float64 `json:"minDurationSec"`
+	FeeBinancePct  *float64 `json:"feeBinancePct"`
+	FeeCoinbasePct *float64 `json:"feeCoinbasePct"`
+	FeeBybitPct    *float64 `json:"feeBybitPct"`
+}
+
+// UpdateWatch handles PATCH /api/v1/price-diff/watches/{id}
+func (h *PriceDiffHandler) UpdateWatch(w http.ResponseWriter, r *http.Request) {
+	var body updateWatchBody
+	if err := decodeJSON(r, &body, DefaultMaxJSONBody); err != nil {
+		writeError(w, fmt.Errorf("%w: invalid JSON body", domain.ErrInvalidArgument))
+		return
+	}
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
+	}
+	watch, err := h.svc.UpdateWatch(r.Context(), pricediff.UpdateInput{
+		ClientID: clientID, ID: r.PathValue("id"),
+		Notional: body.Notional, MinProfit: body.MinProfit, MinNetDiffPct: body.MinNetDiffPct,
+		MinDurationSec: body.MinDurationSec,
+		FeeBinancePct:  body.FeeBinancePct, FeeCoinbasePct: body.FeeCoinbasePct, FeeBybitPct: body.FeeBybitPct,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, watchDTO(watch))
+}
+
+// PauseWatch handles POST /api/v1/price-diff/watches/{id}/pause
+func (h *PriceDiffHandler) PauseWatch(w http.ResponseWriter, r *http.Request) {
+	watch, err := h.svc.PauseWatch(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, watchDTO(watch))
+}
+
+// ResumeWatch handles POST /api/v1/price-diff/watches/{id}/resume
+func (h *PriceDiffHandler) ResumeWatch(w http.ResponseWriter, r *http.Request) {
+	watch, err := h.svc.ResumeWatch(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, watchDTO(watch))
+}
+
 // DeleteWatch handles DELETE /api/v1/price-diff/watches/{id}
 func (h *PriceDiffHandler) DeleteWatch(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")

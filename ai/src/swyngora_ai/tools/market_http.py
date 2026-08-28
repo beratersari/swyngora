@@ -1368,6 +1368,21 @@ class PriceDiffWatchIdInput(BaseModel):
     watch_id: str
 
 
+class PriceDiffWatchUpdateInput(BaseModel):
+    client_id: str
+    watch_id: str
+    notional: float | None = Field(default=None, description="New quote size to walk")
+    min_profit: float | None = Field(default=None, description="New after-fee profit floor")
+    min_duration_sec: float | None = Field(
+        default=None,
+        description="Seconds the fill must stay qualifying; 0 = first tick",
+    )
+    min_net_diff_pct: float | None = None
+    fee_binance_pct: float | None = None
+    fee_coinbase_pct: float | None = None
+    fee_bybit_pct: float | None = None
+
+
 class PriceDiffOppListInput(BaseModel):
     client_id: str
     status: str = Field(default="open", description="open | closed | all")
@@ -3158,6 +3173,46 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id},
         )
 
+    def update_price_diff_watch(
+        client_id: str,
+        watch_id: str,
+        notional: float | None = None,
+        min_profit: float | None = None,
+        min_duration_sec: float | None = None,
+        min_net_diff_pct: float | None = None,
+        fee_binance_pct: float | None = None,
+        fee_coinbase_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+    ) -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if notional is not None:
+            body["notional"] = notional
+        if min_profit is not None:
+            body["minProfit"] = min_profit
+        if min_duration_sec is not None:
+            body["minDurationSec"] = min_duration_sec
+        if min_net_diff_pct is not None:
+            body["minNetDiffPct"] = min_net_diff_pct
+        if fee_binance_pct is not None:
+            body["feeBinancePct"] = fee_binance_pct
+        if fee_coinbase_pct is not None:
+            body["feeCoinbasePct"] = fee_coinbase_pct
+        if fee_bybit_pct is not None:
+            body["feeBybitPct"] = fee_bybit_pct
+        return http.patch(f"/api/v1/price-diff/watches/{watch_id}", body)
+
+    def pause_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/price-diff/watches/{watch_id}/pause?clientId={client_id}",
+            {},
+        )
+
+    def resume_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/price-diff/watches/{watch_id}/resume?clientId={client_id}",
+            {},
+        )
+
     def delete_price_diff_watch(client_id: str, watch_id: str) -> str:
         return http.delete(
             f"/api/v1/price-diff/watches/{watch_id}",
@@ -4590,6 +4645,30 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_price_diff_watch,
             name="get_price_diff_watch",
             description="Get one price-diff watch by id.",
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            update_price_diff_watch,
+            name="update_price_diff_watch",
+            description=(
+                "Change notional, min_profit, min_duration_sec, or fees on an existing "
+                "price-diff watch. Resets the duration timer. Does not change pause/active."
+            ),
+            args_schema=PriceDiffWatchUpdateInput,
+        ),
+        StructuredTool.from_function(
+            pause_price_diff_watch,
+            name="pause_price_diff_watch",
+            description=(
+                "Pause a price-diff watch. Stops searching and closes any open opportunity. "
+                "Resume starts the duration timer from zero."
+            ),
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            resume_price_diff_watch,
+            name="resume_price_diff_watch",
+            description="Resume a paused price-diff watch. Does not continue a duration wait from before pause.",
             args_schema=PriceDiffWatchIdInput,
         ),
         StructuredTool.from_function(
