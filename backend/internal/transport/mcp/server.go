@@ -186,10 +186,10 @@ type DataPort interface {
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
+	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error)
 	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error)
+	UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error)
 	PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3613,7 +3613,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_price_diff_watch",
-		mcp.WithDescription("Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when that notional can be bought and sold on fresh live books and after-fee profit (including slippage) is at least minProfit. minDurationSec requires the fill to stay qualifying that long; a break resets the timer."),
+		mcp.WithDescription("Track a coin across chosen spot venues (default Binance+Coinbase+Bybit). Opens an opportunity only when that notional can be bought and sold on fresh live books and after-fee profit (including slippage) is at least minProfit. minDurationSec requires the fill to stay qualifying that long; a break resets the timer. exchanges is a CSV such as binance,bybit (at least two)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("notional", mcp.Required(), mcp.Description("Quote size to walk on the buy book e.g. 10000")),
@@ -3623,6 +3623,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee % e.g. 0.1")),
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee % e.g. 0.6")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee % e.g. 0.1")),
+		mcp.WithString("exchanges", mcp.Description("CSV of venues to walk, e.g. binance,bybit. Default all three.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3642,7 +3643,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, notional, minProfit,
 			req.GetFloat("minNetDiffPct", 0), req.GetFloat("minDurationSec", 0),
-			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0))
+			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0),
+			mcpCSVList(req, "exchanges"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3685,7 +3687,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("update_price_diff_watch",
-		mcp.WithDescription("Change notional, minProfit, minDurationSec, or fees on an existing price-diff watch. Resets the duration timer. Does not change pause/active status."),
+		mcp.WithDescription("Change notional, minProfit, minDurationSec, fees, or exchanges on an existing price-diff watch. Resets the duration timer. Does not change pause/active status."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
 		mcp.WithNumber("notional", mcp.Description("New quote size to walk")),
@@ -3695,6 +3697,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee %")),
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee %")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee %")),
+		mcp.WithString("exchanges", mcp.Description("CSV of venues to walk, e.g. binance,bybit (at least two)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3707,7 +3710,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		raw, err := api.UpdatePriceDiffWatch(ctx, clientID, id,
 			optionalMCPFee(req, "notional"), optionalMCPFee(req, "minProfit"),
 			optionalMCPFee(req, "minNetDiffPct"), optionalMCPFee(req, "minDurationSec"),
-			optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeCoinbasePct"), optionalMCPFee(req, "feeBybitPct"))
+			optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeCoinbasePct"), optionalMCPFee(req, "feeBybitPct"),
+			mcpCSVList(req, "exchanges"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3715,7 +3719,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("pause_price_diff_watch",
-		mcp.WithDescription("Pause a price-diff watch. Stops searching. Closes any open opportunity. Resume starts the duration timer from zero."),
+		mcp.WithDescription("Pause a price-diff watch. Marks it paused first so an in-flight tick cannot open. Closes any open opportunity. Resume starts the duration timer from zero."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -3962,4 +3966,32 @@ func optionalMCPFee(req mcp.CallToolRequest, name string) *float64 {
 	}
 	v := req.GetFloat(name, 0)
 	return &v
+}
+
+func mcpCSVList(req mcp.CallToolRequest, name string) []string {
+	raw := strings.TrimSpace(req.GetString(name, ""))
+	if raw == "" {
+		if args := req.GetArguments(); args != nil {
+			if arr, ok := args[name].([]any); ok {
+				out := make([]string, 0, len(arr))
+				for _, v := range arr {
+					s := strings.TrimSpace(fmt.Sprint(v))
+					if s != "" && s != "<nil>" {
+						out = append(out, s)
+					}
+				}
+				return out
+			}
+		}
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,6 +48,7 @@ type CreateInput struct {
 	FeeBinancePct  float64
 	FeeCoinbasePct float64
 	FeeBybitPct    float64
+	Exchanges      []string
 }
 
 // AccountChecker reports whether a tenant is closed so workers can skip them.
@@ -62,6 +64,8 @@ type Service struct {
 	account AccountChecker
 	// MaxPriceAge rejects tickers older than this (default 2m).
 	MaxPriceAge time.Duration
+	// evalMu serializes pause/update against an in-flight tick per watch.
+	evalMu sync.Map
 }
 
 // New constructs a price-diff service.
@@ -144,6 +148,10 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 	if err := validateWatchFees(in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct); err != nil {
 		return nil, err
 	}
+	exs, err := domain.ResolvePriceDiffWatchExchanges(in.Exchanges)
+	if err != nil {
+		return nil, err
+	}
 	n, err := s.store.CountWatches(ctx, clientID)
 	if err != nil {
 		return nil, err
@@ -157,7 +165,7 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 		Notional: in.Notional, MinProfit: in.MinProfit, MinNetDiffPct: in.MinNetDiffPct,
 		MinDurationSec: minDur.Seconds(),
 		FeeBinancePct:  in.FeeBinancePct, FeeCoinbasePct: in.FeeCoinbasePct, FeeBybitPct: in.FeeBybitPct,
-		Status: domain.PriceDiffWatchActive, CreatedAt: now, UpdatedAt: now,
+		Exchanges: exs, Status: domain.PriceDiffWatchActive, CreatedAt: now, UpdatedAt: now,
 	}
 	return s.store.CreateWatch(ctx, w)
 }
@@ -217,12 +225,20 @@ type UpdateInput struct {
 	FeeBinancePct  *float64
 	FeeCoinbasePct *float64
 	FeeBybitPct    *float64
+	Exchanges      *[]string
 }
 
 // UpdateWatch changes notional, min profit, duration, and fees without deleting.
 // A settings change clears the duration timer so the next hold starts from zero.
 func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.PriceDiffWatch, error) {
 	w, err := s.GetWatch(ctx, in.ClientID, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	mu := s.watchLock(w.ID)
+	mu.Lock()
+	defer mu.Unlock()
+	w, err = s.store.GetWatch(ctx, w.ClientID, w.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +289,14 @@ func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.Pric
 		w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct = fb, fc, fy
 		changed = true
 	}
+	if in.Exchanges != nil {
+		exs, err := domain.ResolvePriceDiffWatchExchanges(*in.Exchanges)
+		if err != nil {
+			return nil, err
+		}
+		w.Exchanges = exs
+		changed = true
+	}
 	if !changed {
 		return w, nil
 	}
@@ -280,7 +304,14 @@ func (s *Service) UpdateWatch(ctx context.Context, in UpdateInput) (*domain.Pric
 		return nil, err
 	}
 	w.UpdatedAt = time.Now().UTC()
-	return s.store.UpdateWatch(ctx, *w)
+	got, err := s.store.UpdateWatch(ctx, *w)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.closeRoutesOutside(ctx, got, w.UpdatedAt); err != nil {
+		return nil, err
+	}
+	return got, nil
 }
 
 // PauseWatch stops evaluation, closes open opportunities, and drops the duration timer.
@@ -289,22 +320,39 @@ func (s *Service) PauseWatch(ctx context.Context, clientID, id string) (*domain.
 	if err != nil {
 		return nil, err
 	}
+	mu := s.watchLock(w.ID)
+	mu.Lock()
+	defer mu.Unlock()
+	w, err = s.store.GetWatch(ctx, w.ClientID, w.ID)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
+	if w.Status != domain.PriceDiffWatchPaused {
+		w.Status = domain.PriceDiffWatchPaused
+		w.UpdatedAt = now
+		w, err = s.store.UpdateWatch(ctx, *w)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if err := s.closeOpenAndClearArms(ctx, w.ID, now); err != nil {
 		return nil, err
 	}
-	if w.Status == domain.PriceDiffWatchPaused {
-		return w, nil
-	}
-	w.Status = domain.PriceDiffWatchPaused
-	w.UpdatedAt = now
-	return s.store.UpdateWatch(ctx, *w)
+	return w, nil
 }
 
 // ResumeWatch starts evaluating again. The duration timer starts from zero
 // (it does not continue any wait that was in progress before pause).
 func (s *Service) ResumeWatch(ctx context.Context, clientID, id string) (*domain.PriceDiffWatch, error) {
 	w, err := s.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	mu := s.watchLock(w.ID)
+	mu.Lock()
+	defer mu.Unlock()
+	w, err = s.store.GetWatch(ctx, w.ClientID, w.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +378,32 @@ func (s *Service) closeOpenAndClearArms(ctx context.Context, watchID string, now
 		}
 	}
 	return s.store.ClearRouteArms(ctx, watchID)
+}
+
+func (s *Service) closeRoutesOutside(ctx context.Context, w *domain.PriceDiffWatch, now time.Time) error {
+	if w == nil {
+		return nil
+	}
+	open, err := s.store.ListOpenOpportunitiesForWatch(ctx, w.ID)
+	if err != nil {
+		return err
+	}
+	for i := range open {
+		if w.AllowsExchange(open[i].BuyExchange) && w.AllowsExchange(open[i].SellExchange) {
+			continue
+		}
+		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e != nil && !errors.Is(e, domain.ErrNotFound) {
+			return e
+		}
+		_ = s.store.ClearRouteArm(ctx, w.ID, open[i].BuyExchange, open[i].SellExchange)
+	}
+	return nil
+}
+
+func (s *Service) watchLock(id string) *sync.Mutex {
+	v, _ := s.evalMu.LoadOrStore(id, &sync.Mutex{})
+	mu, _ := v.(*sync.Mutex)
+	return mu
 }
 
 // ListOpportunities lists opportunities for a client (status: open|closed|"" for all).
@@ -410,15 +484,25 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 	if s.books == nil || w.Notional < domain.MinPriceDiffNotional {
 		return 0, 0, 0, nil
 	}
+	books, _, err := s.fetchQuoteBooksFor(ctx, w.Symbol, w.WatchExchanges())
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	mu := s.watchLock(w.ID)
+	mu.Lock()
+	defer mu.Unlock()
+	live, lerr := s.store.GetWatch(ctx, w.ClientID, w.ID)
+	if lerr != nil || live == nil || live.Status != domain.PriceDiffWatchActive {
+		return 0, 0, 0, nil
+	}
+	w = live
+
 	maxAge := s.MaxPriceAge
 	if maxAge <= 0 {
 		maxAge = domain.DefaultPriceDiffMaxAge
 	}
 	minDur, err := domain.ResolvePriceDiffMinDuration(w.MinDurationSec)
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	books, _, err := s.fetchAllQuoteBooks(ctx, w.Symbol)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -432,10 +516,7 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		domain.ExchangeBybit:    w.FeeBybitPct,
 	}
 	var venues []domain.Exchange
-	for _, ex := range domain.SupportedExchanges {
-		if domain.IsEquityExchange(ex) {
-			continue
-		}
+	for _, ex := range w.WatchExchanges() {
 		b := books[ex]
 		if b == nil || (len(b.Bids) == 0 && len(b.Asks) == 0) {
 			continue
@@ -537,6 +618,8 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		if _, e := s.store.CreateOpportunity(ctx, opp); e == nil {
 			created++
 			_ = s.store.ClearRouteArm(ctx, w.ID, q.BuyExchange, q.SellExchange)
+		} else if !errors.Is(e, domain.ErrConflict) {
+			continue
 		}
 	}
 	for k, q := range quoted {
@@ -618,6 +701,7 @@ type ScanInput struct {
 	MinNetDiffPct   float64
 	MinProfitPct    float64
 	MinProfitAmount float64
+	Exchanges       []string
 }
 
 // QuoteScan walks Binance, Coinbase, and Bybit books and ranks every buy/sell route.
@@ -634,7 +718,11 @@ func (s *Service) QuoteScan(ctx context.Context, in ScanInput) (*domain.PriceDif
 			return nil, fmt.Errorf("%w: fees must be between 0 and %g percent", domain.ErrInvalidArgument, domain.MaxPriceDiffFeePct)
 		}
 	}
-	books, unavailable, err := s.fetchAllQuoteBooks(ctx, sym)
+	venues, err := domain.NormalizePriceDiffExchanges(in.Exchanges)
+	if err != nil {
+		return nil, err
+	}
+	books, unavailable, err := s.fetchQuoteBooksFor(ctx, sym, venues)
 	if err != nil {
 		return nil, err
 	}
@@ -652,6 +740,7 @@ func (s *Service) QuoteScan(ctx context.Context, in ScanInput) (*domain.PriceDif
 		MinProfitAmount: in.MinProfitAmount,
 		Books:           books,
 		Unavailable:     unavailable,
+		Venues:          venues,
 	})
 }
 
@@ -674,20 +763,22 @@ func (s *Service) QuoteWatch(ctx context.Context, clientID, watchID string, in S
 	if in.MinNetDiffPct == 0 {
 		in.MinNetDiffPct = w.MinNetDiffPct
 	}
+	if len(in.Exchanges) == 0 {
+		for _, ex := range w.WatchExchanges() {
+			in.Exchanges = append(in.Exchanges, string(ex))
+		}
+	}
 	return s.QuoteScan(ctx, in)
 }
 
-func (s *Service) fetchAllQuoteBooks(ctx context.Context, symbol string) (map[domain.Exchange]*domain.RawOrderBook, []domain.PriceDiffUnavailable, error) {
+func (s *Service) fetchQuoteBooksFor(ctx context.Context, symbol string, venues []domain.Exchange) (map[domain.Exchange]*domain.RawOrderBook, []domain.PriceDiffUnavailable, error) {
 	type result struct {
 		ex   domain.Exchange
 		book *domain.RawOrderBook
 		err  error
 	}
-	var venues []domain.Exchange
-	for _, ex := range domain.SupportedExchanges {
-		if !domain.IsEquityExchange(ex) {
-			venues = append(venues, ex)
-		}
+	if len(venues) == 0 {
+		venues = append([]domain.Exchange(nil), domain.PriceDiffSpotExchanges...)
 	}
 	ch := make(chan result, len(venues))
 	for _, ex := range venues {

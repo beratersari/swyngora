@@ -347,7 +347,7 @@ func TestAPIClient_UpdatePauseResumePriceDiffWatch(t *testing.T) {
 	c := NewAPIClient(srv.URL, 0)
 	ctx := context.Background()
 	minP := 8.0
-	if _, err := c.UpdatePriceDiffWatch(ctx, "c1", "w1", nil, &minP, nil, nil, nil, nil, nil); err != nil {
+	if _, err := c.UpdatePriceDiffWatch(ctx, "c1", "w1", nil, &minP, nil, nil, nil, nil, nil, []string{"binance", "bybit"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.PausePriceDiffWatch(ctx, "c1", "w1"); err != nil {

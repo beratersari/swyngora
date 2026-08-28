@@ -111,3 +111,35 @@ func TestPriceDiffHeldLongEnough(t *testing.T) {
 		t.Fatal("60s should be enough")
 	}
 }
+
+func TestResolvePriceDiffWatchExchanges(t *testing.T) {
+	all, err := ResolvePriceDiffWatchExchanges(nil)
+	if err != nil || len(all) != 3 {
+		t.Fatalf("%v %v", all, err)
+	}
+	got, err := ResolvePriceDiffWatchExchanges([]string{"bybit", "BINANCE", "bybit"})
+	if err != nil || len(got) != 2 || got[0] != ExchangeBinance || got[1] != ExchangeBybit {
+		t.Fatalf("%v %v", got, err)
+	}
+	if _, err := ResolvePriceDiffWatchExchanges([]string{"binance"}); err == nil {
+		t.Fatal("one venue must be rejected")
+	}
+	if _, err := ResolvePriceDiffWatchExchanges([]string{"nasdaq", "binance"}); err == nil {
+		t.Fatal("equity venue must be rejected")
+	}
+	w := PriceDiffWatch{}
+	if len(w.WatchExchanges()) != 3 || !w.AllowsExchange(ExchangeCoinbase) {
+		t.Fatal("empty watch should walk all spot venues")
+	}
+	w.Exchanges = []Exchange{ExchangeBinance, ExchangeBybit}
+	if w.AllowsExchange(ExchangeCoinbase) || !w.AllowsExchange(ExchangeBybit) {
+		t.Fatal("watch should skip coinbase")
+	}
+	if s := EncodePriceDiffExchanges(got); s != "binance,bybit" {
+		t.Fatalf("encode=%s", s)
+	}
+	parsed := ParsePriceDiffExchanges("bybit,binance")
+	if len(parsed) != 2 || parsed[0] != ExchangeBinance {
+		t.Fatalf("%v", parsed)
+	}
+}

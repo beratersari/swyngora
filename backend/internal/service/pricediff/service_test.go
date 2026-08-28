@@ -497,6 +497,126 @@ func TestUpdateWatchSettingsAndResetArm(t *testing.T) {
 	}
 }
 
+func TestPauseStopsInFlightCreate(t *testing.T) {
+	now := time.Now().UTC()
+	started := make(chan struct{}, 8)
+	release := make(chan struct{})
+	inner := booksAt(now, 100, 110, 100)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&gateBooks{inner: inner, started: started, release: release})
+	svc.MaxPriceAge = 2 * time.Minute
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "race-u", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	var created int
+	go func() {
+		defer close(done)
+		created, _, _, _ = svc.ProcessActiveWatches(ctx, now)
+	}()
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("book fetch never started")
+	}
+	if _, err := svc.PauseWatch(ctx, "race-u", w.ID); err != nil {
+		t.Fatal(err)
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("process did not finish")
+	}
+	open, err := svc.ListOpportunities(ctx, "race-u", "open", 20, 0)
+	if err != nil || len(open) != 0 {
+		t.Fatalf("in-flight tick must not leave an open opp after pause: created=%d open=%+v err=%v", created, open, err)
+	}
+}
+
+func TestWatchExchangesSkipUnselected(t *testing.T) {
+	now := time.Now().UTC()
+	books := booksAt(now, 100, 130, 101)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 2 * time.Minute
+	ctx := context.Background()
+	if _, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "ex-u", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+		Exchanges: []string{"binance", "bybit"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, _, _, err := svc.ProcessActiveWatches(ctx, now)
+	if err != nil || c < 1 {
+		t.Fatalf("created=%d err=%v", c, err)
+	}
+	open, err := svc.ListOpportunities(ctx, "ex-u", "open", 20, 0)
+	if err != nil || len(open) == 0 {
+		t.Fatalf("%+v %v", open, err)
+	}
+	for _, o := range open {
+		if o.BuyExchange == domain.ExchangeCoinbase || o.SellExchange == domain.ExchangeCoinbase {
+			t.Fatalf("coinbase must not be checked: %+v", o)
+		}
+	}
+}
+
+func TestUpdateExchangesClosesDroppedVenue(t *testing.T) {
+	now := time.Now().UTC()
+	books := booksAt(now, 100, 130, 101)
+	svc := newSvc(t, &fakeTicker{}).WithBooks(books)
+	svc.MaxPriceAge = 2 * time.Minute
+	ctx := context.Background()
+	w, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "ex2", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(ctx, now); err != nil {
+		t.Fatal(err)
+	}
+	exs := []string{"binance", "bybit"}
+	got, err := svc.UpdateWatch(ctx, UpdateInput{ClientID: "ex2", ID: w.ID, Exchanges: &exs})
+	if err != nil || len(got.WatchExchanges()) != 2 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	open, err := svc.ListOpportunities(ctx, "ex2", "open", 20, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, o := range open {
+		if o.BuyExchange == domain.ExchangeCoinbase || o.SellExchange == domain.ExchangeCoinbase {
+			t.Fatalf("dropped venue still open: %+v", o)
+		}
+	}
+}
+
+type gateBooks struct {
+	inner   *fakeBooks
+	started chan struct{}
+	release chan struct{}
+}
+
+func (g *gateBooks) GetRawOrderBook(ctx context.Context, exchange, symbol string) (*domain.RawOrderBook, error) {
+	select {
+	case g.started <- struct{}{}:
+	default:
+	}
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return g.inner.GetRawOrderBook(ctx, exchange, symbol)
+}
+
 func stampBooks(f *fakeBooks, now time.Time) {
 	for _, b := range f.data {
 		b.FetchedAt = now

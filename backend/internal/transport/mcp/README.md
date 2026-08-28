@@ -146,10 +146,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_margin_orders` | Margin limit orders |
 | `cancel_margin_order` | Cancel margin limit (releases reserve) |
 | `list_margin_trades` | Margin trade history |
-| `create_price_diff_watch` | Track a coin; open only when a fresh-book fill meets minProfit for minDurationSec |
+| `create_price_diff_watch` | Track a coin on chosen venues; open only when a fresh-book fill meets minProfit for minDurationSec |
 | `list_price_diff_watches` | List price-diff watches |
 | `get_price_diff_watch` | Get one price-diff watch |
-| `update_price_diff_watch` | Change notional, minProfit, minDurationSec, or fees; resets duration timer |
+| `update_price_diff_watch` | Change notional, minProfit, minDurationSec, fees, or exchanges; resets duration timer |
 | `pause_price_diff_watch` | Pause; close open opportunities; stop searching |
 | `resume_price_diff_watch` | Resume; duration timer starts from zero |
 | `delete_price_diff_watch` | Delete watch and opportunities |

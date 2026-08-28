@@ -3942,6 +3942,8 @@ export interface components {
             feeBinancePct?: number;
             feeCoinbasePct?: number;
             feeBybitPct?: number;
+            /** @description Venues this watch walks */
+            exchanges?: ("binance" | "coinbase" | "bybit")[];
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -8173,6 +8175,11 @@ export interface operations {
                     feeCoinbasePct?: number;
                     /** @example 0.1 */
                     feeBybitPct?: number;
+                    /**
+                     * @description Venues to walk. Default all three. At least two required.
+                     * @example [binance, bybit]
+                     */
+                    exchanges?: ("binance" | "coinbase" | "bybit")[];
                 };
             };
         };
@@ -8265,6 +8272,7 @@ export interface operations {
                     feeBinancePct?: number;
                     feeCoinbasePct?: number;
                     feeBybitPct?: number;
+                    exchanges?: ("binance" | "coinbase" | "bybit")[];
                 };
             };
         };

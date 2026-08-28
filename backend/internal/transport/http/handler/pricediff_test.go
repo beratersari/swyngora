@@ -124,6 +124,7 @@ func TestPriceDiffWatchHTTP_PauseResumeAndPatch(t *testing.T) {
 	body, _ := json.Marshal(map[string]any{
 		"clientId": "pd-client", "symbol": "BTCUSDT", "notional": 10000, "minProfit": 5,
 		"minDurationSec": 30, "feeBinancePct": 0.1, "feeBybitPct": 0.1,
+		"exchanges": []string{"binance", "bybit"},
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/price-diff/watches", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -136,6 +137,9 @@ func TestPriceDiffWatchHTTP_PauseResumeAndPatch(t *testing.T) {
 	var created priceDiffWatchDTO
 	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
 		t.Fatal(err)
+	}
+	if len(created.Exchanges) != 2 || created.Exchanges[0] != "binance" || created.Exchanges[1] != "bybit" {
+		t.Fatalf("exchanges=%v", created.Exchanges)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/price-diff/watches/"+created.ID+"/pause", nil)
@@ -153,6 +157,7 @@ func TestPriceDiffWatchHTTP_PauseResumeAndPatch(t *testing.T) {
 
 	patch, _ := json.Marshal(map[string]any{
 		"notional": 15000, "minProfit": 8, "minDurationSec": 45, "feeBinancePct": 0.2,
+		"exchanges": []string{"binance", "coinbase", "bybit"},
 	})
 	req = httptest.NewRequest(http.MethodPatch, "/api/v1/price-diff/watches/"+created.ID, bytes.NewReader(patch))
 	req.Header.Set("Content-Type", "application/json")
@@ -166,7 +171,7 @@ func TestPriceDiffWatchHTTP_PauseResumeAndPatch(t *testing.T) {
 	var updated priceDiffWatchDTO
 	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil ||
 		updated.Notional != 15000 || updated.MinProfit != 8 || updated.MinDurationSec != 45 ||
-		updated.FeeBinancePct != 0.2 || updated.Status != "paused" {
+		updated.FeeBinancePct != 0.2 || updated.Status != "paused" || len(updated.Exchanges) != 3 {
 		t.Fatalf("%s %v", rr.Body.String(), err)
 	}
 

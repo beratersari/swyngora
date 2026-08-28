@@ -1974,12 +1974,16 @@ func (c *APIClient) ListMarginTrades(ctx context.Context, clientID string, limit
 }
 
 // CreatePriceDiffWatch creates a cross-exchange price difference watch.
-func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", map[string]any{
+func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error) {
+	body := map[string]any{
 		"clientId": clientID, "symbol": symbol, "notional": notional, "minProfit": minProfit,
 		"minNetDiffPct": minNetDiffPct, "minDurationSec": minDurationSec,
 		"feeBinancePct": feeBinance, "feeCoinbasePct": feeCoinbase, "feeBybitPct": feeBybit,
-	})
+	}
+	if len(exchanges) > 0 {
+		body["exchanges"] = exchanges
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", body)
 }
 
 // ListPriceDiffWatches lists watches.
@@ -1997,7 +2001,7 @@ func (c *APIClient) GetPriceDiffWatch(ctx context.Context, clientID, id string) 
 }
 
 // UpdatePriceDiffWatch patches watch settings.
-func (c *APIClient) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error) {
+func (c *APIClient) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error) {
 	body := map[string]any{"clientId": clientID}
 	if notional != nil {
 		body["notional"] = *notional
@@ -2019,6 +2023,9 @@ func (c *APIClient) UpdatePriceDiffWatch(ctx context.Context, clientID, id strin
 	}
 	if feeBybit != nil {
 		body["feeBybitPct"] = *feeBybit
+	}
+	if len(exchanges) > 0 {
+		body["exchanges"] = exchanges
 	}
 	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/price-diff/watches/"+url.PathEscape(id), body)
 }

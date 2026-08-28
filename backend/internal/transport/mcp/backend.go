@@ -3706,7 +3706,7 @@ func (b *Backend) CancelImport(ctx context.Context, clientID, id string) (json.R
 	return importJobJSON(job)
 }
 
-func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
 	}
@@ -3714,6 +3714,7 @@ func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol str
 		ClientID: clientID, Symbol: symbol, Notional: notional, MinProfit: minProfit,
 		MinNetDiffPct: minNetDiffPct, MinDurationSec: minDurationSec,
 		FeeBinancePct: feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+		Exchanges: exchanges,
 	})
 	if err != nil {
 		return nil, err
@@ -3747,16 +3748,20 @@ func (b *Backend) GetPriceDiffWatch(ctx context.Context, clientID, id string) (j
 	return mustJSON(priceDiffWatchMap(w))
 }
 
-func (b *Backend) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64) (json.RawMessage, error) {
+func (b *Backend) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
 	}
-	w, err := b.PriceDiff.UpdateWatch(ctx, pricediff.UpdateInput{
+	in := pricediff.UpdateInput{
 		ClientID: clientID, ID: id,
 		Notional: notional, MinProfit: minProfit, MinNetDiffPct: minNetDiffPct,
 		MinDurationSec: minDurationSec,
 		FeeBinancePct:  feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
-	})
+	}
+	if len(exchanges) > 0 {
+		in.Exchanges = &exchanges
+	}
+	w, err := b.PriceDiff.UpdateWatch(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -3876,11 +3881,17 @@ func (b *Backend) QuotePriceDiffOpportunity(ctx context.Context, clientID, id st
 }
 
 func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
+	exs := w.WatchExchanges()
+	names := make([]string, 0, len(exs))
+	for _, ex := range exs {
+		names = append(names, string(ex))
+	}
 	return map[string]any{
 		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
 		"notional": w.Notional, "minProfit": w.MinProfit, "minNetDiffPct": w.MinNetDiffPct,
 		"minDurationSec": w.MinDurationSec,
 		"feeBinancePct":  w.FeeBinancePct, "feeCoinbasePct": w.FeeCoinbasePct, "feeBybitPct": w.FeeBybitPct,
+		"exchanges": names,
 		"status":    string(w.Status),
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),

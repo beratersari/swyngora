@@ -5219,6 +5219,14 @@ paths:
                 feeBinancePct: { type: number, minimum: 0, example: 0.1 }
                 feeCoinbasePct: { type: number, minimum: 0, example: 0.6 }
                 feeBybitPct: { type: number, minimum: 0, example: 0.1 }
+                exchanges:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: string
+                    enum: [binance, coinbase, bybit]
+                  description: Venues to walk. Default all three. At least two required.
+                  example: [binance, bybit]
       responses:
         '201':
           description: Created watch
@@ -5303,6 +5311,13 @@ paths:
                 feeBinancePct: { type: number, minimum: 0 }
                 feeCoinbasePct: { type: number, minimum: 0 }
                 feeBybitPct: { type: number, minimum: 0 }
+                exchanges:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: string
+                    enum: [binance, coinbase, bybit]
+                  description: Replace the venue set. At least two required.
       responses:
         '200':
           description: Updated watch
@@ -5339,8 +5354,9 @@ paths:
     post:
       summary: Pause a price-diff watch
       description: |
-        Stops evaluating the watch. Open opportunities are closed. The duration
-        timer is dropped so resume starts a new wait.
+        Marks the watch paused first so an in-flight checker tick cannot open a
+        new opportunity. Open opportunities are closed. The duration timer is
+        dropped so resume starts a new wait.
       operationId: pausePriceDiffWatch
       tags: [PriceDiff]
       parameters:
@@ -7940,6 +7956,12 @@ components:
         feeBinancePct: { type: number }
         feeCoinbasePct: { type: number }
         feeBybitPct: { type: number }
+        exchanges:
+          type: array
+          items:
+            type: string
+            enum: [binance, coinbase, bybit]
+          description: Venues this watch walks
         status: { type: string, enum: [active, paused] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

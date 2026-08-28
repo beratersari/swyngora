@@ -157,11 +157,19 @@ CREATE TABLE IF NOT EXISTS price_diff_route_arms (
 			return err
 		}
 	}
+	if v < 4 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE price_diff_watches ADD COLUMN exchanges TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 const watchCols = `id, client_id, symbol, min_net_diff_pct, fee_binance_pct, fee_coinbase_pct,
-	fee_bybit_pct, status, created_at, updated_at, notional, min_profit, min_duration_sec`
+	fee_bybit_pct, status, created_at, updated_at, notional, min_profit, min_duration_sec, exchanges`
 
 type scannable interface {
 	Scan(dest ...any) error
@@ -169,16 +177,17 @@ type scannable interface {
 
 func scanWatch(row scannable) (*domain.PriceDiffWatch, error) {
 	var w domain.PriceDiffWatch
-	var st, cAt, uAt string
+	var st, cAt, uAt, exchanges string
 	if err := row.Scan(
 		&w.ID, &w.ClientID, &w.Symbol, &w.MinNetDiffPct, &w.FeeBinancePct, &w.FeeCoinbasePct,
-		&w.FeeBybitPct, &st, &cAt, &uAt, &w.Notional, &w.MinProfit, &w.MinDurationSec,
+		&w.FeeBybitPct, &st, &cAt, &uAt, &w.Notional, &w.MinProfit, &w.MinDurationSec, &exchanges,
 	); err != nil {
 		return nil, err
 	}
 	w.Status = domain.PriceDiffWatchStatus(st)
 	w.CreatedAt = parseTime(cAt)
 	w.UpdatedAt = parseTime(uAt)
+	w.Exchanges = domain.ParsePriceDiffExchanges(exchanges)
 	return &w, nil
 }
 
@@ -199,10 +208,10 @@ func (s *SQLite) CreateWatch(ctx context.Context, w domain.PriceDiffWatch) (*dom
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_diff_watches (`+watchCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, w.ID, w.ClientID, w.Symbol, w.MinNetDiffPct, w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct,
 		string(w.Status), w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		w.Notional, w.MinProfit, w.MinDurationSec)
+		w.Notional, w.MinProfit, w.MinDurationSec, domain.EncodePriceDiffExchanges(w.Exchanges))
 	if err != nil {
 		return nil, err
 	}
@@ -288,11 +297,12 @@ func (s *SQLite) UpdateWatch(ctx context.Context, w domain.PriceDiffWatch) (*dom
 		UPDATE price_diff_watches SET
 			notional = ?, min_profit = ?, min_net_diff_pct = ?, min_duration_sec = ?,
 			fee_binance_pct = ?, fee_coinbase_pct = ?, fee_bybit_pct = ?,
-			status = ?, updated_at = ?
+			status = ?, updated_at = ?, exchanges = ?
 		WHERE id = ? AND client_id = ?
 	`, w.Notional, w.MinProfit, w.MinNetDiffPct, w.MinDurationSec,
 		w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct,
-		string(w.Status), w.UpdatedAt.UTC().Format(time.RFC3339Nano), w.ID, w.ClientID)
+		string(w.Status), w.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		domain.EncodePriceDiffExchanges(w.Exchanges), w.ID, w.ClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -352,12 +362,14 @@ func (s *SQLite) GetOpenOpportunity(ctx context.Context, watchID string, buy, se
 func (s *SQLite) CreateOpportunity(ctx context.Context, o domain.PriceDiffOpportunity) (*domain.PriceDiffOpportunity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.ExecContext(ctx, `
+	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_diff_opportunities (`+oppCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE EXISTS (SELECT 1 FROM price_diff_watches WHERE id = ? AND status = 'active')
 	`, o.ID, o.WatchID, o.ClientID, o.Symbol, string(o.BuyExchange), string(o.SellExchange),
 		o.BuyPrice, o.SellPrice, o.GrossDiffPct, o.NetDiffPct, o.MinNetDiffPct, string(o.Status),
-		o.OpenedAt.UTC().Format(time.RFC3339Nano), o.LastSeenAt.UTC().Format(time.RFC3339Nano), nullTime(o.ClosedAt))
+		o.OpenedAt.UTC().Format(time.RFC3339Nano), o.LastSeenAt.UTC().Format(time.RFC3339Nano), nullTime(o.ClosedAt),
+		o.WatchID)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "unique") {
@@ -365,6 +377,10 @@ func (s *SQLite) CreateOpportunity(ctx context.Context, o domain.PriceDiffOpport
 			return s.GetOpenOpportunity(ctx, o.WatchID, o.BuyExchange, o.SellExchange)
 		}
 		return nil, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return nil, domain.ErrConflict
 	}
 	return s.getOppByID(ctx, o.ID)
 }

@@ -21,19 +21,20 @@ func NewPriceDiffHandler(svc *pricediff.Service) *PriceDiffHandler {
 }
 
 type priceDiffWatchDTO struct {
-	ID             string  `json:"id"`
-	ClientID       string  `json:"clientId"`
-	Symbol         string  `json:"symbol"`
-	Notional       float64 `json:"notional"`
-	MinProfit      float64 `json:"minProfit"`
-	MinNetDiffPct  float64 `json:"minNetDiffPct,omitempty"`
-	MinDurationSec float64 `json:"minDurationSec,omitempty"`
-	FeeBinancePct  float64 `json:"feeBinancePct"`
-	FeeCoinbasePct float64 `json:"feeCoinbasePct"`
-	FeeBybitPct    float64 `json:"feeBybitPct"`
-	Status         string  `json:"status"`
-	CreatedAt      string  `json:"createdAt"`
-	UpdatedAt      string  `json:"updatedAt"`
+	ID             string   `json:"id"`
+	ClientID       string   `json:"clientId"`
+	Symbol         string   `json:"symbol"`
+	Notional       float64  `json:"notional"`
+	MinProfit      float64  `json:"minProfit"`
+	MinNetDiffPct  float64  `json:"minNetDiffPct,omitempty"`
+	MinDurationSec float64  `json:"minDurationSec,omitempty"`
+	FeeBinancePct  float64  `json:"feeBinancePct"`
+	FeeCoinbasePct float64  `json:"feeCoinbasePct"`
+	FeeBybitPct    float64  `json:"feeBybitPct"`
+	Exchanges      []string `json:"exchanges"`
+	Status         string   `json:"status"`
+	CreatedAt      string   `json:"createdAt"`
+	UpdatedAt      string   `json:"updatedAt"`
 }
 
 type priceDiffOppDTO struct {
@@ -60,10 +61,23 @@ func watchDTO(w *domain.PriceDiffWatch) priceDiffWatchDTO {
 		Notional: w.Notional, MinProfit: w.MinProfit, MinNetDiffPct: w.MinNetDiffPct,
 		MinDurationSec: w.MinDurationSec,
 		FeeBinancePct:  w.FeeBinancePct, FeeCoinbasePct: w.FeeCoinbasePct, FeeBybitPct: w.FeeBybitPct,
+		Exchanges: watchExchangeIDs(w),
 		Status:    string(w.Status),
 		CreatedAt: w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: w.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+func watchExchangeIDs(w *domain.PriceDiffWatch) []string {
+	if w == nil {
+		return nil
+	}
+	exs := w.WatchExchanges()
+	out := make([]string, 0, len(exs))
+	for _, ex := range exs {
+		out = append(out, string(ex))
+	}
+	return out
 }
 
 func oppDTO(o *domain.PriceDiffOpportunity) priceDiffOppDTO {
@@ -84,15 +98,16 @@ func oppDTO(o *domain.PriceDiffOpportunity) priceDiffOppDTO {
 }
 
 type createWatchBody struct {
-	ClientID       string  `json:"clientId"`
-	Symbol         string  `json:"symbol"`
-	Notional       float64 `json:"notional"`
-	MinProfit      float64 `json:"minProfit"`
-	MinNetDiffPct  float64 `json:"minNetDiffPct"`
-	MinDurationSec float64 `json:"minDurationSec"`
-	FeeBinancePct  float64 `json:"feeBinancePct"`
-	FeeCoinbasePct float64 `json:"feeCoinbasePct"`
-	FeeBybitPct    float64 `json:"feeBybitPct"`
+	ClientID       string   `json:"clientId"`
+	Symbol         string   `json:"symbol"`
+	Notional       float64  `json:"notional"`
+	MinProfit      float64  `json:"minProfit"`
+	MinNetDiffPct  float64  `json:"minNetDiffPct"`
+	MinDurationSec float64  `json:"minDurationSec"`
+	FeeBinancePct  float64  `json:"feeBinancePct"`
+	FeeCoinbasePct float64  `json:"feeCoinbasePct"`
+	FeeBybitPct    float64  `json:"feeBybitPct"`
+	Exchanges      []string `json:"exchanges"`
 }
 
 // CreateWatch handles POST /api/v1/price-diff/watches
@@ -110,6 +125,7 @@ func (h *PriceDiffHandler) CreateWatch(w http.ResponseWriter, r *http.Request) {
 		ClientID: clientID, Symbol: body.Symbol, Notional: body.Notional, MinProfit: body.MinProfit,
 		MinNetDiffPct: body.MinNetDiffPct, MinDurationSec: body.MinDurationSec,
 		FeeBinancePct: body.FeeBinancePct, FeeCoinbasePct: body.FeeCoinbasePct, FeeBybitPct: body.FeeBybitPct,
+		Exchanges: body.Exchanges,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -145,14 +161,15 @@ func (h *PriceDiffHandler) GetWatch(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateWatchBody struct {
-	ClientID       string   `json:"clientId"`
-	Notional       *float64 `json:"notional"`
-	MinProfit      *float64 `json:"minProfit"`
-	MinNetDiffPct  *float64 `json:"minNetDiffPct"`
-	MinDurationSec *float64 `json:"minDurationSec"`
-	FeeBinancePct  *float64 `json:"feeBinancePct"`
-	FeeCoinbasePct *float64 `json:"feeCoinbasePct"`
-	FeeBybitPct    *float64 `json:"feeBybitPct"`
+	ClientID       string    `json:"clientId"`
+	Notional       *float64  `json:"notional"`
+	MinProfit      *float64  `json:"minProfit"`
+	MinNetDiffPct  *float64  `json:"minNetDiffPct"`
+	MinDurationSec *float64  `json:"minDurationSec"`
+	FeeBinancePct  *float64  `json:"feeBinancePct"`
+	FeeCoinbasePct *float64  `json:"feeCoinbasePct"`
+	FeeBybitPct    *float64  `json:"feeBybitPct"`
+	Exchanges      *[]string `json:"exchanges"`
 }
 
 // UpdateWatch handles PATCH /api/v1/price-diff/watches/{id}
@@ -171,6 +188,7 @@ func (h *PriceDiffHandler) UpdateWatch(w http.ResponseWriter, r *http.Request) {
 		Notional: body.Notional, MinProfit: body.MinProfit, MinNetDiffPct: body.MinNetDiffPct,
 		MinDurationSec: body.MinDurationSec,
 		FeeBinancePct:  body.FeeBinancePct, FeeCoinbasePct: body.FeeCoinbasePct, FeeBybitPct: body.FeeBybitPct,
+		Exchanges: body.Exchanges,
 	})
 	if err != nil {
 		writeError(w, err)

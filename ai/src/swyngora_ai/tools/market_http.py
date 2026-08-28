@@ -1361,6 +1361,10 @@ class PriceDiffWatchCreateInput(BaseModel):
     fee_binance_pct: float = Field(default=0, ge=0, description="Binance fee %")
     fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase fee %")
     fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit fee %")
+    exchanges: list[str] | None = Field(
+        default=None,
+        description="Venues to walk, e.g. [binance, bybit]. Default all three. At least two.",
+    )
 
 
 class PriceDiffWatchIdInput(BaseModel):
@@ -1381,6 +1385,10 @@ class PriceDiffWatchUpdateInput(BaseModel):
     fee_binance_pct: float | None = None
     fee_coinbase_pct: float | None = None
     fee_bybit_pct: float | None = None
+    exchanges: list[str] | None = Field(
+        default=None,
+        description="Replace venues, e.g. [binance, bybit]. At least two.",
+    )
 
 
 class PriceDiffOppListInput(BaseModel):
@@ -3148,21 +3156,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         fee_binance_pct: float = 0,
         fee_coinbase_pct: float = 0,
         fee_bybit_pct: float = 0,
+        exchanges: list[str] | None = None,
     ) -> str:
-        return http.post(
-            "/api/v1/price-diff/watches",
-            {
-                "clientId": client_id,
-                "symbol": symbol,
-                "notional": notional,
-                "minProfit": min_profit,
-                "minDurationSec": min_duration_sec,
-                "minNetDiffPct": min_net_diff_pct,
-                "feeBinancePct": fee_binance_pct,
-                "feeCoinbasePct": fee_coinbase_pct,
-                "feeBybitPct": fee_bybit_pct,
-            },
-        )
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "notional": notional,
+            "minProfit": min_profit,
+            "minDurationSec": min_duration_sec,
+            "minNetDiffPct": min_net_diff_pct,
+            "feeBinancePct": fee_binance_pct,
+            "feeCoinbasePct": fee_coinbase_pct,
+            "feeBybitPct": fee_bybit_pct,
+        }
+        if exchanges:
+            body["exchanges"] = exchanges
+        return http.post("/api/v1/price-diff/watches", body)
 
     def list_price_diff_watches(client_id: str) -> str:
         return http.get("/api/v1/price-diff/watches", {"clientId": client_id})
@@ -3183,6 +3192,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         fee_binance_pct: float | None = None,
         fee_coinbase_pct: float | None = None,
         fee_bybit_pct: float | None = None,
+        exchanges: list[str] | None = None,
     ) -> str:
         body: dict[str, Any] = {"clientId": client_id}
         if notional is not None:
@@ -3199,6 +3209,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["feeCoinbasePct"] = fee_coinbase_pct
         if fee_bybit_pct is not None:
             body["feeBybitPct"] = fee_bybit_pct
+        if exchanges is not None:
+            body["exchanges"] = exchanges
         return http.patch(f"/api/v1/price-diff/watches/{watch_id}", body)
 
     def pause_price_diff_watch(client_id: str, watch_id: str) -> str:
