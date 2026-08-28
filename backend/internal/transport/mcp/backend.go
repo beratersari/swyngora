@@ -3706,12 +3706,12 @@ func (b *Backend) CancelImport(ctx context.Context, clientID, id string) (json.R
 	return importJobJSON(job)
 }
 
-func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
 	}
 	w, err := b.PriceDiff.CreateWatch(ctx, pricediff.CreateInput{
-		ClientID: clientID, Symbol: symbol, MinNetDiffPct: minNetDiffPct,
+		ClientID: clientID, Symbol: symbol, Notional: notional, MinProfit: minProfit, MinNetDiffPct: minNetDiffPct,
 		FeeBinancePct: feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
 	})
 	if err != nil {
@@ -3839,7 +3839,7 @@ func (b *Backend) QuotePriceDiffOpportunity(ctx context.Context, clientID, id st
 func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
 	return map[string]any{
 		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
-		"minNetDiffPct": w.MinNetDiffPct,
+		"notional": w.Notional, "minProfit": w.MinProfit, "minNetDiffPct": w.MinNetDiffPct,
 		"feeBinancePct": w.FeeBinancePct, "feeCoinbasePct": w.FeeCoinbasePct, "feeBybitPct": w.FeeBybitPct,
 		"status":    string(w.Status),
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),

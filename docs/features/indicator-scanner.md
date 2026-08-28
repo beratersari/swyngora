@@ -118,7 +118,7 @@ Run a saved rule over a symbol and date range to see past signals and what price
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).
 - The rule is **snapshotted when the job is queued**. Editing the live rule before the worker starts does not change this run.
 - Signals use the same false→true onset as live hits (a condition that stays true is one signal).
-- **No duplicate run** for the same client + rule + symbol + date range while status is pending/running/completed (returns existing job).
+- **No duplicate run** for the same client + rule snapshot + symbol + date range while status is pending/running/completed (returns existing job). Editing the rule and starting again creates a **new** job.
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.

@@ -44,6 +44,22 @@ func newSvc(t *testing.T, m TickerFetcher) *Service {
 	return svc
 }
 
+func venueBook(bid, ask, qty float64, now time.Time) *domain.RawOrderBook {
+	return &domain.RawOrderBook{
+		Live: true, FetchedAt: now,
+		Bids: []domain.PriceLevel{{Price: bid, Quantity: qty}},
+		Asks: []domain.PriceLevel{{Price: ask, Quantity: qty}},
+	}
+}
+
+func booksAt(now time.Time, binance, coinbase, bybit float64) *fakeBooks {
+	return &fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT":  venueBook(binance, binance, 1000, now),
+		"coinbase|BTC-USD": venueBook(coinbase, coinbase, 1000, now),
+		"bybit|BTCUSDT":    venueBook(bybit, bybit, 1000, now),
+	}}
+}
+
 func freshTicker(price string, now time.Time) *domain.Ticker24h {
 	return &domain.Ticker24h{LastPrice: price, CloseTime: now.Add(-10 * time.Second)}
 }
@@ -66,7 +82,7 @@ func TestProcessActiveWatches_SkipsClosedAccount(t *testing.T) {
 	svc.SetAccountChecker(closedAccounts{"arb-closed": true})
 	ctx := context.Background()
 	if _, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "arb-closed", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		ClientID: "arb-closed", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
 		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
 	}); err != nil {
 		t.Fatal(err)
@@ -77,13 +93,13 @@ func TestProcessActiveWatches_SkipsClosedAccount(t *testing.T) {
 	}
 }
 
-func TestCreateWatch_RejectsTinyNetFloor(t *testing.T) {
+func TestCreateWatch_RequiresNotional(t *testing.T) {
 	svc := newSvc(t, &fakeTicker{})
 	_, err := svc.CreateWatch(context.Background(), CreateInput{
-		ClientID: "u-floor", Symbol: "BTCUSDT", MinNetDiffPct: 0.01,
+		ClientID: "u-floor", Symbol: "BTCUSDT", MinProfit: 1,
 	})
 	if err == nil {
-		t.Fatal("expected minNetDiffPct 0.01 to be rejected")
+		t.Fatal("expected missing notional to be rejected")
 	}
 }
 
@@ -91,7 +107,7 @@ func TestCreateListDeleteWatch(t *testing.T) {
 	svc := newSvc(t, &fakeTicker{})
 	ctx := context.Background()
 	w, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "u1", Symbol: "btcusdt", MinNetDiffPct: 0.5,
+		ClientID: "u1", Symbol: "btcusdt", Notional: 10000, MinProfit: 5,
 		FeeBinancePct: 0.1, FeeCoinbasePct: 0.6, FeeBybitPct: 0.1,
 	})
 	if err != nil {
@@ -119,11 +135,12 @@ func TestOpportunity_OpenTouchCloseReopen(t *testing.T) {
 		"coinbase|BTC-USD": freshTicker("102", now),
 		"bybit|BTCUSDT":    freshTicker("100.2", now),
 	}}
-	svc := newSvc(t, m)
+	books := booksAt(now, 100, 102, 100.2)
+	svc := newSvc(t, m).WithBooks(books)
 	svc.MaxPriceAge = 2 * time.Minute
 	ctx := context.Background()
 	if _, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "arb", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		ClientID: "arb", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 10,
 		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
 	}); err != nil {
 		t.Fatal(err)
@@ -181,6 +198,7 @@ func TestOpportunity_OpenTouchCloseReopen(t *testing.T) {
 
 	// Collapse spread → close
 	m.data["coinbase|BTC-USD"] = freshTicker("100.1", now)
+	books.data["coinbase|BTC-USD"] = venueBook(100.1, 100.1, 1000, now)
 	_, cl3, _, err := svc.ProcessActiveWatches(ctx, now.Add(2*time.Second))
 	if err != nil {
 		t.Fatal(err)
@@ -195,6 +213,7 @@ func TestOpportunity_OpenTouchCloseReopen(t *testing.T) {
 
 	// Spread returns → new opportunity
 	m.data["coinbase|BTC-USD"] = freshTicker("103", now)
+	books.data["coinbase|BTC-USD"] = venueBook(103, 103, 1000, now)
 	c4, _, _, err := svc.ProcessActiveWatches(ctx, now.Add(3*time.Second))
 	if err != nil || c4 < 1 {
 		t.Fatalf("created=%d err=%v", c4, err)
@@ -211,45 +230,76 @@ func TestOpportunity_OpenTouchCloseReopen(t *testing.T) {
 	}
 }
 
-func TestSkipStaleOrMissingPrice(t *testing.T) {
+func TestSkipMissingBook(t *testing.T) {
 	now := time.Now().UTC()
-	m := &fakeTicker{data: map[string]*domain.Ticker24h{
-		"binance|BTCUSDT":  {LastPrice: "100", CloseTime: now.Add(-10 * time.Minute)}, // stale
-		"coinbase|BTC-USD": freshTicker("110", now),
-		"bybit|BTCUSDT":    freshTicker("100", now),
-	}}
-	svc := newSvc(t, m)
-	svc.MaxPriceAge = 2 * time.Minute
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"coinbase|BTC-USD": venueBook(110, 110, 1000, now),
+		"bybit|BTCUSDT":    venueBook(100, 100, 1000, now),
+	}})
 	ctx := context.Background()
 	_, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "stale", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		ClientID: "stale", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Only coinbase+bybit fresh; bybit 100 vs coinbase 110 should still open
 	c, _, _, err := svc.ProcessActiveWatches(ctx, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c < 1 {
-		t.Fatalf("expected opp from bybit/coinbase, created=%d", c)
+		t.Fatalf("expected opp from bybit/coinbase books, created=%d", c)
 	}
-	// If only one fresh price — no opp
-	m2 := &fakeTicker{data: map[string]*domain.Ticker24h{
-		"binance|ETHUSDT":  freshTicker("100", now),
-		"coinbase|ETH-USD": {LastPrice: "110", CloseTime: now.Add(-10 * time.Minute)},
-		// bybit missing
-	}}
-	svc2 := newSvc(t, m2)
-	svc2.MaxPriceAge = 2 * time.Minute
-	_, err = svc2.CreateWatch(ctx, CreateInput{ClientID: "one", Symbol: "ETHUSDT", MinNetDiffPct: 0.5})
+	svc2 := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|ETHUSDT": venueBook(100, 100, 1000, now),
+	}})
+	_, err = svc2.CreateWatch(ctx, CreateInput{ClientID: "one", Symbol: "ETHUSDT", Notional: 10000, MinProfit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	c2, _, _, err := svc2.ProcessActiveWatches(ctx, now)
 	if err != nil || c2 != 0 {
-		t.Fatalf("want 0 created with single fresh price, got %d err=%v", c2, err)
+		t.Fatalf("want 0 created with a single book, got %d err=%v", c2, err)
+	}
+}
+
+func TestTickerSpreadWithoutBookDoesNotOpen(t *testing.T) {
+	now := time.Now().UTC()
+	m := &fakeTicker{data: map[string]*domain.Ticker24h{
+		"binance|BTCUSDT":  freshTicker("100", now),
+		"coinbase|BTC-USD": freshTicker("110", now),
+		"bybit|BTCUSDT":    freshTicker("100", now),
+	}}
+	svc := newSvc(t, m).WithBooks(booksAt(now, 100, 100, 100))
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "tick", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, _, _, err := svc.ProcessActiveWatches(context.Background(), now)
+	if err != nil || c != 0 {
+		t.Fatalf("ticker gap without book edge must not open, created=%d err=%v", c, err)
+	}
+}
+
+func TestThinBookDoesNotOpen(t *testing.T) {
+	now := time.Now().UTC()
+	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{
+		"binance|BTCUSDT":  venueBook(100, 100, 0.01, now),
+		"coinbase|BTC-USD": venueBook(110, 110, 0.01, now),
+		"bybit|BTCUSDT":    venueBook(100, 100, 0.01, now),
+	}})
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "thin", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c, _, _, err := svc.ProcessActiveWatches(context.Background(), now)
+	if err != nil || c != 0 {
+		t.Fatalf("thin book must not open, created=%d err=%v", c, err)
 	}
 }
 
@@ -419,7 +469,7 @@ func TestQuoteWatch_UsesWatchFees(t *testing.T) {
 	}})
 	ctx := context.Background()
 	w, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "scan1", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		ClientID: "scan1", Symbol: "BTCUSDT", Notional: 100, MinProfit: 0, MinNetDiffPct: 0.5,
 		FeeBinancePct: 0.1, FeeCoinbasePct: 0.6, FeeBybitPct: 0.1,
 	})
 	if err != nil {
@@ -457,7 +507,7 @@ func TestQuoteOpportunity_UsesWatchFees(t *testing.T) {
 	}})
 	ctx := context.Background()
 	if _, err := svc.CreateWatch(ctx, CreateInput{
-		ClientID: "q1", Symbol: "BTCUSDT", MinNetDiffPct: 0.5,
+		ClientID: "q1", Symbol: "BTCUSDT", Notional: 100, MinProfit: 0, MinNetDiffPct: 0.5,
 		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
 	}); err != nil {
 		t.Fatal(err)
@@ -513,8 +563,8 @@ func TestOpenPersistsAcrossNewService(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	ctx := context.Background()
-	svc1 := New(store, m)
-	w, err := svc1.CreateWatch(ctx, CreateInput{ClientID: "p", Symbol: "BTCUSDT", MinNetDiffPct: 0.5})
+	svc1 := New(store, m).WithBooks(booksAt(now, 100, 105, 100))
+	w, err := svc1.CreateWatch(ctx, CreateInput{ClientID: "p", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}

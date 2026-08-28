@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff executable quote:** walk the buy venue asks and sell venue bids for a size (`notional` USDT or `quantity`) and return average buy/sell, slippage, profit after fees, usable money, and the largest still-profitable size (`GET /api/v1/price-diff/quote`, `GET /api/v1/price-diff/opportunities/{id}/quote`, MCP `quote_price_diff` / `quote_price_diff_opportunity`) (`docs/features/price-diff.md`)
 
 ### Changed
+- **Price-diff watches:** set `notional` and `minProfit`; opportunities open only when that size fills on live books and after-fee profit (including slippage) meets the floor — not from ticker last-price gaps (`docs/features/price-diff.md`)
 - **Price-diff scan:** missing venue books are listed as `unavailable` (not ranked or chosen as best); `minProfitPct` / `minProfitAmount` hide tiny fills (`docs/features/price-diff.md`)
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI both-LLM error:** when Grok and the Ollama fallback both fail, the CLI prints both errors (primary then fallback), not only the last Ollama message (`docs/features/ai-assistant.md`)
 - **Dashboard 24h on halted coins:** delisted rows use the same off-venue 24h **delta and %** as coin detail (other venue or CoinGecko `price_change_24h`), not a frozen home-book window or a blank; Coinbase last/open/high/low and % stay on one stats window (`docs/features/market-data.md`, `docs/features/delist-schedule.md`)
 - **AI concurrent tenant bind:** overlapping chats no longer send the master token plus the other user’s `X-Client-Id` (or inherit their `canTrade`) when desk gather runs on a thread pool (`docs/features/ai-assistant.md`)
+- **Scanner backtest reuse:** starting the same symbol and date range after editing the rule creates a new job instead of returning the old completed run
 - **Scanner backtest snapshot:** a queued backtest keeps the rule params from start time; later edits do not change that run
 - **Scanner onset hits:** live results and backtest signals fire once when a condition becomes true, not on every later bar that stays true
 - **Scanner combo lookback:** combo rules fetch candles for the longest selected condition (for example MA 200) instead of a fixed 100 bars

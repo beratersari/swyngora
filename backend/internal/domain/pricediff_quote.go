@@ -392,6 +392,11 @@ func applyRequestedFill(out *PriceDiffQuote, fill quoteFill, buyFeePct, sellFeeP
 	out.Executable = filledReq && out.Profitable
 }
 
+// AfterFeeProfit is the numeric profit after fees and slippage for the fill.
+func (q PriceDiffQuote) AfterFeeProfit() float64 {
+	return q.profitAmount
+}
+
 func capFillToMax(fill quoteFill, max maxFill, buy, sell []ImpactSourceLevel, notional, quantity float64) quoteFill {
 	if max.qty <= 0 {
 		return fill

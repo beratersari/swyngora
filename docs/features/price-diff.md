@@ -6,19 +6,15 @@ Users want to know when the same coin trades at a meaningful price gap across **
 
 ## Behavior
 
-1. **Create a watch**: coin (`symbol`, e.g. `BTCUSDT`), `minNetDiffPct`, and per-exchange fees (`feeBinancePct`, `feeCoinbasePct`, `feeBybitPct`).
-2. Background worker fetches last prices on all three venues (Coinbase maps `*USDT` → `*-USD`).
-3. **Net edge** for buy A / sell B:
-
-   `netPct = (sell * (1 - feeSell/100) / (buy * (1 + feeBuy/100)) - 1) * 100`
-
-4. If `netPct >= minNetDiffPct`, open an **opportunity** with `buyExchange` and `sellExchange`.
-5. **While open**: same `(watch, buy, sell)` is only updated (prices / lastSeenAt), not recreated.
-6. When net falls **below** the limit (with fresh prices on both legs): opportunity is **closed**.
-7. When edge later exceeds the limit again: a **new** opportunity is created.
-8. If a venue price is **missing or stale** (CloseTime older than 2 minutes, or **zero/unknown**): that venue is skipped for this tick; incomplete data does **not** open or close a route. Binance uses API `closeTime`; Bybit uses ticker `time`; Coinbase uses Exchange `/ticker` trade time. Adapters must not stamp `time.Now()` as CloseTime.
-9. `minNetDiffPct` floor is **0.20%** so USDT≈USD noise does not open false opportunities.
-10. Open opportunities live in SQLite and **survive worker restarts**.
+1. **Create a watch**: coin (`symbol`, e.g. `BTCUSDT`), **`notional`** (quote size to walk), **`minProfit`** (after-fee profit floor in quote currency), optional `minNetDiffPct`, and per-exchange fees.
+2. Background worker loads **live order books** on Binance, Coinbase, and Bybit (Coinbase maps `*USDT` → `*-USD`).
+3. For each buy A / sell B pair it walks the **buy asks** and **sell bids** for that `notional` (fees + slippage).
+4. Open an **opportunity** only when the full size **fills on both books** and after-fee profit is at least `minProfit` (and `minNetDiffPct` when set). Ticker last-price gaps alone do **not** open a row.
+5. **While open**: same `(watch, buy, sell)` is only updated (average fill prices / lastSeenAt), not recreated.
+6. When the book fill no longer qualifies (thin book, or profit too small) and both books loaded: opportunity is **closed**.
+7. When a qualifying fill later returns: a **new** opportunity is created.
+8. If a venue **book is missing**: that venue is skipped; incomplete data does **not** open or close a route.
+9. Open opportunities live in SQLite and **survive worker restarts**.
 11. **Executable quote:** walk the **buy venue asks** and **sell venue bids** for a size. `notional` is quote currency spent on the buy book **before** the buy fee (e.g. `10000` USDT). The same base quantity is sold on the other book (rematched if one side is thinner). **Max size** is the largest quantity whose **cumulative** after-fee profit is still positive — a later book level that loses money on its own is still taken while the running total stays above zero. The displayed fill is capped at that size. `usedNotional` / `usedPct` is how much of the entered money can actually be deployed; `unusedNotional` is the rest. `executable` is true only when the full requested size fills **and** profit after fees is positive.
 12. **All-venue scan:** one amount is walked on every Binance / Coinbase / Bybit buy→sell pair (fees + live depth). Routes are ranked by after-fee profit, then by usable money. `bestRoute` is the top row. If a venue's order book cannot be loaded, that venue is listed in `unavailable` and is **never** shown as a normal route or chosen as best. Optional `minProfitPct` and/or `minProfitAmount` hide smaller fills (`skippedCount` is how many were dropped). Both filters must pass when both are set.
 

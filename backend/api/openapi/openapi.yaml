@@ -5175,13 +5175,13 @@ paths:
     post:
       summary: Create a cross-exchange price difference watch
       description: |
-        Tracks last prices for a symbol on Binance, Coinbase, and Bybit.
-        When net edge after exchange fees exceeds minNetDiffPct, stores an opportunity
-        with buyExchange and sellExchange. Does not create a duplicate while open.
-        When net falls below the limit the opportunity closes; a later re-cross opens a new one.
-        Stale or missing exchange prices skip evaluation for that venue (no signal).
-        Open opportunities are durable (SQLite) and survive worker restarts.
-        Informational only — not financial advice / not executable trading.
+        Tracks a symbol on Binance, Coinbase, and Bybit. Walks live books for
+        `notional` and opens an opportunity only when that size can be bought
+        and sold and after-fee profit (including slippage) is at least `minProfit`.
+        Does not open from ticker last-price gaps alone. Does not create a
+        duplicate while open. When the book fill no longer meets the floor the
+        opportunity closes; a later re-cross opens a new one. Missing books skip
+        that venue. Informational only — not financial advice.
       operationId: createPriceDiffWatch
       tags: [PriceDiff]
       requestBody:
@@ -5190,14 +5190,24 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol, minNetDiffPct]
+              required: [symbol, notional, minProfit]
               properties:
                 clientId: { type: string }
                 symbol: { type: string, example: BTCUSDT }
-                minNetDiffPct:
+                notional:
                   type: number
                   exclusiveMinimum: 0
-                  description: Minimum net difference percent after fees (e.g. 0.5 = 0.5%)
+                  description: Quote size walked on the buy book (e.g. 10000 USDT)
+                  example: 10000
+                minProfit:
+                  type: number
+                  minimum: 0
+                  description: Minimum after-fee profit in quote currency
+                  example: 20
+                minNetDiffPct:
+                  type: number
+                  minimum: 0
+                  description: Optional extra profit percent floor
                   example: 0.5
                 feeBinancePct: { type: number, minimum: 0, example: 0.1 }
                 feeCoinbasePct: { type: number, minimum: 0, example: 0.6 }
@@ -5674,7 +5684,8 @@ paths:
       description: |
         Runs a rule over a symbol and date range in the background. The rule is
         snapshotted at queue time; later edits do not change this job. Identical jobs
-        (same client, rule, symbol, range) return the existing pending/running/completed job.
+        (same client, rule snapshot, symbol, range) return the existing pending/running/completed job.
+        Editing the rule and starting again creates a new job.
         Progress and signalCount update while running. Informational only.
       operationId: startScannerBacktest
       tags: [Scanner]
@@ -7812,9 +7823,11 @@ components:
         id: { type: string }
         clientId: { type: string }
         symbol: { type: string }
+        notional: { type: number, description: Quote size walked on live books }
+        minProfit: { type: number, description: Minimum after-fee profit in quote currency }
         minNetDiffPct:
           type: number
-          description: Minimum net % edge after fees to open an opportunity
+          description: Optional extra profit % floor
         feeBinancePct: { type: number }
         feeCoinbasePct: { type: number }
         feeBybitPct: { type: number }

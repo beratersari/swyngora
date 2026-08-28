@@ -117,11 +117,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pd_opp_open_route
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
-	return sqliteutil.SetUserVersion(s.db, 1)
+	v, err := sqliteutil.UserVersion(s.db)
+	if err != nil {
+		return err
+	}
+	if v < 1 {
+		if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+			return err
+		}
+		v = 1
+	}
+	if v < 2 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE price_diff_watches ADD COLUMN notional REAL NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE price_diff_watches ADD COLUMN min_profit REAL NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 const watchCols = `id, client_id, symbol, min_net_diff_pct, fee_binance_pct, fee_coinbase_pct,
-	fee_bybit_pct, status, created_at, updated_at`
+	fee_bybit_pct, status, created_at, updated_at, notional, min_profit`
 
 type scannable interface {
 	Scan(dest ...any) error
@@ -132,7 +153,7 @@ func scanWatch(row scannable) (*domain.PriceDiffWatch, error) {
 	var st, cAt, uAt string
 	if err := row.Scan(
 		&w.ID, &w.ClientID, &w.Symbol, &w.MinNetDiffPct, &w.FeeBinancePct, &w.FeeCoinbasePct,
-		&w.FeeBybitPct, &st, &cAt, &uAt,
+		&w.FeeBybitPct, &st, &cAt, &uAt, &w.Notional, &w.MinProfit,
 	); err != nil {
 		return nil, err
 	}
@@ -159,9 +180,10 @@ func (s *SQLite) CreateWatch(ctx context.Context, w domain.PriceDiffWatch) (*dom
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_diff_watches (`+watchCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, w.ID, w.ClientID, w.Symbol, w.MinNetDiffPct, w.FeeBinancePct, w.FeeCoinbasePct, w.FeeBybitPct,
-		string(w.Status), w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		string(w.Status), w.CreatedAt.UTC().Format(time.RFC3339Nano), w.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		w.Notional, w.MinProfit)
 	if err != nil {
 		return nil, err
 	}

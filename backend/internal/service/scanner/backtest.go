@@ -58,8 +58,14 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 		return nil, fmt.Errorf("%w: date range must be at most 400 days", domain.ErrInvalidArgument)
 	}
 
+	snap, err := domain.EncodeScannerRuleSnapshot(*rule)
+	if err != nil {
+		return nil, err
+	}
 	if existing, err := s.store.FindActiveBacktest(ctx, clientID, ruleID, ex, sym, start, end); err == nil && existing != nil {
-		return existing, nil
+		if sameQueuedRule(existing, snap, rule) {
+			return existing, nil
+		}
 	} else if err != nil && err != domain.ErrNotFound {
 		return nil, err
 	}
@@ -70,11 +76,6 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 	}
 	if n >= domain.MaxScannerBacktestsPerClient {
 		return nil, fmt.Errorf("%w: max %d backtests per client", domain.ErrInvalidArgument, domain.MaxScannerBacktestsPerClient)
-	}
-
-	snap, err := domain.EncodeScannerRuleSnapshot(*rule)
-	if err != nil {
-		return nil, err
 	}
 	now := time.Now().UTC()
 	job := domain.ScannerBacktest{
@@ -312,6 +313,19 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 	}
 	_ = s.store.UpdateBacktestProgress(ctx, id, total, total, signalCount, 100)
 	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+}
+
+func sameQueuedRule(job *domain.ScannerBacktest, snap string, rule *domain.ScannerRule) bool {
+	if job == nil {
+		return false
+	}
+	if strings.TrimSpace(job.RuleJSON) != "" {
+		return job.RuleJSON == snap
+	}
+	if rule == nil {
+		return true
+	}
+	return !rule.UpdatedAt.UTC().After(job.CreatedAt.UTC())
 }
 
 func resolveBacktestRule(ctx context.Context, store domain.ScannerPort, job domain.ScannerBacktest) (*domain.ScannerRule, error) {

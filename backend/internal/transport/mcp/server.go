@@ -186,7 +186,7 @@ type DataPort interface {
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
+	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
 	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3610,10 +3610,12 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_price_diff_watch",
-		mcp.WithDescription("Track cross-exchange price differences for a coin (Binance/Coinbase/Bybit). Opens opportunities when net edge after fees exceeds minNetDiffPct."),
+		mcp.WithDescription("Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when that notional can be bought and sold on live books and after-fee profit (including slippage) is at least minProfit."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithNumber("minNetDiffPct", mcp.Required(), mcp.Description("Minimum net difference % after fees e.g. 0.5")),
+		mcp.WithNumber("notional", mcp.Required(), mcp.Description("Quote size to walk on the buy book e.g. 10000")),
+		mcp.WithNumber("minProfit", mcp.Required(), mcp.Description("Minimum after-fee profit in quote currency e.g. 20")),
+		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional extra profit % floor")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee % e.g. 0.1")),
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee % e.g. 0.6")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee % e.g. 0.1")),
@@ -3626,11 +3628,16 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		minNet, err := req.RequireFloat("minNetDiffPct")
+		notional, err := req.RequireFloat("notional")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, minNet,
+		minProfit, err := req.RequireFloat("minProfit")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, notional, minProfit,
+			req.GetFloat("minNetDiffPct", 0),
 			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil

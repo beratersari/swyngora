@@ -2107,7 +2107,7 @@ export interface paths {
         /**
          * Create a cross-exchange price difference watch
          * @description Tracks last prices for a symbol on Binance, Coinbase, and Bybit.
-         *     When net edge after exchange fees exceeds minNetDiffPct, stores an opportunity
+         *     When a notional fills on live books and after-fee profit meets minProfit, stores an opportunity
          *     with buyExchange and sellExchange. Does not create a duplicate while open.
          *     When net falls below the limit the opportunity closes; a later re-cross opens a new one.
          *     Stale or missing exchange prices skip evaluation for that venue (no signal).
@@ -3883,7 +3883,11 @@ export interface components {
             id?: string;
             clientId?: string;
             symbol?: string;
-            /** @description Minimum net % edge after fees to open an opportunity */
+            /** @description Quote size walked on live books */
+            notional?: number;
+            /** @description Minimum after-fee profit in quote currency */
+            minProfit?: number;
+            /** @description Optional extra profit % floor */
             minNetDiffPct?: number;
             feeBinancePct?: number;
             feeCoinbasePct?: number;
@@ -8094,10 +8098,20 @@ export interface operations {
                     /** @example BTCUSDT */
                     symbol: string;
                     /**
-                     * @description Minimum net difference percent after fees (e.g. 0.5 = 0.5%)
+                     * @description Quote size walked on the buy book (e.g. 10000 USDT)
+                     * @example 10000
+                     */
+                    notional: number;
+                    /**
+                     * @description Minimum after-fee profit in quote currency
+                     * @example 20
+                     */
+                    minProfit: number;
+                    /**
+                     * @description Optional extra profit percent floor
                      * @example 0.5
                      */
-                    minNetDiffPct: number;
+                    minNetDiffPct?: number;
                     /** @example 0.1 */
                     feeBinancePct?: number;
                     /** @example 0.6 */

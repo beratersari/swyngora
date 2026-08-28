@@ -11,9 +11,12 @@ import (
 // Price-diff watch limits.
 const (
 	MaxPriceDiffWatchesPerClient = 20
-	MinPriceDiffNetPct           = 0.20  // 0.20% — above typical USDT/USD noise
-	MaxPriceDiffNetPct           = 50.0  // 50%
-	MaxPriceDiffFeePct           = 10.0  // 10% per exchange
+	MinPriceDiffNetPct           = 0.20 // 0.20% — above typical USDT/USD noise
+	MaxPriceDiffNetPct           = 50.0 // 50%
+	MaxPriceDiffFeePct           = 10.0 // 10% per exchange
+	MinPriceDiffNotional         = 1.0
+	MaxPriceDiffNotional         = 1e9
+	MaxPriceDiffMinProfit        = 1e9
 	// DefaultPriceDiffMaxAge is how fresh a ticker CloseTime must be to count.
 	DefaultPriceDiffMaxAge = 2 * time.Minute
 )
@@ -35,12 +38,15 @@ const (
 )
 
 // PriceDiffWatch is a user-configured cross-exchange price difference tracker.
-// MinNetDiffPct is the minimum net % edge after fees required to open an opportunity.
-// Fee*Pct are taker-style fees in percent (0.1 = 0.1%) per exchange.
+// Notional is the quote size walked on live books. MinProfit is the minimum
+// after-fee profit (quote currency) required to open an opportunity.
+// MinNetDiffPct is an optional extra % floor. Fee*Pct are taker fees (0.1 = 0.1%).
 type PriceDiffWatch struct {
 	ID             string
 	ClientID       string
 	Symbol         string // canonical pair e.g. BTCUSDT
+	Notional       float64
+	MinProfit      float64
 	MinNetDiffPct  float64
 	FeeBinancePct  float64
 	FeeCoinbasePct float64

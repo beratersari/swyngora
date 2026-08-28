@@ -147,4 +147,14 @@ func TestBacktest_UsesQueuedRuleNotLaterEdit(t *testing.T) {
 	if got.SignalCount < 1 {
 		t.Fatalf("edit after queue must not erase the original 2x spike: %+v", got)
 	}
+	again, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-snap", RuleID: rule.ID, Exchange: "binance", Symbol: "ETHUSDT",
+		RangeStart: t0.Add(15 * 24 * time.Hour), RangeEnd: t0.Add(35 * 24 * time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ID == job.ID {
+		t.Fatal("changed rule must start a new backtest, not reuse the completed one")
+	}
 }

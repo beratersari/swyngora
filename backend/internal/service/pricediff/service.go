@@ -40,6 +40,8 @@ type QuoteInput struct {
 type CreateInput struct {
 	ClientID       string
 	Symbol         string
+	Notional       float64
+	MinProfit      float64
 	MinNetDiffPct  float64
 	FeeBinancePct  float64
 	FeeCoinbasePct float64
@@ -125,10 +127,18 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 	if sym == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	if in.MinNetDiffPct < domain.MinPriceDiffNetPct || in.MinNetDiffPct > domain.MaxPriceDiffNetPct ||
+	if in.Notional < domain.MinPriceDiffNotional || in.Notional > domain.MaxPriceDiffNotional ||
+		math.IsNaN(in.Notional) || math.IsInf(in.Notional, 0) {
+		return nil, fmt.Errorf("%w: notional must be between %g and %g", domain.ErrInvalidArgument,
+			domain.MinPriceDiffNotional, domain.MaxPriceDiffNotional)
+	}
+	if in.MinProfit < 0 || in.MinProfit > domain.MaxPriceDiffMinProfit ||
+		math.IsNaN(in.MinProfit) || math.IsInf(in.MinProfit, 0) {
+		return nil, fmt.Errorf("%w: minProfit must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffMinProfit)
+	}
+	if in.MinNetDiffPct < 0 || in.MinNetDiffPct > domain.MaxPriceDiffNetPct ||
 		math.IsNaN(in.MinNetDiffPct) || math.IsInf(in.MinNetDiffPct, 0) {
-		return nil, fmt.Errorf("%w: minNetDiffPct must be between %g and %g", domain.ErrInvalidArgument,
-			domain.MinPriceDiffNetPct, domain.MaxPriceDiffNetPct)
+		return nil, fmt.Errorf("%w: minNetDiffPct must be between 0 and %g", domain.ErrInvalidArgument, domain.MaxPriceDiffNetPct)
 	}
 	for _, f := range []float64{in.FeeBinancePct, in.FeeCoinbasePct, in.FeeBybitPct} {
 		if f < 0 || f > domain.MaxPriceDiffFeePct || math.IsNaN(f) || math.IsInf(f, 0) {
@@ -145,7 +155,7 @@ func (s *Service) CreateWatch(ctx context.Context, in CreateInput) (*domain.Pric
 	now := time.Now().UTC()
 	w := domain.PriceDiffWatch{
 		ID: uuid.NewString(), ClientID: clientID, Symbol: sym,
-		MinNetDiffPct: in.MinNetDiffPct,
+		Notional: in.Notional, MinProfit: in.MinProfit, MinNetDiffPct: in.MinNetDiffPct,
 		FeeBinancePct: in.FeeBinancePct, FeeCoinbasePct: in.FeeCoinbasePct, FeeBybitPct: in.FeeBybitPct,
 		Status: domain.PriceDiffWatchActive, CreatedAt: now, UpdatedAt: now,
 	}
@@ -271,31 +281,14 @@ func (s *Service) ProcessActiveWatches(ctx context.Context, now time.Time) (crea
 }
 
 func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, now time.Time) (created, closed, touched int, err error) {
-	maxAge := s.MaxPriceAge
-	if maxAge <= 0 {
-		maxAge = domain.DefaultPriceDiffMaxAge
+	if s.books == nil || w.Notional < domain.MinPriceDiffNotional {
+		return 0, 0, 0, nil
 	}
-	prices := map[domain.Exchange]float64{}
-	for _, ex := range domain.SupportedExchanges {
-		if domain.IsEquityExchange(ex) {
-			continue
-		}
-		sym := domain.PriceDiffSymbolForExchange(ex, w.Symbol)
-		tkr, err := s.market.GetTicker24h(ctx, string(ex), sym)
-		if err != nil || tkr == nil {
-			continue
-		}
-		if !domain.IsFreshTicker(tkr, now, maxAge) {
-			continue
-		}
-		last, err := strconv.ParseFloat(tkr.LastPrice, 64)
-		if err != nil || last <= 0 {
-			continue
-		}
-		prices[ex] = last
+	books, _, err := s.fetchAllQuoteBooks(ctx, w.Symbol)
+	if err != nil {
+		return 0, 0, 0, err
 	}
-	// Need at least two fresh venues to compare.
-	if len(prices) < 2 {
+	if len(books) < 2 {
 		return 0, 0, 0, nil
 	}
 
@@ -304,12 +297,41 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		domain.ExchangeCoinbase: w.FeeCoinbasePct,
 		domain.ExchangeBybit:    w.FeeBybitPct,
 	}
-	routes := domain.BestPriceDiffRoutes(prices, fees, w.MinNetDiffPct)
+	var venues []domain.Exchange
+	for _, ex := range domain.SupportedExchanges {
+		if domain.IsEquityExchange(ex) {
+			continue
+		}
+		if b := books[ex]; b != nil && (len(b.Bids) > 0 || len(b.Asks) > 0) {
+			venues = append(venues, ex)
+		}
+	}
+	if len(venues) < 2 {
+		return 0, 0, 0, nil
+	}
 
-	// Routes currently above the min net threshold.
-	activeKeys := map[string]domain.PriceDiffRoute{}
-	for _, r := range routes {
-		activeKeys[routeKey(r.BuyExchange, r.SellExchange)] = r
+	quoted := map[string]*domain.PriceDiffQuote{}
+	active := map[string]*domain.PriceDiffQuote{}
+	for i := range venues {
+		for j := range venues {
+			if i == j {
+				continue
+			}
+			buy, sell := venues[i], venues[j]
+			q, qerr := domain.QuotePriceDiffRoute(domain.PriceDiffQuoteQuery{
+				Symbol: w.Symbol, BuyExchange: buy, SellExchange: sell,
+				BuyFeePct: fees[buy], SellFeePct: fees[sell],
+				Notional: w.Notional, MinNetDiffPct: w.MinNetDiffPct,
+			}, books[buy], books[sell])
+			if qerr != nil || q == nil {
+				continue
+			}
+			k := routeKey(buy, sell)
+			quoted[k] = q
+			if bookRouteQualifies(q, w) {
+				active[k] = q
+			}
+		}
 	}
 
 	open, err := s.store.ListOpenOpportunitiesForWatch(ctx, w.ID)
@@ -320,38 +342,32 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 	for i := range open {
 		k := routeKey(open[i].BuyExchange, open[i].SellExchange)
 		openByKey[k] = &open[i]
-
-		buyP, buyOK := prices[open[i].BuyExchange]
-		sellP, sellOK := prices[open[i].SellExchange]
-		if !buyOK || !sellOK {
-			// Missing/stale price: do not open or close based on incomplete data.
+		q, haveQuote := quoted[k]
+		if !haveQuote {
 			continue
 		}
-		gross, net, err := domain.NetDiffPctAfterFees(buyP, sellP, fees[open[i].BuyExchange], fees[open[i].SellExchange])
-		if err != nil {
-			continue
-		}
-		if net+1e-12 < w.MinNetDiffPct {
+		if _, ok := active[k]; !ok {
 			if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e == nil {
 				closed++
 			}
 			continue
 		}
-		if _, e := s.store.TouchOpportunity(ctx, open[i].ID, buyP, sellP, gross, net, now); e == nil {
+		buyP, sellP := quoteFillPrices(q)
+		if _, e := s.store.TouchOpportunity(ctx, open[i].ID, buyP, sellP, q.GrossPct, q.ProfitPct, now); e == nil {
 			touched++
 		}
 	}
 
-	// Create opportunities for routes above threshold with no open row.
-	for k, r := range activeKeys {
+	for k, q := range active {
 		if _, exists := openByKey[k]; exists {
 			continue
 		}
+		buyP, sellP := quoteFillPrices(q)
 		opp := domain.PriceDiffOpportunity{
 			ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
-			BuyExchange: r.BuyExchange, SellExchange: r.SellExchange,
-			BuyPrice: r.BuyPrice, SellPrice: r.SellPrice,
-			GrossDiffPct: r.GrossDiffPct, NetDiffPct: r.NetDiffPct,
+			BuyExchange: q.BuyExchange, SellExchange: q.SellExchange,
+			BuyPrice: buyP, SellPrice: sellP,
+			GrossDiffPct: q.GrossPct, NetDiffPct: q.ProfitPct,
 			MinNetDiffPct: w.MinNetDiffPct, Status: domain.PriceDiffOppOpen,
 			OpenedAt: now, LastSeenAt: now,
 		}
@@ -360,6 +376,28 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		}
 	}
 	return created, closed, touched, nil
+}
+
+func bookRouteQualifies(q *domain.PriceDiffQuote, w *domain.PriceDiffWatch) bool {
+	if q == nil || w == nil || !q.Executable {
+		return false
+	}
+	if q.AfterFeeProfit()+1e-12 < w.MinProfit {
+		return false
+	}
+	if w.MinNetDiffPct > 0 && q.ProfitPct+1e-12 < w.MinNetDiffPct {
+		return false
+	}
+	return true
+}
+
+func quoteFillPrices(q *domain.PriceDiffQuote) (buy, sell float64) {
+	if q == nil {
+		return 0, 0
+	}
+	buy, _ = strconv.ParseFloat(q.AverageBuyPrice, 64)
+	sell, _ = strconv.ParseFloat(q.AverageSellPrice, 64)
+	return buy, sell
 }
 
 // Quote walks live books for a buy/sell venue pair.
@@ -457,6 +495,12 @@ func (s *Service) QuoteWatch(ctx context.Context, clientID, watchID string, in S
 	in.FeeBinancePct = w.FeeBinancePct
 	in.FeeCoinbasePct = w.FeeCoinbasePct
 	in.FeeBybitPct = w.FeeBybitPct
+	if in.Notional == 0 && in.Quantity == 0 {
+		in.Notional = w.Notional
+	}
+	if in.MinProfitAmount == 0 {
+		in.MinProfitAmount = w.MinProfit
+	}
 	if in.MinNetDiffPct == 0 {
 		in.MinNetDiffPct = w.MinNetDiffPct
 	}
