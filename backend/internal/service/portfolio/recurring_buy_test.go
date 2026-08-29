@@ -403,6 +403,60 @@ func TestRecurringBuy_MaxPriceBlocksAfterFeeAndSlippage(t *testing.T) {
 	}
 }
 
+func TestRecurringBuy_MaxPricePatchDuringLastPriceBlocksFill(t *testing.T) {
+	px := &slowPx{inner: &fakePx{prices: map[string]string{"binance|BTCUSDT": "64000"}}, delay: 80 * time.Millisecond}
+	svc := newSvc(t, nil)
+	svc.market = px
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-race-lock", StartingBalance: 200000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-race-lock", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &past, MaxPrice: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		max := 100.0
+		_, err := svc.UpdateRecurringBuyPlan(ctx, RecurringBuyUpdateInput{
+			ClientID: "rb-race-lock", PlanID: plan.ID, MaxPrice: &max,
+		})
+		done <- err
+	}()
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-race-lock", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed {
+		t.Fatalf("PATCH during in-flight lastPrice must block fill %+v", runs)
+	}
+	if !strings.Contains(runs[0].FailReason, "maxPrice") {
+		t.Fatalf("reason=%q", runs[0].FailReason)
+	}
+	view, _ := svc.View(ctx, "rb-race-lock")
+	if view.CashBalance < 199999 {
+		t.Fatalf("should not spend, cash=%v", view.CashBalance)
+	}
+}
+
+type slowPx struct {
+	inner *fakePx
+	delay time.Duration
+}
+
+func (p *slowPx) GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error) {
+	time.Sleep(p.delay)
+	return p.inner.GetTicker24h(ctx, exchange, symbol)
+}
+
 func TestRecurringBuy_MaxPricePatchAppliesToInFlightWorker(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "64000"}}
 	svc := newSvc(t, px)
@@ -448,6 +502,60 @@ func (p *patchMaxOnTick) GetTicker24h(ctx context.Context, exchange, symbol stri
 		ClientID: p.clientID, PlanID: p.planID, MaxPrice: &max,
 	})
 	return p.inner.GetTicker24h(ctx, exchange, symbol)
+}
+
+func TestRecurringBuy_BudgetCountsFeeAndSlippage(t *testing.T) {
+	svc := newSvcWithCosts(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	const startCash = 20000.0
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-fee-bud", StartingBalance: startCash}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-fee-bud", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &past, Budget: 1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	view, err := svc.View(ctx, "rb-fee-bud")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spentCash := startCash - view.CashBalance
+	if spentCash < 999.5 || spentCash > 1000.5 {
+		t.Fatalf("wallet debit=%v want ~1000 (fee+slip included in sizing)", spentCash)
+	}
+	got, _ := svc.GetRecurringBuyPlan(ctx, "rb-fee-bud", plan.ID)
+	if got.Spent < spentCash-0.01 || got.Spent > spentCash+0.01 {
+		t.Fatalf("spent=%v wallet=%v (spent must be cash out, not raw notional)", got.Spent, spentCash)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-fee-bud", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("%+v", runs)
+	}
+	if runs[0].Amount < spentCash-0.01 || runs[0].Amount > spentCash+0.01 {
+		t.Fatalf("run amount=%v wallet=%v", runs[0].Amount, spentCash)
+	}
+	// leftover budget is ~0 after fee-inclusive debit of 1000
+	later := time.Now().UTC().Add(26 * time.Hour)
+	if _, err := svc.ProcessDueRecurringBuys(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ = svc.ListRecurringBuyRuns(ctx, "rb-fee-bud", plan.ID, 10, 0)
+	var exhausted bool
+	for _, r := range runs {
+		if r.FailReason == "budget exhausted" {
+			exhausted = true
+		}
+	}
+	if !exhausted {
+		t.Fatalf("want budget exhausted after fee-inclusive spend %+v", runs)
+	}
 }
 
 func TestRecurringBuy_BudgetAndEndDate(t *testing.T) {

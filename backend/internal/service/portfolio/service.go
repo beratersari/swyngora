@@ -144,6 +144,11 @@ type OrderInput struct {
 	// Recurring cash buys pin the mark they sized on so a later ticker cannot
 	// overspend the plan amount. Not mapped from HTTP.
 	MarkPrice float64
+	// RecurringPlanID, when set, re-reads that plan under lockClient before the
+	// debit so a concurrent maxPrice / budget / pause / end PATCH cannot fill
+	// with stale limits.
+	RecurringPlanID       string
+	RecurringScheduledFor time.Time
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -438,6 +443,13 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if price <= 0 {
 		return nil, nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
 	}
+	if in.RecurringPlanID != "" {
+		qty, err := s.enforceRecurringLimits(ctx, clientID, in, last, cost, price)
+		if err != nil {
+			return nil, nil, err
+		}
+		in.Quantity = qty
+	}
 	fee := domain.FeeAmount(in.Quantity, price, cost.FeeRate)
 	if side == domain.TradeSideBuy {
 		base, _ := domain.SplitBaseQuote(ex, sym)
@@ -561,6 +573,49 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	}
 	s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderFilled, nil, &tr, view)
 	return &tr, view, nil
+}
+
+// enforceRecurringLimits re-reads the plan under lockClient (caller holds it)
+// and applies the live maxPrice / budget / pause / end. This is the fill gate:
+// a PATCH that already committed cannot lose to this buy.
+func (s *Service) enforceRecurringLimits(ctx context.Context, bookID string, in OrderInput, last float64, cost domain.TradingCost, slipped float64) (float64, error) {
+	plan, err := s.store.GetRecurringBuyPlan(ctx, bookID, in.RecurringPlanID)
+	if err != nil || plan == nil {
+		return 0, fmt.Errorf("%w: plan unavailable", domain.ErrInvalidArgument)
+	}
+	if plan.Status != domain.RecurringBuyActive {
+		if plan.Status == domain.RecurringBuyEnded {
+			return 0, fmt.Errorf("%w: plan ended", domain.ErrInvalidArgument)
+		}
+		return 0, fmt.Errorf("%w: plan paused", domain.ErrInvalidArgument)
+	}
+	if !domain.RecurringPlanAllowsRun(*plan, in.RecurringScheduledFor) {
+		return 0, fmt.Errorf("%w: plan ended", domain.ErrInvalidArgument)
+	}
+	if reason := domain.RecurringMaxPriceBlocks(last, cost.SlippageRate, cost.FeeRate, plan.MaxPrice); reason != "" {
+		return 0, fmt.Errorf("%w: %s", domain.ErrInvalidArgument, reason)
+	}
+	spend, reason := domain.RecurringSpendAmount(*plan)
+	if reason != "" {
+		return 0, fmt.Errorf("%w: %s", domain.ErrInvalidArgument, reason)
+	}
+	unit := domain.BuyUnitCost(slipped, cost.FeeRate)
+	if unit <= 0 {
+		return 0, fmt.Errorf("%w: market price unavailable", domain.ErrInvalidArgument)
+	}
+	qty := in.Quantity
+	debit := domain.BuyCashDebit(qty, slipped, cost.FeeRate)
+	if debit > spend+1e-9 {
+		qty = spend / unit
+		debit = domain.BuyCashDebit(qty, slipped, cost.FeeRate)
+	}
+	if qty < domain.MinTradeQuantity || debit+1e-9 < domain.MinRecurringBuyAmount && plan.Budget > 0 && spend < domain.MinRecurringBuyAmount {
+		return 0, fmt.Errorf("%w: budget exhausted", domain.ErrInvalidArgument)
+	}
+	if qty < domain.MinTradeQuantity {
+		return 0, fmt.Errorf("%w: buy quantity too small for amount", domain.ErrInvalidArgument)
+	}
+	return qty, nil
 }
 
 // ListTrades returns trade history.

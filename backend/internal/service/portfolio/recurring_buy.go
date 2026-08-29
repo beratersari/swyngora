@@ -184,6 +184,8 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	if id == "" {
 		return nil, fmt.Errorf("%w: plan id is required", domain.ErrInvalidArgument)
 	}
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	cur, err := s.store.GetRecurringBuyPlan(ctx, clientID, id)
 	if err != nil {
 		return nil, err
@@ -356,6 +358,8 @@ func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, s
 		return nil, err
 	}
 	clientID = p.BookID()
+	unlock := s.lockClient(clientID)
+	defer unlock()
 	plan, err := s.store.GetRecurringBuyPlan(ctx, clientID, id)
 	if err != nil {
 		return nil, err
@@ -489,7 +493,7 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 		final.TradeID = tr.ID
 		final.Price = tr.Price
 		final.Quantity = tr.Quantity
-		final.Amount = tr.Notional
+		final.Amount = tr.Notional + tr.Fee
 	} else {
 		final.Status = domain.RecurringBuyRunFailed
 		final.FailReason = failReason
@@ -553,6 +557,7 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 		ClientID: book.ClientID, PortfolioID: book.ID,
 		Exchange: string(plan.Exchange), Symbol: plan.Symbol,
 		Side: "buy", Quantity: qty, MarkPrice: price,
+		RecurringPlanID: plan.ID, RecurringScheduledFor: scheduledFor,
 	})
 	if err != nil {
 		msg := err.Error()

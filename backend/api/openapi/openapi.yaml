@@ -4648,7 +4648,7 @@ paths:
                 budget:
                   type: number
                   minimum: 0
-                  description: Total cash cap across succeeded runs. 0 = no cap. Last buy may spend leftover.
+                  description: Total cash cap across succeeded runs (slipped fill + taker fee). 0 = no cap. Last buy may spend leftover.
                   example: 10000
                 endDate:
                   type: string

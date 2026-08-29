@@ -311,8 +311,15 @@ func RecurringRemainingBudget(p RecurringBuyPlan) float64 {
 	return rem
 }
 
-// RecurringSpendAmount is cash to spend this run (last period may be a partial leftover).
-// Empty reason means ok; spend is 0 when the budget cannot cover a minimum buy.
+// RecurringCashOut is the wallet debit for a buy: slipped fill × qty × (1 + fee).
+func RecurringCashOut(last, slipRate, feeRate, qty float64) (fill, unit, debit float64) {
+	fill, unit = RecurringEffectivePrice(last, slipRate, feeRate)
+	debit = BuyCashDebit(qty, fill, feeRate)
+	return fill, unit, debit
+}
+
+// RecurringSpendAmount is cash to spend this run including fee and slippage
+// (last period may be a partial leftover). Empty reason means ok.
 func RecurringSpendAmount(p RecurringBuyPlan) (spend float64, reason string) {
 	spend = p.Amount
 	if p.Budget <= 0 {
