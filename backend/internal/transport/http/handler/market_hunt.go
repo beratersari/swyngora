@@ -302,9 +302,16 @@ type huntHeatmapResponse struct {
 type huntHeatmapReviewHorizonDTO struct {
 	Horizon            string  `json:"horizon"`
 	Signals            int     `json:"signals"`
+	Validated          int     `json:"validated"`
+	Missing            int     `json:"missing"`
+	PriceReady         int     `json:"priceReady"`
+	PriceMissing       int     `json:"priceMissing"`
+	LiqReady           int     `json:"liqReady"`
+	LiqMissing         int     `json:"liqMissing"`
+	Pending            int     `json:"pending"`
+	Coverage           float64 `json:"coverage"`
 	Hits               int     `json:"hits"`
 	FalseSignals       int     `json:"falseSignals"`
-	Pending            int     `json:"pending"`
 	HitRate            float64 `json:"hitRate"`
 	AvgTimeToHitSec    float64 `json:"avgTimeToHitSec"`
 	MedianTimeToHitSec float64 `json:"medianTimeToHitSec"`
@@ -357,10 +364,13 @@ func huntReviewVenueToDTO(v domain.HuntHeatmapReviewVenue) huntHeatmapReviewVenu
 	hs := make([]huntHeatmapReviewHorizonDTO, 0, len(v.Horizons))
 	for _, h := range v.Horizons {
 		hs = append(hs, huntHeatmapReviewHorizonDTO{
-			Horizon: h.Horizon, Signals: h.Signals, Hits: h.Hits, FalseSignals: h.FalseSignals,
-			Pending: h.Pending, HitRate: h.HitRate, AvgTimeToHitSec: h.AvgTimeToHitSec,
-			MedianTimeToHitSec: h.MedianTimeToHitSec, LiqIncreased: h.LiqIncreased,
-			LiqIncreaseRate: h.LiqIncreaseRate, AvgLiqBefore: h.AvgLiqBefore, AvgLiqAfter: h.AvgLiqAfter,
+			Horizon: h.Horizon, Signals: h.Signals, Validated: h.Validated, Missing: h.Missing,
+			PriceReady: h.PriceReady, PriceMissing: h.PriceMissing, LiqReady: h.LiqReady,
+			LiqMissing: h.LiqMissing, Pending: h.Pending, Coverage: h.Coverage,
+			Hits: h.Hits, FalseSignals: h.FalseSignals, HitRate: h.HitRate,
+			AvgTimeToHitSec: h.AvgTimeToHitSec, MedianTimeToHitSec: h.MedianTimeToHitSec,
+			LiqIncreased: h.LiqIncreased, LiqIncreaseRate: h.LiqIncreaseRate,
+			AvgLiqBefore: h.AvgLiqBefore, AvgLiqAfter: h.AvgLiqAfter,
 		})
 	}
 	return huntHeatmapReviewVenueDTO{Exchange: v.Exchange, Horizons: hs}

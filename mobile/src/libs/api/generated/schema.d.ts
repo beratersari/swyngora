@@ -3194,9 +3194,16 @@ export interface components {
             /** @enum {string} */
             horizon?: "1h" | "4h" | "12h";
             signals?: number;
+            validated?: number;
+            missing?: number;
+            priceReady?: number;
+            priceMissing?: number;
+            liqReady?: number;
+            liqMissing?: number;
+            pending?: number;
+            coverage?: number;
             hits?: number;
             falseSignals?: number;
-            pending?: number;
             hitRate?: number;
             avgTimeToHitSec?: number;
             medianTimeToHitSec?: number;

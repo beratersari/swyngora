@@ -41,10 +41,10 @@ func TestReviewHuntHeatmap_HitMissAndLiqIncrease(t *testing.T) {
 	prices = append(prices, HuntHeatmapPricePoint{
 		Time: hitAt, Price: up, High: up + 50, Low: up - 50,
 	})
-	liqs := []LiquidationEvent{{
+	liqs := append(reviewCoverLiqs(cols, to), LiquidationEvent{
 		Exchange: ExchangeBinance, Side: LiquidationSideShort,
 		Time: t0.Add(50 * time.Minute), Price: up, Notional: 200_000,
-	}}
+	})
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{{
@@ -52,8 +52,11 @@ func TestReviewHuntHeatmap_HitMissAndLiqIncrease(t *testing.T) {
 		}},
 	})
 	h1 := horizonByID(got.Review.Binance.Horizons, "1h")
-	if h1.Signals == 0 || h1.Hits == 0 {
-		t.Fatalf("expected hits %+v review=%+v", h1, got.Review.Binance)
+	if h1.Validated == 0 || h1.Hits == 0 {
+		t.Fatalf("expected validated hits %+v review=%+v", h1, got.Review.Binance)
+	}
+	if h1.HitRate != float64(h1.Hits)/float64(h1.Validated) {
+		t.Fatalf("hit rate should use validated only %+v", h1)
 	}
 	if h1.HitRate <= 0 || h1.AvgTimeToHitSec <= 0 || h1.AvgTimeToHitSec > 3600 {
 		t.Fatalf("time/rate %+v", h1)
@@ -82,15 +85,18 @@ func TestReviewHuntHeatmap_FalseSignalWhenPriceNeverReaches(t *testing.T) {
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{{
-			Exchange: ExchangeBinance, Prices: prices, OI: oi,
+			Exchange: ExchangeBinance, Prices: prices, OI: oi, Liquidations: reviewCoverLiqs(cols, to),
 		}},
 	})
 	h1 := horizonByID(got.Review.Binance.Horizons, "1h")
-	if h1.Signals == 0 || h1.FalseSignals == 0 {
-		t.Fatalf("expected false signals %+v", h1)
+	if h1.Validated == 0 || h1.FalseSignals == 0 {
+		t.Fatalf("expected validated false signals %+v", h1)
 	}
 	if h1.Hits != 0 || h1.HitRate != 0 {
 		t.Fatalf("unexpected hits %+v", h1)
+	}
+	if h1.Signals != h1.Validated+h1.Missing {
+		t.Fatalf("signals should split validated+missing %+v", h1)
 	}
 }
 
@@ -115,8 +121,8 @@ func TestReviewHuntHeatmap_CombinedUsesEitherVenuePath(t *testing.T) {
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{
-			{Exchange: ExchangeBinance, Prices: binP, OI: oi},
-			{Exchange: ExchangeBybit, Prices: bybP, OI: oi},
+			{Exchange: ExchangeBinance, Prices: binP, OI: oi, Liquidations: reviewCoverLiqs(cols, to)},
+			{Exchange: ExchangeBybit, Prices: bybP, OI: oi, Liquidations: reviewCoverLiqs(cols, to)},
 		},
 	})
 	comb := horizonByID(got.Review.Combined.Horizons, "1h")
@@ -140,7 +146,7 @@ func TestReviewHuntHeatmap_RecentColumnsPending(t *testing.T) {
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{{
-			Exchange: ExchangeBinance, Prices: prices, OI: oi,
+			Exchange: ExchangeBinance, Prices: prices, OI: oi, Liquidations: reviewCoverLiqs(cols, to),
 		}},
 	})
 	h12 := horizonByID(got.Review.Binance.Horizons, "12h")
@@ -150,6 +156,74 @@ func TestReviewHuntHeatmap_RecentColumnsPending(t *testing.T) {
 	h1 := horizonByID(got.Review.Binance.Horizons, "1h")
 	if h1.Pending == 0 {
 		t.Fatalf("1h horizon should leave the last hour pending %+v", h1)
+	}
+}
+
+func TestReviewHuntHeatmap_MissingLiqIsNotValidated(t *testing.T) {
+	spec, _ := ParseHuntHeatmapRange("24h")
+	to := time.Date(2026, 8, 29, 18, 0, 0, 0, time.UTC)
+	cols := HuntHeatmapColumns(spec, to)
+	mid := 100_000.0
+	var prices []HuntHeatmapPricePoint
+	var oi []FuturesSnapshot
+	for _, ts := range cols {
+		prices = append(prices, HuntHeatmapPricePoint{Time: ts, Price: mid, High: mid, Low: mid})
+		oi = append(oi, FuturesSnapshot{SampledAt: ts, Value: 8_000_000})
+	}
+	got := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "BTCUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{{
+			Exchange: ExchangeBinance, Prices: prices, OI: oi,
+		}},
+	})
+	h1 := horizonByID(got.Review.Binance.Horizons, "1h")
+	if h1.Signals == 0 || h1.LiqMissing == 0 {
+		t.Fatalf("expected liq gaps %+v", h1)
+	}
+	if h1.Validated != 0 || h1.Hits != 0 || h1.FalseSignals != 0 {
+		t.Fatalf("unvalidated must not score hit rate %+v", h1)
+	}
+	if h1.HitRate != 0 || h1.LiqIncreaseRate != 0 {
+		t.Fatalf("rates must stay 0 without validated rows %+v", h1)
+	}
+	if h1.Missing != h1.Signals {
+		t.Fatalf("all signals should be missing %+v", h1)
+	}
+}
+
+func TestReviewHuntHeatmap_MissingPriceIsNotValidated(t *testing.T) {
+	spec, _ := ParseHuntHeatmapRange("24h")
+	to := time.Date(2026, 8, 29, 18, 0, 0, 0, time.UTC)
+	cols := HuntHeatmapColumns(spec, to)
+	t0 := cols[0]
+	mid := 100_000.0
+	// Only the signal column has a print — no forward path.
+	got := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "BTCUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{{
+			Exchange:     ExchangeBinance,
+			Prices:       []HuntHeatmapPricePoint{{Time: t0, Price: mid, High: mid, Low: mid}},
+			OI:           []FuturesSnapshot{{SampledAt: t0, Value: 8_000_000}},
+			Liquidations: reviewCoverLiqs(cols, to),
+		}},
+	})
+	h1 := horizonByID(got.Review.Binance.Horizons, "1h")
+	if h1.Signals == 0 || h1.PriceMissing == 0 {
+		t.Fatalf("expected price gaps %+v", h1)
+	}
+	if h1.Validated != 0 || h1.HitRate != 0 {
+		t.Fatalf("missing price must not enter hit rate %+v", h1)
+	}
+}
+
+func reviewCoverLiqs(cols []time.Time, to time.Time) []LiquidationEvent {
+	start := to.Add(-36 * time.Hour)
+	if len(cols) > 0 {
+		start = cols[0].Add(-12 * time.Hour)
+	}
+	return []LiquidationEvent{
+		{Time: start, Price: 1, Notional: 1, Side: LiquidationSideLong},
+		{Time: to, Price: 1, Notional: 1, Side: LiquidationSideLong},
 	}
 }
 

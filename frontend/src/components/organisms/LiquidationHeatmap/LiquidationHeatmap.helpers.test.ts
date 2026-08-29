@@ -83,7 +83,7 @@ const sample: LiquidationHeatmapData = {
     hotFrac: 0.6,
     binance: {
       exchange: 'binance',
-      horizons: [{ horizon: '1h', signals: 4, hits: 2, falseSignals: 2, hitRate: 0.5 }],
+      horizons: [{ horizon: '1h', signals: 6, validated: 4, missing: 2, hits: 2, falseSignals: 2, hitRate: 0.5 }],
     },
     bybit: { exchange: 'bybit', horizons: [] },
     combined: {

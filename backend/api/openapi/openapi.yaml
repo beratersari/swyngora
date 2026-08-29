@@ -7057,14 +7057,21 @@ components:
       properties:
         horizon: { type: string, enum: [1h, 4h, 12h] }
         signals: { type: integer }
-        hits: { type: integer }
-        falseSignals: { type: integer }
-        pending: { type: integer, description: Columns without a full look-ahead or a venue-local forward path }
-        hitRate: { type: number }
+        validated: { type: integer, description: Signals with enough later price path and liquidation history }
+        missing: { type: integer, description: Signals that cannot be scored (clock, price, or liquidation gap) }
+        priceReady: { type: integer }
+        priceMissing: { type: integer }
+        liqReady: { type: integer }
+        liqMissing: { type: integer }
+        pending: { type: integer, description: Clock has not reached the end of the look-ahead yet }
+        coverage: { type: number, description: validated / signals }
+        hits: { type: integer, description: Among validated only }
+        falseSignals: { type: integer, description: Among validated only }
+        hitRate: { type: number, description: hits / validated }
         avgTimeToHitSec: { type: number }
         medianTimeToHitSec: { type: number }
-        liqIncreased: { type: integer }
-        liqIncreaseRate: { type: number, description: Share of hits where zone liquidation notional rose vs the prior window }
+        liqIncreased: { type: integer, description: Validated hits where zone liquidation notional rose }
+        liqIncreaseRate: { type: number, description: liqIncreased / validated hits }
         avgLiqBefore: { type: number }
         avgLiqAfter: { type: number }
     LiquidationHuntHeatmapReviewVenue:

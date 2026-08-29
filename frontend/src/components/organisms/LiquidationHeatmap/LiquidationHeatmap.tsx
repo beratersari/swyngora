@@ -230,12 +230,15 @@ export function LiquidationHeatmap({
               <tr>
                 <th>{t('liqHeatmap.review.horizon')}</th>
                 <th>{t('liqHeatmap.review.signals')}</th>
+                <th>{t('liqHeatmap.review.validated')}</th>
+                <th>{t('liqHeatmap.review.missing')}</th>
+                <th>{t('liqHeatmap.review.priceMissing')}</th>
+                <th>{t('liqHeatmap.review.liqMissing')}</th>
                 <th>{t('liqHeatmap.review.hits')}</th>
                 <th>{t('liqHeatmap.review.falseSignals')}</th>
                 <th>{t('liqHeatmap.review.hitRate')}</th>
                 <th>{t('liqHeatmap.review.avgTime')}</th>
                 <th>{t('liqHeatmap.review.liqRose')}</th>
-                <th>{t('liqHeatmap.review.pending')}</th>
               </tr>
             </thead>
             <tbody>
@@ -243,16 +246,19 @@ export function LiquidationHeatmap({
                 <tr key={row.horizon ?? 'h'}>
                   <td>{row.horizon ?? '—'}</td>
                   <td>{row.signals ?? 0}</td>
+                  <td>{row.validated ?? 0}</td>
+                  <td>{row.missing ?? 0}</td>
+                  <td>{row.priceMissing ?? 0}</td>
+                  <td>{row.liqMissing ?? 0}</td>
                   <td>{row.hits ?? 0}</td>
                   <td>{row.falseSignals ?? 0}</td>
-                  <td>{formatHitRate(row.hitRate)}</td>
+                  <td>{row.validated ? formatHitRate(row.hitRate) : '—'}</td>
                   <td>{formatLookahead(row.avgTimeToHitSec)}</td>
                   <td>
                     {row.hits
                       ? `${row.liqIncreased ?? 0}/${row.hits} (${formatHitRate(row.liqIncreaseRate)})`
                       : '—'}
                   </td>
-                  <td>{row.pending ?? 0}</td>
                 </tr>
               ))}
             </tbody>

@@ -22,12 +22,21 @@ var HuntHeatmapReviewHorizons = []struct {
 }
 
 // HuntHeatmapReviewHorizon is hit / miss stats for one look-ahead.
+// HitRate and LiqIncreaseRate use only Validated signals (enough price
+// path and liquidation history). Missing is everything else.
 type HuntHeatmapReviewHorizon struct {
 	Horizon            string  `json:"horizon"`
 	Signals            int     `json:"signals"`
+	Validated          int     `json:"validated"`
+	Missing            int     `json:"missing"`
+	PriceReady         int     `json:"priceReady"`
+	PriceMissing       int     `json:"priceMissing"`
+	LiqReady           int     `json:"liqReady"`
+	LiqMissing         int     `json:"liqMissing"`
+	Pending            int     `json:"pending"`
+	Coverage           float64 `json:"coverage"`
 	Hits               int     `json:"hits"`
 	FalseSignals       int     `json:"falseSignals"`
-	Pending            int     `json:"pending"`
 	HitRate            float64 `json:"hitRate"`
 	AvgTimeToHitSec    float64 `json:"avgTimeToHitSec"`
 	MedianTimeToHitSec float64 `json:"medianTimeToHitSec"`
@@ -54,7 +63,7 @@ type HuntHeatmapReview struct {
 	Note     string                 `json:"note,omitempty"`
 }
 
-const huntHeatmapReviewNote = "Hot zones are contiguous bins at or above 60% of that column's peak, excluding the bin that already holds that venue's mark. A hit means that venue's own later candles traded through the zone within 1h / 4h / 12h. Missing venue prices are not filled from the other exchange; columns without a forward path are pending, not false. Combined uses the summed grid and counts a hit if either venue's own price reached the zone. Liquidation increase compares prints in the zone after the signal vs the same-length window before. Informational only — not financial advice."
+const huntHeatmapReviewNote = "Hot zones are contiguous bins at or above 60% of that column's peak, excluding the bin that already holds that venue's mark. A signal is validated only when that venue's own later candles span the 1h / 4h / 12h window and liquidation history covers the same-length windows before and after. Hit rate and liquidation-increase rate use only validated signals. Missing price or liquidation data is counted separately and is not filled from the other exchange. Combined uses the summed grid and counts a hit if either venue's own price reached the zone. Informational only — not financial advice."
 
 func emptyHuntHeatmapReview() HuntHeatmapReview {
 	return HuntHeatmapReview{
@@ -110,6 +119,10 @@ func reviewHuntVenue(ex string, grid HuntHeatmapGrid, rep HuntHeatmapReport, now
 	if stale < 20*time.Minute {
 		stale = 20 * time.Minute
 	}
+	step := time.Duration(rep.StepSec) * time.Second
+	if step <= 0 {
+		step = 30 * time.Minute
+	}
 	for hi, spec := range HuntHeatmapReviewHorizons {
 		acc := huntReviewAcc{horizon: spec.ID}
 		var liqBefore, liqAfter float64
@@ -125,16 +138,33 @@ func reviewHuntVenue(ex string, grid HuntHeatmapGrid, rep HuntHeatmapReport, now
 				continue
 			}
 			until := t.Add(spec.Dur)
-			fullLookahead := !now.Before(until)
+			from := t.Add(-spec.Dur)
+			clockOK := !now.Before(until)
+			priceOK := clockOK && huntPricePathCovers(paths, t, until, step)
+			liqOK := clockOK && huntLiqFeedCovers(liqs, from, until)
 			fwd := huntForwardBars(paths, t, until)
-			if !fullLookahead || len(fwd) == 0 {
-				acc.pending += len(zones)
-				continue
-			}
 			for _, z := range zones {
 				acc.signals++
+				if !clockOK {
+					acc.pending++
+				}
+				if priceOK {
+					acc.priceReady++
+				} else {
+					acc.priceMissing++
+				}
+				if liqOK {
+					acc.liqReady++
+				} else {
+					acc.liqMissing++
+				}
+				if !priceOK || !liqOK {
+					acc.missing++
+					continue
+				}
+				acc.validated++
 				hitAt, ok := huntFirstTouch(fwd, z.lo, z.hi)
-				before := huntLiqInZone(liqs, t.Add(-spec.Dur), t, z.lo, z.hi)
+				before := huntLiqInZone(liqs, from, t, z.lo, z.hi)
 				after := huntLiqInZone(liqs, t, until, z.lo, z.hi)
 				liqBefore += before
 				liqAfter += after
@@ -160,25 +190,40 @@ func reviewHuntVenue(ex string, grid HuntHeatmapGrid, rep HuntHeatmapReport, now
 }
 
 type huntReviewAcc struct {
-	horizon string
-	signals int
-	hits    int
-	misses  int
-	pending int
-	liqUp   int
-	hitSecs []float64
+	horizon      string
+	signals      int
+	validated    int
+	missing      int
+	priceReady   int
+	priceMissing int
+	liqReady     int
+	liqMissing   int
+	pending      int
+	hits         int
+	misses       int
+	liqUp        int
+	hitSecs      []float64
 }
 
 func (a huntReviewAcc) finish(liqBefore, liqAfter float64, liqN int) HuntHeatmapReviewHorizon {
 	h := HuntHeatmapReviewHorizon{
 		Horizon:      a.horizon,
 		Signals:      a.signals,
+		Validated:    a.validated,
+		Missing:      a.missing,
+		PriceReady:   a.priceReady,
+		PriceMissing: a.priceMissing,
+		LiqReady:     a.liqReady,
+		LiqMissing:   a.liqMissing,
+		Pending:      a.pending,
 		Hits:         a.hits,
 		FalseSignals: a.misses,
-		Pending:      a.pending,
 	}
 	if a.signals > 0 {
-		h.HitRate = float64(a.hits) / float64(a.signals)
+		h.Coverage = float64(a.validated) / float64(a.signals)
+	}
+	if a.validated > 0 {
+		h.HitRate = float64(a.hits) / float64(a.validated)
 	}
 	if len(a.hitSecs) > 0 {
 		sum := 0.0
@@ -267,6 +312,49 @@ func huntMarksAt(paths [][]HuntHeatmapPricePoint, t time.Time, stale time.Durati
 		}
 	}
 	return out
+}
+
+func huntPricePathCovers(paths [][]HuntHeatmapPricePoint, after, until time.Time, step time.Duration) bool {
+	fwd := huntForwardBars(paths, after, until)
+	if len(fwd) == 0 {
+		return false
+	}
+	var last time.Time
+	for _, p := range fwd {
+		if p.Time.After(last) {
+			last = p.Time
+		}
+	}
+	slack := step
+	if slack < 15*time.Minute {
+		slack = 15 * time.Minute
+	}
+	return !last.Before(until.Add(-slack))
+}
+
+// huntLiqFeedCovers is true when liquidation history spans [from, to], so a
+// quiet window is a real zero rather than a missing feed.
+func huntLiqFeedCovers(groups [][]LiquidationEvent, from, to time.Time) bool {
+	var minT, maxT time.Time
+	any := false
+	for _, ev := range groups {
+		for _, e := range ev {
+			if e.Time.IsZero() {
+				continue
+			}
+			if !any || e.Time.Before(minT) {
+				minT = e.Time
+			}
+			if !any || e.Time.After(maxT) {
+				maxT = e.Time
+			}
+			any = true
+		}
+	}
+	if !any {
+		return false
+	}
+	return !minT.After(from) && !maxT.Before(to)
 }
 
 func huntForwardBars(paths [][]HuntHeatmapPricePoint, after, until time.Time) []HuntHeatmapPricePoint {

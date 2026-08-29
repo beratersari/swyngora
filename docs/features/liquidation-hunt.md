@@ -104,10 +104,14 @@ against **later candles from the same venue**:
 |---------|----------|
 | `1h` / `4h` / `12h` | Did that venue's own price trade through the zone? How long did it take? Did observed liquidations in that zone rise vs the same-length window before the signal? |
 
-- **Hit** — later venue-local candles traded through the zone.
-- **False signal** — full look-ahead exists and price never reached the zone.
-- **Pending** — not enough time yet, or that venue has no forward path (not
-  filled from the other exchange).
+- **Validated** — that venue's later candles span the horizon **and**
+  liquidation history covers the same-length windows before and after.
+- **Missing** — too recent (`pending`), no venue-local forward price path
+  (`priceMissing`), or no liquidation history covering the window
+  (`liqMissing`). Not filled from the other exchange.
+- **Hit / false / hit rate** — scored only on **validated** signals.
+- **Liqs rose** — among validated hits, whether observed notional in the zone
+  rose vs the prior window.
 - **Combined** uses the summed grid and counts a hit if **either** venue's own
   price reached the zone.
 
