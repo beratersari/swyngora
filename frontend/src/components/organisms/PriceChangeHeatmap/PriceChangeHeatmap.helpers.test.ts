@@ -23,8 +23,9 @@ describe('PriceChangeHeatmap helpers', () => {
   });
 
   it('strips quote suffix for labels', () => {
-    expect(baseSymbol('BTCUSDT')).toBe('BTC');
-    expect(baseSymbol('ETH-USD')).toBe('ETH');
+    expect(baseSymbol('BTCUSDT', 'BTC')).toBe('BTC');
+    expect(baseSymbol('ETH-USD', 'ETH')).toBe('ETH');
+    expect(baseSymbol('BTCUSDT')).toBe('BTCUSDT');
   });
 
   it('uses a discrete CoinMarketCap-style scale', () => {

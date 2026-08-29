@@ -24,8 +24,10 @@ export function itemWeight(item: PriceChangeHeatmapItem, metric: HeatmapMetric):
   return Math.max(0, parseNum(item.quoteVolume));
 }
 
-export function baseSymbol(symbol: string): string {
-  return symbol.replace(/[-_]?(USDT|USDC|USD|BUSD|FDUSD)$/i, '') || symbol;
+export function baseSymbol(symbol: string, base?: string | null): string {
+  const fromApi = (base ?? '').trim();
+  if (fromApi) return fromApi;
+  return symbol;
 }
 
 export function tileDensity(w: number, h: number): TileDensity {
@@ -94,6 +96,7 @@ export function toHeatmapTiles(
     .filter((it) => it.symbol)
     .map((it) => ({
       symbol: it.symbol!,
+      base: it.base,
       exchange: it.exchange,
       lastPrice: it.lastPrice,
       quoteVolume: it.quoteVolume,

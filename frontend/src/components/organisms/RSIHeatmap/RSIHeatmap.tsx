@@ -50,8 +50,7 @@ export function RSIHeatmap({ data, isLoading, onOpen }: RSIHeatmapProps) {
 
   const onMove = useCallback(
     (clientX: number, clientY: number) => {
-      const el = frameRef.current;
-      if (!el) return;
+      const el = frameRef.current!;
       const r = el.getBoundingClientRect();
       const mx = clientX - r.left;
       const my = clientY - r.top;
@@ -137,7 +136,7 @@ export function RSIHeatmap({ data, isLoading, onOpen }: RSIHeatmapProps) {
           ) : null}
           {plotted.map((row) => {
             const cx = plotX(row.rank ?? 0, plotted.length, size.w);
-            const cy = plotY(row.rsi ?? 0, size.h);
+            const cy = plotY(row.rsi as number, size.h);
             const label = rowLabel(row);
             const r = hover?.row.symbol === row.symbol ? RSI_DOT_RADIUS + 1.5 : RSI_DOT_RADIUS;
             return (
@@ -151,7 +150,7 @@ export function RSIHeatmap({ data, isLoading, onOpen }: RSIHeatmapProps) {
                   cx={cx}
                   cy={cy}
                   r={r}
-                  fill={rsiFill(row.rsi)}
+                  fill={rsiFill(row.zone)}
                   stroke={theme.semantic.bg.canvas}
                   strokeWidth={1}
                 />

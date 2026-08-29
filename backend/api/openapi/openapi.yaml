@@ -150,6 +150,14 @@ paths:
                   default:
                     type: string
                     example: binance
+                  venueQuotes:
+                    type: object
+                    additionalProperties: { type: string }
+                    description: Native quote of last/open/high/low/quoteVolume per venue
+                  marketCapQuotes:
+                    type: object
+                    additionalProperties: { type: string }
+                    description: Currency of market-cap fields per venue
 
   /api/v1/market/fx:
     get:
@@ -2610,6 +2618,10 @@ paths:
           in: query
           description: Comma-separated EMA periods
           schema: { type: string, default: "12,26", example: "12,26" }
+        - name: endTime
+          in: query
+          description: Exclusive end of the candle window (RFC3339). Used to page older EMA/RSI bars.
+          schema: { type: string, format: date-time }
       responses:
         '200':
           description: Indicator series
@@ -2629,6 +2641,7 @@ paths:
                     type: object
                     properties:
                       rsi: { type: number, nullable: true }
+                      zone: { type: string, enum: [oversold, neutral, overbought, ''] }
                       ema:
                         type: object
                         additionalProperties: { type: number }
@@ -2845,8 +2858,10 @@ paths:
       description: |
         Wilder RSI(14) for the top listed pairs on one venue, ranked left to
         right (market cap by default). Stables (USDC, USDT, …) are omitted.
-        One interval (default 1h). Seeded from ~300 closed candles so the
-        number tracks TradingView-style charts. Cached 60s. Informational only.
+        One interval (default 1h). Seeded from ~120 closed candles (the
+        unfinished venue bar is dropped) so the number tracks TradingView-style
+        charts. Cached 60s; default Binance 1h map is warmed in the background.
+        Informational only.
       operationId: getRSIHeatmap
       tags: [Market]
       parameters:
@@ -5734,6 +5749,10 @@ paths:
       responses:
         '200':
           description: Result list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerResultList'
   /api/v1/scanner/backtests:
     post:
       summary: Start a historical scanner backtest
@@ -7274,6 +7293,12 @@ components:
         sharePct:
           type: number
           description: Percent of supply held by this address
+        resolvedBalance:
+          type: number
+          description: Wallet size after dust-vs-share×circulating resolution
+        usdValue:
+          type: number
+          description: Estimated USD value (share × circulating × USD price)
     AssetHolders:
       type: object
       properties:
@@ -7435,6 +7460,41 @@ components:
         count: { type: integer }
         accepted: { type: integer }
         note: { type: string }
+    ScannerSetup:
+      type: object
+      properties:
+        key: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        interval: { type: string }
+        factors:
+          type: array
+          items: { type: string }
+        score: { type: integer }
+        grade: { type: string, enum: [A, B, C] }
+        sameBar: { type: boolean }
+        latestAt: { type: string, format: date-time }
+        summaries:
+          type: array
+          items: { type: string }
+    ScannerResultList:
+      type: object
+      properties:
+        clientId: { type: string }
+        results:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        count: { type: integer }
+        total: { type: integer }
+        limit: { type: integer }
+        offset: { type: integer }
+        setups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScannerSetup'
+        hits24h: { type: integer }
     PortfolioSummary:
       type: object
       properties:
@@ -8223,6 +8283,8 @@ components:
         exchange: { type: string }
         interval: { type: string }
         bestReturnPct: { type: number }
+        bestVolumeRatio: { type: number }
+        bestOpenTime: { type: string, format: date-time }
         events:
           type: array
           items:
@@ -8265,6 +8327,18 @@ components:
           example: { USD: 1, USDT: 1, TRY: 40.5, EUR: 0.92 }
         stale:
           type: boolean
+        venueQuotes:
+          type: object
+          additionalProperties: { type: string }
+          description: Native quote of last/open/high/low/quoteVolume per venue
+        marketCapQuotes:
+          type: object
+          additionalProperties: { type: string }
+          description: Currency of market-cap fields per venue
+        aliases:
+          type: object
+          additionalProperties: { type: string }
+          description: Stablecoin aliases for display FX (USDT→USD)
         note:
           type: string
 

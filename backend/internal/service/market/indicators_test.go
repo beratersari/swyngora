@@ -31,7 +31,7 @@ func (m *indicatorMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([
 
 func TestGetIndicators_RSIAndEMA(t *testing.T) {
 	svc := New(&indicatorMarket{}, &fakeSupply{})
-	ser, err := svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 20, 14, []int{12, 26})
+	ser, err := svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 20, 14, []int{12, 26}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +46,18 @@ func TestGetIndicators_RSIAndEMA(t *testing.T) {
 	}
 	if ser.Symbol != "BTCUSDT" || ser.Exchange != domain.ExchangeBinance {
 		t.Fatalf("%+v", ser)
+	}
+	if ser.LatestZone == "" {
+		t.Fatal("expected RSI zone from server")
+	}
+}
+
+func TestGetIndicators_EndTime(t *testing.T) {
+	svc := New(&indicatorMarket{}, &fakeSupply{})
+	end := time.Unix(1_700_000_000, 0).UTC().Add(10 * time.Hour)
+	ser, err := svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 10, 14, []int{12}, &end)
+	if err != nil || ser == nil || len(ser.Points) == 0 {
+		t.Fatalf("ser=%+v err=%v", ser, err)
 	}
 }
 
@@ -87,16 +99,16 @@ func TestGetIndicatorsBatch_RespectsCancel(t *testing.T) {
 
 func TestGetIndicators_Validation(t *testing.T) {
 	svc := New(&indicatorMarket{}, &fakeSupply{})
-	_, err := svc.GetIndicators(context.Background(), "binance", "", "1h", 10, 14, nil)
+	_, err := svc.GetIndicators(context.Background(), "binance", "", "1h", 10, 14, nil, nil)
 	if err == nil {
 		t.Fatal("empty symbol")
 	}
-	_, err = svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 10, 1, nil)
+	_, err = svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 10, 1, nil, nil)
 	if err == nil {
 		t.Fatal("bad rsi period")
 	}
 	// Out-of-range EMA periods fail loud (not silent default).
-	_, err = svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 10, 14, []int{1, 9999})
+	_, err = svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 10, 14, []int{1, 9999}, nil)
 	if err == nil {
 		t.Fatal("invalid ema periods must error")
 	}
@@ -128,7 +140,7 @@ func (m *badCloseMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]
 
 func TestGetIndicators_InvalidCloseErrors(t *testing.T) {
 	svc := New(&badCloseMarket{}, &fakeSupply{})
-	_, err := svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 20, 14, []int{12, 26})
+	_, err := svc.GetIndicators(context.Background(), "binance", "BTCUSDT", "1h", 20, 14, []int{12, 26}, nil)
 	if err == nil {
 		t.Fatal("expected error when candle close is unparseable (must not collapse gaps)")
 	}

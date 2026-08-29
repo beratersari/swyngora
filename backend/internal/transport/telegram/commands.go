@@ -526,7 +526,7 @@ func (r *Router) cmdRSI(ctx context.Context, args []string) string {
 		}
 		interval = a
 	}
-	ser, err := r.market.GetIndicators(ctx, exchange, symbol, interval, 60, 14, []int{12, 26})
+	ser, err := r.market.GetIndicators(ctx, exchange, symbol, interval, 60, 14, []int{12, 26}, nil)
 	if err != nil {
 		return friendlyErr(err)
 	}

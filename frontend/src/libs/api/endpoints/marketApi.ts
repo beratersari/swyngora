@@ -306,6 +306,7 @@ export const marketApi = baseApi.injectEndpoints({
         url: '/api/v1/market/rsi-heatmap',
         params: compactParams({ ...(arg ?? {}) }),
       }),
+      keepUnusedDataFor: 90,
     }),
 
     postIndicatorsBatch: build.mutation<
@@ -358,6 +359,7 @@ export const {
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,
+  useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,

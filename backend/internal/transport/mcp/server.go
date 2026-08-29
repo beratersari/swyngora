@@ -1490,7 +1490,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_fx_rates",
-		mcp.WithDescription("Spot FX rates (units per 1 USD) for converting BIST TRY, Nasdaq USD, and crypto USDT display values. USDT is treated as USD. Display only."),
+		mcp.WithDescription("Spot FX rates (units per 1 USD) plus venueQuotes, marketCapQuotes, and stable aliases for display conversion. USDT is treated as USD. Display only."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetFxRates(ctx)
 		if err != nil {
@@ -3422,7 +3422,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_scanner_results",
-		mcp.WithDescription("List saved scanner match history for a clientId (deduped by rule/symbol/bar)."),
+		mcp.WithDescription("List saved scanner match history for a clientId (deduped by rule/symbol/bar), plus confluence setups (grade A/B) and hits24h."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
 		mcp.WithNumber("offset", mcp.Description("Offset default 0")),

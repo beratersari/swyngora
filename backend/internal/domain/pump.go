@@ -44,6 +44,22 @@ type PumpEvent struct {
 	WindowBars  int
 }
 
+// BestPumpEvent returns the event with the largest |returnPct|, or false if empty.
+func BestPumpEvent(events []PumpEvent) (PumpEvent, bool) {
+	if len(events) == 0 {
+		return PumpEvent{}, false
+	}
+	best := events[0]
+	bestAbs := math.Abs(best.ReturnPct)
+	for i := 1; i < len(events); i++ {
+		if a := math.Abs(events[i].ReturnPct); a > bestAbs {
+			best = events[i]
+			bestAbs = a
+		}
+	}
+	return best, true
+}
+
 // PumpDetectOptions configures DetectPumpEvents.
 type PumpDetectOptions struct {
 	// MinReturnPct is the absolute threshold in percent (e.g. 5 = ±5%). Required > 0.

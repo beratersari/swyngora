@@ -1,4 +1,5 @@
 import type { SpotListQuery, SpotSortField, SpotSortOrder, MarketExchange } from '@/libs/api';
+import { venueQuote } from './displayCurrency';
 
 export type MarketsUrlState = {
   exchange: MarketExchange;
@@ -14,7 +15,7 @@ export type MarketsUrlState = {
 export const DEFAULT_MARKETS_STATE: MarketsUrlState = {
   exchange: 'binance',
   q: '',
-  quote: 'USDT',
+  quote: '',
   tag: '',
   sort: 'quoteVolume',
   order: 'desc',
@@ -37,15 +38,12 @@ const SORTS = new Set<SpotSortField>([
   'tags',
 ]);
 
-/**
- * Primary quote asset for each venue's spot book.
- * Coinbase is USD-centric; Binance/Bybit are USDT-centric.
- */
-export function defaultQuoteForExchange(exchange: string): string {
-  const ex = exchange.toLowerCase();
-  if (ex === 'coinbase' || ex === 'nasdaq') return 'USD';
-  if (ex === 'bist') return 'TRY';
-  return 'USDT';
+/** Venue default quote. Prefer API `venueQuotes`; last-resort matches Go QuoteForVenue. */
+export function defaultQuoteForExchange(
+  exchange: string,
+  quotes?: Record<string, string> | null,
+): string {
+  return venueQuote(exchange, quotes);
 }
 
 function parseIntParam(raw: string | null, fallback: number, min: number, max: number): number {
@@ -56,7 +54,10 @@ function parseIntParam(raw: string | null, fallback: number, min: number, max: n
 }
 
 /** Parse /markets URL search params into state with defaults. */
-export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlState {
+export function parseMarketsSearchParams(
+  params: URLSearchParams,
+  venueQuotes?: Record<string, string> | null,
+): MarketsUrlState {
   const exchangeRaw = (params.get('exchange') ?? DEFAULT_MARKETS_STATE.exchange).toLowerCase();
   const exchange = (
     EXCHANGES.has(exchangeRaw) ? exchangeRaw : DEFAULT_MARKETS_STATE.exchange
@@ -74,7 +75,7 @@ export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlSta
   const quote =
     quoteParam !== null && quoteParam !== ''
       ? quoteParam
-      : defaultQuoteForExchange(exchange);
+      : defaultQuoteForExchange(exchange, venueQuotes);
 
   return {
     exchange,
@@ -89,12 +90,15 @@ export function parseMarketsSearchParams(params: URLSearchParams): MarketsUrlSta
 }
 
 /** Serialize state to URLSearchParams (omit defaults where sensible). */
-export function marketsStateToSearchParams(state: MarketsUrlState): URLSearchParams {
+export function marketsStateToSearchParams(
+  state: MarketsUrlState,
+  venueQuotes?: Record<string, string> | null,
+): URLSearchParams {
   const p = new URLSearchParams();
   if (state.exchange !== DEFAULT_MARKETS_STATE.exchange) p.set('exchange', state.exchange);
   if (state.q.trim()) p.set('q', state.q.trim());
   // Omit quote when it matches this exchange's primary default.
-  if (state.quote && state.quote !== defaultQuoteForExchange(state.exchange)) {
+  if (state.quote && state.quote !== defaultQuoteForExchange(state.exchange, venueQuotes)) {
     p.set('quote', state.quote);
   }
   if (state.tag.trim()) p.set('tag', state.tag.trim());

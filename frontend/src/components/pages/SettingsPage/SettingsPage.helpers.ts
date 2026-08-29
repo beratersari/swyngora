@@ -12,3 +12,14 @@ export function exportDownloadHref(downloadUrl?: string | null): string | null {
 export function currentClientId(): string {
   return getOrCreateClientId();
 }
+
+/** Trade keys may become the browser session. Read keys must not — they 403 every mutation. */
+export function createdKeySessionToken(
+  secret?: string | null,
+  permission?: string | null,
+): string | null {
+  const token = (secret ?? '').trim();
+  if (!token) return null;
+  if ((permission ?? '').trim().toLowerCase() !== 'trade') return null;
+  return token;
+}

@@ -13,7 +13,7 @@ export const RSI_HEAT_BANDS = [
   { upTo: 60, fill: '#F5B4B8' },
   { upTo: 70, fill: '#F07B84' },
   { upTo: 80, fill: '#EA3943' },
-  { upTo: Number.POSITIVE_INFINITY, fill: '#F6465D' },
+  { upTo: 100, fill: '#F6465D' },
 ] as const;
 
 export const RSI_PLOT_PAD = { left: 52, right: 72, top: 20, bottom: 44 };

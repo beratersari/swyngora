@@ -13,9 +13,12 @@ const (
 
 	RSIHeatmapDefaultLimit    = 100
 	RSIHeatmapMaxLimit        = 200
-	RSIHeatmapCandleLimit     = 300
+	// RSIHeatmapCandleLimit is closed bars for latest Wilder RSI only
+	// (~8× default period). This is a scatter seed, not a 300-bar TV chart.
+	RSIHeatmapCandleLimit     = 120
 	RSIHeatmapDefaultInterval = "1h"
 	RSIHeatmapCacheTTL        = time.Minute
+	RSIHeatmapBuildTimeout    = 45 * time.Second
 )
 
 // RSIHeatmapStableBases are quote-like tickers omitted from the map so
@@ -176,8 +179,38 @@ func ClampRSIHeatmapLimit(n int) int {
 	return n
 }
 
-// RSIHeatmapCacheKey is the TTL key for one scatter request.
-func RSIHeatmapCacheKey(ex Exchange, quote, sortBy, interval string, limit, period int) string {
+// RSIHeatmapCacheKey is the TTL key for one scatter (limit is not part of
+// the key — a larger cached map can serve a smaller Top-N).
+func RSIHeatmapCacheKey(ex Exchange, quote, sortBy, interval string, period int) string {
 	return strings.ToUpper(string(ex)) + "|" + strings.ToUpper(strings.TrimSpace(quote)) + "|" +
-		sortBy + "|" + interval + "|" + fmt.Sprintf("%d|%d", limit, period)
+		sortBy + "|" + interval + "|" + fmt.Sprintf("%d", period)
+}
+
+// RSIHeatmapFetchLimit is how many venue klines to pull for latest RSI.
+func RSIHeatmapFetchLimit(period int) int {
+	n := RSIHeatmapCandleLimit
+	if period+50 > n {
+		n = period + 50
+	}
+	return n
+}
+
+// ClipRSIHeatmap returns a copy with at most limit rows and fresh ranks/counts.
+func ClipRSIHeatmap(h *RSIHeatmap, limit int) *RSIHeatmap {
+	if h == nil {
+		return nil
+	}
+	limit = ClampRSIHeatmapLimit(limit)
+	cp := *h
+	n := len(h.Items)
+	if n > limit {
+		n = limit
+	}
+	if n > 0 {
+		cp.Items = append([]RSIHeatmapRow(nil), h.Items[:n]...)
+	} else {
+		cp.Items = nil
+	}
+	SummarizeRSIHeatmap(&cp)
+	return &cp
 }

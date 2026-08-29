@@ -62,6 +62,56 @@ func (routerHolders) GetHolders(_ context.Context, asset string) (*domain.AssetH
 	return &domain.AssetHolders{Asset: asset, HolderCount: 1, Source: "test", AsOf: time.Unix(0, 0).UTC()}, nil
 }
 
+type rsiRouterMarket struct{ routerMarket }
+
+func (rsiRouterMarket) GetCandles(_ context.Context, q domain.CandleQuery) ([]domain.Candle, error) {
+	n := q.Limit
+	if n < 30 {
+		n = 30
+	}
+	out := make([]domain.Candle, n)
+	for i := 0; i < n; i++ {
+		out[i] = domain.Candle{
+			OpenTime: time.Unix(int64(i)*3600, 0).UTC(),
+			Close:    "100",
+		}
+		if i > 0 {
+			out[i].Close = "101"
+		}
+	}
+	return out, nil
+}
+
+func (rsiRouterMarket) ListSpotMarkets(_ context.Context) ([]domain.SpotMarket, error) {
+	return []domain.SpotMarket{
+		{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "9", LastPrice: "100"},
+		{Symbol: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "8", LastPrice: "50"},
+	}, nil
+}
+
+func TestRSIHeatmap_HTTPIntegration(t *testing.T) {
+	svc := market.New(rsiRouterMarket{}, routerSupply{})
+	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/rsi-heatmap?interval=1h&limit=2&sort=quoteVolume", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := body["items"].([]any)
+	if body["exchange"] != "binance" || len(items) != 2 {
+		t.Fatalf("%s", rr.Body.String())
+	}
+	first, _ := items[0].(map[string]any)
+	if first["symbol"] == nil || first["rsi"] == nil {
+		t.Fatalf("row=%v", first)
+	}
+}
+
 func TestNewRouter_RoutesAndCORS(t *testing.T) {
 	svc := market.New(routerMarket{}, routerSupply{}).WithHolders(routerHolders{})
 	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
@@ -84,6 +134,10 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 			}
 			if m["base"] != "USD" {
 				t.Fatalf("fx=%v", m)
+			}
+			vq, _ := m["venueQuotes"].(map[string]any)
+			if vq["bist"] != "TRY" || vq["binance"] != "USDT" {
+				t.Fatalf("venueQuotes=%v", vq)
 			}
 		}},
 		{"/api/v1/market/intervals", http.StatusOK, func(t *testing.T, body []byte) {

@@ -215,13 +215,18 @@ func (h *MarketHandler) ScanPumpEvents(w http.ResponseWriter, r *http.Request) {
 	totalEvents := 0
 	for _, hhit := range res.Hits {
 		totalEvents += len(hhit.Events)
-		items = append(items, map[string]any{
-			"symbol":        hhit.Symbol,
-			"exchange":      string(hhit.Exchange),
-			"interval":      hhit.Interval,
-			"bestReturnPct": hhit.BestReturnPct,
-			"events":        pumpEventsDTO(hhit.Events),
-		})
+		item := map[string]any{
+			"symbol":          hhit.Symbol,
+			"exchange":        string(hhit.Exchange),
+			"interval":        hhit.Interval,
+			"bestReturnPct":   hhit.BestReturnPct,
+			"bestVolumeRatio": hhit.BestVolumeRatio,
+			"events":          pumpEventsDTO(hhit.Events),
+		}
+		if !hhit.BestOpenTime.IsZero() {
+			item["bestOpenTime"] = hhit.BestOpenTime.UTC().Format(time.RFC3339Nano)
+		}
+		items = append(items, item)
 	}
 	// Metadata uses service-resolved defaults (not raw query zeros/empties).
 	writeJSON(w, http.StatusOK, map[string]any{

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { SwingSetup } from '@/libs/utils';
+import type { ScannerSetup } from '@/libs/api';
 import { renderWithProviders } from '@/test/render';
 import { SignalsSetupGrid } from './SignalsSetupGrid';
 
-const setup: SwingSetup = {
+const setup: ScannerSetup = {
   key: 'binance|BTCUSDT|4h',
   exchange: 'binance',
   symbol: 'BTCUSDT',
@@ -16,7 +16,6 @@ const setup: SwingSetup = {
   sameBar: true,
   latestAt: '2026-08-01T08:00:00Z',
   summaries: ['RSI(14)=38.00 below 40'],
-  hits: [],
 };
 
 describe('SignalsSetupGrid', () => {

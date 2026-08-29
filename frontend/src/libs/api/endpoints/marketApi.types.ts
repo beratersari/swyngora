@@ -81,6 +81,7 @@ export type IndicatorsResponse = {
   emaPeriods?: number[];
   latest?: {
     rsi?: number | null;
+    zone?: 'oversold' | 'overbought' | 'neutral' | '';
     ema?: Record<string, number>;
   };
   points?: {
@@ -95,12 +96,17 @@ export type IndicatorsResponse = {
 export type ExchangesResponse = {
   exchanges: string[];
   default: string;
+  venueQuotes?: Record<string, string>;
+  marketCapQuotes?: Record<string, string>;
 };
 
 export type FxRatesResponse = {
   base?: string;
   asOf?: string;
   rates?: Record<string, number>;
+  venueQuotes?: Record<string, string>;
+  marketCapQuotes?: Record<string, string>;
+  aliases?: Record<string, string>;
   stale?: boolean;
   note?: string;
 };

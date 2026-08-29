@@ -24,7 +24,7 @@ import {
   useStartExportMutation,
 } from '@/libs/api';
 import { setBrowserApiToken } from '@/libs/utils';
-import { currentClientId, exportDownloadHref } from './SettingsPage.helpers';
+import { createdKeySessionToken, currentClientId, exportDownloadHref } from './SettingsPage.helpers';
 import { FormRow, PageStack, Section } from './SettingsPage.styles';
 
 export function SettingsPage() {
@@ -66,7 +66,8 @@ function KeysPane() {
         onFinish={async (v: { name: string; permission: 'read' | 'trade' }) => {
           const got = await create(v).unwrap();
           setSecret(got.secret ?? null);
-          if (got.secret) setBrowserApiToken(got.secret);
+          const session = createdKeySessionToken(got.secret, got.permission ?? v.permission);
+          if (session) setBrowserApiToken(session);
           void message.success(t('settings:keys.created'));
         }}
       >

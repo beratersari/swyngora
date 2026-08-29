@@ -8,7 +8,7 @@ import {
   type DeskTapeSource,
 } from '@/components/organisms/DeskPriceTape';
 import { toTickerTapeItem, type TickerTapeItem } from '@/components/molecules/TickerTape';
-import { defaultQuoteForExchange, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
+import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import type { DisplayCurrency, FxRatesMap } from '@/libs/utils';
 import { useDisplayCurrency } from './displayCurrency';
 import { useDocumentVisible } from './useDocumentVisible';
@@ -48,7 +48,7 @@ export function useDeskPriceTape(): {
 } {
   const visible = useDocumentVisible();
   const livePrices = useRealtimeConnected();
-  const { currency, rates } = useDisplayCurrency();
+  const { currency, rates, nativeQuote } = useDisplayCurrency();
   const [source, setSourceState] = useState<DeskTapeSource>(loadDeskTapeSource);
   const setSource = useCallback((next: DeskTapeSource) => {
     setSourceState(next);
@@ -60,7 +60,7 @@ export function useDeskPriceTape(): {
   const venueQuery = useListSpotMarketsQuery(
     {
       exchange: (venue ?? 'binance') as MarketExchange,
-      quote: defaultQuoteForExchange(venue ?? 'binance'),
+      quote: nativeQuote(venue ?? 'binance'),
       sort: 'quoteVolume',
       order: 'desc',
       limit: DESK_TAPE_VENUE_LIMIT,

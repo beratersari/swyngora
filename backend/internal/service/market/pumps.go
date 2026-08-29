@@ -66,11 +66,13 @@ type PumpDetectResult struct {
 
 // PumpScanHit is one symbol's strongest recent pump in a scan.
 type PumpScanHit struct {
-	Symbol        string
-	Exchange      domain.Exchange
-	Interval      string
-	Events        []domain.PumpEvent
-	BestReturnPct float64
+	Symbol          string
+	Exchange        domain.Exchange
+	Interval        string
+	Events          []domain.PumpEvent
+	BestReturnPct   float64
+	BestVolumeRatio float64
+	BestOpenTime    time.Time
 }
 
 // PumpScanResult is the service response for a multi-symbol pump scan.
@@ -284,15 +286,15 @@ func (s *Service) ScanPumpEvents(ctx context.Context, q PumpScanQuery) (*PumpSca
 			if err != nil || res == nil || len(res.Events) == 0 {
 				return
 			}
-			best := res.Events[0].ReturnPct
+			hit := PumpScanHit{
+				Symbol:   res.Symbol,
+				Exchange: ex,
+				Interval: q.Interval,
+				Events:   res.Events,
+			}
+			fillPumpHitBest(&hit)
 			mu.Lock()
-			hits = append(hits, PumpScanHit{
-				Symbol:        res.Symbol,
-				Exchange:      ex,
-				Interval:      q.Interval,
-				Events:        res.Events,
-				BestReturnPct: best,
-			})
+			hits = append(hits, hit)
 			mu.Unlock()
 		}()
 	}
@@ -337,16 +339,29 @@ func capPumpScanHitsByTotalEvents(hits []PumpScanHit, maxTotal int) []PumpScanHi
 			continue
 		}
 		hit := PumpScanHit{
-			Symbol:        h.Symbol,
-			Exchange:      h.Exchange,
-			Interval:      h.Interval,
-			Events:        evs,
-			BestReturnPct: evs[0].ReturnPct,
+			Symbol:   h.Symbol,
+			Exchange: h.Exchange,
+			Interval: h.Interval,
+			Events:   evs,
 		}
+		fillPumpHitBest(&hit)
 		remaining -= len(evs)
 		capped = append(capped, hit)
 	}
 	return capped
+}
+
+func fillPumpHitBest(h *PumpScanHit) {
+	if h == nil {
+		return
+	}
+	ev, ok := domain.BestPumpEvent(h.Events)
+	if !ok {
+		return
+	}
+	h.BestReturnPct = ev.ReturnPct
+	h.BestVolumeRatio = ev.VolumeRatio
+	h.BestOpenTime = ev.OpenTime
 }
 
 // FormatPumpReturn is a helper for tests/DTOs.

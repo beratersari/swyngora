@@ -19,7 +19,7 @@ describe('IndicatorPanel', () => {
       <IndicatorPanel
         priceQuote="TRY"
         data={{
-          latest: { rsi: 55, ema: { '12': 400 } },
+          latest: { rsi: 55, zone: 'neutral', ema: { '12': 400 } },
         }}
       />,
     );
@@ -32,7 +32,7 @@ describe('IndicatorPanel', () => {
       <IndicatorPanel
         data={{
           rsiPeriod: 14,
-          latest: { rsi: 55, ema: { '12': 100, '26': 99 } },
+          latest: { rsi: 55, zone: 'neutral', ema: { '12': 100, '26': 99 } },
           points: [{ openTime: '2024-01-01T00:00:00Z', rsi: 55, ema: { '12': 100 } }],
         }}
       />,
@@ -46,7 +46,7 @@ describe('IndicatorPanel', () => {
     const onToggle = vi.fn();
     renderWithTheme(
       <IndicatorPanel
-        data={{ latest: { rsi: 50, ema: { '12': 1 } } }}
+        data={{ latest: { rsi: 50, zone: 'neutral', ema: { '12': 1 } } }}
         showEmaOnChart
         onToggleEma={onToggle}
       />,

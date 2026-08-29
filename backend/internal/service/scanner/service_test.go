@@ -96,6 +96,13 @@ func TestScanner_CreateRunDedupe(t *testing.T) {
 	if list[0].RuleID != rule.ID || list[0].Symbol != "BTCUSDT" {
 		t.Fatalf("%+v", list[0])
 	}
+	page, err := svc.ListResultsPage(ctx, "scan-user", 10, 0)
+	if err != nil || page == nil || page.Total != 1 || len(page.Results) != 1 {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	if page.Hits24h < 0 {
+		t.Fatalf("hits24h=%d", page.Hits24h)
+	}
 
 	// Same condition still true on the next bar — no new result
 	candles2 := append([]domain.Candle{}, candles...)

@@ -40,7 +40,7 @@ React SPA that talks to the Go backend via **OpenAPI-described HTTP**. Not `simp
 | `src/components/pages` | Route screens — **RTK Query only here** |
 | `src/libs/api/` | baseApi, store, endpoints, OpenAPI generated |
 | `src/libs/hooks/` | Shared React hooks |
-| `src/libs/utils/` | Pure helpers (incl. candle → chart mappers) |
+| `src/libs/utils/` | Formatters, URL/session, API→chart mappers. Domain math stays in the Go API. |
 | `src/libs/types/` | Shared view/re-export types |
 | `src/app/` | Providers (Redux, Ant `ConfigProvider`), router |
 | `src/config/` | Env + app constants |

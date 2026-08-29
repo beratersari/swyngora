@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
+
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -62,6 +64,7 @@ type Service struct {
 	delistSupplyFB domain.SymbolSupplyFallback
 	offVenue       domain.OffVenuePricePort
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
+	rsiHeatSF      singleflight.Group
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -1083,6 +1086,7 @@ func (s *Service) GetHolders(ctx context.Context, asset string) (*domain.AssetHo
 	got, err := s.holders.GetHolders(ctx, asset)
 	if err == nil {
 		domain.AnnotateHolderLabels(got)
+		s.enrichHolders(ctx, got)
 		return got, nil
 	}
 	if s.holderFallback == nil {
@@ -1096,7 +1100,20 @@ func (s *Service) GetHolders(ctx context.Context, asset string) (*domain.AssetHo
 		return nil, err
 	}
 	domain.AnnotateHolderLabels(fb)
+	s.enrichHolders(ctx, fb)
 	return fb, nil
+}
+
+func (s *Service) enrichHolders(ctx context.Context, got *domain.AssetHolders) {
+	if s == nil || got == nil {
+		return
+	}
+	var circ, px *float64
+	if sup, err := s.GetSupply(ctx, got.Asset); err == nil && sup != nil {
+		circ = sup.CirculatingSupply
+		px = sup.CurrentPriceUSD
+	}
+	domain.EnrichHolderRows(got, circ, px)
 }
 
 // ListIntervals returns supported candle intervals for an exchange.

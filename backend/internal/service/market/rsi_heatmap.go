@@ -12,8 +12,12 @@ import (
 
 const rsiHeatDisclaimer = "Informational only — not financial advice. Wilder RSI(14) on closed candles with a long seed so readings track TradingView-style charts. Stables are omitted."
 
+// rsiHeatBeforeBuild lets tests fill the cache after a miss and before singleflight.
+var rsiHeatBeforeBuild func()
+
 // GetRSIHeatmap returns a ranked Wilder RSI scatter for top listed pairs.
-// One interval. Stables are dropped. Results are cached for RSIHeatmapCacheTTL.
+// One interval. Stables are dropped. Fresh results are cached for RSIHeatmapCacheTTL;
+// an expired map is returned immediately (stale) while a refresh runs.
 func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRaw, sortBy string, limit, period int) (*domain.RSIHeatmap, error) {
 	ex, err := s.ResolveExchange(exchange)
 	if err != nil {
@@ -40,14 +44,62 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 		return nil, fmt.Errorf("%w: sort must be one of %v", domain.ErrInvalidArgument, domain.SupportedSpotSortFields)
 	}
 
-	key := domain.RSIHeatmapCacheKey(ex, quote, sortBy, interval, limit, period)
+	key := domain.RSIHeatmapCacheKey(ex, quote, sortBy, interval, period)
 	if s.rsiHeat != nil {
-		if hit, ok := s.rsiHeat.Get(key); ok && hit != nil {
-			cp := *hit
-			return &cp, nil
+		if hit, ok := s.rsiHeat.Get(key); ok && hit != nil && len(hit.Items) >= limit {
+			return domain.ClipRSIHeatmap(hit, limit), nil
+		}
+		if stale, ok := s.rsiHeat.GetStale(key); ok && stale != nil && len(stale.Items) >= limit {
+			go s.refreshRSIHeatmap(key, string(ex), quote, interval, sortBy, limit, period)
+			out := domain.ClipRSIHeatmap(stale, limit)
+			out.Stale = true
+			return out, nil
 		}
 	}
 
+	if rsiHeatBeforeBuild != nil {
+		rsiHeatBeforeBuild()
+	}
+	v, err, _ := s.rsiHeatSF.Do(fmt.Sprintf("%s|%d", key, limit), func() (any, error) {
+		if s.rsiHeat != nil {
+			if hit, ok := s.rsiHeat.Get(key); ok && hit != nil && len(hit.Items) >= limit {
+				return hit, nil
+			}
+		}
+		return s.buildRSIHeatmap(ctx, ex, quote, interval, sortBy, limit, period)
+	})
+	if err != nil {
+		if s.rsiHeat != nil {
+			if stale, ok := s.rsiHeat.GetStale(key); ok && stale != nil && len(stale.Items) >= limit {
+				out := domain.ClipRSIHeatmap(stale, limit)
+				out.Stale = true
+				return out, nil
+			}
+		}
+		return nil, err
+	}
+	got, _ := v.(*domain.RSIHeatmap)
+	return domain.ClipRSIHeatmap(got, limit), nil
+}
+
+func (s *Service) refreshRSIHeatmap(key, exchange, quote, interval, sortBy string, limit, period int) {
+	ctx, cancel := context.WithTimeout(context.Background(), domain.RSIHeatmapBuildTimeout)
+	defer cancel()
+	_, _, _ = s.rsiHeatSF.Do(fmt.Sprintf("%s|%d", key, limit), func() (any, error) {
+		if s.rsiHeat != nil {
+			if hit, ok := s.rsiHeat.Get(key); ok && hit != nil && len(hit.Items) >= limit {
+				return hit, nil
+			}
+		}
+		ex, err := s.ResolveExchange(exchange)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildRSIHeatmap(ctx, ex, quote, interval, sortBy, limit, period)
+	})
+}
+
+func (s *Service) buildRSIHeatmap(ctx context.Context, ex domain.Exchange, quote, interval, sortBy string, limit, period int) (*domain.RSIHeatmap, error) {
 	scanLimit := limit * 3
 	if scanLimit < 80 {
 		scanLimit = 80
@@ -64,7 +116,6 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 	})
 	if err != nil && sortBy == string(domain.SpotSortMarketCapCirculating) {
 		sortBy = string(domain.SpotSortQuoteVolume)
-		key = domain.RSIHeatmapCacheKey(ex, quote, sortBy, interval, limit, period)
 		spot, err = s.ListSpotMarkets(ctx, string(ex), domain.SpotListQuery{
 			QuoteAsset: quote,
 			Status:     "TRADING",
@@ -74,13 +125,6 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 		})
 	}
 	if err != nil {
-		if s.rsiHeat != nil {
-			if stale, ok := s.rsiHeat.GetStale(key); ok && stale != nil {
-				cp := *stale
-				cp.Stale = true
-				return &cp, nil
-			}
-		}
 		return nil, err
 	}
 
@@ -122,26 +166,13 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 		}
 	}
 
-	fetchLimit := domain.RSIHeatmapCandleLimit
-	if fetchLimit < period+50 {
-		fetchLimit = period + 50
-	}
-
+	fetchLimit := domain.RSIHeatmapFetchLimit(period)
 	var wg sync.WaitGroup
-	reqSem := make(chan struct{}, 8)
 	for i := range out.Items {
 		i := i
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			select {
-			case <-ctx.Done():
-				out.Items[i].Error = ctx.Err().Error()
-				return
-			case reqSem <- struct{}{}:
-			}
-			defer func() { <-reqSem }()
-
 			select {
 			case <-ctx.Done():
 				out.Items[i].Error = ctx.Err().Error()
@@ -155,7 +186,7 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 				out.Items[i].Error = err.Error()
 				return
 			}
-			closes, err := domain.ParseClosePrices(candles)
+			closes, err := domain.ParseClosePrices(domain.ClosedCandles(candles, now))
 			if err != nil {
 				out.Items[i].Error = err.Error()
 				return
@@ -169,8 +200,10 @@ func (s *Service) GetRSIHeatmap(ctx context.Context, exchange, quote, intervalRa
 	domain.SummarizeRSIHeatmap(out)
 
 	if s.rsiHeat != nil {
-		s.rsiHeat.Set(key, out)
+		key := domain.RSIHeatmapCacheKey(ex, quote, sortBy, interval, period)
+		if prev, ok := s.rsiHeat.GetStale(key); !ok || prev == nil || len(out.Items) >= len(prev.Items) {
+			s.rsiHeat.Set(key, out)
+		}
 	}
-	cp := *out
-	return &cp, nil
+	return out, nil
 }

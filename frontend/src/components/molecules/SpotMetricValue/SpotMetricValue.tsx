@@ -10,7 +10,6 @@ import {
   formatDelistDate,
   formatDelistDay,
   formatTradeCount,
-  marketCapQuote,
   pairQuote,
 } from '@/libs/utils';
 import { TagsWrap } from './SpotMetricValue.styles';
@@ -27,11 +26,11 @@ export function SpotMetricValue({
   locale: localeProp,
 }: SpotMetricValueProps) {
   const { t, i18n } = useTranslation(['markets', 'common']);
-  const { formatPrice: formatMoney, formatCompact } = useDisplayCurrency();
+  const { formatPrice: formatMoney, formatCompact, venueQuotes, mcapQuote } = useDisplayCurrency();
   const locale = localeProp ?? i18n.language;
   const raw = spot?.[metric.field];
-  const quote = pairQuote(spot?.symbol, exchange);
-  const mcapQuote = marketCapQuote(exchange);
+  const quote = pairQuote(spot?.symbol, exchange, venueQuotes);
+  const mcap = mcapQuote(exchange);
 
   if (metric.format === 'tags') {
     const tags = (raw as string[] | undefined) ?? [];
@@ -89,7 +88,7 @@ export function SpotMetricValue({
           : metric.id === 'marketCapCirculating' ||
               metric.id === 'marketCapTotal' ||
               metric.id === 'marketCapMax'
-            ? formatCompact(raw as string | number | null | undefined, mcapQuote)
+            ? formatCompact(raw as string | number | null | undefined, mcap)
             : formatCompactUsd(raw as string | number | null | undefined);
       break;
     case 'tradeCount':

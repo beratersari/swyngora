@@ -1,11 +1,10 @@
 import { RSI_DOT_RADIUS, RSI_HEAT_BANDS, RSI_HEAT_NEUTRAL, RSI_PLOT_PAD } from './constants';
 import type { RSIHeatmapRow } from './RSIHeatmap.types';
 
-export function rsiFill(rsi: number | null | undefined): string {
-  if (rsi == null || Number.isNaN(rsi)) return RSI_HEAT_NEUTRAL;
-  for (const band of RSI_HEAT_BANDS) {
-    if (rsi <= band.upTo) return band.fill;
-  }
+/** Color from the API `zone` field (Go RSIZoneFor). */
+export function rsiFill(zone: string | null | undefined): string {
+  if (zone === 'oversold') return RSI_HEAT_BANDS[1]!.fill;
+  if (zone === 'overbought') return RSI_HEAT_BANDS[7]!.fill;
   return RSI_HEAT_NEUTRAL;
 }
 
@@ -43,10 +42,8 @@ export function plotY(rsi: number, height: number): number {
 
 export function shouldLabelDot(row: RSIHeatmapRow, count: number): boolean {
   const rank = row.rank ?? 0;
-  const rsi = row.rsi;
   if (rank > 0 && rank <= 12) return true;
-  if (rsi == null) return false;
-  if (rsi <= 30 || rsi >= 70) return true;
+  if (row.zone === 'oversold' || row.zone === 'overbought') return true;
   return count <= 40 && rank <= 24;
 }
 

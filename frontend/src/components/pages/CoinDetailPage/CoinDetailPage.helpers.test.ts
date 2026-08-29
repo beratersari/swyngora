@@ -3,8 +3,6 @@ import {
   appendCandlesAfter,
   delistCandleQueryEndTime,
   delistEventsToVertLines,
-  isPastDelist,
-  postDelistCandleLimit,
   livePumpEventsForPair,
   mergeChartMarkers,
   mergePumpEvents,
@@ -147,28 +145,6 @@ describe('mergeChartMarkers', () => {
     expect(out).toHaveLength(1);
     expect(out[0]?.shape).toBe('arrowUp');
     expect(out[0]?.text).toBe('↑8.5 · RSI');
-  });
-});
-
-describe('isPastDelist', () => {
-  const now = Date.parse('2026-08-22T12:00:00Z');
-
-  it('is true after halt', () => {
-    expect(isPastDelist('2026-08-17T00:00:00Z', now)).toBe(true);
-  });
-
-  it('is false for upcoming or missing', () => {
-    expect(isPastDelist('2026-09-03T00:00:00Z', now)).toBe(false);
-    expect(isPastDelist(null, now)).toBe(false);
-  });
-});
-
-describe('postDelistCandleLimit', () => {
-  const now = Date.parse('2026-08-22T12:00:00Z');
-
-  it('covers halt to now at the chart interval', () => {
-    expect(postDelistCandleLimit('1h', '2026-08-17T00:00:00Z', now)).toBe(140);
-    expect(postDelistCandleLimit('1d', '2026-08-17T00:00:00Z', now)).toBe(30);
   });
 });
 

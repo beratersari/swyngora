@@ -1369,7 +1369,7 @@ func (b *Backend) GetIndicators(ctx context.Context, exchange, symbol, interval 
 			}
 		}
 	}
-	ser, err := b.Market.GetIndicators(ctx, exchange, symbol, interval, limit, rsiPeriod, periods)
+	ser, err := b.Market.GetIndicators(ctx, exchange, symbol, interval, limit, rsiPeriod, periods, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1401,8 +1401,9 @@ func (b *Backend) GetIndicators(ctx context.Context, exchange, symbol, interval 
 		"rsiPeriod":  ser.RSIPeriod,
 		"emaPeriods": ser.EMAPeriods,
 		"latest": map[string]any{
-			"rsi": ser.LatestRSI,
-			"ema": latestEMA,
+			"rsi":  ser.LatestRSI,
+			"zone": string(ser.LatestZone),
+			"ema":  latestEMA,
 		},
 		"points": points,
 		"note":   "Informational only — not financial advice.",
@@ -1427,7 +1428,14 @@ func (b *Backend) GetFxRates(ctx context.Context) (json.RawMessage, error) {
 		stale = got.Stale
 	}
 	return mustJSON(map[string]any{
-		"base": domain.FxBaseUSD, "asOf": asOf, "rates": rates, "stale": stale, "note": note,
+		"base":            domain.FxBaseUSD,
+		"asOf":            asOf,
+		"rates":           rates,
+		"venueQuotes":     domain.DisplayVenueQuotes(),
+		"marketCapQuotes": domain.DisplayMarketCapQuotes(),
+		"aliases":         domain.DisplayFxAliases(),
+		"stale":           stale,
+		"note":            note,
 	})
 }
 
@@ -1439,8 +1447,10 @@ func (b *Backend) ListExchanges(ctx context.Context) (json.RawMessage, error) {
 		out[i] = string(e)
 	}
 	return mustJSON(map[string]any{
-		"exchanges": out,
-		"default":   string(domain.DefaultExchange),
+		"exchanges":       out,
+		"default":         string(domain.DefaultExchange),
+		"venueQuotes":     domain.DisplayVenueQuotes(),
+		"marketCapQuotes": domain.DisplayMarketCapQuotes(),
 	})
 }
 
@@ -3521,12 +3531,12 @@ func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit
 	if b.Scanner == nil {
 		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
 	}
-	list, total, err := b.Scanner.ListResults(ctx, clientID, limit, offset)
+	page, err := b.Scanner.ListResultsPage(ctx, clientID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]map[string]any, 0, len(list))
-	for _, r := range list {
+	items := make([]map[string]any, 0, len(page.Results))
+	for _, r := range page.Results {
 		items = append(items, map[string]any{
 			"id": r.ID, "clientId": r.ClientID, "ruleId": r.RuleID, "exchange": string(r.Exchange),
 			"symbol": r.Symbol, "ruleType": string(r.RuleType), "interval": r.Interval,
@@ -3534,7 +3544,14 @@ func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit
 			"summary": r.Summary, "metrics": r.Metrics,
 		})
 	}
-	return mustJSON(map[string]any{"clientId": clientID, "results": items, "count": len(items), "total": total})
+	setups := make([]map[string]any, 0, len(page.Setups))
+	for _, s := range page.Setups {
+		setups = append(setups, scanner.SetupMap(s))
+	}
+	return mustJSON(map[string]any{
+		"clientId": clientID, "results": items, "count": len(items), "total": page.Total,
+		"setups": setups, "hits24h": page.Hits24h,
+	})
 }
 
 func exportJobJSON(j *domain.ExportJob) (json.RawMessage, error) {

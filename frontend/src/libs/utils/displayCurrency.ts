@@ -31,34 +31,40 @@ export function saveDisplayCurrency(next: DisplayCurrency): void {
   }
 }
 
-/** Native quote for last/open/high/low/quoteVolume. */
-export function venueQuote(exchange?: string | null): string {
-  switch ((exchange ?? '').toLowerCase()) {
-    case 'bist':
-      return 'TRY';
-    case 'nasdaq':
-    case 'coinbase':
-      return 'USD';
-    default:
-      return 'USDT';
-  }
+/** Native quote from the API `venueQuotes` map. Empty until that payload loads. */
+export function venueQuote(
+  exchange?: string | null,
+  quotes?: Record<string, string> | null,
+): string {
+  const key = (exchange ?? '').toLowerCase();
+  return quotes?.[key] ?? '';
 }
 
 /** Pair quote when the symbol splits; otherwise the venue default. */
-export function pairQuote(symbol?: string | null, exchange?: string | null): string {
+export function pairQuote(
+  symbol?: string | null,
+  exchange?: string | null,
+  quotes?: Record<string, string> | null,
+): string {
   const q = parseTradingPair(symbol).quote;
-  return q || venueQuote(exchange);
+  return q || venueQuote(exchange, quotes);
 }
 
-/** Market-cap fields: BIST is TRY; crypto and Nasdaq are USD. */
-export function marketCapQuote(exchange?: string | null): string {
-  return venueQuote(exchange) === 'TRY' ? 'TRY' : 'USD';
+/** Market-cap currency from the API `marketCapQuotes` map. */
+export function marketCapQuote(
+  exchange?: string | null,
+  quotes?: Record<string, string> | null,
+): string {
+  const key = (exchange ?? '').toLowerCase();
+  return quotes?.[key] ?? '';
 }
 
-export function aliasFxCode(code?: string | null): string {
+export function aliasFxCode(
+  code?: string | null,
+  aliases?: Record<string, string> | null,
+): string {
   const c = (code ?? '').trim().toUpperCase();
-  if (c === 'USDT' || c === 'USDC' || c === 'BUSD') return 'USD';
-  return c;
+  return aliases?.[c] ?? c;
 }
 
 export function convertAmount(
@@ -66,12 +72,13 @@ export function convertAmount(
   from: string,
   to: string,
   rates?: FxRatesMap | null,
+  aliases?: Record<string, string> | null,
 ): number | null {
   if (value === null || value === undefined || value === '') return null;
   const n = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(n)) return null;
-  const src = aliasFxCode(from);
-  const dst = aliasFxCode(to);
+  const src = aliasFxCode(from, aliases);
+  const dst = aliasFxCode(to, aliases);
   if (!src || !dst || src === dst) return n;
   const fromPerUsd = src === 'USD' ? 1 : rates?.[src];
   const toPerUsd = dst === 'USD' ? 1 : rates?.[dst];
@@ -89,9 +96,13 @@ export function formatConvertedPrice(
   nativeQuote: string,
   preference: DisplayCurrency,
   rates?: FxRatesMap | null,
+  aliases?: Record<string, string> | null,
 ): string {
   const to = resolveDisplayCode(preference, nativeQuote);
-  const n = preference === 'native' ? Number(value) : convertAmount(value, nativeQuote, to, rates);
+  const n =
+    preference === 'native'
+      ? Number(value)
+      : convertAmount(value, nativeQuote, to, rates, aliases);
   if (n === null || !Number.isFinite(n)) {
     if (preference === 'native') return `${formatPrice(value)} ${to}`.trim();
     return '—';
@@ -105,11 +116,12 @@ export function scalePriceSeries(
   nativeQuote: string,
   preference: DisplayCurrency,
   rates?: FxRatesMap | null,
+  aliases?: Record<string, string> | null,
 ): { time: number; value: number }[] {
   if (!points.length || preference === 'native') return points;
   const out: { time: number; value: number }[] = [];
   for (const p of points) {
-    const next = convertAmount(p.value, nativeQuote, preference, rates);
+    const next = convertAmount(p.value, nativeQuote, preference, rates, aliases);
     if (next === null) continue;
     out.push({ ...p, value: next });
   }
@@ -121,9 +133,13 @@ export function formatConvertedCompact(
   nativeQuote: string,
   preference: DisplayCurrency,
   rates?: FxRatesMap | null,
+  aliases?: Record<string, string> | null,
 ): string {
   const to = resolveDisplayCode(preference, nativeQuote);
-  const n = preference === 'native' ? Number(value) : convertAmount(value, nativeQuote, to, rates);
+  const n =
+    preference === 'native'
+      ? Number(value)
+      : convertAmount(value, nativeQuote, to, rates, aliases);
   if (preference === 'native') {
     const num = formatCompactAmount(value);
     return num === '—' ? num : `${num} ${to}`;

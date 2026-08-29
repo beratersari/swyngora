@@ -1232,10 +1232,12 @@ func (h *MarketHandler) GetSupply(w http.ResponseWriter, r *http.Request) {
 }
 
 type holderRowDTO struct {
-	Address  string  `json:"address"`
-	Label    string  `json:"label,omitempty"`
-	Balance  float64 `json:"balance"`
-	SharePct float64 `json:"sharePct"`
+	Address         string   `json:"address"`
+	Label           string   `json:"label,omitempty"`
+	Balance         float64  `json:"balance"`
+	SharePct        float64  `json:"sharePct"`
+	ResolvedBalance *float64 `json:"resolvedBalance,omitempty"`
+	UsdValue        *float64 `json:"usdValue,omitempty"`
 }
 
 type holdersResponse struct {
@@ -1322,10 +1324,12 @@ func (h *MarketHandler) GetHolders(w http.ResponseWriter, r *http.Request) {
 	rows := make([]holderRowDTO, 0, len(got.TopHolders))
 	for _, row := range got.TopHolders {
 		rows = append(rows, holderRowDTO{
-			Address:  row.Address,
-			Label:    row.Label,
-			Balance:  row.Balance,
-			SharePct: row.SharePct,
+			Address:         row.Address,
+			Label:           row.Label,
+			Balance:         row.Balance,
+			SharePct:        row.SharePct,
+			ResolvedBalance: row.ResolvedBalance,
+			UsdValue:        row.UsdValue,
 		})
 	}
 	writeJSON(w, http.StatusOK, holdersResponse{
@@ -1442,8 +1446,10 @@ func (h *MarketHandler) ListProductTags(w http.ResponseWriter, r *http.Request) 
 }
 
 type exchangesResponse struct {
-	Exchanges []string `json:"exchanges"`
-	Default   string   `json:"default"`
+	Exchanges       []string          `json:"exchanges"`
+	Default         string            `json:"default"`
+	VenueQuotes     map[string]string `json:"venueQuotes"`
+	MarketCapQuotes map[string]string `json:"marketCapQuotes"`
 }
 
 // ListExchanges handles GET /api/v1/market/exchanges
@@ -1454,17 +1460,22 @@ func (h *MarketHandler) ListExchanges(w http.ResponseWriter, r *http.Request) {
 		out[i] = string(e)
 	}
 	writeJSON(w, http.StatusOK, exchangesResponse{
-		Exchanges: out,
-		Default:   string(domain.DefaultExchange),
+		Exchanges:       out,
+		Default:         string(domain.DefaultExchange),
+		VenueQuotes:     domain.DisplayVenueQuotes(),
+		MarketCapQuotes: domain.DisplayMarketCapQuotes(),
 	})
 }
 
 type fxRatesResponse struct {
-	Base  string             `json:"base"`
-	AsOf  string             `json:"asOf"`
-	Rates map[string]float64 `json:"rates"`
-	Stale bool               `json:"stale"`
-	Note  string             `json:"note,omitempty"`
+	Base            string             `json:"base"`
+	AsOf            string             `json:"asOf"`
+	Rates           map[string]float64 `json:"rates"`
+	VenueQuotes     map[string]string  `json:"venueQuotes"`
+	MarketCapQuotes map[string]string  `json:"marketCapQuotes"`
+	Aliases         map[string]string  `json:"aliases"`
+	Stale           bool               `json:"stale"`
+	Note            string             `json:"note,omitempty"`
 }
 
 // GetFxRates handles GET /api/v1/market/fx
@@ -1487,7 +1498,14 @@ func (h *MarketHandler) GetFxRates(w http.ResponseWriter, r *http.Request) {
 		stale = got.Stale
 	}
 	writeJSON(w, http.StatusOK, fxRatesResponse{
-		Base: domain.FxBaseUSD, AsOf: asOf, Rates: rates, Stale: stale, Note: note,
+		Base:            domain.FxBaseUSD,
+		AsOf:            asOf,
+		Rates:           rates,
+		VenueQuotes:     domain.DisplayVenueQuotes(),
+		MarketCapQuotes: domain.DisplayMarketCapQuotes(),
+		Aliases:         domain.DisplayFxAliases(),
+		Stale:           stale,
+		Note:            note,
 	})
 }
 

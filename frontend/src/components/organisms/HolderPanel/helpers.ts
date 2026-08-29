@@ -46,42 +46,4 @@ export function formatHolderBalance(value: number | null | undefined): string {
   return value.toExponential(2);
 }
 
-/**
- * Prefer share × circulating supply when the reported CMC balance is dust-scale
- * compared with that estimate (common on high-supply tokens).
- */
-export function resolveHolderBalance(
-  reported: number | null | undefined,
-  sharePct: number | null | undefined,
-  circulatingSupply: number | null | undefined,
-): number | null {
-  const raw = typeof reported === 'number' && Number.isFinite(reported) ? reported : null;
-  const share =
-    typeof sharePct === 'number' && Number.isFinite(sharePct) ? sharePct / 100 : null;
-  const circ =
-    typeof circulatingSupply === 'number' && Number.isFinite(circulatingSupply) && circulatingSupply > 0
-      ? circulatingSupply
-      : null;
-  const estimated = share != null && circ != null ? share * circ : null;
-  if (estimated != null && estimated > 0) {
-    if (raw == null || raw === 0) return estimated;
-    if (Math.abs(estimated) / Math.max(Math.abs(raw), Number.EPSILON) >= 100) {
-      return estimated;
-    }
-  }
-  return raw;
-}
 
-export function holderUsdValue(
-  sharePct: number | null | undefined,
-  circulatingSupply: number | null | undefined,
-  priceUsd: number | null | undefined,
-): number | null {
-  const share =
-    typeof sharePct === 'number' && Number.isFinite(sharePct) ? sharePct / 100 : null;
-  const circ =
-    typeof circulatingSupply === 'number' && Number.isFinite(circulatingSupply) ? circulatingSupply : null;
-  const px = typeof priceUsd === 'number' && Number.isFinite(priceUsd) ? priceUsd : null;
-  if (share == null || circ == null || px == null || circ <= 0 || px <= 0) return null;
-  return share * circ * px;
-}

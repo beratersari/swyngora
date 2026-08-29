@@ -63,6 +63,33 @@ func QuoteForMarketCap(ex Exchange) string {
 	return FxBaseUSD
 }
 
+// DisplayVenueQuotes is the native quote of last/open/high/low/quoteVolume per venue.
+func DisplayVenueQuotes() map[string]string {
+	out := make(map[string]string, len(SupportedExchanges))
+	for _, ex := range SupportedExchanges {
+		out[string(ex)] = QuoteForVenue(ex)
+	}
+	return out
+}
+
+// DisplayMarketCapQuotes is the currency of circulating/total/max market-cap fields.
+func DisplayMarketCapQuotes() map[string]string {
+	out := make(map[string]string, len(SupportedExchanges))
+	for _, ex := range SupportedExchanges {
+		out[string(ex)] = QuoteForMarketCap(ex)
+	}
+	return out
+}
+
+// DisplayFxAliases maps stables onto USD for display conversion.
+func DisplayFxAliases() map[string]string {
+	return map[string]string{
+		FxUSDT: FxBaseUSD,
+		"USDC": FxBaseUSD,
+		"BUSD": FxBaseUSD,
+	}
+}
+
 // ConvertFx converts amount from one currency to another using USD-based rates.
 func ConvertFx(amount float64, from, to string, rates map[string]float64) (float64, error) {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) {

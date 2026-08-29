@@ -4,8 +4,6 @@ import {
   formatHolderBalance,
   formatHolderCount,
   formatSharePct,
-  holderUsdValue,
-  resolveHolderBalance,
 } from './helpers';
 
 describe('formatHolderAddress', () => {
@@ -43,19 +41,3 @@ describe('formatHolderBalance', () => {
   });
 });
 
-describe('resolveHolderBalance', () => {
-  it('uses share × supply when reported balance is dust-scale', () => {
-    expect(resolveHolderBalance(0.004, 8.37, 1_000_000_000)).toBeCloseTo(83_700_000, 0);
-  });
-
-  it('keeps a reported balance that already matches the share', () => {
-    expect(resolveHolderBalance(248_597, 1.18, 21_000_000)).toBe(248_597);
-  });
-});
-
-describe('holderUsdValue', () => {
-  it('is share of circulating mcap', () => {
-    expect(holderUsdValue(10, 1_000, 2)).toBe(200);
-    expect(holderUsdValue(8.37, null, 1)).toBeNull();
-  });
-});

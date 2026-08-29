@@ -19,9 +19,9 @@ import {
   useListSpotMarketsQuery,
   type MarketExchange,
 } from '@/libs/api';
-import { useDocumentVisible } from '@/libs/hooks';
+import { useDisplayCurrency, useDocumentVisible } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
-import { defaultQuoteForExchange, parseExchangeParamOrDefault, rtkCurrent } from '@/libs/utils';
+import { parseExchangeParamOrDefault, rtkCurrent } from '@/libs/utils';
 import { BoardWrap, Field, PageStack, Toolbar, ToolbarLeft, ToolbarRight } from './HeatmapPage.styles';
 
 const RSI_HEAT_POLL_MS = 60_000;
@@ -33,8 +33,9 @@ export function HeatmapPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
+  const { nativeQuote } = useDisplayCurrency();
   const exchange = parseExchangeParamOrDefault(searchParams.get('exchange') ?? undefined);
-  const quote = searchParams.get('quote') || defaultQuoteForExchange(exchange);
+  const quote = searchParams.get('quote') || nativeQuote(exchange);
   const view = searchParams.get('view') === 'rsi' ? 'rsi' : 'price';
   const rawInterval = searchParams.get('interval') ?? '';
   const rsiInterval = (RSI_HEAT_INTERVALS as readonly string[]).includes(rawInterval)
@@ -99,6 +100,7 @@ export function HeatmapPage() {
     () =>
       (liveList?.items ?? []).map((row) => ({
         symbol: row.symbol ?? '',
+        base: row.baseAsset,
         exchange,
         lastPrice: row.lastPrice,
         priceChangePercent: row.priceChangePercent,
@@ -149,7 +151,7 @@ export function HeatmapPage() {
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        const def = defaultQuoteForExchange(exchange);
+        const def = nativeQuote(exchange);
         if (next && next !== def) p.set('quote', next);
         else p.delete('quote');
         return p;

@@ -15,9 +15,11 @@ by size, plotted against Wilder RSI.
 - Top `limit` pairs (default **100**, max **200**) by `sort`
   (`marketCapCirculating` default, or `quoteVolume`)
 - **Stables omitted** (USDC, USDT, FDUSD, …)
-- Seeded from **~300 closed candles**
+- Seeded from **~120 closed candles** (the venue’s still-forming last bar is dropped)
 - `averageRsi` plus oversold / neutral / overbought counts
-- Cached **60s**. Informational only — not financial advice
+- Cached **60s**; expired maps are served immediately while they refresh.
+  Default Binance USDT 1h Top 100 is kept warm in the background.
+  A Top 50 request reuses a larger cached map. Informational only — not financial advice
 
 Web: `/heatmap?view=rsi`. Timeframe and Top 50 / 100. Dots are equal
 size; left is rank #1 by market cap. Hover for RSI; click to open
@@ -45,8 +47,10 @@ Open http://localhost:5174/heatmap?view=rsi
 
 ## Limits
 
-- First load fetches ~300 candles per plotted pair (same process-wide
-  batch semaphore as indicator batch). Later hits use the 60s cache.
+- First uncached load fetches ~120 candles per plotted pair (process-wide
+  batch semaphore, 24 at a time). The default 1h map is warmed on startup
+  and every 60s so `/heatmap?view=rsi` is usually a cache hit.
 - Values can still differ from another site if that site uses perps, the
-  forming bar, or a short Cutler/SMA RSI.
+  forming bar, or a short Cutler/SMA RSI. This endpoint does not seed
+  the unfinished venue candle.
 - Equities work when the venue has candles.

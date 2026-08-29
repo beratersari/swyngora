@@ -59,7 +59,7 @@ frontend/
     ├── libs/
     │   ├── api/             # RTK + generated OpenAPI
     │   ├── hooks/
-    │   ├── utils/           # formatters, candle mappers
+    │   ├── utils/           # formatters, URL/session, candle/indicator mappers (no domain math)
     │   └── types/
     └── styles/
 ```
@@ -106,7 +106,7 @@ If you open the UI from Windows as `http://172.x.x.x:5174`:
 
 Backend CORS already allows `*` for local dev.
 
-When the API is locked (`API_AUTH_TOKEN` set) outside `npm run dev`, create a user key in **Settings** — the one-time secret is stored as `swyngora.apiAuthToken` and sent as `Authorization` on REST and `?token=` on the WebSocket. The process master token is never bundled.
+When the API is locked (`API_AUTH_TOKEN` set) outside `npm run dev`, create a **trade** user key in **Settings** — that one-time secret is stored as `swyngora.apiAuthToken` and sent as `Authorization` on REST and `?token=` on the WebSocket. A **read** key is shown once and is not installed (it would 403 paper mutations). The process master token is never bundled.
 
 Find WSL IP: `hostname -I | awk '{print $1}'`
 

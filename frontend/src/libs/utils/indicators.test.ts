@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-  emaFromCloses,
-  emaLineFromCloses,
   formatIndicator,
   indicatorPointsToEmaLine,
   indicatorPointsToRsiLine,
-  parseEmaPeriods,
+  mergeIndicatorPoints,
   rsiBandKey,
   rsiBandLabel,
   rsiTone,
@@ -25,36 +23,22 @@ describe('formatIndicator', () => {
   });
 });
 
-describe('rsiTone / rsiBandKey alignment', () => {
-  it('classifies oversold / overbought / neutral consistently', () => {
-    expect(rsiTone(25)).toBe('success');
-    expect(rsiBandKey(25)).toBe('oversold');
-    expect(rsiBandLabel(25)).toBe('oversold');
+describe('rsiTone / rsiBandKey from API zone', () => {
+  it('maps server zones onto color and i18n keys', () => {
+    expect(rsiTone('oversold')).toBe('success');
+    expect(rsiBandKey('oversold')).toBe('oversold');
+    expect(rsiBandLabel('oversold')).toBe('oversold');
 
-    expect(rsiTone(80)).toBe('error');
-    expect(rsiBandKey(80)).toBe('overbought');
+    expect(rsiTone('overbought')).toBe('error');
+    expect(rsiBandKey('overbought')).toBe('overbought');
 
-    expect(rsiTone(50)).toBe('secondary');
-    expect(rsiBandKey(50)).toBe('neutral');
+    expect(rsiTone('neutral')).toBe('secondary');
+    expect(rsiBandKey('neutral')).toBe('neutral');
 
-    // Near-band values stay neutral (color matches band label)
-    expect(rsiTone(35)).toBe('secondary');
-    expect(rsiBandKey(35)).toBe('neutral');
-    expect(rsiTone(65)).toBe('secondary');
-    expect(rsiBandKey(65)).toBe('neutral');
-
-    // Boundaries
-    expect(rsiTone(30)).toBe('secondary');
-    expect(rsiBandKey(30)).toBe('neutral');
-    expect(rsiTone(70)).toBe('secondary');
-    expect(rsiBandKey(70)).toBe('neutral');
-    expect(rsiTone(29.9)).toBe('success');
-    expect(rsiTone(70.1)).toBe('error');
-
-    expect(rsiTone(null)).toBe('secondary');
-    expect(rsiBandKey(null)).toBe('na');
+    expect(rsiTone('')).toBe('secondary');
+    expect(rsiBandKey('')).toBe('na');
     expect(rsiBandLabel(null)).toBe('n/a');
-    expect(rsiTone(Number.NaN)).toBe('secondary');
+    expect(rsiTone(undefined)).toBe('secondary');
   });
 });
 
@@ -75,38 +59,17 @@ describe('indicatorPointsToRsiLine', () => {
   });
 });
 
-describe('parseEmaPeriods / emaFromCloses', () => {
-  it('parses unique ascending periods', () => {
-    expect(parseEmaPeriods('12,26')).toEqual([12, 26]);
-    expect(parseEmaPeriods('26, 12, 12')).toEqual([12, 26]);
-    expect(parseEmaPeriods('1,12')).toEqual([12]);
-    expect(parseEmaPeriods(undefined)).toEqual([]);
-  });
-
-  it('matches backend SMA seed and recurrence', () => {
-    const ema = emaFromCloses([1, 2, 3, 4, 5], 3);
-    expect(ema[0]).toBeNull();
-    expect(ema[1]).toBeNull();
-    expect(ema[2]).toBeCloseTo(2, 9);
-    expect(ema[3]).toBeCloseTo(3, 6);
-  });
-
-  it('covers prepended history times so pan-left bars keep an EMA', () => {
-    const live = Array.from({ length: 40 }, (_, i) => ({
-      time: 1_700_000_000 + (i + 20) * 3600,
-      close: 100 + i,
-    }));
-    const history = Array.from({ length: 20 }, (_, i) => ({
-      time: 1_700_000_000 + i * 3600,
-      close: 80 + i,
-    }));
-    const all = [...history, ...live];
-    const liveOnly = emaLineFromCloses(live, 12);
-    const withHistory = emaLineFromCloses(all, 12);
-    expect(liveOnly[0]?.time).toBe(live[11]?.time);
-    expect(withHistory[0]?.time).toBe(history[11]?.time);
-    expect(withHistory[0]!.time).toBeLessThan(liveOnly[0]!.time);
-    expect(withHistory.some((p) => p.time === history[11]?.time)).toBe(true);
+describe('mergeIndicatorPoints', () => {
+  it('merges by openTime with newer winning', () => {
+    const older = [{ openTime: '2024-01-01T00:00:00Z', ema: { '12': 1 } }];
+    const newer = [
+      { openTime: '2024-01-01T00:00:00Z', ema: { '12': 2 } },
+      { openTime: '2024-01-01T01:00:00Z', ema: { '12': 3 } },
+    ];
+    const merged = mergeIndicatorPoints(older, newer);
+    expect(merged).toHaveLength(2);
+    expect(merged[0]?.ema?.['12']).toBe(2);
+    expect(merged[1]?.ema?.['12']).toBe(3);
   });
 });
 

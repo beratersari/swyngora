@@ -18,6 +18,10 @@ func TestRSIZoneFor(t *testing.T) {
 	if RSIZoneFor(nil, 30, 70) != RSIZoneUnknown {
 		t.Fatal("nil rsi is unknown")
 	}
+	edge := 30.0
+	if RSIZoneFor(&edge, 0, 0) != RSIZoneOversold {
+		t.Fatal("non-positive bands must fall back to 30/70")
+	}
 }
 
 func TestParseRSIHeatmapInterval(t *testing.T) {
@@ -28,6 +32,10 @@ func TestParseRSIHeatmapInterval(t *testing.T) {
 	got, err = ParseRSIHeatmapInterval("4h,1d", ExchangeBinance)
 	if err != nil || got != "4h" {
 		t.Fatalf("first of list=%q err=%v", got, err)
+	}
+	got, err = ParseRSIHeatmapInterval("  ,1h", ExchangeBinance)
+	if err != nil || got != "1h" {
+		t.Fatalf("empty first token should default: %q err=%v", got, err)
 	}
 	if _, err := ParseRSIHeatmapInterval("3y", ExchangeBinance); err == nil {
 		t.Fatal("expected invalid interval")
@@ -50,6 +58,10 @@ func TestIsRSIHeatmapStableBase(t *testing.T) {
 	if IsRSIHeatmapStableBase("BTC") || IsRSIHeatmapStableBase("ETH") {
 		t.Fatal("majors stay on the map")
 	}
+}
+
+func TestSummarizeRSIHeatmap_Nil(t *testing.T) {
+	SummarizeRSIHeatmap(nil)
 }
 
 func TestSummarizeRSIHeatmap(t *testing.T) {
@@ -81,16 +93,61 @@ func TestLatestRSI_AllUp(t *testing.T) {
 	if got == nil || *got < 70 {
 		t.Fatalf("all-up RSI=%v", got)
 	}
+	if LatestRSI(nil, 0) != nil {
+		t.Fatal("empty series")
+	}
+	if LatestRSI([]float64{1, 2}, 0) != nil {
+		t.Fatal("too short even with default period")
+	}
 }
 
 func TestRSIHeatmapCacheKey(t *testing.T) {
-	a := RSIHeatmapCacheKey(ExchangeBinance, "usdt", "marketCapCirculating", "1h", 100, 14)
-	b := RSIHeatmapCacheKey(ExchangeBinance, "USDT", "marketCapCirculating", "1h", 100, 14)
-	c := RSIHeatmapCacheKey(ExchangeBinance, "USDT", "marketCapCirculating", "4h", 100, 14)
+	a := RSIHeatmapCacheKey(ExchangeBinance, "usdt", "marketCapCirculating", "1h", 14)
+	b := RSIHeatmapCacheKey(ExchangeBinance, "USDT", "marketCapCirculating", "1h", 14)
+	c := RSIHeatmapCacheKey(ExchangeBinance, "USDT", "marketCapCirculating", "4h", 14)
 	if a != b {
 		t.Fatalf("keys should match: %s vs %s", a, b)
 	}
 	if a == c {
 		t.Fatal("different intervals must not share a key")
+	}
+}
+
+func TestClipRSIHeatmap_NilAndEmpty(t *testing.T) {
+	if ClipRSIHeatmap(nil, 10) != nil {
+		t.Fatal("nil")
+	}
+	got := ClipRSIHeatmap(&RSIHeatmap{}, 5)
+	if got == nil || len(got.Items) != 0 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestClipRSIHeatmap_SmallerTopFromLargerMap(t *testing.T) {
+	low, high := 20.0, 80.0
+	full := &RSIHeatmap{Items: []RSIHeatmapRow{
+		{Symbol: "AAA", RSI: &low, Zone: RSIZoneOversold},
+		{Symbol: "BBB", RSI: &high, Zone: RSIZoneOverbought},
+		{Symbol: "CCC", RSI: &high, Zone: RSIZoneOverbought},
+	}}
+	SummarizeRSIHeatmap(full)
+	got := ClipRSIHeatmap(full, 1)
+	if len(got.Items) != 1 || got.Items[0].Symbol != "AAA" || got.Items[0].Rank != 1 {
+		t.Fatalf("%+v", got.Items)
+	}
+	if got.OversoldCount != 1 || got.OverboughtCount != 0 {
+		t.Fatalf("counts %+v", got)
+	}
+	if full.Items[0].Rank != 1 || len(full.Items) != 3 {
+		t.Fatal("clip must not mutate the cached map")
+	}
+}
+
+func TestRSIHeatmapFetchLimit(t *testing.T) {
+	if RSIHeatmapFetchLimit(14) != RSIHeatmapCandleLimit {
+		t.Fatalf("default period: %d", RSIHeatmapFetchLimit(14))
+	}
+	if RSIHeatmapFetchLimit(100) < 150 {
+		t.Fatalf("long period should grow seed: %d", RSIHeatmapFetchLimit(100))
 	}
 }

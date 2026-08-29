@@ -56,7 +56,7 @@ cd backend && go test ./internal/domain/ ./internal/adapter/cmc/ ./internal/adap
 curl -s 'http://localhost:8080/api/v1/market/holders?asset=BTC' | jq '{asset, holderCount, topTenSharePct, topHolders: .topHolders[:3]}'
 ```
 
-Open `/markets/binance/BTCUSDT?tab=holders` — Holders tab. Wallet size uses share × circulating supply when the raw CMC balance is dust-scale, plus an estimated USD value.
+Open `/markets/binance/BTCUSDT?tab=holders` — Holders tab. The API fills `resolvedBalance` (share × circulating when CMC balance is dust-scale) and `usdValue`. The web table only formats those fields.
 
 ## Limits
 

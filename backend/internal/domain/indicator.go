@@ -21,22 +21,23 @@ type IndicatorPoint struct {
 
 // IndicatorSeries is the response shape for technical indicators on a symbol.
 type IndicatorSeries struct {
-	Exchange  Exchange
-	Symbol    string
-	Interval  CandleInterval
-	RSIPeriod int
+	Exchange   Exchange
+	Symbol     string
+	Interval   CandleInterval
+	RSIPeriod  int
 	EMAPeriods []int
-	Points    []IndicatorPoint
+	Points     []IndicatorPoint
 	// Latest non-nil values for quick UI badges (may be nil if insufficient data).
-	LatestRSI *float64
-	LatestEMA map[int]*float64
+	LatestRSI  *float64
+	LatestZone RSIZone
+	LatestEMA  map[int]*float64
 }
 
 // Default indicator periods (common swing defaults).
 const (
-	DefaultRSIPeriod = 14
-	DefaultEMAFast   = 12
-	DefaultEMASlow   = 26
+	DefaultRSIPeriod   = 14
+	DefaultEMAFast     = 12
+	DefaultEMASlow     = 26
 	MinIndicatorPeriod = 2
 	MaxIndicatorPeriod = 500
 )

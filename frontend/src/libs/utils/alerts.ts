@@ -1,32 +1,10 @@
-/** Pure alert evaluation helpers (client-side utilities). */
+/** Alert display helpers. Fire/edge evaluation lives in the Go API. */
 
 export type AlertKind =
   | 'price_above'
   | 'price_below'
   | 'change_pct_above'
   | 'change_pct_below';
-
-export function evaluateAlert(
-  kind: AlertKind | undefined,
-  threshold: number | undefined,
-  lastPrice: number,
-  changePct: number,
-): boolean {
-  if (!kind || threshold == null || !Number.isFinite(threshold)) return false;
-  if (!Number.isFinite(lastPrice) || !Number.isFinite(changePct)) return false;
-  switch (kind) {
-    case 'price_above':
-      return lastPrice >= threshold;
-    case 'price_below':
-      return lastPrice <= threshold;
-    case 'change_pct_above':
-      return changePct >= threshold;
-    case 'change_pct_below':
-      return changePct <= threshold;
-    default:
-      return false;
-  }
-}
 
 export function parseFiniteNumber(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined || value === '') return null;

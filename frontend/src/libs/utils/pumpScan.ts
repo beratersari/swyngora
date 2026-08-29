@@ -3,13 +3,13 @@
  *
  * Live API shape (GET /api/v1/market/pumps/scan):
  * {
- *   symbol, exchange, interval, bestReturnPct,
- *   events: [{ openTime, returnPct, volumeRatio, ... }]
+ *   symbol, exchange, interval, bestReturnPct, bestVolumeRatio, bestOpenTime,
+ *   events: [...]
  * }
- * Return/vol/time live on the strongest event — not on the hit root.
+ * Best-event fields are computed by the API.
  */
 
-import type { PumpEventDto, PumpScanHitDto } from '@/libs/api';
+import type { PumpScanHitDto } from '@/libs/api';
 
 export type PumpScanRow = {
   symbol: string;
@@ -21,35 +21,16 @@ export type PumpScanRow = {
   eventCount: number;
 };
 
-/** Prefer event with largest |returnPct|; fall back to first event. */
-export function pickBestEvent(events: PumpEventDto[] | undefined): PumpEventDto | undefined {
-  if (!events?.length) return undefined;
-  let best = events[0]!;
-  let bestAbs = Math.abs(Number(best.returnPct) || 0);
-  for (let i = 1; i < events.length; i++) {
-    const ev = events[i]!;
-    const abs = Math.abs(Number(ev.returnPct) || 0);
-    if (abs > bestAbs) {
-      best = ev;
-      bestAbs = abs;
-    }
-  }
-  return best;
-}
-
 export function pumpScanHitToRow(hit: PumpScanHitDto): PumpScanRow | null {
   const symbol = (hit.symbol ?? '').trim();
   if (!symbol) return null;
-  const best = pickBestEvent(hit.events);
   const returnPct =
-    hit.bestReturnPct != null && Number.isFinite(hit.bestReturnPct)
-      ? hit.bestReturnPct
-      : best?.returnPct != null && Number.isFinite(best.returnPct)
-        ? best.returnPct
-        : null;
+    hit.bestReturnPct != null && Number.isFinite(hit.bestReturnPct) ? hit.bestReturnPct : null;
   const volumeRatio =
-    best?.volumeRatio != null && Number.isFinite(best.volumeRatio) ? best.volumeRatio : null;
-  const openTime = best?.openTime?.trim() || null;
+    hit.bestVolumeRatio != null && Number.isFinite(hit.bestVolumeRatio)
+      ? hit.bestVolumeRatio
+      : null;
+  const openTime = hit.bestOpenTime?.trim() || null;
 
   return {
     symbol,

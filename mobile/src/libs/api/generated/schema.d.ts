@@ -1642,8 +1642,10 @@ export interface paths {
          * Ranked RSI scatter (CoinGlass-style)
          * @description Wilder RSI(14) for the top listed pairs on one venue, ranked left to
          *     right (market cap by default). Stables (USDC, USDT, …) are omitted.
-         *     One interval (default 1h). Seeded from ~300 closed candles so the
-         *     number tracks TradingView-style charts. Cached 60s. Informational only.
+         *     One interval (default 1h). Seeded from ~120 closed candles (the
+         *     unfinished venue bar is dropped) so the number tracks TradingView-style
+         *     charts. Cached 60s; default Binance 1h map is warmed in the background.
+         *     Informational only.
          */
         get: operations["getRSIHeatmap"];
         put?: never;
@@ -4083,6 +4085,10 @@ export interface components {
             balance?: number;
             /** @description Percent of supply held by this address */
             sharePct?: number;
+            /** @description Wallet size after dust-vs-share×circulating resolution */
+            resolvedBalance?: number;
+            /** @description Estimated USD value (share × circulating × USD price) */
+            usdValue?: number;
         };
         AssetHolders: {
             asset?: string;
@@ -4203,6 +4209,32 @@ export interface components {
             count?: number;
             accepted?: number;
             note?: string;
+        };
+        ScannerSetup: {
+            key?: string;
+            exchange?: string;
+            symbol?: string;
+            interval?: string;
+            factors?: string[];
+            score?: number;
+            /** @enum {string} */
+            grade?: "A" | "B" | "C";
+            sameBar?: boolean;
+            /** Format: date-time */
+            latestAt?: string;
+            summaries?: string[];
+        };
+        ScannerResultList: {
+            clientId?: string;
+            results?: {
+                [key: string]: unknown;
+            }[];
+            count?: number;
+            total?: number;
+            limit?: number;
+            offset?: number;
+            setups?: components["schemas"]["ScannerSetup"][];
+            hits24h?: number;
         };
         PortfolioSummary: {
             id?: string;
@@ -4990,6 +5022,9 @@ export interface components {
             exchange?: string;
             interval?: string;
             bestReturnPct?: number;
+            bestVolumeRatio?: number;
+            /** Format: date-time */
+            bestOpenTime?: string;
             events?: components["schemas"]["PumpEvent"][];
         };
         PumpScanResponse: {
@@ -5026,6 +5061,18 @@ export interface components {
                 [key: string]: number;
             };
             stale?: boolean;
+            /** @description Native quote of last/open/high/low/quoteVolume per venue */
+            venueQuotes?: {
+                [key: string]: string;
+            };
+            /** @description Currency of market-cap fields per venue */
+            marketCapQuotes?: {
+                [key: string]: string;
+            };
+            /** @description Stablecoin aliases for display FX (USDT→USD) */
+            aliases?: {
+                [key: string]: string;
+            };
             note?: string;
         };
         RSIHeatmapRow: {
@@ -5255,6 +5302,14 @@ export interface operations {
                         exchanges?: string[];
                         /** @example binance */
                         default?: string;
+                        /** @description Native quote of last/open/high/low/quoteVolume per venue */
+                        venueQuotes?: {
+                            [key: string]: string;
+                        };
+                        /** @description Currency of market-cap fields per venue */
+                        marketCapQuotes?: {
+                            [key: string]: string;
+                        };
                     };
                 };
             };
@@ -7107,6 +7162,8 @@ export interface operations {
                 rsiPeriod?: number;
                 /** @description Comma-separated EMA periods */
                 emaPeriods?: string;
+                /** @description Exclusive end of the candle window (RFC3339). Used to page older EMA/RSI bars. */
+                endTime?: string;
             };
             header?: never;
             path?: never;
@@ -7128,6 +7185,8 @@ export interface operations {
                         emaPeriods?: number[];
                         latest?: {
                             rsi?: number | null;
+                            /** @enum {string} */
+                            zone?: "oversold" | "neutral" | "overbought" | "";
                             ema?: {
                                 [key: string]: number;
                             };
@@ -10156,7 +10215,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScannerResultList"];
+                };
             };
         };
     };

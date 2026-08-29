@@ -42,8 +42,17 @@ func (h *MarketHandler) GetIndicators(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	var endPtr *time.Time
+	if raw := q.Get("endTime"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		endPtr = &t
+	}
 
-	ser, err := h.svc.GetIndicators(r.Context(), exchange, symbol, interval, limit, rsiPeriod, emaPeriods)
+	ser, err := h.svc.GetIndicators(r.Context(), exchange, symbol, interval, limit, rsiPeriod, emaPeriods, endPtr)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -83,8 +92,9 @@ func (h *MarketHandler) GetIndicators(w http.ResponseWriter, r *http.Request) {
 		"rsiPeriod":  ser.RSIPeriod,
 		"emaPeriods": ser.EMAPeriods,
 		"latest": map[string]any{
-			"rsi": ser.LatestRSI,
-			"ema": latestEMA,
+			"rsi":  ser.LatestRSI,
+			"ema":  latestEMA,
+			"zone": string(ser.LatestZone),
 		},
 		"points": points,
 		"note":   "Informational analysis only — not financial advice. RSI uses Wilder's smoothing; EMA seeded with SMA.",

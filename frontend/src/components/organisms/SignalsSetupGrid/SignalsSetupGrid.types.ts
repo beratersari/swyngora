@@ -1,7 +1,7 @@
-import type { SwingSetup } from '@/libs/utils';
+import type { ScannerSetup } from '@/libs/api';
 
 export type SignalsSetupGridProps = {
-  setups: SwingSetup[];
+  setups: ScannerSetup[];
   loading?: boolean;
   emptyText?: string;
   onOpen?: (exchange: string, symbol: string) => void;

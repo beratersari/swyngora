@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useDisplayCurrency } from '@/libs/hooks';
-import { formatChangePercent, marketCapQuote, pairQuote } from '@/libs/utils';
+import { formatChangePercent, pairQuote } from '@/libs/utils';
 import { HEATMAP_COLOR_CAP_PCT, HEATMAP_LEGEND_GRADIENT } from './PriceChangeHeatmap.constants';
 import {
   baseSymbol,
@@ -43,7 +43,7 @@ export function PriceChangeHeatmap({
   onOpen,
 }: PriceChangeHeatmapProps) {
   const { t } = useTranslation(['heatmap', 'common']);
-  const { formatPrice, formatCompact } = useDisplayCurrency();
+  const { formatPrice, formatCompact, venueQuotes, mcapQuote } = useDisplayCurrency();
   const frameRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 960, h: 560 });
   const [hover, setHover] = useState<{ tile: HeatmapTile; x: number; y: number } | null>(null);
@@ -95,7 +95,7 @@ export function PriceChangeHeatmap({
       >
         {tiles.map((tile) => {
           const density = tileDensity(tile.w, tile.h);
-          const ticker = baseSymbol(tile.symbol);
+          const ticker = baseSymbol(tile.symbol, tile.base);
           const change = formatTileChange(tile.changePct);
           const fill = changeFill(tile.changePct);
           const ink = tileInk(fill);
@@ -136,22 +136,22 @@ export function PriceChangeHeatmap({
         {tip && hover ? (
           <HoverCard $x={hover.x} $y={hover.y} role="tooltip">
             <TipHead>
-              <TipSym>{baseSymbol(tip.symbol)}</TipSym>
+              <TipSym>{baseSymbol(tip.symbol, tip.base)}</TipSym>
               <TipChg $up={tip.changePct >= 0} $flat={tipFlat}>
                 {formatChangePercent(tip.changePct)}
               </TipChg>
             </TipHead>
             <TipRow>
               <span>{t('heatmap:last')}</span>
-              <span>{formatPrice(tip.lastPrice, pairQuote(tip.symbol, tip.exchange))}</span>
+              <span>{formatPrice(tip.lastPrice, pairQuote(tip.symbol, tip.exchange, venueQuotes))}</span>
             </TipRow>
             <TipRow>
               <span>{t('heatmap:metric.marketCap')}</span>
-              <span>{formatCompact(tip.marketCapCirculating, marketCapQuote(tip.exchange))}</span>
+              <span>{formatCompact(tip.marketCapCirculating, mcapQuote(tip.exchange))}</span>
             </TipRow>
             <TipRow>
               <span>{t('heatmap:metric.volume')}</span>
-              <span>{formatCompact(tip.quoteVolume, pairQuote(tip.symbol, tip.exchange))}</span>
+              <span>{formatCompact(tip.quoteVolume, pairQuote(tip.symbol, tip.exchange, venueQuotes))}</span>
             </TipRow>
             <TipRow>
               <span>{t('heatmap:venue')}</span>

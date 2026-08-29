@@ -216,18 +216,22 @@ func (h *ScannerHandler) ListResults(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	limit, _ := strconv.Atoi(q.Get("limit"))
 	offset, _ := strconv.Atoi(q.Get("offset"))
-	list, total, err := h.svc.ListResults(r.Context(), clientIDFrom(r), limit, offset)
+	page, err := h.svc.ListResultsPage(r.Context(), clientIDFrom(r), limit, offset)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	items := make([]scannerResultDTO, 0, len(list))
-	for i := range list {
-		items = append(items, resultToDTO(&list[i]))
+	items := make([]scannerResultDTO, 0, len(page.Results))
+	for i := range page.Results {
+		items = append(items, resultToDTO(&page.Results[i]))
+	}
+	setups := make([]map[string]any, 0, len(page.Setups))
+	for _, s := range page.Setups {
+		setups = append(setups, scanner.SetupMap(s))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"clientId": clientIDFrom(r), "results": items, "count": len(items), "total": total,
-		"limit": limit, "offset": offset,
+		"clientId": clientIDFrom(r), "results": items, "count": len(items), "total": page.Total,
+		"limit": limit, "offset": offset, "setups": setups, "hits24h": page.Hits24h,
 	})
 }
 
