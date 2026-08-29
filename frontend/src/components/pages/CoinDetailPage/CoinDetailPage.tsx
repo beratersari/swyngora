@@ -27,6 +27,14 @@ import {
   ORDER_HEATMAP_POLL_MS,
   OrderHeatmap,
 } from '@/components/organisms/OrderHeatmap';
+import {
+  DEFAULT_LIQ_HEATMAP_RANGE,
+  LIQ_HEATMAP_POLL_MS,
+  LiquidationHeatmap,
+  type LiqHeatRange,
+  type LiqHeatSide,
+  type LiqHeatVenue,
+} from '@/components/organisms/LiquidationHeatmap';
 import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
 import {
   rtkErrorMessage,
@@ -39,6 +47,7 @@ import {
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
+  useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
@@ -166,6 +175,9 @@ export function CoinDetailPage() {
   /** Backend group size; empty until the first book returns a default. */
   const [orderBookGroup, setOrderBookGroup] = useState('');
   const [orderHeatmapWindow, setOrderHeatmapWindow] = useState(DEFAULT_ORDER_HEATMAP_WINDOW);
+  const [liqHeatRange, setLiqHeatRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
+  const [liqHeatVenue, setLiqHeatVenue] = useState<LiqHeatVenue>('combined');
+  const [liqHeatSide, setLiqHeatSide] = useState<LiqHeatSide>('totals');
   const [showSignalMarkers, setShowSignalMarkers] = useState(true);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
@@ -384,6 +396,14 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const liqHeatQuery = useGetMarketLiquidationHuntHeatmapQuery(
+    { symbol: perpSymbol, range: liqHeatRange, exchange: 'all' },
+    {
+      skip: skipTape,
+      pollingInterval: visible ? LIQ_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
 
   // First-paint slice + full live window in parallel. The short request usually
   // returns first so the chart can draw before the 300-bar poll window arrives.
@@ -700,6 +720,7 @@ export function CoinDetailPage() {
     void tickerQuery.refetch();
     void orderBookQuery.refetch();
     void orderHeatmapQuery.refetch();
+    void liqHeatQuery.refetch();
     void supplyQuery.refetch();
     void holdersQuery.refetch();
     void firstCandlesQuery.refetch();
@@ -1013,48 +1034,73 @@ export function CoinDetailPage() {
                   key: 'tape',
                   label: t('detail:tabs.tape'),
                   children: (
-                    <TapePanel
-                      openInterest={rtkCurrent(openInterestQuery)}
-                      openInterestError={
-                        openInterestQuery.isError
-                          ? rtkErrorMessage(openInterestQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                404: t('detail:tape.none'),
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      liquidations={rtkCurrent(liquidationsQuery)}
-                      liquidationsError={
-                        liquidationsQuery.isError
-                          ? rtkErrorMessage(liquidationsQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                404: t('detail:tape.none'),
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      cvd={rtkCurrent(cvdQuery)}
-                      cvdError={
-                        cvdQuery.isError
-                          ? rtkErrorMessage(cvdQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      isLoading={
-                        rtkCurrentPending(openInterestQuery) ||
-                        rtkCurrentPending(liquidationsQuery) ||
-                        rtkCurrentPending(cvdQuery)
-                      }
-                    />
+                    <TabStack>
+                      <TapePanel
+                        openInterest={rtkCurrent(openInterestQuery)}
+                        openInterestError={
+                          openInterestQuery.isError
+                            ? rtkErrorMessage(openInterestQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        liquidations={rtkCurrent(liquidationsQuery)}
+                        liquidationsError={
+                          liquidationsQuery.isError
+                            ? rtkErrorMessage(liquidationsQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        cvd={rtkCurrent(cvdQuery)}
+                        cvdError={
+                          cvdQuery.isError
+                            ? rtkErrorMessage(cvdQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        isLoading={
+                          rtkCurrentPending(openInterestQuery) ||
+                          rtkCurrentPending(liquidationsQuery) ||
+                          rtkCurrentPending(cvdQuery)
+                        }
+                      />
+                      <LiquidationHeatmap
+                        data={rtkCurrent(liqHeatQuery)}
+                        range={liqHeatRange}
+                        onRangeChange={setLiqHeatRange}
+                        venue={liqHeatVenue}
+                        onVenueChange={setLiqHeatVenue}
+                        side={liqHeatSide}
+                        onSideChange={setLiqHeatSide}
+                        lastPrice={Number(rtkCurrent(tickerQuery)?.lastPrice)}
+                        isLoading={rtkCurrentPending(liqHeatQuery)}
+                        isFetching={liqHeatQuery.isFetching}
+                        errorMessage={
+                          liqHeatQuery.isError
+                            ? rtkErrorMessage(liqHeatQuery.error, {
+                                resource: t('detail:resource.liqHeatmap'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                      />
+                    </TabStack>
                   ),
                 },
                 {

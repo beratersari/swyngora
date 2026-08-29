@@ -925,6 +925,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-hunt/heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMarketLiquidationHuntHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -3167,6 +3183,34 @@ export interface components {
             live?: boolean;
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
+            note?: string;
+        };
+        LiquidationHuntHeatmapGrid: {
+            exchange?: string;
+            longs?: number[][];
+            shorts?: number[][];
+            totals?: number[][];
+            maxIntensity?: number;
+            coverage?: number;
+            columnsWithOi?: number;
+        };
+        LiquidationHuntHeatmap: {
+            symbol?: string;
+            /** @enum {string} */
+            range?: "12h" | "24h" | "3d" | "7d";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            priceMin?: number;
+            priceMax?: number;
+            priceStep?: number;
+            prices?: number[];
+            times?: string[];
+            binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             note?: string;
         };
         OpenInterestLevel: {
@@ -5536,6 +5580,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationHuntHeatmap: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description 12h | 24h | 3d | 7d */
+                range?: "12h" | "24h" | "3d" | "7d";
+                /** @description binance | bybit | all */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationHuntHeatmap"];
                 };
             };
             400: components["responses"]["Error"];

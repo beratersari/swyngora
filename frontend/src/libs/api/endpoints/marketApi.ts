@@ -11,6 +11,7 @@ import {
   tickerTagId,
   orderBookTagId,
   orderHeatmapTagId,
+  liqHeatmapTagId,
   transformExchangesResponse,
   transformIntervalsResponse,
   transformProductTagsResponse,
@@ -50,6 +51,8 @@ import type {
   OrderBookQuery,
   OrderBookHeatmap,
   OrderBookHeatmapQuery,
+  LiquidationHuntHeatmap,
+  LiquidationHuntHeatmapQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -77,6 +80,8 @@ export type {
   OrderBookQuery,
   OrderBookHeatmap,
   OrderBookHeatmapQuery,
+  LiquidationHuntHeatmap,
+  LiquidationHuntHeatmapQuery,
   SupplyQuery,
   IntervalsQuery,
   IndicatorsQuery,
@@ -232,6 +237,20 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationHuntHeatmap: build.query<
+      LiquidationHuntHeatmap,
+      LiquidationHuntHeatmapQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-hunt/heatmap',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      keepUnusedDataFor: 60,
+      providesTags: (_r, _e, arg) => [
+        { type: 'LiqHeatmap' as const, id: liqHeatmapTagId(arg) },
+      ],
+    }),
+
     getMarketCvd: build.query<MarketCvd, CvdQuery>({
       query: (arg) => ({
         url: '/api/v1/market/cvd',
@@ -345,6 +364,7 @@ export const {
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
+  useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,
   useGetPumpEventsQuery,

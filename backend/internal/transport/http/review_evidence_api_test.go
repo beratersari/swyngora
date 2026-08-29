@@ -216,6 +216,7 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/positioning?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/squeeze-risk?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/liquidation-hunt?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=12h", http.StatusOK},
 		{"/api/v1/market/correlation?symbol=SOLUSDT", http.StatusOK},
 		{"/api/v1/market/breadth", http.StatusOK},
 		{"/api/v1/market/volatility?symbol=SOLUSDT", http.StatusOK},

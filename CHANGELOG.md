@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Liquidation hunt heatmap:** CoinGlass-style price × time intensity from historical OI, price, the hunt leverage mix, and observed liquidations. Ranges 12h / 24h / 3d / 7d. Binance and Bybit separately plus combined sum (`GET /api/v1/market/liquidation-hunt/heatmap`, MCP `get_liquidation_heatmap`). Coin detail Tape tab shows Combined / Binance / Bybit and All / Longs / Shorts (`docs/features/liquidation-hunt.md`)
 - **Recurring buy budget and end date:** optional `budget` (total cash cap; last buy may be a leftover slice) and `endDate` / `endsAt` (inclusive last run; plan becomes `ended`) (`docs/features/recurring-buys.md`)
 - **Recurring buy timezone and max price:** IANA `timeZone` (e.g. `Europe/Istanbul`) plus `hour`/`minute` for a local clock (every Monday 09:00). Optional `maxPrice` skips a run when last, slipped fill, or fee-inclusive unit cost would exceed it (`docs/features/recurring-buys.md`)
 - **AI retry status:** CLI spinner and Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…` (`docs/features/ai-assistant.md`)

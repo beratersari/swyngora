@@ -20,6 +20,11 @@ export type OrderBookHeatmap = components['schemas']['OrderBookHeatmap'];
 export type OrderBookHeatmapQuery = NonNullable<
   operations['getSpotOrderBookHeatmap']['parameters']['query']
 >;
+export type LiquidationHuntHeatmap = components['schemas']['LiquidationHuntHeatmap'];
+export type LiquidationHuntHeatmapGrid = components['schemas']['LiquidationHuntHeatmapGrid'];
+export type LiquidationHuntHeatmapQuery = NonNullable<
+  operations['getMarketLiquidationHuntHeatmap']['parameters']['query']
+>;
 
 export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;

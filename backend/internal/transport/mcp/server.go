@@ -53,6 +53,7 @@ type DataPort interface {
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
@@ -817,6 +818,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_heatmap",
+		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, price, the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d. Returns Binance, Bybit, and combined (sum) grids. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationHuntHeatmap(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

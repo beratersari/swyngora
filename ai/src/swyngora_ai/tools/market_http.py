@@ -446,6 +446,15 @@ class LiquidationHuntInput(BaseModel):
     )
 
 
+class LiquidationHeatmapInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    range: str = Field(default="24h", description="12h | 24h | 3d | 7d")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+
+
 class SqueezeRiskInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1706,6 +1715,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidation-hunt",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_liquidation_heatmap(
+        symbol: str, range: str = "24h", exchange: str = "all"
+    ) -> str:
+        return http.get(
+            "/api/v1/market/liquidation-hunt/heatmap",
+            {"symbol": symbol, "range": range, "exchange": exchange},
         )
 
     def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
@@ -3809,6 +3826,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "of exchange behavior. Not financial advice."
             ),
             args_schema=LiquidationHuntInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_heatmap,
+            name="get_liquidation_heatmap",
+            description=(
+                "Price × time liquidation intensity map (CoinGlass-style) from "
+                "historical open interest, price, the hunt leverage mix, and "
+                "observed liquidations. range=12h|24h|3d|7d. Returns Binance, "
+                "Bybit, and combined (sum) grids. Not financial advice."
+            ),
+            args_schema=LiquidationHeatmapInput,
         ),
         StructuredTool.from_function(
             get_squeeze_risk,

@@ -1716,6 +1716,61 @@ func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
 	}
 }
 
+type huntHeatFut struct {
+	oi []domain.FuturesSnapshot
+}
+
+func (h huntHeatFut) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	if q.Metric == "liquidations" {
+		return []domain.LiquidationEvent{}, nil
+	}
+	if q.Metric == domain.FuturesMetricOpenInterest {
+		return h.oi, nil
+	}
+	return []domain.FuturesSnapshot{}, nil
+}
+
+func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
+	now := time.Now().UTC()
+	var candles []domain.Candle
+	var oi []domain.FuturesSnapshot
+	for i := 0; i < 50; i++ {
+		ts := now.Add(-time.Duration(50-i) * 30 * time.Minute)
+		candles = append(candles, domain.Candle{CloseTime: ts, Close: "100000"})
+		oi = append(oi, domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance,
+			SampledAt: ts, Value: 5_000_000,
+		})
+	}
+	fm := &fakeMarket{candles: candles, ticker: &domain.Ticker24h{LastPrice: "100000"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+		domain.ExchangeBybit:   fm,
+	}, &fakeSupply{})
+	svc.SetFuturesHistory(huntHeatFut{oi: oi})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Range != "24h" || len(got.Times) == 0 || len(got.Prices) != domain.HuntHeatmapPriceBins {
+		t.Fatalf("shape %+v", got)
+	}
+	if got.Binance.MaxIntensity <= 0 {
+		t.Fatalf("binance empty %+v", got.Binance)
+	}
+	if got.Combined.MaxIntensity < got.Binance.MaxIntensity-1 {
+		t.Fatalf("combined %+v", got.Combined)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_BadRange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "9h")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
 func TestGetRawOrderBook(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

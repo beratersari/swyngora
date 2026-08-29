@@ -2409,6 +2409,44 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-hunt/heatmap:
+    get:
+      summary: Liquidation intensity heatmap (price × time)
+      description: |
+        CoinGlass-style grid of estimated liquidation intensity at each price
+        for each time column. Built from historical open interest, mark price,
+        the hunt leverage mix (tilted by funding), blended account long/short,
+        and observed liquidation prints in that column.
+
+        `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+        separately; `combined` is the sum of their cells. Not a live book and
+        not financial advice.
+      operationId: getMarketLiquidationHuntHeatmap
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: range
+          in: query
+          description: 12h | 24h | 3d | 7d
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Price × time intensity grids
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidationHuntHeatmap'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -6968,6 +7006,46 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        note: { type: string }
+    LiquidationHuntHeatmapGrid:
+      type: object
+      properties:
+        exchange: { type: string }
+        longs:
+          type: array
+          items: { type: array, items: { type: number } }
+          description: "[time][price] estimated long-liquidation notional"
+        shorts:
+          type: array
+          items: { type: array, items: { type: number } }
+        totals:
+          type: array
+          items: { type: array, items: { type: number } }
+        maxIntensity: { type: number }
+        coverage: { type: number, description: Fraction of time columns with open interest }
+        columnsWithOi: { type: integer }
+    LiquidationHuntHeatmap:
+      type: object
+      description: Price × time estimated liquidation intensity
+      properties:
+        symbol: { type: string }
+        range: { type: string, enum: [12h, 24h, 3d, 7d] }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        stepSec: { type: integer }
+        priceMin: { type: number }
+        priceMax: { type: number }
+        priceStep: { type: number }
+        prices:
+          type: array
+          items: { type: number }
+          description: Bin centers, highest price first
+        times:
+          type: array
+          items: { type: string, format: date-time }
+        binance: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
         note: { type: string }
     OpenInterestLevel:
       type: object

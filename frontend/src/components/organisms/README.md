@@ -34,6 +34,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `OrderBookPanel` | CoinDetailPage |
 | `OrderDepthChart` | CoinDetailPage |
 | `OrderHeatmap` | CoinDetailPage |
+| `LiquidationHeatmap` | CoinDetailPage (Tape tab) |
 | `PriceChangeHeatmap` | HeatmapPage |
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |
 | `SignalsSetupGrid` / `SignalsHitsTable` / `SignalsRuleForm` / `SignalsRulesTable` / `SignalsBacktestPanel` | SignalsPage |

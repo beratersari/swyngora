@@ -118,6 +118,7 @@
     "intervals": "intervals",
     "orderBook": "order book",
     "tape": "futures tape",
+    "liqHeatmap": "liquidation heatmap",
     "postDelist": "post-delist price"
   },
   "tape": {
@@ -173,6 +174,36 @@
     "asks": "Asks",
     "cumulative": "Cumulative",
     "empty": "No depth for this pair."
+  },
+  "liqHeatmap": {
+    "title": "Liquidation heatmap",
+    "subtitle": "Estimated liquidation intensity by price and time from historical open interest, the hunt leverage mix, and observed prints. Binance and Bybit separately, or combined as a sum. Informational only — not financial advice.",
+    "range": "Range",
+    "venue": "Venue",
+    "side": "Side",
+    "low": "Thin",
+    "high": "Heavy",
+    "total": "Total",
+    "longs": "Longs",
+    "shorts": "Shorts",
+    "coverage": "{{pct}}% of columns have OI",
+    "empty": "No liquidation map for this pair yet.",
+    "ranges": {
+      "12h": "12h",
+      "24h": "24h",
+      "3d": "3d",
+      "7d": "7d"
+    },
+    "venues": {
+      "combined": "Combined",
+      "binance": "Binance",
+      "bybit": "Bybit"
+    },
+    "sides": {
+      "totals": "All",
+      "longs": "Longs",
+      "shorts": "Shorts"
+    }
   },
   "orderHeatmap": {
     "title": "Liquidity heatmap",

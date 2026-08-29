@@ -484,6 +484,19 @@ func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol str
 	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
 }
 
+// GetLiquidationHuntHeatmap returns a price × time liquidation intensity grid.
+func (c *APIClient) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if rawRange != "" {
+		q.Set("range", rawRange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-hunt/heatmap", q)
+}
+
 // GetSqueezeRisk returns long/short squeeze risk scores per venue and combined.
 func (c *APIClient) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

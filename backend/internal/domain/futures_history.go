@@ -13,7 +13,7 @@ const (
 	FuturesMetricLongShort    = "long_short"
 
 	DefaultFuturesHistoryLimit = 200
-	MaxFuturesHistoryLimit     = 1000
+	MaxFuturesHistoryLimit     = 2500
 )
 
 // DefaultFuturesHistorySymbols are always sampled by the background worker.

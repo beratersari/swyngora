@@ -118,6 +118,7 @@
     "intervals": "aralıklar",
     "orderBook": "emir defteri",
     "tape": "vadeli bant",
+    "liqHeatmap": "likidasyon ısı haritası",
     "postDelist": "delist sonrası fiyat"
   },
   "tape": {
@@ -173,6 +174,36 @@
     "asks": "Satış",
     "cumulative": "Birikimli",
     "empty": "Bu çift için derinlik yok."
+  },
+  "liqHeatmap": {
+    "title": "Likidasyon ısı haritası",
+    "subtitle": "Tarihsel açık faiz, hunt kaldıraç karışımı ve gözlenen likidasyonlardan fiyat × zaman yoğunluğu. Binance ve Bybit ayrı; birleşik hücrelerin toplamıdır. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "range": "Aralık",
+    "venue": "Borsa",
+    "side": "Taraf",
+    "low": "İnce",
+    "high": "Yoğun",
+    "total": "Toplam",
+    "longs": "Long",
+    "shorts": "Short",
+    "coverage": "Sütunların %{{pct}} kadarında OI var",
+    "empty": "Bu çift için henüz likidasyon haritası yok.",
+    "ranges": {
+      "12h": "12s",
+      "24h": "24s",
+      "3d": "3g",
+      "7d": "7g"
+    },
+    "venues": {
+      "combined": "Birleşik",
+      "binance": "Binance",
+      "bybit": "Bybit"
+    },
+    "sides": {
+      "totals": "Tümü",
+      "longs": "Long",
+      "shorts": "Short"
+    }
   },
   "orderHeatmap": {
     "title": "Likidite ısı haritası",

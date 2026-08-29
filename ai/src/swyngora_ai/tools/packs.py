@@ -64,6 +64,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_long_short_ratio",
         "get_futures_history",
         "estimate_liquidation_hunt",
+        "get_liquidation_heatmap",
         "get_squeeze_risk",
         "get_positioning",
         "get_venue_divergence",
