@@ -29,6 +29,9 @@ type RecurringBuyCreateInput struct {
 	Hour          *int    // 0-23 local; nil = inherit startAt/now clock unless TimeZone set
 	Minute        *int    // 0-59
 	MaxPrice      float64 // 0 = no cap
+	Budget        float64 // 0 = no cap
+	EndDate       string  // YYYY-MM-DD inclusive last local day
+	EndsAt        *time.Time
 	// StartAt is the first scheduled run (default: now — first worker tick after create).
 	StartAt *time.Time
 }
@@ -50,6 +53,10 @@ type RecurringBuyUpdateInput struct {
 	Hour          *int
 	Minute        *int
 	MaxPrice      *float64
+	Budget        *float64
+	EndDate       *string // YYYY-MM-DD; empty string clears the end with EndsAt
+	EndsAt        *time.Time
+	ClearEnds     bool
 	StartAt       *time.Time // if set, next run is recomputed from this instant
 }
 
@@ -125,6 +132,14 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if err != nil {
 		return nil, err
 	}
+	budget, err := domain.ResolveRecurringBudget(in.Budget)
+	if err != nil {
+		return nil, err
+	}
+	endsAt, err := domain.ResolveRecurringEndsAt(in.EndsAt, in.EndDate, tz)
+	if err != nil {
+		return nil, err
+	}
 	name, err := domain.NormalizeRecurringBuyName(in.Name, sym, freq)
 	if err != nil {
 		return nil, err
@@ -141,11 +156,16 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 		TimeZone: tz, HasLocalTime: hasLocal, Hour: hour, Minute: minute,
 	}
 	next := domain.FirstRecurringRunAt(now, in.StartAt, draft)
+	status := domain.RecurringBuyActive
+	if endsAt != nil && !domain.RecurringPlanAllowsRun(domain.RecurringBuyPlan{EndsAt: endsAt}, next) {
+		status = domain.RecurringBuyEnded
+	}
 	plan := domain.RecurringBuyPlan{
 		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Name: name,
 		Amount: in.Amount, Frequency: freq, Weekday: weekday, DayOfMonth: in.DayOfMonth, IntervalHours: in.IntervalHours,
 		TimeZone: tz, HasLocalTime: hasLocal, Hour: hour, Minute: minute, MaxPrice: maxP,
-		Status: domain.RecurringBuyActive, NextRunAt: next, CreatedAt: now, UpdatedAt: now,
+		Budget: budget, EndsAt: endsAt,
+		Status: status, NextRunAt: next, CreatedAt: now, UpdatedAt: now,
 	}
 	return s.store.CreateRecurringBuyPlan(ctx, plan)
 }
@@ -236,6 +256,26 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 			return nil, err
 		}
 	}
+	budget := cur.Budget
+	if in.Budget != nil {
+		budget, err = domain.ResolveRecurringBudget(*in.Budget)
+		if err != nil {
+			return nil, err
+		}
+	}
+	endsAt := cur.EndsAt
+	if in.ClearEnds {
+		endsAt = nil
+	} else if in.EndDate != nil || in.EndsAt != nil {
+		endDate := ""
+		if in.EndDate != nil {
+			endDate = *in.EndDate
+		}
+		endsAt, err = domain.ResolveRecurringEndsAt(in.EndsAt, endDate, tz)
+		if err != nil {
+			return nil, err
+		}
+	}
 	name := cur.Name
 	if in.Name != nil {
 		name, err = domain.NormalizeRecurringBuyName(*in.Name, cur.Symbol, freq)
@@ -265,8 +305,16 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	updated.Hour = hour
 	updated.Minute = minute
 	updated.MaxPrice = maxP
+	updated.Budget = budget
+	updated.EndsAt = endsAt
 	updated.NextRunAt = next
 	updated.UpdatedAt = now
+	if updated.Status == domain.RecurringBuyEnded && (endsAt == nil || domain.RecurringPlanAllowsRun(updated, now)) {
+		updated.Status = domain.RecurringBuyActive
+	}
+	if endsAt != nil && !domain.RecurringPlanAllowsRun(updated, next) {
+		updated.Status = domain.RecurringBuyEnded
+	}
 	return s.store.UpdateRecurringBuyPlan(ctx, clientID, id, updated)
 }
 
@@ -313,6 +361,11 @@ func (s *Service) setRecurringStatus(ctx context.Context, clientID, id string, s
 		return nil, err
 	}
 	now := time.Now().UTC()
+	if status == domain.RecurringBuyActive && plan.Status == domain.RecurringBuyEnded {
+		if plan.EndsAt != nil && now.After(*plan.EndsAt) {
+			return nil, fmt.Errorf("%w: plan ended; extend endDate or endsAt first", domain.ErrInvalidArgument)
+		}
+	}
 	next := plan.NextRunAt
 	if bumpPastNext && next.Before(now) {
 		next = now
@@ -401,10 +454,35 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 		return s.store.AdvanceRecurringBuyPlan(ctx, plan.ID, nextAfter, periodKey, now)
 	}
 
-	// Execute market buy for cash amount.
+	// Reload after claim so a PATCH (maxPrice, budget, end, pause) wins over the
+	// snapshot this worker started with.
+	fresh, err := s.store.GetRecurringBuyPlan(ctx, plan.ClientID, plan.ID)
+	if err != nil || fresh == nil {
+		final := *run
+		final.Status = domain.RecurringBuyRunFailed
+		final.FailReason = "plan unavailable"
+		final.ExecutedAt = now
+		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
+	}
 	final := *run
 	final.ExecutedAt = now
-	tr, failReason := s.executeRecurringCashBuy(ctx, plan, now)
+	if fresh.Status != domain.RecurringBuyActive {
+		final.Status = domain.RecurringBuyRunFailed
+		final.FailReason = "plan paused"
+		if fresh.Status == domain.RecurringBuyEnded {
+			final.FailReason = "plan ended"
+			final.PlanStatus = domain.RecurringBuyEnded
+		}
+		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
+	}
+	if !domain.RecurringPlanAllowsRun(*fresh, scheduledFor) {
+		final.Status = domain.RecurringBuyRunFailed
+		final.FailReason = "plan ended"
+		final.PlanStatus = domain.RecurringBuyEnded
+		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
+	}
+
+	tr, failReason := s.executeRecurringCashBuy(ctx, fresh, scheduledFor, now)
 	if tr != nil {
 		final.Status = domain.RecurringBuyRunSucceeded
 		final.FailReason = ""
@@ -415,27 +493,53 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 	} else {
 		final.Status = domain.RecurringBuyRunFailed
 		final.FailReason = failReason
-		final.Amount = plan.Amount
+		final.Amount = fresh.Amount
+		if failReason == "plan ended" {
+			final.PlanStatus = domain.RecurringBuyEnded
+		}
+	}
+	if fresh.EndsAt != nil && nextAfter.After(*fresh.EndsAt) {
+		final.PlanStatus = domain.RecurringBuyEnded
 	}
 	return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
 }
 
 // executeRecurringCashBuy spends up to plan.Amount cash at last price (qty = amount/price).
-func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, now time.Time) (*domain.Trade, string) {
+// It reloads the plan after the last print and again immediately before PlaceOrder so a
+// concurrent maxPrice / budget / pause / end PATCH cannot fill with stale limits.
+func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time) (*domain.Trade, string) {
 	price, err := s.lastPrice(ctx, string(plan.Exchange), plan.Symbol)
 	if err != nil || price <= 0 {
 		return nil, "market price unavailable"
 	}
-	cost := s.paperCost(plan.Exchange)
-	if reason := domain.RecurringMaxPriceBlocks(price, cost.SlippageRate, cost.FeeRate, plan.MaxPrice); reason != "" {
+	fresh, reason := s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price)
+	if reason != "" {
 		return nil, reason
 	}
+	cost := s.paperCost(fresh.Exchange)
 	fill := domain.ApplySlippage(price, domain.TradeSideBuy, cost.SlippageRate)
 	unit := domain.BuyUnitCost(fill, cost.FeeRate)
 	if unit <= 0 {
 		return nil, "market price unavailable"
 	}
-	qty := plan.Amount / unit
+	spend, reason := domain.RecurringSpendAmount(*fresh)
+	if reason != "" {
+		return nil, reason
+	}
+	qty := spend / unit
+	if qty < domain.MinTradeQuantity {
+		return nil, "buy quantity too small for amount"
+	}
+	// Re-check immediately before the fill so a PATCH during sizing still applies.
+	fresh, reason = s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price)
+	if reason != "" {
+		return nil, reason
+	}
+	spend, reason = domain.RecurringSpendAmount(*fresh)
+	if reason != "" {
+		return nil, reason
+	}
+	qty = spend / unit
 	if qty < domain.MinTradeQuantity {
 		return nil, "buy quantity too small for amount"
 	}
@@ -464,4 +568,25 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 	}
 	_ = now
 	return tr, ""
+}
+
+func (s *Service) recurringPlanReadyToBuy(ctx context.Context, bookID, planID string, scheduledFor time.Time, last float64) (*domain.RecurringBuyPlan, string) {
+	fresh, err := s.store.GetRecurringBuyPlan(ctx, bookID, planID)
+	if err != nil || fresh == nil {
+		return nil, "plan unavailable"
+	}
+	if fresh.Status != domain.RecurringBuyActive {
+		if fresh.Status == domain.RecurringBuyEnded {
+			return nil, "plan ended"
+		}
+		return nil, "plan paused"
+	}
+	if !domain.RecurringPlanAllowsRun(*fresh, scheduledFor) {
+		return nil, "plan ended"
+	}
+	cost := s.paperCost(fresh.Exchange)
+	if reason := domain.RecurringMaxPriceBlocks(last, cost.SlippageRate, cost.FeeRate, fresh.MaxPrice); reason != "" {
+		return nil, reason
+	}
+	return fresh, ""
 }

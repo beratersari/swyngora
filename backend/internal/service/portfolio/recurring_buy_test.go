@@ -403,4 +403,104 @@ func TestRecurringBuy_MaxPriceBlocksAfterFeeAndSlippage(t *testing.T) {
 	}
 }
 
+func TestRecurringBuy_MaxPricePatchAppliesToInFlightWorker(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "64000"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-race-max", StartingBalance: 200000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-race-max", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &past, MaxPrice: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.market = &patchMaxOnTick{svc: svc, clientID: "rb-race-max", planID: plan.ID, inner: px}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-race-max", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed {
+		t.Fatalf("in-flight maxPrice PATCH must block the buy %+v", runs)
+	}
+	if !strings.Contains(runs[0].FailReason, "maxPrice") {
+		t.Fatalf("reason=%q", runs[0].FailReason)
+	}
+	view, _ := svc.View(ctx, "rb-race-max")
+	if view.CashBalance < 199999 {
+		t.Fatalf("should not spend, cash=%v", view.CashBalance)
+	}
+}
+
+type patchMaxOnTick struct {
+	svc      *Service
+	clientID string
+	planID   string
+	inner    *fakePx
+}
+
+func (p *patchMaxOnTick) GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error) {
+	max := 100.0
+	_, _ = p.svc.UpdateRecurringBuyPlan(ctx, RecurringBuyUpdateInput{
+		ClientID: p.clientID, PlanID: p.planID, MaxPrice: &max,
+	})
+	return p.inner.GetTicker24h(ctx, exchange, symbol)
+}
+
+func TestRecurringBuy_BudgetAndEndDate(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-bud", StartingBalance: 20000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	end := time.Now().UTC().Add(24 * time.Hour)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-bud", Symbol: "BTCUSDT", Amount: 500, Frequency: "daily",
+		StartAt: &past, Budget: 500, EndsAt: &end,
+	})
+	if err != nil || plan.Budget != 500 || plan.EndsAt == nil {
+		t.Fatalf("%+v %v", plan, err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	view, _ := svc.View(ctx, "rb-bud")
+	if view.CashBalance < 19499 || view.CashBalance > 19501 {
+		t.Fatalf("budget 500 should spend 500, cash=%v", view.CashBalance)
+	}
+	got, _ := svc.GetRecurringBuyPlan(ctx, "rb-bud", plan.ID)
+	if got.Spent < 499 || got.Spent > 501 {
+		t.Fatalf("spent=%v", got.Spent)
+	}
+
+	// Next calendar period (same daily plan, later clock): budget exhausted
+	later := time.Now().UTC().Add(26 * time.Hour)
+	if _, err := svc.ProcessDueRecurringBuys(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-bud", plan.ID, 10, 0)
+	var exhausted bool
+	for _, r := range runs {
+		if r.FailReason == "budget exhausted" {
+			exhausted = true
+		}
+	}
+	if !exhausted {
+		t.Fatalf("want budget exhausted %+v", runs)
+	}
+
+	pastEnd := time.Now().UTC().Add(-time.Hour)
+	ended, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-bud", Symbol: "BTCUSDT", Amount: 100, Frequency: "daily",
+		StartAt: &past, EndsAt: &pastEnd,
+	})
+	if err != nil || ended.Status != domain.RecurringBuyEnded {
+		t.Fatalf("past end should create ended %+v %v", ended, err)
+	}
+}
+
 func intPtr(v int) *int { return &v }

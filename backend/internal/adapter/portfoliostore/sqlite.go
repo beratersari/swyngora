@@ -155,6 +155,9 @@ CREATE TABLE IF NOT EXISTS recurring_buy_plans (
 	hour            INTEGER NOT NULL DEFAULT 0,
 	minute          INTEGER NOT NULL DEFAULT 0,
 	max_price       REAL NOT NULL DEFAULT 0,
+	budget          REAL NOT NULL DEFAULT 0,
+	spent           REAL NOT NULL DEFAULT 0,
+	ends_at         TEXT,
 	status          TEXT NOT NULL,
 	next_run_at     TEXT NOT NULL,
 	last_run_at     TEXT,
@@ -380,6 +383,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE recurring_buy_plans ADD COLUMN hour INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN minute INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN max_price REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN budget REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN spent REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE recurring_buy_plans ADD COLUMN ends_at TEXT`,
 		`ALTER TABLE portfolios ADD COLUMN net_deposits REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN lot_method TEXT NOT NULL DEFAULT 'fifo'`,
 		`ALTER TABLE trades ADD COLUMN lot_method TEXT NOT NULL DEFAULT ''`,
@@ -1761,17 +1767,17 @@ func parseTime(raw string) time.Time {
 }
 
 const recurringPlanCols = `id, client_id, exchange, symbol, name, amount, frequency, weekday, day_of_month, interval_hours,
-	time_zone, has_local_time, hour, minute, max_price, status,
+	time_zone, has_local_time, hour, minute, max_price, budget, spent, ends_at, status,
 	next_run_at, last_run_at, last_period_key, created_at, updated_at`
 
 func scanRecurringPlan(row scannable) (*domain.RecurringBuyPlan, error) {
 	var p domain.RecurringBuyPlan
 	var ex, freq, st, next, cAt, uAt string
-	var lastRun sql.NullString
+	var lastRun, endsAt sql.NullString
 	var hasLocal int
 	if err := row.Scan(
 		&p.ID, &p.ClientID, &ex, &p.Symbol, &p.Name, &p.Amount, &freq, &p.Weekday, &p.DayOfMonth, &p.IntervalHours,
-		&p.TimeZone, &hasLocal, &p.Hour, &p.Minute, &p.MaxPrice, &st,
+		&p.TimeZone, &hasLocal, &p.Hour, &p.Minute, &p.MaxPrice, &p.Budget, &p.Spent, &endsAt, &st,
 		&next, &lastRun, &p.LastPeriodKey, &cAt, &uAt,
 	); err != nil {
 		return nil, err
@@ -1787,6 +1793,10 @@ func scanRecurringPlan(row scannable) (*domain.RecurringBuyPlan, error) {
 		t := parseTime(lastRun.String)
 		p.LastRunAt = &t
 	}
+	if endsAt.Valid && endsAt.String != "" {
+		t := parseTime(endsAt.String)
+		p.EndsAt = &t
+	}
 	return &p, nil
 }
 
@@ -1796,9 +1806,9 @@ func (s *SQLite) CreateRecurringBuyPlan(ctx context.Context, p domain.RecurringB
 	defer s.mu.Unlock()
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO recurring_buy_plans (`+recurringPlanCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, p.ID, p.ClientID, string(p.Exchange), p.Symbol, p.Name, p.Amount, string(p.Frequency), p.Weekday, p.DayOfMonth, p.IntervalHours,
-		p.TimeZone, boolToInt(p.HasLocalTime), p.Hour, p.Minute, p.MaxPrice, string(p.Status),
+		p.TimeZone, boolToInt(p.HasLocalTime), p.Hour, p.Minute, p.MaxPrice, p.Budget, p.Spent, nullTime(p.EndsAt), string(p.Status),
 		p.NextRunAt.UTC().Format(time.RFC3339Nano), nullTime(p.LastRunAt), p.LastPeriodKey,
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -1876,10 +1886,12 @@ func (s *SQLite) UpdateRecurringBuyPlan(ctx context.Context, clientID, id string
 		UPDATE recurring_buy_plans
 		SET name = ?, amount = ?, frequency = ?, weekday = ?, day_of_month = ?, interval_hours = ?,
 		    time_zone = ?, has_local_time = ?, hour = ?, minute = ?, max_price = ?,
+		    budget = ?, ends_at = ?, status = ?,
 		    next_run_at = ?, updated_at = ?
 		WHERE id = ? AND client_id = ?
 	`, p.Name, p.Amount, string(p.Frequency), p.Weekday, p.DayOfMonth, p.IntervalHours,
 		p.TimeZone, boolToInt(p.HasLocalTime), p.Hour, p.Minute, p.MaxPrice,
+		p.Budget, nullTime(p.EndsAt), string(p.Status),
 		p.NextRunAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano), id, clientID)
 	if err != nil {
 		return nil, err
@@ -1971,11 +1983,17 @@ func (s *SQLite) FinishRecurringBuyRun(ctx context.Context, planID string, run d
 		run.ExecutedAt.UTC().Format(time.RFC3339Nano), run.ID); err != nil {
 		return err
 	}
+	spentDelta := 0.0
+	if run.Status == domain.RecurringBuyRunSucceeded && run.Amount > 0 {
+		spentDelta = run.Amount
+	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE recurring_buy_plans SET next_run_at = ?, last_run_at = ?, last_period_key = ?, updated_at = ?
+		UPDATE recurring_buy_plans SET next_run_at = ?, last_run_at = ?, last_period_key = ?, updated_at = ?,
+			spent = spent + ?,
+			status = CASE WHEN ? != '' THEN ? ELSE status END
 		WHERE id = ?
 	`, nextRunAt.UTC().Format(time.RFC3339Nano), at.UTC().Format(time.RFC3339Nano), lastPeriodKey,
-		at.UTC().Format(time.RFC3339Nano), planID); err != nil {
+		at.UTC().Format(time.RFC3339Nano), spentDelta, string(run.PlanStatus), string(run.PlanStatus), planID); err != nil {
 		return err
 	}
 	return tx.Commit()

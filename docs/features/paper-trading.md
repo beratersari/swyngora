@@ -45,7 +45,7 @@ Backup and restore owned books with the user data export/import jobs (`sections=
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create named recurring buy (DCA) plan |
 | `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}` | Get plan |
-| `PATCH` | `/api/v1/portfolio/recurring-buys/{id}` | Update name / amount / schedule / timeZone / maxPrice |
+| `PATCH` | `/api/v1/portfolio/recurring-buys/{id}` | Update name / amount / schedule / timeZone / maxPrice / budget / endDate |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |

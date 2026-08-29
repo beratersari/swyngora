@@ -18,6 +18,7 @@ const (
 	MinRecurringIntervalHours     = 1
 	MaxRecurringIntervalHours     = 168 // 7 days
 	MaxRecurringBuyMaxPrice       = 1e12
+	MaxRecurringBuyBudget         = 1e12
 	// RecurringHourUnset means keep the clock from startAt / previous nextRunAt.
 	RecurringHourUnset = -1
 )
@@ -38,6 +39,7 @@ type RecurringBuyPlanStatus string
 const (
 	RecurringBuyActive RecurringBuyPlanStatus = "active"
 	RecurringBuyPaused RecurringBuyPlanStatus = "paused"
+	RecurringBuyEnded  RecurringBuyPlanStatus = "ended"
 )
 
 // RecurringBuyRunStatus is the outcome of one scheduled execution attempt.
@@ -58,14 +60,17 @@ type RecurringBuyPlan struct {
 	Name          string  // user label e.g. "Salary Day Buy"
 	Amount        float64 // cash notional per run
 	Frequency     RecurringBuyFrequency
-	Weekday       string  // monday..sunday; weekly only (optional)
-	DayOfMonth    int     // 1-31; monthly only (optional; 0 = anniversary of start)
-	IntervalHours int     // 1-168; interval frequency only
-	TimeZone      string  // IANA e.g. Europe/Istanbul; empty = UTC
-	HasLocalTime  bool    // when true, Hour:Minute is the local clock
-	Hour          int     // 0-23 local when HasLocalTime
-	Minute        int     // 0-59 local
-	MaxPrice      float64 // 0 = no cap; last, slipped fill, and fee-inclusive unit must all stay <= this
+	Weekday       string     // monday..sunday; weekly only (optional)
+	DayOfMonth    int        // 1-31; monthly only (optional; 0 = anniversary of start)
+	IntervalHours int        // 1-168; interval frequency only
+	TimeZone      string     // IANA e.g. Europe/Istanbul; empty = UTC
+	HasLocalTime  bool       // when true, Hour:Minute is the local clock
+	Hour          int        // 0-23 local when HasLocalTime
+	Minute        int        // 0-59 local
+	MaxPrice      float64    // 0 = no cap; last, slipped fill, and fee-inclusive unit must all stay <= this
+	Budget        float64    // 0 = no cap; total cash across succeeded runs
+	Spent         float64    // cash spent on succeeded runs
+	EndsAt        *time.Time // inclusive last allowed scheduled instant; nil = no end
 	Status        RecurringBuyPlanStatus
 	NextRunAt     time.Time
 	LastRunAt     *time.Time
@@ -88,6 +93,9 @@ type RecurringBuyRun struct {
 	FailReason   string
 	ScheduledFor time.Time // the schedule instant this run represents
 	ExecutedAt   time.Time
+	// PlanStatus is not stored on the run row. FinishRecurringBuyRun writes it
+	// onto the plan when set (e.g. ended).
+	PlanStatus RecurringBuyPlanStatus
 }
 
 // IsValidRecurringBuyFrequency reports daily|weekly|monthly|interval.
@@ -241,11 +249,135 @@ func (p RecurringBuyPlan) location() *time.Location {
 func applyRecurringClock(t time.Time, p RecurringBuyPlan) time.Time {
 	loc := p.location()
 	lt := t.In(loc)
-	h, m, sec, nsec := lt.Hour(), lt.Minute(), lt.Second(), lt.Nanosecond()
 	if p.HasLocalTime || strings.TrimSpace(p.TimeZone) != "" {
-		h, m, sec, nsec = p.Hour, p.Minute, 0, 0
+		return CivilLocalTime(lt.Year(), lt.Month(), lt.Day(), p.Hour, p.Minute, loc)
 	}
-	return time.Date(lt.Year(), lt.Month(), lt.Day(), h, m, sec, nsec, loc)
+	return time.Date(lt.Year(), lt.Month(), lt.Day(), lt.Hour(), lt.Minute(), lt.Second(), lt.Nanosecond(), loc)
+}
+
+// CivilLocalTime is the instant for a wall-clock time in loc, DST-aware:
+//   - spring-forward gap (e.g. 02:30 America/New_York on the start day) snaps to
+//     the first valid local time after the gap on that calendar day
+//   - fall-back overlap (e.g. 01:30 on the end day) uses the first occurrence
+//
+// Embedded tzdata is loaded so IANA names work on every OS.
+func CivilLocalTime(year int, month time.Month, day, hour, minute int, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.UTC
+	}
+	wantMin := hour*60 + minute
+	// Walk real minutes from local midnight so a skipped hour is never invented
+	// and a repeated hour is taken on its first occurrence.
+	start := time.Date(year, month, day, 0, 0, 0, 0, loc)
+	var last time.Time
+	for i := 0; i < 24*60+180; i++ {
+		cand := start.Add(time.Duration(i) * time.Minute)
+		lt := cand.In(loc)
+		if lt.Year() != year || lt.Month() != month || lt.Day() != day {
+			if !last.IsZero() {
+				return last
+			}
+			break
+		}
+		gotMin := lt.Hour()*60 + lt.Minute()
+		if gotMin >= wantMin {
+			return cand
+		}
+		last = cand
+	}
+	return time.Date(year, month, day, hour, minute, 0, 0, loc)
+}
+
+// ResolveRecurringBudget accepts 0 (no cap) or a positive finite cash budget.
+func ResolveRecurringBudget(v float64) (float64, error) {
+	if v == 0 {
+		return 0, nil
+	}
+	if v < MinRecurringBuyAmount || math.IsNaN(v) || math.IsInf(v, 0) || v > MaxRecurringBuyBudget {
+		return 0, fmt.Errorf("%w: budget must be between %g and %g", ErrInvalidArgument, MinRecurringBuyAmount, MaxRecurringBuyBudget)
+	}
+	return v, nil
+}
+
+// RecurringRemainingBudget is leftover cash when Budget > 0; +Inf when unlimited.
+func RecurringRemainingBudget(p RecurringBuyPlan) float64 {
+	if p.Budget <= 0 {
+		return math.Inf(1)
+	}
+	rem := p.Budget - p.Spent
+	if rem < 0 {
+		return 0
+	}
+	return rem
+}
+
+// RecurringSpendAmount is cash to spend this run (last period may be a partial leftover).
+// Empty reason means ok; spend is 0 when the budget cannot cover a minimum buy.
+func RecurringSpendAmount(p RecurringBuyPlan) (spend float64, reason string) {
+	spend = p.Amount
+	if p.Budget <= 0 {
+		return spend, ""
+	}
+	rem := RecurringRemainingBudget(p)
+	if rem+1e-9 < MinRecurringBuyAmount {
+		return 0, "budget exhausted"
+	}
+	if rem < spend {
+		spend = rem
+	}
+	return spend, ""
+}
+
+// ParseRecurringEndDate treats YYYY-MM-DD as the last inclusive local calendar day in tz.
+func ParseRecurringEndDate(endDate, tz string) (*time.Time, error) {
+	endDate = strings.TrimSpace(endDate)
+	if endDate == "" {
+		return nil, nil
+	}
+	loc := RecurringLocation(tz)
+	t, err := time.ParseInLocation("2006-01-02", endDate, loc)
+	if err != nil {
+		return nil, fmt.Errorf("%w: endDate must be YYYY-MM-DD", ErrInvalidArgument)
+	}
+	last := t.AddDate(0, 0, 1).Add(-time.Nanosecond)
+	return &last, nil
+}
+
+// ResolveRecurringEndsAt combines an RFC3339 instant (inclusive) and/or YYYY-MM-DD.
+// When both are set, the earlier instant wins.
+func ResolveRecurringEndsAt(endsAt *time.Time, endDate, tz string) (*time.Time, error) {
+	var out *time.Time
+	if endsAt != nil && !endsAt.IsZero() {
+		u := endsAt.UTC()
+		out = &u
+	}
+	fromDate, err := ParseRecurringEndDate(endDate, tz)
+	if err != nil {
+		return nil, err
+	}
+	if fromDate != nil {
+		u := fromDate.UTC()
+		if out == nil || u.Before(*out) {
+			out = &u
+		}
+	}
+	return out, nil
+}
+
+// RecurringEndDate is the local YYYY-MM-DD of EndsAt, or empty.
+func RecurringEndDate(p RecurringBuyPlan) string {
+	if p.EndsAt == nil || p.EndsAt.IsZero() {
+		return ""
+	}
+	return p.EndsAt.In(p.location()).Format("2006-01-02")
+}
+
+// RecurringPlanAllowsRun is true when scheduledFor is on or before EndsAt (or there is no end).
+func RecurringPlanAllowsRun(p RecurringBuyPlan, scheduledFor time.Time) bool {
+	if p.EndsAt == nil || p.EndsAt.IsZero() {
+		return true
+	}
+	return !scheduledFor.UTC().After(p.EndsAt.UTC())
 }
 
 // ValidateRecurringSchedule checks weekday / dayOfMonth / intervalHours vs frequency.

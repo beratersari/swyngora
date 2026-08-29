@@ -4571,9 +4571,14 @@ paths:
         frequency: daily | weekly | monthly | interval.
         weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
         interval + intervalHours (1-168, e.g. 12 = every 12 hours).
-        Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for local clock
-        (Monday 09:00). Optional maxPrice skips a run when last, slipped fill, or
-        fee-inclusive unit cost would exceed it.
+        Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for a DST-aware
+        local clock (Monday 09:00; spring-forward snaps to the next valid local time,
+        fall-back uses the first occurrence). Optional maxPrice skips a run when last,
+        slipped fill, or fee-inclusive unit cost would exceed it (re-read after the
+        worker starts so a PATCH applies to an in-flight tick).
+        Optional budget is a total cash cap across succeeded runs (last buy may be partial).
+        Optional endDate (YYYY-MM-DD in timeZone, inclusive last local day) or endsAt (RFC3339)
+        stops further buys and marks the plan ended.
         Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
         Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
         Missed periods execute only the latest due slot (no backlog of intermediate buys).
@@ -4640,6 +4645,19 @@ paths:
                   minimum: 0
                   description: Skip the run if last, slipped fill, or fee-inclusive unit cost exceeds this. 0 = no cap.
                   example: 65000
+                budget:
+                  type: number
+                  minimum: 0
+                  description: Total cash cap across succeeded runs. 0 = no cap. Last buy may spend leftover.
+                  example: 10000
+                endDate:
+                  type: string
+                  description: Last inclusive local calendar day (YYYY-MM-DD) in timeZone
+                  example: "2026-12-31"
+                endsAt:
+                  type: string
+                  format: date-time
+                  description: Inclusive last allowed scheduled instant (RFC3339)
                 startAt:
                   type: string
                   format: date-time
@@ -4740,6 +4758,9 @@ paths:
                 hour: { type: integer, minimum: 0, maximum: 23 }
                 minute: { type: integer, minimum: 0, maximum: 59 }
                 maxPrice: { type: number, minimum: 0 }
+                budget: { type: number, minimum: 0 }
+                endDate: { type: string, example: "2026-12-31" }
+                endsAt: { type: string, format: date-time }
                 startAt: { type: string, format: date-time }
       responses:
         '200':
@@ -7885,9 +7906,25 @@ components:
         maxPrice:
           type: number
           description: Skip when last or fee+slippage unit cost would exceed this; 0 = none
+        budget:
+          type: number
+          description: Total cash cap across succeeded runs; 0 = none
+        spent:
+          type: number
+          description: Cash spent on succeeded runs
+        remainingBudget:
+          type: number
+          description: budget minus spent when budget is set
+        endsAt:
+          type: string
+          format: date-time
+          description: Inclusive last allowed scheduled instant
+        endDate:
+          type: string
+          description: Local YYYY-MM-DD of endsAt
         status:
           type: string
-          enum: [active, paused]
+          enum: [active, paused, ended]
         nextRunAt: { type: string, format: date-time }
         lastRunAt: { type: string, format: date-time, nullable: true }
         lastPeriodKey:
@@ -7912,7 +7949,7 @@ components:
         tradeId: { type: string }
         failReason:
           type: string
-          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage
+          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
     AllocationTarget:

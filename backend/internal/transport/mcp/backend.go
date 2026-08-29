@@ -2565,7 +2565,7 @@ func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string)
 	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; unused reservation released; it will not execute."})
 }
 
-func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error) {
+func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -2586,11 +2586,22 @@ func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Name: name,
 		Amount: amount, Frequency: frequency, Weekday: weekday,
 		DayOfMonth: dayOfMonth, IntervalHours: intervalHours, StartAt: start,
-		TimeZone: timeZone, MaxPrice: maxPrice,
+		TimeZone: timeZone, MaxPrice: maxPrice, Budget: budget, EndDate: endDate,
 	}
 	if hour != domain.RecurringHourUnset {
 		h, m := hour, minute
 		in.Hour, in.Minute = &h, &m
+	}
+	if endsAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, endsAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, endsAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: endsAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		in.EndsAt = &tu
 	}
 	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, in)
 	if err != nil {
@@ -2599,7 +2610,7 @@ func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange
 	return mustJSON(recurringPlanMap(plan))
 }
 
-func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error) {
+func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string, clearEnds bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -2631,6 +2642,27 @@ func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name
 	}
 	if maxPrice >= 0 {
 		in.MaxPrice = &maxPrice
+	}
+	if budget >= 0 {
+		in.Budget = &budget
+	}
+	if clearEnds {
+		in.ClearEnds = true
+	} else {
+		if endDate != "" {
+			in.EndDate = &endDate
+		}
+		if endsAt != "" {
+			t, err := time.Parse(time.RFC3339Nano, endsAt)
+			if err != nil {
+				t, err = time.Parse(time.RFC3339, endsAt)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("%w: endsAt must be RFC3339", domain.ErrInvalidArgument)
+			}
+			tu := t.UTC()
+			in.EndsAt = &tu
+		}
 	}
 	if startAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, startAt)
@@ -3132,6 +3164,18 @@ func recurringPlanMap(p *domain.RecurringBuyPlan) map[string]any {
 	}
 	if p.MaxPrice > 0 {
 		m["maxPrice"] = p.MaxPrice
+	}
+	if p.Budget > 0 {
+		m["budget"] = p.Budget
+		m["spent"] = p.Spent
+		rem := domain.RecurringRemainingBudget(*p)
+		if rem < 1e18 {
+			m["remainingBudget"] = rem
+		}
+	}
+	if p.EndsAt != nil && !p.EndsAt.IsZero() {
+		m["endsAt"] = p.EndsAt.UTC().Format(time.RFC3339Nano)
+		m["endDate"] = domain.RecurringEndDate(*p)
 	}
 	if p.LastRunAt != nil {
 		m["lastRunAt"] = p.LastRunAt.UTC().Format(time.RFC3339Nano)

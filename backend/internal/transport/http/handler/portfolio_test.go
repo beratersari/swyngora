@@ -607,6 +607,19 @@ func TestPortfolioHTTP_RecurringBuyTimezoneAndMaxPrice(t *testing.T) {
 	if plan["hour"].(float64) != 10 || plan["maxPrice"].(float64) != 64000 {
 		t.Fatalf("%v", plan)
 	}
+	body, _ = json.Marshal(map[string]any{"budget": 8000, "endDate": "2026-12-31"})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/portfolio/recurring-buys/"+id+"?clientId=http-rb-tz", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.UpdateRecurringBuy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch budget/end %d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["budget"].(float64) != 8000 || plan["endDate"] != "2026-12-31" {
+		t.Fatalf("%v", plan)
+	}
 }
 
 func TestPortfolioHTTP_AllocationBasketRebalance(t *testing.T) {

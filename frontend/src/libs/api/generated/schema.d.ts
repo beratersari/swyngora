@@ -3868,8 +3868,21 @@ export interface components {
             minute?: number;
             /** @description Skip when last or fee+slippage unit cost would exceed this; 0 = none */
             maxPrice?: number;
+            /** @description Total cash cap across succeeded runs; 0 = none */
+            budget?: number;
+            /** @description Cash spent on succeeded runs */
+            spent?: number;
+            /** @description budget minus spent when budget is set */
+            remainingBudget?: number;
+            /**
+             * Format: date-time
+             * @description Inclusive last allowed scheduled instant
+             */
+            endsAt?: string;
+            /** @description Local YYYY-MM-DD of endsAt */
+            endDate?: string;
             /** @enum {string} */
-            status?: "active" | "paused";
+            status?: "active" | "paused" | "ended";
             /** Format: date-time */
             nextRunAt?: string;
             /** Format: date-time */
@@ -3892,7 +3905,7 @@ export interface components {
             quantity?: number;
             price?: number;
             tradeId?: string;
-            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage */
+            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended */
             failReason?: string;
             /** Format: date-time */
             scheduledFor?: string;
@@ -7667,6 +7680,21 @@ export interface operations {
                      */
                     maxPrice?: number;
                     /**
+                     * @description Total cash cap across succeeded runs. 0 = no cap. Last buy may spend leftover.
+                     * @example 10000
+                     */
+                    budget?: number;
+                    /**
+                     * @description Last inclusive local calendar day (YYYY-MM-DD) in timeZone
+                     * @example 2026-12-31
+                     */
+                    endDate?: string;
+                    /**
+                     * Format: date-time
+                     * @description Inclusive last allowed scheduled instant (RFC3339)
+                     */
+                    endsAt?: string;
+                    /**
                      * Format: date-time
                      * @description First scheduled run (RFC3339); default is now (next worker tick)
                      */
@@ -7774,6 +7802,11 @@ export interface operations {
                     hour?: number;
                     minute?: number;
                     maxPrice?: number;
+                    budget?: number;
+                    /** @example 2026-12-31 */
+                    endDate?: string;
+                    /** Format: date-time */
+                    endsAt?: string;
                     /** Format: date-time */
                     startAt?: string;
                 };

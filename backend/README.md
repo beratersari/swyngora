@@ -114,7 +114,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (FIFO/LIFO remaining buys) |
 | `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |
-| `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name, schedule, timezone, maxPrice / delete plan |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name, schedule, timezone, maxPrice, budget, endDate / delete plan |
 | `POST`/`GET` | `/api/v1/portfolio/baskets` | Create / list named allocation baskets (target % mix) |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/baskets/{id}` | Get with live drift / update / delete |
 | `GET`/`POST` | `/api/v1/portfolio/baskets/{id}/preview` · `/rebalance` | Preview or user-triggered rebalance |

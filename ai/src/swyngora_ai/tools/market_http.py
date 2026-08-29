@@ -1266,6 +1266,9 @@ class RecurringBuyCreateInput(BaseModel):
     hour: int | None = Field(default=None, description="Local hour 0-23")
     minute: int = Field(default=0, description="Local minute 0-59")
     max_price: float = Field(default=0, description="Skip if last or fee+slippage unit exceeds this; 0 = no cap")
+    budget: float = Field(default=0, description="Total cash cap across succeeded runs; 0 = no cap")
+    end_date: str = Field(default="", description="Last inclusive local day YYYY-MM-DD")
+    ends_at: str = Field(default="", description="RFC3339 inclusive last scheduled instant")
     start_at: str = Field(default="", description="RFC3339 first run; default now")
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
@@ -1283,6 +1286,9 @@ class RecurringBuyUpdateInput(BaseModel):
     hour: int | None = None
     minute: int = 0
     max_price: float | None = None
+    budget: float | None = None
+    end_date: str | None = None
+    ends_at: str | None = None
     start_at: str = ""
 
 
@@ -2919,6 +2925,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         hour: int | None = None,
         minute: int = 0,
         max_price: float = 0,
+        budget: float = 0,
+        end_date: str = "",
+        ends_at: str = "",
         start_at: str = "",
         portfolio_id: str = "",
     ) -> str:
@@ -2944,6 +2953,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["minute"] = minute
         if max_price:
             body["maxPrice"] = max_price
+        if budget:
+            body["budget"] = budget
+        if end_date:
+            body["endDate"] = end_date
+        if ends_at:
+            body["endsAt"] = ends_at
         if start_at:
             body["startAt"] = start_at
         if portfolio_id:
@@ -2963,6 +2978,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         hour: int | None = None,
         minute: int = 0,
         max_price: float | None = None,
+        budget: float | None = None,
+        end_date: str | None = None,
+        ends_at: str | None = None,
         start_at: str = "",
     ) -> str:
         body: dict[str, Any] = {}
@@ -2985,6 +3003,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["minute"] = minute
         if max_price is not None:
             body["maxPrice"] = max_price
+        if budget is not None:
+            body["budget"] = budget
+        if end_date is not None:
+            body["endDate"] = end_date
+        if ends_at is not None:
+            body["endsAt"] = ends_at
         if start_at:
             body["startAt"] = start_at
         return http.patch(
@@ -4534,15 +4558,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Create a named paper recurring buy: cash amount at market on "
                 "daily|weekly|monthly|interval. weekday for weekly, dayOfMonth for salary day, "
                 "intervalHours (e.g. 12) for interval. time_zone (Europe/Istanbul) + hour/minute "
-                "for local clock (Monday 09:00). max_price skips a run if last or fee+slippage "
-                "unit would exceed it. Simulated only."
+                "for a DST-aware local clock (Monday 09:00). max_price skips a run if last or "
+                "fee+slippage unit would exceed it. budget is a total cash cap; end_date "
+                "(YYYY-MM-DD) or ends_at is the last inclusive run. Simulated only."
             ),
             args_schema=RecurringBuyCreateInput,
         ),
         StructuredTool.from_function(
             update_recurring_buy,
             name="update_recurring_buy",
-            description="Update a paper recurring buy name, amount, schedule, time_zone/hour/minute, or max_price.",
+            description="Update a paper recurring buy name, amount, schedule, time_zone/hour/minute, max_price, budget, or end_date/ends_at.",
             args_schema=RecurringBuyUpdateInput,
         ),
         StructuredTool.from_function(
