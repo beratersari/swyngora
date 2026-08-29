@@ -321,9 +321,37 @@ type huntHeatmapReviewHorizonDTO struct {
 	AvgLiqAfter        float64 `json:"avgLiqAfter"`
 }
 
+type huntHeatmapReviewSignalHorizonDTO struct {
+	Horizon         string  `json:"horizon"`
+	Status          string  `json:"status"`
+	Validated       bool    `json:"validated"`
+	Hit             bool    `json:"hit"`
+	Pending         bool    `json:"pending"`
+	PriceReady      bool    `json:"priceReady"`
+	LiqReady        bool    `json:"liqReady"`
+	TimeToHitSec    float64 `json:"timeToHitSec,omitempty"`
+	HorizonSec      float64 `json:"horizonSec"`
+	PriceCoveredSec float64 `json:"priceCoveredSec"`
+	PriceBars       int     `json:"priceBars"`
+	LiqBefore       float64 `json:"liqBefore"`
+	LiqAfter        float64 `json:"liqAfter"`
+	LiqIncreased    bool    `json:"liqIncreased"`
+	Gap             string  `json:"gap,omitempty"`
+}
+
+type huntHeatmapReviewSignalDTO struct {
+	Time      time.Time                           `json:"time"`
+	PriceLo   float64                             `json:"priceLo"`
+	PriceHi   float64                             `json:"priceHi"`
+	Intensity float64                             `json:"intensity"`
+	Side      string                              `json:"side,omitempty"`
+	Horizons  []huntHeatmapReviewSignalHorizonDTO `json:"horizons"`
+}
+
 type huntHeatmapReviewVenueDTO struct {
 	Exchange string                        `json:"exchange"`
 	Horizons []huntHeatmapReviewHorizonDTO `json:"horizons"`
+	Signals  []huntHeatmapReviewSignalDTO  `json:"signals"`
 }
 
 type huntHeatmapReviewDTO struct {
@@ -373,7 +401,25 @@ func huntReviewVenueToDTO(v domain.HuntHeatmapReviewVenue) huntHeatmapReviewVenu
 			AvgLiqBefore: h.AvgLiqBefore, AvgLiqAfter: h.AvgLiqAfter,
 		})
 	}
-	return huntHeatmapReviewVenueDTO{Exchange: v.Exchange, Horizons: hs}
+	sigs := make([]huntHeatmapReviewSignalDTO, 0, len(v.Signals))
+	for _, s := range v.Signals {
+		rows := make([]huntHeatmapReviewSignalHorizonDTO, 0, len(s.Horizons))
+		for _, h := range s.Horizons {
+			rows = append(rows, huntHeatmapReviewSignalHorizonDTO{
+				Horizon: h.Horizon, Status: h.Status, Validated: h.Validated, Hit: h.Hit,
+				Pending: h.Pending, PriceReady: h.PriceReady, LiqReady: h.LiqReady,
+				TimeToHitSec: h.TimeToHitSec, HorizonSec: h.HorizonSec,
+				PriceCoveredSec: h.PriceCoveredSec, PriceBars: h.PriceBars,
+				LiqBefore: h.LiqBefore, LiqAfter: h.LiqAfter, LiqIncreased: h.LiqIncreased,
+				Gap: h.Gap,
+			})
+		}
+		sigs = append(sigs, huntHeatmapReviewSignalDTO{
+			Time: s.Time.UTC(), PriceLo: s.PriceLo, PriceHi: s.PriceHi,
+			Intensity: s.Intensity, Side: s.Side, Horizons: rows,
+		})
+	}
+	return huntHeatmapReviewVenueDTO{Exchange: v.Exchange, Horizons: hs, Signals: sigs}
 }
 
 func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {

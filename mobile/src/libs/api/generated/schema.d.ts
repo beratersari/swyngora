@@ -3212,9 +3212,38 @@ export interface components {
             avgLiqBefore?: number;
             avgLiqAfter?: number;
         };
+        LiquidationHuntHeatmapReviewSignalHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "12h";
+            /** @enum {string} */
+            status?: "hit" | "miss" | "pending" | "price_gap" | "liq_gap";
+            validated?: boolean;
+            hit?: boolean;
+            pending?: boolean;
+            priceReady?: boolean;
+            liqReady?: boolean;
+            timeToHitSec?: number;
+            horizonSec?: number;
+            priceCoveredSec?: number;
+            priceBars?: number;
+            liqBefore?: number;
+            liqAfter?: number;
+            liqIncreased?: boolean;
+            gap?: string;
+        };
+        LiquidationHuntHeatmapReviewSignal: {
+            /** Format: date-time */
+            time?: string;
+            priceLo?: number;
+            priceHi?: number;
+            intensity?: number;
+            side?: string;
+            horizons?: components["schemas"]["LiquidationHuntHeatmapReviewSignalHorizon"][];
+        };
         LiquidationHuntHeatmapReviewVenue: {
             exchange?: string;
             horizons?: components["schemas"]["LiquidationHuntHeatmapReviewHorizon"][];
+            signals?: components["schemas"]["LiquidationHuntHeatmapReviewSignal"][];
         };
         LiquidationHuntHeatmapReview: {
             hotFrac?: number;

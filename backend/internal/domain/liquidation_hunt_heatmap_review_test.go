@@ -35,8 +35,9 @@ func TestReviewHuntHeatmap_HitMissAndLiqIncrease(t *testing.T) {
 	}
 	dist := HuntLiqDistance(10, HuntMaintenanceMargin)
 	up := mid * (1 + dist)
-	// After the first column, walk price into the short-liq band.
-	t0 := cols[0]
+	// Walk into the short-liq band after a recent column so the row stays
+	// inside the returned signal cap.
+	t0 := cols[len(cols)-16]
 	hitAt := t0.Add(45 * time.Minute)
 	prices = append(prices, HuntHeatmapPricePoint{
 		Time: hitAt, Price: up, High: up + 50, Low: up - 50,
@@ -67,6 +68,17 @@ func TestReviewHuntHeatmap_HitMissAndLiqIncrease(t *testing.T) {
 	h4 := horizonByID(got.Review.Binance.Horizons, "4h")
 	if h4.Hits < h1.Hits {
 		t.Fatalf("4h should include 1h hits 1h=%+v 4h=%+v", h1, h4)
+	}
+	sig := firstHitSignal(got.Review.Binance.Signals, "1h")
+	if sig.PriceLo <= 0 || sig.PriceHi <= sig.PriceLo {
+		t.Fatalf("signal area %+v", sig)
+	}
+	h1s := signalHorizon(sig, "1h")
+	if h1s.Status != HuntReviewHit || h1s.TimeToHitSec <= 0 || h1s.PriceBars == 0 {
+		t.Fatalf("signal 1h %+v", h1s)
+	}
+	if h1s.PriceCoveredSec <= 0 || h1s.HorizonSec != 3600 {
+		t.Fatalf("signal coverage %+v", h1s)
 	}
 }
 
@@ -189,6 +201,13 @@ func TestReviewHuntHeatmap_MissingLiqIsNotValidated(t *testing.T) {
 	if h1.Missing != h1.Signals {
 		t.Fatalf("all signals should be missing %+v", h1)
 	}
+	if len(got.Review.Binance.Signals) == 0 {
+		t.Fatal("expected per-signal rows")
+	}
+	s1 := signalHorizon(got.Review.Binance.Signals[0], "1h")
+	if s1.Status != HuntReviewLiqGap || s1.Gap == "" {
+		t.Fatalf("expected liq gap on signal %+v", s1)
+	}
 }
 
 func TestReviewHuntHeatmap_MissingPriceIsNotValidated(t *testing.T) {
@@ -214,6 +233,34 @@ func TestReviewHuntHeatmap_MissingPriceIsNotValidated(t *testing.T) {
 	if h1.Validated != 0 || h1.HitRate != 0 {
 		t.Fatalf("missing price must not enter hit rate %+v", h1)
 	}
+	if len(got.Review.Binance.Signals) == 0 {
+		t.Fatal("expected per-signal rows")
+	}
+	s1 := signalHorizon(got.Review.Binance.Signals[0], "1h")
+	if s1.Status != HuntReviewPriceGap || s1.Gap == "" {
+		t.Fatalf("expected price gap on signal %+v", s1)
+	}
+}
+
+func firstHitSignal(signals []HuntHeatmapReviewSignal, horizon string) HuntHeatmapReviewSignal {
+	for _, s := range signals {
+		if signalHorizon(s, horizon).Hit {
+			return s
+		}
+	}
+	if len(signals) > 0 {
+		return signals[0]
+	}
+	return HuntHeatmapReviewSignal{}
+}
+
+func signalHorizon(s HuntHeatmapReviewSignal, id string) HuntHeatmapReviewSignalHorizon {
+	for _, h := range s.Horizons {
+		if h.Horizon == id {
+			return h
+		}
+	}
+	return HuntHeatmapReviewSignalHorizon{}
 }
 
 func reviewCoverLiqs(cols []time.Time, to time.Time) []LiquidationEvent {

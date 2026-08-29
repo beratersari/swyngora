@@ -54,6 +54,19 @@ const data: LiquidationHeatmapData = {
           pending: 0,
         },
       ],
+      signals: [
+        {
+          time: '2026-08-29T12:00:00Z',
+          priceLo: 108_000,
+          priceHi: 110_000,
+          side: 'short',
+          horizons: [
+            { horizon: '1h', status: 'hit', validated: true, timeToHitSec: 1800, horizonSec: 3600 },
+            { horizon: '4h', status: 'hit', validated: true, timeToHitSec: 1800, horizonSec: 14400 },
+            { horizon: '12h', status: 'price_gap', priceCoveredSec: 3600, horizonSec: 43200 },
+          ],
+        },
+      ],
     },
   },
 };
@@ -80,6 +93,9 @@ describe('LiquidationHeatmap', () => {
     expect(screen.getByTestId('liquidation-heatmap-review')).toBeInTheDocument();
     expect(screen.getByText('Validated')).toBeInTheDocument();
     expect(screen.getByText('60%')).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-heatmap-signals')).toBeInTheDocument();
+    expect(screen.getAllByText('Hit · 30m').length).toBeGreaterThan(0);
+    expect(screen.getByText('Price gap · 1h/12h')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '12h' }));
     expect(onRangeChange).toHaveBeenCalledWith('12h');
     await user.click(screen.getByRole('button', { name: 'Binance' }));

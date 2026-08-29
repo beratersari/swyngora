@@ -21,6 +21,8 @@ import type {
   LiqHeatVenue,
   LiquidationHeatmapData,
   LiquidationHeatmapGrid,
+  LiquidationHeatmapReviewSignal,
+  LiquidationHeatmapReviewSignalHorizon,
   LiquidationHeatmapReviewVenue,
 } from './LiquidationHeatmap.types';
 
@@ -50,6 +52,43 @@ export function pickReview(
 export function formatHitRate(n: number | undefined): string {
   if (!Number.isFinite(n)) return '—';
   return `${Math.round((n ?? 0) * 100)}%`;
+}
+
+export function pickSignalHorizon(
+  signal: LiquidationHeatmapReviewSignal | undefined,
+  horizon: '1h' | '4h' | '12h',
+): LiquidationHeatmapReviewSignalHorizon | undefined {
+  return signal?.horizons?.find((h) => h.horizon === horizon);
+}
+
+export function newestSignals(
+  signals: LiquidationHeatmapReviewSignal[] | undefined,
+): LiquidationHeatmapReviewSignal[] {
+  const rows = [...(signals ?? [])];
+  rows.sort((a, b) => Date.parse(b.time ?? '') - Date.parse(a.time ?? ''));
+  return rows;
+}
+
+export function formatSignalArea(lo?: number, hi?: number, step?: number): string {
+  if (!(lo && hi) || hi <= 0) return '—';
+  return `${formatLiqPrice(lo, step ?? 0)}–${formatLiqPrice(hi, step ?? 0)}`;
+}
+
+export function formatSignalHorizon(h: LiquidationHeatmapReviewSignalHorizon | undefined): string {
+  if (!h) return '—';
+  if (h.status === 'hit') {
+    const time = formatLookahead(h.timeToHitSec);
+    return h.liqIncreased ? `Hit · ${time} · liq up` : `Hit · ${time}`;
+  }
+  if (h.status === 'miss') return 'Miss';
+  if (h.status === 'pending') return 'Pending';
+  if (h.status === 'price_gap') {
+    const have = formatLookahead(h.priceCoveredSec);
+    const need = formatLookahead(h.horizonSec);
+    return have === '—' ? 'Price gap' : `Price gap · ${have}/${need}`;
+  }
+  if (h.status === 'liq_gap') return h.gap === 'no_liq' ? 'Liq gap' : 'Liq short';
+  return h.gap || '—';
 }
 
 export function formatLookahead(sec: number | undefined): string {

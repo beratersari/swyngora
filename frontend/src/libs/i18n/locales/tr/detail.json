@@ -202,7 +202,12 @@
       "hitRate": "İsabet oranı",
       "avgTime": "Ort. süre",
       "liqRose": "Liq arttı",
-      "pending": "Bekleyen"
+      "pending": "Bekleyen",
+      "signalsTitle": "Her sinyal",
+      "signalsSubtitle": "En yeni üstte. Her satır bir sıcak bölge. 1s / 4s / 12s isabet, süre ve fiyat veya likidasyon boşluğunu gösterir.",
+      "when": "Zaman",
+      "area": "Bölge",
+      "side": "Taraf"
     },
     "ranges": {
       "12h": "12s",

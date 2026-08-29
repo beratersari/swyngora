@@ -109,6 +109,41 @@ export const ReviewTable = styled.table`
   }
 `;
 
+export const SignalScroll = styled.div`
+  max-height: 360px;
+  overflow: auto;
+  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+`;
+
+export const SignalTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th,
+  td {
+    padding: 6px 8px;
+    text-align: left;
+    border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+    white-space: nowrap;
+    vertical-align: top;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    background: ${({ theme }) => theme.semantic.bg.canvas};
+    color: ${({ theme }) => theme.semantic.text.secondary};
+    font-weight: 600;
+    z-index: 1;
+  }
+
+  td[data-gap='true'] {
+    color: ${({ theme }) => theme.semantic.text.secondary};
+  }
+`;
+
 export const HoverCard = styled.div<{ $x: number; $y: number }>`
   position: absolute;
   left: ${({ $x }) => $x}px;

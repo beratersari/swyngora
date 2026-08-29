@@ -7074,6 +7074,36 @@ components:
         liqIncreaseRate: { type: number, description: liqIncreased / validated hits }
         avgLiqBefore: { type: number }
         avgLiqAfter: { type: number }
+    LiquidationHuntHeatmapReviewSignalHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 12h] }
+        status: { type: string, enum: [hit, miss, pending, price_gap, liq_gap] }
+        validated: { type: boolean }
+        hit: { type: boolean }
+        pending: { type: boolean }
+        priceReady: { type: boolean }
+        liqReady: { type: boolean }
+        timeToHitSec: { type: number }
+        horizonSec: { type: number }
+        priceCoveredSec: { type: number, description: How far later candles reach after the signal }
+        priceBars: { type: integer }
+        liqBefore: { type: number }
+        liqAfter: { type: number }
+        liqIncreased: { type: boolean }
+        gap: { type: string, description: pending | no_price | price_short | no_liq | liq_short }
+    LiquidationHuntHeatmapReviewSignal:
+      type: object
+      description: One hot liquidation area at one time
+      properties:
+        time: { type: string, format: date-time }
+        priceLo: { type: number }
+        priceHi: { type: number }
+        intensity: { type: number }
+        side: { type: string, description: long (below mark) or short (above mark) }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewSignalHorizon' }
     LiquidationHuntHeatmapReviewVenue:
       type: object
       properties:
@@ -7081,6 +7111,9 @@ components:
         horizons:
           type: array
           items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewHorizon' }
+        signals:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewSignal' }
     LiquidationHuntHeatmapReview:
       type: object
       description: Did later price actually reach the hot zones, and did real liquidations rise there

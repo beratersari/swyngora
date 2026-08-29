@@ -12,10 +12,14 @@ import {
   formatLiqPrice,
   formatLiqTime,
   formatLookahead,
+  formatSignalArea,
+  formatSignalHorizon,
   hasHeatTape,
   hitTest,
+  newestSignals,
   pickGrid,
   pickReview,
+  pickSignalHorizon,
 } from './LiquidationHeatmap.helpers';
 import {
   Chip,
@@ -27,6 +31,8 @@ import {
   ReviewTable,
   ScaleBar,
   ScaleLegend,
+  SignalScroll,
+  SignalTable,
   TitleRow,
 } from './LiquidationHeatmap.styles';
 import type {
@@ -66,6 +72,7 @@ export function LiquidationHeatmap({
   const grid = pickGrid(data, venue);
   const review = pickReview(data, venue);
   const reviewRows = review?.horizons ?? [];
+  const signalRows = newestSignals(review?.signals);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -263,6 +270,59 @@ export function LiquidationHeatmap({
               ))}
             </tbody>
           </ReviewTable>
+          {signalRows.length > 0 ? (
+            <>
+              <Text variant="h4" color="primary">
+                {t('liqHeatmap.review.signalsTitle')}
+              </Text>
+              <Text variant="caption" color="secondary">
+                {t('liqHeatmap.review.signalsSubtitle')}
+              </Text>
+              <SignalScroll>
+                <SignalTable data-testid="liquidation-heatmap-signals">
+                  <thead>
+                    <tr>
+                      <th>{t('liqHeatmap.review.when')}</th>
+                      <th>{t('liqHeatmap.review.area')}</th>
+                      <th>{t('liqHeatmap.review.side')}</th>
+                      <th>1h</th>
+                      <th>4h</th>
+                      <th>12h</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {signalRows.map((sig, i) => {
+                      const h1 = pickSignalHorizon(sig, '1h');
+                      const h4 = pickSignalHorizon(sig, '4h');
+                      const h12 = pickSignalHorizon(sig, '12h');
+                      return (
+                        <tr key={`${sig.time ?? 't'}-${sig.priceLo ?? 0}-${i}`}>
+                          <td>{formatLiqTime(Date.parse(sig.time ?? ''), range)}</td>
+                          <td>{formatSignalArea(sig.priceLo, sig.priceHi, data?.priceStep)}</td>
+                          <td>
+                            {sig.side === 'long'
+                              ? t('liqHeatmap.longs')
+                              : sig.side === 'short'
+                                ? t('liqHeatmap.shorts')
+                                : '—'}
+                          </td>
+                          <td data-gap={h1?.validated ? 'false' : 'true'}>
+                            {formatSignalHorizon(h1)}
+                          </td>
+                          <td data-gap={h4?.validated ? 'false' : 'true'}>
+                            {formatSignalHorizon(h4)}
+                          </td>
+                          <td data-gap={h12?.validated ? 'false' : 'true'}>
+                            {formatSignalHorizon(h12)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </SignalTable>
+              </SignalScroll>
+            </>
+          ) : null}
         </>
       ) : null}
     </Panel>

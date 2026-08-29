@@ -825,7 +825,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_heatmap",
-		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, each venue's own price (never borrowed from the other exchange), the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d. Returns Binance, Bybit, and combined (sum) grids plus a review of whether later price hit the hot zones in 1h/4h/12h. Review hit rate and liquidation-increase use only signals with enough later price path and liquidation history; missing data is counted separately. Not financial advice."),
+		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, each venue's own price (never borrowed from the other exchange), the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d. Returns Binance, Bybit, and combined (sum) grids plus a review: totals and a per-signal list (price area, 1h/4h/12h hit or miss, time-to-hit, how much later price and liquidation history was available, labeled gaps). Rates use only validated signals. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),

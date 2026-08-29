@@ -115,6 +115,13 @@ against **later candles from the same venue**:
 - **Combined** uses the summed grid and counts a hit if **either** venue's own
   price reached the zone.
 
+`signals[]` lists each hot area (time, price band, side) with a 1h / 4h / 12h
+row: `hit` / `miss` / `pending` / `price_gap` / `liq_gap`, time-to-hit,
+how far later candles reached (`priceCoveredSec` of `horizonSec`), and
+observed liquidation notional before vs after. Gaps are labeled (`no_price`,
+`price_short`, `no_liq`, `liq_short`) and are not filled from the other
+exchange.
+
 MCP: `get_liquidation_heatmap`.
 
 On the product web app the same grid is the **Liquidation heatmap** on coin

@@ -202,7 +202,12 @@
       "hitRate": "Hit rate",
       "avgTime": "Avg time",
       "liqRose": "Liqs rose",
-      "pending": "Pending"
+      "pending": "Pending",
+      "signalsTitle": "Each signal",
+      "signalsSubtitle": "Newest first. Each row is one hot area. 1h / 4h / 12h show hit or miss, how long it took, and any price or liquidation gap.",
+      "when": "Time",
+      "area": "Area",
+      "side": "Side"
     },
     "ranges": {
       "12h": "12h",

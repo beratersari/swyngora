@@ -10,7 +10,11 @@ import {
   intensityFromNotional,
   formatHitRate,
   formatLookahead,
+  formatSignalArea,
+  formatSignalHorizon,
+  newestSignals,
   pickGrid,
+  pickSignalHorizon,
   pickMatrix,
   pickReview,
 } from './LiquidationHeatmap.helpers';
@@ -133,6 +137,19 @@ describe('LiquidationHeatmap helpers', () => {
     expect(formatHitRate(0.5)).toBe('50%');
     expect(formatLookahead(2700)).toBe('45m');
     expect(formatLookahead(0)).toBe('—');
+    expect(formatSignalArea(99_000, 101_000, 100)).toMatch(/99/);
+    expect(formatSignalHorizon({ status: 'hit', timeToHitSec: 1800 })).toMatch(/Hit/);
+    expect(formatSignalHorizon({ status: 'price_gap', priceCoveredSec: 1800, horizonSec: 3600 })).toMatch(
+      /Price gap/,
+    );
+    const newest = newestSignals([
+      { time: '2026-08-29T12:00:00Z', priceLo: 1, priceHi: 2 },
+      { time: '2026-08-29T13:00:00Z', priceLo: 3, priceHi: 4 },
+    ]);
+    expect(newest[0]?.priceLo).toBe(3);
+    expect(pickSignalHorizon({ horizons: [{ horizon: '4h', status: 'miss' }] }, '4h')?.status).toBe(
+      'miss',
+    );
   });
 
   it('formats notional and time', () => {
