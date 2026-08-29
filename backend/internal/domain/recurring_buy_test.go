@@ -143,6 +143,12 @@ func TestRecurringMaxPriceBlocks(t *testing.T) {
 	if _, err := ResolveRecurringMaxPrice(-1); err == nil {
 		t.Fatal("expected invalid maxPrice")
 	}
+	if !RecurringFailRetryable("market price unavailable") || RecurringFailRetryable("last price above maxPrice") {
+		t.Fatal("retryable classification")
+	}
+	if RecurringIdempotencyKey("p1", "2026-01-01") != "rb:p1:2026-01-01" {
+		t.Fatal(RecurringIdempotencyKey("p1", "2026-01-01"))
+	}
 }
 
 func TestRecurringDSTSpringForwardAndFallBack(t *testing.T) {

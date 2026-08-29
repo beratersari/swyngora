@@ -342,3 +342,79 @@ func TestSQLite_CancelOCOLegCancelsPeer(t *testing.T) {
 	}
 	t.Logf("FALSE POSITIVE / NOT REPRODUCED F5 happy-path: peer=%s reason=%s", peer.Status, peer.CancelReason)
 }
+
+func TestSQLite_RecurringFillSpentIsAtomicAndOnce(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "rb-fill.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	book, err := s.CreatePortfolio(ctx, domain.Portfolio{
+		ClientID: "rb", Currency: "USDT", StartingBalance: 10000, CashBalance: 10000, CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan, err := s.CreateRecurringBuyPlan(ctx, domain.RecurringBuyPlan{
+		ID: "plan1", ClientID: book.BookID(), Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Name: "t", Amount: 100, Frequency: domain.RecurringDaily, Budget: 500,
+		Status: domain.RecurringBuyActive, NextRunAt: now.Add(-time.Minute), CreatedAt: now, UpdatedAt: now,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := now.Add(24 * time.Hour)
+	fillCtx := domain.ContextWithRecurringFill(ctx, &domain.RecurringFillCommit{
+		PlanID: plan.ID, LastPeriodKey: "2026-01-01", NextRunAt: next,
+		Run: domain.RecurringBuyRun{
+			ID: "r1", PlanID: plan.ID, ClientID: book.BookID(), PeriodKey: "2026-01-01",
+			Status: domain.RecurringBuyRunSucceeded, Amount: 100.5, Quantity: 1, Price: 100,
+			TradeID: "t-rb1", ScheduledFor: now, ExecutedAt: now,
+		},
+	})
+	p := *book
+	p.CashBalance = 9899.5
+	if err := s.ExecuteTrade(fillCtx, &p, &domain.Position{
+		ClientID: book.BookID(), Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Quantity: 1, AvgCost: 100, UpdatedAt: now,
+	}, domain.Trade{
+		ID: "t-rb1", ClientID: book.BookID(), Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, Fee: 0.5, CreatedAt: now,
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.GetRecurringBuyPlan(ctx, book.BookID(), plan.ID)
+	if err != nil || got.Spent < 100.4 || got.Spent > 100.6 {
+		t.Fatalf("spent after fill %+v %v", got, err)
+	}
+	// Replay same period: must not debit spent again and must not apply a second cash write.
+	p2 := *got
+	_ = p2
+	dup := domain.ContextWithRecurringFill(ctx, &domain.RecurringFillCommit{
+		PlanID: plan.ID, LastPeriodKey: "2026-01-01", NextRunAt: next.Add(24 * time.Hour),
+		Run: domain.RecurringBuyRun{
+			ID: "r1", PlanID: plan.ID, ClientID: book.BookID(), PeriodKey: "2026-01-01",
+			Status: domain.RecurringBuyRunSucceeded, Amount: 100.5, TradeID: "t-rb2",
+			ScheduledFor: now, ExecutedAt: now,
+		},
+	})
+	p.CashBalance = 9799
+	err = s.ExecuteTrade(dup, &p, &domain.Position{
+		ClientID: book.BookID(), Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Quantity: 2, AvgCost: 100, UpdatedAt: now,
+	}, domain.Trade{
+		ID: "t-rb2", ClientID: book.BookID(), Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Side: domain.TradeSideBuy, Quantity: 1, Price: 100, Notional: 100, Fee: 0.5, CreatedAt: now,
+	}, nil)
+	if !errors.Is(err, domain.ErrRecurringPeriodDone) {
+		t.Fatalf("want period done, got %v", err)
+	}
+	got, _ = s.GetRecurringBuyPlan(ctx, book.BookID(), plan.ID)
+	if got.Spent < 100.4 || got.Spent > 100.6 {
+		t.Fatalf("spent double-counted %v", got.Spent)
+	}
+	cash, _ := s.GetPortfolio(ctx, book.BookID())
+	if cash.CashBalance < 9899 || cash.CashBalance > 9900 {
+		t.Fatalf("cash after rejected replay %v (second debit must roll back)", cash.CashBalance)
+	}
+}

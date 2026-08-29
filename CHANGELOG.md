@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Recurring buy maxPrice race:** PATCH of maxPrice / pause / budget / end takes the same book lock as the fill and the live plan is re-read inside that lock immediately before the cash debit, so an in-flight worker cannot buy with the old limit (`docs/features/recurring-buys.md`)
 - **Recurring buy budget cash:** `spent` is slipped fill plus taker fee (wallet debit), not raw order notional (`docs/features/recurring-buys.md`)
+- **Recurring buy spent vs fill:** trade, `spent`, and the succeeded run commit in one transaction so a failed spent update cannot leave budget uncounted; the same period cannot increment `spent` twice (`docs/features/recurring-buys.md`)
+- **Recurring buy temp retries:** market/order/cash blips retry the same period without a second fill or a second budget debit (`docs/features/recurring-buys.md`)
 - **AI both-LLM error:** when Grok and the Ollama fallback both fail, the CLI prints both errors (primary then fallback), not only the last Ollama message (`docs/features/ai-assistant.md`)
 - **Dashboard 24h on halted coins:** delisted rows use the same off-venue 24h **delta and %** as coin detail (other venue or CoinGecko `price_change_24h`), not a frozen home-book window or a blank; Coinbase last/open/high/low and % stay on one stats window (`docs/features/market-data.md`, `docs/features/delist-schedule.md`)
 - **AI concurrent tenant bind:** overlapping chats no longer send the master token plus the other user’s `X-Client-Id` (or inherit their `canTrade`) when desk gather runs on a thread pool (`docs/features/ai-assistant.md`)

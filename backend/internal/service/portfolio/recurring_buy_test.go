@@ -145,9 +145,12 @@ func TestRecurringBuy_ExecuteAndInsufficientCash(t *testing.T) {
 	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed {
 		t.Fatalf("%+v", runs)
 	}
-	// Plan still exists and advanced
+	if !domain.RecurringFailRetryable(runs[0].FailReason) {
+		t.Fatalf("insufficient cash should retry: %q", runs[0].FailReason)
+	}
+	// Plan stays due so a later deposit can fill this period (no double spend yet).
 	got, _ := svc.GetRecurringBuyPlan(ctx, "rb-poor", poor.ID)
-	if got.Status != domain.RecurringBuyActive || !got.NextRunAt.After(time.Now().UTC()) {
+	if got.Status != domain.RecurringBuyActive || got.Spent != 0 {
 		t.Fatalf("%+v", got)
 	}
 }
@@ -502,6 +505,74 @@ func (p *patchMaxOnTick) GetTicker24h(ctx context.Context, exchange, symbol stri
 		ClientID: p.clientID, PlanID: p.planID, MaxPrice: &max,
 	})
 	return p.inner.GetTicker24h(ctx, exchange, symbol)
+}
+
+func TestRecurringBuy_TempErrorRetriesOnce(t *testing.T) {
+	px := &failThenOkPx{fails: 1, inner: &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}}
+	svc := newSvc(t, nil)
+	svc.market = px
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-retry", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-retry", Symbol: "BTCUSDT", Amount: 200, Frequency: "daily",
+		StartAt: &past, Budget: 200,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = n
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-retry", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed || !domain.RecurringFailRetryable(runs[0].FailReason) {
+		t.Fatalf("want retryable fail %+v", runs)
+	}
+	got, _ := svc.GetRecurringBuyPlan(ctx, "rb-retry", plan.ID)
+	if got.Spent != 0 {
+		t.Fatalf("temp fail must not spend %v", got.Spent)
+	}
+	if !got.NextRunAt.After(time.Now().UTC()) && got.NextRunAt.After(past.Add(time.Hour)) {
+		t.Fatalf("should still be due or soon: next=%v", got.NextRunAt)
+	}
+	n, err = svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if err != nil || n != 1 {
+		t.Fatalf("retry n=%d err=%v", n, err)
+	}
+	runs, _ = svc.ListRecurringBuyRuns(ctx, "rb-retry", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("retry should succeed once %+v", runs)
+	}
+	got, _ = svc.GetRecurringBuyPlan(ctx, "rb-retry", plan.ID)
+	if got.Spent < 199 || got.Spent > 201 {
+		t.Fatalf("spent once %v", got.Spent)
+	}
+	n, _ = svc.ProcessDueRecurringBuys(ctx, time.Now().UTC())
+	if n != 0 {
+		t.Fatalf("must not buy the same period again n=%d", n)
+	}
+	got, _ = svc.GetRecurringBuyPlan(ctx, "rb-retry", plan.ID)
+	if got.Spent < 199 || got.Spent > 201 {
+		t.Fatalf("spent twice %v", got.Spent)
+	}
+}
+
+type failThenOkPx struct {
+	fails int
+	n     int
+	inner *fakePx
+}
+
+func (f *failThenOkPx) GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error) {
+	f.n++
+	if f.n <= f.fails {
+		return nil, domain.ErrNotFound
+	}
+	return f.inner.GetTicker24h(ctx, exchange, symbol)
 }
 
 func TestRecurringBuy_BudgetCountsFeeAndSlippage(t *testing.T) {

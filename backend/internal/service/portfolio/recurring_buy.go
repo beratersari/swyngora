@@ -443,75 +443,98 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 	periodKey := domain.RecurringPeriodKeyPlan(scheduledFor, *plan)
 	nextAfter := domain.AdvanceRecurringSchedule(scheduledFor, *plan)
 
-	runID := uuid.NewString()
-	claim := domain.RecurringBuyRun{
-		ID: runID, PlanID: plan.ID, ClientID: plan.ClientID, PeriodKey: periodKey,
-		Status: domain.RecurringBuyRunFailed, FailReason: "in_progress",
-		Amount: plan.Amount, ScheduledFor: scheduledFor, ExecutedAt: now,
-	}
-	claimed, run, err := s.store.ClaimRecurringBuyRun(ctx, claim)
-	if err != nil {
+	existing, err := s.store.GetRecurringBuyRun(ctx, plan.ID, periodKey)
+	if err != nil && err != domain.ErrNotFound {
 		return err
 	}
-	if !claimed {
-		// Another worker already handled this period — still advance schedule past it.
+	if existing != nil && existing.Status == domain.RecurringBuyRunSucceeded {
+		return s.store.AdvanceRecurringBuyPlan(ctx, plan.ID, nextAfter, periodKey, now)
+	}
+	if existing != nil && existing.Status == domain.RecurringBuyRunFailed && !domain.RecurringFailRetryable(existing.FailReason) {
 		return s.store.AdvanceRecurringBuyPlan(ctx, plan.ID, nextAfter, periodKey, now)
 	}
 
-	// Reload after claim so a PATCH (maxPrice, budget, end, pause) wins over the
-	// snapshot this worker started with.
-	fresh, err := s.store.GetRecurringBuyPlan(ctx, plan.ClientID, plan.ID)
-	if err != nil || fresh == nil {
-		final := *run
-		final.Status = domain.RecurringBuyRunFailed
-		final.FailReason = "plan unavailable"
-		final.ExecutedAt = now
-		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
-	}
-	final := *run
-	final.ExecutedAt = now
-	if fresh.Status != domain.RecurringBuyActive {
-		final.Status = domain.RecurringBuyRunFailed
-		final.FailReason = "plan paused"
-		if fresh.Status == domain.RecurringBuyEnded {
-			final.FailReason = "plan ended"
-			final.PlanStatus = domain.RecurringBuyEnded
-		}
-		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
-	}
-	if !domain.RecurringPlanAllowsRun(*fresh, scheduledFor) {
-		final.Status = domain.RecurringBuyRunFailed
-		final.FailReason = "plan ended"
-		final.PlanStatus = domain.RecurringBuyEnded
-		return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
+	runID := uuid.NewString()
+	if existing != nil && existing.ID != "" {
+		runID = existing.ID
 	}
 
-	tr, failReason := s.executeRecurringCashBuy(ctx, fresh, scheduledFor, now)
+	fresh, err := s.store.GetRecurringBuyPlan(ctx, plan.ClientID, plan.ID)
+	if err != nil || fresh == nil {
+		return s.finishOrRetryRecurring(ctx, plan.ID, plan.ClientID, runID, periodKey, scheduledFor, nextAfter, now, fresh, "plan unavailable")
+	}
+	if fresh.Status != domain.RecurringBuyActive {
+		reason := "plan paused"
+		if fresh.Status == domain.RecurringBuyEnded {
+			reason = "plan ended"
+		}
+		return s.finishOrRetryRecurring(ctx, plan.ID, plan.ClientID, runID, periodKey, scheduledFor, nextAfter, now, fresh, reason)
+	}
+	if !domain.RecurringPlanAllowsRun(*fresh, scheduledFor) {
+		return s.finishOrRetryRecurring(ctx, plan.ID, plan.ClientID, runID, periodKey, scheduledFor, nextAfter, now, fresh, "plan ended")
+	}
+
+	tr, failReason := s.executeRecurringCashBuy(ctx, fresh, scheduledFor, now, periodKey, nextAfter, runID)
 	if tr != nil {
-		final.Status = domain.RecurringBuyRunSucceeded
-		final.FailReason = ""
-		final.TradeID = tr.ID
-		final.Price = tr.Price
-		final.Quantity = tr.Quantity
-		final.Amount = tr.Notional + tr.Fee
-	} else {
-		final.Status = domain.RecurringBuyRunFailed
-		final.FailReason = failReason
-		final.Amount = fresh.Amount
-		if failReason == "plan ended" {
-			final.PlanStatus = domain.RecurringBuyEnded
+		// Cash, spent, and succeeded run were committed in the same ExecuteTrade transaction.
+		return nil
+	}
+	return s.finishOrRetryRecurring(ctx, plan.ID, plan.ClientID, runID, periodKey, scheduledFor, nextAfter, now, fresh, failReason)
+}
+
+func (s *Service) finishOrRetryRecurring(ctx context.Context, planID, bookID, runID, periodKey string, scheduledFor, nextAfter, now time.Time, plan *domain.RecurringBuyPlan, reason string) error {
+	run := domain.RecurringBuyRun{
+		ID: runID, PlanID: planID, ClientID: bookID, PeriodKey: periodKey,
+		Status: domain.RecurringBuyRunFailed, FailReason: reason,
+		ScheduledFor: scheduledFor, ExecutedAt: now,
+	}
+	if plan != nil {
+		run.Amount = plan.Amount
+		if reason == "plan ended" {
+			run.PlanStatus = domain.RecurringBuyEnded
+		}
+		if plan.EndsAt != nil && nextAfter.After(*plan.EndsAt) && !domain.RecurringFailRetryable(reason) {
+			run.PlanStatus = domain.RecurringBuyEnded
 		}
 	}
-	if fresh.EndsAt != nil && nextAfter.After(*fresh.EndsAt) {
-		final.PlanStatus = domain.RecurringBuyEnded
+	if domain.RecurringFailRetryable(reason) {
+		// Leave next_run_at due so the worker retries this period. Do not spend.
+		run.FailReason = reason
+		if run.FailReason == "" {
+			run.FailReason = "in_progress"
+		}
+		return s.store.PutRecurringBuyRun(ctx, run)
 	}
-	return s.store.FinishRecurringBuyRun(ctx, plan.ID, final, nextAfter, periodKey, now)
+	return s.store.FinishRecurringBuyRun(ctx, planID, run, nextAfter, periodKey, now)
+}
+
+func runIDOr(id, planID, periodKey string) string {
+	if strings.TrimSpace(id) != "" {
+		return id
+	}
+	return planID + "-" + periodKey
+}
+
+func (s *Service) replayRecurringPeriod(ctx context.Context, bookID string, in OrderInput) (*domain.Trade, *domain.PortfolioView, error) {
+	run, err := s.store.GetRecurringBuyRun(ctx, in.RecurringPlanID, in.RecurringPeriodKey)
+	if err != nil || run == nil || run.TradeID == "" {
+		return nil, nil, domain.ErrRecurringPeriodDone
+	}
+	tr, err := s.store.GetTrade(ctx, bookID, run.TradeID)
+	if err != nil {
+		return nil, nil, err
+	}
+	view, err := s.View(ctx, in.ClientID, in.PortfolioID)
+	if err != nil {
+		return tr, nil, err
+	}
+	return tr, view, nil
 }
 
 // executeRecurringCashBuy spends up to plan.Amount cash at last price (qty = amount/price).
 // It reloads the plan after the last print and again immediately before PlaceOrder so a
 // concurrent maxPrice / budget / pause / end PATCH cannot fill with stale limits.
-func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time) (*domain.Trade, string) {
+func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time, periodKey string, nextAfter time.Time, runID string) (*domain.Trade, string) {
 	price, err := s.lastPrice(ctx, string(plan.Exchange), plan.Symbol)
 	if err != nil || price <= 0 {
 		return nil, "market price unavailable"
@@ -557,7 +580,12 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 		ClientID: book.ClientID, PortfolioID: book.ID,
 		Exchange: string(plan.Exchange), Symbol: plan.Symbol,
 		Side: "buy", Quantity: qty, MarkPrice: price,
-		RecurringPlanID: plan.ID, RecurringScheduledFor: scheduledFor,
+		IdempotencyKey:        domain.RecurringIdempotencyKey(plan.ID, periodKey),
+		RecurringPlanID:       plan.ID,
+		RecurringScheduledFor: scheduledFor,
+		RecurringPeriodKey:    periodKey,
+		RecurringNextRunAt:    nextAfter,
+		RecurringRunID:        runID,
 	})
 	if err != nil {
 		msg := err.Error()

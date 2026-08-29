@@ -7949,7 +7949,7 @@ components:
         tradeId: { type: string }
         failReason:
           type: string
-          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended
+          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit.
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
     AllocationTarget:

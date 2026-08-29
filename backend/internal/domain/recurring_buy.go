@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -96,6 +97,52 @@ type RecurringBuyRun struct {
 	// PlanStatus is not stored on the run row. FinishRecurringBuyRun writes it
 	// onto the plan when set (e.g. ended).
 	PlanStatus RecurringBuyPlanStatus
+}
+
+// RecurringFillCommit is applied in the same store transaction as the paper fill
+// so cash debit and budget spent cannot diverge.
+type RecurringFillCommit struct {
+	PlanID        string
+	Run           RecurringBuyRun
+	NextRunAt     time.Time
+	LastPeriodKey string
+}
+
+type recurringFillCtxKey struct{}
+
+// ContextWithRecurringFill attaches a fill commit for ExecuteTrade.
+func ContextWithRecurringFill(ctx context.Context, c *RecurringFillCommit) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if c == nil || c.PlanID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, recurringFillCtxKey{}, c)
+}
+
+// RecurringFillFromContext returns the fill commit for the current write, if any.
+func RecurringFillFromContext(ctx context.Context) *RecurringFillCommit {
+	if ctx == nil {
+		return nil
+	}
+	c, _ := ctx.Value(recurringFillCtxKey{}).(*RecurringFillCommit)
+	return c
+}
+
+// RecurringIdempotencyKey is stable for one plan period so a retry cannot double-fill.
+func RecurringIdempotencyKey(planID, periodKey string) string {
+	return "rb:" + strings.TrimSpace(planID) + ":" + strings.TrimSpace(periodKey)
+}
+
+// RecurringFailRetryable is true for transient failures that must retry the same period.
+func RecurringFailRetryable(reason string) bool {
+	switch strings.TrimSpace(reason) {
+	case "", "in_progress", "market price unavailable", "order failed", "plan unavailable", "insufficient cash balance":
+		return true
+	default:
+		return false
+	}
 }
 
 // IsValidRecurringBuyFrequency reports daily|weekly|monthly|interval.

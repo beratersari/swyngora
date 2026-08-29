@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -149,6 +150,9 @@ type OrderInput struct {
 	// with stale limits.
 	RecurringPlanID       string
 	RecurringScheduledFor time.Time
+	RecurringPeriodKey    string
+	RecurringNextRunAt    time.Time
+	RecurringRunID        string
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -559,7 +563,25 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		tr.LotFills = lotOps.Fills
 	}
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindTrade, idempIDs{TradeID: tradeID})
+	if in.RecurringPlanID != "" && in.RecurringPeriodKey != "" {
+		cashOut := tr.Notional + tr.Fee
+		ctx = domain.ContextWithRecurringFill(ctx, &domain.RecurringFillCommit{
+			PlanID:        in.RecurringPlanID,
+			LastPeriodKey: in.RecurringPeriodKey,
+			NextRunAt:     in.RecurringNextRunAt,
+			Run: domain.RecurringBuyRun{
+				ID:     runIDOr(in.RecurringRunID, in.RecurringPlanID, in.RecurringPeriodKey),
+				PlanID: in.RecurringPlanID, ClientID: clientID, PeriodKey: in.RecurringPeriodKey,
+				Status: domain.RecurringBuyRunSucceeded, Amount: cashOut,
+				Quantity: in.Quantity, Price: price, TradeID: tradeID,
+				ScheduledFor: in.RecurringScheduledFor, ExecutedAt: now,
+			},
+		})
+	}
 	if err := s.store.ExecuteTrade(ctx, p, posOut, tr, lotOps); err != nil {
+		if errors.Is(err, domain.ErrRecurringPeriodDone) {
+			return s.replayRecurringPeriod(ctx, clientID, in)
+		}
 		if isIdempotencyHit(err) {
 			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
 				return s.replayTrade(ctx, rec, in.ClientID, p.ID)
