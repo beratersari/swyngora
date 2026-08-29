@@ -2,8 +2,11 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
+
+	_ "time/tzdata"
 )
 
 // Recurring buy plan limits (paper trading only).
@@ -14,6 +17,9 @@ const (
 	MaxRecurringBuyNameLen        = 80
 	MinRecurringIntervalHours     = 1
 	MaxRecurringIntervalHours     = 168 // 7 days
+	MaxRecurringBuyMaxPrice       = 1e12
+	// RecurringHourUnset means keep the clock from startAt / previous nextRunAt.
+	RecurringHourUnset = -1
 )
 
 // RecurringBuyFrequency is how often a plan executes.
@@ -49,12 +55,17 @@ type RecurringBuyPlan struct {
 	ClientID      string
 	Exchange      Exchange
 	Symbol        string
-	Name          string // user label e.g. "Salary Day Buy"
+	Name          string  // user label e.g. "Salary Day Buy"
 	Amount        float64 // cash notional per run
 	Frequency     RecurringBuyFrequency
-	Weekday       string // monday..sunday; weekly only (optional)
-	DayOfMonth    int    // 1-31; monthly only (optional; 0 = anniversary of start)
-	IntervalHours int    // 1-168; interval frequency only
+	Weekday       string  // monday..sunday; weekly only (optional)
+	DayOfMonth    int     // 1-31; monthly only (optional; 0 = anniversary of start)
+	IntervalHours int     // 1-168; interval frequency only
+	TimeZone      string  // IANA e.g. Europe/Istanbul; empty = UTC
+	HasLocalTime  bool    // when true, Hour:Minute is the local clock
+	Hour          int     // 0-23 local when HasLocalTime
+	Minute        int     // 0-59 local
+	MaxPrice      float64 // 0 = no cap; last, slipped fill, and fee-inclusive unit must all stay <= this
 	Status        RecurringBuyPlanStatus
 	NextRunAt     time.Time
 	LastRunAt     *time.Time
@@ -142,6 +153,101 @@ func NormalizeRecurringBuyName(name, symbol string, freq RecurringBuyFrequency) 
 	return name, nil
 }
 
+// NormalizeRecurringTimeZone accepts empty (UTC) or an IANA name.
+func NormalizeRecurringTimeZone(s string) (string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.EqualFold(s, "utc") || s == "Z" {
+		return "", nil
+	}
+	if _, err := time.LoadLocation(s); err != nil {
+		return "", fmt.Errorf("%w: timeZone must be an IANA name e.g. Europe/Istanbul", ErrInvalidArgument)
+	}
+	return s, nil
+}
+
+// RecurringLocation is UTC when TimeZone is empty.
+func RecurringLocation(tz string) *time.Location {
+	tz = strings.TrimSpace(tz)
+	if tz == "" {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
+}
+
+// NormalizeRecurringClock validates hour/minute. hour RecurringHourUnset means inherit.
+func NormalizeRecurringClock(hour, minute int) (int, int, error) {
+	if hour == RecurringHourUnset {
+		if minute < 0 || minute > 59 {
+			return RecurringHourUnset, 0, fmt.Errorf("%w: minute must be 0-59", ErrInvalidArgument)
+		}
+		return RecurringHourUnset, 0, nil
+	}
+	if hour < 0 || hour > 23 {
+		return 0, 0, fmt.Errorf("%w: hour must be 0-23", ErrInvalidArgument)
+	}
+	if minute < 0 || minute > 59 {
+		return 0, 0, fmt.Errorf("%w: minute must be 0-59", ErrInvalidArgument)
+	}
+	return hour, minute, nil
+}
+
+// ResolveRecurringMaxPrice accepts 0 (no cap) or a positive finite price.
+func ResolveRecurringMaxPrice(v float64) (float64, error) {
+	if v == 0 {
+		return 0, nil
+	}
+	if v < 0 || math.IsNaN(v) || math.IsInf(v, 0) || v > MaxRecurringBuyMaxPrice {
+		return 0, fmt.Errorf("%w: maxPrice must be between 0 and %g", ErrInvalidArgument, MaxRecurringBuyMaxPrice)
+	}
+	return v, nil
+}
+
+// RecurringEffectivePrice is slipped fill including the taker fee (quote per base).
+func RecurringEffectivePrice(last, slipRate, feeRate float64) (fill, unit float64) {
+	fill = ApplySlippage(last, TradeSideBuy, slipRate)
+	unit = BuyUnitCost(fill, feeRate)
+	return fill, unit
+}
+
+// RecurringMaxPriceBlocks reports why a buy should be skipped. Empty means ok.
+func RecurringMaxPriceBlocks(last, slipRate, feeRate, maxPrice float64) string {
+	if maxPrice <= 0 || last <= 0 {
+		return ""
+	}
+	const eps = 1e-9
+	if last > maxPrice+eps {
+		return "last price above maxPrice"
+	}
+	fill, unit := RecurringEffectivePrice(last, slipRate, feeRate)
+	if fill > maxPrice+eps || unit > maxPrice+eps {
+		return "fill would exceed maxPrice after fee and slippage"
+	}
+	return ""
+}
+
+// usesWallClock is true when the plan pins a local time and/or timezone.
+func (p RecurringBuyPlan) usesWallClock() bool {
+	return p.HasLocalTime || strings.TrimSpace(p.TimeZone) != ""
+}
+
+func (p RecurringBuyPlan) location() *time.Location {
+	return RecurringLocation(p.TimeZone)
+}
+
+func applyRecurringClock(t time.Time, p RecurringBuyPlan) time.Time {
+	loc := p.location()
+	lt := t.In(loc)
+	h, m, sec, nsec := lt.Hour(), lt.Minute(), lt.Second(), lt.Nanosecond()
+	if p.HasLocalTime || strings.TrimSpace(p.TimeZone) != "" {
+		h, m, sec, nsec = p.Hour, p.Minute, 0, 0
+	}
+	return time.Date(lt.Year(), lt.Month(), lt.Day(), h, m, sec, nsec, loc)
+}
+
 // ValidateRecurringSchedule checks weekday / dayOfMonth / intervalHours vs frequency.
 func ValidateRecurringSchedule(freq RecurringBuyFrequency, weekday string, dayOfMonth, intervalHours int) error {
 	weekday = strings.TrimSpace(weekday)
@@ -190,7 +296,7 @@ func RecurringPeriodKey(at time.Time, freq RecurringBuyFrequency) string {
 
 // RecurringPeriodKeyPlan uses interval-aware keys when frequency is interval.
 func RecurringPeriodKeyPlan(at time.Time, p RecurringBuyPlan) string {
-	at = at.UTC()
+	at = at.In(p.location())
 	switch p.Frequency {
 	case RecurringWeekly:
 		y, w := at.ISOWeek()
@@ -202,7 +308,7 @@ func RecurringPeriodKeyPlan(at time.Time, p RecurringBuyPlan) string {
 		if h < 1 {
 			h = 1
 		}
-		return fmt.Sprintf("i%d-%d", h, at.Unix())
+		return fmt.Sprintf("i%d-%d", h, at.UTC().Unix())
 	default: // daily
 		return at.Format("2006-01-02")
 	}
@@ -215,21 +321,35 @@ func AdvanceRecurringRunAt(from time.Time, freq RecurringBuyFrequency) time.Time
 
 // AdvanceRecurringSchedule returns the next run after `from` using weekday / month day / interval.
 func AdvanceRecurringSchedule(from time.Time, p RecurringBuyPlan) time.Time {
-	from = from.UTC()
+	if p.Frequency == RecurringInterval || !p.usesWallClock() {
+		from = from.UTC()
+		switch p.Frequency {
+		case RecurringWeekly:
+			return from.AddDate(0, 0, 7)
+		case RecurringMonthly:
+			return addMonthsClamped(from, p.DayOfMonth)
+		case RecurringInterval:
+			h := p.IntervalHours
+			if h < 1 {
+				h = 1
+			}
+			return from.Add(time.Duration(h) * time.Hour)
+		default:
+			return from.AddDate(0, 0, 1)
+		}
+	}
+	loc := p.location()
+	lt := from.In(loc)
+	var next time.Time
 	switch p.Frequency {
 	case RecurringWeekly:
-		return from.AddDate(0, 0, 7)
+		next = lt.AddDate(0, 0, 7)
 	case RecurringMonthly:
-		return addMonthsClamped(from, p.DayOfMonth)
-	case RecurringInterval:
-		h := p.IntervalHours
-		if h < 1 {
-			h = 1
-		}
-		return from.Add(time.Duration(h) * time.Hour)
+		next = addMonthsClampedIn(lt, p.DayOfMonth, loc)
 	default:
-		return from.AddDate(0, 0, 1)
+		next = lt.AddDate(0, 0, 1)
 	}
+	return applyRecurringClock(next, p).UTC()
 }
 
 func daysInMonth(year int, m time.Month) int {
@@ -248,7 +368,14 @@ func clampMonthDay(year int, m time.Month, day int) int {
 }
 
 func addMonthsClamped(from time.Time, dayOfMonth int) time.Time {
-	from = from.UTC()
+	return addMonthsClampedIn(from.UTC(), dayOfMonth, time.UTC)
+}
+
+func addMonthsClampedIn(from time.Time, dayOfMonth int, loc *time.Location) time.Time {
+	if loc == nil {
+		loc = time.UTC
+	}
+	from = from.In(loc)
 	y, m := from.Year(), from.Month()+1
 	if m > 12 {
 		y++
@@ -259,38 +386,63 @@ func addMonthsClamped(from time.Time, dayOfMonth int) time.Time {
 		day = from.Day()
 	}
 	day = clampMonthDay(y, m, day)
-	return time.Date(y, m, day, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), time.UTC)
+	return time.Date(y, m, day, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), loc)
 }
 
 // AlignRecurringStart moves `from` to the next valid slot on or after from (weekday / salary day).
 func AlignRecurringStart(from time.Time, p RecurringBuyPlan) time.Time {
-	from = from.UTC()
+	if p.Frequency == RecurringInterval {
+		return from.UTC()
+	}
+	loc := p.location()
+	from = from.In(loc)
+	base := applyRecurringClock(from, p)
 	switch p.Frequency {
 	case RecurringWeekly:
 		if strings.TrimSpace(p.Weekday) == "" {
-			return from
+			if p.usesWallClock() {
+				if base.Before(from) {
+					return applyRecurringClock(from.AddDate(0, 0, 1), p).UTC()
+				}
+				return base.UTC()
+			}
+			return from.UTC()
 		}
 		wd, err := ParseRecurringWeekday(p.Weekday)
 		if err != nil {
-			return from
+			return from.UTC()
 		}
-		delta := int(wd - from.Weekday())
+		delta := int(wd - base.Weekday())
 		if delta < 0 {
 			delta += 7
 		}
-		return from.AddDate(0, 0, delta)
-	case RecurringMonthly:
-		if p.DayOfMonth <= 0 {
-			return from
-		}
-		day := clampMonthDay(from.Year(), from.Month(), p.DayOfMonth)
-		cand := time.Date(from.Year(), from.Month(), day, from.Hour(), from.Minute(), from.Second(), from.Nanosecond(), time.UTC)
+		cand := applyRecurringClock(base.AddDate(0, 0, delta), p)
 		if cand.Before(from) {
-			return addMonthsClamped(from, p.DayOfMonth)
+			cand = applyRecurringClock(cand.AddDate(0, 0, 7), p)
 		}
-		return cand
-	default:
-		return from
+		return cand.UTC()
+	case RecurringMonthly:
+		if p.DayOfMonth <= 0 && !p.usesWallClock() {
+			return from.UTC()
+		}
+		day := p.DayOfMonth
+		if day <= 0 {
+			day = from.Day()
+		}
+		day = clampMonthDay(from.Year(), from.Month(), day)
+		cand := applyRecurringClock(time.Date(from.Year(), from.Month(), day, 0, 0, 0, 0, loc), p)
+		if cand.Before(from) {
+			return applyRecurringClock(addMonthsClampedIn(from, p.DayOfMonth, loc), p).UTC()
+		}
+		return cand.UTC()
+	default: // daily
+		if !p.usesWallClock() {
+			return from.UTC()
+		}
+		if base.Before(from) {
+			return applyRecurringClock(from.AddDate(0, 0, 1), p).UTC()
+		}
+		return base.UTC()
 	}
 }
 

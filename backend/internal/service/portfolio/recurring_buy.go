@@ -25,6 +25,10 @@ type RecurringBuyCreateInput struct {
 	Weekday       string  // monday..sunday; weekly
 	DayOfMonth    int     // 1-31; monthly salary day
 	IntervalHours int     // 1-168; interval frequency
+	TimeZone      string  // IANA e.g. Europe/Istanbul; empty = UTC
+	Hour          *int    // 0-23 local; nil = inherit startAt/now clock unless TimeZone set
+	Minute        *int    // 0-59
+	MaxPrice      float64 // 0 = no cap
 	// StartAt is the first scheduled run (default: now — first worker tick after create).
 	StartAt *time.Time
 }
@@ -42,6 +46,10 @@ type RecurringBuyUpdateInput struct {
 	Weekday       *string
 	DayOfMonth    *int
 	IntervalHours *int
+	TimeZone      *string
+	Hour          *int
+	Minute        *int
+	MaxPrice      *float64
 	StartAt       *time.Time // if set, next run is recomputed from this instant
 }
 
@@ -75,6 +83,48 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if err := domain.ValidateRecurringSchedule(freq, weekday, in.DayOfMonth, in.IntervalHours); err != nil {
 		return nil, err
 	}
+	tz, err := domain.NormalizeRecurringTimeZone(in.TimeZone)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	hour, minute := domain.RecurringHourUnset, 0
+	hasLocal := false
+	if in.Hour != nil {
+		min := 0
+		if in.Minute != nil {
+			min = *in.Minute
+		}
+		hour, minute, err = domain.NormalizeRecurringClock(*in.Hour, min)
+		if err != nil {
+			return nil, err
+		}
+		hasLocal = true
+	} else if in.Minute != nil {
+		hour, minute, err = domain.NormalizeRecurringClock(0, *in.Minute)
+		if err != nil {
+			return nil, err
+		}
+		hasLocal = true
+	}
+	if tz != "" {
+		hasLocal = true
+		if hour == domain.RecurringHourUnset {
+			anchor := now
+			if in.StartAt != nil && !in.StartAt.IsZero() {
+				anchor = in.StartAt.UTC()
+			}
+			lt := anchor.In(domain.RecurringLocation(tz))
+			hour, minute = lt.Hour(), lt.Minute()
+		}
+	}
+	if hour == domain.RecurringHourUnset {
+		hour, minute = 0, 0
+	}
+	maxP, err := domain.ResolveRecurringMaxPrice(in.MaxPrice)
+	if err != nil {
+		return nil, err
+	}
 	name, err := domain.NormalizeRecurringBuyName(in.Name, sym, freq)
 	if err != nil {
 		return nil, err
@@ -86,14 +136,15 @@ func (s *Service) CreateRecurringBuyPlan(ctx context.Context, in RecurringBuyCre
 	if n >= domain.MaxRecurringBuyPlansPerClient {
 		return nil, fmt.Errorf("%w: max %d recurring buy plans per client", domain.ErrInvalidArgument, domain.MaxRecurringBuyPlansPerClient)
 	}
-	now := time.Now().UTC()
 	draft := domain.RecurringBuyPlan{
 		Frequency: freq, Weekday: weekday, DayOfMonth: in.DayOfMonth, IntervalHours: in.IntervalHours,
+		TimeZone: tz, HasLocalTime: hasLocal, Hour: hour, Minute: minute,
 	}
 	next := domain.FirstRecurringRunAt(now, in.StartAt, draft)
 	plan := domain.RecurringBuyPlan{
 		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Name: name,
 		Amount: in.Amount, Frequency: freq, Weekday: weekday, DayOfMonth: in.DayOfMonth, IntervalHours: in.IntervalHours,
+		TimeZone: tz, HasLocalTime: hasLocal, Hour: hour, Minute: minute, MaxPrice: maxP,
 		Status: domain.RecurringBuyActive, NextRunAt: next, CreatedAt: now, UpdatedAt: now,
 	}
 	return s.store.CreateRecurringBuyPlan(ctx, plan)
@@ -148,6 +199,43 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	if err := domain.ValidateRecurringSchedule(freq, weekday, dom, ih); err != nil {
 		return nil, err
 	}
+	tz := cur.TimeZone
+	hasLocal := cur.HasLocalTime
+	hour, minute := cur.Hour, cur.Minute
+	if in.TimeZone != nil {
+		tz, err = domain.NormalizeRecurringTimeZone(*in.TimeZone)
+		if err != nil {
+			return nil, err
+		}
+		if tz != "" && !hasLocal && in.Hour == nil {
+			lt := cur.NextRunAt.In(domain.RecurringLocation(tz))
+			hour, minute = lt.Hour(), lt.Minute()
+		}
+		if tz != "" {
+			hasLocal = true
+		}
+	}
+	if in.Hour != nil || in.Minute != nil {
+		h, m := hour, minute
+		if in.Hour != nil {
+			h = *in.Hour
+		}
+		if in.Minute != nil {
+			m = *in.Minute
+		}
+		hour, minute, err = domain.NormalizeRecurringClock(h, m)
+		if err != nil {
+			return nil, err
+		}
+		hasLocal = true
+	}
+	maxP := cur.MaxPrice
+	if in.MaxPrice != nil {
+		maxP, err = domain.ResolveRecurringMaxPrice(*in.MaxPrice)
+		if err != nil {
+			return nil, err
+		}
+	}
 	name := cur.Name
 	if in.Name != nil {
 		name, err = domain.NormalizeRecurringBuyName(*in.Name, cur.Symbol, freq)
@@ -156,9 +244,13 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 		}
 	}
 	now := time.Now().UTC()
-	draft := domain.RecurringBuyPlan{Frequency: freq, Weekday: weekday, DayOfMonth: dom, IntervalHours: ih}
+	draft := domain.RecurringBuyPlan{
+		Frequency: freq, Weekday: weekday, DayOfMonth: dom, IntervalHours: ih,
+		TimeZone: tz, HasLocalTime: hasLocal, Hour: hour, Minute: minute,
+	}
 	next := cur.NextRunAt
-	if in.Frequency != nil || in.Weekday != nil || in.DayOfMonth != nil || in.IntervalHours != nil || in.StartAt != nil {
+	if in.Frequency != nil || in.Weekday != nil || in.DayOfMonth != nil || in.IntervalHours != nil ||
+		in.StartAt != nil || in.TimeZone != nil || in.Hour != nil || in.Minute != nil {
 		next = domain.FirstRecurringRunAt(now, in.StartAt, draft)
 	}
 	updated := *cur
@@ -168,6 +260,11 @@ func (s *Service) UpdateRecurringBuyPlan(ctx context.Context, in RecurringBuyUpd
 	updated.Weekday = weekday
 	updated.DayOfMonth = dom
 	updated.IntervalHours = ih
+	updated.TimeZone = tz
+	updated.HasLocalTime = hasLocal
+	updated.Hour = hour
+	updated.Minute = minute
+	updated.MaxPrice = maxP
 	updated.NextRunAt = next
 	updated.UpdatedAt = now
 	return s.store.UpdateRecurringBuyPlan(ctx, clientID, id, updated)
@@ -330,6 +427,9 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 		return nil, "market price unavailable"
 	}
 	cost := s.paperCost(plan.Exchange)
+	if reason := domain.RecurringMaxPriceBlocks(price, cost.SlippageRate, cost.FeeRate, plan.MaxPrice); reason != "" {
+		return nil, reason
+	}
 	fill := domain.ApplySlippage(price, domain.TradeSideBuy, cost.SlippageRate)
 	unit := domain.BuyUnitCost(fill, cost.FeeRate)
 	if unit <= 0 {

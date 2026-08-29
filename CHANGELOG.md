@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Recurring buy timezone and max price:** IANA `timeZone` (e.g. `Europe/Istanbul`) plus `hour`/`minute` for a local clock (every Monday 09:00). Optional `maxPrice` skips a run when last, slipped fill, or fee-inclusive unit cost would exceed it (`docs/features/recurring-buys.md`)
 - **AI retry status:** CLI spinner and Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…` (`docs/features/ai-assistant.md`)
 - **Scanner combo rules:** pick RSI, MA crossover, and/or volume increase on one rule and choose `matchMode` `all` (every selected condition) or `any` (one is enough) (`POST /api/v1/scanner/rules`, MCP `create_scanner_rule`) (`docs/features/indicator-scanner.md`)
 - **Scanner rule edit:** enable/disable a rule without deleting it, and change interval, conditions, periods, and thresholds later (`PATCH /api/v1/scanner/rules/{id}`, MCP `update_scanner_rule`)

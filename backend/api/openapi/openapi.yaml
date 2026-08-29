@@ -4571,6 +4571,9 @@ paths:
         frequency: daily | weekly | monthly | interval.
         weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
         interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+        Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for local clock
+        (Monday 09:00). Optional maxPrice skips a run when last, slipped fill, or
+        fee-inclusive unit cost would exceed it.
         Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
         Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
         Missed periods execute only the latest due slot (no backlog of intermediate buys).
@@ -4605,7 +4608,7 @@ paths:
                 weekday:
                   type: string
                   enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
-                  description: Weekly — buy on this UTC weekday
+                  description: Weekly — buy on this weekday in timeZone (UTC if omitted)
                 dayOfMonth:
                   type: integer
                   minimum: 1
@@ -4616,6 +4619,27 @@ paths:
                   minimum: 1
                   maximum: 168
                   description: Interval frequency — hours between buys (e.g. 12)
+                timeZone:
+                  type: string
+                  description: IANA timezone e.g. Europe/Istanbul. Empty is UTC and keeps the startAt clock.
+                  example: Europe/Istanbul
+                hour:
+                  type: integer
+                  minimum: 0
+                  maximum: 23
+                  description: Local hour to run (use with timeZone or UTC)
+                  example: 9
+                minute:
+                  type: integer
+                  minimum: 0
+                  maximum: 59
+                  description: Local minute to run
+                  example: 0
+                maxPrice:
+                  type: number
+                  minimum: 0
+                  description: Skip the run if last, slipped fill, or fee-inclusive unit cost exceeds this. 0 = no cap.
+                  example: 65000
                 startAt:
                   type: string
                   format: date-time
@@ -4712,6 +4736,10 @@ paths:
                 weekday: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
                 dayOfMonth: { type: integer, minimum: 1, maximum: 31 }
                 intervalHours: { type: integer, minimum: 1, maximum: 168 }
+                timeZone: { type: string, example: Europe/Istanbul }
+                hour: { type: integer, minimum: 0, maximum: 23 }
+                minute: { type: integer, minimum: 0, maximum: 59 }
+                maxPrice: { type: number, minimum: 0 }
                 startAt: { type: string, format: date-time }
       responses:
         '200':
@@ -7846,6 +7874,17 @@ components:
         intervalHours:
           type: integer
           description: Hours between interval buys
+        timeZone:
+          type: string
+          description: IANA timezone e.g. Europe/Istanbul
+        hour:
+          type: integer
+          description: Local hour when a local clock is set
+        minute:
+          type: integer
+        maxPrice:
+          type: number
+          description: Skip when last or fee+slippage unit cost would exceed this; 0 = none
         status:
           type: string
           enum: [active, paused]
@@ -7873,7 +7912,7 @@ components:
         tradeId: { type: string }
         failReason:
           type: string
-          description: e.g. insufficient cash balance, market price unavailable
+          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
     AllocationTarget:

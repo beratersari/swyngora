@@ -146,8 +146,8 @@ type DataPort interface {
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error)
-	UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error)
+	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error)
+	UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error)
 	ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -2636,7 +2636,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_recurring_buy",
-		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. Simulated only."),
+		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. timeZone (Europe/Istanbul) + hour/minute for local clock. maxPrice skips a run if last or fee+slippage unit would exceed it. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -2648,6 +2648,10 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("intervalHours", mcp.Description("Interval frequency: 1-168 hours")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 first run; default now")),
+		mcp.WithString("timeZone", mcp.Description("IANA timezone e.g. Europe/Istanbul")),
+		mcp.WithNumber("hour", mcp.Description("Local hour 0-23")),
+		mcp.WithNumber("minute", mcp.Description("Local minute 0-59")),
+		mcp.WithNumber("maxPrice", mcp.Description("Skip if last or fee+slippage unit exceeds this; 0 = no cap")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -2666,8 +2670,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		hour := domain.RecurringHourUnset
+		if _, ok := req.GetArguments()["hour"]; ok {
+			hour = int(req.GetFloat("hour", 0))
+		}
 		raw, err := api.CreateRecurringBuyPlan(ctx, clientID, req.GetString("exchange", "binance"), symbol, amount, freq, req.GetString("startAt", ""),
-			req.GetString("name", ""), req.GetString("weekday", ""), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
+			req.GetString("name", ""), req.GetString("weekday", ""), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)),
+			req.GetString("timeZone", ""), hour, int(req.GetFloat("minute", 0)), req.GetFloat("maxPrice", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -2675,7 +2684,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("update_recurring_buy",
-		mcp.WithDescription("Update a paper recurring buy name, amount, or schedule (frequency/weekday/dayOfMonth/intervalHours). Simulated only."),
+		mcp.WithDescription("Update a paper recurring buy name, amount, schedule, timeZone/hour/minute, or maxPrice. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -2686,6 +2695,10 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("dayOfMonth", mcp.Description("1-31")),
 		mcp.WithNumber("intervalHours", mcp.Description("1-168")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 to reschedule first/next run")),
+		mcp.WithString("timeZone", mcp.Description("IANA timezone e.g. Europe/Istanbul")),
+		mcp.WithNumber("hour", mcp.Description("Local hour 0-23")),
+		mcp.WithNumber("minute", mcp.Description("Local minute 0-59")),
+		mcp.WithNumber("maxPrice", mcp.Description("Skip if last or fee+slippage unit exceeds this; 0 = no cap")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -2696,8 +2709,17 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		hour := domain.RecurringHourUnset
+		if _, ok := req.GetArguments()["hour"]; ok {
+			hour = int(req.GetFloat("hour", 0))
+		}
+		maxP := -1.0
+		if _, ok := req.GetArguments()["maxPrice"]; ok {
+			maxP = req.GetFloat("maxPrice", 0)
+		}
 		raw, err := api.UpdateRecurringBuyPlan(ctx, clientID, planID, req.GetString("name", ""), req.GetString("frequency", ""),
-			req.GetString("weekday", ""), req.GetString("startAt", ""), req.GetFloat("amount", 0), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
+			req.GetString("weekday", ""), req.GetString("startAt", ""), req.GetFloat("amount", 0), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)),
+			req.GetString("timeZone", ""), hour, int(req.GetFloat("minute", 0)), maxP)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

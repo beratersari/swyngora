@@ -90,3 +90,75 @@ func TestRecurringIntervalAndSalaryDay(t *testing.T) {
 		t.Fatal("daily+weekday")
 	}
 }
+
+func TestRecurringMondayNineIstanbul(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wednesday afternoon UTC → next Monday 09:00 Istanbul
+	wed := time.Date(2024, 6, 5, 15, 0, 0, 0, time.UTC)
+	p := RecurringBuyPlan{
+		Frequency: RecurringWeekly, Weekday: "monday",
+		TimeZone: "Europe/Istanbul", HasLocalTime: true, Hour: 9, Minute: 0,
+	}
+	got := AlignRecurringStart(wed, p)
+	want := time.Date(2024, 6, 10, 9, 0, 0, 0, loc).UTC()
+	if !got.Equal(want) {
+		t.Fatalf("align got %v want %v (local %v)", got, want, got.In(loc))
+	}
+	next := AdvanceRecurringSchedule(got, p)
+	wantNext := time.Date(2024, 6, 17, 9, 0, 0, 0, loc).UTC()
+	if !next.Equal(wantNext) {
+		t.Fatalf("advance got %v want %v", next, wantNext)
+	}
+	if k := RecurringPeriodKeyPlan(got, p); k != "2024-W24" {
+		t.Fatalf("period=%s", k)
+	}
+}
+
+func TestRecurringMaxPriceBlocks(t *testing.T) {
+	if got := RecurringMaxPriceBlocks(66000, 0.001, 0.001, 65000); got == "" {
+		t.Fatal("last over max should block")
+	}
+	if got := RecurringMaxPriceBlocks(64000, 0.001, 0.001, 65000); got != "" {
+		t.Fatalf("64k should buy: %s", got)
+	}
+	// last under max but slipped+fee crosses the cap
+	if got := RecurringMaxPriceBlocks(64990, 0.001, 0.001, 65000); got == "" {
+		t.Fatal("effective price over max should block")
+	}
+	if got := RecurringMaxPriceBlocks(64000, 0.001, 0.001, 0); got != "" {
+		t.Fatalf("no cap: %s", got)
+	}
+	if _, err := NormalizeRecurringTimeZone("Europe/Istanbul"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NormalizeRecurringTimeZone("Not/AZone"); err == nil {
+		t.Fatal("expected invalid timezone")
+	}
+	if v, err := ResolveRecurringMaxPrice(65000); err != nil || v != 65000 {
+		t.Fatalf("%v %v", v, err)
+	}
+	if _, err := ResolveRecurringMaxPrice(-1); err == nil {
+		t.Fatal("expected invalid maxPrice")
+	}
+}
+
+func TestRecurringDailyNineIstanbulAfterHour(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Monday 10:00 Istanbul → next is Tuesday 09:00
+	from := time.Date(2024, 6, 10, 10, 0, 0, 0, loc)
+	p := RecurringBuyPlan{
+		Frequency: RecurringDaily, TimeZone: "Europe/Istanbul",
+		HasLocalTime: true, Hour: 9, Minute: 0,
+	}
+	got := AlignRecurringStart(from, p)
+	want := time.Date(2024, 6, 11, 9, 0, 0, 0, loc).UTC()
+	if !got.Equal(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}

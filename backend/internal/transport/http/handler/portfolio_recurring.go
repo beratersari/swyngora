@@ -21,6 +21,10 @@ type recurringBuyPlanDTO struct {
 	Weekday       string  `json:"weekday,omitempty"`
 	DayOfMonth    int     `json:"dayOfMonth,omitempty"`
 	IntervalHours int     `json:"intervalHours,omitempty"`
+	TimeZone      string  `json:"timeZone,omitempty"`
+	Hour          *int    `json:"hour,omitempty"`
+	Minute        *int    `json:"minute,omitempty"`
+	MaxPrice      float64 `json:"maxPrice,omitempty"`
 	Status        string  `json:"status"`
 	NextRunAt     string  `json:"nextRunAt"`
 	LastRunAt     *string `json:"lastRunAt,omitempty"`
@@ -47,10 +51,15 @@ func recurringPlanDTO(p *domain.RecurringBuyPlan) recurringBuyPlanDTO {
 	d := recurringBuyPlanDTO{
 		ID: p.ID, ClientID: p.ClientID, Exchange: string(p.Exchange), Symbol: p.Symbol, Name: p.Name,
 		Amount: p.Amount, Frequency: string(p.Frequency), Weekday: p.Weekday, DayOfMonth: p.DayOfMonth,
-		IntervalHours: p.IntervalHours, Status: string(p.Status),
+		IntervalHours: p.IntervalHours, TimeZone: p.TimeZone, MaxPrice: p.MaxPrice,
+		Status:    string(p.Status),
 		NextRunAt: p.NextRunAt.UTC().Format(time.RFC3339Nano), LastPeriodKey: p.LastPeriodKey,
 		CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if p.HasLocalTime || p.TimeZone != "" {
+		h, m := p.Hour, p.Minute
+		d.Hour, d.Minute = &h, &m
 	}
 	if p.LastRunAt != nil {
 		s := p.LastRunAt.UTC().Format(time.RFC3339Nano)
@@ -63,7 +72,7 @@ func recurringRunDTO(r *domain.RecurringBuyRun) recurringBuyRunDTO {
 	return recurringBuyRunDTO{
 		ID: r.ID, PlanID: r.PlanID, PeriodKey: r.PeriodKey, Status: string(r.Status),
 		Amount: r.Amount, Quantity: r.Quantity, Price: r.Price, TradeID: r.TradeID,
-		FailReason: r.FailReason,
+		FailReason:   r.FailReason,
 		ScheduledFor: r.ScheduledFor.UTC().Format(time.RFC3339Nano),
 		ExecutedAt:   r.ExecutedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -80,6 +89,10 @@ type createRecurringBody struct {
 	Weekday       string  `json:"weekday"`
 	DayOfMonth    int     `json:"dayOfMonth"`
 	IntervalHours int     `json:"intervalHours"`
+	TimeZone      string  `json:"timeZone"`
+	Hour          *int    `json:"hour"`
+	Minute        *int    `json:"minute"`
+	MaxPrice      float64 `json:"maxPrice"`
 	StartAt       string  `json:"startAt"`
 }
 
@@ -90,6 +103,10 @@ type updateRecurringBody struct {
 	Weekday       *string  `json:"weekday"`
 	DayOfMonth    *int     `json:"dayOfMonth"`
 	IntervalHours *int     `json:"intervalHours"`
+	TimeZone      *string  `json:"timeZone"`
+	Hour          *int     `json:"hour"`
+	Minute        *int     `json:"minute"`
+	MaxPrice      *float64 `json:"maxPrice"`
 	StartAt       string   `json:"startAt"`
 }
 
@@ -120,7 +137,9 @@ func (h *PortfolioHandler) CreateRecurringBuy(w http.ResponseWriter, r *http.Req
 	plan, err := h.svc.CreateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyCreateInput{
 		ClientID: clientID, PortfolioID: coalescePortfolioID(r, body.PortfolioID), Exchange: body.Exchange, Symbol: body.Symbol, Name: body.Name,
 		Amount: body.Amount, Frequency: body.Frequency, Weekday: body.Weekday,
-		DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
+		DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours,
+		TimeZone: body.TimeZone, Hour: body.Hour, Minute: body.Minute, MaxPrice: body.MaxPrice,
+		StartAt: start,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -168,7 +187,9 @@ func (h *PortfolioHandler) UpdateRecurringBuy(w http.ResponseWriter, r *http.Req
 	plan, err := h.svc.UpdateRecurringBuyPlan(r.Context(), portfolio.RecurringBuyUpdateInput{
 		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), PlanID: r.PathValue("id"),
 		Name: body.Name, Amount: body.Amount, Frequency: body.Frequency,
-		Weekday: body.Weekday, DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours, StartAt: start,
+		Weekday: body.Weekday, DayOfMonth: body.DayOfMonth, IntervalHours: body.IntervalHours,
+		TimeZone: body.TimeZone, Hour: body.Hour, Minute: body.Minute, MaxPrice: body.MaxPrice,
+		StartAt: start,
 	})
 	if err != nil {
 		writeError(w, err)

@@ -3861,6 +3861,13 @@ export interface components {
             dayOfMonth?: number;
             /** @description Hours between interval buys */
             intervalHours?: number;
+            /** @description IANA timezone e.g. Europe/Istanbul */
+            timeZone?: string;
+            /** @description Local hour when a local clock is set */
+            hour?: number;
+            minute?: number;
+            /** @description Skip when last or fee+slippage unit cost would exceed this; 0 = none */
+            maxPrice?: number;
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -3885,7 +3892,7 @@ export interface components {
             quantity?: number;
             price?: number;
             tradeId?: string;
-            /** @description e.g. insufficient cash balance, market price unavailable */
+            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage */
             failReason?: string;
             /** Format: date-time */
             scheduledFor?: string;
@@ -7631,7 +7638,7 @@ export interface operations {
                     /** @enum {string} */
                     frequency: "daily" | "weekly" | "monthly" | "interval";
                     /**
-                     * @description Weekly — buy on this UTC weekday
+                     * @description Weekly — buy on this weekday in timeZone (UTC if omitted)
                      * @enum {string}
                      */
                     weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -7639,6 +7646,26 @@ export interface operations {
                     dayOfMonth?: number;
                     /** @description Interval frequency — hours between buys (e.g. 12) */
                     intervalHours?: number;
+                    /**
+                     * @description IANA timezone e.g. Europe/Istanbul. Empty is UTC and keeps the startAt clock.
+                     * @example Europe/Istanbul
+                     */
+                    timeZone?: string;
+                    /**
+                     * @description Local hour to run (use with timeZone or UTC)
+                     * @example 9
+                     */
+                    hour?: number;
+                    /**
+                     * @description Local minute to run
+                     * @example 0
+                     */
+                    minute?: number;
+                    /**
+                     * @description Skip the run if last, slipped fill, or fee-inclusive unit cost exceeds this. 0 = no cap.
+                     * @example 65000
+                     */
+                    maxPrice?: number;
                     /**
                      * Format: date-time
                      * @description First scheduled run (RFC3339); default is now (next worker tick)
@@ -7742,6 +7769,11 @@ export interface operations {
                     weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
                     dayOfMonth?: number;
                     intervalHours?: number;
+                    /** @example Europe/Istanbul */
+                    timeZone?: string;
+                    hour?: number;
+                    minute?: number;
+                    maxPrice?: number;
                     /** Format: date-time */
                     startAt?: string;
                 };

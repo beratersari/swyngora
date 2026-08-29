@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // APIClient is a minimal HTTP client for the Swyngora backend API.
@@ -1628,7 +1630,7 @@ func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, li
 }
 
 // CreateRecurringBuyPlan creates a paper recurring buy plan.
-func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol,
 		"amount": amount, "frequency": frequency,
@@ -1648,11 +1650,21 @@ func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchan
 	if intervalHours > 0 {
 		body["intervalHours"] = intervalHours
 	}
+	if timeZone != "" {
+		body["timeZone"] = timeZone
+	}
+	if hour != domain.RecurringHourUnset {
+		body["hour"] = hour
+		body["minute"] = minute
+	}
+	if maxPrice > 0 {
+		body["maxPrice"] = maxPrice
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/recurring-buys", body)
 }
 
 // UpdateRecurringBuyPlan patches name/amount/schedule. Zero/empty optional fields are omitted.
-func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice float64) (json.RawMessage, error) {
 	q := url.Values{}
 	if clientID != "" {
 		q.Set("clientId", clientID)
@@ -1682,6 +1694,16 @@ func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, na
 	}
 	if intervalHours > 0 {
 		body["intervalHours"] = intervalHours
+	}
+	if timeZone != "" {
+		body["timeZone"] = timeZone
+	}
+	if hour != domain.RecurringHourUnset {
+		body["hour"] = hour
+		body["minute"] = minute
+	}
+	if maxPrice >= 0 {
+		body["maxPrice"] = maxPrice
 	}
 	return c.sendJSON(ctx, http.MethodPatch, path, body)
 }

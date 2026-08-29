@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -293,3 +294,113 @@ func TestRecurringBuy_ExecutesOnNonPrimaryBook(t *testing.T) {
 		t.Fatalf("Alts positions=%+v want ~2 ETH", view.Positions)
 	}
 }
+
+func TestRecurringBuy_TimezoneMondayNine(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "64000"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-tz", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	hour := 9
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-tz", Symbol: "BTCUSDT", Amount: 100, Frequency: "weekly",
+		Weekday: "monday", TimeZone: "Europe/Istanbul", Hour: &hour, Minute: intPtr(0),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loc, _ := time.LoadLocation("Europe/Istanbul")
+	local := plan.NextRunAt.In(loc)
+	if local.Weekday() != time.Monday || local.Hour() != 9 || local.Minute() != 0 {
+		t.Fatalf("next=%v local=%v", plan.NextRunAt, local)
+	}
+	if plan.TimeZone != "Europe/Istanbul" || !plan.HasLocalTime {
+		t.Fatalf("%+v", plan)
+	}
+	if _, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-tz", Symbol: "BTCUSDT", Amount: 100, Frequency: "daily",
+		TimeZone: "Not/AZone",
+	}); err == nil {
+		t.Fatal("expected invalid timezone")
+	}
+}
+
+func TestRecurringBuy_MaxPriceSkipsAndAllows(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "66000"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-cap", StartingBalance: 200000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	high, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-cap", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &past, MaxPrice: 65000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-cap", high.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed {
+		t.Fatalf("want failed over-max run %+v", runs)
+	}
+	if !strings.Contains(runs[0].FailReason, "maxPrice") {
+		t.Fatalf("reason=%q", runs[0].FailReason)
+	}
+	view, _ := svc.View(ctx, "rb-cap")
+	if view.CashBalance < 199999 {
+		t.Fatalf("should not spend when over max, cash=%v", view.CashBalance)
+	}
+
+	svc.market = &fakePx{prices: map[string]string{"binance|BTCUSDT": "64000"}}
+	okPast := time.Now().UTC().Add(-time.Minute)
+	ok, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-cap", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &okPast, MaxPrice: 65000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	okRuns, _ := svc.ListRecurringBuyRuns(ctx, "rb-cap", ok.ID, 10, 0)
+	if len(okRuns) != 1 || okRuns[0].Status != domain.RecurringBuyRunSucceeded {
+		t.Fatalf("64k should buy %+v", okRuns)
+	}
+}
+
+func TestRecurringBuy_MaxPriceBlocksAfterFeeAndSlippage(t *testing.T) {
+	// Last is under 65k, but Binance slip+fee unit cost is over.
+	svc := newSvcWithCosts(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "64980"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-eff", StartingBalance: 200000}); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().UTC().Add(-time.Minute)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-eff", Symbol: "BTCUSDT", Amount: 1000, Frequency: "daily",
+		StartAt: &past, MaxPrice: 65000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-eff", plan.ID, 10, 0)
+	if len(runs) != 1 || runs[0].Status != domain.RecurringBuyRunFailed {
+		t.Fatalf("want failed fee+slip run %+v", runs)
+	}
+	if !strings.Contains(runs[0].FailReason, "fee and slippage") {
+		t.Fatalf("reason=%q", runs[0].FailReason)
+	}
+	view, _ := svc.View(ctx, "rb-eff")
+	if view.CashBalance < 199999 {
+		t.Fatalf("should not spend, cash=%v", view.CashBalance)
+	}
+}
+
+func intPtr(v int) *int { return &v }

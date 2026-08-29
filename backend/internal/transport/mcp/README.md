@@ -121,8 +121,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `cancel_portfolio_order` | Cancel open pending paper order |
 | `list_portfolio_trades` | Paper trade history |
 | `list_portfolio_lots` | Open (or closed) tax lots for FIFO/LIFO sells |
-| `create_recurring_buy` | Create named paper recurring buy (daily/weekly/monthly/interval) |
-| `update_recurring_buy` | Update recurring buy name, amount, or schedule |
+| `create_recurring_buy` | Create named paper recurring buy (daily/weekly/monthly/interval; timeZone + hour/minute; maxPrice) |
+| `update_recurring_buy` | Update recurring buy name, amount, schedule, timezone/clock, or maxPrice |
 | `list_recurring_buys` | List recurring buy plans |
 | `get_recurring_buy` | Get one recurring buy plan |
 | `pause_recurring_buy` | Pause a plan |
