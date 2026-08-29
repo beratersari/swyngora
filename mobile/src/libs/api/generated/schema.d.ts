@@ -178,6 +178,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/post-delist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Off-venue price after this exchange delisted the pair
+         * @description After a venue has halted a pair, Binance (or that venue) has no new
+         *     trades. This returns a labeled public reference: another listed venue
+         *     if the pair still trades there, otherwise CoinGecko USD last + OHLC.
+         *     Informational only — not this venue's book, not financial advice.
+         *     Listed and upcoming pairs return `available: false`.
+         */
+        get: operations["getPostDelist"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/spot": {
         parameters: {
             query?: never;
@@ -523,6 +547,192 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/funding-arb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cross-exchange funding opportunity for one coin
+         * @description Compare **Binance USD-M** and **Bybit linear** predicted funding and
+         *     pick which venue to **long** (cheaper) and **short** (richer).
+         *     Funding is paid only at each venue's published settlement clock
+         *     (8h: 00:00/08:00/16:00 UTC; 4h: every four hours from 00:00 UTC).
+         *     `holdHours` counts those clocks in `(now, now+holdHours]`. No clock
+         *     means funding is **0**. `trade` is omitted unless after-fee net is
+         *     positive. Informational only.
+         */
+        get: operations["getMarketFundingArb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/funding-arb/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank coins by after-fee funding spread
+         * @description Walks top 24h-volume USDT pairs and returns **only after-fee winners**
+         *     (published settlements in `holdHours` beat round-trip taker fees).
+         *     Same fee and size params as `/api/v1/market/funding-arb`. Informational only.
+         */
+        get: operations["scanMarketFundingArb"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/funding-arb/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Past after-fee funding stretches for one coin
+         * @description Settled Binance USD-M and Bybit linear funding prints in `[from, to]`.
+         *     Groups consecutive prints with the same long/short pair into a run and
+         *     lists a run only when settled funding minus round-trip taker fees is
+         *     positive. The first clock of a run is the entry signal — that payment
+         *     is not collected (the position was not open before it). A run that
+         *     starts and ends on the same clock is not profit. A direction flip at
+         *     settlement still pays the old sides, then starts a new run. `from`/`to`
+         *     are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
+         */
+        get: operations["getMarketFundingArbHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/funding-arb/watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List funding-arb follow watches */
+        get: operations["listFundingArbWatches"];
+        put?: never;
+        /**
+         * Follow a funding-arb opportunity
+         * @description Omit `symbol` (or set `scan` / `*`) to follow the funding-arb scan:
+         *     every liquid coin is re-quoted on a background interval. When a coin's
+         *     after-fee net first reaches `minProfit`, opens a signal and enqueues
+         *     the client's alert webhook (`type=funding_arb.triggered`). Same coin
+         *     plus same long/short while still above the floor does not re-notify.
+         *     After net falls below the floor the signal closes; a later re-cross
+         *     notifies again. A coin missing from the volume-limited scan is
+         *     re-quoted on its own and closed only when net is really below the
+         *     floor. A direction flip closes the old signal and opens a new one.
+         *     Optional `symbol` follows one pair only. Pause/resume and PATCH
+         *     settings without deleting. One scan follow per client. Max 20
+         *     watches per client. Informational only.
+         */
+        post: operations["createFundingArbWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/funding-arb/watches/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a funding-arb follow watch */
+        get: operations["getFundingArbWatch"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a funding-arb follow watch
+         * @description Removes the watch and its signals.
+         */
+        delete: operations["deleteFundingArbWatch"];
+        options?: never;
+        head?: never;
+        /**
+         * Update funding-arb follow settings
+         * @description Change minProfit, notional, holdHours, fees, or scan size. Does not delete signals.
+         */
+        patch: operations["updateFundingArbWatch"];
+        trace?: never;
+    };
+    "/api/v1/funding-arb/watches/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a funding-arb follow
+         * @description Stops evaluation without deleting the watch or its signals.
+         */
+        post: operations["pauseFundingArbWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/funding-arb/watches/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a funding-arb follow */
+        post: operations["resumeFundingArbWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/funding-arb/signals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List funding-arb min-profit crossings */
+        get: operations["listFundingArbSignals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/long-short-ratio": {
         parameters: {
             query?: never;
@@ -797,6 +1007,323 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/volume-surge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Volume versus typical (5m / 15m / 1h)
+         * @description How much **higher** this coin's quote volume is than **its own
+         *     typical** (median of the prior ~24 hours) over **5 minutes**,
+         *     **15 minutes**, and **1 hour**. Buy and sell are split when the
+         *     venue publishes taker-buy (Binance klines; Bybit is total-only)
+         *     so a spike can be one-sided. `ratio` is current / typical.
+         *     `grade` is typical / elevated / high / extreme. Informational only.
+         */
+        get: operations["getMarketVolumeSurge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/volume-surge/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coins with much more volume than typical
+         * @description Scans top 24h-volume pairs and ranks those whose latest 5m / 15m
+         *     / 1h volume is at least `minRatio` times their own typical
+         *     (default 2x). Use this to see **which coins** are running hot.
+         *     Default venue is Binance (buy/sell split). Informational only.
+         */
+        get: operations["scanMarketVolumeSurges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidity-sweeps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidity sweeps (poke through a prior high or low)
+         * @description A **liquidity sweep** is when price pokes a little **through a
+         *     prior high or low** that had already turned it back, then comes
+         *     back. Each sweep names the **level**, how far price went through
+         *     (`excursion` / `excursionPct`), how long it stayed beyond
+         *     (`duration`), and **quote volume** (buy/sell when the venue
+         *     publishes taker-buy) during that poke. `tests` is how many times
+         *     the level turned price before the sweep. `status` is `swept`
+         *     (back) or `open` (still beyond). 15-minute spot candles, last
+         *     ~7 days. A poke that stays through for more than 2 hours is a
+         *     breakout, not a sweep. `exchange=all` (default) returns Binance
+         *     and Bybit separately. Informational only.
+         */
+        get: operations["getMarketLiquiditySweeps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/absorption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Absorption (large flow, little price)
+         * @description Detects **absorption**: large aggressive **market buys or sells**
+         *     while price barely moves — someone on the other side is taking
+         *     the flow. Each 15m / 1h / 4h / 24h window (and each 5-minute bar)
+         *     shows buy/sell notional, price change, which side is absorbing
+         *     (`bid` = bids absorbing sells, `ask` = asks absorbing buys),
+         *     `result` (`held` or `pushed` against the aggressive side), and a
+         *     0–100 `score` / `grade`. `current` is the latest consecutive run.
+         *     `exchange=all` (default) returns Binance and Bybit plus combined.
+         *     `venues` / `combined` are futures; `spotVenues` / `spotCombined`
+         *     are spot. Informational only.
+         */
+        get: operations["getMarketAbsorption"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/around": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What happened around a time (before / during / after)
+         * @description Pick a coin and a time to see **what changed around that move**.
+         *     Returns three adjacent windows: **before** (`window` ending at `at`),
+         *     **during** (the move starting at `at`, default 15 minutes), and
+         *     **after** (the same `window` after the move). Each phase has price
+         *     (OHLC + %), quote volume, buy/sell when known, VWAP, volume versus
+         *     that coin's own typical, and a compact volume-profile POC / value
+         *     area. Liquidity sweeps that poked in the span are attached.
+         *     Stored order-book and futures history (OI, funding, long/short,
+         *     liquidations) are included when those archives have a sample.
+         *     `exchange=all` (default) returns Binance and Bybit separately plus
+         *     `combined`. Informational only.
+         */
+        get: operations["getMarketAround"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/around/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare two times (two moves of the same coin)
+         * @description Pick a coin and **two event times** to see how those moves
+         *     differed. Each time is an around-the-move tape (before / during /
+         *     after). The response includes both tapes plus deltas for **price
+         *     level**, the **move** (net %, range, volume, vs typical, takers,
+         *     POC), **order-book** mid and liquidity, and **futures** (OI,
+         *     funding, long %, liquidations) when those archives have samples.
+         *     `from` and `to` are the two event times (RFC3339 or unix ms);
+         *     they do not have to be in chronological order. Same `window` /
+         *     `during` as `/around`. Informational only.
+         */
+        get: operations["compareMarketAround"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/around/moves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Important moves and what happened during them
+         * @description Finds the strongest **up and down legs** in a coin's recent
+         *     history, then attaches the around-the-move tape (price, volume,
+         *     VWAP, vs typical, POC, sweeps, stored book/futures) for each one.
+         *     Legs are same-direction stretches of 15m or 1h candles, ranked
+         *     by |return|. Default lookback **24h**, default floor **1.5%**
+         *     (15m) or **2.5%** (1h). `direction` is `up`, `down`, or `both`.
+         *     Informational only.
+         */
+        get: operations["findMarketAroundMoves"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/around/precursors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Common tape before important moves
+         * @description Scans historical candles for strong **up and down** legs, then
+         *     compares the market tape in the window **before** each move
+         *     (volume vs typical, takers, price, OI, book, sweeps). Returns
+         *     singles and **combos** — conditions that fired **together** in
+         *     the same before-window. Combos report how often they showed up
+         *     before increases vs drops (`lean`). `common` is the **overall**
+         *     hit rate (not one side only) — at least **60%** of all sampled
+         *     before-windows with **3+** samples. Default lookback **7d**.
+         *     Informational only.
+         */
+        get: operations["findMarketAroundPrecursors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/around/similar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Past important moves similar to the current tape
+         * @description Compares the **current** market (last `window`, default 1h) to the
+         *     setup **before** past important moves — volume vs typical, order
+         *     book, open interest, takers, and price. `fields` selects which
+         *     pieces to use (e.g. `volume,book,oi` skips price). `weights` sets
+         *     importance (`book:3,oi:3,volume:1`; defaults book and OI 3, takers
+         *     1.5, volume and price 1). Uncompared fields have no score.
+         *     Similarity uses only fields that actually had data. `minCoverage`
+         *     (default 60) sends cases that lack enough selected data to
+         *     `skipped` (with `missing` and `coverage`), not `matches`.
+         *     Two matches are one past event only when their **price-move
+         *     ranges overlap**. Shared setup windows do not merge different
+         *     moves.
+         *     Each past match uses only tape available before that move
+         *     (`dataFrom` / `dataTo`). `horizons` picks the after-windows
+         *     (default `15m,1h,4h`; e.g. `5m,30m,2h`). Each horizon is
+         *     measured on matching candle size (5m uses 5m bars) and reports
+         *     up/down, average, median, `sample`, plus the same stats in
+         *     similarity bands 40–60 / 60–80 / 80–100. A case is left out of
+         *     a horizon when that tape is not long enough. Default lookback
+         *     **7d**. Informational only.
+         */
+        get: operations["findMarketAroundSimilar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/vwap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Volume-weighted average price
+         * @description **VWAP** from a start time (or named `window`) until now.
+         *     Each candle's typical price (high+low+close)/3 is weighted by
+         *     **quote volume**, so prices with more trading pull the average
+         *     more. Returns `vwap`, last vs VWAP (`distance`, `distancePct`,
+         *     `side`), and total volume. `exchange=all` (default) returns
+         *     Binance and Bybit separately plus `combined` (volume-weighted
+         *     across both). Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`,
+         *     default `24h`) or `startTime` (+ optional `endTime`).
+         *     Informational only.
+         */
+        get: operations["getMarketVWAP"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/volume-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Volume profile (volume by price)
+         * @description **Volume profile** shows **where** trading happened by **price**
+         *     over a time range you choose — not just how much traded over time.
+         *     Each row is quote (USDT) volume in a price band, with **buy** and
+         *     **sell** when the venue publishes taker-buy (Binance klines; Bybit
+         *     is total-only). `poc` is the price with the most volume. `valueArea`
+         *     is the contiguous block around the POC that holds about **70%** of
+         *     volume. `exchange=all` (default) returns Binance and Bybit separately
+         *     plus `combined`. Combined adds both venues at the same price levels.
+         *     Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or
+         *     `startTime` + `endTime`. Optional `tickSize` sets the row width.
+         *     Built from spot candles (volume spread across each bar's high–low),
+         *     not individual prints. Informational only.
+         */
+        get: operations["getMarketVolumeProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/venue-divergence": {
         parameters: {
             query?: never;
@@ -908,6 +1435,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Liquidation intensity heatmap (price × time)
+         * @description CoinGlass-style grid of estimated liquidation intensity at each price
+         *     for each time column. Built from historical open interest, mark price,
+         *     the hunt leverage mix (tilted by funding), blended account long/short,
+         *     and observed liquidation prints in that column.
+         *
+         *     `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+         *     separately and each venue uses only its own candles (never the
+         *     other exchange's price). `combined` is the sum of their cells.
+         *     `review` scores whether later price reached the hot zones within
+         *     1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
+         *     observed liquidations in that zone rose. Not a live book and not
+         *     financial advice.
+         */
         get: operations["getMarketLiquidationHuntHeatmap"];
         put?: never;
         post?: never;
@@ -972,12 +1514,14 @@ export interface paths {
         };
         /**
          * Crypto holder count and top wallets
-         * @description On-chain holder snapshot for a crypto base asset (or pair). Mapped from the
-         *     Binance marketing list `cmcUniqueId` and fetched from CoinMarketCap's public
-         *     data-api (not a paid plan). Cache TTL default 1h; 429 / upstream / empty
-         *     CMC blips may serve last-good with `stale: true`. `404` `catalog_unmapped`
-         *     means no Binance `cmcUniqueId`; `404` `holders_unpublished` means CMC has
-         *     no holder table. Informational only.
+         * @description On-chain holder snapshot for a crypto base asset (or pair). Sources are
+         *     tried in order (no paid plans): CoinMarketCap public detail by Binance
+         *     `cmcUniqueId` or marketing `slug`, then Coin Metrics `AdrBalCnt`, then
+         *     GeckoTerminal token info, then Ethplorer ERC-20, then Routescan EVM
+         *     (including Chiliz), then Tronscan TRC-20. UTXO coins such as PIVX may
+         *     fall back to Chainz CryptoID. Cache TTL default 1h; 429 / upstream blips
+         *     may serve last-good with `stale: true`. `404` `catalog_unmapped` /
+         *     `holders_unpublished` only after every source misses. Informational only.
          */
         get: operations["getHolders"];
         put?: never;
@@ -1112,6 +1656,31 @@ export interface paths {
          *     Upstream concurrency is bounded process-wide. Informational only - not financial advice.
          */
         post: operations["postIndicatorsBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/rsi-heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ranked RSI scatter (CoinGlass-style)
+         * @description Wilder RSI(14) for the top listed pairs on one venue, ranked left to
+         *     right (market cap by default). Stables (USDC, USDT, …) are omitted.
+         *     One interval (default 1h). Seeded from ~120 closed candles (the
+         *     unfinished venue bar is dropped) so the number tracks TradingView-style
+         *     charts. Cached 60s; default Binance 1h map is warmed in the background.
+         *     Informational only.
+         */
+        get: operations["getRSIHeatmap"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1820,6 +2389,14 @@ export interface paths {
          *     frequency: daily | weekly | monthly | interval.
          *     weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
          *     interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+         *     Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for a DST-aware
+         *     local clock (Monday 09:00; spring-forward snaps to the next valid local time,
+         *     fall-back uses the first occurrence). Optional maxPrice skips a run when last,
+         *     slipped fill, or fee-inclusive unit cost would exceed it (re-read after the
+         *     worker starts so a PATCH applies to an in-flight tick).
+         *     Optional budget is a total cash cap across succeeded runs (last buy may be partial).
+         *     Optional endDate (YYYY-MM-DD in timeZone, inclusive last local day) or endsAt (RFC3339)
+         *     stops further buys and marks the plan ended.
          *     Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
          *     Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
          *     Missed periods execute only the latest due slot (no backlog of intermediate buys).
@@ -2122,13 +2699,15 @@ export interface paths {
         put?: never;
         /**
          * Create a cross-exchange price difference watch
-         * @description Tracks last prices for a symbol on Binance, Coinbase, and Bybit.
-         *     When a notional fills on live books and after-fee profit meets minProfit, stores an opportunity
-         *     with buyExchange and sellExchange. Does not create a duplicate while open.
-         *     When net falls below the limit the opportunity closes; a later re-cross opens a new one.
-         *     Stale or missing exchange prices skip evaluation for that venue (no signal).
-         *     Open opportunities are durable (SQLite) and survive worker restarts.
-         *     Informational only — not financial advice / not executable trading.
+         * @description Tracks a symbol on Binance, Coinbase, and Bybit. Walks **fresh** live books for
+         *     `notional` and opens an opportunity only when that size can be bought
+         *     and sold and after-fee profit (including slippage) is at least `minProfit`.
+         *     Stale books (FetchedAt older than 2 minutes) are ignored. `minDurationSec`
+         *     requires the fill to stay qualifying that long; a break resets the timer.
+         *     Does not open from ticker last-price gaps alone. Does not create a
+         *     duplicate while open. When the book fill no longer meets the floor the
+         *     opportunity closes; a later re-cross opens a new one. Missing or stale
+         *     books skip that venue. Informational only — not financial advice.
          */
         post: operations["createPriceDiffWatch"];
         delete?: never;
@@ -2175,8 +2754,9 @@ export interface paths {
         put?: never;
         /**
          * Pause a price-diff watch
-         * @description Stops evaluating the watch. Open opportunities are closed. The duration
-         *     timer is dropped so resume starts a new wait.
+         * @description Marks the watch paused first so an in-flight checker tick cannot open a
+         *     new opportunity. Open opportunities are closed. The duration timer is
+         *     dropped so resume starts a new wait.
          */
         post: operations["pausePriceDiffWatch"];
         delete?: never;
@@ -2200,6 +2780,30 @@ export interface paths {
          *     pause — the timer starts from zero.
          */
         post: operations["resumePriceDiffWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan all venue pairs for a stored watch
+         * @description Uses the watch symbol and per-exchange fees. Walks live books on
+         *     Binance, Coinbase, and Bybit for every buy/sell pair at the given size.
+         *     Routes are ranked by after-fee profit. `usedNotional` / `usedPct` show
+         *     how much of the entered money can still be deployed while the total
+         *     trade stays profitable.
+         */
+        get: operations["quotePriceDiffWatch"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2252,26 +2856,11 @@ export interface paths {
          * @description Walks the live buy-venue asks and sell-venue bids for a size using the
          *     watch fees. Returns average fill prices, slippage versus top of book,
          *     profit after fees, and the largest size that still has a positive
-         *     after-fee edge.
+         *     after-fee edge. `notional` is quote currency spent on the buy book
+         *     before the buy fee (e.g. 10000 USDT). Provide `notional` or `quantity`,
+         *     not both. Simulated depth walk — not a fill or financial advice.
          */
         get: operations["quotePriceDiffOpportunity"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/price-diff/watches/{id}/quote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Scan all venue pairs for a stored watch */
-        get: operations["quotePriceDiffWatch"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2287,7 +2876,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Compare every venue pair at one size */
+        /**
+         * Compare every venue pair at one size
+         * @description Walks live Binance, Coinbase, and Bybit books for every buy/sell route
+         *     at the same notional or quantity. Includes fees, visible depth, after-fee
+         *     profit, and how much of the entered money can actually be used.
+         *     Ranked by profit after fees. Informational only.
+         */
         get: operations["scanPriceDiffQuotes"];
         put?: never;
         post?: never;
@@ -2331,7 +2926,9 @@ export interface paths {
         /**
          * Create a technical scanner rule
          * @description Creates a rule evaluated against the client's watchlist symbols.
-         *     Types: rsi, ma_crossover, volume_increase. Informational only - not financial advice.
+         *     Send `conditions` as one or more of rsi, ma_crossover, volume_increase
+         *     and `matchMode` `all` (every selected condition) or `any` (one is enough).
+         *     Legacy `type` of a single condition still works. Informational only.
          */
         post: operations["createScannerRule"];
         delete?: never;
@@ -2355,7 +2952,12 @@ export interface paths {
         delete: operations["deleteScannerRule"];
         options?: never;
         head?: never;
-        /** Update a scanner rule */
+        /**
+         * Update a scanner rule
+         * @description Enable or disable a rule without deleting it, or edit interval,
+         *     conditions, matchMode, and indicator settings (periods, thresholds).
+         *     Omitted fields stay unchanged.
+         */
         patch: operations["updateScannerRule"];
         trace?: never;
     };
@@ -2368,8 +2970,9 @@ export interface paths {
         };
         /**
          * List scanner match history
-         * @description Saved matches for watchlist symbols. Deduped by ruleId + exchange + symbol + marketDataKey
-         *     (candle open time) so the same bar is not stored twice.
+         * @description Saved matches for watchlist symbols. A row is written when the rule becomes
+         *     true (previous bar false). A condition that stays true on later bars does not
+         *     add another row. Also unique on ruleId + exchange + symbol + marketDataKey.
          */
         get: operations["listScannerResults"];
         put?: never;
@@ -2392,8 +2995,10 @@ export interface paths {
         put?: never;
         /**
          * Start a historical scanner backtest
-         * @description Runs a rule over a symbol and date range in the background. Identical jobs
-         *     (same client, rule, symbol, range) return the existing pending/running/completed job.
+         * @description Runs a rule over a symbol and date range in the background. The rule is
+         *     snapshotted at queue time; later edits do not change this job. Identical jobs
+         *     (same client, rule snapshot, symbol, range) return the existing pending/running/completed job.
+         *     Editing the rule and starting again creates a new job.
          *     Progress and signalCount update while running. Informational only.
          */
         post: operations["startScannerBacktest"];
@@ -3163,13 +3768,16 @@ export interface components {
         };
         LiquidationHuntHeatmapGrid: {
             exchange?: string;
+            /** @description [time][price] estimated long-liquidation notional */
             longs?: number[][];
             shorts?: number[][];
             totals?: number[][];
             maxIntensity?: number;
+            /** @description Fraction of time columns with open interest */
             coverage?: number;
             columnsWithOi?: number;
         };
+        /** @description Price × time estimated liquidation intensity */
         LiquidationHuntHeatmap: {
             symbol?: string;
             /** @enum {string} */
@@ -3182,6 +3790,7 @@ export interface components {
             priceMin?: number;
             priceMax?: number;
             priceStep?: number;
+            /** @description Bin centers, highest price first */
             prices?: number[];
             times?: string[];
             binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
@@ -3194,20 +3803,29 @@ export interface components {
             /** @enum {string} */
             horizon?: "1h" | "4h" | "12h";
             signals?: number;
+            /** @description Signals with enough later price path and liquidation history */
             validated?: number;
+            /** @description Signals that cannot be scored (clock */
             missing?: number;
             priceReady?: number;
             priceMissing?: number;
             liqReady?: number;
             liqMissing?: number;
+            /** @description Clock has not reached the end of the look-ahead yet */
             pending?: number;
+            /** @description validated / signals */
             coverage?: number;
+            /** @description Among validated only */
             hits?: number;
+            /** @description Among validated only */
             falseSignals?: number;
+            /** @description hits / validated */
             hitRate?: number;
             avgTimeToHitSec?: number;
             medianTimeToHitSec?: number;
+            /** @description Validated hits where zone liquidation notional rose */
             liqIncreased?: number;
+            /** @description liqIncreased / validated hits */
             liqIncreaseRate?: number;
             avgLiqBefore?: number;
             avgLiqAfter?: number;
@@ -3224,19 +3842,23 @@ export interface components {
             liqReady?: boolean;
             timeToHitSec?: number;
             horizonSec?: number;
+            /** @description How far later candles reach after the signal */
             priceCoveredSec?: number;
             priceBars?: number;
             liqBefore?: number;
             liqAfter?: number;
             liqIncreased?: boolean;
+            /** @description pending | no_price | price_short | no_liq | liq_short */
             gap?: string;
         };
+        /** @description One hot liquidation area at one time */
         LiquidationHuntHeatmapReviewSignal: {
             /** Format: date-time */
             time?: string;
             priceLo?: number;
             priceHi?: number;
             intensity?: number;
+            /** @description long (below mark) or short (above mark) */
             side?: string;
             horizons?: components["schemas"]["LiquidationHuntHeatmapReviewSignalHorizon"][];
         };
@@ -3245,6 +3867,7 @@ export interface components {
             horizons?: components["schemas"]["LiquidationHuntHeatmapReviewHorizon"][];
             signals?: components["schemas"]["LiquidationHuntHeatmapReviewSignal"][];
         };
+        /** @description Did later price actually reach the hot zones, and did real liquidations rise there */
         LiquidationHuntHeatmapReview: {
             hotFrac?: number;
             binance?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
@@ -3349,6 +3972,190 @@ export interface components {
             asOf?: string;
             venueCount?: number;
             note?: string;
+        };
+        MarketFundingArbVenue: {
+            exchange?: string;
+            fundingRate?: string;
+            fundingRatePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            avgLast3?: string;
+            avgLast3Pct?: string;
+            intervalHours?: number;
+            /** Format: date-time */
+            nextFundingTime?: string;
+            perpLast?: string;
+            perpMark?: string;
+            spot?: string;
+            spotSource?: string;
+            basis?: string;
+            basisPct?: string;
+            basisKind?: string;
+            feePct?: string;
+            error?: string;
+        };
+        MarketFundingArbTrade: {
+            longExchange?: string;
+            shortExchange?: string;
+            longRate?: string;
+            longRatePct?: string;
+            shortRate?: string;
+            shortRatePct?: string;
+            spreadPct?: string;
+            spreadPerDayPct?: string;
+            longPerp?: string;
+            shortPerp?: string;
+            perpGapPct?: string;
+            perpGapAmount?: string;
+            longBasisPct?: string;
+            shortBasisPct?: string;
+            longSpot?: string;
+            shortSpot?: string;
+            openFeeAmount?: string;
+            openFeePct?: string;
+            roundTripFeeAmount?: string;
+            roundTripFeePct?: string;
+            notional?: string;
+            holdHours?: string;
+            nextFundingAmount?: string;
+            horizonFundingAmount?: string;
+            netNextAfterOpenFees?: string;
+            netNextAfterRoundTrip?: string;
+            netHorizonAfterRoundTrip?: string;
+            netHorizonIfBasisConverges?: string;
+            breakEvenSettlements?: string;
+            breakEvenHoldHours?: string;
+            worthIt?: boolean;
+            title?: string;
+            summary?: string;
+        };
+        MarketFundingArbCarry: {
+            exchange?: string;
+            /** @enum {string} */
+            perpSide?: "long" | "short";
+            /** @enum {string} */
+            spotSide?: "long" | "short";
+            fundingRatePct?: string;
+            basisPct?: string;
+            nextFundingAmount?: string;
+            openFeeAmount?: string;
+            roundTripFeeAmount?: string;
+            basisCaptureAmount?: string;
+            netNextAfterRoundTrip?: string;
+            title?: string;
+            summary?: string;
+        };
+        /** @description Cross-exchange funding quote sized to a notional */
+        MarketFundingArb: {
+            symbol?: string;
+            notional?: string;
+            holdHours?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketFundingArbVenue"][];
+            trade?: components["schemas"]["MarketFundingArbTrade"];
+            carry?: components["schemas"]["MarketFundingArbCarry"][];
+            summary?: string;
+            note?: string;
+        };
+        MarketFundingArbHit: {
+            symbol?: string;
+            longExchange?: string;
+            shortExchange?: string;
+            spreadPct?: string;
+            horizonFundingAmount?: string;
+            netHorizonAfterRoundTrip?: string;
+            worthIt?: boolean;
+            summary?: string;
+        };
+        MarketFundingArbScan: {
+            notional?: string;
+            holdHours?: string;
+            symbolLimit?: number;
+            /** Format: date-time */
+            asOf?: string;
+            hits?: components["schemas"]["MarketFundingArbHit"][];
+            skipped?: number;
+            note?: string;
+        };
+        MarketFundingArbHistoryPayment: {
+            /** Format: date-time */
+            time?: string;
+            exchange?: string;
+            rate?: string;
+            ratePct?: string;
+            amount?: string;
+            longExchange?: string;
+            shortExchange?: string;
+        };
+        MarketFundingArbHistoryRun: {
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            durationHours?: string;
+            longExchange?: string;
+            shortExchange?: string;
+            payments?: components["schemas"]["MarketFundingArbHistoryPayment"][];
+            paymentCount?: number;
+            fundingAmount?: string;
+            roundTripFees?: string;
+            netAfterFees?: string;
+            summary?: string;
+        };
+        MarketFundingArbHistory: {
+            symbol?: string;
+            notional?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            runs?: components["schemas"]["MarketFundingArbHistoryRun"][];
+            skippedUnprofitable?: number;
+            summary?: string;
+            note?: string;
+        };
+        FundingArbWatch: {
+            id?: string;
+            clientId?: string;
+            /** @enum {string} */
+            scope?: "scan" | "symbol";
+            symbol?: string;
+            quote?: string;
+            symbolLimit?: number;
+            notional?: number;
+            holdHours?: number;
+            /** @description Minimum after-fee profit in quote currency */
+            minProfit?: number;
+            feeBinancePct?: number;
+            feeBybitPct?: number;
+            /** @enum {string} */
+            status?: "active" | "paused" | "expired";
+            armed?: boolean;
+            /** Format: date-time */
+            expiresAt?: string | null;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        FundingArbSignal: {
+            id?: string;
+            watchId?: string;
+            clientId?: string;
+            symbol?: string;
+            longExchange?: string;
+            shortExchange?: string;
+            netAfterFees?: number;
+            minProfit?: number;
+            /** @enum {string} */
+            status?: "open" | "closed";
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: date-time */
+            lastSeenAt?: string;
+            /** Format: date-time */
+            closedAt?: string | null;
         };
         LongShortLevel: {
             /** Format: date-time */
@@ -3470,13 +4277,15 @@ export interface components {
         };
         HolderWallet: {
             address?: string;
-            /**
-             * @description Public attribution when the address is widely published (exchange cold wallet, genesis, seized hack). Omitted when unknown. Not identity proof.
-             */
+            /** @description Public attribution when the address is widely published (exchange cold wallet, genesis, seized hack). Omitted when unknown. Not identity proof. */
             label?: string;
             balance?: number;
             /** @description Percent of supply held by this address */
             sharePct?: number;
+            /** @description Wallet size after dust-vs-share×circulating resolution */
+            resolvedBalance?: number;
+            /** @description Estimated USD value (share × circulating × USD price) */
+            usdValue?: number;
         };
         AssetHolders: {
             asset?: string;
@@ -3597,6 +4406,32 @@ export interface components {
             count?: number;
             accepted?: number;
             note?: string;
+        };
+        ScannerSetup: {
+            key?: string;
+            exchange?: string;
+            symbol?: string;
+            interval?: string;
+            factors?: string[];
+            score?: number;
+            /** @enum {string} */
+            grade?: "A" | "B" | "C";
+            sameBar?: boolean;
+            /** Format: date-time */
+            latestAt?: string;
+            summaries?: string[];
+        };
+        ScannerResultList: {
+            clientId?: string;
+            results?: {
+                [key: string]: unknown;
+            }[];
+            count?: number;
+            total?: number;
+            limit?: number;
+            offset?: number;
+            setups?: components["schemas"]["ScannerSetup"][];
+            hits24h?: number;
         };
         PortfolioSummary: {
             id?: string;
@@ -3988,7 +4823,7 @@ export interface components {
             quantity?: number;
             price?: number;
             tradeId?: string;
-            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended */
+            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit. */
             failReason?: string;
             /** Format: date-time */
             scheduledFor?: string;
@@ -4101,7 +4936,7 @@ export interface components {
             /** Format: date-time */
             closedAt?: string | null;
         };
-        /** Simulated two-venue market buy/sell from live spot books */
+        /** @description Simulated two-venue market buy/sell from live spot books */
         PriceDiffQuote: {
             symbol?: string;
             /** @enum {string} */
@@ -4174,10 +5009,15 @@ export interface components {
             symbol?: string;
             requestedNotional?: string;
             requestedQuantity?: string;
-            minProfitPct?: number;
-            minProfitAmount?: number;
             bestRoute?: components["schemas"]["PriceDiffQuote"];
             routes?: components["schemas"]["PriceDiffQuote"][];
+            minProfitPct?: number;
+            minProfitAmount?: number;
+            profitableCount?: number;
+            /** @description Routes hidden because they missed the profit floor */
+            skippedCount?: number;
+            venueCount?: number;
+            loadedVenueCount?: number;
             /** @description Venues or routes whose order books could not be loaded (never ranked as best) */
             unavailable?: {
                 exchange?: string;
@@ -4187,11 +5027,6 @@ export interface components {
                 reason?: "order_book_unavailable" | "no_asks" | "no_bids";
                 message?: string;
             }[];
-            profitableCount?: number;
-            /** @description Routes hidden because they missed the profit floor */
-            skippedCount?: number;
-            venueCount?: number;
-            loadedVenueCount?: number;
             note?: string;
         };
         Watchlist: {
@@ -4406,6 +5241,9 @@ export interface components {
             exchange?: string;
             interval?: string;
             bestReturnPct?: number;
+            bestVolumeRatio?: number;
+            /** Format: date-time */
+            bestOpenTime?: string;
             events?: components["schemas"]["PumpEvent"][];
         };
         PumpScanResponse: {
@@ -4442,6 +5280,51 @@ export interface components {
                 [key: string]: number;
             };
             stale?: boolean;
+            /** @description Native quote of last/open/high/low/quoteVolume per venue */
+            venueQuotes?: {
+                [key: string]: string;
+            };
+            /** @description Currency of market-cap fields per venue */
+            marketCapQuotes?: {
+                [key: string]: string;
+            };
+            /** @description Stablecoin aliases for display FX (USDT→USD) */
+            aliases?: {
+                [key: string]: string;
+            };
+            note?: string;
+        };
+        RSIHeatmapRow: {
+            rank?: number;
+            /** @example BTCUSDT */
+            symbol?: string;
+            /** @example BTC */
+            base?: string;
+            lastPrice?: string;
+            priceChangePercent?: string;
+            quoteVolume?: string;
+            marketCapCirculating?: number | null;
+            rsi?: number | null;
+            /** @enum {string} */
+            zone?: "oversold" | "neutral" | "overbought";
+            error?: string;
+        };
+        RSIHeatmap: {
+            exchange?: string;
+            quote?: string;
+            interval?: string;
+            period?: number;
+            oversold?: number;
+            overbought?: number;
+            sort?: string;
+            averageRsi?: number | null;
+            oversoldCount?: number;
+            neutralCount?: number;
+            overboughtCount?: number;
+            /** Format: date-time */
+            asOf?: string;
+            stale?: boolean;
+            items?: components["schemas"]["RSIHeatmapRow"][];
             note?: string;
         };
         SpotMarket: {
@@ -4498,6 +5381,29 @@ export interface components {
              * @description When the venue published the delist announcement (UTC)
              */
             announcedAt?: string;
+        };
+        PostDelistResponse: {
+            exchange?: string;
+            symbol?: string;
+            base?: string;
+            /** Format: date-time */
+            delistTime?: string;
+            /** @description True when an off-venue last price was found */
+            available?: boolean;
+            /** @description Provider id (coingecko, bybit, coinbase, binance) */
+            source?: string;
+            /** @description Human label for the source */
+            sourceLabel?: string;
+            /** @description Why this is not the home venue tape */
+            note?: string;
+            lastPrice?: string;
+            priceChangePercent?: string;
+            /** @description Quote asset of lastPrice (USD or USDT) */
+            quote?: string;
+            /** Format: date-time */
+            asOf?: string;
+            interval?: string;
+            candles?: components["schemas"]["Candle"][];
         };
     };
     responses: {
@@ -4615,6 +5521,14 @@ export interface operations {
                         exchanges?: string[];
                         /** @example binance */
                         default?: string;
+                        /** @description Native quote of last/open/high/low/quoteVolume per venue */
+                        venueQuotes?: {
+                            [key: string]: string;
+                        };
+                        /** @description Currency of market-cap fields per venue */
+                        marketCapQuotes?: {
+                            [key: string]: string;
+                        };
                     };
                 };
             };
@@ -4729,6 +5643,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DelistScheduleResponse"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPostDelist: {
+        parameters: {
+            query: {
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                symbol: string;
+                /** @description Hint for other-venue candles. CoinGecko OHLC is daily (7d or 30d). */
+                interval?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Post-delist off-venue snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDelistResponse"];
                 };
             };
             400: components["responses"]["Error"];
@@ -5174,6 +6115,356 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketFundingArb: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Quote-currency size to hold on each leg (default 10000) */
+                notional?: number;
+                /** @description How long to hold for the horizon payout (default 24) */
+                holdHours?: number;
+                /** @description Binance taker fee percent (default paper 0.10) */
+                feeBinancePct?: number;
+                /** @description Bybit taker fee percent (default paper 0.10) */
+                feeBybitPct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Long/short venues and sized after-fee funding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketFundingArb"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanMarketFundingArb: {
+        parameters: {
+            query?: {
+                notional?: number;
+                holdHours?: number;
+                feeBinancePct?: number;
+                feeBybitPct?: number;
+                quote?: string;
+                /** @description How many top-volume coins to scan (default 15, max 40) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked funding-arb hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketFundingArbScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFundingArbHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                from: string;
+                to: string;
+                notional?: number;
+                feeBinancePct?: number;
+                feeBybitPct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description After-fee winning stretches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketFundingArbHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    listFundingArbWatches: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watch list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        watches?: components["schemas"]["FundingArbWatch"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createFundingArbWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    /**
+                     * @description Pair to follow, or omit / scan / * for the full scan
+                     * @example BTCUSDT
+                     */
+                    symbol?: string;
+                    /** @example USDT */
+                    quote?: string;
+                    /** @example 15 */
+                    limit?: number;
+                    /** @example 10000 */
+                    notional?: number;
+                    /** @example 24 */
+                    holdHours?: number;
+                    /**
+                     * @description How long the follow should run from now. Omit or 0 to keep running.
+                     * @example 48
+                     */
+                    durationHours?: number;
+                    /**
+                     * @description Minimum after-fee profit in quote currency
+                     * @example 10
+                     */
+                    minProfit: number;
+                    /** @example 0.1 */
+                    feeBinancePct?: number;
+                    /** @example 0.1 */
+                    feeBybitPct?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created watch */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbWatch"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getFundingArbWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteFundingArbWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateFundingArbWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    minProfit?: number;
+                    notional?: number;
+                    holdHours?: number;
+                    /** @description Reset how long the follow should run from now. 0 clears the end time. */
+                    durationHours?: number;
+                    quote?: string;
+                    limit?: number;
+                    feeBinancePct?: number;
+                    feeBybitPct?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbWatch"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    pauseFundingArbWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    resumeFundingArbWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    listFundingArbSignals: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "closed" | "all";
+                limit?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signal list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        signals?: components["schemas"]["FundingArbSignal"][];
+                    };
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     getMarketLongShortRatio: {
         parameters: {
             query: {
@@ -5473,6 +6764,374 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketVolumeSurge: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue current vs typical volume */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanMarketVolumeSurges: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default binance) */
+                exchange?: string;
+                quote?: string;
+                /** @description Minimum current/typical (default 2) */
+                minRatio?: number;
+                /** @description How many top-volume coins to scan (default 30, max 50) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked volume-surge hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquiditySweeps: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue liquidity sweeps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketAbsorption: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined absorption vs price */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketAround: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Event time (RFC3339 or unix ms) — start of the during window */
+                at: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Move window starting at `at` — 5m | 15m | 30m | 1h (default 15m) */
+                during?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Before / during / after tape */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    compareMarketAround: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description First event time (RFC3339 or unix ms) */
+                from: string;
+                /** @description Second event time (RFC3339 or unix ms) */
+                to: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Move window starting at each time — 5m | 15m | 30m | 1h (default 15m) */
+                during?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Two-move comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    findMarketAroundMoves: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description 4h | 12h | 24h | 3d | 7d (default 24h) */
+                lookback?: string;
+                /** @description 15m | 1h (default 15m) */
+                interval?: string;
+                /** @description up | down | both (default both) */
+                direction?: string;
+                /** @description Minimum |return| percent (default 1.5 on 15m, 2.5 on 1h) */
+                minReturnPct?: number;
+                /** @description How many moves to keep (default 8, max 15) */
+                limit?: number;
+                /** @description Around lookback 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Override move window 5m | 15m | 30m | 1h (default from the leg) */
+                during?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked important moves with around-the-move tapes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    findMarketAroundPrecursors: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description 4h | 12h | 24h | 3d | 7d (default 7d) */
+                lookback?: string;
+                /** @description 15m | 1h (default 15m) */
+                interval?: string;
+                /** @description up | down | both (default both) */
+                direction?: string;
+                /** @description Minimum |return| percent (default 1.5 on 15m) */
+                minReturnPct?: number;
+                /** @description How many moves to scan (default 15) */
+                limit?: number;
+                /** @description Before-window length 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Override move window 5m | 15m | 30m | 1h */
+                during?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Common before-move patterns */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    findMarketAroundSimilar: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description 4h | 12h | 24h | 3d | 7d (default 7d) */
+                lookback?: string;
+                /** @description 15m | 1h (default 15m) */
+                interval?: string;
+                /** @description up | down | both (default both) */
+                direction?: string;
+                /** @description Minimum |return| percent for past moves */
+                minReturnPct?: number;
+                /** @description How many nearest cases (default 5, max 10) */
+                limit?: number;
+                /** @description Current/before window 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Override past move window */
+                during?: string;
+                /** @description Tape to compare — price,volume,takers,oi,book (default all). Example volume,book,oi */
+                fields?: string;
+                /** @description Importance per field — book:3,oi:3,volume:1 (defaults book and oi 3, takers 1.5, volume and price 1) */
+                weights?: string;
+                /** @description Minimum percent of selected data that must be present (default 60). Below that goes to skipped. 0 disables the floor. */
+                minCoverage?: number;
+                /** @description After-windows CSV (default 15m,1h,4h). Example 5m,30m,2h. Matching candle size; each reports avg, median, up, down, sample, and similarity bands. */
+                horizons?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Similar past setups, afterHorizons, thin coverage in skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVWAP: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime is set. */
+                window?: string;
+                /** @description Range start (RFC3339 or unix ms) */
+                startTime?: string;
+                /** @description Range end (RFC3339 or unix ms). Default now. */
+                endTime?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined VWAP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVolumeProfile: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set. */
+                window?: string;
+                /** @description Range start (RFC3339 or unix ms) */
+                startTime?: string;
+                /** @description Range end (RFC3339 or unix ms) */
+                endTime?: string;
+                /** @description Price row width (e.g. 50). Omit to pick one automatically. */
+                tickSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined volume profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketVenueDivergence: {
         parameters: {
             query: {
@@ -5579,7 +7238,9 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
+                /** @description 12h | 24h | 3d | 7d */
                 range?: "12h" | "24h" | "3d" | "7d";
+                /** @description binance | bybit | all (default all = both + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -5588,6 +7249,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Price × time intensity grids */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5747,6 +7409,8 @@ export interface operations {
                 rsiPeriod?: number;
                 /** @description Comma-separated EMA periods */
                 emaPeriods?: string;
+                /** @description Exclusive end of the candle window (RFC3339). Used to page older EMA/RSI bars. */
+                endTime?: string;
             };
             header?: never;
             path?: never;
@@ -5768,6 +7432,8 @@ export interface operations {
                         emaPeriods?: number[];
                         latest?: {
                             rsi?: number | null;
+                            /** @enum {string} */
+                            zone?: "oversold" | "neutral" | "overbought" | "";
                             ema?: {
                                 [key: string]: number;
                             };
@@ -5923,6 +7589,41 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getRSIHeatmap: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                quote?: string;
+                /** @description Candle interval (default 1h). `intervals` is accepted as an alias (first value). */
+                interval?: string;
+                /** @description Deprecated alias of interval (first value only) */
+                intervals?: string;
+                /** @description How many top pairs to plot (default 100, max 200) */
+                limit?: number;
+                /** @description Wilder RSI period (default 14) */
+                period?: number;
+                /** @description How to rank dots left to right */
+                sort?: "quoteVolume" | "marketCapCirculating";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description RSI grid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RSIHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };
@@ -7738,7 +9439,7 @@ export interface operations {
                      */
                     maxPrice?: number;
                     /**
-                     * @description Total cash cap across succeeded runs. 0 = no cap. Last buy may spend leftover.
+                     * @description Total cash cap across succeeded runs (slipped fill + taker fee). 0 = no cap. Last buy may spend leftover.
                      * @example 10000
                      */
                     budget?: number;
@@ -8374,7 +10075,10 @@ export interface operations {
                     feeBybitPct?: number;
                     /**
                      * @description Venues to walk. Default all three. At least two required.
-                     * @example [binance, bybit]
+                     * @example [
+                     *       "binance",
+                     *       "bybit"
+                     *     ]
                      */
                     exchanges?: ("binance" | "coinbase" | "bybit")[];
                 };
@@ -8469,6 +10173,7 @@ export interface operations {
                     feeBinancePct?: number;
                     feeCoinbasePct?: number;
                     feeBybitPct?: number;
+                    /** @description Replace the venue set. At least two required. */
                     exchanges?: ("binance" | "coinbase" | "bybit")[];
                 };
             };
@@ -8538,6 +10243,38 @@ export interface operations {
                     "application/json": components["schemas"]["PriceDiffWatch"];
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    quotePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                notional?: number;
+                quantity?: number;
+                minProfitPct?: number;
+                minProfitAmount?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked routes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffQuoteScan"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };
@@ -8626,36 +10363,6 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    quotePriceDiffWatch: {
-        parameters: {
-            query?: {
-                clientId?: string;
-                notional?: number;
-                quantity?: number;
-            };
-            header?: {
-                "X-Client-Id"?: string;
-            };
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Ranked routes */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PriceDiffQuoteScan"];
-                };
-            };
-            400: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
     scanPriceDiffQuotes: {
         parameters: {
             query: {
@@ -8666,7 +10373,9 @@ export interface operations {
                 feeCoinbasePct?: number;
                 feeBybitPct?: number;
                 minNetDiffPct?: number;
+                /** @description Only include routes whose after-fee profit percent is at least this */
                 minProfitPct?: number;
+                /** @description Only include routes whose after-fee profit (quote currency) is at least this */
                 minProfitAmount?: number;
             };
             header?: never;
@@ -8815,6 +10524,29 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    deleteScannerRule: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
     updateScannerRule: {
         parameters: {
             query?: {
@@ -8860,29 +10592,6 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    deleteScannerRule: {
-        parameters: {
-            query?: {
-                clientId?: string;
-            };
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Deleted */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            404: components["responses"]["Error"];
-        };
-    };
     listScannerResults: {
         parameters: {
             query?: {
@@ -8903,7 +10612,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ScannerResultList"];
+                };
             };
         };
     };

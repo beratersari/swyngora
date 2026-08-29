@@ -260,6 +260,27 @@ func TestGetHolders(t *testing.T) {
 	}
 }
 
+func TestGetHolders_EnrichesResolvedBalanceAndUsd(t *testing.T) {
+	circ, px := 1_000_000_000.0, 2.0
+	svc := New(&fakeMarket{}, &fakeSupply{sup: &domain.AssetSupply{
+		Asset: "BTC", CirculatingSupply: &circ, CurrentPriceUSD: &px,
+	}}).WithHolders(&fakeHolders{snap: &domain.AssetHolders{
+		Asset:       "BTC",
+		HolderCount: 1,
+		TopHolders:  []domain.AssetHolder{{Address: "abc", Balance: 0.004, SharePct: 8.37}},
+	}})
+	got, err := svc.GetHolders(context.Background(), "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.TopHolders[0].ResolvedBalance == nil || *got.TopHolders[0].ResolvedBalance < 1 {
+		t.Fatalf("resolved=%v", got.TopHolders[0].ResolvedBalance)
+	}
+	if got.TopHolders[0].UsdValue == nil || *got.TopHolders[0].UsdValue < 1 {
+		t.Fatalf("usd=%v", got.TopHolders[0].UsdValue)
+	}
+}
+
 func TestGetHolders_FallbackWhenCMCUnpublished(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{}).
 		WithHolders(&fakeHolders{err: fmt.Errorf("%w: ACE", domain.ErrHoldersUnpublished)}).

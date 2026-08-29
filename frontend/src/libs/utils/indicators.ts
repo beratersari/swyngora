@@ -17,33 +17,32 @@ export function formatIndicator(value: number | null | undefined, digits = 2): s
   });
 }
 
-/**
- * RSI interpretation bands for UI coloring (not trading advice).
- * oversold &lt; 30 · neutral 30–70 · overbought &gt; 70
- * Aligned with {@link rsiBandKey} so color and band label never disagree.
- */
-export function rsiTone(
-  value: number | null | undefined,
-): 'success' | 'error' | 'warning' | 'secondary' {
-  if (value === null || value === undefined || !Number.isFinite(value)) return 'secondary';
-  if (value < 30) return 'success'; // oversold — often highlighted as opportunity (green)
-  if (value > 70) return 'error'; // overbought
-  return 'secondary'; // neutral 30–70 (includes near-band values)
-}
-
 /** Stable band key for i18n (`detail:indicators.band.*`). */
 export type RsiBandKey = 'na' | 'oversold' | 'overbought' | 'neutral';
 
-export function rsiBandKey(value: number | null | undefined): RsiBandKey {
-  if (value === null || value === undefined || !Number.isFinite(value)) return 'na';
-  if (value < 30) return 'oversold';
-  if (value > 70) return 'overbought';
-  return 'neutral';
+/** Map the API `zone` field (Go `RSIZoneFor`) onto UI color. */
+export function rsiTone(
+  zone: string | null | undefined,
+): 'success' | 'error' | 'warning' | 'secondary' {
+  switch (zone) {
+    case 'oversold':
+      return 'success';
+    case 'overbought':
+      return 'error';
+    default:
+      return 'secondary';
+  }
+}
+
+/** Map the API `zone` field onto an i18n band key. */
+export function rsiBandKey(zone: string | null | undefined): RsiBandKey {
+  if (zone === 'oversold' || zone === 'overbought' || zone === 'neutral') return zone;
+  return 'na';
 }
 
 /** English band label (tests / non-UI). Prefer rsiBandKey + t() in components. */
-export function rsiBandLabel(value: number | null | undefined): string {
-  const key = rsiBandKey(value);
+export function rsiBandLabel(zone: string | null | undefined): string {
+  const key = rsiBandKey(zone);
   if (key === 'na') return 'n/a';
   return key;
 }
@@ -63,57 +62,27 @@ export function indicatorPointsToRsiLine(
   return out;
 }
 
-const MIN_EMA_PERIOD = 2;
+export type IndicatorPoint = NonNullable<IndicatorsResponse['points']>[number];
 
-/** Parse `"12,26"` into unique ascending periods (same rules as the backend). */
-export function parseEmaPeriods(csv: string | undefined): number[] {
-  if (!csv?.trim()) return [];
-  const seen = new Set<number>();
-  const out: number[] = [];
-  for (const part of csv.split(',')) {
-    const n = Number(part.trim());
-    if (!Number.isInteger(n) || n < MIN_EMA_PERIOD || seen.has(n)) continue;
-    seen.add(n);
-    out.push(n);
+/** Merge older + newer indicator pages by openTime (newer wins). */
+export function mergeIndicatorPoints(
+  older: readonly IndicatorPoint[] | undefined,
+  newer: readonly IndicatorPoint[] | undefined,
+): IndicatorPoint[] {
+  const byTime = new Map<string, IndicatorPoint>();
+  for (const p of older ?? []) {
+    const key = p.openTime?.trim();
+    if (key) byTime.set(key, p);
   }
-  return out.sort((a, b) => a - b);
-}
-
-/**
- * EMA over closes. Seed is SMA of the first `period` closes (matches Go `domain.EMA`).
- * Warm-up bars are `null`.
- */
-export function emaFromCloses(closes: readonly number[], period: number): Array<number | null> {
-  const n = closes.length;
-  const out: Array<number | null> = Array.from({ length: n }, () => null);
-  if (!Number.isInteger(period) || period < MIN_EMA_PERIOD || n < period) return out;
-  let sum = 0;
-  for (let i = 0; i < period; i += 1) sum += closes[i]!;
-  let ema = sum / period;
-  out[period - 1] = ema;
-  const k = 2 / (period + 1);
-  for (let i = period; i < n; i += 1) {
-    ema = closes[i]! * k + ema * (1 - k);
-    out[i] = ema;
+  for (const p of newer ?? []) {
+    const key = p.openTime?.trim();
+    if (key) byTime.set(key, p);
   }
-  return out;
-}
-
-/** EMA line on the same time axis as loaded chart candles (follows pan-left history). */
-export function emaLineFromCloses(
-  bars: ReadonlyArray<{ time: number; close: number }>,
-  period: number,
-): ChartLinePoint[] {
-  if (!bars.length) return [];
-  const closes = bars.map((b) => b.close);
-  const ema = emaFromCloses(closes, period);
-  const out: ChartLinePoint[] = [];
-  for (let i = 0; i < ema.length; i += 1) {
-    const v = ema[i];
-    if (v == null || !Number.isFinite(v) || !Number.isFinite(bars[i]!.time)) continue;
-    out.push({ time: bars[i]!.time, value: v });
-  }
-  return out;
+  return [...byTime.values()].sort((a, b) => {
+    const am = Date.parse(a.openTime ?? '');
+    const bm = Date.parse(b.openTime ?? '');
+    return am - bm;
+  });
 }
 
 /** Map indicator points → EMA line series for a given period key (e.g. "12"). */

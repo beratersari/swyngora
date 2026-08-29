@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  pickBestEvent,
-  pumpScanHitToRow,
-  pumpScanHitsToRows,
-} from './pumpScan';
+import { pumpScanHitToRow, pumpScanHitsToRows } from './pumpScan';
 
 /** Fixture shaped like live GET /api/v1/market/pumps/scan hits. */
 const liveHit = {
@@ -11,6 +7,8 @@ const liveHit = {
   exchange: 'binance',
   interval: '15m',
   bestReturnPct: 22.811983958480763,
+  bestVolumeRatio: 17.5664348678538,
+  bestOpenTime: '2026-07-27T06:15:00Z',
   events: [
     {
       index: 58,
@@ -41,13 +39,16 @@ describe('pumpScan', () => {
     expect(row!.interval).toBe('15m');
   });
 
-  it('falls back to best event return when bestReturnPct missing', () => {
+  it('uses API best-event fields on the hit root', () => {
     const row = pumpScanHitToRow({
       symbol: 'X',
-      events: [{ returnPct: 5, volumeRatio: 2, openTime: '2024-01-01T00:00:00Z' }],
+      bestReturnPct: 5,
+      bestVolumeRatio: 2,
+      bestOpenTime: '2024-01-01T00:00:00Z',
     });
     expect(row!.returnPct).toBe(5);
     expect(row!.volumeRatio).toBe(2);
+    expect(row!.openTime).toBe('2024-01-01T00:00:00Z');
   });
 
   it('returns null without symbol', () => {
@@ -59,13 +60,4 @@ describe('pumpScan', () => {
     expect(pumpScanHitsToRows(undefined)).toEqual([]);
   });
 
-  it('pickBestEvent chooses largest abs return (including dumps)', () => {
-    const best = pickBestEvent([
-      { returnPct: -8, openTime: 'a' },
-      { returnPct: 3, openTime: 'b' },
-    ]);
-    expect(best?.openTime).toBe('a');
-    expect(pickBestEvent(undefined)).toBeUndefined();
-    expect(pickBestEvent([])).toBeUndefined();
-  });
 });

@@ -113,6 +113,23 @@ func TestScannerHTTP_CreateListDelete(t *testing.T) {
 		t.Fatalf("list %d", rr.Code)
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/scanner/results?clientId=http-scan", nil)
+	rr = httptest.NewRecorder()
+	h.ListResults(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("results %d %s", rr.Code, rr.Body.String())
+	}
+	var page map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := page["setups"]; !ok {
+		t.Fatalf("missing setups %+v", page)
+	}
+	if _, ok := page["hits24h"]; !ok {
+		t.Fatalf("missing hits24h %+v", page)
+	}
+
 	req = httptest.NewRequest(http.MethodDelete, "/api/v1/scanner/rules/"+id+"?clientId=http-scan", nil)
 	req.SetPathValue("id", id)
 	rr = httptest.NewRecorder()

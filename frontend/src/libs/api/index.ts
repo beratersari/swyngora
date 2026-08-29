@@ -26,9 +26,11 @@ export {
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,
+  useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useLazyGetPumpEventsQuery,
   useScanPumpEventsQuery,
+  useGetRSIHeatmapQuery,
   usePostIndicatorsBatchMutation,
 } from './endpoints/marketApi';
 export type {
@@ -75,6 +77,8 @@ export type {
   PumpScanHitDto,
   ScanPumpEventsQuery,
   ScanPumpEventsResponse,
+  RSIHeatmapQuery,
+  RSIHeatmapResponse,
 } from './endpoints/marketApi';
 export {
   useGetWatchlistQuery,
@@ -205,6 +209,7 @@ export type {
   ScannerMaDirection,
   ScannerMatchMode,
   ScannerResult,
+  ScannerSetup,
   ScannerRsiCondition,
   ScannerRule,
   ScannerRuleType,

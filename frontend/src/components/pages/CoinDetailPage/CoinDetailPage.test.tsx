@@ -251,7 +251,7 @@ describe('CoinDetailPage', () => {
 
   it('opens holders tab from the URL', async () => {
     renderDetail('/markets/binance/BTCUSDT?tab=holders');
-    expect(await screen.findByText('On-chain wallet count and top addresses. Informational only — not financial advice.')).toBeInTheDocument();
+    expect(await screen.findByText(/On-chain wallet count and top addresses/i)).toBeInTheDocument();
     expect(screen.queryByTestId('candle-chart')).not.toBeInTheDocument();
   });
 

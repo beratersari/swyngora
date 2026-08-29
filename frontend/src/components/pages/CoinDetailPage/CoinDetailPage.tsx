@@ -41,6 +41,7 @@ import {
   useAddWatchlistItemMutation,
   useGetCandlesQuery,
   useGetIndicatorsQuery,
+  useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
@@ -65,15 +66,16 @@ import {
   useRemoveWatchlistItemMutation,
   type MarketExchange,
   type PumpEventDto,
+  type IndicatorsResponse,
 } from '@/libs/api';
 import { useDisplayCurrency, useDocumentVisible, useMediaQuery } from '@/libs/hooks';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
 import {
-  emaLineFromCloses,
   formatDelistDay,
   formatPrice,
+  indicatorPointsToEmaLine,
+  mergeIndicatorPoints,
   newPaperIdempotencyKey,
-  parseEmaPeriods,
   rtkCurrent,
   rtkCurrentPending,
 } from '@/libs/utils';
@@ -93,10 +95,8 @@ import {
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
-  aliasFxCode,
   pairQuote,
-  toSupplyAsset,
-  toPerpSymbol,
+
   trimCandlesToMax,
   type ApiCandle,
   type DetailTab,
@@ -130,8 +130,8 @@ import {
   appendCandlesAfter,
   delistCandleQueryEndTime,
   delistEventsToVertLines,
-  isPastDelist,
-  postDelistCandleLimit,
+
+
   mergeChartMarkers,
   mergePumpEvents,
   livePumpEventsForPair,
@@ -165,6 +165,9 @@ export function CoinDetailPage() {
   const [historyCandles, setHistoryCandles] = useState<ApiCandle[]>([]);
   /** Pump events for those history pages (live pumps stay on RTK query). */
   const [historyPumpEvents, setHistoryPumpEvents] = useState<PumpEventDto[]>([]);
+  const [historyIndicatorPoints, setHistoryIndicatorPoints] = useState<
+    NonNullable<IndicatorsResponse['points']>
+  >([]);
   const [historyExhausted, setHistoryExhausted] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   /** |return %| threshold for pump/dump markers on the chart. */
@@ -210,6 +213,7 @@ export function CoinDetailPage() {
     historyRequestIdRef.current += 1;
     setHistoryCandles([]);
     setHistoryPumpEvents([]);
+    setHistoryIndicatorPoints([]);
     setHistoryExhausted(false);
     setHistoryLoading(false);
   }
@@ -240,7 +244,7 @@ export function CoinDetailPage() {
   // indicators wait until the venue interval list is known so we do not page
   // the wrong series.
   const skipSeries = skip || waitingForIntervals;
-  const supplyAsset = toSupplyAsset(symbol);
+  const supplyAsset = symbol;
 
   const watchlistQuery = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const delistQuery = useListDelistScheduleQuery(
@@ -258,24 +262,11 @@ export function CoinDetailPage() {
   }, [delistSchedule?.items, symbol]);
   const delistTime = delistHit?.delistTime ?? null;
   const announcedAt = delistHit?.announcedAt ?? null;
-  const pastDelist = isPastDelist(delistTime);
   const candleEndTime = useMemo(() => delistCandleQueryEndTime(delistTime), [delistTime]);
-  const postDelistQuery = useGetPostDelistQuery(
-    {
-      exchange: (exchange ?? 'binance') as MarketExchange,
-      symbol: symbol ?? '',
-      interval,
-      limit: postDelistCandleLimit(interval, delistTime),
-    },
-    {
-      skip: skip || isEquity || !symbol || !exchange || !pastDelist,
-      pollingInterval: visible ? 120_000 : 0,
-      refetchOnFocus: true,
-    },
-  );
   const [addWatch, addWatchState] = useAddWatchlistItemMutation();
   const [removeWatch, removeWatchState] = useRemoveWatchlistItemMutation();
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
+  const [fetchOlderIndicators] = useLazyGetIndicatorsQuery();
   const [fetchOlderPumps] = useLazyGetPumpEventsQuery();
   const booksQuery = useListPortfoliosQuery(undefined, { refetchOnFocus: true });
   const books = booksQuery.data?.portfolios ?? [];
@@ -353,6 +344,20 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
+  const pastDelist = Boolean(rtkCurrent(tickerQuery)?.halted);
+  const postDelistQuery = useGetPostDelistQuery(
+    {
+      exchange: (exchange ?? 'binance') as MarketExchange,
+      symbol: symbol ?? '',
+      interval,
+      limit: DEFAULT_DETAIL_CANDLE_LIMIT,
+    },
+    {
+      skip: skip || isEquity || !symbol || !exchange || !pastDelist,
+      pollingInterval: visible ? 120_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
 
   const supplyQuery = useGetSupplyQuery(
     { asset: supplyAsset },
@@ -378,7 +383,7 @@ export function CoinDetailPage() {
     },
   );
 
-  const perpSymbol = toPerpSymbol(symbol);
+  const perpSymbol = symbol;
   const tapeQueryArg = { exchange: 'all' as const, symbol: perpSymbol };
   const skipTape = skip || isEquity || !perpSymbol;
   const openInterestQuery = useGetOpenInterestQuery(tapeQueryArg, {
@@ -550,6 +555,20 @@ export function CoinDetailPage() {
       endTime,
     }).unwrap();
 
+    const indicatorReq = showEma
+      ? fetchOlderIndicators({
+          exchange,
+          symbol,
+          interval,
+          limit: Math.min(DETAIL_CANDLE_PAGE_SIZE, DETAIL_API_BAR_MAX),
+          endTime,
+          rsiPeriod: DEFAULT_RSI_PERIOD,
+          emaPeriods: DEFAULT_EMA_PERIODS,
+        })
+          .unwrap()
+          .catch(() => ({ points: [] as NonNullable<IndicatorsResponse['points']> }))
+      : Promise.resolve({ points: [] as NonNullable<IndicatorsResponse['points']> });
+
     // Same time window as the candle page so markers exist on older bars.
     const pumpReq =
       showPumpMarkers
@@ -567,8 +586,8 @@ export function CoinDetailPage() {
             .catch(() => ({ events: [] as PumpEventDto[] }))
         : Promise.resolve({ events: [] as PumpEventDto[] });
 
-    void Promise.all([candleReq, pumpReq])
-      .then(([candleRes, pumpRes]) => {
+    void Promise.all([candleReq, pumpReq, indicatorReq])
+      .then(([candleRes, pumpRes, indicatorRes]) => {
         // Drop stale responses after pair/interval change mid-flight.
         if (requestId !== historyRequestIdRef.current) return;
         if (`${exchange}|${symbol}|${interval}` !== seriesKey) return;
@@ -587,6 +606,10 @@ export function CoinDetailPage() {
         if (pageEvents.length > 0) {
           setHistoryPumpEvents((prev) => mergePumpEvents(prev, pageEvents));
         }
+        const pagePoints = indicatorRes.points ?? [];
+        if (pagePoints.length > 0) {
+          setHistoryIndicatorPoints((prev) => mergeIndicatorPoints(pagePoints, prev));
+        }
         if (batch.length < DETAIL_CANDLE_PAGE_SIZE) {
           setHistoryExhausted(true);
         }
@@ -603,11 +626,13 @@ export function CoinDetailPage() {
     mergedCandles,
     exchange,
     fetchOlderCandles,
+    fetchOlderIndicators,
     fetchOlderPumps,
     historyExhausted,
     historyLoading,
     interval,
     pumpThresholdPct,
+    showEma,
     showPumpMarkers,
     skipSeries,
     symbol,
@@ -615,9 +640,15 @@ export function CoinDetailPage() {
 
   const liveIndicators = rtkCurrent(indicatorsQuery);
   const emaPeriods = useMemo(() => {
-    const fromApi = parseEmaPeriods((liveIndicators?.emaPeriods ?? []).join(','));
-    return fromApi.length > 0 ? fromApi : parseEmaPeriods(DEFAULT_EMA_PERIODS);
+    const fromApi = (liveIndicators?.emaPeriods ?? []).filter(
+      (n): n is number => Number.isInteger(n) && n >= 2,
+    );
+    return fromApi.length > 0 ? [...fromApi].sort((a, b) => a - b) : [12, 26];
   }, [liveIndicators?.emaPeriods]);
+  const overlayPoints = useMemo(
+    () => mergeIndicatorPoints(historyIndicatorPoints, liveIndicators?.points),
+    [historyIndicatorPoints, liveIndicators?.points],
+  );
   const overlays: CandleChartOverlay[] = useMemo(() => {
     const lines: CandleChartOverlay[] = [];
     if (showEma) {
@@ -627,7 +658,7 @@ export function CoinDetailPage() {
           id: `ema-${period}`,
           title: t('detail:indicators.emaLabel', { period }),
           color: emaColor(String(period), i),
-          data: emaLineFromCloses(chartData, period),
+          data: indicatorPointsToEmaLine(overlayPoints, String(period)),
         });
       }
     }
@@ -646,7 +677,7 @@ export function CoinDetailPage() {
       });
     }
     return lines;
-  }, [showEma, emaPeriods, chartData, mergedCandles.length, t]);
+  }, [showEma, emaPeriods, overlayPoints, chartData, mergedCandles.length, t]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
@@ -1109,14 +1140,6 @@ export function CoinDetailPage() {
                   children: (
                     <HolderPanel
                       holders={rtkCurrent(holdersQuery)}
-                      circulatingSupply={rtkCurrent(supplyQuery)?.circulatingSupply}
-                      priceUsd={
-                        rtkCurrent(supplyQuery)?.currentPriceUsd ??
-                        (aliasFxCode(pairQuote(symbol, exchange)) === 'USD' &&
-                        Number.isFinite(Number(rtkCurrent(tickerQuery)?.lastPrice))
-                          ? Number(rtkCurrent(tickerQuery)?.lastPrice)
-                          : null)
-                      }
                       isLoading={rtkCurrentPending(holdersQuery)}
                       error={
                         holdersQuery.isError

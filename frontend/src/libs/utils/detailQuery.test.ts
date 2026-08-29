@@ -9,8 +9,6 @@ import {
   parseExchangeParam,
   parseSymbolParam,
   resolveInterval,
-  toSupplyAsset,
-  toPerpSymbol,
 } from './detailQuery';
 describe('parseExchangeParam', () => {
   it('accepts known venues (case-insensitive) and rejects unknown', () => {
@@ -84,37 +82,6 @@ describe('resolveInterval', () => {
     expect(resolveInterval('3m', undefined)).toBe('3m');
     expect(resolveInterval('', undefined)).toBe(DEFAULT_DETAIL_STATE.interval);
     expect(resolveInterval('3m', [])).toBe('3m');
-  });
-});
-
-describe('toSupplyAsset', () => {
-  it('strips Coinbase hyphen quotes to base', () => {
-    expect(toSupplyAsset('BTC-USD')).toBe('BTC');
-    expect(toSupplyAsset('eth-usdt')).toBe('ETH');
-    expect(toSupplyAsset('-USD')).toBe('-USD');
-  });
-
-  it('strips unhyphenated stable suffixes (longest first)', () => {
-    expect(toSupplyAsset('BTCUSDT')).toBe('BTC');
-    expect(toSupplyAsset('ETHUSDC')).toBe('ETH');
-    expect(toSupplyAsset('XFDUSD')).toBe('X');
-    expect(toSupplyAsset('ETHTRY')).toBe('ETH');
-    expect(toSupplyAsset('BTCEUR')).toBe('BTC');
-  });
-
-  it('keeps bare base tickers and empty', () => {
-    expect(toSupplyAsset('BTC')).toBe('BTC');
-    expect(toSupplyAsset('RLUSD')).toBe('RLUSD');
-    expect(toSupplyAsset('')).toBe('');
-    expect(toSupplyAsset('   ')).toBe('');
-  });
-});
-
-describe('toPerpSymbol', () => {
-  it('maps Coinbase USD pairs onto USDT perps', () => {
-    expect(toPerpSymbol('BTC-USD')).toBe('BTCUSDT');
-    expect(toPerpSymbol('eth-usdc')).toBe('ETHUSDC');
-    expect(toPerpSymbol('BTCUSDT')).toBe('BTCUSDT');
   });
 });
 

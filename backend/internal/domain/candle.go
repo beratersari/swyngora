@@ -95,6 +95,22 @@ type Candle struct {
 	TakerBuyQuote string
 }
 
+// ClosedCandles drops the last bar when its close is still in the future
+// (the venue's still-forming candle). Zero CloseTime is kept.
+func ClosedCandles(bars []Candle, now time.Time) []Candle {
+	if len(bars) == 0 {
+		return bars
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	last := bars[len(bars)-1]
+	if !last.CloseTime.IsZero() && now.Before(last.CloseTime) {
+		return bars[:len(bars)-1]
+	}
+	return bars
+}
+
 // CandleQuery is the input for fetching historical candles.
 type CandleQuery struct {
 	Symbol   string

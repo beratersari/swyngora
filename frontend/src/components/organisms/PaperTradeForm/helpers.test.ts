@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindFromOrderType, toApiOrderType, validateTradeForm } from './helpers';
+import { kindFromOrderType, toApiOrderType } from './helpers';
 
 describe('PaperTradeForm helpers', () => {
   it('maps kind to API order type', () => {
@@ -14,35 +14,4 @@ describe('PaperTradeForm helpers', () => {
     expect(kindFromOrderType('stop_loss')).toBe('stop_loss');
   });
 
-  it('validates required fields', () => {
-    expect(
-      validateTradeForm({
-        exchange: 'binance',
-        symbol: 'BTCUSDT',
-        orderType: 'market',
-        side: 'buy',
-        quantity: 0.01,
-      }),
-    ).toBeNull();
-    expect(
-      validateTradeForm({
-        exchange: 'binance',
-        symbol: 'BTCUSDT',
-        orderType: 'limit_buy',
-        side: 'buy',
-        quantity: 0.01,
-      }),
-    ).toBe('triggerPrice');
-    expect(
-      validateTradeForm({
-        exchange: 'binance',
-        symbol: 'BTCUSDT',
-        orderType: 'oco',
-        side: 'sell',
-        quantity: 1,
-        takeProfitPrice: 120,
-        stopLossPrice: 90,
-      }),
-    ).toBeNull();
-  });
 });

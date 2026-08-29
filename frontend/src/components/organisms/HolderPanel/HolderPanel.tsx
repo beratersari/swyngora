@@ -7,11 +7,9 @@ import {
   formatHolderBalance,
   formatHolderCount,
   formatSharePct,
-  holderUsdValue,
-  resolveHolderBalance,
 } from './helpers';
 import { AddressCell, AddressLabel, AddressWrap, Panel, StatCard, StatsGrid, TitleRow } from './HolderPanel.styles';
-import type { HolderPanelProps } from './HolderPanel.types';
+import type { HolderPanelProps, HolderWalletRow } from './HolderPanel.types';
 
 function Stat({
   label,
@@ -38,15 +36,11 @@ export function HolderPanel({
   holders,
   error,
   isLoading = false,
-  circulatingSupply,
-  priceUsd,
 }: HolderPanelProps) {
   const { t, i18n } = useTranslation('detail');
   const { formatCompact } = useDisplayCurrency();
   const rows = holders?.topHolders ?? [];
-  const showUsd = rows.some(
-    (row) => holderUsdValue(row.sharePct, circulatingSupply, priceUsd) != null,
-  );
+  const showUsd = rows.some((row) => row.usdValue != null && Number.isFinite(row.usdValue));
   const showStats = Boolean(holders) && !error;
 
   return (
@@ -107,13 +101,13 @@ export function HolderPanel({
         <Table
           size="small"
           pagination={false}
-          rowKey={(row) => row.address ?? ''}
+          rowKey={(row: HolderWalletRow) => row.address ?? ''}
           dataSource={rows}
           columns={[
             {
               title: t('holders.address'),
               dataIndex: 'address',
-              render: (addr: string, row: { label?: string }) => (
+              render: (addr: string, row: HolderWalletRow) => (
                 <AddressWrap>
                   {row.label ? <AddressLabel>{row.label}</AddressLabel> : null}
                   <Typography.Text copyable={{ text: addr }}>
@@ -126,8 +120,8 @@ export function HolderPanel({
               title: t('holders.balance'),
               dataIndex: 'balance',
               align: 'right',
-              render: (v: number, row: { sharePct?: number }) =>
-                formatHolderBalance(resolveHolderBalance(v, row.sharePct, circulatingSupply)),
+              render: (v: number, row: HolderWalletRow) =>
+                formatHolderBalance(row.resolvedBalance ?? v),
             },
             ...(showUsd
               ? [
@@ -135,11 +129,8 @@ export function HolderPanel({
                     title: t('holders.valueUsd'),
                     key: 'usd',
                     align: 'right' as const,
-                    render: (_: unknown, row: { sharePct?: number }) =>
-                      formatCompact(
-                        holderUsdValue(row.sharePct, circulatingSupply, priceUsd),
-                        'USD',
-                      ),
+                    render: (_: unknown, row: HolderWalletRow) =>
+                      formatCompact(row.usdValue, 'USD'),
                   },
                 ]
               : []),

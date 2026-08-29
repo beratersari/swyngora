@@ -141,6 +141,22 @@ class _Transport(httpx.BaseTransport):
             )
         if request.url.path.endswith("/exchanges"):
             return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
+        if request.url.path.endswith("/rsi-heatmap"):
+            return httpx.Response(
+                200,
+                json={
+                    "exchange": "binance",
+                    "quote": "USDT",
+                    "period": 14,
+                    "intervals": ["1h"],
+                    "items": [
+                        {
+                            "symbol": "BTCUSDT",
+                            "cells": [{"interval": "1h", "rsi": 42.5, "zone": "neutral"}],
+                        }
+                    ],
+                },
+            )
         if request.url.path.endswith("/volume-surge/scan"):
             return httpx.Response(
                 200,
@@ -343,6 +359,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))
     assert lsr["venues"][0]["current"]["bias"] == "long"
+
+    assert "get_rsi_heatmap" in by_name
+    heat = json.loads(by_name["get_rsi_heatmap"].invoke({"exchange": "binance"}))
+    assert heat["items"][0]["symbol"] == "BTCUSDT"
 
     assert "get_volume_surge" in by_name
     surge = json.loads(by_name["get_volume_surge"].invoke({"symbol": "BTCUSDT"}))

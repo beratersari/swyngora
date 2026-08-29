@@ -42,3 +42,18 @@ func TestQuoteForVenue(t *testing.T) {
 		t.Fatal("mcap quote")
 	}
 }
+
+func TestDisplayFxMeta(t *testing.T) {
+	t.Parallel()
+	vq := DisplayVenueQuotes()
+	if vq["bist"] != FxTRY || vq["binance"] != FxUSDT {
+		t.Fatalf("venue quotes=%v", vq)
+	}
+	mq := DisplayMarketCapQuotes()
+	if mq["bist"] != FxTRY || mq["nasdaq"] != FxBaseUSD {
+		t.Fatalf("mcap quotes=%v", mq)
+	}
+	if DisplayFxAliases()["USDT"] != FxBaseUSD {
+		t.Fatal("alias")
+	}
+}

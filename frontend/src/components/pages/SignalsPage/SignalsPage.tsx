@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Alert, Button, Tabs, message } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -28,7 +28,7 @@ import {
   type ScannerRule,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
-import { backtestRangeIso, buildSwingSetups, countHitsSince } from '@/libs/utils';
+import { backtestRangeIso } from '@/libs/utils';
 import {
   SIGNALS_BACKTEST_POLL_MS,
   SIGNALS_BACKTEST_RANGES,
@@ -91,10 +91,10 @@ export function SignalsPage() {
   const jobs = backtestsQuery.data?.backtests ?? [];
   const watchCount = watchlist.data?.items?.length ?? 0;
 
-  const setups = useMemo(() => buildSwingSetups(results), [results]);
+  const setups = resultsQuery.data?.setups ?? [];
   const engineItems = engineQuery.data?.items ?? [];
   const engineAccepted = engineQuery.data?.accepted ?? 0;
-  const hits24h = useMemo(() => countHitsSince(results, Date.now() - 24 * 60 * 60 * 1000), [results]);
+  const hits24h = resultsQuery.data?.hits24h ?? 0;
   const activeJobs = jobs.filter((j) => j.status === 'pending' || j.status === 'running').length;
 
   const intervals = intervalsQuery.data?.intervals?.length

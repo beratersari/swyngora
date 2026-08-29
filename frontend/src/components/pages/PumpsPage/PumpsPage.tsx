@@ -11,7 +11,7 @@ import {
   useScanPumpEventsQuery,
   type MarketExchange,
 } from '@/libs/api';
-import { defaultQuoteForExchange } from '@/libs/utils';
+import { useDisplayCurrency } from '@/libs/hooks';
 import { pumpScanHitsToRows } from './PumpsPage.helpers';
 import { Field, PageStack, Toolbar } from './PumpsPage.styles';
 
@@ -27,8 +27,9 @@ function pickDefaultInterval(intervals: string[] | undefined, current: string): 
 export function PumpsPage() {
   const { t } = useTranslation(['pumps', 'common']);
   const navigate = useNavigate();
+  const { nativeQuote } = useDisplayCurrency();
   const [exchange, setExchange] = useState<MarketExchange>('binance');
-  const [quote, setQuote] = useState(defaultQuoteForExchange('binance'));
+  const [quote, setQuote] = useState(() => nativeQuote('binance'));
   const [interval, setInterval] = useState('15m');
   /** False until the user runs the first scan (skip query until then). */
   const [hasScanned, setHasScanned] = useState(false);
@@ -76,7 +77,7 @@ export function PumpsPage() {
             ]}
             onChange={(v) => {
               setExchange(v);
-              setQuote(defaultQuoteForExchange(v));
+              setQuote(nativeQuote(v));
             }}
           />
         </Field>

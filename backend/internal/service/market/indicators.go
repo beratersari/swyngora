@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // GetIndicators fetches candles and computes RSI + EMA series for a symbol.
 // limit is the number of output bars desired; extra history is fetched for warm-up.
-func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval string, limit, rsiPeriod int, emaPeriods []int) (*domain.IndicatorSeries, error) {
+func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval string, limit, rsiPeriod int, emaPeriods []int, end *time.Time) (*domain.IndicatorSeries, error) {
 	ex, err := s.ResolveExchange(exchange)
 	if err != nil {
 		return nil, err
@@ -57,7 +58,7 @@ func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval 
 		fetchLimit = 1000
 	}
 
-	candles, err := s.GetCandles(ctx, string(ex), symbol, interval, fetchLimit, nil, nil)
+	candles, err := s.GetCandles(ctx, string(ex), symbol, interval, fetchLimit, nil, end)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +112,7 @@ func (s *Service) GetIndicators(ctx context.Context, exchange, symbol, interval 
 			}
 		}
 	}
+	series.LatestZone = domain.RSIZoneFor(series.LatestRSI, 0, 0)
 	return series, nil
 }
 

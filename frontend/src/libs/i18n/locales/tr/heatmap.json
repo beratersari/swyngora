@@ -17,5 +17,25 @@
   "fullscreen": "Tam ekran",
   "exitFullscreen": "Tam ekrandan çık",
   "last": "Fiyat",
-  "venue": "Borsa"
+  "venue": "Borsa",
+  "view": {
+    "price": "Fiyat",
+    "rsi": "RSI"
+  },
+  "rsi": {
+    "title": "RSI ısı haritası",
+    "subtitle": "Her coin aynı boyutta bir nokta. Solda en büyük piyasa değeri (#1), sağda daha küçükler. Yükseklik Wilder RSI(14). Yeşil aşırı satım, kırmızı aşırı alım. Yalnızca bilgilendirme.",
+    "resource": "RSI ısı haritası",
+    "loadFailed": "RSI ısı haritası yüklenemedi",
+    "mapAria": "RSI saçılım haritası",
+    "interval": "Zaman dilimi",
+    "top": "İlk",
+    "average": "Ort. RSI",
+    "oversold": "Aşırı satım",
+    "overbought": "Aşırı alım",
+    "coins": "Coin",
+    "rankLeft": "#1 piyasa değeri",
+    "rankRight": "Daha küçük",
+    "rankN": "Sıra #{{n}}"
+  }
 }

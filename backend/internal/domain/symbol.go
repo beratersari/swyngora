@@ -90,15 +90,47 @@ func SplitBaseQuote(ex Exchange, symbol string) (base, quote string) {
 // AssetQuoteSuffixes are longest-first quote tails stripped to resolve a base
 // asset key for supply / holders catalog lookup. Bare "USD" is omitted so
 // RLUSD / BFUSD stay intact; hyphenated BASE-USD is handled in NormalizeAssetKey.
+// BTC/ETH/BNB are only peeled when the leftover is a known pair base (see
+// NormalizeAssetKey) so WBTC / STETH are not collapsed onto W / ST.
 var AssetQuoteSuffixes = []string{
 	"FDUSD", "USDT", "USDC", "BUSD", "TUSD", "DAI",
 	"EUR", "TRY", "BRL", "GBP", "AUD", "CAD", "ARS", "JPY",
 	"BTC", "ETH", "BNB",
 }
 
+// cryptoQuoteSuffixes can also be real token tails (WBTC, STETH). Only strip
+// them when the leftover is a known independent pair base (ETHBTC → ETH).
+var cryptoQuoteSuffixes = map[string]struct{}{
+	"BTC": {}, "ETH": {}, "BNB": {},
+}
+
+// cryptoPairBases are tickers that may be the left side of a BTC/ETH/BNB pair.
+// Wrapped or staked names that merely end in those quotes are omitted.
+var cryptoPairBases = map[string]struct{}{
+	"BTC": {}, "ETH": {}, "BNB": {},
+	"SOL": {}, "XRP": {}, "ADA": {}, "DOGE": {}, "AVAX": {}, "DOT": {},
+	"LINK": {}, "ATOM": {}, "LTC": {}, "BCH": {}, "UNI": {}, "APT": {},
+	"SUI": {}, "NEAR": {}, "FIL": {}, "INJ": {}, "TIA": {}, "SEI": {},
+	"OP": {}, "ARB": {}, "AAVE": {}, "MKR": {}, "LDO": {}, "TRX": {},
+	"TON": {}, "HBAR": {}, "ICP": {}, "XLM": {}, "ETC": {}, "APE": {},
+	"PEPE": {}, "SHIB": {}, "WIF": {}, "BONK": {}, "JUP": {}, "FET": {},
+	"GRT": {}, "SAND": {}, "MANA": {}, "CRV": {}, "SNX": {}, "IMX": {},
+}
+
+func isCryptoQuoteSuffix(q string) bool {
+	_, ok := cryptoQuoteSuffixes[q]
+	return ok
+}
+
+func isCryptoPairBase(base string) bool {
+	_, ok := cryptoPairBases[base]
+	return ok
+}
+
 // NormalizeAssetKey maps a trading pair or base ticker to the supply/holders
-// catalog key (BTCUSDT / BTC-USD / ETHTRY → BTC). Exact bases that only look
-// like a quote tail (TUSD, RLUSD) are preserved.
+// catalog key (BTCUSDT / BTC-USD / ETHTRY → BTC, ETHBTC → ETH). Exact bases
+// that only look like a quote tail (TUSD, RLUSD) stay intact, as do wrapped
+// or staked tickers that end in BTC/ETH/BNB (WBTC, STETH, WSTETH).
 func NormalizeAssetKey(raw string) string {
 	s := strings.ToUpper(strings.TrimSpace(raw))
 	if s == "" {
@@ -113,9 +145,13 @@ func NormalizeAssetKey(raw string) string {
 	for _, q := range AssetQuoteSuffixes {
 		if len(s) > len(q) && strings.HasSuffix(s, q) {
 			base := strings.TrimSuffix(s, q)
-			if base != "" && base != q {
-				return base
+			if base == "" || base == q {
+				continue
 			}
+			if isCryptoQuoteSuffix(q) && !isCryptoPairBase(base) {
+				continue
+			}
+			return base
 		}
 	}
 	return s

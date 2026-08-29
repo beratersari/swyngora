@@ -9,4 +9,13 @@ describe('toSupplyAsset', () => {
     expect(toSupplyAsset('RLUSD')).toBe('RLUSD');
     expect(toSupplyAsset('')).toBe('');
   });
+
+  it('does not collapse wrapped or staked tickers onto a shorter prefix', () => {
+    expect(toSupplyAsset('WBTC')).toBe('WBTC');
+    expect(toSupplyAsset('WBTCUSDT')).toBe('WBTC');
+    expect(toSupplyAsset('STETH')).toBe('STETH');
+    expect(toSupplyAsset('WSTETH')).toBe('WSTETH');
+    expect(toSupplyAsset('W')).toBe('W');
+    expect(toSupplyAsset('ETHBTC')).toBe('ETH');
+  });
 });

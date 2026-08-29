@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // MaxHolderList is the maximum number of top wallets returned to clients.
 const MaxHolderList = 20
@@ -24,6 +27,11 @@ type AssetHolder struct {
 	Label    string
 	Balance  float64
 	SharePct float64
+	// ResolvedBalance prefers share × circulating when the reported CMC
+	// balance is dust-scale compared with that estimate.
+	ResolvedBalance *float64
+	// UsdValue is share × circulating × USD price when those inputs exist.
+	UsdValue *float64
 }
 
 // AssetHolders is an on-chain holder snapshot for a crypto base asset.
@@ -89,4 +97,64 @@ func CapHolderList(list []AssetHolder, n int) []AssetHolder {
 		return list
 	}
 	return list[:n]
+}
+
+// ResolveHolderBalance prefers share × circulating when the reported wallet
+// size is missing, zero, or at least 100× smaller than that estimate
+// (common on high-supply tokens where CMC prints dust).
+func ResolveHolderBalance(reported, sharePct float64, circulating *float64) *float64 {
+	var raw *float64
+	if !math.IsNaN(reported) && !math.IsInf(reported, 0) {
+		v := reported
+		raw = &v
+	}
+	var estimated *float64
+	if circulating != nil && *circulating > 0 && !math.IsNaN(sharePct) && !math.IsInf(sharePct, 0) {
+		v := (sharePct / 100) * *circulating
+		estimated = &v
+	}
+	if estimated != nil && *estimated > 0 {
+		if raw == nil || *raw == 0 {
+			return estimated
+		}
+		den := *raw
+		if den < 0 {
+			den = -den
+		}
+		if den < 1e-18 {
+			den = 1e-18
+		}
+		num := *estimated
+		if num < 0 {
+			num = -num
+		}
+		if num/den >= 100 {
+			return estimated
+		}
+	}
+	return raw
+}
+
+// HolderUsdValue is share of circulating market cap in USD.
+func HolderUsdValue(sharePct float64, circulating, priceUSD *float64) *float64 {
+	if circulating == nil || priceUSD == nil {
+		return nil
+	}
+	if *circulating <= 0 || *priceUSD <= 0 || math.IsNaN(sharePct) || math.IsInf(sharePct, 0) {
+		return nil
+	}
+	v := (sharePct / 100) * *circulating * *priceUSD
+	return &v
+}
+
+// EnrichHolderRows fills ResolvedBalance and UsdValue on each wallet.
+func EnrichHolderRows(h *AssetHolders, circulating, priceUSD *float64) {
+	if h == nil {
+		return
+	}
+	for i := range h.TopHolders {
+		row := &h.TopHolders[i]
+		row.ResolvedBalance = ResolveHolderBalance(row.Balance, row.SharePct, circulating)
+		row.UsdValue = HolderUsdValue(row.SharePct, circulating, priceUSD)
+	}
 }

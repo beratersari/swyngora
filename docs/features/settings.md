@@ -10,6 +10,9 @@ buys existed as HTTP + MCP only. Users need a desk page.
 - Route `/settings` (nav item).
 - Tabs: API keys, export, sharing, recurring buys.
 - Uses existing OpenAPI endpoints and the current `X-Client-Id`.
+- Creating a **read** key shows the secret once and does **not** write it
+  to `swyngora.apiAuthToken` (read keys 403 paper mutations). A **trade**
+  key may become the browser session token.
 - Paper copy stays labeled as not real money.
 
 ## Where the code lives

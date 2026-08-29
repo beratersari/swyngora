@@ -72,4 +72,12 @@ describe('SettingsPage API key session binding', () => {
     await createNamedKey();
     expect(getBrowserApiToken()).toBe(TRADE_SECRET);
   });
+
+  it('may install a newly created trade key as the browser session token', async () => {
+    createKey.mockImplementation(() => ({
+      unwrap: async () => ({ secret: TRADE_SECRET, permission: 'trade' }),
+    }));
+    await createNamedKey();
+    expect(getBrowserApiToken()).toBe(TRADE_SECRET);
+  });
 });

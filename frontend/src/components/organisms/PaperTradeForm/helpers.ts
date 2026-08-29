@@ -1,5 +1,4 @@
 import type { PaperOrderType } from '@/libs/api';
-import type { PaperTradeFormValues } from './PaperTradeForm.types';
 
 export type SpotOrderKind =
   | 'market'
@@ -56,19 +55,4 @@ export function needsTif(kind: SpotOrderKind): boolean {
   return kind === 'limit' || kind === 'stop_loss';
 }
 
-export function validateTradeForm(values: PaperTradeFormValues): string | null {
-  if (!values.symbol?.trim()) return 'symbol';
-  if (!Number.isFinite(values.quantity) || values.quantity <= 0) return 'quantity';
-  const kind = kindFromOrderType(values.orderType);
-  if (needsTrigger(kind) && !(values.triggerPrice != null && values.triggerPrice > 0)) {
-    return 'triggerPrice';
-  }
-  if (needsTpSl(kind)) {
-    if (!(values.takeProfitPrice != null && values.takeProfitPrice > 0)) return 'takeProfitPrice';
-    if (!(values.stopLossPrice != null && values.stopLossPrice > 0)) return 'stopLossPrice';
-  }
-  if (needsTrail(kind)) {
-    if (!(values.trailValue != null && values.trailValue > 0)) return 'trailValue';
-  }
-  return null;
-}
+

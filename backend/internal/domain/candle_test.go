@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestIsValidInterval(t *testing.T) {
 	for _, iv := range SupportedIntervals {
@@ -34,5 +37,28 @@ func TestSupportedIntervals_UniqueAndNonEmpty(t *testing.T) {
 		if !seen[want] {
 			t.Fatalf("missing %s", want)
 		}
+	}
+}
+
+func TestClosedCandlesDropsForming(t *testing.T) {
+	now := time.Date(2026, 8, 28, 10, 30, 0, 0, time.UTC)
+	closed := Candle{OpenTime: now.Add(-time.Hour), CloseTime: now.Add(-time.Millisecond), Close: "100"}
+	forming := Candle{OpenTime: now.Truncate(time.Hour), CloseTime: now.Add(30 * time.Minute), Close: "1"}
+	got := ClosedCandles([]Candle{closed, forming}, now)
+	if len(got) != 1 || got[0].Close != "100" {
+		t.Fatalf("got %+v", got)
+	}
+	if keep := ClosedCandles([]Candle{closed}, now); len(keep) != 1 {
+		t.Fatalf("already-closed dropped: %+v", keep)
+	}
+	if zero := ClosedCandles([]Candle{{Close: "50"}}, now); len(zero) != 1 {
+		t.Fatal("zero CloseTime must be kept")
+	}
+	if empty := ClosedCandles(nil, now); empty != nil {
+		t.Fatalf("empty=%v", empty)
+	}
+	future := Candle{CloseTime: time.Now().UTC().Add(time.Hour), Close: "9"}
+	if dropped := ClosedCandles([]Candle{closed, future}, time.Time{}); len(dropped) != 1 {
+		t.Fatalf("zero now must still drop a future close: %+v", dropped)
 	}
 }

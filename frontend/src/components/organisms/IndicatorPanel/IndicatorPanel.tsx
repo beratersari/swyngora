@@ -33,12 +33,13 @@ export function IndicatorPanel({
   const { t } = useTranslation('detail');
   const { formatPrice } = useDisplayCurrency();
   const rsi = data?.latest?.rsi;
+  const zone = data?.latest?.zone;
   const emaKeys = sortedEmaKeys(data?.latest?.ema);
   const rsiLine = indicatorPointsToRsiLine(data?.points);
   const period = data?.rsiPeriod ?? 14;
   // Empty when no EMA keys yet — avoid hard-coded periods that may not exist.
   const emaPeriodLabel = emaKeys.join(', ') || '—';
-  const band = t(`indicators.band.${rsiBandKey(rsi)}`);
+  const band = t(`indicators.band.${rsiBandKey(zone)}`);
 
   if (errorMessage) {
     return (
@@ -84,7 +85,7 @@ export function IndicatorPanel({
           </Text>
           <Text
             variant="h3"
-            color={rsiTone(rsi)}
+            color={rsiTone(zone)}
             mono
             isLoading={isLoading}
             skeletonWidth={80}

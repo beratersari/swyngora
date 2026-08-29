@@ -17,11 +17,26 @@ export function compactParams<T extends Record<string, unknown>>(
 export function transformExchangesResponse(raw: {
   exchanges?: string[];
   default?: string;
-}): { exchanges: string[]; default: string } {
-  return {
+  venueQuotes?: Record<string, string>;
+  marketCapQuotes?: Record<string, string>;
+}): {
+  exchanges: string[];
+  default: string;
+  venueQuotes?: Record<string, string>;
+  marketCapQuotes?: Record<string, string>;
+} {
+  const out: {
+    exchanges: string[];
+    default: string;
+    venueQuotes?: Record<string, string>;
+    marketCapQuotes?: Record<string, string>;
+  } = {
     exchanges: raw.exchanges ?? [],
     default: raw.default ?? 'binance',
   };
+  if (raw.venueQuotes) out.venueQuotes = raw.venueQuotes;
+  if (raw.marketCapQuotes) out.marketCapQuotes = raw.marketCapQuotes;
+  return out;
 }
 
 export function resolveExchangeArg(

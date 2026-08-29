@@ -70,9 +70,7 @@ export {
   rsiBandLabel,
   indicatorPointsToRsiLine,
   indicatorPointsToEmaLine,
-  emaFromCloses,
-  emaLineFromCloses,
-  parseEmaPeriods,
+  mergeIndicatorPoints,
   sortedEmaKeys,
 } from './indicators';
 export type { ChartLinePoint, RsiBandKey } from './indicators';
@@ -85,8 +83,7 @@ export {
   detailStateToSearchParams,
   parseDetailTab,
   resolveInterval,
-  toSupplyAsset,
-  toPerpSymbol,
+
   marketsBackPath,
   intervalToSeconds,
   analyticsBarLimit,
@@ -119,18 +116,13 @@ export type {
 export { rememberMarketsReturnPath, marketsBackPath as marketsBackPathFromSession, MARKETS_RETURN_STORAGE_KEY } from './marketsReturn';
 export { pickSpotForSymbol } from './pickSpot';
 export { pumpScanHitsToRows } from './pumpScan';
-export { evaluateAlert, ALERT_KINDS, alertDisplayLabel, ALERT_FIRE_COOLDOWN_MS, parseFiniteNumber } from './alerts';
+export { ALERT_KINDS, alertDisplayLabel, ALERT_FIRE_COOLDOWN_MS, parseFiniteNumber } from './alerts';
 export { comparePairKey, parseComparePairsParam, serializeComparePairs, closesToPercentSeries, MAX_COMPARE_PAIRS } from './compareSeries';
 export type { ComparePair } from './compareSeries';
 export {
-  SIGNALS_CONFLUENCE_WINDOW_MS,
-  gradeFromScore,
   ruleTypeShort,
   ruleFactorsShort,
   ruleConditions,
   describeRule,
-  buildSwingSetups,
-  countHitsSince,
   backtestRangeIso,
 } from './swingSetups';
-export type { SwingGrade, SwingSetup } from './swingSetups';

@@ -2,6 +2,7 @@ export type HeatmapMetric = 'quoteVolume' | 'marketCap';
 
 export type PriceChangeHeatmapItem = {
   symbol: string;
+  base?: string;
   exchange: string;
   lastPrice?: string;
   priceChangePercent?: string;
@@ -11,6 +12,7 @@ export type PriceChangeHeatmapItem = {
 
 export type HeatmapTile = {
   symbol: string;
+  base?: string;
   exchange: string;
   lastPrice?: string;
   quoteVolume?: string;

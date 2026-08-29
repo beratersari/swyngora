@@ -21,12 +21,12 @@ describe('HolderPanel', () => {
               label: 'Binance',
               balance: 248597,
               sharePct: 1.18,
+              resolvedBalance: 248597,
+              usdValue: 14_915_820_000,
             },
           ],
           source: 'coinmarketcap',
         }}
-        circulatingSupply={21_000_000}
-        priceUsd={60_000}
       />,
     );
     expect(screen.getByText('Holders')).toBeInTheDocument();
@@ -55,6 +55,6 @@ describe('HolderPanel', () => {
         }}
       />,
     );
-    expect(screen.getByText(/listed no top wallets/i)).toBeInTheDocument();
+    expect(screen.getByText(/no top wallets were listed/i)).toBeInTheDocument();
   });
 });

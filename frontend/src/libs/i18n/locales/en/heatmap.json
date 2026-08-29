@@ -17,5 +17,25 @@
   "fullscreen": "Fullscreen",
   "exitFullscreen": "Exit fullscreen",
   "last": "Price",
-  "venue": "Venue"
+  "venue": "Venue",
+  "view": {
+    "price": "Price",
+    "rsi": "RSI"
+  },
+  "rsi": {
+    "title": "RSI heatmap",
+    "subtitle": "Each coin is the same-size dot. Left is the largest market cap (#1), right is smaller. Height is Wilder RSI(14). Green is oversold, red is overbought. Informational only.",
+    "resource": "RSI heatmap",
+    "loadFailed": "Could not load RSI heatmap",
+    "mapAria": "RSI scatter map",
+    "interval": "Timeframe",
+    "top": "Show top",
+    "average": "Avg RSI",
+    "oversold": "Oversold",
+    "overbought": "Overbought",
+    "coins": "Coins",
+    "rankLeft": "#1 market cap",
+    "rankRight": "Smaller cap",
+    "rankN": "Rank #{{n}}"
+  }
 }

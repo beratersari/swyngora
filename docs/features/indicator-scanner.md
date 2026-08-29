@@ -12,7 +12,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 
 | Tab | Behavior |
 |-----|----------|
-| Setups | Client-side confluence: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
+| Setups | API confluence on `GET /api/v1/scanner/results`: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
 | Rules | Create, edit, enable/disable, or delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
 | Lab | Historical backtest on one symbol with 1/5/20d forward returns. |
@@ -30,6 +30,8 @@ Backend `GET /api/v1/market/swing` and `GET /api/v1/swing/setups` run a **closed
 
 Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
 
+`GET /api/v1/market/indicators` includes `latest.zone` (`oversold` / `neutral` / `overbought`) from Wilder RSI bands. The web indicator panel does not re-threshold the number.
+
 **Not financial advice.** Live checker may match a forming bar; treat hits as informational until you confirm on a closed candle.
 
 ## API
@@ -41,7 +43,7 @@ Informational only. MCP: `analyze_swing`, `scan_swing_setups`.
 | `GET` | `/api/v1/scanner/rules/{id}` | Get one rule |
 | `PATCH` | `/api/v1/scanner/rules/{id}` | Enable/disable or edit interval, conditions, periods, thresholds |
 | `DELETE` | `/api/v1/scanner/rules/{id}` | Delete rule (+ cascaded results) |
-| `GET` | `/api/v1/scanner/results` | Match history (`limit`, `offset`) |
+| `GET` | `/api/v1/scanner/results` | Match history (`limit`, `offset`) plus `setups` and `hits24h` |
 
 Tenancy: same `clientId` / `X-Client-Id` model as watchlists.
 

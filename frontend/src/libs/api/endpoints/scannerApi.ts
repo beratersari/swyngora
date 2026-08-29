@@ -21,6 +21,7 @@ export type {
   ScannerMaDirection,
   ScannerMatchMode,
   ScannerResult,
+  ScannerSetup,
   ScannerRsiCondition,
   ScannerRule,
   ScannerRuleType,

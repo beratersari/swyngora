@@ -19,6 +19,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "get_asset_profile",
         "list_spot_markets",
         "get_indicators",
+        "get_rsi_heatmap",
         "list_delist_schedule",
         "get_post_delist",
         "get_volume_profile",

@@ -74,6 +74,21 @@ func TestDetectPumpEvents_Dump(t *testing.T) {
 	}
 }
 
+func TestBestPumpEvent(t *testing.T) {
+	t.Parallel()
+	if _, ok := BestPumpEvent(nil); ok {
+		t.Fatal("empty")
+	}
+	got, ok := BestPumpEvent([]PumpEvent{
+		{ReturnPct: 4, VolumeRatio: 1, OpenTime: time.Unix(1, 0).UTC()},
+		{ReturnPct: -12, VolumeRatio: 3, OpenTime: time.Unix(2, 0).UTC()},
+		{ReturnPct: 8, VolumeRatio: 2, OpenTime: time.Unix(3, 0).UTC()},
+	})
+	if !ok || got.ReturnPct != -12 || got.VolumeRatio != 3 {
+		t.Fatalf("%+v ok=%v", got, ok)
+	}
+}
+
 func TestBarsForLookbackHours(t *testing.T) {
 	n, err := BarsForLookbackHours(Interval1h, 48)
 	if err != nil || n != 48 {

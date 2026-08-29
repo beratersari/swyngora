@@ -20,6 +20,8 @@ User keys **cannot**:
 
 The process master token (`API_AUTH_TOKEN`) still has full access and is how the main app manages keys when the API is locked down. In open local mode (empty master token), `X-Client-Id` is enough to manage keys; a `swy_…` user key still binds that client and its scopes.
 
+The web Settings desk shows the secret once on create. It does **not** install a `permission=read` secret as the browser session token (that would 403 every paper mutation). A newly created `trade` key may be stored in `swyngora.apiAuthToken`.
+
 Secrets are stored as SHA-256 hashes. The full token is returned **once** on create (`swy_` + 48 hex chars). List shows only `prefix` (first 12 characters).
 
 Limits: 20 active keys per `clientId`; name 1–64 characters. `clientId` is validated with `domain.NormalizeClientID` (reserved names and enumerable `tg-<digits>` are rejected).

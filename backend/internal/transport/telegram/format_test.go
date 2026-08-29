@@ -20,6 +20,57 @@ func TestCompactMcap(t *testing.T) {
 	}
 }
 
+func TestFormatRSIHeatmap(t *testing.T) {
+	if FormatRSIHeatmap(nil) != "No RSI heatmap rows." {
+		t.Fatal("nil")
+	}
+	if FormatRSIHeatmap(&domain.RSIHeatmap{}) != "No RSI heatmap rows." {
+		t.Fatal("empty")
+	}
+	low, mid, high := 22.0, 50.0, 81.0
+	out := FormatRSIHeatmap(&domain.RSIHeatmap{
+		Exchange: domain.ExchangeBinance, Quote: "USDT", Interval: "1h", Period: 14,
+		AverageRSI: &mid, OversoldCount: 1, OverboughtCount: 1,
+		Items: []domain.RSIHeatmapRow{
+			{Rank: 1, Base: "AAA", RSI: &low, Zone: domain.RSIZoneOversold},
+			{Rank: 2, Symbol: "BBBUSDT", RSI: &high, Zone: domain.RSIZoneOverbought},
+			{Rank: 3, Base: "CCC", RSI: &mid, Zone: domain.RSIZoneNeutral},
+			{Rank: 4, Base: "DDD"},
+		},
+	})
+	if !strings.Contains(out, "RSI heatmap") || !strings.Contains(out, "AAA") || !strings.Contains(out, "BBBUSDT") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "avg") || !strings.Contains(out, "oversold 1") {
+		t.Fatalf("%s", out)
+	}
+	items := make([]domain.RSIHeatmapRow, 0, 25)
+	for i := 0; i < 25; i++ {
+		v := 20.0
+		items = append(items, domain.RSIHeatmapRow{Rank: i + 1, Base: "X", RSI: &v, Zone: domain.RSIZoneOversold})
+	}
+	long := FormatRSIHeatmap(&domain.RSIHeatmap{
+		Exchange: domain.ExchangeBinance, Quote: "USDT", Interval: "1h", Period: 14,
+		Items: items,
+	})
+	if !strings.Contains(long, "X") {
+		t.Fatalf("%s", long)
+	}
+	neutral := 50.0
+	skip := make([]domain.RSIHeatmapRow, 0, 16)
+	for i := 0; i < 12; i++ {
+		v := 20.0
+		skip = append(skip, domain.RSIHeatmapRow{Rank: i + 1, Base: "OS", RSI: &v, Zone: domain.RSIZoneOversold})
+	}
+	skip = append(skip, domain.RSIHeatmapRow{Rank: 13, Base: "NEUT", RSI: &neutral, Zone: domain.RSIZoneNeutral})
+	skipped := FormatRSIHeatmap(&domain.RSIHeatmap{
+		Exchange: domain.ExchangeBinance, Quote: "USDT", Interval: "1h", Period: 14, Items: skip,
+	})
+	if strings.Contains(skipped, "NEUT") {
+		t.Fatalf("neutral after 12 rows must be omitted: %s", skipped)
+	}
+}
+
 func TestFormatTicker(t *testing.T) {
 	s := FormatTicker("binance", &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "100", PriceChangePercent: "1"})
 	if !strings.Contains(s, "BTCUSDT") || !strings.Contains(s, "<b>") || !strings.Contains(s, "Informational") {

@@ -24,10 +24,9 @@ import {
   type SpotSortOrder,
 } from '@/libs/api';
 import { MetricColumnPicker } from '@/components/molecules/MetricColumnPicker';
-import { useDebouncedValue, useDocumentVisible, useSpotMetricColumns } from '@/libs/hooks';
+import { useDebouncedValue, useDisplayCurrency, useDocumentVisible, useSpotMetricColumns } from '@/libs/hooks';
 import { usePriceSubscription, useRealtimeConnected } from '@/libs/realtime';
 import {
-  defaultQuoteForExchange,
   marketsStateToSearchParams,
   metricColumnTitle,
   parseMarketsSearchParams,
@@ -55,8 +54,12 @@ export function MarketsPage() {
   const navigate = useNavigate();
   const visible = useDocumentVisible();
   const metricColumns = useSpotMetricColumns('markets');
+  const { venueQuotes, nativeQuote } = useDisplayCurrency();
 
-  const state = useMemo(() => parseMarketsSearchParams(searchParams), [searchParams]);
+  const state = useMemo(
+    () => parseMarketsSearchParams(searchParams, venueQuotes),
+    [searchParams, venueQuotes],
+  );
   const [qInput, setQInput] = useState(state.q);
   const debouncedQ = useDebouncedValue(qInput, 300);
 
@@ -77,26 +80,26 @@ export function MarketsPage() {
     (patch: Partial<MarketsUrlState>) => {
       setSearchParams(
         (prev) => {
-          const current = parseMarketsSearchParams(prev);
-          return marketsStateToSearchParams({ ...current, ...patch });
+          const current = parseMarketsSearchParams(prev, venueQuotes);
+          return marketsStateToSearchParams({ ...current, ...patch }, venueQuotes);
         },
         { replace: true },
       );
     },
-    [setSearchParams],
+    [setSearchParams, venueQuotes],
   );
 
   // Search q is owned by the debounce effect only (not injected into every patch).
   useEffect(() => {
     setSearchParams(
       (prev) => {
-        const current = parseMarketsSearchParams(prev);
+        const current = parseMarketsSearchParams(prev, venueQuotes);
         if (debouncedQ === current.q) return prev;
-        return marketsStateToSearchParams({ ...current, q: debouncedQ, offset: 0 });
+        return marketsStateToSearchParams({ ...current, q: debouncedQ, offset: 0 }, venueQuotes);
       },
       { replace: true },
     );
-  }, [debouncedQ, setSearchParams]);
+  }, [debouncedQ, setSearchParams, venueQuotes]);
 
   const exchangesQuery = useListExchangesQuery();
   const tagsQuery = useListProductTagsQuery({ exchange: state.exchange });
@@ -183,7 +186,7 @@ export function MarketsPage() {
     // left filtered to a handful of USDT pairs after browsing Binance.
     patchState({
       exchange,
-      quote: defaultQuoteForExchange(exchange),
+      quote: nativeQuote(exchange),
       offset: 0,
       tag: '',
     });
@@ -300,7 +303,7 @@ export function MarketsPage() {
         <MetaRight>
           <Text variant="caption" color="secondary">
             {t('markets:results.meta', {
-              quote: state.quote || defaultQuoteForExchange(state.exchange),
+              quote: state.quote || nativeQuote(state.exchange),
               sort: state.sort,
               order: state.order,
             })}

@@ -10,12 +10,12 @@ import {
 
 describe('defaultQuoteForExchange', () => {
   it('uses USD on Coinbase and USDT elsewhere', () => {
-    expect(defaultQuoteForExchange('coinbase')).toBe('USD');
-    expect(defaultQuoteForExchange('Coinbase')).toBe('USD');
-    expect(defaultQuoteForExchange('binance')).toBe('USDT');
-    expect(defaultQuoteForExchange('bybit')).toBe('USDT');
-    expect(defaultQuoteForExchange('nasdaq')).toBe('USD');
-    expect(defaultQuoteForExchange('bist')).toBe('TRY');
+    const quotes = { coinbase: 'USD', binance: 'USDT', bybit: 'USDT', nasdaq: 'USD', bist: 'TRY' };
+    expect(defaultQuoteForExchange('coinbase')).toBe('');
+    expect(defaultQuoteForExchange('coinbase', quotes)).toBe('USD');
+    expect(defaultQuoteForExchange('binance', quotes)).toBe('USDT');
+    expect(defaultQuoteForExchange('bist', quotes)).toBe('TRY');
+    expect(defaultQuoteForExchange('binance', { binance: 'EUR' })).toBe('EUR');
   });
 });
 
@@ -24,10 +24,15 @@ describe('spotQuery', () => {
     expect(parseMarketsSearchParams(new URLSearchParams())).toEqual(DEFAULT_MARKETS_STATE);
   });
 
-  it('defaults quote from exchange when quote is omitted', () => {
-    expect(parseMarketsSearchParams(new URLSearchParams('exchange=coinbase')).quote).toBe('USD');
-    expect(parseMarketsSearchParams(new URLSearchParams('exchange=bybit')).quote).toBe('USDT');
-    expect(parseMarketsSearchParams(new URLSearchParams('exchange=binance')).quote).toBe('USDT');
+  it('defaults quote from the API venue map when quote is omitted', () => {
+    const quotes = { coinbase: 'USD', bybit: 'USDT', binance: 'USDT' };
+    expect(parseMarketsSearchParams(new URLSearchParams('exchange=coinbase'), quotes).quote).toBe(
+      'USD',
+    );
+    expect(parseMarketsSearchParams(new URLSearchParams('exchange=bybit'), quotes).quote).toBe(
+      'USDT',
+    );
+    expect(parseMarketsSearchParams(new URLSearchParams('exchange=coinbase')).quote).toBe('');
   });
 
   it('honors explicit quote override on any exchange', () => {
@@ -78,24 +83,31 @@ describe('spotQuery', () => {
   });
 
   it('omits default quote/sort when serializing (per exchange)', () => {
+    const quotes = { coinbase: 'USD', binance: 'USDT' };
     const p = marketsStateToSearchParams(DEFAULT_MARKETS_STATE);
     expect(p.toString()).toBe('');
 
     // Coinbase + USD is venue default → no quote in URL
-    const cb = marketsStateToSearchParams({
-      ...DEFAULT_MARKETS_STATE,
-      exchange: 'coinbase',
-      quote: 'USD',
-    });
+    const cb = marketsStateToSearchParams(
+      {
+        ...DEFAULT_MARKETS_STATE,
+        exchange: 'coinbase',
+        quote: 'USD',
+      },
+      quotes,
+    );
     expect(cb.get('exchange')).toBe('coinbase');
     expect(cb.get('quote')).toBeNull();
 
     // Coinbase + USDT is an override → keep in URL
-    const cbUsdt = marketsStateToSearchParams({
-      ...DEFAULT_MARKETS_STATE,
-      exchange: 'coinbase',
-      quote: 'USDT',
-    });
+    const cbUsdt = marketsStateToSearchParams(
+      {
+        ...DEFAULT_MARKETS_STATE,
+        exchange: 'coinbase',
+        quote: 'USDT',
+      },
+      quotes,
+    );
     expect(cbUsdt.get('quote')).toBe('USDT');
   });
 

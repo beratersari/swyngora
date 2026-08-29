@@ -26,7 +26,10 @@ concentration (top 10 / 50 / 100 %), and the largest wallets.
   6. Routescan EVM explorer (Chiliz fan tokens such as CITY, plus other mapped chains)
   7. Tronscan public `token_trc20` (JST, SUN, WIN, and other TRC-20)
   8. Chainz CryptoID (`/{ticker}/api.dws?q=addresses` + `q=rich`) for UTXO coins such as PIVX
-- Pair forms (`BTC-USD`, `ETHTRY`) normalize to the base asset.
+- Pair forms (`BTC-USD`, `ETHTRY`, `ETHBTC`) normalize to the base asset.
+  Bare tickers that only happen to end in `BTC` / `ETH` / `BNB` (`WBTC`,
+  `STETH`, `WSTETH`) stay intact so the 1h cache cannot serve Wormhole for
+  Wrapped Bitcoin (or `ST` for Lido staked ETH).
 - Request path uses a 1h TTL cache (env `HOLDERS_CACHE_TTL`). A 429, upstream
   error, or empty CMC blip serves last-good (`stale: true`) when present.
   Unpublished assets are negative-cached so they do not hammer CMC.
@@ -53,7 +56,7 @@ cd backend && go test ./internal/domain/ ./internal/adapter/cmc/ ./internal/adap
 curl -s 'http://localhost:8080/api/v1/market/holders?asset=BTC' | jq '{asset, holderCount, topTenSharePct, topHolders: .topHolders[:3]}'
 ```
 
-Open `/markets/binance/BTCUSDT?tab=holders` — Holders tab. Wallet size uses share × circulating supply when the raw CMC balance is dust-scale, plus an estimated USD value.
+Open `/markets/binance/BTCUSDT?tab=holders` — Holders tab. The API fills `resolvedBalance` (share × circulating when CMC balance is dust-scale) and `usdValue`. The web table only formats those fields.
 
 ## Limits
 

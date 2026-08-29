@@ -9,6 +9,7 @@ BIST last prices and mcap are **TRY**. Nasdaq (and Coinbase) are **USD**. Crypto
 - Header control: **Native** | **USD** | **TRY** | **EUR**
 - Native leaves each venue in its quoted currency (and labels it)
 - Conversion uses `GET /api/v1/market/fx` (ECB/Frankfurter, 15m cache)
+- That payload also ships `venueQuotes`, `marketCapQuotes`, and `aliases` (USDT→USD). The SPA applies published rates only. It does not invent venue quotes or stable aliases.
 - `USDT` is treated as `USD`
 - Converted: last / open / high / low / quote volume / market cap / chart OHLC / **EMA (and other price-axis MAs)** overlay + latest EMA snapshot
 - Not converted: base volume (shares/coins), % change, RSI/indicators, paper-book cash (still USDT), order-book grouping

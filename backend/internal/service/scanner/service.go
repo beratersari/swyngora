@@ -368,6 +368,53 @@ func (s *Service) ListResults(ctx context.Context, clientID string, limit, offse
 	return list, total, err
 }
 
+// ResultsPage is match history plus server-built confluence setups.
+type ResultsPage struct {
+	Results []domain.ScannerResult
+	Total   int
+	Setups  []domain.ScannerSetup
+	Hits24h int
+}
+
+// ListResultsPage returns history and groups it into confluence setups.
+func (s *Service) ListResultsPage(ctx context.Context, clientID string, limit, offset int) (*ResultsPage, error) {
+	list, total, err := s.ListResults(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	return &ResultsPage{
+		Results: list,
+		Total:   total,
+		Setups:  domain.BuildScannerSetups(list, now, 0),
+		Hits24h: domain.CountHitsSince(list, now.Add(-domain.ScannerConfluenceWindow)),
+	}, nil
+}
+
+// SetupMap is the JSON object for one confluence setup.
+func SetupMap(s domain.ScannerSetup) map[string]any {
+	factors := make([]string, 0, len(s.Factors))
+	for _, f := range s.Factors {
+		factors = append(factors, string(f))
+	}
+	latest := ""
+	if !s.LatestAt.IsZero() {
+		latest = s.LatestAt.UTC().Format(time.RFC3339Nano)
+	}
+	return map[string]any{
+		"key":       s.Key,
+		"exchange":  string(s.Exchange),
+		"symbol":    s.Symbol,
+		"interval":  s.Interval,
+		"factors":   factors,
+		"score":     s.Score,
+		"grade":     s.Grade,
+		"sameBar":   s.SameBar,
+		"latestAt":  latest,
+		"summaries": s.Summaries,
+	}
+}
+
 // ListEnabledRules for the background checker.
 func (s *Service) ListEnabledRules(ctx context.Context) ([]domain.ScannerRule, error) {
 	if s.store == nil {

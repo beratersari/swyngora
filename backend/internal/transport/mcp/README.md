@@ -50,6 +50,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |
 | `get_volume_surge` | Current 5m/15m/1h volume vs that coin's typical (median); buy/sell split |
 | `scan_volume_surges` | Rank coins whose volume is much higher than typical |
+| `get_rsi_heatmap` | Ranked Wilder RSI scatter for top listed pairs (stables omitted) |
 | `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |
@@ -164,7 +165,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_scanner_rules` | List scanner rules |
 | `update_scanner_rule` | Enable/disable a rule or edit conditions, periods, and thresholds |
 | `delete_scanner_rule` | Delete scanner rule |
-| `list_scanner_results` | Scanner match history |
+| `list_scanner_results` | Scanner match history, confluence setups, hits24h |
 | `start_export` | Start JSON/CSV export of watchlist, shares, alerts, backtests, portfolios |
 | `get_export` | Export job status / progress |
 | `list_exports` | List recent export jobs |

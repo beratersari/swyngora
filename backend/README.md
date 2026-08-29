@@ -24,12 +24,13 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/realtime` | WebSocket protocol description |
 | `GET` | `/api/v1/ws` | WebSocket: live prices + paper portfolio events |
 | `GET` | `/api/v1/market/exchanges` | Supported venues |
-| `GET` | `/api/v1/market/fx` | Spot FX rates (USD base) for display conversion |
+| `GET` | `/api/v1/market/fx` | Spot FX rates (USD base) plus venue/mcap quote maps and stable aliases |
 | `GET` | `/api/v1/market/intervals` | Candle intervals (per `exchange`) |
 | `GET` | `/api/v1/market/tags` | Unique Binance product-catalog tags (crypto) |
 | `GET` | `/api/v1/market/spot?q=btc&quote=USDT&tag=Meme&sort=quoteVolume` | List/search/filter/sort spot markets |
 | `GET` | `/api/v1/market/indicators?symbol=BTCUSDT&interval=1h` | RSI (Wilder) + EMA series |
 | `POST` | `/api/v1/market/indicators/batch` | Latest RSI/EMA for up to 50 symbols (bounded concurrency) |
+| `GET` | `/api/v1/market/rsi-heatmap` | Ranked Wilder RSI scatter for top listed pairs (stables omitted, forming bar dropped, ~120-bar seed, 60s cache + warm default) |
 | `GET` | `/api/v1/market/delist-schedule` | Cached spot delist schedule (`exchange=`; halt `delistTime` + `announcedAt`; last 30 days + next ~31 days; Binance needs `BINANCE_API_KEY`, Bybit is public announcements) |
 | `GET` | `/api/v1/market/post-delist` | Off-venue last + candles after this exchange halted the pair (other listed venue or CoinGecko USD; informational) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
@@ -144,7 +145,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/scanner/rules/{id}` | Get scanner rule |
 | `PATCH` | `/api/v1/scanner/rules/{id}` | Enable/disable or edit conditions, periods, and thresholds |
 | `DELETE` | `/api/v1/scanner/rules/{id}` | Delete scanner rule |
-| `GET` | `/api/v1/scanner/results` | Scanner match history |
+| `GET` | `/api/v1/scanner/results` | Scanner match history plus confluence `setups` and `hits24h` |
 | `POST` | `/api/v1/scanner/backtests` | Start historical rule backtest |
 | `GET` | `/api/v1/scanner/backtests` | List backtests |
 | `GET` | `/api/v1/scanner/backtests/{id}` | Backtest progress/summary |

@@ -11,23 +11,27 @@ import {
 
 describe('displayCurrency', () => {
   const rates = { TRY: 40, EUR: 0.9, USD: 1, USDT: 1 };
+  const venues = { bist: 'TRY', nasdaq: 'USD', binance: 'USDT', coinbase: 'USD' };
+  const mcaps = { bist: 'TRY', nasdaq: 'USD', binance: 'USD' };
+  const aliases = { USDT: 'USD', USDC: 'USD', BUSD: 'USD' };
 
-  it('maps venue quotes', () => {
-    expect(venueQuote('bist')).toBe('TRY');
-    expect(venueQuote('nasdaq')).toBe('USD');
-    expect(venueQuote('binance')).toBe('USDT');
-    expect(marketCapQuote('bist')).toBe('TRY');
-    expect(marketCapQuote('nasdaq')).toBe('USD');
+  it('reads venue quotes only from the API map', () => {
+    expect(venueQuote('bist')).toBe('');
+    expect(venueQuote('bist', venues)).toBe('TRY');
+    expect(venueQuote('binance', venues)).toBe('USDT');
+    expect(marketCapQuote('bist')).toBe('');
+    expect(marketCapQuote('bist', mcaps)).toBe('TRY');
   });
 
   it('converts TRY last price to USD', () => {
-    expect(convertAmount(400, 'TRY', 'USD', rates)).toBe(10);
-    expect(convertAmount(10, 'USD', 'TRY', rates)).toBe(400);
-    expect(convertAmount(1, 'USDT', 'TRY', rates)).toBe(40);
+    expect(convertAmount(400, 'TRY', 'USD', rates, aliases)).toBe(10);
+    expect(convertAmount(10, 'USD', 'TRY', rates, aliases)).toBe(400);
+    expect(convertAmount(1, 'USDT', 'TRY', rates, aliases)).toBe(40);
   });
 
-  it('aliases USDT to USD', () => {
-    expect(aliasFxCode('usdt')).toBe('USD');
+  it('aliases only from the API map', () => {
+    expect(aliasFxCode('usdt')).toBe('USDT');
+    expect(aliasFxCode('usdt', aliases)).toBe('USD');
   });
 
   it('formats native and converted prices with a code', () => {
@@ -52,7 +56,7 @@ describe('displayCurrency', () => {
     expect(pairQuote('ETHBTC', 'binance')).toBe('BTC');
     expect(pairQuote('BTCEUR', 'binance')).toBe('EUR');
     expect(pairQuote('BTCUSDT', 'binance')).toBe('USDT');
-    expect(pairQuote('AAPL', 'nasdaq')).toBe('USD');
+    expect(pairQuote('AAPL', 'nasdaq', venues)).toBe('USD');
     expect(formatConvertedPrice(0.035, pairQuote('ETHBTC', 'binance'), 'native', rates)).toMatch(/BTC/);
     expect(formatConvertedPrice(0.035, pairQuote('ETHBTC', 'binance'), 'USD', rates)).toBe('—');
   });

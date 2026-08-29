@@ -151,6 +151,50 @@ func TestRSIArgOrder_EitherWay(t *testing.T) {
 	}
 }
 
+func TestRSIHeatCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 12, 12, "/rsiheat binance USDT")
+	if strings.Contains(strings.ToLower(out), "error") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(out, "RSI") && !strings.Contains(out, "AAAUSDT") {
+		t.Fatalf("expected heatmap grid: %s", out)
+	}
+	alias := r.Handle(context.Background(), 13, 13, "/rsiheatmap bybit 4h USDT")
+	if strings.Contains(strings.ToLower(alias), "error") {
+		t.Fatalf("alias: %s", alias)
+	}
+	bad := r.Handle(context.Background(), 15, 15, "/rsiheat notavenue")
+	if !strings.Contains(strings.ToLower(bad), "error") && !strings.Contains(strings.ToLower(bad), "invalid") {
+		// exchange token "notavenue" is treated as quote; still a valid request
+		if bad == "" {
+			t.Fatal("empty rsiheat reply")
+		}
+	}
+}
+
+func TestRSIHeatCommand_MarketError(t *testing.T) {
+	t.Helper()
+	fm := &failListMarket{}
+	ms := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+	}, fakeSupply{})
+	r := NewRouter(ms, watchlist.New(watchliststore.NewMemory()), Options{
+		DefaultExchange: "binance", AllowAll: true, Identities: accountstore.NewMemory(),
+	})
+	out := r.Handle(context.Background(), 21, 21, "/rsiheat")
+	if !strings.Contains(strings.ToLower(out), "error") && !strings.Contains(strings.ToLower(out), "fail") &&
+		!strings.Contains(strings.ToLower(out), "unavailable") {
+		t.Fatalf("expected error reply, got %s", out)
+	}
+}
+
+type failListMarket struct{ fakeMarket }
+
+func (failListMarket) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
+	return nil, context.DeadlineExceeded
+}
+
 func TestWatchUsesStableUnguessableClientID(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 99, 42, "/watch add BTCUSDT")

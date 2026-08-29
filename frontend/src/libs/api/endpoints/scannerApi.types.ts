@@ -117,6 +117,19 @@ export type ScannerRuleListResponse = {
   rules?: ScannerRule[];
 };
 
+export type ScannerSetup = {
+  key: string;
+  exchange: string;
+  symbol: string;
+  interval: string;
+  factors: ScannerRuleType[];
+  score: number;
+  grade: 'A' | 'B' | 'C';
+  sameBar: boolean;
+  latestAt: string;
+  summaries: string[];
+};
+
 export type ScannerResultListResponse = {
   clientId?: string;
   count?: number;
@@ -124,6 +137,8 @@ export type ScannerResultListResponse = {
   limit?: number;
   offset?: number;
   results?: ScannerResult[];
+  setups?: ScannerSetup[];
+  hits24h?: number;
 };
 
 export type ScannerBacktestListResponse = {

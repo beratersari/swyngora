@@ -36,6 +36,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `OrderHeatmap` | CoinDetailPage |
 | `LiquidationHeatmap` | CoinDetailPage (Tape tab) |
 | `PriceChangeHeatmap` | HeatmapPage |
+| `RSIHeatmap` | HeatmapPage (`?view=rsi`) — ranked scatter |
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |
 | `SignalsSetupGrid` / `SignalsHitsTable` / `SignalsRuleForm` / `SignalsRulesTable` / `SignalsBacktestPanel` | SignalsPage |
 

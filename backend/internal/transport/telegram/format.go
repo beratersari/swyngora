@@ -792,6 +792,40 @@ func FormatIndicators(ser *domain.IndicatorSeries) string {
 	return b.String()
 }
 
+// FormatRSIHeatmap prints average RSI plus the most stretched names.
+func FormatRSIHeatmap(h *domain.RSIHeatmap) string {
+	if h == nil || len(h.Items) == 0 {
+		return "No RSI heatmap rows."
+	}
+	var b strings.Builder
+	b.WriteString(header("📉", "RSI heatmap"))
+	fmt.Fprintf(&b, "%s · %s · %s · RSI(%d)\n", code(string(h.Exchange)), code(h.Quote), code(h.Interval), h.Period)
+	if h.AverageRSI != nil {
+		fmt.Fprintf(&b, "avg %s  oversold %d  overbought %d\n", code(Float(*h.AverageRSI, 1)), h.OversoldCount, h.OverboughtCount)
+	}
+	b.WriteString(divider())
+	shown := 0
+	for _, row := range h.Items {
+		if row.RSI == nil {
+			continue
+		}
+		if row.Zone != domain.RSIZoneOversold && row.Zone != domain.RSIZoneOverbought && shown >= 12 {
+			continue
+		}
+		label := row.Base
+		if label == "" {
+			label = row.Symbol
+		}
+		fmt.Fprintf(&b, "  %2d  %-8s  %s\n", row.Rank, label, code(Float(*row.RSI, 1)))
+		shown++
+		if shown >= 20 {
+			break
+		}
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
 // FormatWatchlist formats watchlist items.
 func FormatWatchlist(items []domain.WatchlistItem) string {
 	if len(items) == 0 {
@@ -878,6 +912,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/lowmcap", "[exchange|all] [n]", "lowest circ. mcap"))
 	b.WriteString(cmdLine("/mcap", "<asset|pair>", "supply snapshot"))
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
+	b.WriteString(cmdLine("/rsiheat", "[exchange] [quote]", "RSI heatmap grid"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
 	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short if after-fee winner"))

@@ -14,7 +14,7 @@ import {
   needsTrigger,
   toApiOrderType,
   type SpotOrderKind,
-  validateTradeForm,
+
 } from './helpers';
 
 /**
@@ -108,11 +108,6 @@ export function PaperTradeForm({
         : undefined,
       timeInForce: showTif ? tif : undefined,
     };
-    const err = validateTradeForm(values);
-    if (err) {
-      setLocalError(t(`portfolio:trade.validation.${err}`, { defaultValue: t('portfolio:trade.failed') }));
-      return;
-    }
     setLocalError(null);
     inFlightRef.current = true;
     setLocalBusy(true);

@@ -669,6 +669,8 @@ func main() {
 	go marketSvc.StartWallSampler(ctx)
 	go marketSvc.StartHeatmapWarmer(ctx)
 	logger.Info("order heatmap warmer started", "venues", []string{"binance", "coinbase", "bybit"})
+	go marketSvc.StartRSIHeatmapWarmer(ctx)
+	logger.Info("rsi heatmap warmer started", "exchange", "binance", "interval", "1h", "limit", 100)
 
 	alertChecker := &pricealert.Checker{
 		Alerts:   alertSvc,
