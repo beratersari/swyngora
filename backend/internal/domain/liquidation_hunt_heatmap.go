@@ -60,15 +60,19 @@ func ParseHuntHeatmapRange(raw string) (HuntHeatmapSpec, error) {
 	}
 }
 
-// HuntHeatmapPricePoint is a mark used to place leverage bands at that time.
+// HuntHeatmapPricePoint is one venue's own print used to place bands
+// and to score later zone hits. Never mix venues on one series.
 type HuntHeatmapPricePoint struct {
 	Time  time.Time
 	Price float64
+	High  float64
+	Low   float64
 }
 
 // HuntHeatmapVenueSeries is one venue's history for the heatmap.
 type HuntHeatmapVenueSeries struct {
 	Exchange     Exchange
+	Prices       []HuntHeatmapPricePoint
 	OI           []FuturesSnapshot
 	LongShort    []FuturesSnapshot
 	Funding      []FuturesSnapshot
@@ -80,7 +84,6 @@ type HuntHeatmapInput struct {
 	Symbol string
 	Spec   HuntHeatmapSpec
 	To     time.Time
-	Prices []HuntHeatmapPricePoint
 	Venues []HuntHeatmapVenueSeries
 }
 
@@ -98,23 +101,24 @@ type HuntHeatmapGrid struct {
 
 // HuntHeatmapReport is a CoinGlass-style price × time liquidation intensity map.
 type HuntHeatmapReport struct {
-	Symbol    string          `json:"symbol"`
-	Range     string          `json:"range"`
-	From      time.Time       `json:"from"`
-	To        time.Time       `json:"to"`
-	StepSec   int             `json:"stepSec"`
-	PriceMin  float64         `json:"priceMin"`
-	PriceMax  float64         `json:"priceMax"`
-	PriceStep float64         `json:"priceStep"`
-	Prices    []float64       `json:"prices"`
-	Times     []time.Time     `json:"times"`
-	Binance   HuntHeatmapGrid `json:"binance"`
-	Bybit     HuntHeatmapGrid `json:"bybit"`
-	Combined  HuntHeatmapGrid `json:"combined"`
-	Note      string          `json:"note,omitempty"`
+	Symbol    string            `json:"symbol"`
+	Range     string            `json:"range"`
+	From      time.Time         `json:"from"`
+	To        time.Time         `json:"to"`
+	StepSec   int               `json:"stepSec"`
+	PriceMin  float64           `json:"priceMin"`
+	PriceMax  float64           `json:"priceMax"`
+	PriceStep float64           `json:"priceStep"`
+	Prices    []float64         `json:"prices"`
+	Times     []time.Time       `json:"times"`
+	Binance   HuntHeatmapGrid   `json:"binance"`
+	Bybit     HuntHeatmapGrid   `json:"bybit"`
+	Combined  HuntHeatmapGrid   `json:"combined"`
+	Review    HuntHeatmapReview `json:"review"`
+	Note      string            `json:"note,omitempty"`
 }
 
-const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance and Bybit are modeled separately; combined is the sum. Not a live order book and not financial advice."
+const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance and Bybit are modeled separately and never borrow each other's prices; combined is the sum. Not a live order book and not financial advice."
 
 // HuntHeatmapColumns is the UTC-aligned time axis ending at or before to.
 func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {
@@ -160,12 +164,13 @@ func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {
 		Times:   times,
 		Note:    huntHeatmapNote,
 	}
-	pMin, pMax := huntHeatmapPriceExtent(in.Prices, times)
+	pMin, pMax := huntHeatmapPriceExtent(allHuntVenuePrices(in.Venues), times)
 	nBin := HuntHeatmapPriceBins
 	if pMax <= pMin || len(times) == 0 {
 		out.Binance = emptyHuntGrid("binance", times, nBin)
 		out.Bybit = emptyHuntGrid("bybit", times, nBin)
 		out.Combined = emptyHuntGrid("combined", times, nBin)
+		out.Review = emptyHuntHeatmapReview()
 		return out
 	}
 	step := (pMax - pMin) / float64(nBin)
@@ -187,9 +192,22 @@ func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {
 	for _, v := range in.Venues {
 		byEx[v.Exchange] = v
 	}
-	out.Binance = buildHuntVenueGrid("binance", byEx[ExchangeBinance], times, spec.Step, in.Prices, pMin, pMax, step, nBin)
-	out.Bybit = buildHuntVenueGrid("bybit", byEx[ExchangeBybit], times, spec.Step, in.Prices, pMin, pMax, step, nBin)
+	out.Binance = buildHuntVenueGrid("binance", byEx[ExchangeBinance], times, spec.Step, byEx[ExchangeBinance].Prices, pMin, pMax, step, nBin)
+	out.Bybit = buildHuntVenueGrid("bybit", byEx[ExchangeBybit], times, spec.Step, byEx[ExchangeBybit].Prices, pMin, pMax, step, nBin)
 	out.Combined = sumHuntGrids("combined", out.Binance, out.Bybit)
+	out.Review = ReviewHuntHeatmap(out, in.Venues, to)
+	return out
+}
+
+func allHuntVenuePrices(venues []HuntHeatmapVenueSeries) []HuntHeatmapPricePoint {
+	n := 0
+	for _, v := range venues {
+		n += len(v.Prices)
+	}
+	out := make([]HuntHeatmapPricePoint, 0, n)
+	for _, v := range venues {
+		out = append(out, v.Prices...)
+	}
 	return out
 }
 

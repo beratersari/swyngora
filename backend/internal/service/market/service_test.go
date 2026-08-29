@@ -1771,6 +1771,54 @@ func TestGetLiquidationHuntHeatmap_BadRange(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationHuntHeatmap_NoCrossVenuePrices(t *testing.T) {
+	now := time.Now().UTC()
+	var binC, bybC []domain.Candle
+	var oi []domain.FuturesSnapshot
+	for i := 0; i < 50; i++ {
+		ts := now.Add(-time.Duration(50-i) * 30 * time.Minute)
+		binC = append(binC, domain.Candle{CloseTime: ts, Close: "100000", High: "100200", Low: "99800"})
+		bybC = append(bybC, domain.Candle{CloseTime: ts, Close: "50000", High: "50100", Low: "49900"})
+		oi = append(oi, domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, SampledAt: ts, Value: 5_000_000,
+		})
+	}
+	bin := &fakeMarket{candles: binC, ticker: &domain.Ticker24h{LastPrice: "100000"}}
+	byb := &fakeMarket{candles: bybC, ticker: &domain.Ticker24h{LastPrice: "50000"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	}, &fakeSupply{})
+	svc.SetFuturesHistory(huntHeatFut{oi: oi})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Binance.MaxIntensity <= 0 || got.Bybit.MaxIntensity <= 0 {
+		t.Fatalf("both venues should paint bin=%+v byb=%+v", got.Binance, got.Bybit)
+	}
+	if len(got.Review.Binance.Horizons) != 3 || got.Review.Combined.Exchange != "combined" {
+		t.Fatalf("review %+v", got.Review)
+	}
+
+	emptyByb := &fakeMarket{tickerErr: domain.ErrNotFound}
+	svc2 := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   emptyByb,
+	}, &fakeSupply{})
+	svc2.SetFuturesHistory(huntHeatFut{oi: oi})
+	got2, err := svc2.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.Binance.MaxIntensity <= 0 {
+		t.Fatalf("binance empty %+v", got2.Binance)
+	}
+	if got2.Bybit.MaxIntensity != 0 || got2.Bybit.ColumnsWithOI != 0 {
+		t.Fatalf("bybit used binance prices %+v", got2.Bybit)
+	}
+}
+
 func TestGetRawOrderBook(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance:  &fakeMarket{},

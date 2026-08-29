@@ -8,8 +8,11 @@ import {
   heatColor,
   hitTest,
   intensityFromNotional,
+  formatHitRate,
+  formatLookahead,
   pickGrid,
   pickMatrix,
+  pickReview,
 } from './LiquidationHeatmap.helpers';
 import type { LiquidationHeatmapData } from './LiquidationHeatmap.types';
 
@@ -76,6 +79,18 @@ const sample: LiquidationHeatmapData = {
     coverage: 1,
     columnsWithOi: 2,
   },
+  review: {
+    hotFrac: 0.6,
+    binance: {
+      exchange: 'binance',
+      horizons: [{ horizon: '1h', signals: 4, hits: 2, falseSignals: 2, hitRate: 0.5 }],
+    },
+    bybit: { exchange: 'bybit', horizons: [] },
+    combined: {
+      exchange: 'combined',
+      horizons: [{ horizon: '1h', signals: 4, hits: 3, falseSignals: 1, hitRate: 0.75 }],
+    },
+  },
 };
 
 describe('LiquidationHeatmap helpers', () => {
@@ -110,6 +125,14 @@ describe('LiquidationHeatmap helpers', () => {
     );
     expect(hover?.longs).toBe(80);
     expect(hover?.totals).toBe(80);
+  });
+
+  it('picks venue review and formats rates', () => {
+    expect(pickReview(sample, 'binance')?.horizons?.[0]?.hits).toBe(2);
+    expect(pickReview(sample, 'combined')?.horizons?.[0]?.hitRate).toBe(0.75);
+    expect(formatHitRate(0.5)).toBe('50%');
+    expect(formatLookahead(2700)).toBe('45m');
+    expect(formatLookahead(0)).toBe('—');
   });
 
   it('formats notional and time', () => {

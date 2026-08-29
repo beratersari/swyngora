@@ -51,9 +51,9 @@ func TestBuildHuntHeatmap_IntensityAtLeverageBand(t *testing.T) {
 		})
 	}
 	got := BuildHuntHeatmap(HuntHeatmapInput{
-		Symbol: "BTCUSDT", Spec: spec, To: to, Prices: prices,
+		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{{
-			Exchange: ExchangeBinance, OI: oi,
+			Exchange: ExchangeBinance, Prices: prices, OI: oi,
 		}},
 	})
 	if got.Range != "24h" || len(got.Times) != 48 || len(got.Prices) != HuntHeatmapPriceBins {
@@ -85,6 +85,7 @@ func TestBuildHuntHeatmap_ObservedLiquidationAndCombined(t *testing.T) {
 	prices := []HuntHeatmapPricePoint{{Time: last, Price: 50_000}}
 	bin := HuntHeatmapVenueSeries{
 		Exchange: ExchangeBinance,
+		Prices:   prices,
 		OI:       []FuturesSnapshot{{SampledAt: last, Value: 1_000_000}},
 		Liquidations: []LiquidationEvent{{
 			Exchange: ExchangeBinance, Side: LiquidationSideLong,
@@ -93,10 +94,11 @@ func TestBuildHuntHeatmap_ObservedLiquidationAndCombined(t *testing.T) {
 	}
 	byb := HuntHeatmapVenueSeries{
 		Exchange: ExchangeBybit,
+		Prices:   prices,
 		OI:       []FuturesSnapshot{{SampledAt: last, Value: 2_000_000}},
 	}
 	got := BuildHuntHeatmap(HuntHeatmapInput{
-		Symbol: "ETHUSDT", Spec: spec, To: to, Prices: prices,
+		Symbol: "ETHUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{bin, byb},
 	})
 	idx := huntPriceBin(49_000, got.PriceMin, got.PriceMax, got.PriceStep, len(got.Prices))
@@ -131,6 +133,71 @@ func TestHuntPriceBinEdges(t *testing.T) {
 	}
 	if huntPriceBin(0, 10, 110, 10, 10) != -1 {
 		t.Fatal(huntPriceBin(0, 10, 110, 10, 10))
+	}
+}
+
+func TestBuildHuntHeatmap_UsesOwnVenuePrices(t *testing.T) {
+	spec, _ := ParseHuntHeatmapRange("24h")
+	to := time.Date(2026, 8, 29, 14, 0, 0, 0, time.UTC)
+	cols := HuntHeatmapColumns(spec, to)
+	binPx, bybPx := 100_000.0, 50_000.0
+	var binP, bybP []HuntHeatmapPricePoint
+	var binOI, bybOI []FuturesSnapshot
+	for _, ts := range cols {
+		binP = append(binP, HuntHeatmapPricePoint{Time: ts, Price: binPx})
+		bybP = append(bybP, HuntHeatmapPricePoint{Time: ts, Price: bybPx})
+		binOI = append(binOI, FuturesSnapshot{SampledAt: ts, Value: 8_000_000})
+		bybOI = append(bybOI, FuturesSnapshot{SampledAt: ts, Value: 8_000_000})
+	}
+	got := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "BTCUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{
+			{Exchange: ExchangeBinance, Prices: binP, OI: binOI},
+			{Exchange: ExchangeBybit, Prices: bybP, OI: bybOI},
+		},
+	})
+	dist := HuntLiqDistance(10, HuntMaintenanceMargin)
+	binUp := binPx * (1 + dist)
+	bybUp := bybPx * (1 + dist)
+	last := len(got.Times) - 1
+	binIdx := huntPriceBin(binUp, got.PriceMin, got.PriceMax, got.PriceStep, len(got.Prices))
+	bybIdx := huntPriceBin(bybUp, got.PriceMin, got.PriceMax, got.PriceStep, len(got.Prices))
+	if binIdx == bybIdx {
+		t.Fatalf("expected distinct 10x bins bin=%d byb=%d", binIdx, bybIdx)
+	}
+	if got.Binance.Shorts[last][binIdx] <= 0 {
+		t.Fatalf("binance 10x short empty at %d", binIdx)
+	}
+	if got.Bybit.Shorts[last][bybIdx] <= 0 {
+		t.Fatalf("bybit 10x short empty at %d", bybIdx)
+	}
+	if got.Bybit.Shorts[last][binIdx] > got.Bybit.Shorts[last][bybIdx]*0.25 {
+		t.Fatalf("bybit should not paint binance 10x band idx=%d byb=%v", binIdx, lastCol(got.Bybit.Shorts))
+	}
+}
+
+func TestBuildHuntHeatmap_MissingVenuePricesStayEmpty(t *testing.T) {
+	spec, _ := ParseHuntHeatmapRange("24h")
+	to := time.Date(2026, 8, 29, 14, 0, 0, 0, time.UTC)
+	cols := HuntHeatmapColumns(spec, to)
+	var prices []HuntHeatmapPricePoint
+	var oi []FuturesSnapshot
+	for _, ts := range cols {
+		prices = append(prices, HuntHeatmapPricePoint{Time: ts, Price: 80_000})
+		oi = append(oi, FuturesSnapshot{SampledAt: ts, Value: 4_000_000})
+	}
+	got := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "ETHUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{
+			{Exchange: ExchangeBinance, Prices: prices, OI: oi},
+			{Exchange: ExchangeBybit, OI: oi},
+		},
+	})
+	if got.Binance.MaxIntensity <= 0 {
+		t.Fatalf("binance empty %+v", got.Binance)
+	}
+	if got.Bybit.MaxIntensity != 0 || got.Bybit.ColumnsWithOI != 0 {
+		t.Fatalf("bybit borrowed prices %+v", got.Bybit)
 	}
 }
 

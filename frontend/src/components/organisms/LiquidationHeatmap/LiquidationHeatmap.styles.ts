@@ -86,6 +86,29 @@ export const HeatCanvas = styled.canvas`
   height: 100%;
 `;
 
+export const ReviewTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+
+  th,
+  td {
+    padding: 5px 8px;
+    text-align: right;
+    border-bottom: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  }
+
+  th:first-child,
+  td:first-child {
+    text-align: left;
+  }
+
+  th {
+    color: ${({ theme }) => theme.semantic.text.secondary};
+    font-weight: 600;
+  }
+`;
+
 export const HoverCard = styled.div<{ $x: number; $y: number }>`
   position: absolute;
   left: ${({ $x }) => $x}px;

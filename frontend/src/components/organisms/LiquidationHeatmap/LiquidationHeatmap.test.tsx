@@ -34,6 +34,24 @@ const data: LiquidationHeatmapData = {
     coverage: 1,
     columnsWithOi: 2,
   },
+  review: {
+    combined: {
+      exchange: 'combined',
+      horizons: [
+        {
+          horizon: '1h',
+          signals: 10,
+          hits: 6,
+          falseSignals: 4,
+          hitRate: 0.6,
+          avgTimeToHitSec: 1800,
+          liqIncreased: 4,
+          liqIncreaseRate: 0.67,
+          pending: 2,
+        },
+      ],
+    },
+  },
 };
 
 describe('LiquidationHeatmap', () => {
@@ -55,6 +73,8 @@ describe('LiquidationHeatmap', () => {
     );
     expect(screen.getByTestId('liquidation-heatmap')).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-heatmap-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-heatmap-review')).toBeInTheDocument();
+    expect(screen.getByText('60%')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '12h' }));
     expect(onRangeChange).toHaveBeenCalledWith('12h');
     await user.click(screen.getByRole('button', { name: 'Binance' }));

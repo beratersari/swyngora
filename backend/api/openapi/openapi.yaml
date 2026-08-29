@@ -2419,8 +2419,12 @@ paths:
         and observed liquidation prints in that column.
 
         `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
-        separately; `combined` is the sum of their cells. Not a live book and
-        not financial advice.
+        separately and each venue uses only its own candles (never the
+        other exchange's price). `combined` is the sum of their cells.
+        `review` scores whether later price reached the hot zones within
+        1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
+        observed liquidations in that zone rose. Not a live book and not
+        financial advice.
       operationId: getMarketLiquidationHuntHeatmap
       tags: [Market]
       parameters:
@@ -7046,6 +7050,38 @@ components:
         binance: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
         bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
         combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        review: { $ref: '#/components/schemas/LiquidationHuntHeatmapReview' }
+        note: { type: string }
+    LiquidationHuntHeatmapReviewHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 12h] }
+        signals: { type: integer }
+        hits: { type: integer }
+        falseSignals: { type: integer }
+        pending: { type: integer, description: Columns without a full look-ahead or a venue-local forward path }
+        hitRate: { type: number }
+        avgTimeToHitSec: { type: number }
+        medianTimeToHitSec: { type: number }
+        liqIncreased: { type: integer }
+        liqIncreaseRate: { type: number, description: Share of hits where zone liquidation notional rose vs the prior window }
+        avgLiqBefore: { type: number }
+        avgLiqAfter: { type: number }
+    LiquidationHuntHeatmapReviewVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewHorizon' }
+    LiquidationHuntHeatmapReview:
+      type: object
+      description: Did later price actually reach the hot zones, and did real liquidations rise there
+      properties:
+        hotFrac: { type: number }
+        binance: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
+        bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
+        combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
         note: { type: string }
     OpenInterestLevel:
       type: object

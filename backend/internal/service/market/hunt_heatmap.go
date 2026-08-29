@@ -30,7 +30,6 @@ func (s *Service) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbo
 	}
 	now := time.Now().UTC()
 	from := now.Add(-spec.Window)
-	prices := s.huntHeatmapPrices(ctx, symbol, spec, from, now)
 	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
 	if ex != "all" {
 		want = []domain.Exchange{domain.Exchange(ex)}
@@ -42,7 +41,7 @@ func (s *Service) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbo
 		wg.Add(1)
 		go func(v domain.Exchange) {
 			defer wg.Done()
-			ser := s.huntHeatmapVenueSeries(ctx, v, symbol, from, now)
+			ser := s.huntHeatmapVenueSeries(ctx, v, symbol, spec, from, now)
 			mu.Lock()
 			venues = append(venues, ser)
 			mu.Unlock()
@@ -50,20 +49,20 @@ func (s *Service) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbo
 	}
 	wg.Wait()
 	got := domain.BuildHuntHeatmap(domain.HuntHeatmapInput{
-		Symbol: symbol, Spec: spec, To: now, Prices: prices, Venues: venues,
+		Symbol: symbol, Spec: spec, To: now, Venues: venues,
 	})
 	return &got, nil
 }
 
-func (s *Service) huntHeatmapPrices(ctx context.Context, symbol string, spec domain.HuntHeatmapSpec, from, to time.Time) []domain.HuntHeatmapPricePoint {
+func (s *Service) huntHeatmapPrices(ctx context.Context, ex domain.Exchange, symbol string, spec domain.HuntHeatmapSpec, from, to time.Time) []domain.HuntHeatmapPricePoint {
 	limit := spec.CandleLim
 	if limit < 10 {
 		limit = 80
 	}
 	f, t := from.Add(-spec.Step), to
-	bars, err := s.GetCandles(ctx, string(domain.ExchangeBinance), symbol, spec.CandleIV, limit, &f, &t)
-	if err != nil || len(bars) == 0 {
-		bars, err = s.GetCandles(ctx, string(domain.ExchangeBybit), symbol, spec.CandleIV, limit, &f, &t)
+	bars, err := s.GetCandles(ctx, string(ex), symbol, spec.CandleIV, limit, &f, &t)
+	if err != nil {
+		bars = nil
 	}
 	out := make([]domain.HuntHeatmapPricePoint, 0, len(bars))
 	lo, hi := from.Add(-2*time.Hour), to.Add(2*time.Hour)
@@ -76,20 +75,28 @@ func (s *Service) huntHeatmapPrices(ctx context.Context, symbol string, spec dom
 		if ts.Before(lo) || ts.After(hi) {
 			continue
 		}
-		out = append(out, domain.HuntHeatmapPricePoint{Time: ts, Price: px})
+		high, low := px, px
+		if v, err := strconv.ParseFloat(c.High, 64); err == nil && v > 0 {
+			high = v
+		}
+		if v, err := strconv.ParseFloat(c.Low, 64); err == nil && v > 0 {
+			low = v
+		}
+		out = append(out, domain.HuntHeatmapPricePoint{Time: ts, Price: px, High: high, Low: low})
 	}
 	if len(out) == 0 {
-		if tkr, terr := s.GetTicker24h(ctx, string(domain.ExchangeBinance), symbol); terr == nil && tkr != nil {
+		if tkr, terr := s.GetTicker24h(ctx, string(ex), symbol); terr == nil && tkr != nil {
 			if px, perr := strconv.ParseFloat(tkr.LastPrice, 64); perr == nil && px > 0 {
-				out = append(out, domain.HuntHeatmapPricePoint{Time: to, Price: px})
+				out = append(out, domain.HuntHeatmapPricePoint{Time: to, Price: px, High: px, Low: px})
 			}
 		}
 	}
 	return out
 }
 
-func (s *Service) huntHeatmapVenueSeries(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) domain.HuntHeatmapVenueSeries {
+func (s *Service) huntHeatmapVenueSeries(ctx context.Context, ex domain.Exchange, symbol string, spec domain.HuntHeatmapSpec, from, to time.Time) domain.HuntHeatmapVenueSeries {
 	ser := domain.HuntHeatmapVenueSeries{Exchange: ex}
+	ser.Prices = s.huntHeatmapPrices(ctx, ex, symbol, spec, from, to)
 	if s.futHist != nil {
 		ser.OI = s.huntHistSnapshots(ctx, domain.FuturesMetricOpenInterest, string(ex), symbol, from, to)
 		ser.LongShort = s.huntHistSnapshots(ctx, domain.FuturesMetricLongShort, string(ex), symbol, from, to)

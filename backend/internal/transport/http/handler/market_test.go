@@ -1240,6 +1240,9 @@ func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
 	if len(body.Times) == 0 || len(body.Prices) == 0 {
 		t.Fatalf("missing axes times=%d prices=%d", len(body.Times), len(body.Prices))
 	}
+	if len(body.Review.Binance.Horizons) != 3 || body.Review.HotFrac <= 0 {
+		t.Fatalf("review %+v", body.Review)
+	}
 }
 
 func TestGetLiquidationHuntHeatmap_BadRange(t *testing.T) {

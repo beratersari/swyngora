@@ -21,6 +21,7 @@ import type {
   LiqHeatVenue,
   LiquidationHeatmapData,
   LiquidationHeatmapGrid,
+  LiquidationHeatmapReviewVenue,
 } from './LiquidationHeatmap.types';
 
 type Rgb = { r: number; g: number; b: number };
@@ -33,6 +34,31 @@ export function pickGrid(
   if (venue === 'binance') return data.binance;
   if (venue === 'bybit') return data.bybit;
   return data.combined;
+}
+
+export function pickReview(
+  data: LiquidationHeatmapData | undefined,
+  venue: LiqHeatVenue,
+): LiquidationHeatmapReviewVenue | undefined {
+  const review = data?.review;
+  if (!review) return undefined;
+  if (venue === 'binance') return review.binance;
+  if (venue === 'bybit') return review.bybit;
+  return review.combined;
+}
+
+export function formatHitRate(n: number | undefined): string {
+  if (!Number.isFinite(n)) return '—';
+  return `${Math.round((n ?? 0) * 100)}%`;
+}
+
+export function formatLookahead(sec: number | undefined): string {
+  if (!Number.isFinite(sec) || !sec || sec <= 0) return '—';
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.round((sec % 3600) / 60);
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
 export function pickMatrix(

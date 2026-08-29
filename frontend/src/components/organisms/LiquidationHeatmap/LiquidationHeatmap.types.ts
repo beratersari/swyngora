@@ -1,7 +1,10 @@
 import type {
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapGrid,
+  LiquidationHuntHeatmapReviewVenue,
 } from '@/libs/api/endpoints/marketApi.types';
+
+export type { LiquidationHuntHeatmapReviewVenue };
 
 export type LiqHeatRange = '12h' | '24h' | '3d' | '7d';
 export type LiqHeatVenue = 'combined' | 'binance' | 'bybit';

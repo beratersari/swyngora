@@ -3187,6 +3187,33 @@ export interface components {
             binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            review?: components["schemas"]["LiquidationHuntHeatmapReview"];
+            note?: string;
+        };
+        LiquidationHuntHeatmapReviewHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "12h";
+            signals?: number;
+            hits?: number;
+            falseSignals?: number;
+            pending?: number;
+            hitRate?: number;
+            avgTimeToHitSec?: number;
+            medianTimeToHitSec?: number;
+            liqIncreased?: number;
+            liqIncreaseRate?: number;
+            avgLiqBefore?: number;
+            avgLiqAfter?: number;
+        };
+        LiquidationHuntHeatmapReviewVenue: {
+            exchange?: string;
+            horizons?: components["schemas"]["LiquidationHuntHeatmapReviewHorizon"][];
+        };
+        LiquidationHuntHeatmapReview: {
+            hotFrac?: number;
+            binance?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            bybit?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            combined?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             note?: string;
         };
         OpenInterestLevel: {

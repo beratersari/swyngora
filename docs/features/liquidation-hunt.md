@@ -52,7 +52,7 @@ Each venue report includes:
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_heatmap.go`, `orderbook_reach.go` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
 | Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
 | HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
 | MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
@@ -83,18 +83,37 @@ estimated liquidation notional** at that price in that column.
 | `3d` | 3 days | 1 hour |
 | `7d` | 7 days | 2 hours |
 
-Each column uses historical **open interest**, **mark price** (spot candles),
-the same **leverage mix** as the hunt (tilted by funding), and blended
-**account long/short**. Observed liquidation prints in that column are added
-into the matching price bin.
+Each column uses historical **open interest**, **that venue's own price**
+(spot candles from that exchange only), the same **leverage mix** as the hunt
+(tilted by funding), and blended **account long/short**. Observed liquidation
+prints in that column are added into the matching price bin.
 
-`binance` and `bybit` are modeled separately. `combined` is the **sum** of
-their cells (not an average). `longs` are longs that would liquidate if price
-falls into that bin; `shorts` are shorts that would liquidate if price rises
-into that bin; `totals` = longs + shorts.
+`binance` and `bybit` are modeled separately and **never borrow each other's
+prices**. If Bybit candles are missing, the Bybit grid stays empty. `combined`
+is the **sum** of their cells (not an average). `longs` are longs that would
+liquidate if price falls into that bin; `shorts` are shorts that would
+liquidate if price rises into that bin; `totals` = longs + shorts.
+
+### Did the hot zones work? (`review`)
+
+After the grid is built, each **high** area (contiguous bins at ≥ 60% of that
+column's peak, excluding the bin that already holds the venue mark) is checked
+against **later candles from the same venue**:
+
+| Horizon | Question |
+|---------|----------|
+| `1h` / `4h` / `12h` | Did that venue's own price trade through the zone? How long did it take? Did observed liquidations in that zone rise vs the same-length window before the signal? |
+
+- **Hit** — later venue-local candles traded through the zone.
+- **False signal** — full look-ahead exists and price never reached the zone.
+- **Pending** — not enough time yet, or that venue has no forward path (not
+  filled from the other exchange).
+- **Combined** uses the summed grid and counts a hit if **either** venue's own
+  price reached the zone.
 
 MCP: `get_liquidation_heatmap`.
 
 On the product web app the same grid is the **Liquidation heatmap** on coin
 detail → Tape: ranges 12h / 24h / 3d / 7d, venue Combined / Binance / Bybit,
-and All / Longs / Shorts. Combined is the sum of venue cells.
+and All / Longs / Shorts, plus the 1h / 4h / 12h hit-rate table. Combined is
+the sum of venue cells.

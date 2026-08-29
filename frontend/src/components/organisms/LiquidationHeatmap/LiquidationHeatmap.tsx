@@ -7,12 +7,15 @@ import { LIQ_HEATMAP_RANGES } from './LiquidationHeatmap.constants';
 import {
   buildLayout,
   drawHeatmap,
+  formatHitRate,
   formatLiqNotional,
   formatLiqPrice,
   formatLiqTime,
+  formatLookahead,
   hasHeatTape,
   hitTest,
   pickGrid,
+  pickReview,
 } from './LiquidationHeatmap.helpers';
 import {
   Chip,
@@ -21,6 +24,7 @@ import {
   HoverCard,
   MapFrame,
   Panel,
+  ReviewTable,
   ScaleBar,
   ScaleLegend,
   TitleRow,
@@ -60,6 +64,8 @@ export function LiquidationHeatmap({
   const [hover, setHover] = useState<LiqHeatHover | null>(null);
   const hasTape = hasHeatTape(data);
   const grid = pickGrid(data, venue);
+  const review = pickReview(data, venue);
+  const reviewRows = review?.horizons ?? [];
 
   useEffect(() => {
     const el = frameRef.current;
@@ -210,6 +216,49 @@ export function LiquidationHeatmap({
           ) : null}
         </MapFrame>
       )}
+
+      {reviewRows.length > 0 ? (
+        <>
+          <Text variant="h4" color="primary">
+            {t('liqHeatmap.review.title')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {t('liqHeatmap.review.subtitle')}
+          </Text>
+          <ReviewTable data-testid="liquidation-heatmap-review">
+            <thead>
+              <tr>
+                <th>{t('liqHeatmap.review.horizon')}</th>
+                <th>{t('liqHeatmap.review.signals')}</th>
+                <th>{t('liqHeatmap.review.hits')}</th>
+                <th>{t('liqHeatmap.review.falseSignals')}</th>
+                <th>{t('liqHeatmap.review.hitRate')}</th>
+                <th>{t('liqHeatmap.review.avgTime')}</th>
+                <th>{t('liqHeatmap.review.liqRose')}</th>
+                <th>{t('liqHeatmap.review.pending')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reviewRows.map((row) => (
+                <tr key={row.horizon ?? 'h'}>
+                  <td>{row.horizon ?? '—'}</td>
+                  <td>{row.signals ?? 0}</td>
+                  <td>{row.hits ?? 0}</td>
+                  <td>{row.falseSignals ?? 0}</td>
+                  <td>{formatHitRate(row.hitRate)}</td>
+                  <td>{formatLookahead(row.avgTimeToHitSec)}</td>
+                  <td>
+                    {row.hits
+                      ? `${row.liqIncreased ?? 0}/${row.hits} (${formatHitRate(row.liqIncreaseRate)})`
+                      : '—'}
+                  </td>
+                  <td>{row.pending ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </ReviewTable>
+        </>
+      ) : null}
     </Panel>
   );
 }

@@ -177,7 +177,7 @@
   },
   "liqHeatmap": {
     "title": "Liquidation heatmap",
-    "subtitle": "Estimated liquidation intensity by price and time from historical open interest, the hunt leverage mix, and observed prints. Binance and Bybit separately, or combined as a sum. Informational only — not financial advice.",
+    "subtitle": "Estimated liquidation intensity by price and time from historical open interest, each venue's own price, the hunt leverage mix, and observed prints. Binance and Bybit separately, or combined as a sum. Informational only — not financial advice.",
     "range": "Range",
     "venue": "Venue",
     "side": "Side",
@@ -188,6 +188,18 @@
     "shorts": "Shorts",
     "coverage": "{{pct}}% of columns have OI",
     "empty": "No liquidation map for this pair yet.",
+    "review": {
+      "title": "Did the hot zones work?",
+      "subtitle": "After each column, did that venue's own later price reach the bright areas within 1h / 4h / 12h, how long it took, and whether real liquidations in that zone rose. Missing venue data is not filled from the other exchange. Informational only — not financial advice.",
+      "horizon": "Horizon",
+      "signals": "Signals",
+      "hits": "Hits",
+      "falseSignals": "False",
+      "hitRate": "Hit rate",
+      "avgTime": "Avg time",
+      "liqRose": "Liqs rose",
+      "pending": "Pending"
+    },
     "ranges": {
       "12h": "12h",
       "24h": "24h",

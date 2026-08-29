@@ -22,6 +22,9 @@ export type OrderBookHeatmapQuery = NonNullable<
 >;
 export type LiquidationHuntHeatmap = components['schemas']['LiquidationHuntHeatmap'];
 export type LiquidationHuntHeatmapGrid = components['schemas']['LiquidationHuntHeatmapGrid'];
+export type LiquidationHuntHeatmapReview = components['schemas']['LiquidationHuntHeatmapReview'];
+export type LiquidationHuntHeatmapReviewVenue = components['schemas']['LiquidationHuntHeatmapReviewVenue'];
+export type LiquidationHuntHeatmapReviewHorizon = components['schemas']['LiquidationHuntHeatmapReviewHorizon'];
 export type LiquidationHuntHeatmapQuery = NonNullable<
   operations['getMarketLiquidationHuntHeatmap']['parameters']['query']
 >;

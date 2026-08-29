@@ -282,20 +282,49 @@ type huntHeatmapGridDTO struct {
 }
 
 type huntHeatmapResponse struct {
-	Symbol    string             `json:"symbol"`
-	Range     string             `json:"range"`
-	From      time.Time          `json:"from"`
-	To        time.Time          `json:"to"`
-	StepSec   int                `json:"stepSec"`
-	PriceMin  float64            `json:"priceMin"`
-	PriceMax  float64            `json:"priceMax"`
-	PriceStep float64            `json:"priceStep"`
-	Prices    []float64          `json:"prices"`
-	Times     []time.Time        `json:"times"`
-	Binance   huntHeatmapGridDTO `json:"binance"`
-	Bybit     huntHeatmapGridDTO `json:"bybit"`
-	Combined  huntHeatmapGridDTO `json:"combined"`
-	Note      string             `json:"note"`
+	Symbol    string               `json:"symbol"`
+	Range     string               `json:"range"`
+	From      time.Time            `json:"from"`
+	To        time.Time            `json:"to"`
+	StepSec   int                  `json:"stepSec"`
+	PriceMin  float64              `json:"priceMin"`
+	PriceMax  float64              `json:"priceMax"`
+	PriceStep float64              `json:"priceStep"`
+	Prices    []float64            `json:"prices"`
+	Times     []time.Time          `json:"times"`
+	Binance   huntHeatmapGridDTO   `json:"binance"`
+	Bybit     huntHeatmapGridDTO   `json:"bybit"`
+	Combined  huntHeatmapGridDTO   `json:"combined"`
+	Review    huntHeatmapReviewDTO `json:"review"`
+	Note      string               `json:"note"`
+}
+
+type huntHeatmapReviewHorizonDTO struct {
+	Horizon            string  `json:"horizon"`
+	Signals            int     `json:"signals"`
+	Hits               int     `json:"hits"`
+	FalseSignals       int     `json:"falseSignals"`
+	Pending            int     `json:"pending"`
+	HitRate            float64 `json:"hitRate"`
+	AvgTimeToHitSec    float64 `json:"avgTimeToHitSec"`
+	MedianTimeToHitSec float64 `json:"medianTimeToHitSec"`
+	LiqIncreased       int     `json:"liqIncreased"`
+	LiqIncreaseRate    float64 `json:"liqIncreaseRate"`
+	AvgLiqBefore       float64 `json:"avgLiqBefore"`
+	AvgLiqAfter        float64 `json:"avgLiqAfter"`
+}
+
+type huntHeatmapReviewVenueDTO struct {
+	Exchange string                        `json:"exchange"`
+	Horizons []huntHeatmapReviewHorizonDTO `json:"horizons"`
+}
+
+type huntHeatmapReviewDTO struct {
+	HotFrac  float64                   `json:"hotFrac"`
+	Binance  huntHeatmapReviewVenueDTO `json:"binance"`
+	Bybit    huntHeatmapReviewVenueDTO `json:"bybit"`
+	Combined huntHeatmapReviewVenueDTO `json:"combined"`
+	Note     string                    `json:"note"`
 }
 
 func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
@@ -309,8 +338,32 @@ func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
 		Binance:  huntGridToDTO(a.Binance),
 		Bybit:    huntGridToDTO(a.Bybit),
 		Combined: huntGridToDTO(a.Combined),
+		Review:   huntReviewToDTO(a.Review),
 		Note:     a.Note,
 	}
+}
+
+func huntReviewToDTO(r domain.HuntHeatmapReview) huntHeatmapReviewDTO {
+	return huntHeatmapReviewDTO{
+		HotFrac:  r.HotFrac,
+		Binance:  huntReviewVenueToDTO(r.Binance),
+		Bybit:    huntReviewVenueToDTO(r.Bybit),
+		Combined: huntReviewVenueToDTO(r.Combined),
+		Note:     r.Note,
+	}
+}
+
+func huntReviewVenueToDTO(v domain.HuntHeatmapReviewVenue) huntHeatmapReviewVenueDTO {
+	hs := make([]huntHeatmapReviewHorizonDTO, 0, len(v.Horizons))
+	for _, h := range v.Horizons {
+		hs = append(hs, huntHeatmapReviewHorizonDTO{
+			Horizon: h.Horizon, Signals: h.Signals, Hits: h.Hits, FalseSignals: h.FalseSignals,
+			Pending: h.Pending, HitRate: h.HitRate, AvgTimeToHitSec: h.AvgTimeToHitSec,
+			MedianTimeToHitSec: h.MedianTimeToHitSec, LiqIncreased: h.LiqIncreased,
+			LiqIncreaseRate: h.LiqIncreaseRate, AvgLiqBefore: h.AvgLiqBefore, AvgLiqAfter: h.AvgLiqAfter,
+		})
+	}
+	return huntHeatmapReviewVenueDTO{Exchange: v.Exchange, Horizons: hs}
 }
 
 func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {

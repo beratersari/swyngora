@@ -188,6 +188,18 @@
     "shorts": "Short",
     "coverage": "Sütunların %{{pct}} kadarında OI var",
     "empty": "Bu çift için henüz likidasyon haritası yok.",
+    "review": {
+      "title": "Sıcak bölgeler tuttu mu?",
+      "subtitle": "Her sütundan sonra o borsanın kendi fiyatı parlak bölgelere 1s / 4s / 12s içinde ulaştı mı, ne kadar sürdü ve o bölgede gerçek likidasyonlar arttı mı. Eksik borsa verisi diğerinden doldurulmaz. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+      "horizon": "Ufuk",
+      "signals": "Sinyal",
+      "hits": "İsabet",
+      "falseSignals": "Yanlış",
+      "hitRate": "İsabet oranı",
+      "avgTime": "Ort. süre",
+      "liqRose": "Liq arttı",
+      "pending": "Bekleyen"
+    },
     "ranges": {
       "12h": "12s",
       "24h": "24s",
