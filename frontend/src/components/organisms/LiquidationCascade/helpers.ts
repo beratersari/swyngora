@@ -35,3 +35,29 @@ export function hottestWindow(venue: CascadeVenue | undefined): CascadeWindow | 
   if (!venue) return undefined;
   return (venue.windows ?? []).find((w) => w.window === venue.hottest);
 }
+
+export function formatDurationSec(sec: number | undefined): string {
+  const n = typeof sec === 'number' && Number.isFinite(sec) ? Math.max(0, Math.round(sec)) : 0;
+  if (n < 60) return `${Math.max(1, n)}s`;
+  const m = Math.round(n / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm === 0 ? `${h}h` : `${h}h ${rm}m`;
+}
+
+export function formatClock(iso: string | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+export function priceMoveTone(pct: string | undefined): 'long' | 'short' | 'none' {
+  if (!pct) return 'none';
+  const n = Number(pct);
+  if (!Number.isFinite(n) || n === 0) return 'none';
+  return n < 0 ? 'long' : 'short';
+}

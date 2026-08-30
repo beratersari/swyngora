@@ -2540,8 +2540,10 @@ paths:
         the median of prior blocks over ~6 hours. `grade` is quiet / elevated
         / cascade / extreme. Binance and Bybit are scored **separately**.
         `both.agree` is true only when the **same side** is cascading on both
-        venues. `symbol=all` pools every tracked coin (market-wide risk).
-        Informational only.
+        venues. `episodes` lists each wave in the last 24h (start, duration,
+        long/short notional, price move). Overlapping same-side waves on both
+        venues are one `combined` episode. `symbol=all` pools every tracked
+        coin (market-wide risk; no price). Informational only.
       operationId: getMarketLiquidationCascade
       tags: [Market]
       parameters:
@@ -7318,8 +7320,36 @@ components:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationCascadeVenue' }
         both: { $ref: '#/components/schemas/MarketLiquidationCascadeBoth' }
+        episodes:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeEpisode' }
         summary: { type: string }
         note: { type: string }
+    MarketLiquidationCascadeEpisode:
+      type: object
+      description: One liquidation wave (open or finished) in the last 24h
+      properties:
+        symbol: { type: string }
+        exchange: { type: string, description: binance | bybit | both }
+        combined: { type: boolean, description: Same-side wave on Binance and Bybit at once }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time }
+        open: { type: boolean }
+        durationSec: { type: integer }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+        peakRatio: { type: number }
+        priceOpen: { type: string }
+        priceClose: { type: string }
+        priceHigh: { type: string }
+        priceLow: { type: string }
+        priceChangePct: { type: string, description: Signed percent, e.g. -1.24 }
+        summary: { type: string }
     MarketLiquidationCascadeHit:
       type: object
       properties:

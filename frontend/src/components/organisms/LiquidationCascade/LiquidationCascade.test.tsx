@@ -39,6 +39,20 @@ describe('LiquidationCascade', () => {
               windows: [{ window: '1m', longNotional: '9000', shortNotional: '80', maxRatio: 7, grade: 'cascade' }],
             },
           ],
+          episodes: [
+            {
+              exchange: 'both',
+              combined: true,
+              side: 'long',
+              grade: 'cascade',
+              startedAt: '2026-08-30T15:21:00.000Z',
+              durationSec: 600,
+              longNotional: '20000',
+              shortNotional: '100',
+              priceChangePct: '-1.20',
+              open: false,
+            },
+          ],
         }}
         hits={[{ symbol: 'SOLUSDT', side: 'long', grade: 'elevated', score: 40, hottest: '5m', both: false }]}
       />,
@@ -48,6 +62,8 @@ describe('LiquidationCascade', () => {
     expect(screen.getAllByText(/binance/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/bybit/i).length).toBeGreaterThan(0);
     expect(screen.getByText('SOLUSDT')).toBeInTheDocument();
+    expect(screen.getByText(/15:21/)).toBeInTheDocument();
+    expect(screen.getByText(/-1\.20%/)).toBeInTheDocument();
   });
 
   it('opens a bursting coin from the hits list', async () => {

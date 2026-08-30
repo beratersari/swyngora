@@ -3,11 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
 import { useDisplayCurrency } from '@/libs/hooks';
-import { formatRatio, gradeTone, orderedWindows, sideTone, venueLabel } from './helpers';
+import {
+  formatClock,
+  formatDurationSec,
+  formatRatio,
+  gradeTone,
+  orderedWindows,
+  priceMoveTone,
+  sideTone,
+  venueLabel,
+} from './helpers';
 import {
   Banner,
   BannerTitle,
   BothNote,
+  EpisodeTable,
+  EpisodeWrap,
   GradeChip,
   HitButton,
   HitsTable,
@@ -121,6 +132,48 @@ export function LiquidationCascade({
           );
         })}
       </VenueGrid>
+
+      {(report?.episodes ?? []).length > 0 ? (
+        <EpisodeWrap>
+          <Text variant="bodySm" weight={700}>
+            {t('liquidations:cascade.episodesTitle')}
+          </Text>
+          <EpisodeTable>
+            <WindowHead>{t('liquidations:cascade.started')}</WindowHead>
+            <WindowHead>{t('liquidations:cascade.duration')}</WindowHead>
+            <WindowHead>{t('liquidations:exchange')}</WindowHead>
+            <WindowHead>{t('liquidations:cascade.side')}</WindowHead>
+            <WindowHead>{t('liquidations:cascade.gradeLabel')}</WindowHead>
+            <WindowHead>{t('liquidations:cards.long')}</WindowHead>
+            <WindowHead>{t('liquidations:cards.short')}</WindowHead>
+            <WindowHead>{t('liquidations:cascade.price')}</WindowHead>
+            <WindowHead>{t('liquidations:cascade.status')}</WindowHead>
+            {(report?.episodes ?? []).map((ep, i) => {
+              const g = gradeTone(ep.grade);
+              const s = sideTone(ep.side);
+              const move = priceMoveTone(ep.priceChangePct);
+              const venue = ep.combined ? t('liquidations:cascade.bothVenues') : venueLabel(ep.exchange);
+              return (
+                <span key={`${ep.exchange}-${ep.startedAt}-${i}`} style={{ display: 'contents' }}>
+                  <WindowCell $hot={ep.open}>{formatClock(ep.startedAt)}</WindowCell>
+                  <WindowCell>{formatDurationSec(ep.durationSec)}</WindowCell>
+                  <WindowCell $hot={ep.combined}>{venue}</WindowCell>
+                  <SideChip $tone={s}>{t(`liquidations:cascade.sides.${s}`)}</SideChip>
+                  <GradeChip $tone={g}>{t(`liquidations:cascade.grades.${g}`)}</GradeChip>
+                  <WindowCell>{formatCompact(ep.longNotional, 'USDT')}</WindowCell>
+                  <WindowCell>{formatCompact(ep.shortNotional, 'USDT')}</WindowCell>
+                  <SideChip $tone={move}>
+                    {ep.priceChangePct ? `${ep.priceChangePct}%` : '—'}
+                  </SideChip>
+                  <WindowCell>
+                    {ep.open ? t('liquidations:cascade.running') : t('liquidations:cascade.ended')}
+                  </WindowCell>
+                </span>
+              );
+            })}
+          </EpisodeTable>
+        </EpisodeWrap>
+      ) : null}
 
       {hits && hits.length > 0 ? (
         <HitsWrap>

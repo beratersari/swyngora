@@ -1261,7 +1261,7 @@ func TestGetLiquidationCascade_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" || len(body.Venues) != 2 || body.Note == "" {
+	if body.Symbol != "BTCUSDT" || len(body.Venues) != 2 || body.Note == "" || body.Episodes == nil {
 		t.Fatalf("%+v", body)
 	}
 }

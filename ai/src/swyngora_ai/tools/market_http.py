@@ -3816,9 +3816,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Detect a liquidation cascade: a short burst of long or short "
                 "liquidations far above that stream's own typical rate "
-                "(1m / 5m / 15m vs the prior 6 hours). Binance and Bybit are "
-                "scored separately. both.agree is true only when the same side "
-                "is cascading on both venues. symbol=all is market-wide."
+                "(1m / 5m / 15m vs the prior 6 hours). episodes lists each "
+                "wave in the last 24h (start, duration, long/short notional, "
+                "price move). Binance and Bybit are scored separately; a "
+                "combined episode is the same-side wave on both venues at "
+                "once. symbol=all is market-wide."
             ),
             args_schema=LiquidationCascadeInput,
         ),

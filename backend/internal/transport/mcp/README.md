@@ -19,7 +19,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations (Binance USD-M + Bybit linear) |
 | `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap |
 | `get_liquidation_levels` | CoinGlass-style price-level bars for one coin, or time bars of total liquidations (`symbol=all`) |
-| `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); Binance and Bybit separate; `symbol=all` is market-wide |
+| `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); `episodes` = start, duration, long/short notional, price; combined when both venues fire together |
 | `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |

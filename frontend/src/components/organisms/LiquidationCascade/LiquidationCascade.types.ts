@@ -39,12 +39,37 @@ export type CascadeBoth = {
   summary?: string;
 };
 
+export type CascadeEpisode = {
+  symbol?: string;
+  exchange?: string;
+  combined?: boolean;
+  side?: CascadeSide;
+  grade?: CascadeGrade;
+  score?: number;
+  startedAt?: string;
+  endedAt?: string;
+  open?: boolean;
+  durationSec?: number;
+  longNotional?: string;
+  shortNotional?: string;
+  totalNotional?: string;
+  count?: number;
+  peakRatio?: number;
+  priceOpen?: string;
+  priceClose?: string;
+  priceHigh?: string;
+  priceLow?: string;
+  priceChangePct?: string;
+  summary?: string;
+};
+
 export type CascadeReport = {
   symbol?: string;
   exchange?: string;
   asOf?: string;
   venues?: CascadeVenue[];
   both?: CascadeBoth;
+  episodes?: CascadeEpisode[];
   summary?: string;
   note?: string;
 };

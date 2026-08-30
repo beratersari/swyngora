@@ -1527,8 +1527,10 @@ export interface paths {
          *     the median of prior blocks over ~6 hours. `grade` is quiet / elevated
          *     / cascade / extreme. Binance and Bybit are scored **separately**.
          *     `both.agree` is true only when the **same side** is cascading on both
-         *     venues. `symbol=all` pools every tracked coin (market-wide risk).
-         *     Informational only.
+         *     venues. `episodes` lists each wave in the last 24h (start, duration,
+         *     long/short notional, price move). Overlapping same-side waves on both
+         *     venues are one `combined` episode. `symbol=all` pools every tracked
+         *     coin (market-wide risk; no price). Informational only.
          */
         get: operations["getMarketLiquidationCascade"];
         put?: never;
@@ -3975,8 +3977,40 @@ export interface components {
             asOf?: string;
             venues?: components["schemas"]["MarketLiquidationCascadeVenue"][];
             both?: components["schemas"]["MarketLiquidationCascadeBoth"];
+            episodes?: components["schemas"]["MarketLiquidationCascadeEpisode"][];
             summary?: string;
             note?: string;
+        };
+        /** @description One liquidation wave (open or finished) in the last 24h */
+        MarketLiquidationCascadeEpisode: {
+            symbol?: string;
+            /** @description binance | bybit | both */
+            exchange?: string;
+            /** @description Same-side wave on Binance and Bybit at once */
+            combined?: boolean;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            open?: boolean;
+            durationSec?: number;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+            peakRatio?: number;
+            priceOpen?: string;
+            priceClose?: string;
+            priceHigh?: string;
+            priceLow?: string;
+            /** @description Signed percent */
+            priceChangePct?: string;
+            summary?: string;
         };
         MarketLiquidationCascadeHit: {
             symbol?: string;

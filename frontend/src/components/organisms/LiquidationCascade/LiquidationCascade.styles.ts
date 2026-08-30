@@ -144,6 +144,23 @@ export const HitsTable = styled.div`
   font-variant-numeric: tabular-nums;
 `;
 
+export const EpisodeWrap = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+`;
+
+export const EpisodeTable = styled.div`
+  display: grid;
+  grid-template-columns: 72px 56px 88px 64px 80px minmax(72px, 1fr) minmax(72px, 1fr) 88px 56px;
+  gap: 8px 10px;
+  align-items: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-x: auto;
+`;
+
 export const HitButton = styled.button`
   margin: 0;
   padding: 0;

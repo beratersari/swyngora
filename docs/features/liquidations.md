@@ -33,6 +33,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `grade` is `quiet` / `elevated` (≥2×) / `cascade` (≥4× + enough hits) / `extreme` (≥8×).
   - Binance and Bybit are scored **separately**. `both.agree` is true only when the **same side** is `cascade` or hotter on both venues.
   - `symbol=all` pools every tracked coin (market-wide risk). `GET /liquidation-cascade/scan` adds ranked bursting coins.
+  - `episodes` lists each wave in the last 24h: when it started, how long it lasted, long vs short notional, and the price move. A still-running wave has `open=true`. Overlapping same-side waves on Binance and Bybit become one `combined` episode.
 
 ## Cascade grades
 
@@ -47,7 +48,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation.go`, `liquidation_levels.go`, `liquidation_cascade.go` |
+| Domain | `backend/internal/domain/liquidation.go`, `liquidation_levels.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
 | Adapters | `adapter/binance/liqhub.go`, `adapter/bybit/liqhub.go` |
 | Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades` |
 | HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan` |

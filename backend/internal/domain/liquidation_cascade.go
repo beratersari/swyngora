@@ -20,11 +20,16 @@ const (
 	CascadeSideNone = "none"
 	CascadeSideBoth = "both"
 
-	cascadeLookback     = 6 * time.Hour
-	cascadeStep         = time.Minute
-	cascadeMinTypical1m = 500.0
-	DefaultCascadeMin   = CascadeGradeElevated
-	CascadeScanMaxHits  = 40
+	cascadeLookback         = 6 * time.Hour
+	cascadeEpisodeLookback  = 24 * time.Hour
+	cascadeStep             = time.Minute
+	cascadeMinTypical1m     = 500.0
+	cascadeEpisodeMinPrior  = 20
+	cascadeEpisodeQuietGap  = 2
+	DefaultCascadeMin       = CascadeGradeElevated
+	CascadeScanMaxHits      = 40
+	CascadeEpisodeMax       = 30
+	CascadeExchangeBoth     = "both"
 )
 
 // CascadeWindows are short bursts compared to that coin/venue's own typical.
@@ -80,6 +85,31 @@ type CascadeBoth struct {
 	Summary string
 }
 
+// CascadeEpisode is one completed or still-open liquidation wave.
+type CascadeEpisode struct {
+	Symbol         string
+	Exchange       string // binance | bybit | both
+	Combined       bool
+	Side           string
+	Grade          string // peak grade in the wave
+	Score          float64
+	StartedAt      time.Time
+	EndedAt        time.Time // zero while open
+	Open           bool
+	DurationSec    int64
+	LongNotional   string
+	ShortNotional  string
+	TotalNotional  string
+	Count          int
+	PeakRatio      float64
+	PriceOpen      string
+	PriceClose     string
+	PriceHigh      string
+	PriceLow       string
+	PriceChangePct string
+	Summary        string
+}
+
 // CascadeReport is one coin (or symbol=all for the pooled market).
 type CascadeReport struct {
 	Symbol   string
@@ -87,6 +117,7 @@ type CascadeReport struct {
 	AsOf     time.Time
 	Venues   []CascadeVenue
 	Both     *CascadeBoth
+	Episodes []CascadeEpisode
 	Summary  string
 	Note     string
 }
@@ -208,6 +239,7 @@ func BuildCascadeReport(symbol, exchange string, events []LiquidationEvent, now 
 		Exchange: ex,
 		AsOf:     now.UTC(),
 		Venues:   make([]CascadeVenue, 0, len(want)),
+		Episodes: []CascadeEpisode{},
 		Note:     cascadeNote,
 	}
 	for _, v := range want {
@@ -218,6 +250,11 @@ func BuildCascadeReport(symbol, exchange string, events []LiquidationEvent, now 
 	})
 	if ex == "all" {
 		out.Both = DetectCascadeBoth(out.Venues)
+		bn := DetectCascadeEpisodes(ExchangeBinance, symbol, events, now)
+		bb := DetectCascadeEpisodes(ExchangeBybit, symbol, events, now)
+		out.Episodes = MergeCascadeEpisodes(bn, bb, now)
+	} else {
+		out.Episodes = DetectCascadeEpisodes(Exchange(ex), symbol, events, now)
 	}
 	out.Summary = explainCascadeReport(out)
 	return out
@@ -279,7 +316,7 @@ func BuildCascadeScan(exchange string, events []LiquidationEvent, now time.Time)
 	return out
 }
 
-const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Binance and Bybit are scored separately; both=true only when the same side is cascading on both. Informational only."
+const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Binance and Bybit are scored separately; a combined episode is the same-side wave on both venues at once. Informational only."
 
 type cascadeBucket struct {
 	start time.Time
@@ -289,8 +326,17 @@ type cascadeBucket struct {
 }
 
 func cascadeBuckets(events []LiquidationEvent, now time.Time) []cascadeBucket {
-	from := now.Add(-cascadeLookback)
-	n := int(cascadeLookback / cascadeStep)
+	return cascadeBucketsRange(events, now.Add(-cascadeLookback), now)
+}
+
+func cascadeBucketsRange(events []LiquidationEvent, from, now time.Time) []cascadeBucket {
+	if !from.Before(now) {
+		return nil
+	}
+	n := int(now.Sub(from) / cascadeStep)
+	if n < 1 {
+		return nil
+	}
 	out := make([]cascadeBucket, n)
 	for i := 0; i < n; i++ {
 		out[i].start = from.Add(time.Duration(i) * cascadeStep)

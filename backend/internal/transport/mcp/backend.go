@@ -1203,10 +1203,34 @@ func cascadeReportJSON(got *domain.CascadeReport) map[string]any {
 		}
 		venues = append(venues, row)
 	}
+	episodes := make([]map[string]any, 0, len(got.Episodes))
+	for _, ep := range got.Episodes {
+		row := map[string]any{
+			"symbol": ep.Symbol, "exchange": ep.Exchange, "combined": ep.Combined,
+			"side": ep.Side, "grade": ep.Grade, "score": ep.Score, "open": ep.Open,
+			"durationSec": ep.DurationSec, "longNotional": ep.LongNotional,
+			"shortNotional": ep.ShortNotional, "totalNotional": ep.TotalNotional,
+			"count": ep.Count, "peakRatio": ep.PeakRatio, "summary": ep.Summary,
+		}
+		if !ep.StartedAt.IsZero() {
+			row["startedAt"] = ep.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !ep.EndedAt.IsZero() {
+			row["endedAt"] = ep.EndedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if ep.PriceOpen != "" {
+			row["priceOpen"] = ep.PriceOpen
+			row["priceClose"] = ep.PriceClose
+			row["priceHigh"] = ep.PriceHigh
+			row["priceLow"] = ep.PriceLow
+			row["priceChangePct"] = ep.PriceChangePct
+		}
+		episodes = append(episodes, row)
+	}
 	out := map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange,
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
-		"venues": venues, "summary": got.Summary, "note": got.Note,
+		"venues": venues, "episodes": episodes, "summary": got.Summary, "note": got.Note,
 	}
 	if got.Both != nil {
 		out["both"] = map[string]any{
