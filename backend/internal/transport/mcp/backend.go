@@ -2079,6 +2079,41 @@ func (b *Backend) CreateOrderBookAlert(ctx context.Context, clientID, exchange, 
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Kind:        string(domain.AlertKindLiqFeed),
+		TargetPrice: minDownSeconds,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
+func (b *Backend) CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:  clientID,
+		Exchange:  exchange,
+		Symbol:    symbol,
+		Kind:      string(domain.AlertKindLiqCascade),
+		Condition: minGrade,
+		Mode:      mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)

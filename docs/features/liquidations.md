@@ -42,6 +42,11 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
     leftover piece stays and `missingSeconds` is how much is still missing.
     No history (or a 404) leaves the gap as-is. Binance is never used to fill
     Bybit, and the other way around.
+- Alerts (same `POST /api/v1/alerts` desk): `kind=liquidation_feed` fires once when
+  Binance or Bybit stay down/stalled longer than `targetPrice` seconds (default 300)
+  and re-arms only after the feed is live again. `kind=liquidation_cascade` fires
+  once when a coin (or `symbol=all`) hits grade `cascade` or hotter; the webhook
+  names the **exchange** and **coin**. See [`price-alerts.md`](price-alerts.md).
 - Side meaning: **long** = long positions were force-closed; **short** = shorts were force-closed.
 - Live windows are computed from an in-memory 24h book. Every print is written to SQLite (Binance and Bybit in separate rows). On startup the last **24 hours** are reloaded, including live-coverage clocks, so 1h/4h/12h/24h totals stay usable after a restart. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
 - Chart (`GET /liquidation-levels`): CoinGlass-style **horizontal** price bars

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -356,6 +357,38 @@ func TestCreate_OrderBookImbalanceAndWall(t *testing.T) {
 	}
 }
 
+func TestCreate_LiquidationFeedAndCascade(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	feed, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.Kind != domain.AlertKindLiqFeed || feed.Symbol != domain.LiqAlertSymbolAll || !feed.Armed || feed.Mode != domain.AlertModeRepeating {
+		t.Fatalf("%+v", feed)
+	}
+	cas, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_cascade", Exchange: "all", Symbol: "BTCUSDT", Condition: "cascade",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cas.Kind != domain.AlertKindLiqCascade || cas.Symbol != "BTCUSDT" || string(cas.Exchange) != "all" || !cas.Armed {
+		t.Fatalf("%+v", cas)
+	}
+	mkt, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_cascade", Symbol: "all",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mkt.Symbol != domain.LiqAlertSymbolAll {
+		t.Fatalf("%+v", mkt)
+	}
+}
+
 type fakeBook struct {
 	mu    sync.Mutex
 	books map[string]*domain.OrderBook
@@ -447,5 +480,81 @@ func TestChecker_OrderBookWallAppearAndClear(t *testing.T) {
 	cleared, _ := svc.Get(ctx, "w", a.ID)
 	if !cleared.Armed {
 		t.Fatalf("re-arm after wall gone %+v", cleared)
+	}
+}
+
+type fakeLiq struct {
+	feed domain.LiquidationFeed
+	rep  *domain.CascadeReport
+	scan *domain.CascadeScan
+}
+
+func (f *fakeLiq) GetLiquidationFeed(string) domain.LiquidationFeed { return f.feed }
+func (f *fakeLiq) GetLiquidationCascade(context.Context, string, string) (*domain.CascadeReport, error) {
+	return f.rep, nil
+}
+func (f *fakeLiq) ScanLiquidationCascades(context.Context, string) (*domain.CascadeScan, error) {
+	return f.scan, nil
+}
+
+func TestChecker_LiquidationFeedNoRetrigger(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "ff", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
+	src := &fakeLiq{feed: domain.LiquidationFeed{Venues: []domain.LiquidationVenueHealth{{
+		Exchange: "bybit", Live: false, LastSeenAt: now.Add(-3 * time.Minute),
+	}}}}
+	c := &Checker{Alerts: svc, Liquidations: src, now: func() time.Time { return now }}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "ff", a.ID)
+	if got.Armed || got.TriggeredPrice < 170 {
+		t.Fatalf("first fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "ff", a.ID)
+	if still.TriggeredAt == nil || got.TriggeredAt == nil || !still.TriggeredAt.Equal(*got.TriggeredAt) {
+		t.Fatalf("re-fired while down %+v vs %+v", still, got)
+	}
+	src.feed.Venues[0].Live = true
+	src.feed.Venues[0].LastSeenAt = now
+	c.RunOnce(ctx)
+	ok, _ := svc.Get(ctx, "ff", a.ID)
+	if !ok.Armed {
+		t.Fatalf("re-arm when live %+v", ok)
+	}
+}
+
+func TestChecker_LiquidationCascadeNamesCoin(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "cc", Kind: "liquidation_cascade", Exchange: "all", Symbol: "BTCUSDT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeLiq{rep: &domain.CascadeReport{
+		Symbol: "BTCUSDT",
+		Venues: []domain.CascadeVenue{{
+			Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT",
+			Grade: domain.CascadeGradeCascade, Score: 5, Side: "long", Summary: "bybit long cascade",
+		}},
+	}}
+	c := &Checker{Alerts: svc, Liquidations: src, now: time.Now}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "cc", a.ID)
+	if got.Armed || got.TriggeredPrice != 5 {
+		t.Fatalf("cascade fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "cc", a.ID)
+	if still.TriggeredPrice != 5 {
+		t.Fatalf("re-fired %+v", still)
 	}
 }

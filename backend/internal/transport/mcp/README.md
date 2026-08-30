@@ -90,6 +90,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_price_alerts` | List price alerts for a client |
 | `create_price_alert` | Create one-shot above/below price alert |
 | `create_orderbook_alert` | Live imbalance or wall alert (edge re-arm, no re-fire while still true) |
+| `create_liquidation_feed_alert` | Fire when Binance/Bybit liquidation feed stays down; no re-fire until it recovers |
+| `create_liquidation_cascade_alert` | Fire on a big cascade; payload names the exchange and coin |
 | `delete_price_alert` | Delete a price alert by id |
 | `get_alert_webhook` | Get client webhook URL for alert notifications |
 | `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |

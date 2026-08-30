@@ -3289,9 +3289,13 @@ paths:
         kind=price (default): last price above/below targetPrice. mode defaults to one_time.
         kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
         kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
-        Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
-        mode=repeating (default for book): fires on each new appearance; does not re-fire while the
-        condition stays true; re-arms when it clears. Informational only.
+        kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
+        targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+        kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
+        or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+        Book and liquidation kinds are checked in the background. mode=repeating (default for
+        those kinds): fires on each new appearance; does not re-fire while the condition stays
+        true; re-arms when it clears. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]
       requestBody:
@@ -3303,15 +3307,15 @@ paths:
               required: [symbol, condition]
               properties:
                 clientId: { type: string }
-                exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
+                exchange: { type: string, default: binance, description: Spot venues, or binance|bybit|all for liquidation kinds }
                 symbol: { type: string }
-                kind: { type: string, enum: [price, imbalance, wall], default: price }
+                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade], default: price }
                 condition:
                   type: string
-                  description: price/imbalance above|below; wall bid|ask|any
+                  description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated
                 targetPrice:
                   type: number
-                  description: Price target, |imbalance| threshold, or wall min share (0 = any detected wall)
+                  description: Price target, |imbalance| threshold, wall min share, or liquidation_feed min down seconds (0 = 300)
                 rangePct:
                   type: number
                   description: ±% of mid for live book analysis (0.25–10, default 2; book kinds only)
@@ -8049,8 +8053,8 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        kind: { type: string, enum: [price, imbalance, wall] }
-        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any }
+        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade] }
+        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated }
         targetPrice: { type: number }
         rangePct: { type: number, description: Analysis band for imbalance/wall alerts }
         mode: { type: string, enum: [one_time, repeating] }

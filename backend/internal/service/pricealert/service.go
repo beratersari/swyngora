@@ -22,7 +22,7 @@ type CreateInput struct {
 	TargetPrice float64
 	// Mode is one_time (default for price) or repeating (default for book).
 	Mode string
-	// Kind is price (default), imbalance, or wall.
+	// Kind is price (default), imbalance, wall, liquidation_feed, or liquidation_cascade.
 	Kind string
 	// RangePct is the live-book analysis band (book kinds only; 0 = default 2%).
 	RangePct float64
@@ -50,13 +50,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if err != nil {
 		return nil, err
 	}
-	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
-	if err != nil {
-		return nil, err
-	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, or wall", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, or liquidation_cascade", domain.ErrInvalidArgument)
+	}
+	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
+	if err != nil {
+		return nil, err
 	}
 	cond := strings.ToLower(strings.TrimSpace(in.Condition))
 	if err := domain.ValidateAlertSpec(kind, cond, in.TargetPrice, in.RangePct); err != nil {
@@ -66,7 +66,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if !ok {
 		return nil, fmt.Errorf("%w: mode must be one_time or repeating", domain.ErrInvalidArgument)
 	}
-	if in.Mode == "" && domain.IsBookAlert(kind) {
+	if in.Mode == "" && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind)) {
 		mode = domain.AlertModeRepeating
 	}
 	rangePct := 0.0
@@ -81,9 +81,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		return nil, fmt.Errorf("%w: max %d alerts per client", domain.ErrInvalidArgument, domain.MaxPriceAlertsPerClient)
 	}
 	// Price repeating starts disarmed (avoid firing if already on the target side).
-	// Book repeating starts armed so the first appearance of a wall/imbalance can fire.
+	// Book and liquidation repeating start armed so the first appearance can fire.
 	armed := false
-	if mode == domain.AlertModeRepeating && domain.IsBookAlert(kind) {
+	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind)) {
 		armed = true
 	}
 	alert := domain.PriceAlert{
@@ -188,6 +188,16 @@ func (s *Service) ProcessBook(ctx context.Context, a domain.PriceAlert, an domai
 
 // ProcessObservation persists fire / re-arm from a pure eval result.
 func (s *Service) ProcessObservation(ctx context.Context, a domain.PriceAlert, ev domain.AlertEvalResult, metric float64, at time.Time) (*domain.PriceAlert, bool, error) {
+	return s.processObservation(ctx, a, ev, metric, at, nil)
+}
+
+// ProcessObservationExtra is ProcessObservation plus webhook payload extras
+// (which exchange / coin fired a liquidation alert).
+func (s *Service) ProcessObservationExtra(ctx context.Context, a domain.PriceAlert, ev domain.AlertEvalResult, metric float64, at time.Time, extra map[string]any) (*domain.PriceAlert, bool, error) {
+	return s.processObservation(ctx, a, ev, metric, at, extra)
+}
+
+func (s *Service) processObservation(ctx context.Context, a domain.PriceAlert, ev domain.AlertEvalResult, metric float64, at time.Time, extra map[string]any) (*domain.PriceAlert, bool, error) {
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: alert store not configured", domain.ErrUpstream)
 	}
@@ -208,7 +218,7 @@ func (s *Service) ProcessObservation(ctx context.Context, a domain.PriceAlert, e
 		if err != nil {
 			return nil, false, err
 		}
-		if err := s.enqueueWebhookNotification(ctx, out); err != nil {
+		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after alert trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
 		return out, true, nil
@@ -217,7 +227,7 @@ func (s *Service) ProcessObservation(ctx context.Context, a domain.PriceAlert, e
 		if err != nil {
 			return nil, false, err
 		}
-		if err := s.enqueueWebhookNotification(ctx, out); err != nil {
+		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after repeating trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
 		return out, true, nil
@@ -424,6 +434,10 @@ func (s *Service) NotifyClient(ctx context.Context, clientID, sourceID, payloadJ
 }
 
 func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.PriceAlert) error {
+	return s.enqueueWebhookNotificationExtra(ctx, a, nil)
+}
+
+func (s *Service) enqueueWebhookNotificationExtra(ctx context.Context, a *domain.PriceAlert, extra map[string]any) error {
 	if a == nil {
 		return nil
 	}
@@ -434,7 +448,7 @@ func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.Pric
 	if wh == nil || strings.TrimSpace(wh.URL) == "" {
 		return nil
 	}
-	payload, err := buildAlertWebhookPayload(a)
+	payload, err := buildAlertWebhookPayload(a, extra)
 	if err != nil {
 		return err
 	}
@@ -464,7 +478,7 @@ func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.Pric
 	return err
 }
 
-func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
+func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (string, error) {
 	trigAt := ""
 	if a.TriggeredAt != nil {
 		trigAt = a.TriggeredAt.UTC().Format(time.RFC3339Nano)
@@ -475,8 +489,13 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 	}
 	kind := string(domain.EffectiveAlertKind(*a))
 	typ := "price_alert.triggered"
-	if domain.IsBookAlert(a.Kind) {
+	switch {
+	case domain.IsBookAlert(a.Kind):
 		typ = "orderbook_alert.triggered"
+	case domain.IsLiqFeedAlert(a.Kind):
+		typ = "liquidation_feed.triggered"
+	case domain.IsLiqCascadeAlert(a.Kind):
+		typ = "liquidation_cascade.triggered"
 	}
 	body := map[string]any{
 		"type":        typ,
@@ -497,6 +516,15 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 		body["rangePct"] = a.RangePct
 		body["metric"] = a.TriggeredPrice
 	}
+	if domain.IsLiquidationAlert(a.Kind) {
+		body["metric"] = a.TriggeredPrice
+	}
+	for k, v := range extra {
+		if v == nil {
+			continue
+		}
+		body[k] = v
+	}
 	b, err := json.Marshal(body)
 	if err != nil {
 		return "", err
@@ -506,6 +534,27 @@ func buildAlertWebhookPayload(a *domain.PriceAlert) (string, error) {
 
 func normalizeClientID(id string) (string, error) {
 	return domain.NormalizeClientID(id)
+}
+
+func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol string) (domain.Exchange, string, error) {
+	if !domain.IsLiquidationAlert(kind) {
+		return normalizeExchangeSymbol(exchange, symbol)
+	}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return "", "", err
+	}
+	if kind == domain.AlertKindLiqFeed {
+		return domain.Exchange(ex), domain.LiqAlertSymbolAll, nil
+	}
+	sym, err := domain.ParseLiquidationLevelsSymbol(symbol)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.EqualFold(sym, "all") {
+		return domain.Exchange(ex), domain.LiqAlertSymbolAll, nil
+	}
+	return domain.Exchange(ex), domain.NormalizeLiquidationSymbol(sym), nil
 }
 
 func normalizeExchangeSymbol(exchange, symbol string) (domain.Exchange, string, error) {

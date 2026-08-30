@@ -683,12 +683,13 @@ func main() {
 	logger.Info("rsi heatmap warmer started", "exchange", "binance", "interval", "1h", "limit", 100)
 
 	alertChecker := &pricealert.Checker{
-		Alerts:   alertSvc,
-		Market:   marketSvc,
-		Books:    marketSvc,
-		Accounts: accountSvc,
-		Interval: cfg.AlertCheckInterval,
-		Logger:   logger,
+		Alerts:       alertSvc,
+		Market:       marketSvc,
+		Books:        marketSvc,
+		Liquidations: marketSvc,
+		Accounts:     accountSvc,
+		Interval:     cfg.AlertCheckInterval,
+		Logger:       logger,
 	}
 	go alertChecker.Start(ctx)
 

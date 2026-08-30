@@ -29,6 +29,9 @@
   "firedToast": "Uyarı: {{label}}",
   "monitoringChip": "{{count}} uyarı izleniyor · sekme açık kalmalı",
   "kinds": {
+    "price": "Fiyat",
+    "liquidation_feed": "Likidasyon akışı",
+    "liquidation_cascade": "Likidasyon kaskadı",
     "price_above": "Fiyat ≥",
     "price_below": "Fiyat ≤",
     "change_pct_above": "24s değişim % ≥",
@@ -38,8 +41,11 @@
   "addToCompare": "Karşılaştır",
   "conditions": {
     "above": "Fiyat üstü",
-    "below": "Fiyat altı"
+    "below": "Fiyat altı",
+    "cascade": "Kaskad",
+    "extreme": "Aşırı"
   },
+  "minDownSeconds": "Kesinti (saniye)",
   "modes": {
     "one_time": "Tek sefer",
     "repeating": "Tekrarlayan"

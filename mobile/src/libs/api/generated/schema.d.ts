@@ -4657,7 +4657,7 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall";
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade";
             /** @description price/imbalance above|below; wall bid|ask|any */
             condition?: string;
             targetPrice?: number;
@@ -8307,7 +8307,7 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall";
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade";
                     /** @description price/imbalance above|below; wall bid|ask|any */
                     condition: string;
                     /** @description Price target, |imbalance| threshold, or wall min share (0 = any detected wall) */

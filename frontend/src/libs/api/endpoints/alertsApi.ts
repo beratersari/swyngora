@@ -11,9 +11,10 @@ type AlertListResponse = {
 
 export type CreatePriceAlertArg = {
   exchange?: string;
-  symbol: string;
-  condition: 'above' | 'below';
-  targetPrice: number;
+  symbol?: string;
+  kind?: 'price' | 'imbalance' | 'wall' | 'liquidation_feed' | 'liquidation_cascade';
+  condition?: string;
+  targetPrice?: number;
   mode?: 'one_time' | 'repeating';
 };
 

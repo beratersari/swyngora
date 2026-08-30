@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,13 @@ type TickerFetcher interface {
 // BookFetcher loads a live grouped book + analysis for imbalance/wall alerts.
 type BookFetcher interface {
 	GetSpotOrderBook(ctx context.Context, exchange, symbol, group string, levels int, rangePct float64) (*domain.OrderBook, error)
+}
+
+// LiquidationAlertSource evaluates feed health and cascade grades.
+type LiquidationAlertSource interface {
+	GetLiquidationFeed(exchange string) domain.LiquidationFeed
+	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error)
+	ScanLiquidationCascades(ctx context.Context, exchange string) (*domain.CascadeScan, error)
 }
 
 // AccountChecker reports whether a tenant is closed so workers can skip them.
@@ -38,12 +46,13 @@ func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string)
 // Repeating alerts fire on each edge into the condition zone and re-arm on the safe side.
 // Closed accounts are skipped (docs/features/account-close.md — workers skip the tenant).
 type Checker struct {
-	Alerts   *Service
-	Market   TickerFetcher
-	Books    BookFetcher
-	Accounts AccountChecker
-	Interval time.Duration
-	Logger   *slog.Logger
+	Alerts       *Service
+	Market       TickerFetcher
+	Books        BookFetcher
+	Liquidations LiquidationAlertSource
+	Accounts     AccountChecker
+	Interval     time.Duration
+	Logger       *slog.Logger
 	// now and sleep are injectable for tests.
 	now   func() time.Time
 	sleep func(context.Context, time.Duration) error
@@ -106,21 +115,38 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	// Dedupe ticker / book fetches across clients watching the same pair.
 	priceGroups := map[key][]domain.PriceAlert{}
 	bookGroups := map[bookKey][]domain.PriceAlert{}
+	var feedAlerts []domain.PriceAlert
+	cascadeCoin := map[key][]domain.PriceAlert{}
+	cascadeScan := map[string][]domain.PriceAlert{}
 	for _, a := range active {
 		if tenantClosed(ctx, c.Accounts, a.ClientID) {
 			continue
 		}
-		if domain.IsBookAlert(a.Kind) {
+		switch {
+		case domain.IsLiqFeedAlert(a.Kind):
+			feedAlerts = append(feedAlerts, a)
+		case domain.IsLiqCascadeAlert(a.Kind):
+			if strings.EqualFold(a.Symbol, domain.LiqAlertSymbolAll) || strings.EqualFold(a.Symbol, "all") {
+				ex := string(a.Exchange)
+				if ex == "" {
+					ex = "all"
+				}
+				cascadeScan[ex] = append(cascadeScan[ex], a)
+			} else {
+				k := key{ex: string(a.Exchange), sym: a.Symbol}
+				cascadeCoin[k] = append(cascadeCoin[k], a)
+			}
+		case domain.IsBookAlert(a.Kind):
 			rng := a.RangePct
 			if rng <= 0 {
 				rng = domain.DefaultOrderBookRangePct
 			}
 			k := bookKey{ex: string(a.Exchange), sym: a.Symbol, rng: rng}
 			bookGroups[k] = append(bookGroups[k], a)
-			continue
+		default:
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			priceGroups[k] = append(priceGroups[k], a)
 		}
-		k := key{ex: string(a.Exchange), sym: a.Symbol}
-		priceGroups[k] = append(priceGroups[k], a)
 	}
 
 	sem := make(chan struct{}, 5)
@@ -137,6 +163,35 @@ func (c *Checker) RunOnce(ctx context.Context) {
 			}
 			defer func() { <-sem }()
 			c.evalPriceGroup(ctx, k.ex, k.sym, alerts)
+		}()
+	}
+	c.evalFeedAlerts(ctx, feedAlerts)
+	for k, alerts := range cascadeCoin {
+		k, alerts := k, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalCascadeCoin(ctx, k.ex, k.sym, alerts)
+		}()
+	}
+	for ex, alerts := range cascadeScan {
+		ex, alerts := ex, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalCascadeScan(ctx, ex, alerts)
 		}()
 	}
 	for k, alerts := range bookGroups {
@@ -225,6 +280,103 @@ func (c *Checker) evalBookGroup(ctx context.Context, exchange, symbol string, ra
 			"metric", updated.TriggeredPrice,
 		)
 	}
+}
+
+func (c *Checker) evalFeedAlerts(ctx context.Context, alerts []domain.PriceAlert) {
+	if c.Liquidations == nil || len(alerts) == 0 {
+		return
+	}
+	now := c.now().UTC()
+	feed := c.Liquidations.GetLiquidationFeed("all")
+	for _, a := range alerts {
+		met, metric, detail := domain.FeedAlertObservation(a, feed, now)
+		ev := domain.EvaluateAlertState(a, met)
+		extra := map[string]any{
+			"exchange":         detail.Exchange,
+			"unhealthySeconds": detail.UnhealthySeconds,
+			"thresholdSeconds": detail.ThresholdSeconds,
+			"missing":          detail.Missing,
+			"live":             detail.Live,
+		}
+		if !detail.LastSeenAt.IsZero() {
+			extra["lastSeenAt"] = detail.LastSeenAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !detail.LastEventAt.IsZero() {
+			extra["lastEventAt"] = detail.LastEventAt.UTC().Format(time.RFC3339Nano)
+		}
+		updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, metric, now, extra)
+		if err != nil {
+			c.Logger.Debug("process liquidation feed alert failed", "id", a.ID, "err", err)
+			continue
+		}
+		if !fired || updated == nil {
+			continue
+		}
+		c.Logger.Info("liquidation feed alert triggered",
+			"id", updated.ID, "clientId", updated.ClientID,
+			"exchange", detail.Exchange, "missing", detail.Missing,
+			"unhealthySeconds", detail.UnhealthySeconds,
+		)
+	}
+}
+
+func (c *Checker) evalCascadeCoin(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c.Liquidations == nil {
+		return
+	}
+	rep, err := c.Liquidations.GetLiquidationCascade(ctx, exchange, symbol)
+	if err != nil {
+		c.Logger.Debug("cascade for alert failed", "exchange", exchange, "symbol", symbol, "err", err)
+		return
+	}
+	now := c.now().UTC()
+	for _, a := range alerts {
+		met, metric, detail := domain.CascadeAlertObservation(a, rep)
+		c.finishCascade(ctx, a, met, metric, detail, now)
+	}
+}
+
+func (c *Checker) evalCascadeScan(ctx context.Context, exchange string, alerts []domain.PriceAlert) {
+	if c.Liquidations == nil {
+		return
+	}
+	scan, err := c.Liquidations.ScanLiquidationCascades(ctx, exchange)
+	if err != nil {
+		c.Logger.Debug("cascade scan for alert failed", "exchange", exchange, "err", err)
+		return
+	}
+	now := c.now().UTC()
+	for _, a := range alerts {
+		met, metric, detail := domain.CascadeScanAlertObservation(a, scan)
+		c.finishCascade(ctx, a, met, metric, detail, now)
+	}
+}
+
+func (c *Checker) finishCascade(ctx context.Context, a domain.PriceAlert, met bool, metric float64, detail domain.LiqCascadeAlertDetail, now time.Time) {
+	ev := domain.EvaluateAlertState(a, met)
+	extra := map[string]any{
+		"exchange": detail.Exchange,
+		"symbol":   detail.Symbol,
+		"grade":    detail.Grade,
+		"side":     detail.Side,
+		"score":    detail.Score,
+		"hottest":  detail.Hottest,
+		"summary":  detail.Summary,
+		"both":     detail.Both,
+	}
+	updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, metric, now, extra)
+	if err != nil {
+		c.Logger.Debug("process liquidation cascade alert failed", "id", a.ID, "err", err)
+		return
+	}
+	if !fired || updated == nil {
+		return
+	}
+	c.Logger.Info("liquidation cascade alert triggered",
+		"id", updated.ID, "clientId", updated.ClientID,
+		"exchange", detail.Exchange, "symbol", detail.Symbol,
+		"grade", detail.Grade, "side", detail.Side, "score", detail.Score,
+	)
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

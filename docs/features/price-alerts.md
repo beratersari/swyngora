@@ -50,6 +50,8 @@ PUT /api/v1/alerts/webhook
 | `price` (default) | Last trade/ticker price | `above` / `below` | Price | `one_time` |
 | `imbalance` | Live book notional imbalance in ±`rangePct` of mid | `above` (buy) / `below` (sell) | 0.05–0.95 | `repeating` |
 | `wall` | Large clustered rest size in that band | `bid` / `ask` / `any` | Min share 0–1 (`0` = any detected wall) | `repeating` |
+| `liquidation_feed` | Binance / Bybit liquidation websocket down or stalled | `down` / `gap` / empty | Min down seconds (`0` = 300) | `repeating` |
+| `liquidation_cascade` | A coin (or market `symbol=all`) hits a cascade grade | `cascade` (default) / `extreme` / `elevated` | unused | `repeating` |
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 
@@ -77,7 +79,28 @@ POST /api/v1/alerts
 }
 ```
 
-MCP: `create_orderbook_alert`. Informational only.
+Repeating book and liquidation alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again. A liquidation feed alert does **not** keep sending while Bybit or Binance is still down. A cascade alert payload includes the **exchange** and **coin** that crossed the grade. A live feed with only an old unfilled history hole does not stay in the down state.
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_feed",
+  "exchange": "bybit",
+  "targetPrice": 300
+}
+```
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_cascade",
+  "exchange": "all",
+  "symbol": "BTCUSDT",
+  "condition": "cascade"
+}
+```
+
+MCP: `create_orderbook_alert`, `create_liquidation_feed_alert`, `create_liquidation_cascade_alert`. Informational only.
 
 ## Webhook security (SSRF)
 

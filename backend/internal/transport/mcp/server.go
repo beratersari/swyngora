@@ -112,6 +112,8 @@ type DataPort interface {
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
+	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
+	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -1870,6 +1872,47 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreateOrderBookAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, kind, condition, req.GetFloat("threshold", 0), req.GetFloat("rangePct", 0), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_feed_alert",
+		mcp.WithDescription("Alert when Binance or Bybit stop sending liquidation data (down or stalled) longer than minDownSeconds (default 300). Repeating by default: fires once, stays quiet while the feed is still bad, re-arms when it is live again. Does not keep sending the same outage. exchange=binance|bybit|all."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("minDownSeconds", mcp.Description("How long the feed may stay down before fire (default 300, min 30)")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationFeedAlert(ctx, clientID, req.GetString("exchange", "all"), req.GetFloat("minDownSeconds", 0), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_cascade_alert",
+		mcp.WithDescription("Alert when a coin has a big liquidation cascade. Payload includes the exchange and coin. symbol=BTCUSDT or all (any bursting coin). minGrade=cascade (default) or extreme. Repeating: fires once per wave, does not re-fire while the same cascade stays on, re-arms when it goes quiet."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT, or all for a market scan")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("minGrade", mcp.Description("cascade (default) | extreme | elevated")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationCascadeAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("minGrade", ""), req.GetString("mode", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

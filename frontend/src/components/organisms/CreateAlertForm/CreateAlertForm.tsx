@@ -7,11 +7,14 @@ import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
 import { Field, FieldRow, FormStack } from './CreateAlertForm.styles';
 import type { CreateAlertFormProps } from './CreateAlertForm.types';
 
+export type AlertKind = 'price' | 'liquidation_feed' | 'liquidation_cascade';
+
 export type CreatePriceAlertValues = {
-  exchange: MarketExchange;
-  symbol: string;
-  condition: 'above' | 'below';
-  targetPrice: number;
+  exchange: string;
+  symbol?: string;
+  kind?: AlertKind;
+  condition?: string;
+  targetPrice?: number;
   mode: 'one_time' | 'repeating';
 };
 
@@ -31,11 +34,16 @@ export function CreateAlertForm({
   onSubmit: (values: CreatePriceAlertValues) => Promise<void>;
 }) {
   const { t } = useTranslation(['alerts', 'common']);
+  const [kind, setKind] = useState<AlertKind>('price');
   const [exchange, setExchange] = useState(String(defaultExchange));
   const [symbol, setSymbol] = useState(defaultSymbol);
-  const [condition, setCondition] = useState<'above' | 'below'>('above');
+  const [condition, setCondition] = useState('above');
   const [targetPrice, setTargetPrice] = useState<number | null>(null);
   const [mode, setMode] = useState<'one_time' | 'repeating'>('one_time');
+  const isFeed = kind === 'liquidation_feed';
+  const isCascade = kind === 'liquidation_cascade';
+  const liqExchanges = ['binance', 'bybit', 'all'];
+  const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
   useEffect(() => {
     setExchange(String(defaultExchange || 'binance'));
@@ -45,18 +53,24 @@ export function CreateAlertForm({
   }, [defaultSymbol]);
 
   const submit = async () => {
-    if (!symbol.trim() || targetPrice == null || !Number.isFinite(targetPrice) || targetPrice <= 0) {
+    if (kind === 'price') {
+      if (!symbol.trim() || targetPrice == null || !Number.isFinite(targetPrice) || targetPrice <= 0) {
+        return;
+      }
+    }
+    if (isCascade && !symbol.trim()) {
       return;
     }
     try {
       await onSubmit({
-        exchange: exchange as MarketExchange,
-        symbol: symbol.trim(),
-        condition,
-        targetPrice,
-        mode,
+        kind,
+        exchange: isFeed || isCascade ? exchange || 'all' : (exchange as MarketExchange),
+        symbol: isFeed ? 'ALL' : symbol.trim(),
+        condition: isFeed ? 'down' : isCascade ? condition || 'cascade' : condition,
+        targetPrice: isFeed ? targetPrice ?? 300 : isCascade ? 0 : (targetPrice ?? 0),
+        mode: isFeed || isCascade ? 'repeating' : mode,
       });
-      setTargetPrice(null);
+      if (kind === 'price') setTargetPrice(null);
     } catch {
       // parent surfaces error
     }
@@ -73,69 +87,112 @@ export function CreateAlertForm({
       <FieldRow>
         <Field>
           <Text variant="caption" color="secondary">
+            {t('alerts:kind', { defaultValue: 'Kind' })}
+          </Text>
+          <Select
+            value={kind}
+            aria-label={t('alerts:kind', { defaultValue: 'Kind' })}
+            style={{ minWidth: 180 }}
+            options={[
+              { value: 'price', label: t('alerts:kinds.price', { defaultValue: 'Price' }) },
+              { value: 'liquidation_feed', label: t('alerts:kinds.liquidation_feed', { defaultValue: 'Liquidation feed' }) },
+              { value: 'liquidation_cascade', label: t('alerts:kinds.liquidation_cascade', { defaultValue: 'Liquidation cascade' }) },
+            ]}
+            onChange={(v) => {
+              setKind(v);
+              if (v === 'liquidation_feed' || v === 'liquidation_cascade') {
+                setMode('repeating');
+                if (v === 'liquidation_cascade') setCondition('cascade');
+                if (!['binance', 'bybit', 'all'].includes(exchange)) setExchange('all');
+              } else {
+                setCondition('above');
+                if (exchange === 'all') setExchange('binance');
+              }
+            }}
+          />
+        </Field>
+        <Field>
+          <Text variant="caption" color="secondary">
             {t('alerts:exchange')}
           </Text>
           <Select
             value={exchange}
             aria-label={t('alerts:exchange')}
             style={{ minWidth: 120 }}
-            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
+            options={(isFeed || isCascade ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
             onChange={setExchange}
           />
         </Field>
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('alerts:symbol')}
-          </Text>
-          <SymbolSuggest
-            exchange={exchange}
-            value={symbol}
-            onChange={setSymbol}
-            aria-label={t('alerts:symbol')}
-          />
-        </Field>
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('alerts:condition')}
-          </Text>
-          <Select
-            value={condition}
-            aria-label={t('alerts:condition')}
-            style={{ minWidth: 120 }}
-            options={[
-              { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
-              { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
-            ]}
-            onChange={(v) => setCondition(v)}
-          />
-        </Field>
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('alerts:threshold', { defaultValue: 'Target price' })}
-          </Text>
-          <InputNumber
-            value={targetPrice ?? undefined}
-            aria-label={t('alerts:threshold', { defaultValue: 'Target price' })}
-            min={0}
-            style={{ minWidth: 120 }}
-            onChange={(v) => setTargetPrice(typeof v === 'number' ? v : null)}
-          />
-        </Field>
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('alerts:mode', { defaultValue: 'Mode' })}
-          </Text>
-          <Select
-            value={mode}
-            aria-label={t('alerts:mode', { defaultValue: 'Mode' })}
-            style={{ minWidth: 140 }}
-            options={[
-              { value: 'one_time', label: t('alerts:modes.one_time', { defaultValue: 'One-time' }) },
-              { value: 'repeating', label: t('alerts:modes.repeating', { defaultValue: 'Repeating' }) },
-            ]}
-            onChange={(v) => setMode(v)}
-          />
-        </Field>
+        {isFeed ? null : (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('alerts:symbol')}
+            </Text>
+            <SymbolSuggest
+              exchange={exchange === 'all' ? 'binance' : exchange}
+              value={symbol}
+              onChange={setSymbol}
+              aria-label={t('alerts:symbol')}
+            />
+          </Field>
+        )}
+        {isFeed ? null : (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('alerts:condition')}
+            </Text>
+            <Select
+              value={condition}
+              aria-label={t('alerts:condition')}
+              style={{ minWidth: 140 }}
+              options={
+                isCascade
+                  ? [
+                      { value: 'cascade', label: t('alerts:conditions.cascade', { defaultValue: 'Cascade' }) },
+                      { value: 'extreme', label: t('alerts:conditions.extreme', { defaultValue: 'Extreme' }) },
+                    ]
+                  : [
+                      { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
+                      { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
+                    ]
+              }
+              onChange={(v) => setCondition(v)}
+            />
+          </Field>
+        )}
+        {isCascade ? null : (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {isFeed
+                ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' })
+                : t('alerts:threshold', { defaultValue: 'Target price' })}
+            </Text>
+            <InputNumber
+              value={isFeed ? (targetPrice ?? 300) : (targetPrice ?? undefined)}
+              aria-label={isFeed ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' }) : t('alerts:threshold', { defaultValue: 'Target price' })}
+              min={isFeed ? 30 : 0}
+              style={{ minWidth: 140 }}
+              onChange={(v) => setTargetPrice(typeof v === 'number' ? v : null)}
+            />
+          </Field>
+        )}
+        {isFeed || isCascade ? null : (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('alerts:mode', { defaultValue: 'Mode' })}
+            </Text>
+            <Select
+              value={mode}
+              aria-label={t('alerts:mode', { defaultValue: 'Mode' })}
+              style={{ minWidth: 140 }}
+              options={[
+                { value: 'one_time', label: t('alerts:modes.one_time', { defaultValue: 'One-time' }) },
+                { value: 'repeating', label: t('alerts:modes.repeating', { defaultValue: 'Repeating' }) },
+              ]}
+              onChange={(v) => setMode(v)}
+            />
+          </Field>
+        )}
       </FieldRow>
       {submitError != null ? (
         <Alert
@@ -149,7 +206,11 @@ export function CreateAlertForm({
         <Button
           type="primary"
           loading={isSubmitting}
-          disabled={!symbol.trim() || targetPrice == null || isSubmitting}
+          disabled={
+            isSubmitting ||
+            (kind === 'price' && (!symbol.trim() || targetPrice == null)) ||
+            (isCascade && !symbol.trim())
+          }
           onClick={() => void submit()}
         >
           {t('alerts:create')}

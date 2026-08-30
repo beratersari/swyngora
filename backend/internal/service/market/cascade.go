@@ -7,6 +7,16 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// GetLiquidationFeed is venue health for liquidation_feed alerts.
+func (s *Service) GetLiquidationFeed(exchange string) domain.LiquidationFeed {
+	out := domain.LiquidationFeed{Venues: []domain.LiquidationVenueHealth{}, Missing: []string{}}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil || s == nil || s.liq == nil {
+		return out
+	}
+	return s.liq.Feed(ex)
+}
+
 // GetLiquidationCascade scores short-burst long/short liquidations for one coin
 // (or symbol=all for the pooled market) on Binance and Bybit separately.
 func (s *Service) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error) {

@@ -1080,6 +1080,28 @@ class AlertCreateInput(BaseModel):
     )
 
 
+class LiquidationFeedAlertInput(BaseModel):
+    client_id: str
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    min_down_seconds: float = Field(
+        default=300,
+        ge=30,
+        description="Fire after the feed stays down this many seconds (default 300)",
+    )
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
+class LiquidationCascadeAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair e.g. BTCUSDT, or all for a market scan")
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    min_grade: str = Field(
+        default="cascade",
+        description="cascade (default) | extreme | elevated",
+    )
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
 class OrderBookAlertInput(BaseModel):
     client_id: str
     symbol: str
@@ -2608,6 +2630,42 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "targetPrice": threshold,
                 "rangePct": range_pct,
                 "exchange": exchange,
+                "mode": mode,
+            },
+        )
+
+    def create_liquidation_feed_alert(
+        client_id: str,
+        exchange: str = "all",
+        min_down_seconds: float = 300.0,
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_feed",
+                "exchange": exchange,
+                "targetPrice": min_down_seconds,
+                "mode": mode,
+            },
+        )
+
+    def create_liquidation_cascade_alert(
+        client_id: str,
+        symbol: str,
+        exchange: str = "all",
+        min_grade: str = "cascade",
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_cascade",
+                "exchange": exchange,
+                "symbol": symbol,
+                "condition": min_grade,
                 "mode": mode,
             },
         )
@@ -4511,6 +4569,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "it does not re-fire while the same condition stays true."
             ),
             args_schema=OrderBookAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_liquidation_feed_alert,
+            name="create_liquidation_feed_alert",
+            description=(
+                "Alert when Binance or Bybit stop sending liquidation data longer than "
+                "min_down_seconds (default 300). Fires once, stays quiet while still down, "
+                "re-arms when the feed is live again."
+            ),
+            args_schema=LiquidationFeedAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_liquidation_cascade_alert,
+            name="create_liquidation_cascade_alert",
+            description=(
+                "Alert when a coin has a big liquidation cascade. Payload names the exchange "
+                "and coin. symbol=BTCUSDT or all. min_grade=cascade (default) or extreme. "
+                "Fires once per wave and does not re-fire while the same cascade stays on."
+            ),
+            args_schema=LiquidationCascadeAlertInput,
         ),
         StructuredTool.from_function(
             delete_price_alert,

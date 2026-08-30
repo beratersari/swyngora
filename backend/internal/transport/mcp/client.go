@@ -1284,6 +1284,29 @@ func (c *APIClient) CreateOrderBookAlert(ctx context.Context, clientID, exchange
 	})
 }
 
+// CreateLiquidationFeedAlert alerts when a venue's liquidation socket stays down.
+func (c *APIClient) CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"kind":        "liquidation_feed",
+		"targetPrice": minDownSeconds,
+		"mode":        mode,
+	})
+}
+
+// CreateLiquidationCascadeAlert alerts when a coin hits a cascade grade.
+func (c *APIClient) CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":  clientID,
+		"exchange":  exchange,
+		"symbol":    symbol,
+		"kind":      "liquidation_cascade",
+		"condition": minGrade,
+		"mode":      mode,
+	})
+}
+
 // DeletePriceAlert deletes an alert by id.
 func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}
