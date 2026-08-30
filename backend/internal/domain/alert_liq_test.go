@@ -119,6 +119,55 @@ func TestCascadeAlertObservation_CoinAndVenue(t *testing.T) {
 	}
 }
 
+func TestNotionalAlertObservation_SideAndWave(t *testing.T) {
+	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
+	ev := []LiquidationEvent{
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: LiquidationSideLong, Notional: 12e6, Time: now.Add(-2 * time.Minute)},
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideShort, Notional: 9e6, Time: now.Add(-1 * time.Minute)},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: LiquidationSideLong, Notional: 1e6, Time: now.Add(-10 * time.Minute)},
+	}
+	a := PriceAlert{
+		Kind: AlertKindLiqNotional, Exchange: Exchange("all"), Symbol: "BTCUSDT",
+		Condition: "both", TargetPrice: 20e6, RangePct: 5, Status: AlertStatusActive, Armed: true, Mode: AlertModeRepeating,
+	}
+	met, n, d := NotionalAlertObservation(a, ev, now)
+	if !met || n < 20e6 || n > 22e6 || d.Count != 2 || d.Window != "5m" {
+		t.Fatalf("both %+v met=%v n=%v", d, met, n)
+	}
+	a.Condition = LiquidationSideLong
+	a.Exchange = ExchangeBybit
+	a.TargetPrice = 10e6
+	met, n, d = NotionalAlertObservation(a, ev, now)
+	if !met || n != 12e6 {
+		t.Fatalf("long bybit %+v met=%v n=%v", d, met, n)
+	}
+	a.Condition = LiquidationSideShort
+	met, _, _ = NotionalAlertObservation(a, ev, now)
+	if met {
+		t.Fatal("bybit short is only on binance")
+	}
+	ev1 := EvaluateAlertState(a, true)
+	if ev1.Fire {
+		// a.Condition short, met false above; use met=true on a copy
+	}
+	wave := a
+	wave.Condition = "both"
+	wave.Exchange = Exchange("all")
+	st := EvaluateAlertState(wave, true)
+	if !st.Fire {
+		t.Fatal("first cross")
+	}
+	wave.Armed = false
+	st = EvaluateAlertState(wave, true)
+	if st.Fire {
+		t.Fatal("same wave must not re-fire")
+	}
+	st = EvaluateAlertState(wave, false)
+	if !st.NewArmed {
+		t.Fatal("re-arm when window drops")
+	}
+}
+
 func TestCascadeScanAlertObservation_HottestCoin(t *testing.T) {
 	a := PriceAlert{
 		Kind: AlertKindLiqCascade, Exchange: Exchange("all"), Symbol: LiqAlertSymbolAll,

@@ -183,6 +183,7 @@ ACCOUNT_TOOLS: frozenset[str] = frozenset(
         "create_orderbook_alert",
         "create_liquidation_feed_alert",
         "create_liquidation_cascade_alert",
+        "create_liquidation_notional_alert",
         "delete_price_alert",
         "get_alert_webhook",
         "set_alert_webhook",

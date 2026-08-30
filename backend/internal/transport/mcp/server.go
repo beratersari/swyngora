@@ -114,6 +114,7 @@ type DataPort interface {
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
 	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
+	CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -1913,6 +1914,35 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreateLiquidationCascadeAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("minGrade", ""), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_notional_alert",
+		mcp.WithDescription("Alert when a coin's liquidations in a window exceed a USDT amount. side=long|short|both (total). exchange=binance|bybit|all (all sums both). window=1m|5m|15m|1h (default 5m). Repeating: fires once when the wave crosses the line, stays quiet while that wave stays above, re-arms when the window drops so a new wave can fire."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("notional", mcp.Required(), mcp.Description("USDT threshold e.g. 20000000")),
+		mcp.WithString("side", mcp.Description("long | short | both (default both)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("window", mcp.Description("1m | 5m | 15m | 1h (default 5m)")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		notional, err := req.RequireFloat("notional")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationNotionalAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("side", "both"), notional, req.GetString("window", "5m"), req.GetString("mode", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

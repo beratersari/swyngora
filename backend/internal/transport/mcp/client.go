@@ -1307,6 +1307,20 @@ func (c *APIClient) CreateLiquidationCascadeAlert(ctx context.Context, clientID,
 	})
 }
 
+// CreateLiquidationNotionalAlert alerts when window notional crosses a USDT line.
+func (c *APIClient) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"symbol":      symbol,
+		"kind":        "liquidation_notional",
+		"condition":   side,
+		"targetPrice": notional,
+		"window":      window,
+		"mode":        mode,
+	})
+}
+
 // DeletePriceAlert deletes an alert by id.
 func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

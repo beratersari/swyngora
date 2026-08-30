@@ -26,6 +26,7 @@ type LiquidationAlertSource interface {
 	GetLiquidationFeed(exchange string) domain.LiquidationFeed
 	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error)
 	ScanLiquidationCascades(ctx context.Context, exchange string) (*domain.CascadeScan, error)
+	ListLiquidationEvents(exchange, symbol string, since time.Time) []domain.LiquidationEvent
 }
 
 // AccountChecker reports whether a tenant is closed so workers can skip them.
@@ -116,6 +117,7 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	priceGroups := map[key][]domain.PriceAlert{}
 	bookGroups := map[bookKey][]domain.PriceAlert{}
 	var feedAlerts []domain.PriceAlert
+	notionalGroups := map[key][]domain.PriceAlert{}
 	cascadeCoin := map[key][]domain.PriceAlert{}
 	cascadeScan := map[string][]domain.PriceAlert{}
 	for _, a := range active {
@@ -125,6 +127,9 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		switch {
 		case domain.IsLiqFeedAlert(a.Kind):
 			feedAlerts = append(feedAlerts, a)
+		case domain.IsLiqNotionalAlert(a.Kind):
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			notionalGroups[k] = append(notionalGroups[k], a)
 		case domain.IsLiqCascadeAlert(a.Kind):
 			if strings.EqualFold(a.Symbol, domain.LiqAlertSymbolAll) || strings.EqualFold(a.Symbol, "all") {
 				ex := string(a.Exchange)
@@ -166,6 +171,20 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		}()
 	}
 	c.evalFeedAlerts(ctx, feedAlerts)
+	for k, alerts := range notionalGroups {
+		k, alerts := k, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalNotionalGroup(ctx, k.ex, k.sym, alerts)
+		}()
+	}
 	for k, alerts := range cascadeCoin {
 		k, alerts := k, alerts
 		wg.Add(1)
@@ -316,6 +335,48 @@ func (c *Checker) evalFeedAlerts(ctx context.Context, alerts []domain.PriceAlert
 			"id", updated.ID, "clientId", updated.ClientID,
 			"exchange", detail.Exchange, "missing", detail.Missing,
 			"unhealthySeconds", detail.UnhealthySeconds,
+		)
+	}
+}
+
+func (c *Checker) evalNotionalGroup(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c.Liquidations == nil || len(alerts) == 0 {
+		return
+	}
+	now := c.now().UTC()
+	since := now.Add(-time.Hour)
+	for _, a := range alerts {
+		if w := domain.LiqNotionalWindow(a); w > 0 && now.Add(-w).Before(since) {
+			since = now.Add(-w)
+		}
+	}
+	ev := c.Liquidations.ListLiquidationEvents(exchange, symbol, since)
+	for _, a := range alerts {
+		met, metric, detail := domain.NotionalAlertObservation(a, ev, now)
+		st := domain.EvaluateAlertState(a, met)
+		extra := map[string]any{
+			"exchange":      detail.Exchange,
+			"symbol":        detail.Symbol,
+			"side":          detail.Side,
+			"window":        detail.Window,
+			"notional":      detail.Notional,
+			"longNotional":  detail.LongNotional,
+			"shortNotional": detail.ShortNotional,
+			"threshold":     detail.Threshold,
+			"count":         detail.Count,
+		}
+		updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, st, metric, now, extra)
+		if err != nil {
+			c.Logger.Debug("process liquidation notional alert failed", "id", a.ID, "err", err)
+			continue
+		}
+		if !fired || updated == nil {
+			continue
+		}
+		c.Logger.Info("liquidation notional alert triggered",
+			"id", updated.ID, "clientId", updated.ClientID,
+			"exchange", detail.Exchange, "symbol", detail.Symbol,
+			"side", detail.Side, "window", detail.Window, "notional", detail.Notional,
 		)
 	}
 }

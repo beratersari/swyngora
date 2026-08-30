@@ -3293,9 +3293,10 @@ paths:
         targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
         kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
         or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
-        Book and liquidation kinds are checked in the background. mode=repeating (default for
-        those kinds): fires on each new appearance; does not re-fire while the condition stays
-        true; re-arms when it clears. Informational only.
+        kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
+        default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
+        Repeating fires once when the wave crosses, stays quiet while that window stays above,
+        re-arms when it drops so a new wave can fire. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]
       requestBody:
@@ -3309,13 +3310,16 @@ paths:
                 clientId: { type: string }
                 exchange: { type: string, default: binance, description: Spot venues, or binance|bybit|all for liquidation kinds }
                 symbol: { type: string }
-                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade], default: price }
+                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional], default: price }
                 condition:
                   type: string
-                  description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated
+                  description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both
                 targetPrice:
                   type: number
-                  description: Price target, |imbalance| threshold, wall min share, or liquidation_feed min down seconds (0 = 300)
+                  description: Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), or liquidation_notional USDT amount
+                window:
+                  type: string
+                  description: liquidation_notional lookback 1m|5m|15m|1h (default 5m)
                 rangePct:
                   type: number
                   description: ±% of mid for live book analysis (0.25–10, default 2; book kinds only)
@@ -8053,8 +8057,8 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade] }
-        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated }
+        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional] }
+        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both }
         targetPrice: { type: number }
         rangePct: { type: number, description: Analysis band for imbalance/wall alerts }
         mode: { type: string, enum: [one_time, repeating] }

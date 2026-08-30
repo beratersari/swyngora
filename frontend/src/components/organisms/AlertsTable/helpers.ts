@@ -10,6 +10,11 @@ export function alertConditionLabel(row: PriceAlert): string {
     const grade = row.condition && row.condition !== '' ? row.condition : 'cascade';
     return `cascade ≥ ${grade}`;
   }
+  if (kind === 'liquidation_notional') {
+    const side = row.condition && row.condition !== '' ? row.condition : 'both';
+    const win = row.rangePct && row.rangePct > 0 ? `${row.rangePct}m` : '5m';
+    return `${side} ≥ ${row.targetPrice ?? 0} / ${win}`;
+  }
   if (kind === 'imbalance' || kind === 'wall') {
     return `${kind} ${row.condition ?? ''} ${row.targetPrice ?? ''}`.trim();
   }

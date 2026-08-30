@@ -2114,6 +2114,26 @@ func (b *Backend) CreateLiquidationCascadeAlert(ctx context.Context, clientID, e
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Kind:        string(domain.AlertKindLiqNotional),
+		Condition:   side,
+		TargetPrice: notional,
+		Window:      window,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
@@ -3609,7 +3629,7 @@ func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 		"status":      string(a.Status),
 		"createdAt":   a.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	if domain.IsBookAlert(a.Kind) && a.RangePct > 0 {
+	if (domain.IsBookAlert(a.Kind) || domain.IsLiqNotionalAlert(a.Kind)) && a.RangePct > 0 {
 		m["rangePct"] = a.RangePct
 	}
 	if a.Mode == domain.AlertModeRepeating {

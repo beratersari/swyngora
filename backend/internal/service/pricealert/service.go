@@ -24,8 +24,11 @@ type CreateInput struct {
 	Mode string
 	// Kind is price (default), imbalance, wall, liquidation_feed, or liquidation_cascade.
 	Kind string
-	// RangePct is the live-book analysis band (book kinds only; 0 = default 2%).
+	// RangePct is the live-book analysis band (book kinds) or window minutes
+	// for liquidation_notional (1, 5, 15, 60).
 	RangePct float64
+	// Window is 1m|5m|15m|1h for liquidation_notional (overrides RangePct).
+	Window string
 }
 
 // Service orchestrates price-alert use cases.
@@ -52,13 +55,20 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, or liquidation_cascade", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, or liquidation_notional", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
 	if err != nil {
 		return nil, err
 	}
 	cond := strings.ToLower(strings.TrimSpace(in.Condition))
+	if kind == domain.AlertKindLiqNotional {
+		d, _, err := domain.ParseLiqNotionalWindow(in.RangePct, in.Window)
+		if err != nil {
+			return nil, err
+		}
+		in.RangePct = d.Minutes()
+	}
 	if err := domain.ValidateAlertSpec(kind, cond, in.TargetPrice, in.RangePct); err != nil {
 		return nil, err
 	}
@@ -72,6 +82,13 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	rangePct := 0.0
 	if domain.IsBookAlert(kind) {
 		rangePct = domain.ClampRangePct(in.RangePct)
+	}
+	if kind == domain.AlertKindLiqNotional {
+		d, _, err := domain.ParseLiqNotionalWindow(in.RangePct, in.Window)
+		if err != nil {
+			return nil, err
+		}
+		rangePct = d.Minutes()
 	}
 	n, err := s.store.CountByClient(ctx, clientID)
 	if err != nil {
@@ -496,6 +513,8 @@ func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (strin
 		typ = "liquidation_feed.triggered"
 	case domain.IsLiqCascadeAlert(a.Kind):
 		typ = "liquidation_cascade.triggered"
+	case domain.IsLiqNotionalAlert(a.Kind):
+		typ = "liquidation_notional.triggered"
 	}
 	body := map[string]any{
 		"type":        typ,
@@ -546,6 +565,13 @@ func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol stri
 	}
 	if kind == domain.AlertKindLiqFeed {
 		return domain.Exchange(ex), domain.LiqAlertSymbolAll, nil
+	}
+	if kind == domain.AlertKindLiqNotional {
+		sym := domain.NormalizeLiquidationSymbol(symbol)
+		if sym == "" || strings.EqualFold(sym, "all") {
+			return "", "", fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+		}
+		return domain.Exchange(ex), sym, nil
 	}
 	sym, err := domain.ParseLiquidationLevelsSymbol(symbol)
 	if err != nil {

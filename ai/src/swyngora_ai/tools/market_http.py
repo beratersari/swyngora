@@ -1091,6 +1091,16 @@ class LiquidationFeedAlertInput(BaseModel):
     mode: str = Field(default="repeating", description="repeating (default) | one_time")
 
 
+class LiquidationNotionalAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    notional: float = Field(gt=0, description="USDT threshold e.g. 20000000")
+    side: str = Field(default="both", description="long | short | both")
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    window: str = Field(default="5m", description="1m | 5m | 15m | 1h")
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
 class LiquidationCascadeAlertInput(BaseModel):
     client_id: str
     symbol: str = Field(description="Pair e.g. BTCUSDT, or all for a market scan")
@@ -2666,6 +2676,29 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange": exchange,
                 "symbol": symbol,
                 "condition": min_grade,
+                "mode": mode,
+            },
+        )
+
+    def create_liquidation_notional_alert(
+        client_id: str,
+        symbol: str,
+        notional: float,
+        side: str = "both",
+        exchange: str = "all",
+        window: str = "5m",
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_notional",
+                "exchange": exchange,
+                "symbol": symbol,
+                "condition": side,
+                "targetPrice": notional,
+                "window": window,
                 "mode": mode,
             },
         )
@@ -4589,6 +4622,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Fires once per wave and does not re-fire while the same cascade stays on."
             ),
             args_schema=LiquidationCascadeAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_liquidation_notional_alert,
+            name="create_liquidation_notional_alert",
+            description=(
+                "Alert when a coin's liquidations in a window exceed a USDT amount. "
+                "side=long|short|both, exchange=binance|bybit|all, window=1m|5m|15m|1h. "
+                "Fires once when the wave crosses the line and does not re-fire until "
+                "the window drops and a new wave starts."
+            ),
+            args_schema=LiquidationNotionalAlertInput,
         ),
         StructuredTool.from_function(
             delete_price_alert,

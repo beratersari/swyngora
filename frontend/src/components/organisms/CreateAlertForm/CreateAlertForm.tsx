@@ -7,7 +7,7 @@ import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
 import { Field, FieldRow, FormStack } from './CreateAlertForm.styles';
 import type { CreateAlertFormProps } from './CreateAlertForm.types';
 
-export type AlertKind = 'price' | 'liquidation_feed' | 'liquidation_cascade';
+export type AlertKind = 'price' | 'liquidation_feed' | 'liquidation_cascade' | 'liquidation_notional';
 
 export type CreatePriceAlertValues = {
   exchange: string;
@@ -15,6 +15,7 @@ export type CreatePriceAlertValues = {
   kind?: AlertKind;
   condition?: string;
   targetPrice?: number;
+  window?: string;
   mode: 'one_time' | 'repeating';
 };
 
@@ -39,9 +40,12 @@ export function CreateAlertForm({
   const [symbol, setSymbol] = useState(defaultSymbol);
   const [condition, setCondition] = useState('above');
   const [targetPrice, setTargetPrice] = useState<number | null>(null);
+  const [window, setWindow] = useState('5m');
   const [mode, setMode] = useState<'one_time' | 'repeating'>('one_time');
   const isFeed = kind === 'liquidation_feed';
   const isCascade = kind === 'liquidation_cascade';
+  const isNotional = kind === 'liquidation_notional';
+  const isLiq = isFeed || isCascade || isNotional;
   const liqExchanges = ['binance', 'bybit', 'all'];
   const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
@@ -58,19 +62,23 @@ export function CreateAlertForm({
         return;
       }
     }
-    if (isCascade && !symbol.trim()) {
+    if ((isCascade || isNotional) && !symbol.trim()) {
+      return;
+    }
+    if (isNotional && (targetPrice == null || targetPrice <= 0)) {
       return;
     }
     try {
       await onSubmit({
         kind,
-        exchange: isFeed || isCascade ? exchange || 'all' : (exchange as MarketExchange),
+        exchange: isLiq ? exchange || 'all' : (exchange as MarketExchange),
         symbol: isFeed ? 'ALL' : symbol.trim(),
-        condition: isFeed ? 'down' : isCascade ? condition || 'cascade' : condition,
+        condition: isFeed ? 'down' : isCascade ? condition || 'cascade' : isNotional ? condition || 'both' : condition,
         targetPrice: isFeed ? targetPrice ?? 300 : isCascade ? 0 : (targetPrice ?? 0),
-        mode: isFeed || isCascade ? 'repeating' : mode,
+        window: isNotional ? window : undefined,
+        mode: isLiq ? 'repeating' : mode,
       });
-      if (kind === 'price') setTargetPrice(null);
+      if (kind === 'price' || isNotional) setTargetPrice(null);
     } catch {
       // parent surfaces error
     }
@@ -97,12 +105,14 @@ export function CreateAlertForm({
               { value: 'price', label: t('alerts:kinds.price', { defaultValue: 'Price' }) },
               { value: 'liquidation_feed', label: t('alerts:kinds.liquidation_feed', { defaultValue: 'Liquidation feed' }) },
               { value: 'liquidation_cascade', label: t('alerts:kinds.liquidation_cascade', { defaultValue: 'Liquidation cascade' }) },
+              { value: 'liquidation_notional', label: t('alerts:kinds.liquidation_notional', { defaultValue: 'Liquidation notional' }) },
             ]}
             onChange={(v) => {
               setKind(v);
-              if (v === 'liquidation_feed' || v === 'liquidation_cascade') {
+              if (v === 'liquidation_feed' || v === 'liquidation_cascade' || v === 'liquidation_notional') {
                 setMode('repeating');
                 if (v === 'liquidation_cascade') setCondition('cascade');
+                if (v === 'liquidation_notional') setCondition('both');
                 if (!['binance', 'bybit', 'all'].includes(exchange)) setExchange('all');
               } else {
                 setCondition('above');
@@ -119,7 +129,7 @@ export function CreateAlertForm({
             value={exchange}
             aria-label={t('alerts:exchange')}
             style={{ minWidth: 120 }}
-            options={(isFeed || isCascade ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
+            options={(isLiq ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
             onChange={setExchange}
           />
         </Field>
@@ -151,10 +161,16 @@ export function CreateAlertForm({
                       { value: 'cascade', label: t('alerts:conditions.cascade', { defaultValue: 'Cascade' }) },
                       { value: 'extreme', label: t('alerts:conditions.extreme', { defaultValue: 'Extreme' }) },
                     ]
-                  : [
-                      { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
-                      { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
-                    ]
+                  : isNotional
+                    ? [
+                        { value: 'both', label: t('alerts:conditions.both', { defaultValue: 'Long + short' }) },
+                        { value: 'long', label: t('alerts:conditions.long', { defaultValue: 'Longs' }) },
+                        { value: 'short', label: t('alerts:conditions.short', { defaultValue: 'Shorts' }) },
+                      ]
+                    : [
+                        { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
+                        { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
+                      ]
               }
               onChange={(v) => setCondition(v)}
             />
@@ -165,18 +181,45 @@ export function CreateAlertForm({
             <Text variant="caption" color="secondary">
               {isFeed
                 ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' })
-                : t('alerts:threshold', { defaultValue: 'Target price' })}
+                : isNotional
+                  ? t('alerts:notional', { defaultValue: 'USDT notional' })
+                  : t('alerts:threshold', { defaultValue: 'Target price' })}
             </Text>
             <InputNumber
               value={isFeed ? (targetPrice ?? 300) : (targetPrice ?? undefined)}
-              aria-label={isFeed ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' }) : t('alerts:threshold', { defaultValue: 'Target price' })}
+              aria-label={
+                isFeed
+                  ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' })
+                  : isNotional
+                    ? t('alerts:notional', { defaultValue: 'USDT notional' })
+                    : t('alerts:threshold', { defaultValue: 'Target price' })
+              }
               min={isFeed ? 30 : 0}
-              style={{ minWidth: 140 }}
+              style={{ minWidth: 160 }}
               onChange={(v) => setTargetPrice(typeof v === 'number' ? v : null)}
             />
           </Field>
         )}
-        {isFeed || isCascade ? null : (
+        {isNotional ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('alerts:window', { defaultValue: 'Window' })}
+            </Text>
+            <Select
+              value={window}
+              aria-label={t('alerts:window', { defaultValue: 'Window' })}
+              style={{ minWidth: 100 }}
+              options={[
+                { value: '1m', label: '1m' },
+                { value: '5m', label: '5m' },
+                { value: '15m', label: '15m' },
+                { value: '1h', label: '1h' },
+              ]}
+              onChange={setWindow}
+            />
+          </Field>
+        ) : null}
+        {isLiq ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:mode', { defaultValue: 'Mode' })}
@@ -209,7 +252,8 @@ export function CreateAlertForm({
           disabled={
             isSubmitting ||
             (kind === 'price' && (!symbol.trim() || targetPrice == null)) ||
-            (isCascade && !symbol.trim())
+            (isCascade && !symbol.trim()) ||
+            (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0))
           }
           onClick={() => void submit()}
         >

@@ -17,6 +17,18 @@ func (s *Service) GetLiquidationFeed(exchange string) domain.LiquidationFeed {
 	return s.liq.Feed(ex)
 }
 
+// ListLiquidationEvents returns prints for one coin (or all) since cutoff.
+func (s *Service) ListLiquidationEvents(exchange, symbol string, since time.Time) []domain.LiquidationEvent {
+	if s == nil || s.liq == nil {
+		return nil
+	}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil
+	}
+	return s.liq.EventsSince(ex, symbol, since)
+}
+
 // GetLiquidationCascade scores short-burst long/short liquidations for one coin
 // (or symbol=all for the pooled market) on Binance and Bybit separately.
 func (s *Service) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error) {

@@ -12,6 +12,12 @@ const (
 	AlertKindLiqFeed AlertKind = "liquidation_feed"
 	// AlertKindLiqCascade fires when a coin (or the market) is in a cascade.
 	AlertKindLiqCascade AlertKind = "liquidation_cascade"
+	// AlertKindLiqNotional fires when long/short/total notional in a window
+	// crosses a dollar threshold (one fire per wave).
+	AlertKindLiqNotional AlertKind = "liquidation_notional"
+
+	// DefaultLiqNotionalWindow is 5 minutes.
+	DefaultLiqNotionalWindow = 5 * time.Minute
 
 	// DefaultLiqFeedAlertSeconds is how long a venue may stay unhealthy before fire.
 	DefaultLiqFeedAlertSeconds = 300
@@ -37,9 +43,15 @@ func IsLiqCascadeAlert(k AlertKind) bool {
 	return ok && k == AlertKindLiqCascade
 }
 
-// IsLiquidationAlert is feed or cascade.
+// IsLiqNotionalAlert reports kind=liquidation_notional.
+func IsLiqNotionalAlert(k AlertKind) bool {
+	k, ok := NormalizeAlertKind(string(k))
+	return ok && k == AlertKindLiqNotional
+}
+
+// IsLiquidationAlert is feed, cascade, or notional.
 func IsLiquidationAlert(k AlertKind) bool {
-	return IsLiqFeedAlert(k) || IsLiqCascadeAlert(k)
+	return IsLiqFeedAlert(k) || IsLiqCascadeAlert(k) || IsLiqNotionalAlert(k)
 }
 
 // LiqFeedAlertThreshold is the min unhealthy duration (targetPrice as seconds).
@@ -260,7 +272,129 @@ func CascadeScanAlertObservation(a PriceAlert, scan *CascadeScan) (bool, float64
 	return true, best.Score, detail
 }
 
-func validateLiqAlertSpec(kind AlertKind, condition string, target float64) error {
+// LiqNotionalWindow is the lookback for a notional alert (RangePct = minutes).
+func LiqNotionalWindow(a PriceAlert) time.Duration {
+	d, _, _ := ParseLiqNotionalWindow(a.RangePct, "")
+	return d
+}
+
+// ParseLiqNotionalWindow accepts 1m/5m/15m/1h, or RangePct as minutes (1, 5, 15, 60).
+func ParseLiqNotionalWindow(rangePct float64, window string) (time.Duration, string, error) {
+	w := strings.ToLower(strings.TrimSpace(window))
+	if w != "" {
+		switch w {
+		case "1m", "1min", "1":
+			return time.Minute, "1m", nil
+		case "5m", "5min", "5":
+			return 5 * time.Minute, "5m", nil
+		case "15m", "15min", "15":
+			return 15 * time.Minute, "15m", nil
+		case "1h", "60m", "60":
+			return time.Hour, "1h", nil
+		default:
+			return 0, "", fmt.Errorf("%w: window must be 1m, 5m, 15m, or 1h", ErrInvalidArgument)
+		}
+	}
+	switch {
+	case rangePct == 0:
+		return DefaultLiqNotionalWindow, "5m", nil
+	case rangePct == 1:
+		return time.Minute, "1m", nil
+	case rangePct == 5:
+		return 5 * time.Minute, "5m", nil
+	case rangePct == 15:
+		return 15 * time.Minute, "15m", nil
+	case rangePct == 60:
+		return time.Hour, "1h", nil
+	default:
+		return 0, "", fmt.Errorf("%w: window must be 1m, 5m, 15m, or 1h", ErrInvalidArgument)
+	}
+}
+
+// LiqNotionalSide is long, short, or both (total).
+func LiqNotionalSide(a PriceAlert) string {
+	switch strings.ToLower(strings.TrimSpace(string(a.Condition))) {
+	case LiquidationSideLong:
+		return LiquidationSideLong
+	case LiquidationSideShort:
+		return LiquidationSideShort
+	default:
+		return "both"
+	}
+}
+
+// LiqNotionalAlertDetail is the window total that crossed the dollar line.
+type LiqNotionalAlertDetail struct {
+	Exchange      string
+	Symbol        string
+	Side          string
+	Window        string
+	Notional      float64
+	LongNotional  float64
+	ShortNotional float64
+	Threshold     float64
+	Count         int
+}
+
+// NotionalAlertObservation sums prints in the lookback. Met when the chosen
+// side (long, short, or both=total) is at or above targetPrice USDT.
+// exchange=all sums Binance + Bybit and never substitutes a missing venue.
+func NotionalAlertObservation(a PriceAlert, events []LiquidationEvent, now time.Time) (bool, float64, LiqNotionalAlertDetail) {
+	win, winID, _ := ParseLiqNotionalWindow(a.RangePct, "")
+	if win <= 0 {
+		win = DefaultLiqNotionalWindow
+		winID = "5m"
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	cut := now.Add(-win)
+	side := LiqNotionalSide(a)
+	wantEx := strings.ToLower(strings.TrimSpace(string(a.Exchange)))
+	detail := LiqNotionalAlertDetail{
+		Exchange:  string(a.Exchange),
+		Symbol:    a.Symbol,
+		Side:      side,
+		Window:    winID,
+		Threshold: a.TargetPrice,
+	}
+	var longN, shortN float64
+	for _, e := range events {
+		if e.Notional <= 0 || e.Time.IsZero() || e.Time.Before(cut) {
+			continue
+		}
+		if wantEx != "" && wantEx != "all" && string(e.Exchange) != wantEx {
+			continue
+		}
+		switch e.Side {
+		case LiquidationSideLong:
+			longN += e.Notional
+		case LiquidationSideShort:
+			shortN += e.Notional
+		default:
+			continue
+		}
+		detail.Count++
+	}
+	detail.LongNotional = longN
+	detail.ShortNotional = shortN
+	switch side {
+	case LiquidationSideLong:
+		detail.Notional = longN
+	case LiquidationSideShort:
+		detail.Notional = shortN
+	default:
+		detail.Notional = longN + shortN
+	}
+	if a.TargetPrice <= 0 {
+		return false, detail.Notional, detail
+	}
+	return detail.Notional+1e-9 >= a.TargetPrice, detail.Notional, detail
+}
+
+func validateLiqAlertSpec(kind AlertKind, condition string, target, rangePct float64) error {
 	cond := strings.ToLower(strings.TrimSpace(condition))
 	switch kind {
 	case AlertKindLiqFeed:
@@ -284,6 +418,18 @@ func validateLiqAlertSpec(kind AlertKind, condition string, target float64) erro
 		}
 		if target != 0 && (math.IsNaN(target) || math.IsInf(target, 0)) {
 			return fmt.Errorf("%w: unused targetPrice must be 0 for liquidation_cascade", ErrInvalidArgument)
+		}
+	case AlertKindLiqNotional:
+		switch cond {
+		case "", "both", "total", LiquidationSideLong, LiquidationSideShort:
+		default:
+			return fmt.Errorf("%w: liquidation_notional condition must be long, short, or both", ErrInvalidArgument)
+		}
+		if target <= 0 || math.IsNaN(target) || math.IsInf(target, 0) {
+			return fmt.Errorf("%w: notional threshold must be a positive USDT amount", ErrInvalidArgument)
+		}
+		if _, _, err := ParseLiqNotionalWindow(rangePct, ""); err != nil {
+			return err
 		}
 	}
 	return nil

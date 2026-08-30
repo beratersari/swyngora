@@ -32,6 +32,7 @@
     "price": "Price",
     "liquidation_feed": "Liquidation feed",
     "liquidation_cascade": "Liquidation cascade",
+    "liquidation_notional": "Liquidation notional",
     "price_above": "Price ≥",
     "price_below": "Price ≤",
     "change_pct_above": "24h change % ≥",
@@ -43,9 +44,14 @@
     "above": "Price above",
     "below": "Price below",
     "cascade": "Cascade",
-    "extreme": "Extreme"
+    "extreme": "Extreme",
+    "both": "Long + short",
+    "long": "Longs",
+    "short": "Shorts"
   },
   "minDownSeconds": "Down for (seconds)",
+  "notional": "USDT notional",
+  "window": "Window",
   "modes": {
     "one_time": "One-time",
     "repeating": "Repeating"

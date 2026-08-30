@@ -604,6 +604,11 @@ func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, targ
 		ex = domain.Exchange(parsed)
 		if k == domain.AlertKindLiqFeed {
 			sym = domain.LiqAlertSymbolAll
+		} else if k == domain.AlertKindLiqNotional {
+			sym = domain.NormalizeLiquidationSymbol(symbol)
+			if sym == "" || strings.EqualFold(sym, "all") {
+				return domain.PriceAlert{}, fmt.Errorf("symbol required")
+			}
 		} else {
 			s, err := domain.ParseLiquidationLevelsSymbol(symbol)
 			if err != nil {

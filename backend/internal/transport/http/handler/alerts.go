@@ -56,7 +56,7 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 		Status:      string(a.Status),
 		CreatedAt:   a.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	if domain.IsBookAlert(a.Kind) && a.RangePct > 0 {
+	if (domain.IsBookAlert(a.Kind) || domain.IsLiqNotionalAlert(a.Kind)) && a.RangePct > 0 {
 		dto.RangePct = a.RangePct
 	}
 	if a.Mode == domain.AlertModeRepeating {
@@ -105,11 +105,12 @@ type createAlertBody struct {
 	ClientID    string  `json:"clientId"`
 	Exchange    string  `json:"exchange"`
 	Symbol      string  `json:"symbol"`
-	Kind        string  `json:"kind"` // price | imbalance | wall | liquidation_feed | liquidation_cascade
+	Kind        string  `json:"kind"` // price | imbalance | wall | liquidation_feed | liquidation_cascade | liquidation_notional
 	Condition   string  `json:"condition"`
 	TargetPrice float64 `json:"targetPrice"`
 	RangePct    float64 `json:"rangePct"`
-	Mode        string  `json:"mode"` // one_time | repeating
+	Window      string  `json:"window"` // liquidation_notional: 1m|5m|15m|1h
+	Mode        string  `json:"mode"`   // one_time | repeating
 }
 
 // Create handles POST /api/v1/alerts
@@ -124,7 +125,7 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := strings.ToLower(strings.TrimSpace(body.Kind))
-	if body.TargetPrice == 0 && kind != "wall" && kind != "liquidation_feed" && kind != "liquidation_cascade" {
+	if body.TargetPrice == 0 && kind != "wall" && kind != "liquidation_feed" && kind != "liquidation_cascade" && kind != "liquidation_notional" {
 		// Try query fallback only if body zero and query set (optional convenience).
 		if raw := r.URL.Query().Get("targetPrice"); raw != "" {
 			if f, err := strconv.ParseFloat(raw, 64); err == nil {
@@ -140,6 +141,7 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Condition:   body.Condition,
 		TargetPrice: body.TargetPrice,
 		RangePct:    body.RangePct,
+		Window:      body.Window,
 		Mode:        body.Mode,
 	})
 	if err != nil {
