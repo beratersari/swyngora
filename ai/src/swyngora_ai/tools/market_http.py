@@ -430,6 +430,21 @@ class LiquidationsInput(BaseModel):
     )
 
 
+class LiquidationLevelsInput(BaseModel):
+    symbol: str = Field(
+        default="all",
+        description="Pair e.g. BTCUSDT, or all for market-wide time bars",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = combined)",
+    )
+    range: str = Field(
+        default="24h",
+        description="12h|24h|3d|7d (totals clamp to 24h)",
+    )
+
+
 class LiquidationOverviewInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -1736,6 +1751,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidations",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_liquidation_levels(
+        symbol: str = "all", exchange: str = "all", range: str = "24h"
+    ) -> str:
+        return http.get(
+            "/api/v1/market/liquidation-levels",
+            {"symbol": symbol, "exchange": exchange, "range": range},
         )
 
     def get_liquidation_overview(
@@ -3745,6 +3768,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "the overall market liquidation situation."
             ),
             args_schema=LiquidationOverviewInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_levels,
+            name="get_liquidation_levels",
+            description=(
+                "CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns "
+                "estimated long/short notional at each price. symbol=all returns "
+                "observed time bars of total liquidations across every coin. "
+                "exchange=binance|bybit|all. range=12h|24h|3d|7d."
+            ),
+            args_schema=LiquidationLevelsInput,
         ),
         StructuredTool.from_function(
             get_orderbook_heatmap,

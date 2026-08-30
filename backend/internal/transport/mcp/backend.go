@@ -1105,6 +1105,42 @@ func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window s
 	})
 }
 
+func (b *Backend) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationLevels(ctx, exchange, symbol, rawRange)
+	if err != nil {
+		return nil, err
+	}
+	levels := make([]map[string]any, 0, len(got.Levels))
+	for _, lv := range got.Levels {
+		levels = append(levels, map[string]any{
+			"price": lv.Price, "longNotional": lv.LongNotional, "shortNotional": lv.ShortNotional,
+			"totalNotional": lv.TotalNotional,
+		})
+	}
+	bars := make([]map[string]any, 0, len(got.Bars))
+	for _, bar := range got.Bars {
+		bars = append(bars, map[string]any{
+			"t": bar.Time.UTC().Format(time.RFC3339Nano),
+			"longNotional": bar.LongNotional, "shortNotional": bar.ShortNotional,
+			"totalNotional": bar.TotalNotional, "count": bar.Count,
+		})
+	}
+	from, to := "", ""
+	if !got.From.IsZero() {
+		from = got.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !got.To.IsZero() {
+		to = got.To.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"kind": got.Kind, "symbol": got.Symbol, "exchange": got.Exchange, "range": got.Range,
+		"from": from, "to": to, "lastPrice": got.LastPrice, "levels": levels, "bars": bars, "note": got.Note,
+	})
+}
+
 func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

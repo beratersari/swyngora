@@ -748,6 +748,59 @@ func TestGetLiquidationOverview_BadWindow(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationLevels_AllCoinsFromBook(t *testing.T) {
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 100, Quantity: 1, Notional: 80, Time: time.Now().UTC().Add(-10 * time.Minute),
+	})
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBybit, Symbol: "ETHUSDT", Side: domain.LiquidationSideShort,
+		Price: 3, Quantity: 2, Notional: 20, Time: time.Now().UTC().Add(-10 * time.Minute),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetLiquidationLevels(context.Background(), "all", "all", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != domain.LiquidationLevelsKindTotal || got.Symbol != "all" || len(got.Bars) == 0 {
+		t.Fatalf("%+v", got)
+	}
+	var longN, shortN float64
+	for _, b := range got.Bars {
+		if v, e := strconv.ParseFloat(b.LongNotional, 64); e == nil {
+			longN += v
+		}
+		if v, e := strconv.ParseFloat(b.ShortNotional, 64); e == nil {
+			shortN += v
+		}
+	}
+	if longN != 80 || shortN != 20 {
+		t.Fatalf("long=%v short=%v bars=%+v", longN, shortN, got.Bars)
+	}
+	onlyBn, err := svc.GetLiquidationLevels(context.Background(), "binance", "*", "12h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bnShort float64
+	for _, b := range onlyBn.Bars {
+		if v, e := strconv.ParseFloat(b.ShortNotional, 64); e == nil {
+			bnShort += v
+		}
+	}
+	if bnShort != 0 {
+		t.Fatalf("binance must omit Bybit shorts %+v", onlyBn.Bars)
+	}
+}
+
+func TestGetLiquidationLevels_BadRange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationLevels(context.Background(), "all", "BTCUSDT", "9h")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 type fakeOI struct {
 	ser *domain.OpenInterestSeries
 	err error

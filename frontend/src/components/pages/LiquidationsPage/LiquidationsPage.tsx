@@ -12,11 +12,17 @@ import {
   type LiqHeatSide,
   type LiqHeatVenue,
 } from '@/components/organisms/LiquidationHeatmap';
+import {
+  LIQ_CHART_RANGES,
+  LIQ_LEVELS_POLL_MS,
+  LiquidationBarChart,
+} from '@/components/organisms/LiquidationBarChart';
 import { LiquidationTreemap } from '@/components/organisms/LiquidationTreemap';
 import { LiquidationWindowCards } from '@/components/organisms/LiquidationWindowCards';
 import {
   rtkErrorMessage,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
   useGetTicker24hQuery,
 } from '@/libs/api';
@@ -24,6 +30,8 @@ import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { DEFAULT_LIQ_SYMBOL, LIQ_OVERVIEW_POLL_MS } from './LiquidationsPage.constants';
 import {
+  parseLiqChartRange,
+  parseLiqChartSymbol,
   parseLiqExchange,
   parseLiqSymbol,
   parseLiqView,
@@ -48,6 +56,8 @@ export function LiquidationsPage() {
   const windowId = parseLiqWindow(searchParams.get('window'));
   const exchange = parseLiqExchange(searchParams.get('exchange'));
   const symbol = parseLiqSymbol(searchParams.get('symbol'));
+  const chartSymbol = parseLiqChartSymbol(searchParams.get('symbol'));
+  const chartRange = parseLiqChartRange(searchParams.get('range'));
   const [liqHeatRange, setLiqHeatRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqHeatVenue, setLiqHeatVenue] = useState<LiqHeatVenue>('combined');
   const [liqHeatSide, setLiqHeatSide] = useState<LiqHeatSide>('totals');
@@ -69,12 +79,21 @@ export function LiquidationsPage() {
   const overviewQuery = useGetMarketLiquidationOverviewQuery(
     { exchange, window: windowId, limit: 80 },
     {
-      pollingInterval: visible && view === 'overview' ? LIQ_OVERVIEW_POLL_MS : 0,
+      pollingInterval: visible && (view === 'overview' || view === 'chart') ? LIQ_OVERVIEW_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );
   const overview = rtkCurrent(overviewQuery);
   const coins = overview?.coins ?? [];
+
+  const levelsQuery = useGetMarketLiquidationLevelsQuery(
+    { exchange, symbol: chartSymbol, range: chartRange },
+    {
+      skip: view !== 'chart',
+      pollingInterval: visible && view === 'chart' ? LIQ_LEVELS_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
 
   const heatQuery = useGetMarketLiquidationHuntHeatmapQuery(
     { symbol, range: liqHeatRange, exchange: exchange === 'all' ? 'all' : exchange },
@@ -109,9 +128,14 @@ export function LiquidationsPage() {
       <Toolbar>
         <Segmented
           value={view}
-          onChange={(next) => patchParams({ view: next === 'heatmap' ? 'heatmap' : null })}
+          onChange={(next) =>
+            patchParams({
+              view: next === 'overview' ? null : String(next),
+            })
+          }
           options={[
             { value: 'overview', label: t('liquidations:tabs.overview') },
+            { value: 'chart', label: t('liquidations:tabs.chart') },
             { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
           ]}
         />
@@ -133,6 +157,38 @@ export function LiquidationsPage() {
             }
           />
         </Field>
+        {view === 'chart' ? (
+          <>
+            <Field>
+              <Text variant="caption" color="secondary" id="liq-coin-label">
+                {t('liquidations:chart.coin')}
+              </Text>
+              <Select
+                aria-labelledby="liq-coin-label"
+                showSearch
+                value={chartSymbol}
+                style={{ minWidth: 160 }}
+                options={[
+                  { value: 'all', label: t('liquidations:chart.allCoins') },
+                  ...symbolOptions.map((s) => ({ value: s, label: s.replace(/USDT$|USDC$/i, '') || s })),
+                ]}
+                onChange={(next) => patchParams({ symbol: next === DEFAULT_LIQ_SYMBOL ? null : next })}
+              />
+            </Field>
+            <Field>
+              <Text variant="caption" color="secondary" id="liq-range-label">
+                {t('liquidations:chart.range')}
+              </Text>
+              <Select
+                aria-labelledby="liq-range-label"
+                value={chartRange}
+                style={{ minWidth: 88 }}
+                options={LIQ_CHART_RANGES.map((r) => ({ value: r, label: r }))}
+                onChange={(next) => patchParams({ range: next === '24h' ? null : next })}
+              />
+            </Field>
+          </>
+        ) : null}
       </Toolbar>
 
       {overviewQuery.isError ? (
@@ -151,7 +207,7 @@ export function LiquidationsPage() {
             <LiquidationTreemap
               coins={coins}
               isLoading={rtkCurrentPending(overviewQuery)}
-              onOpen={(next) => patchParams({ view: 'heatmap', symbol: next })}
+              onOpen={(next) => patchParams({ view: 'chart', symbol: next })}
             />
           </MapCol>
           <CardsCol>
@@ -163,6 +219,19 @@ export function LiquidationsPage() {
             />
           </CardsCol>
         </OverviewLayout>
+      ) : view === 'chart' ? (
+        <LiquidationBarChart
+          data={rtkCurrent(levelsQuery)}
+          isLoading={rtkCurrentPending(levelsQuery)}
+          isFetching={levelsQuery.isFetching}
+          errorMessage={
+            levelsQuery.isError
+              ? rtkErrorMessage(levelsQuery.error, {
+                  resource: t('liquidations:tabs.chart'),
+                })
+              : null
+          }
+        />
       ) : (
         <HeatmapStack>
           <Field>

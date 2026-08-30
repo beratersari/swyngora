@@ -1484,6 +1484,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidation level bar chart
+         * @description CoinGlass-style **liquidation map** as bars.
+         *
+         *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
+         *       long/short notional at each price bin (hunt model summed over `range`).
+         *     - `symbol=all`: **total** observed liquidations for every tracked coin
+         *       as time bars (last 24h max). `exchange=binance|bybit|all`.
+         *
+         *     Informational only.
+         */
+        get: operations["getMarketLiquidationLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -3812,6 +3839,36 @@ export interface components {
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
             coins?: components["schemas"]["MarketLiquidationCoin"][];
+            note?: string;
+        };
+        MarketLiquidationLevelBar: {
+            price?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+        };
+        MarketLiquidationTimeBar: {
+            /** Format: date-time */
+            t?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+        };
+        /** @description Price-level map bars or market-wide time bars */
+        MarketLiquidationLevels: {
+            /** @enum {string} */
+            kind?: "levels" | "totals";
+            symbol?: string;
+            exchange?: string;
+            range?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            lastPrice?: string;
+            levels?: components["schemas"]["MarketLiquidationLevelBar"][];
+            bars?: components["schemas"]["MarketLiquidationTimeBar"][];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -7336,6 +7393,34 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationLevels: {
+        parameters: {
+            query?: {
+                /** @description Pair (BTCUSDT) or all */
+                symbol?: string;
+                /** @description binance | bybit | all (default all = combined) */
+                exchange?: string;
+                /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
+                range?: "12h" | "24h" | "3d" | "7d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price-level bars or time-total bars */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationLevels"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getSupply: {

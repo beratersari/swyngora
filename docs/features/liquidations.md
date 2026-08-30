@@ -33,12 +33,12 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation.go` |
+| Domain | `backend/internal/domain/liquidation.go`, `liquidation_levels.go` |
 | Adapters | `adapter/binance/liqhub.go`, `adapter/bybit/liqhub.go` |
-| Service | `GetLiquidations` |
-| HTTP | `GET /api/v1/market/liquidations`, `GET /api/v1/market/liquidations/overview` |
-| MCP / AI | `get_liquidations`, `get_liquidation_overview` |
-| Web | `/liquidations` — market cards + treemap; Heatmap tab reuses `LiquidationHeatmap` |
+| Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels` |
+| HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels` |
+| MCP / AI | `get_liquidations`, `get_liquidation_overview`, `get_liquidation_levels` |
+| Web | `/liquidations` — cards + treemap; **Chart** tab (price levels or all-coin totals); Heatmap tab |
 
 ## How to verify
 
@@ -47,6 +47,8 @@ cd backend && go test ./internal/domain/ ./internal/adapter/binance/ ./internal/
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT&exchange=binance"
 curl "http://localhost:8080/api/v1/market/liquidations/overview?window=24h&limit=20"
+curl "http://localhost:8080/api/v1/market/liquidation-levels?symbol=BTCUSDT&exchange=all&range=24h"
+curl "http://localhost:8080/api/v1/market/liquidation-levels?symbol=all&exchange=binance"
 ```
 
 ## Limits

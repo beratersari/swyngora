@@ -52,6 +52,10 @@ export type MarketLiquidationCoin = components['schemas']['MarketLiquidationCoin
 export type LiquidationOverviewQuery = NonNullable<
   operations['getMarketLiquidationOverview']['parameters']['query']
 >;
+export type MarketLiquidationLevels = components['schemas']['MarketLiquidationLevels'];
+export type LiquidationLevelsQuery = NonNullable<
+  operations['getMarketLiquidationLevels']['parameters']['query']
+>;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
 
 export type MarketCvdVenue = {

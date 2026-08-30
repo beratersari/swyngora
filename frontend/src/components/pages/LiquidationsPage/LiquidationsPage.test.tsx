@@ -39,6 +39,24 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationLevelsQuery: () => ({
+      data: {
+        kind: 'levels',
+        symbol: 'BTCUSDT',
+        lastPrice: '100',
+        levels: [{ price: '100', longNotional: '10', shortNotional: '5', totalNotional: '15' }],
+      },
+      currentData: {
+        kind: 'levels',
+        symbol: 'BTCUSDT',
+        lastPrice: '100',
+        levels: [{ price: '100', longNotional: '10', shortNotional: '5', totalNotional: '15' }],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketLiquidationHuntHeatmapQuery: () => ({
       data: undefined,
       currentData: undefined,
@@ -64,6 +82,11 @@ describe('LiquidationsPage', () => {
     expect(await screen.findByRole('heading', { name: /liquidations|likidasyonlar/i })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /liquidation coin map|likidasyon coin/i })).toBeInTheDocument();
     expect(screen.getAllByText(/total|toplam/i).length).toBeGreaterThan(0);
+  });
+
+  it('opens the chart tab from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=chart'] });
+    expect(await screen.findByTestId('liquidation-bar-chart')).toBeInTheDocument();
   });
 
   it('opens the heatmap tab from the URL', async () => {

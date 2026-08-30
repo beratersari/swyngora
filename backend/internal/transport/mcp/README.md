@@ -18,6 +18,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_orderbook_heatmap` | Resting bid/ask size over time (pre-warmed for live crypto pairs; not executed volume) |
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations (Binance USD-M + Bybit linear) |
 | `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap |
+| `get_liquidation_levels` | CoinGlass-style price-level bars for one coin, or time bars of total liquidations (`symbol=all`) |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |

@@ -3,6 +3,7 @@
   "subtitle": "Binance USD-M ve Bybit linear genelinde vadeli long/short likidasyonlar.",
   "tabs": {
     "overview": "Genel bakış",
+    "chart": "Grafik",
     "heatmap": "Isı haritası"
   },
   "exchange": "Borsa",
@@ -31,6 +32,19 @@
   "heatmap": {
     "symbol": "Sembol",
     "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "chart": {
+    "coin": "Coin",
+    "allCoins": "Tüm coinler",
+    "range": "Aralık",
+    "levelsTitle": "Likidasyon seviyeleri",
+    "totalsTitle": "Toplam likidasyonlar",
+    "levelsHint": "Her fiyattaki tahmini long ve short likidasyon tutarı. Long (kırmızı) solda, short (yeşil) sağda.",
+    "totalsHint": "Seçilen borsada izlenen tüm coinlerin zaman içindeki gerçekleşen long ve short likidasyonları.",
+    "lastPrice": "Son",
+    "aria": "Likidasyon çubuk grafiği",
+    "empty": "Bu pencerede henüz likidasyon çubuğu yok.",
+    "emptyHint": "Başka bir coin seçin veya canlı akışı bekleyin."
   },
   "status": {
     "live": "Canlı",

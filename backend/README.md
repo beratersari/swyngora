@@ -58,6 +58,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
 | `GET` | `/api/v1/market/liquidation-hunt/heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; own-venue prices; Binance, Bybit, combined; 1h/4h/12h review) |
+| `GET` | `/api/v1/market/liquidation-levels` | CoinGlass-style price-level bars for one coin, or time bars of all-coin totals |
 | `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |
 | `GET` | `/api/v1/market/positioning` | Price+OI regime (buildup / unwinding / covering) per venue + combined market |
 | `GET` | `/api/v1/market/venue-divergence` | Binance vs Bybit: same or opposite, which signals differ and why |

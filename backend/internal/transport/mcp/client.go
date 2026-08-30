@@ -248,6 +248,21 @@ func (c *APIClient) GetLiquidationOverview(ctx context.Context, exchange, window
 	return c.get(ctx, "/api/v1/market/liquidations/overview", q)
 }
 
+// GetLiquidationLevels returns price-level bars or market-wide time bars.
+func (c *APIClient) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if rawRange != "" {
+		q.Set("range", rawRange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-levels", q)
+}
+
 // GetOrderBookHeatmap returns recent resting bid/ask size over time.
 func (c *APIClient) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
 	q := url.Values{}

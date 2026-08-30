@@ -768,6 +768,72 @@ func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window s
 	return s.liq.Overview(ex, win, lim), nil
 }
 
+// GetLiquidationLevels returns CoinGlass-style price bars for one coin, or
+// observed time bars when symbol is all.
+func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.LiquidationLevelsReport, error) {
+	sym, err := domain.ParseLiquidationLevelsSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	spec, err := domain.ParseLiquidationLevelsRange(rawRange)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	from := now.Add(-spec.Window)
+	if sym == "all" {
+		if spec.Window > 24*time.Hour {
+			from = now.Add(-24 * time.Hour)
+			spec.Window = 24 * time.Hour
+		}
+		step := domain.LiquidationTimeBarStep(spec.Window)
+		var bars []domain.LiquidationTimeBar
+		if s.liq != nil {
+			bars = s.liq.TimeBars(ex, "all", from, now, step)
+		} else {
+			bars = []domain.LiquidationTimeBar{}
+		}
+		return &domain.LiquidationLevelsReport{
+			Kind:     domain.LiquidationLevelsKindTotal,
+			Symbol:   "all",
+			Exchange: ex,
+			Range:    string(spec.Range),
+			From:     from,
+			To:       now,
+			Bars:     bars,
+			Note:     "Observed long/short liquidations for every tracked coin. Binance USD-M and Bybit linear stay separate unless exchange=all. Informational only.",
+		}, nil
+	}
+	heat, err := s.GetLiquidationHuntHeatmap(ctx, "all", sym, string(spec.Range))
+	if err != nil {
+		return nil, err
+	}
+	grid := domain.PickHuntHeatmapGrid(*heat, ex)
+	last := ""
+	tkrEx := ex
+	if tkrEx == "all" {
+		tkrEx = string(domain.ExchangeBinance)
+	}
+	if tkr, terr := s.GetTicker24h(ctx, tkrEx, sym); terr == nil && tkr != nil {
+		last = tkr.LastPrice
+	}
+	return &domain.LiquidationLevelsReport{
+		Kind:      domain.LiquidationLevelsKindMap,
+		Symbol:    sym,
+		Exchange:  ex,
+		Range:     heat.Range,
+		From:      heat.From,
+		To:        heat.To,
+		LastPrice: last,
+		Levels:    domain.CollapseHuntHeatmapLevels(grid, heat.Prices),
+		Note:      "Estimated liquidation notional at each price (same model as the hunt heatmap, summed over the window). Longs liquidate if price falls into the bin; shorts if it rises. Informational only.",
+	}, nil
+}
+
 // GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.
 func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)

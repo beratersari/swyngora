@@ -89,6 +89,15 @@ class _Transport(httpx.BaseTransport):
                     "windows": [{"window": "24h", "change": "+10", "direction": "up"}],
                 },
             )
+        if request.url.path.endswith("/liquidation-levels"):
+            return httpx.Response(
+                200,
+                json={
+                    "kind": "totals",
+                    "symbol": request.url.params.get("symbol") or "all",
+                    "bars": [{"t": "2026-08-30T12:00:00Z", "longNotional": "10", "shortNotional": "5"}],
+                },
+            )
         if request.url.path.endswith("/liquidations/overview"):
             return httpx.Response(
                 200,
@@ -329,6 +338,10 @@ def test_market_tools_hit_api(monkeypatch):
     ov = json.loads(by_name["get_liquidation_overview"].invoke({"window": "1h"}))
     assert ov["coinWindow"] == "1h"
     assert ov["coins"][0]["symbol"] == "BTCUSDT"
+
+    assert "get_liquidation_levels" in by_name
+    lv = json.loads(by_name["get_liquidation_levels"].invoke({"symbol": "all"}))
+    assert lv["kind"] == "totals"
 
     assert "get_orderbook_heatmap" in by_name
     heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))

@@ -311,6 +311,32 @@ func TestAPIClient_GetLiquidationOverview(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetLiquidationLevels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidation-levels" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "all" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "totals", "symbol": "all", "bars": []any{}})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLiquidationLevels(context.Background(), "all", "all", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["kind"] != "totals" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetOrderBookHeatmap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/heatmap" {

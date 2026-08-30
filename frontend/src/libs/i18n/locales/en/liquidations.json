@@ -3,6 +3,7 @@
   "subtitle": "Futures long vs short liquidations across Binance USD-M and Bybit linear.",
   "tabs": {
     "overview": "Overview",
+    "chart": "Chart",
     "heatmap": "Heatmap"
   },
   "exchange": "Venue",
@@ -31,6 +32,19 @@
   "heatmap": {
     "symbol": "Symbol",
     "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "chart": {
+    "coin": "Coin",
+    "allCoins": "All coins",
+    "range": "Range",
+    "levelsTitle": "Liquidation levels",
+    "totalsTitle": "Total liquidations",
+    "levelsHint": "Estimated long and short liquidation notional at each price. Longs (red) to the left, shorts (green) to the right.",
+    "totalsHint": "Observed long and short liquidations over time for every tracked coin on the selected venue.",
+    "lastPrice": "Last",
+    "aria": "Liquidation bar chart",
+    "empty": "No liquidation bars in this window yet.",
+    "emptyHint": "Pick another coin or wait for the live feed."
   },
   "status": {
     "live": "Live",

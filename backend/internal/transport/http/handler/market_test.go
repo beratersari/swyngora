@@ -1249,6 +1249,23 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationLevels_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-levels?symbol=all&range=24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationLevels(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body liquidationLevelsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Kind != "totals" || body.Symbol != "all" || body.Bars == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h", nil)

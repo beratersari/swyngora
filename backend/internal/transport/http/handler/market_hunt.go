@@ -271,6 +271,77 @@ func (h *MarketHandler) GetLiquidationHuntHeatmap(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, huntHeatmapToDTO(got))
 }
 
+// GetLiquidationLevels handles GET /api/v1/market/liquidation-levels.
+func (h *MarketHandler) GetLiquidationLevels(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetLiquidationLevels(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, liquidationLevelsToDTO(got))
+}
+
+type liquidationLevelBarDTO struct {
+	Price         string `json:"price"`
+	LongNotional  string `json:"longNotional"`
+	ShortNotional string `json:"shortNotional"`
+	TotalNotional string `json:"totalNotional"`
+}
+
+type liquidationTimeBarDTO struct {
+	T             string `json:"t"`
+	LongNotional  string `json:"longNotional"`
+	ShortNotional string `json:"shortNotional"`
+	TotalNotional string `json:"totalNotional"`
+	Count         int    `json:"count"`
+}
+
+type liquidationLevelsResponse struct {
+	Kind      string                   `json:"kind"`
+	Symbol    string                   `json:"symbol"`
+	Exchange  string                   `json:"exchange"`
+	Range     string                   `json:"range"`
+	From      string                   `json:"from,omitempty"`
+	To        string                   `json:"to,omitempty"`
+	LastPrice string                   `json:"lastPrice,omitempty"`
+	Levels    []liquidationLevelBarDTO `json:"levels"`
+	Bars      []liquidationTimeBarDTO  `json:"bars"`
+	Note      string                   `json:"note"`
+}
+
+func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
+	if a == nil {
+		return liquidationLevelsResponse{Levels: []liquidationLevelBarDTO{}, Bars: []liquidationTimeBarDTO{}}
+	}
+	levels := make([]liquidationLevelBarDTO, 0, len(a.Levels))
+	for _, lv := range a.Levels {
+		levels = append(levels, liquidationLevelBarDTO{
+			Price: lv.Price, LongNotional: lv.LongNotional, ShortNotional: lv.ShortNotional,
+			TotalNotional: lv.TotalNotional,
+		})
+	}
+	bars := make([]liquidationTimeBarDTO, 0, len(a.Bars))
+	for _, b := range a.Bars {
+		bars = append(bars, liquidationTimeBarDTO{
+			T: b.Time.UTC().Format(time.RFC3339Nano),
+			LongNotional: b.LongNotional, ShortNotional: b.ShortNotional,
+			TotalNotional: b.TotalNotional, Count: b.Count,
+		})
+	}
+	from, to := "", ""
+	if !a.From.IsZero() {
+		from = a.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !a.To.IsZero() {
+		to = a.To.UTC().Format(time.RFC3339Nano)
+	}
+	return liquidationLevelsResponse{
+		Kind: a.Kind, Symbol: a.Symbol, Exchange: a.Exchange, Range: a.Range,
+		From: from, To: to, LastPrice: a.LastPrice, Levels: levels, Bars: bars, Note: a.Note,
+	}
+}
+
 type huntHeatmapGridDTO struct {
 	Exchange      string      `json:"exchange"`
 	Longs         [][]float64 `json:"longs"`

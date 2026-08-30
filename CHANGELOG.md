@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Liquidation chart:** CoinGlass-style bar map of long/short levels for one coin (Binance / Bybit / combined), plus time bars of total liquidations for all coins (`GET /api/v1/market/liquidation-levels`, web `/liquidations?view=chart`) (`docs/features/liquidations.md`)
 - **Liquidation 24h restart:** last 24 hours of Binance and Bybit liquidation prints (and coverage clocks) are stored in SQLite and reloaded on boot so desk windows stay usable after a restart (`docs/features/liquidations.md`)
 - **Liquidation desk:** market-wide 1h / 4h / 12h / 24h long/short totals plus a ranked coin treemap (`GET /api/v1/market/liquidations/overview`, MCP `get_liquidation_overview`). Web `/liquidations` (near Watchlist / Signals) with Overview + Heatmap tabs. The price × time heatmap moved off coin-detail Tape (`docs/features/liquidations.md`)
 - **Liquidation hunt heatmap:** CoinGlass-style price × time intensity from historical OI, **each venue's own price** (no Binance↔Bybit fallback), the hunt leverage mix, and observed liquidations. Ranges 12h / 24h / 3d / 7d. Binance and Bybit separately plus combined sum. `review` scores 1h / 4h / 12h and lists **each signal** (area, hit/miss, time-to-hit, price and liquidation coverage, labeled gaps). Hit rate and liq-increase use only validated rows (`GET /api/v1/market/liquidation-hunt/heatmap`, MCP `get_liquidation_heatmap`). Web `/liquidations?view=heatmap` (`docs/features/liquidation-hunt.md`)

@@ -38,6 +38,7 @@ type DataPort interface {
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error)
+	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -498,6 +499,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		limit := int(req.GetFloat("limit", 0))
 		raw, err := api.GetLiquidationOverview(ctx, req.GetString("exchange", "all"), req.GetString("window", "24h"), limit)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_levels",
+		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT (or ETHUSDT) returns estimated long/short notional at each price level for Binance, Bybit, or combined. symbol=all returns observed time bars of total liquidations across every tracked coin. range=12h|24h|3d|7d (totals clamp to 24h). Prefer this for liquidation levels or the market-wide liquidation chart."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = combined)")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetLiquidationLevels(ctx, req.GetString("exchange", "all"), req.GetString("symbol", "all"), req.GetString("range", "24h"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

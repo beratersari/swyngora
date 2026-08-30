@@ -2493,6 +2493,42 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-levels:
+    get:
+      summary: Liquidation level bar chart
+      description: |
+        CoinGlass-style **liquidation map** as bars.
+
+        - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
+          long/short notional at each price bin (hunt model summed over `range`).
+        - `symbol=all`: **total** observed liquidations for every tracked coin
+          as time bars (last 24h max). `exchange=binance|bybit|all`.
+
+        Informational only.
+      operationId: getMarketLiquidationLevels
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          description: Pair (BTCUSDT) or all
+          schema: { type: string, default: all, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = combined)
+          schema: { type: string, default: all, example: all }
+        - name: range
+          in: query
+          description: 12h | 24h | 3d | 7d (totals clamp to 24h)
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+      responses:
+        '200':
+          description: Price-level bars or time-total bars
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationLevels'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -7139,6 +7175,39 @@ components:
         coins:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationCoin' }
+        note: { type: string }
+    MarketLiquidationLevelBar:
+      type: object
+      properties:
+        price: { type: string }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+    MarketLiquidationTimeBar:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+    MarketLiquidationLevels:
+      type: object
+      description: Price-level map bars or market-wide time bars
+      properties:
+        kind: { type: string, enum: [levels, totals] }
+        symbol: { type: string }
+        exchange: { type: string }
+        range: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        lastPrice: { type: string }
+        levels:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelBar' }
+        bars:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationTimeBar' }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object
