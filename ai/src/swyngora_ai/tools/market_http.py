@@ -1369,7 +1369,9 @@ class PriceDiffWatchCreateInput(BaseModel):
     client_id: str
     symbol: str
     notional: float = Field(gt=0, description="Quote size to walk on live books e.g. 10000")
-    min_profit: float = Field(ge=0, description="Minimum after-fee profit in quote currency e.g. 20")
+    min_profit: float = Field(
+        ge=0, description="Minimum after-fee profit in quote currency e.g. 20"
+    )
     min_duration_sec: float = Field(
         default=0,
         ge=0,
@@ -1502,7 +1504,9 @@ class ScannerRuleDeleteInput(BaseModel):
 class ScannerRuleUpdateInput(BaseModel):
     client_id: str
     rule_id: str
-    enabled: bool | None = Field(default=None, description="true to run the rule, false to pause it")
+    enabled: bool | None = Field(
+        default=None, description="true to run the rule, false to pause it"
+    )
     interval: str | None = None
     conditions: str | None = Field(
         default=None,
@@ -2169,9 +2173,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id},
         )
 
-    def list_funding_arb_signals(
-        client_id: str, status: str = "open", limit: int = 50
-    ) -> str:
+    def list_funding_arb_signals(client_id: str, status: str = "open", limit: int = 50) -> str:
         params: dict[str, Any] = {"clientId": client_id, "status": status}
         if limit:
             params["limit"] = limit
