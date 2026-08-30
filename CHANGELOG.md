@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff executable quote:** walk the buy venue asks and sell venue bids for a size (`notional` USDT or `quantity`) and return average buy/sell, slippage, profit after fees, usable money, and the largest still-profitable size (`GET /api/v1/price-diff/quote`, `GET /api/v1/price-diff/opportunities/{id}/quote`, MCP `quote_price_diff` / `quote_price_diff_opportunity`) (`docs/features/price-diff.md`)
 
 ### Changed
+- **AI serve CLI:** `python -m swyngora_ai.serve` / `swyngora-ai-serve` use Typer (`--host` / `--port` unchanged)
 - **Price-diff watches:** set `notional`, `minProfit`, and optional `minDurationSec`; opportunities open only when that size fills on **fresh** live books and after-fee profit meets the floor for the whole duration — not from ticker last-price gaps or a one-tick spike (`docs/features/price-diff.md`)
 - **Price-diff scan:** missing venue books are listed as `unavailable` (not ranked or chosen as best); `minProfitPct` / `minProfitAmount` hide tiny fills (`docs/features/price-diff.md`)
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
