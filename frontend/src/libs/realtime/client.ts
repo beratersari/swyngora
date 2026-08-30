@@ -6,6 +6,7 @@ import {
   symbolKey,
   uniqueSymbolRefs,
 } from './helpers';
+import { mintRealtimeTicket } from './ticket';
 import type { RealtimeMessage, RealtimeSymbolRef } from './realtime.types';
 
 type StatusListener = (connected: boolean) => void;
@@ -121,7 +122,13 @@ export class RealtimeClient {
   private open(): void {
     if (this.stopped) return;
     this.clearTimers();
-    const url = realtimeWsUrl();
+    void this.openWithTicket();
+  }
+
+  private async openWithTicket(): Promise<void> {
+    const ticket = await mintRealtimeTicket();
+    if (this.stopped) return;
+    const url = realtimeWsUrl(undefined, undefined, undefined, undefined, ticket);
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);

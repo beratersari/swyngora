@@ -1,5 +1,4 @@
 import { env } from '@/config/env';
-import { getBrowserApiToken } from '@/libs/utils/apiAuth';
 import { getOrCreateClientId } from '@/libs/utils/clientId';
 import { REALTIME_PATH, REALTIME_RECONNECT_MAX_MS, REALTIME_RECONNECT_MIN_MS } from './constants';
 import type { RealtimeMessage, RealtimeSymbolRef } from './realtime.types';
@@ -38,13 +37,13 @@ export function realtimeWsUrl(
   clientId = getOrCreateClientId(),
   locationHost?: string,
   locationProtocol?: string,
-  authToken = getBrowserApiToken(),
+  ticket = '',
 ): string {
   const params = new URLSearchParams();
   const id = clientId.trim();
   if (id) params.set('clientId', id);
-  const tok = authToken.trim();
-  if (tok) params.set('token', tok);
+  const t = ticket.trim();
+  if (t) params.set('ticket', t);
   const q = params.toString() ? `?${params.toString()}` : '';
   const base = (apiBaseUrl || '').trim();
   if (base) {

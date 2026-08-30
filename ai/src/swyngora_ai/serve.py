@@ -93,12 +93,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         session_id = str(payload.get("sessionId") or payload.get("session_id") or "default")
         client_id = str(payload.get("clientId") or payload.get("client_id") or "").strip()
-        # Missing flags default to full access (CLI / older backends).
-        can_trade = payload["canTrade"] if "canTrade" in payload else payload.get("can_trade", True)
+        # Missing flags deny mutations (Go proxy always sends both).
+        can_trade = payload["canTrade"] if "canTrade" in payload else payload.get("can_trade", False)
         can_manage_keys = (
             payload["canManageKeys"]
             if "canManageKeys" in payload
-            else payload.get("can_manage_keys", True)
+            else payload.get("can_manage_keys", False)
         )
         can_trade = bool(can_trade)
         can_manage_keys = bool(can_manage_keys)
@@ -136,8 +136,8 @@ class Handler(BaseHTTPRequestHandler):
         message: str,
         session_id: str,
         client_id: str = "",
-        can_trade: bool = True,
-        can_manage_keys: bool = True,
+        can_trade: bool = False,
+        can_manage_keys: bool = False,
     ) -> None:
         """NDJSON stream: one JSON object per line (status/tool/thinking/final/error/done)."""
         q: queue.Queue[dict[str, Any] | None] = queue.Queue()

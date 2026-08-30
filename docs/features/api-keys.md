@@ -18,7 +18,7 @@ User keys **cannot**:
 - Use `/mcp` unless `permission=trade`
 - Use AI to place trades or mutate state when `permission=read` (`canTrade=false` is enforced in the AI tool HTTP layer even though tools authenticate with the process master token)
 
-The process master token (`API_AUTH_TOKEN`) still has full access and is how the main app manages keys when the API is locked down. In open local mode (empty master token), `X-Client-Id` is enough to manage keys; a `swy_…` user key still binds that client and its scopes.
+The process master token (`API_AUTH_TOKEN`) can manage keys and, **from loopback only**, act as any `X-Client-Id` (local Vite, AI HTTP tools). Remote clients cannot impersonate a tenant unless `ALLOW_MASTER_IMPERSONATE=true`. They may mint the first key for a client that has none. In open local mode (empty master token), `X-Client-Id` is enough to manage keys; a `swy_…` user key still binds that client and its scopes.
 
 The web Settings desk shows the secret once on create. It does **not** install a `permission=read` secret as the browser session token (that would 403 every paper mutation). A newly created `trade` key may be stored in `swyngora.apiAuthToken`.
 
@@ -34,7 +34,9 @@ Limits: 20 active keys per `clientId`; name 1–64 characters. `clientId` is val
 | `GET` | `/api/v1/account/api-keys` | Metadata only |
 | `DELETE` | `/api/v1/account/api-keys/{id}` | Revoke immediately |
 
-Send the secret as `Authorization: Bearer <secret>` or `X-API-Key: <secret>`. The key’s `clientId` is used (header spoofing is ignored).
+Send the secret as `Authorization: Bearer <secret>` or `X-API-Key: <secret>`. The key’s `clientId` is used (header spoofing is ignored). Do **not** put the secret on a query string. Browsers mint `POST /api/v1/realtime/ticket` and pass `?ticket=` on the WebSocket only.
+
+The process master token cannot act as an arbitrary tenant from a remote client (`ALLOW_MASTER_IMPERSONATE=false` by default). Loopback (local Vite proxy, AI HTTP tools) may still impersonate. Remote master may create the **first** key for a client that has none; it cannot mint keys for an existing tenant or read that tenant’s data.
 
 ## Where the code lives
 
@@ -55,6 +57,6 @@ go test ./internal/service/apikey/... ./internal/adapter/accountstore/... ./inte
 
 ## Known limitations
 
-- `clientId` is still not a login; master token + `X-Client-Id` is the “main account”
+- `clientId` is still not a login; user keys are the tenant credential. Remote master impersonation is off unless `ALLOW_MASTER_IMPERSONATE=true`
 - Read vs trade is path/method based, not per-tool MCP filtering (MCP requires `trade`)
 - Account purge deletes all keys for that client

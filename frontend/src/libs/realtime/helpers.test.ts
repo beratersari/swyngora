@@ -37,7 +37,7 @@ describe('realtime helpers', () => {
     );
   });
 
-  it('appends a user-issued token for locked APIs and never invents one', () => {
+  it('appends a one-time ticket and never a long-lived token', () => {
     const open = realtimeWsUrl('https://api.example.com', 'client-1', undefined, undefined, '');
     expect(open).toBe('wss://api.example.com/api/v1/ws?clientId=client-1');
     const locked = realtimeWsUrl(
@@ -45,10 +45,11 @@ describe('realtime helpers', () => {
       'client-1',
       undefined,
       undefined,
-      'swy_user_key',
+      'one-time-ticket',
     );
     expect(locked).toContain('clientId=client-1');
-    expect(locked).toMatch(/[?&]token=swy_user_key/);
+    expect(locked).toMatch(/[?&]ticket=one-time-ticket/);
+    expect(locked).not.toMatch(/token=/);
   });
 
   it('caps reconnect backoff', () => {

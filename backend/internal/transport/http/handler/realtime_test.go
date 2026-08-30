@@ -13,6 +13,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
 
 type rtMarket struct {
@@ -41,6 +42,31 @@ func (a *rtAccess) RealtimeSnapshot(_ context.Context, actor, book string) (*dom
 		ID: book, ClientID: "owner", Name: "Main", Role: domain.PortfolioRoleViewer,
 		CashBalance: 1000, Equity: 1000, Positions: []domain.PositionView{},
 	}, nil, nil
+}
+
+func TestRealtimeIssueTicketHTTP(t *testing.T) {
+	hub := realtime.NewHub(realtime.Options{Market: &rtMarket{}, Access: &rtAccess{}, Interval: time.Hour})
+	iss := middleware.NewWSTicketIssuer()
+	h := NewRealtimeHandler(hub, nil).WithTickets(iss)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/realtime/ticket", nil)
+	req.Header.Set("X-Client-Id", "alice")
+	rec := httptest.NewRecorder()
+	h.IssueTicket(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.Bytes())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	tok, _ := body["ticket"].(string)
+	if tok == "" || body["clientId"] != "alice" {
+		t.Fatalf("body=%v", body)
+	}
+	id, err := iss.Consume(tok)
+	if err != nil || id == nil || id.ClientID != "alice" {
+		t.Fatalf("consume: %+v %v", id, err)
+	}
 }
 
 func TestRealtimeInfoHTTP(t *testing.T) {
@@ -84,7 +110,7 @@ func TestRealtimeWS_SubscribePricesAndPortfolioAccess(t *testing.T) {
 	}
 
 	if err := conn.WriteJSON(map[string]any{
-		"type": "subscribe_prices",
+		"type":    "subscribe_prices",
 		"symbols": []map[string]string{{"exchange": "binance", "symbol": "BTCUSDT"}},
 	}); err != nil {
 		t.Fatal(err)

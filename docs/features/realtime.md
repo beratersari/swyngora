@@ -8,9 +8,10 @@ Stop polling REST for live numbers. One WebSocket lets the client subscribe to *
 
 | Item | Value |
 |------|--------|
-| Upgrade | `GET /api/v1/ws?clientId=<id>` |
+| Upgrade | `GET /api/v1/ws?clientId=<id>&ticket=<one-time>` |
 | Protocol info | `GET /api/v1/realtime` |
-| Auth | Same as REST (`Authorization` / `X-API-Key`). Browsers: `?token=` |
+| Ticket | `POST /api/v1/realtime/ticket` (header auth) → 60s, single use |
+| Auth | REST: `Authorization` / `X-API-Key`. Browsers: mint a ticket, never put the long-lived secret on the URL |
 | Max price symbols | 100 per connection |
 | Price pump | `REALTIME_PRICE_INTERVAL` (default 5s; uses ticker cache) |
 

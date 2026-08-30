@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **No query-string API secrets:** `?token=` / `?apiKey=` no longer authenticate any HTTP route. Browsers mint a 60s one-time ticket (`POST /api/v1/realtime/ticket`) and pass `?ticket=` on the WebSocket only.
+- **Remote master token cannot impersonate tenants:** unless `ALLOW_MASTER_IMPERSONATE=true` or the peer is loopback, the process master token cannot select an arbitrary `clientId` for tenant APIs or MCP tools. First-key bootstrap (`POST /api/v1/account/api-keys` when that client has zero keys) still works.
+- **AI tenant bind fails closed:** overlapping chats no longer inherit another session's `clientId` / `can_trade` or progress callback when ContextVars are missing.
+- **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
+
 ### Added
 - **Liquidation hunt heatmap:** CoinGlass-style price × time intensity from historical OI, **each venue's own price** (no Binance↔Bybit fallback), the hunt leverage mix, and observed liquidations. Ranges 12h / 24h / 3d / 7d. Binance and Bybit separately plus combined sum. `review` scores 1h / 4h / 12h and lists **each signal** (area, hit/miss, time-to-hit, price and liquidation coverage, labeled gaps). Hit rate and liq-increase use only validated rows (`GET /api/v1/market/liquidation-hunt/heatmap`, MCP `get_liquidation_heatmap`). Coin detail Tape tab (`docs/features/liquidation-hunt.md`)
 - **RSI heatmap:** CoinGlass-style scatter — one timeframe, each pair a ranked dot, stables omitted, ~300-bar Wilder RSI (`GET /api/v1/market/rsi-heatmap`, MCP `get_rsi_heatmap`, web `/heatmap?view=rsi`, Telegram `/rsiheat`) (`docs/features/rsi-heatmap.md`)
@@ -38,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **RSI heatmap hover and aspect:** the scatter keeps a 1:1 plot (dots stay circular) and the card only appears when the pointer is on a coin, not in empty space (`docs/features/rsi-heatmap.md`)
 - **Recurring buy maxPrice race:** PATCH of maxPrice / pause / budget / end takes the same book lock as the fill and the live plan is re-read inside that lock immediately before the cash debit, so an in-flight worker cannot buy with the old limit (`docs/features/recurring-buys.md`)
 - **Recurring buy budget cash:** `spent` is slipped fill plus taker fee (wallet debit), not raw order notional (`docs/features/recurring-buys.md`)
 - **Recurring buy spent vs fill:** trade, `spent`, and the succeeded run commit in one transaction so a failed spent update cannot leave budget uncounted; the same period cannot increment `spent` twice (`docs/features/recurring-buys.md`)

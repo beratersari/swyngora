@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 
@@ -14,6 +15,7 @@ from swyngora_ai.tools.market_http import (
     build_market_tools,
     reset_bound_client_id,
     reset_tool_scope,
+    submit_with_bound_context,
 )
 
 
@@ -70,7 +72,7 @@ def test_worker_thread_keeps_read_only_scope(monkeypatch):
         f"{transport.requests[-1].method} {transport.requests[-1].url}"
     )
     assert "403" in out
-    assert "read-only" in out
+    assert "read-only" in out or "ambiguous" in out
 
 
 def test_worker_thread_keeps_bound_client_id(monkeypatch):
@@ -85,14 +87,12 @@ def test_worker_thread_keeps_bound_client_id(monkeypatch):
         box["out"] = tools["get_portfolio"].invoke({"client_id": "victim-bob"})
 
     try:
-        th = threading.Thread(target=worker)
-        th.start()
-        th.join(timeout=5)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            submit_with_bound_context(pool, worker).result(timeout=5)
     finally:
         reset_tool_scope(scope)
         reset_bound_client_id(bind_tok)
 
-    assert th.is_alive() is False
     assert transport.requests, f"expected GET, tool_out={box.get('out')!r}"
     last = transport.requests[-1]
     sent = last.url.params.get("clientId") or last.headers.get("X-Client-Id")
