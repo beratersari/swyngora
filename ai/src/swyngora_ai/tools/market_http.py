@@ -3666,7 +3666,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_funding_arb_watches,
             name="list_funding_arb_watches",
             description="List funding-arb follow watches for a clientId.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             get_funding_arb_watch,
