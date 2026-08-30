@@ -44,6 +44,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/realtime/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a one-time WebSocket ticket
+         * @description Returns a 60-second, single-use ticket bound to the caller. Browsers
+         *     send this as `?ticket=` on `GET /api/v1/ws` instead of the long-lived
+         *     API secret. Requires the same header auth as other tenant routes.
+         */
+        post: operations["createRealtimeTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ws": {
         parameters: {
             query?: never;
@@ -53,8 +75,10 @@ export interface paths {
         };
         /**
          * WebSocket realtime stream
-         * @description Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
-         *     browsers may pass `?token=` and must pass `?clientId=`.
+         * @description Upgrade to WebSocket. REST uses `Authorization` / `X-API-Key`.
+         *     Browsers mint a one-time ticket (`POST /api/v1/realtime/ticket`) and
+         *     pass `?ticket=` plus `?clientId=`. Long-lived secrets are not accepted
+         *     on the query string.
          *
          *     Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
          *     `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
@@ -3397,6 +3421,12 @@ export interface components {
                 message?: string;
             };
         };
+        RealtimeTicket: {
+            ticket?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            clientId?: string;
+        };
         RealtimeInfo: {
             /** @example /api/v1/ws */
             path?: string;
@@ -5469,12 +5499,38 @@ export interface operations {
             };
         };
     };
+    createRealtimeTicket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ticket minted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeTicket"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
     realtimeWebSocket: {
         parameters: {
             query: {
                 clientId: string;
-                /** @description API token when the browser cannot set Authorization */
-                token?: string;
+                /** @description One-time ticket from POST /api/v1/realtime/ticket (60s, single use) */
+                ticket?: string;
                 /** @description Optional initial book (still send subscribe_portfolio) */
                 portfolioId?: string;
             };

@@ -13,6 +13,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/transport/http/middleware"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 // RealtimeHandler upgrades WebSocket connections onto the shared hub.
 type RealtimeHandler struct {
 	hub      *realtime.Hub
+	tickets  *middleware.WSTicketIssuer
 	upgrader websocket.Upgrader
 }
 
@@ -40,6 +42,14 @@ func NewRealtimeHandler(hub *realtime.Hub, allowOrigins []string) *RealtimeHandl
 	}
 }
 
+// WithTickets attaches the one-time WS ticket issuer (POST /api/v1/realtime/ticket).
+func (h *RealtimeHandler) WithTickets(tickets *middleware.WSTicketIssuer) *RealtimeHandler {
+	if h != nil {
+		h.tickets = tickets
+	}
+	return h
+}
+
 type clientWSMessage struct {
 	Type        string `json:"type"`
 	PortfolioID string `json:"portfolioId"`
@@ -52,6 +62,36 @@ type clientWSMessage struct {
 // Info handles GET /api/v1/realtime — protocol description (MCP / clients).
 func (h *RealtimeHandler) Info(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, realtimeInfoDTO())
+}
+
+// IssueTicket handles POST /api/v1/realtime/ticket.
+// Mint a one-time, 60s ticket so the browser never puts the long-lived secret on the WS URL.
+func (h *RealtimeHandler) IssueTicket(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.tickets == nil {
+		writeError(w, fmt.Errorf("%w: realtime tickets not configured", domain.ErrUpstream))
+		return
+	}
+	id := middleware.IdentityFrom(r.Context())
+	if id == nil {
+		id = &middleware.AuthIdentity{Loopback: true}
+	}
+	if id.ClientID == "" {
+		id.ClientID = clientIDFrom(r)
+	}
+	if id.ClientID == "" {
+		writeError(w, fmt.Errorf("%w: clientId is required", domain.ErrInvalidArgument))
+		return
+	}
+	tok, exp, err := h.tickets.Issue(*id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ticket":    tok,
+		"expiresAt": exp.UTC().Format(time.RFC3339Nano),
+		"clientId":  id.ClientID,
+	})
 }
 
 // ServeWS handles GET /api/v1/ws.
@@ -249,7 +289,7 @@ func realtimeInfoDTO() map[string]any {
 		"path":        domain.RealtimeWSPath,
 		"protocol":    domain.RealtimeProtocolVersion,
 		"maxSymbols":  domain.MaxRealtimePriceSymbols,
-		"auth":        "Same as REST (Bearer / X-API-Key). Browsers: ?token= and ?clientId= on the WebSocket URL.",
+		"auth":        "REST: Authorization Bearer or X-API-Key. Browsers: POST /api/v1/realtime/ticket then GET /api/v1/ws?ticket=&clientId=. Long-lived secrets are not accepted on the query string.",
 		"reconnect":   "Resubscribe after reconnect; the server snapshots current prices and the selected portfolio.",
 		"channels":    []string{"prices", "portfolio"},
 		"clientTypes": []string{domain.RealtimeOpSubscribePrices, domain.RealtimeOpUnsubscribePrices, domain.RealtimeOpSubscribePortfolio, domain.RealtimeOpUnsubscribePortfolio, domain.RealtimeOpPing},

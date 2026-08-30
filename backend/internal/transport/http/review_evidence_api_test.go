@@ -170,7 +170,7 @@ func TestReviewEvidence_ReadKeyCannotPOSTMCP(t *testing.T) {
 }
 
 func TestReviewEvidence_QueryTokenAuthenticatesTenantRoute(t *testing.T) {
-	// Finding: extractAPIToken accepts ?token= / ?apiKey= (lands in logs and history).
+	// Closed: long-lived secrets are not accepted on the query string.
 	watch := watchlist.New(watchliststore.NewMemory())
 	h := NewRouterWithOptions(evidenceMarket(), watch, RouterOptions{
 		RateLimitRPS: 0, APIAuthToken: evidenceMaster,
@@ -185,15 +185,15 @@ func TestReviewEvidence_QueryTokenAuthenticatesTenantRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=ws-user&token="+evidenceMaster, nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("?token= want 200 got %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("?token= want 401 got %d %s", rr.Code, rr.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=ws-user&apiKey="+evidenceMaster, nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("?apiKey= want 200 got %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("?apiKey= want 401 got %d %s", rr.Code, rr.Body.String())
 	}
 }
 

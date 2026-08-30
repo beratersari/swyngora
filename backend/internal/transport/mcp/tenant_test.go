@@ -46,3 +46,23 @@ func TestBindMCPTenant_ForcesClientIDAndBlocksKeyAdmin(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBindMCPTenant_RemoteMasterCannotPickTenant(t *testing.T) {
+	ctx := middleware.WithIdentity(context.Background(), &middleware.AuthIdentity{
+		Master: true, DenyImpersonate: true, Loopback: false,
+	})
+	req := mcp.CallToolRequest{}
+	req.Params.Name = "get_portfolio"
+	req.Params.Arguments = map[string]any{"clientId": "victim"}
+	if err := bindMCPTenant(ctx, &req); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("remote master + clientId: %v", err)
+	}
+
+	loop := middleware.WithIdentity(context.Background(), &middleware.AuthIdentity{
+		Master: true, DenyImpersonate: true, Loopback: true,
+	})
+	req.Params.Arguments = map[string]any{"clientId": "local"}
+	if err := bindMCPTenant(loop, &req); err != nil {
+		t.Fatalf("loopback master: %v", err)
+	}
+}

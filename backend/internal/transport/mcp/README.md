@@ -190,7 +190,8 @@ cd backend && go run ./cmd/server
 
 | Control | Env | Notes |
 |---------|-----|--------|
-| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires master token or a user `trade` key (`Authorization: Bearer` / `X-API-Key`) |
+| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires master token or a user `trade` key (`Authorization: Bearer` / `X-API-Key`). Query-string secrets are rejected. |
+| Remote master | `ALLOW_MASTER_IMPERSONATE` | Default false: a remote master token cannot pass `clientId` on tenant tools. Loopback (AI HTTP tools) still can. |
 | Closed account | (in-process tools) | Tools that send `clientId` call `RequireActive` — closed clients get a tool error (HTTP AccountGate cannot read JSON body on `/mcp`) |
 | User API key | HTTP identity | `bindMCPTenant` forces tool `clientId` to the key binding (mismatch → error); `create_api_key` / `list_api_keys` / `revoke_api_key` denied for user keys (mirror REST) |
 | Disable MCP | `MCP_ENABLED=false` | Do not mount `/mcp` at all |

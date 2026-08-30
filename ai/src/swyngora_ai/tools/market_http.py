@@ -21,6 +21,8 @@ from swyngora_ai.tools.packs import filter_tools
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
 # Defaults True for CLI/local so tools work without an HTTP scope envelope.
+# Bound CLI/legacy turns default to trade. Unbound workers use _AMBIGUOUS_BIND
+# (deny). Orchestrator always calls bind_tool_scope for HTTP-scoped chats.
 bound_can_trade: ContextVar[bool] = ContextVar("bound_can_trade", default=True)
 bound_can_manage_keys: ContextVar[bool] = ContextVar("bound_can_manage_keys", default=True)
 _turn_tool_json: ContextVar[list[str] | None] = ContextVar("turn_tool_json", default=None)
@@ -45,6 +47,7 @@ _bind_stack: list[_ToolBind] = []
 _bind_live: ContextVar[bool] = ContextVar("bind_live", default=False)
 _P = TypeVar("_P")
 _AMBIGUOUS_BIND = _ToolBind("", False, False, ambiguous=True)
+_UNBOUND = _ToolBind("", False, False, ambiguous=False)
 
 
 def _context_bind() -> _ToolBind:
@@ -81,15 +84,22 @@ def _pop_matching(match: Callable[[_ToolBind], bool]) -> None:
 
 
 def _active_bind() -> _ToolBind:
+    """Use this task's ContextVars only. Never guess from the process stack.
+
+    LangChain/desk pool workers must go through submit_with_bound_context.
+    A missing bind fails closed so overlapping chats cannot inherit
+    another tenant's clientId or can_trade flag.
+    """
     if _bind_live.get() or bound_client_id.get():
         return _context_bind()
     with _bind_lock:
-        if not _bind_stack:
-            return _context_bind()
         clients = {b.client_id for b in _bind_stack if b.client_id}
-        if len(clients) > 1:
+        scopes = {(b.can_trade, b.can_manage_keys) for b in _bind_stack}
+        if len(clients) > 1 or len(scopes) > 1:
             return _AMBIGUOUS_BIND
-        return _bind_stack[-1]
+    # No ContextVar: do not guess tenant/scope from the stack (that leaked
+    # can_trade across overlapping same-tenant chats). Mutating tools deny.
+    return _UNBOUND
 
 
 def submit_with_bound_context(

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"crypto/subtle"
+	"net"
 	"net/http"
 	"strings"
 
@@ -18,10 +19,15 @@ type identityCtxKey struct{}
 
 // AuthIdentity is request-scoped auth after APIAuth.
 type AuthIdentity struct {
-	ClientID  string
-	CanTrade  bool
-	KeyID     string // empty = master token or open mode
-	UserKey   bool
+	ClientID string
+	CanTrade bool
+	KeyID    string // empty = master token, open mode, or ticket without a user key
+	UserKey  bool
+	Master   bool // authenticated with the process master token
+	Loopback bool // RemoteAddr is loopback (local Vite, AI HTTP tools)
+	// DenyImpersonate is copied from process config: remote master must not
+	// select an arbitrary clientId.
+	DenyImpersonate bool
 }
 
 // IdentityFrom returns user-key identity when a scoped key authenticated the request.
@@ -38,33 +44,68 @@ func WithIdentity(ctx context.Context, id *AuthIdentity) context.Context {
 	return context.WithValue(ctx, identityCtxKey{}, id)
 }
 
+// APIAuthOptions configures APIAuthWithOptions.
+type APIAuthOptions struct {
+	Master                string
+	Keys                  APIKeyLookup
+	Tickets               *WSTicketIssuer
+	DenyMasterImpersonate bool
+}
+
 // APIAuth requires a shared secret when token is non-empty (legacy single-token mode).
 func APIAuth(token string) func(http.Handler) http.Handler {
 	return APIAuthWith(token, nil)
 }
 
 // APIAuthWith accepts the process master token and/or per-user API keys.
-// Master token = full access (any clientId via X-Client-Id).
+// Master token = full access (any clientId via X-Client-Id) only from loopback
+// unless AllowMasterImpersonate is set on the router.
 // User key = one clientId + read or trade permission.
 // Empty master + no user key = open local/dev mode.
 func APIAuthWith(master string, keys APIKeyLookup) func(http.Handler) http.Handler {
-	master = strings.TrimSpace(master)
+	return APIAuthWithOptions(APIAuthOptions{Master: master, Keys: keys})
+}
+
+// APIAuthWithOptions is APIAuthWith plus WS tickets and master-impersonation policy.
+func APIAuthWithOptions(opts APIAuthOptions) func(http.Handler) http.Handler {
+	master := strings.TrimSpace(opts.Master)
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodOptions || isPublicAPIPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
+			if opts.Tickets != nil && isRealtimeWSPath(r.URL.Path) {
+				if ticket := strings.TrimSpace(r.URL.Query().Get("ticket")); ticket != "" {
+					id, err := opts.Tickets.Consume(ticket)
+					if err != nil || id == nil {
+						writeAPIUnauthorized(w)
+						return
+					}
+					r = r.WithContext(WithIdentity(r.Context(), id))
+					if id.ClientID != "" {
+						r.Header.Set("X-Client-Id", id.ClientID)
+					}
+					next.ServeHTTP(w, r)
+					return
+				}
+			}
 			got := extractAPIToken(r)
 			if master != "" && got != "" && subtle.ConstantTimeCompare([]byte(got), []byte(master)) == 1 {
+				id := &AuthIdentity{
+					Master: true, Loopback: isLoopbackRemote(r),
+					DenyImpersonate: opts.DenyMasterImpersonate,
+				}
+				r = r.WithContext(WithIdentity(r.Context(), id))
 				next.ServeHTTP(w, r)
 				return
 			}
-			if keys != nil && domain.LooksLikeUserAPIKey(got) {
-				k, err := keys.Authenticate(r.Context(), got)
+			if opts.Keys != nil && domain.LooksLikeUserAPIKey(got) {
+				k, err := opts.Keys.Authenticate(r.Context(), got)
 				if err == nil && k != nil && !k.IsRevoked() {
 					id := &AuthIdentity{
 						ClientID: k.ClientID, CanTrade: k.CanTrade(), KeyID: k.ID, UserKey: true,
+						Loopback: isLoopbackRemote(r),
 					}
 					r = r.WithContext(WithIdentity(r.Context(), id))
 					r.Header.Set("X-Client-Id", k.ClientID)
@@ -147,17 +188,36 @@ func extractAPIToken(r *http.Request) string {
 	}
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 	if auth == "" {
-		// Browsers cannot set WS headers; allow the same secret on the query string.
-		if v := strings.TrimSpace(r.URL.Query().Get("token")); v != "" {
-			return v
-		}
-		return strings.TrimSpace(r.URL.Query().Get("apiKey"))
+		// Query-string secrets are rejected on every route (they land in
+		// access logs, proxies, and history). Browsers mint a one-time
+		// ?ticket= via POST /api/v1/realtime/ticket instead.
+		return ""
 	}
 	const prefix = "Bearer "
 	if len(auth) > len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
 		return strings.TrimSpace(auth[len(prefix):])
 	}
 	return ""
+}
+
+func isRealtimeWSPath(path string) bool {
+	return path == "/api/v1/ws" || strings.HasPrefix(path, "/api/v1/ws/")
+}
+
+// isLoopbackRemote is true when the peer is loopback (local Vite proxy, AI tools).
+func isLoopbackRemote(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = strings.TrimSpace(r.RemoteAddr)
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return strings.EqualFold(host, "localhost")
 }
 
 // isPublicAPIPath allows unauthenticated access to liveness and public market data.

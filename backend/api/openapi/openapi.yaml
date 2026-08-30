@@ -94,12 +94,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RealtimeInfo'
+  /api/v1/realtime/ticket:
+    post:
+      summary: Mint a one-time WebSocket ticket
+      description: |
+        Returns a 60-second, single-use ticket bound to the caller. Browsers
+        send this as `?ticket=` on `GET /api/v1/ws` instead of the long-lived
+        API secret. Requires the same header auth as other tenant routes.
+      operationId: createRealtimeTicket
+      tags: [Realtime]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ticket minted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeTicket'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /api/v1/ws:
     get:
       summary: WebSocket realtime stream
       description: |
-        Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
-        browsers may pass `?token=` and must pass `?clientId=`.
+        Upgrade to WebSocket. REST uses `Authorization` / `X-API-Key`.
+        Browsers mint a one-time ticket (`POST /api/v1/realtime/ticket`) and
+        pass `?ticket=` plus `?clientId=`. Long-lived secrets are not accepted
+        on the query string.
 
         Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
         `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
@@ -115,9 +144,9 @@ paths:
           required: true
           schema: { type: string }
         - in: query
-          name: token
+          name: ticket
           schema: { type: string }
-          description: API token when the browser cannot set Authorization
+          description: One-time ticket from POST /api/v1/realtime/ticket (60s, single use)
         - in: query
           name: portfolioId
           schema: { type: string }
@@ -6650,6 +6679,16 @@ components:
               type: string
             message:
               type: string
+    RealtimeTicket:
+      type: object
+      properties:
+        ticket:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        clientId:
+          type: string
     RealtimeInfo:
       type: object
       properties:

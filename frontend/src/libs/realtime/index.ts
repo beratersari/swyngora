@@ -8,6 +8,7 @@ export {
   uniqueSymbolRefs,
 } from './helpers';
 export { getRealtimeClient, resetRealtimeClient, RealtimeClient } from './client';
+export { mintRealtimeTicket } from './ticket';
 export { applyPriceTick, applyPortfolioEvent } from './applyUpdates';
 export { useRealtimeConnection, useRealtimeConnected } from './useRealtimeConnection';
 export { usePriceSubscription } from './usePriceSubscription';
