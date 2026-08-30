@@ -12,10 +12,11 @@ const coverageSaveEvery = 30 * time.Second
 // PersistSink writes liquidation events to the book and to SQLite without
 // blocking the websocket path. Duplicate events are ignored by the store.
 type PersistSink struct {
-	Book *domain.LiquidationBook
-	Hist *Service
-	ch   chan domain.LiquidationEvent
-	now  func() time.Time
+	Book     *domain.LiquidationBook
+	Hist     *Service
+	Backfill *Backfiller
+	ch       chan domain.LiquidationEvent
+	now      func() time.Time
 }
 
 // NewPersistSink starts a background writer. Close by canceling the context
@@ -105,9 +106,13 @@ func (s *PersistSink) Record(e domain.LiquidationEvent) {
 }
 
 // SetLive forwards venue liveness to the book and persists coverage.
+// A reconnect schedules a same-venue history fill for closed gaps.
 func (s *PersistSink) SetLive(ex domain.Exchange, live bool) {
 	if s != nil && s.Book != nil {
 		s.Book.SetLive(ex, live)
+	}
+	if live && s != nil && s.Backfill != nil {
+		s.Backfill.Schedule(ex)
 	}
 	if !live {
 		s.saveCoverage()

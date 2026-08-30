@@ -870,12 +870,13 @@ paths:
         Long/short liquidation notional, count, and the biggest hit for the last
         **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
         (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
-        websocket streams. Totals only include events seen since this process
-        started. `coverageSeconds` / `complete` count only time the websocket
-        was actually connected for that coin and venue — they do not advance if
-        the stream never connects or drops. Combined `all` uses the shorter live
-        coverage of the venues watching that coin. `exchange=all` (default) sums
-        both venues. Informational only.
+        websocket streams. After a reconnect, each venue tries its own history
+        for the hole; overlapping live+history prints are counted once. Venues
+        stay separate. `coverageSeconds` / `complete` count live-socket time plus
+        history that filled a disconnect. Combined `all` uses the shorter coverage
+        of the venues watching that coin. `feed.gaps` lists still-unfilled holes
+        in the last 6h; `missingSeconds` is how much time is still missing. A
+        fully filled hole is omitted. Informational only.
       operationId: getMarketLiquidations
       tags: [Market]
       parameters:
@@ -7193,14 +7194,15 @@ components:
         totalNotional: { type: string }
         count: { type: integer }
         biggest: { $ref: '#/components/schemas/LiquidationHit' }
-        coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. }
-        complete: { type: boolean, description: False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. }
+        coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue, plus history that filled a disconnect (capped at the window). Does not grow while a hole is still unfilled. }
+        complete: { type: boolean, description: False until this coin+venue has had live or backfilled coverage for the full window. Combined is false unless both venues were covered for the whole window. }
     LiquidationGap:
       type: object
       properties:
         from: { type: string, format: date-time }
         to: { type: string, format: date-time, description: Omitted while the gap is still open }
-        seconds: { type: integer }
+        seconds: { type: integer, description: Remaining unfilled duration of this hole }
+        missingSeconds: { type: integer, description: Same as seconds — how much of this hole is still missing }
     LiquidationVenueHealth:
       type: object
       properties:
@@ -7209,6 +7211,7 @@ components:
         lastEventAt: { type: string, format: date-time, description: Last liquidation print on this venue }
         lastSeenAt: { type: string, format: date-time, description: Last websocket payload from this venue }
         coverageSeconds: { type: integer }
+        missingSeconds: { type: integer, description: Sum of still-unfilled disconnect time in the last 6h }
         gaps:
           type: array
           items: { $ref: '#/components/schemas/LiquidationGap' }

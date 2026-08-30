@@ -11,8 +11,11 @@ export function formatClock(raw?: string): string {
 }
 
 export function gapHours(venue?: Venue): number {
+  if (typeof venue?.missingSeconds === 'number') {
+    return venue.missingSeconds / 3600;
+  }
   if (!venue?.gaps?.length) return 0;
-  return venue.gaps.reduce((sum, g) => sum + (g.seconds ?? 0), 0) / 3600;
+  return venue.gaps.reduce((sum, g) => sum + (g.missingSeconds ?? g.seconds ?? 0), 0) / 3600;
 }
 
 export function venuesOf(feed?: Feed | null): Venue[] {

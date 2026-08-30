@@ -3868,7 +3868,10 @@ export interface components {
              * @description Omitted while the gap is still open
              */
             to?: string;
+            /** @description Remaining unfilled duration of this hole */
             seconds?: number;
+            /** @description Same as seconds — how much of this hole is still missing */
+            missingSeconds?: number;
         };
         LiquidationVenueHealth: {
             exchange?: string;
@@ -3884,6 +3887,8 @@ export interface components {
              */
             lastSeenAt?: string;
             coverageSeconds?: number;
+            /** @description Sum of still-unfilled disconnect time in the last 6h */
+            missingSeconds?: number;
             gaps?: components["schemas"]["LiquidationGap"][];
         };
         /** @description Per-venue last print, last socket message, and disconnects. Combined never substitutes one venue for the other. */

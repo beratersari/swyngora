@@ -318,6 +318,22 @@ func (c *liveClock) elapsed(now time.Time) time.Duration {
 	return d
 }
 
+func (c *liveClock) add(d time.Duration) {
+	if c == nil || d <= 0 {
+		return
+	}
+	c.accumulated += d
+}
+
+// LiquidationEventKey uniquely identifies one print so live and history
+// overlap cannot be counted twice. Same fields as the SQLite primary key.
+func LiquidationEventKey(e LiquidationEvent) string {
+	return string(e.Exchange) + "\x00" + NormalizeLiquidationSymbol(e.Symbol) + "\x00" + e.Side + "\x00" +
+		strconv.FormatInt(e.Time.UTC().UnixMilli(), 10) + "\x00" +
+		strconv.FormatFloat(e.Price, 'f', -1, 64) + "\x00" +
+		strconv.FormatFloat(e.Quantity, 'f', -1, 64)
+}
+
 // LiquidationBook keeps a rolling 24h of futures liquidations in memory.
 type LiquidationBook struct {
 	mu         sync.Mutex
@@ -331,10 +347,19 @@ type LiquidationBook struct {
 	lastEvent  map[Exchange]time.Time
 	lastSeen   map[Exchange]time.Time
 	gaps       map[Exchange][]LiquidationGap
+	seen       map[string]struct{}
 }
 
 func watchKey(symbol string, ex Exchange) string {
 	return symbol + "|" + string(ex)
+}
+
+// UseClock overrides the book's clock (tests and backfill fixtures).
+func (b *LiquidationBook) UseClock(now func() time.Time) {
+	if b == nil || now == nil {
+		return
+	}
+	b.now = now
 }
 
 // NewLiquidationBook constructs an empty rolling store.
@@ -350,6 +375,7 @@ func NewLiquidationBook() *LiquidationBook {
 		lastEvent:  map[Exchange]time.Time{},
 		lastSeen:   map[Exchange]time.Time{},
 		gaps:       map[Exchange][]LiquidationGap{},
+		seen:       map[string]struct{}{},
 	}
 }
 
@@ -418,14 +444,29 @@ func (b *LiquidationBook) markWatchLocked(ex Exchange, symbol string, at time.Ti
 }
 
 // Record appends one event and drops anything older than 24h.
+// Duplicate prints (same venue, symbol, side, time, price, qty) are ignored.
 func (b *LiquidationBook) Record(e LiquidationEvent) {
-	if b == nil || e.Symbol == "" || e.Notional <= 0 || e.Time.IsZero() {
+	if b == nil {
 		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.recordLocked(e)
+}
+
+func (b *LiquidationBook) recordLocked(e LiquidationEvent) bool {
+	if e.Symbol == "" || e.Notional <= 0 || e.Time.IsZero() || e.Exchange == "" {
+		return false
 	}
 	e.Symbol = NormalizeLiquidationSymbol(e.Symbol)
 	e.Time = e.Time.UTC()
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	if b.seen == nil {
+		b.seen = map[string]struct{}{}
+	}
+	key := LiquidationEventKey(e)
+	if _, ok := b.seen[key]; ok {
+		return false
+	}
 	now := b.now().UTC()
 	if b.lastEvent == nil {
 		b.lastEvent = map[Exchange]time.Time{}
@@ -434,22 +475,30 @@ func (b *LiquidationBook) Record(e LiquidationEvent) {
 		b.lastEvent[e.Exchange] = e.Time
 	}
 	// Events do not start a clock. Coverage is only live-socket time from
-	// SetLive / MarkWatch. A first print must not reset Binance venue coverage.
+	// SetLive / MarkWatch / history fill. A first print must not reset
+	// Binance venue coverage.
 	cut := now.Add(-liquidationRetain)
 	list := append(b.bySym[e.Symbol], e)
 	if len(list) > 1 && list[0].Time.Before(cut) {
 		kept := list[:0]
 		for _, ev := range list {
-			if !ev.Time.Before(cut) {
-				kept = append(kept, ev)
+			if ev.Time.Before(cut) {
+				delete(b.seen, LiquidationEventKey(ev))
+				continue
 			}
+			kept = append(kept, ev)
 		}
 		list = kept
 	}
 	if len(list) > maxLiquidationEventsPerSymbol {
+		for _, ev := range list[:len(list)-maxLiquidationEventsPerSymbol] {
+			delete(b.seen, LiquidationEventKey(ev))
+		}
 		list = list[len(list)-maxLiquidationEventsPerSymbol:]
 	}
 	b.bySym[e.Symbol] = list
+	b.seen[key] = struct{}{}
+	return true
 }
 
 func (b *LiquidationBook) startOfLocked(symbol string, ex Exchange) time.Time {

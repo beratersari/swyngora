@@ -14,12 +14,15 @@ const (
 	maxLiquidationGaps   = 64
 )
 
-// LiquidationGap is a stretch when that venue's websocket was not live.
-// To is zero while the gap is still open.
+// LiquidationGap is a stretch when that venue's websocket was not live
+// and history has not (yet) filled the hole. To is zero while the gap is
+// still open. Seconds / MissingSeconds are the remaining unfilled duration
+// (a fully filled hole is removed, not listed with 0).
 type LiquidationGap struct {
-	From    time.Time
-	To      time.Time
-	Seconds int64
+	From           time.Time
+	To             time.Time
+	Seconds        int64
+	MissingSeconds int64
 }
 
 // LiquidationVenueHealth is one venue's last print, last socket message, and gaps.
@@ -29,6 +32,7 @@ type LiquidationVenueHealth struct {
 	LastEventAt     time.Time
 	LastSeenAt      time.Time
 	CoverageSeconds int64
+	MissingSeconds  int64
 	Gaps            []LiquidationGap
 }
 
@@ -92,13 +96,15 @@ func (b *LiquidationBook) feedLocked(exchange string, now time.Time) Liquidation
 
 func (b *LiquidationBook) venueHealthLocked(ex Exchange, now, since time.Time) LiquidationVenueHealth {
 	live := b.live[ex] && !b.stalledLocked(ex, now)
+	gaps := clipGaps(b.gaps[ex], since, now)
 	h := LiquidationVenueHealth{
 		Exchange:        string(ex),
 		Live:            live,
 		LastEventAt:     b.lastEvent[ex],
 		LastSeenAt:      b.lastSeen[ex],
 		CoverageSeconds: int64(b.venueClock[ex].elapsed(now).Seconds()),
-		Gaps:            clipGaps(b.gaps[ex], since, now),
+		Gaps:            gaps,
+		MissingSeconds:  sumGapMissing(gaps),
 	}
 	return h
 }
@@ -139,14 +145,11 @@ func (b *LiquidationBook) recordGapLocked(ex Exchange, from, to time.Time) {
 			return
 		}
 		list[n-1].To = to
-		list[n-1].Seconds = int64(to.Sub(list[n-1].From).Seconds())
+		list[n-1] = stampGap(list[n-1])
 		b.gaps[ex] = trimGaps(list)
 		return
 	}
-	g := LiquidationGap{From: from, To: to}
-	if !to.IsZero() {
-		g.Seconds = int64(to.Sub(from).Seconds())
-	}
+	g := stampGap(LiquidationGap{From: from, To: to})
 	b.gaps[ex] = trimGaps(append(list, g))
 }
 
@@ -164,7 +167,7 @@ func (b *LiquidationBook) closeOpenGapLocked(ex Exchange, at time.Time) {
 		return
 	}
 	list[n-1].To = at.UTC()
-	list[n-1].Seconds = int64(at.Sub(list[n-1].From).Seconds())
+	list[n-1] = stampGap(list[n-1])
 	b.gaps[ex] = list
 }
 
@@ -237,6 +240,7 @@ func clipGaps(in []LiquidationGap, since, now time.Time) []LiquidationGap {
 		}
 		if end.After(from) {
 			row.Seconds = int64(end.Sub(from).Seconds())
+			row.MissingSeconds = row.Seconds
 		}
 		out = append(out, row)
 	}

@@ -6,5 +6,6 @@ describe('LiquidationFeedHealth helpers', () => {
     expect(formatClock('2026-08-30T15:04:05.000Z')).toBe('15:04:05Z');
     expect(formatClock(undefined)).toBe('—');
     expect(gapHours({ gaps: [{ seconds: 3600 }, { seconds: 1800 }] })).toBe(1.5);
+    expect(gapHours({ missingSeconds: 900, gaps: [{ seconds: 3600 }] })).toBe(0.25);
   });
 });

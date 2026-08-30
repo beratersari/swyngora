@@ -683,9 +683,10 @@ type liquidationWindowDTO struct {
 }
 
 type liquidationGapDTO struct {
-	From    string `json:"from"`
-	To      string `json:"to,omitempty"`
-	Seconds int64  `json:"seconds"`
+	From           string `json:"from"`
+	To             string `json:"to,omitempty"`
+	Seconds        int64  `json:"seconds"`
+	MissingSeconds int64  `json:"missingSeconds"`
 }
 
 type liquidationVenueHealthDTO struct {
@@ -694,6 +695,7 @@ type liquidationVenueHealthDTO struct {
 	LastEventAt     string              `json:"lastEventAt,omitempty"`
 	LastSeenAt      string              `json:"lastSeenAt,omitempty"`
 	CoverageSeconds int64               `json:"coverageSeconds"`
+	MissingSeconds  int64               `json:"missingSeconds"`
 	Gaps            []liquidationGapDTO `json:"gaps"`
 }
 
@@ -740,7 +742,7 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 	return liquidationsResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Feed: feedToDTO(a.Feed),
-		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. Combined never uses the other venue as a stand-in. A dropped or never-connected stream does not grow coverage. feed.lastEventAt is the last print; feed.gaps are disconnects in the last 6h. Notional is quote (USDT). Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts live-socket time plus history that filled a disconnect. Combined never uses the other venue as a stand-in. feed.gaps are still-unfilled holes in the last 6h; missingSeconds is how much of that hole remains. A fully filled reconnect hole is removed. Notional is quote (USDT). Informational only.",
 	}
 }
 
@@ -749,7 +751,8 @@ func feedToDTO(f domain.LiquidationFeed) liquidationFeedDTO {
 	for _, v := range f.Venues {
 		row := liquidationVenueHealthDTO{
 			Exchange: v.Exchange, Live: v.Live, CoverageSeconds: v.CoverageSeconds,
-			Gaps: make([]liquidationGapDTO, 0, len(v.Gaps)),
+			MissingSeconds: v.MissingSeconds,
+			Gaps:           make([]liquidationGapDTO, 0, len(v.Gaps)),
 		}
 		if !v.LastEventAt.IsZero() {
 			row.LastEventAt = v.LastEventAt.UTC().Format(time.RFC3339Nano)
@@ -758,7 +761,7 @@ func feedToDTO(f domain.LiquidationFeed) liquidationFeedDTO {
 			row.LastSeenAt = v.LastSeenAt.UTC().Format(time.RFC3339Nano)
 		}
 		for _, g := range v.Gaps {
-			gap := liquidationGapDTO{From: g.From.UTC().Format(time.RFC3339Nano), Seconds: g.Seconds}
+			gap := liquidationGapDTO{From: g.From.UTC().Format(time.RFC3339Nano), Seconds: g.Seconds, MissingSeconds: g.MissingSeconds}
 			if !g.To.IsZero() {
 				gap.To = g.To.UTC().Format(time.RFC3339Nano)
 			}
@@ -838,7 +841,7 @@ func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverview
 	return liquidationOverviewResponse{
 		Exchange: a.Exchange, CoinWindow: a.CoinWindow, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins, Feed: feedToDTO(a.Feed),
-		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require both venues; a missing venue is listed in feed.missing and is never replaced by the other. Notional is quote (USDT). Informational only.",
+		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require both venues; a missing venue is listed in feed.missing and is never replaced by the other. feed.missingSeconds is still-unfilled disconnect time. Notional is quote (USDT). Informational only.",
 	}
 }
 

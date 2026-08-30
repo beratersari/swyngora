@@ -29,10 +29,19 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
 - `feed` on coin, overview, and chart responses:
   - per venue `live`, `lastEventAt` (last print), `lastSeenAt` (last websocket
-    payload), `coverageSeconds`, and `gaps` (disconnects in the last 6 hours)
+    payload), `coverageSeconds`, `missingSeconds`, and `gaps` (still-unfilled
+    disconnects in the last 6 hours)
   - `missing` lists venues that are down, stalled (>2 minutes silent), or never started
   - a restart inserts a downtime gap from the last coverage save so the book
     does not pretend it was live while the process was off
+  - **Reconnect backfill:** when a venue socket comes back, that venue only
+    tries its own historical liquidation API for each closed hole. Live prints
+    and history that share venue + symbol + side + time + price + qty count
+    once. If the source covers the whole hole, the gap is removed and that
+    time is added to coverage. If only part of the window is confirmed, the
+    leftover piece stays and `missingSeconds` is how much is still missing.
+    No history (or a 404) leaves the gap as-is. Binance is never used to fill
+    Bybit, and the other way around.
 - Side meaning: **long** = long positions were force-closed; **short** = shorts were force-closed.
 - Live windows are computed from an in-memory 24h book. Every print is written to SQLite (Binance and Bybit in separate rows). On startup the last **24 hours** are reloaded, including live-coverage clocks, so 1h/4h/12h/24h totals stay usable after a restart. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
 - Chart (`GET /liquidation-levels`): CoinGlass-style **horizontal** price bars
@@ -61,9 +70,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation.go`, `liquidation_levels.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
-| Adapters | `adapter/binance/liqhub.go`, `adapter/bybit/liqhub.go` |
-| Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades` |
+| Domain | `backend/internal/domain/liquidation.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
+| Adapters | `adapter/binance/liqhub.go`, `adapter/binance/liqhist.go`, `adapter/bybit/liqhub.go`, `adapter/bybit/liqhist.go` |
+| Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades`; reconnect fill in `service/futureshist/backfill.go` |
 | HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan` |
 | MCP / AI | `get_liquidations`, `get_liquidation_overview`, `get_liquidation_levels`, `get_liquidation_cascade`, `scan_liquidation_cascades` |
 | Web | `/liquidations` — cards + treemap; **Chart** tab; **Cascade** tab (coin or market); Heatmap tab |
@@ -71,7 +80,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 ## How to verify
 
 ```bash
-cd backend && go test ./internal/domain/ ./internal/adapter/binance/ ./internal/adapter/bybit/ ./internal/service/market/ ./internal/transport/http/handler/
+cd backend && go test ./internal/domain/ ./internal/adapter/binance/ ./internal/adapter/bybit/ ./internal/service/futureshist/ ./internal/service/market/ ./internal/transport/http/handler/
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT&exchange=binance"
 curl "http://localhost:8080/api/v1/market/liquidations/overview?window=24h&limit=20"
@@ -85,5 +94,6 @@ curl "http://localhost:8080/api/v1/market/liquidation-cascade/scan"
 ## Limits
 
 - Not Coinbase. Not COIN-M / inverse.
-- 24h is complete only after that coin has had a live feed for 24h on the requested venue(s). A newly tracked coin, or a dropped socket, stays `complete=false` even if the server is older.
+- 24h is complete only after that coin has had live or backfilled coverage for 24h on the requested venue(s). A newly tracked coin, or a hole the venue cannot fill from history, stays `complete=false` even if the server is older.
 - Binance public feed is a 1s largest-hit sample, not every fill.
+- History fill uses Binance `GET /fapi/v1/allForceOrders` and Bybit `GET /v5/market/recent-liquidation` when those public endpoints answer. If they do not, the gap stays and `missingSeconds` shows the remaining hole.

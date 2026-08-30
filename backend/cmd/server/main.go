@@ -207,6 +207,16 @@ func main() {
 		Seeds:      histSeeds,
 	}
 	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
+	liqSink.Backfill = &futureshist.Backfiller{
+		Book: liqBook,
+		Hist: futuresHist,
+		Sources: map[domain.Exchange]domain.LiquidationHistoryPort{
+			domain.ExchangeBinance: binanceClient,
+			domain.ExchangeBybit:   bybitClient,
+		},
+		Seeds:  histSeeds,
+		Logger: logger,
+	}
 	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
 		WSURL: cfg.BinanceFuturesWSURL,
 		Sink:  liqSink,
@@ -444,12 +454,12 @@ func main() {
 	}()
 	apiKeySvc := apikey.New(accountStore)
 	accountSvc := account.New(accountStore, account.DataPurgeDeps{
-		Watchlist: watchStore,
-		Alerts:    alertStore,
-		Scanner:   scannerStore,
-		Exports:   exportStore,
-		Imports:   importStore,
-		APIKeys:   accountStore,
+		Watchlist:  watchStore,
+		Alerts:     alertStore,
+		Scanner:    scannerStore,
+		Exports:    exportStore,
+		Imports:    importStore,
+		APIKeys:    accountStore,
 		Paper:      portfolioSvc,
 		PriceDiff:  priceDiffSvc,
 		FundingArb: fundingArbSvc,
