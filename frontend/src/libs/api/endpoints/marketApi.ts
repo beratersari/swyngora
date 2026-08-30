@@ -43,9 +43,11 @@ import type {
   HoldersQuery,
   MarketOpenInterest,
   MarketLiquidations,
+  MarketLiquidationOverview,
   MarketCvd,
   OpenInterestQuery,
   LiquidationsQuery,
+  LiquidationOverviewQuery,
   CvdQuery,
   Ticker24h,
   Ticker24hQuery,
@@ -74,6 +76,7 @@ export type {
   HoldersQuery,
   MarketOpenInterest,
   MarketLiquidations,
+  MarketLiquidationOverview,
   MarketCvd,
   CandlesQuery,
   Ticker24hQuery,
@@ -241,6 +244,16 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationOverview: build.query<
+      MarketLiquidationOverview,
+      LiquidationOverviewQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidations/overview',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketLiquidationHuntHeatmap: build.query<
       LiquidationHuntHeatmap,
       LiquidationHuntHeatmapQuery
@@ -376,6 +389,7 @@ export const {
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
+  useGetMarketLiquidationOverviewQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,

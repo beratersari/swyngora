@@ -47,6 +47,11 @@ export type OpenInterestQuery = NonNullable<
 export type LiquidationsQuery = NonNullable<
   operations['getMarketLiquidations']['parameters']['query']
 >;
+export type MarketLiquidationOverview = components['schemas']['MarketLiquidationOverview'];
+export type MarketLiquidationCoin = components['schemas']['MarketLiquidationCoin'];
+export type LiquidationOverviewQuery = NonNullable<
+  operations['getMarketLiquidationOverview']['parameters']['query']
+>;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
 
 export type MarketCvdVenue = {

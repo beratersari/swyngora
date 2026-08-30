@@ -74,6 +74,80 @@ func TestLiquidationBook_WindowsAndBiggest(t *testing.T) {
 	}
 }
 
+func TestLiquidationBaseAsset(t *testing.T) {
+	if got := LiquidationBaseAsset("BTCUSDT"); got != "BTC" {
+		t.Fatalf("got %s", got)
+	}
+	if got := LiquidationBaseAsset("eth-usd"); got != "ETH" {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestParseLiquidationOverviewWindow(t *testing.T) {
+	got, err := ParseLiquidationOverviewWindow("")
+	if err != nil || got != LiquidationWindow24h {
+		t.Fatalf("empty → 24h, got %s %v", got, err)
+	}
+	got, err = ParseLiquidationOverviewWindow("12h")
+	if err != nil || got != LiquidationWindow12h {
+		t.Fatalf("12h, got %s %v", got, err)
+	}
+	if _, err := ParseLiquidationOverviewWindow("5m"); err == nil {
+		t.Fatal("5m should be rejected")
+	}
+}
+
+func TestLiquidationBook_Overview(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 30, 15, 0, 0, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	b.SetLive(ExchangeBinance, true)
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong,
+		Price: 64000, Quantity: 2, Notional: 128000, Time: now.Add(-30 * time.Minute),
+	})
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: LiquidationSideShort,
+		Price: 3000, Quantity: 10, Notional: 30000, Time: now.Add(-2 * time.Hour),
+	})
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBybit, Symbol: "SOLUSDT", Side: LiquidationSideLong,
+		Price: 150, Quantity: 100, Notional: 15000, Time: now.Add(-10 * time.Minute),
+	})
+
+	ov := b.Overview("all", LiquidationWindow1h, 10)
+	if ov.CoinWindow != LiquidationWindow1h || len(ov.Windows) != 4 {
+		t.Fatalf("%+v", ov)
+	}
+	var w1h, w12h LiquidationWindowTotals
+	for _, w := range ov.Windows {
+		switch w.Window {
+		case LiquidationWindow1h:
+			w1h = w
+		case LiquidationWindow12h:
+			w12h = w
+		}
+	}
+	if w1h.Count != 2 || w1h.TotalNotional != "143000" {
+		t.Fatalf("1h %+v", w1h)
+	}
+	if w12h.Count != 3 {
+		t.Fatalf("12h %+v", w12h)
+	}
+	if len(ov.Coins) != 2 || ov.Coins[0].Symbol != "BTCUSDT" || ov.Coins[0].Base != "BTC" {
+		t.Fatalf("coins %+v", ov.Coins)
+	}
+
+	onlyBn := b.Overview("binance", LiquidationWindow24h, 10)
+	if len(onlyBn.Coins) != 2 {
+		t.Fatalf("binance coins %+v", onlyBn.Coins)
+	}
+	limited := b.Overview("all", LiquidationWindow24h, 1)
+	if len(limited.Coins) != 1 || limited.Coins[0].Symbol != "BTCUSDT" {
+		t.Fatalf("limit %+v", limited.Coins)
+	}
+}
+
 func TestLiquidationBook_RecentLarge(t *testing.T) {
 	b := NewLiquidationBook()
 	now := time.Date(2026, 8, 16, 15, 0, 0, 0, time.UTC)

@@ -56,7 +56,7 @@ Each venue report includes:
 | Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
 | HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
 | MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
-| Web | Coin detail **Tape** tab — `frontend/src/components/organisms/LiquidationHeatmap` |
+| Web | `/liquidations?view=heatmap` — `frontend/src/components/organisms/LiquidationHeatmap` |
 
 ## How to verify
 

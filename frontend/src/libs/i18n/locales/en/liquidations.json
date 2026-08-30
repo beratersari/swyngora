@@ -1,0 +1,40 @@
+{
+  "title": "Liquidations",
+  "subtitle": "Futures long vs short liquidations across Binance USD-M and Bybit linear.",
+  "tabs": {
+    "overview": "Overview",
+    "heatmap": "Heatmap"
+  },
+  "exchange": "Venue",
+  "exchangeAll": "All venues",
+  "cards": {
+    "total": "Total",
+    "long": "Long",
+    "short": "Short",
+    "count": "{{count}} hits",
+    "selectAria": "Show {{window}} on the coin map"
+  },
+  "windows": {
+    "1h": "1H",
+    "4h": "4H",
+    "12h": "12H",
+    "24h": "24H"
+  },
+  "treemap": {
+    "aria": "Liquidation coin map",
+    "empty": "No liquidations in this window yet.",
+    "emptyHint": "Totals fill as live force-order feeds arrive.",
+    "legendLong": "More longs liquidated",
+    "legendShort": "More shorts liquidated",
+    "openHeatmap": "Open heatmap for {{symbol}}"
+  },
+  "heatmap": {
+    "symbol": "Symbol",
+    "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "status": {
+    "live": "Live",
+    "collecting": "Still collecting this window"
+  },
+  "disclaimer": "Informational only. Not financial advice. Binance samples the largest hit per symbol each second."
+}

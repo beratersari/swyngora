@@ -430,6 +430,21 @@ class LiquidationsInput(BaseModel):
     )
 
 
+class LiquidationOverviewInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues)",
+    )
+    window: str = Field(
+        default="24h",
+        description="1h|4h|12h|24h — ranks coins (default 24h)",
+    )
+    limit: int = Field(
+        default=50,
+        description="Max coins (default 50, max 100)",
+    )
+
+
 class OpenInterestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1721,6 +1736,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidations",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_liquidation_overview(
+        exchange: str = "all", window: str = "24h", limit: int = 50
+    ) -> str:
+        return http.get(
+            "/api/v1/market/liquidations/overview",
+            {"exchange": exchange, "window": window, "limit": limit},
         )
 
     def get_open_interest(symbol: str, exchange: str = "all") -> str:
@@ -3710,6 +3733,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "coverage does not grow if the stream never connects or drops."
             ),
             args_schema=LiquidationsInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_overview,
+            name="get_liquidation_overview",
+            description=(
+                "Market-wide futures liquidations: long vs short notional for the last "
+                "1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total "
+                "notional for a treemap. Binance USD-M + Bybit linear. exchange=all sums "
+                "both. window (1h|4h|12h|24h, default 24h) ranks coins. Prefer this for "
+                "the overall market liquidation situation."
+            ),
+            args_schema=LiquidationOverviewInput,
         ),
         StructuredTool.from_function(
             get_orderbook_heatmap,

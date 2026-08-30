@@ -896,6 +896,40 @@ paths:
                 $ref: '#/components/schemas/MarketLiquidations'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidations/overview:
+    get:
+      summary: Market-wide futures liquidation overview
+      description: |
+        CoinGlass-style **market desk**: long/short liquidation notional for the last
+        **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
+        notional in `window` (default 24h) for a treemap. Fed by the same Binance
+        USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
+        sums both venues. `complete` uses the all-market Binance live clock when
+        `exchange` is `all` or `binance`. Informational only.
+      operationId: getMarketLiquidationOverview
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: window
+          in: query
+          description: Window used to rank `coins` — 1h | 4h | 12h | 24h (default 24h)
+          schema: { type: string, default: 24h, enum: [1h, 4h, 12h, 24h], example: 24h }
+        - name: limit
+          in: query
+          description: Max coins in the ranked list (default 50, max 100)
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100, example: 50 }
+      responses:
+        '200':
+          description: Market-wide windows plus ranked coins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationOverview'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/open-interest:
     get:
       summary: Futures open interest and windowed change
@@ -7058,7 +7092,7 @@ components:
     LiquidationWindow:
       type: object
       properties:
-        window: { type: string, enum: [5m, 1h, 4h, 24h] }
+        window: { type: string, enum: [5m, 1h, 4h, 12h, 24h] }
         longNotional: { type: string, description: Quote value of liquidated longs }
         shortNotional: { type: string, description: Quote value of liquidated shorts }
         totalNotional: { type: string }
@@ -7078,6 +7112,33 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        note: { type: string }
+    MarketLiquidationCoin:
+      type: object
+      description: One coin's liquidation totals for the selected overview window
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+        biggest: { $ref: '#/components/schemas/LiquidationHit' }
+    MarketLiquidationOverview:
+      type: object
+      description: Market-wide liquidation cards plus ranked coins for a treemap
+      properties:
+        exchange: { type: string }
+        coinWindow: { type: string, enum: [1h, 4h, 12h, 24h] }
+        collectingSince: { type: string, format: date-time }
+        live: { type: boolean }
+        venueCount: { type: integer }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationWindow' }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCoin' }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object

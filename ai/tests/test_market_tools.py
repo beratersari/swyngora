@@ -89,6 +89,18 @@ class _Transport(httpx.BaseTransport):
                     "windows": [{"window": "24h", "change": "+10", "direction": "up"}],
                 },
             )
+        if request.url.path.endswith("/liquidations/overview"):
+            return httpx.Response(
+                200,
+                json={
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "coinWindow": request.url.params.get("window") or "24h",
+                    "windows": [
+                        {"window": "1h", "longNotional": "80", "shortNotional": "20", "count": 2}
+                    ],
+                    "coins": [{"symbol": "BTCUSDT", "totalNotional": "100"}],
+                },
+            )
         if request.url.path.endswith("/liquidations"):
             return httpx.Response(
                 200,
@@ -312,6 +324,11 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_liquidations" in by_name
     liqs = json.loads(by_name["get_liquidations"].invoke({"symbol": "BTCUSDT"}))
     assert liqs["windows"][0]["window"] == "24h"
+
+    assert "get_liquidation_overview" in by_name
+    ov = json.loads(by_name["get_liquidation_overview"].invoke({"window": "1h"}))
+    assert ov["coinWindow"] == "1h"
+    assert ov["coins"][0]["symbol"] == "BTCUSDT"
 
     assert "get_orderbook_heatmap" in by_name
     heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))

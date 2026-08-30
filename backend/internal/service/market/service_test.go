@@ -706,6 +706,48 @@ func TestGetLiquidations_FromBook(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationOverview_EmptyFeed(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetLiquidationOverview(context.Background(), "all", "", 0)
+	if err != nil || got.CoinWindow != "24h" || got.Exchange != "all" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Coins == nil || got.Windows == nil {
+		t.Fatal("expected empty slices")
+	}
+}
+
+func TestGetLiquidationOverview_FromBook(t *testing.T) {
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 100, Quantity: 2, Notional: 200, Time: time.Now().UTC(),
+	})
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT", Side: domain.LiquidationSideShort,
+		Price: 3, Quantity: 10, Notional: 30, Time: time.Now().UTC(),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetLiquidationOverview(context.Background(), "binance", "1h", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoinWindow != "1h" || len(got.Windows) != 4 || len(got.Coins) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Coins[0].Symbol != "BTCUSDT" {
+		t.Fatalf("rank %+v", got.Coins)
+	}
+}
+
+func TestGetLiquidationOverview_BadWindow(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationOverview(context.Background(), "all", "5m", 10)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 type fakeOI struct {
 	ser *domain.OpenInterestSeries
 	err error

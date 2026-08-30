@@ -2,6 +2,8 @@ package domain
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,10 +16,13 @@ const (
 	LiquidationWindow5m  = "5m"
 	LiquidationWindow1h  = "1h"
 	LiquidationWindow4h  = "4h"
+	LiquidationWindow12h = "12h"
 	LiquidationWindow24h = "24h"
 
 	maxLiquidationEventsPerSymbol = 20000
 	liquidationRetain             = 24 * time.Hour
+	defaultLiquidationOverviewLimit = 50
+	maxLiquidationOverviewLimit     = 100
 )
 
 // LiquidationWindows is the Coinglass-style lookback set.
@@ -28,6 +33,17 @@ var LiquidationWindows = []struct {
 	{LiquidationWindow5m, 5 * time.Minute},
 	{LiquidationWindow1h, time.Hour},
 	{LiquidationWindow4h, 4 * time.Hour},
+	{LiquidationWindow24h, 24 * time.Hour},
+}
+
+// LiquidationOverviewWindows is the CoinGlass-style market desk set (no 5m).
+var LiquidationOverviewWindows = []struct {
+	ID  string
+	Dur time.Duration
+}{
+	{LiquidationWindow1h, time.Hour},
+	{LiquidationWindow4h, 4 * time.Hour},
+	{LiquidationWindow12h, 12 * time.Hour},
 	{LiquidationWindow24h, 24 * time.Hour},
 }
 
@@ -74,6 +90,28 @@ type LiquidationSnapshot struct {
 	Windows         []LiquidationWindowTotals
 }
 
+// LiquidationCoinTile is one coin's totals for the selected overview window.
+type LiquidationCoinTile struct {
+	Symbol        string
+	Base          string
+	LongNotional  string
+	ShortNotional string
+	TotalNotional string
+	Count         int
+	Biggest       *LiquidationHit
+}
+
+// LiquidationOverview is market-wide cards plus ranked coins for a treemap.
+type LiquidationOverview struct {
+	Exchange        string // binance | bybit | all
+	CoinWindow      string
+	CollectingSince time.Time
+	Live            bool
+	VenueCount      int
+	Windows         []LiquidationWindowTotals
+	Coins           []LiquidationCoinTile
+}
+
 // NormalizeLiquidationSymbol maps spot-style ids (BTC-USD) to USDT linear (BTCUSDT).
 func NormalizeLiquidationSymbol(raw string) string {
 	s := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(raw), "-", ""))
@@ -114,6 +152,57 @@ func LiquidationSideFromBybit(positionSide string) (string, error) {
 	}
 }
 
+// LiquidationBaseAsset strips a linear quote suffix (BTCUSDT → BTC).
+func LiquidationBaseAsset(symbol string) string {
+	s := NormalizeLiquidationSymbol(symbol)
+	for _, q := range []string{"USDT", "USDC"} {
+		if strings.HasSuffix(s, q) && len(s) > len(q) {
+			return strings.TrimSuffix(s, q)
+		}
+	}
+	return s
+}
+
+// ParseLiquidationOverviewWindow accepts 1h, 4h, 12h, or 24h (empty = 24h).
+func ParseLiquidationOverviewWindow(raw string) (string, error) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" {
+		return LiquidationWindow24h, nil
+	}
+	switch s {
+	case LiquidationWindow1h, LiquidationWindow4h, LiquidationWindow12h, LiquidationWindow24h:
+		return s, nil
+	default:
+		return "", fmt.Errorf("%w: window must be 1h, 4h, 12h, or 24h", ErrInvalidArgument)
+	}
+}
+
+// ClampLiquidationOverviewLimit bounds the treemap coin count.
+func ClampLiquidationOverviewLimit(n int) int {
+	if n <= 0 {
+		return defaultLiquidationOverviewLimit
+	}
+	if n > maxLiquidationOverviewLimit {
+		return maxLiquidationOverviewLimit
+	}
+	return n
+}
+
+// LiquidationWindowDuration is the lookback for a window id (per-coin or overview).
+func LiquidationWindowDuration(id string) time.Duration {
+	for _, w := range LiquidationWindows {
+		if w.ID == id {
+			return w.Dur
+		}
+	}
+	for _, w := range LiquidationOverviewWindows {
+		if w.ID == id {
+			return w.Dur
+		}
+	}
+	return 0
+}
+
 // ParseLiquidationExchange accepts binance, bybit, or all (empty = all).
 func ParseLiquidationExchange(raw string) (string, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
@@ -129,13 +218,7 @@ func ParseLiquidationExchange(raw string) (string, error) {
 // SummarizeLiquidations folds events since cut into one window.
 // coverage is how long the websocket was actually live for this coin+venue.
 func SummarizeLiquidations(events []LiquidationEvent, windowID string, cut time.Time, coverage time.Duration) LiquidationWindowTotals {
-	var dur time.Duration
-	for _, w := range LiquidationWindows {
-		if w.ID == windowID {
-			dur = w.Dur
-			break
-		}
-	}
+	dur := LiquidationWindowDuration(windowID)
 	out := LiquidationWindowTotals{Window: windowID}
 	if coverage < 0 {
 		coverage = 0
@@ -478,6 +561,122 @@ func (b *LiquidationBook) RecentLarge(since time.Time, minNotional float64) []Li
 			}
 			out = append(out, e)
 		}
+	}
+	return out
+}
+
+func (b *LiquidationBook) marketStartLocked(exchange string) time.Time {
+	if exchange == "all" {
+		t := b.venueSince[ExchangeBinance]
+		if !t.IsZero() {
+			return t
+		}
+		return b.venueSince[ExchangeBybit]
+	}
+	return b.venueSince[Exchange(exchange)]
+}
+
+func (b *LiquidationBook) marketCoverageLocked(exchange string, now time.Time) time.Duration {
+	if exchange == "all" {
+		if !b.venueSince[ExchangeBinance].IsZero() {
+			return b.venueClock[ExchangeBinance].elapsed(now)
+		}
+		return b.venueClock[ExchangeBybit].elapsed(now)
+	}
+	return b.venueClock[Exchange(exchange)].elapsed(now)
+}
+
+// Overview sums every tracked coin for the desk windows and ranks coins
+// in coinWindow for a treemap (largest total notional first).
+func (b *LiquidationBook) Overview(exchange, coinWindow string, limit int) *LiquidationOverview {
+	limit = ClampLiquidationOverviewLimit(limit)
+	if coinWindow == "" {
+		coinWindow = LiquidationWindow24h
+	}
+	out := &LiquidationOverview{
+		Exchange:   exchange,
+		CoinWindow: coinWindow,
+		Windows:    []LiquidationWindowTotals{},
+		Coins:      []LiquidationCoinTile{},
+	}
+	if b == nil {
+		return out
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := b.now().UTC()
+	out.CollectingSince = b.marketStartLocked(exchange)
+	liveCount := 0
+	if exchange == "all" {
+		for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
+			if b.live[ex] {
+				liveCount++
+			}
+		}
+	} else if b.live[Exchange(exchange)] {
+		liveCount = 1
+	}
+	out.Live = liveCount > 0
+	out.VenueCount = liveCount
+
+	bySym := make(map[string][]LiquidationEvent, len(b.bySym))
+	all := make([]LiquidationEvent, 0, 256)
+	for sym, list := range b.bySym {
+		for _, e := range list {
+			if exchange != "all" && string(e.Exchange) != exchange {
+				continue
+			}
+			bySym[sym] = append(bySym[sym], e)
+			all = append(all, e)
+		}
+	}
+
+	cov := b.marketCoverageLocked(exchange, now)
+	for _, w := range LiquidationOverviewWindows {
+		out.Windows = append(out.Windows, SummarizeLiquidations(all, w.ID, now.Add(-w.Dur), cov))
+	}
+
+	coinDur := LiquidationWindowDuration(coinWindow)
+	if coinDur <= 0 {
+		coinDur = 24 * time.Hour
+	}
+	cut := now.Add(-coinDur)
+	type ranked struct {
+		tile  LiquidationCoinTile
+		total float64
+	}
+	rows := make([]ranked, 0, len(bySym))
+	for sym, list := range bySym {
+		tot := SummarizeLiquidations(list, coinWindow, cut, cov)
+		if tot.Count == 0 {
+			continue
+		}
+		total, _ := strconv.ParseFloat(tot.TotalNotional, 64)
+		rows = append(rows, ranked{
+			tile: LiquidationCoinTile{
+				Symbol:        sym,
+				Base:          LiquidationBaseAsset(sym),
+				LongNotional:  tot.LongNotional,
+				ShortNotional: tot.ShortNotional,
+				TotalNotional: tot.TotalNotional,
+				Count:         tot.Count,
+				Biggest:       tot.Biggest,
+			},
+			total: total,
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].total != rows[j].total {
+			return rows[i].total > rows[j].total
+		}
+		return rows[i].tile.Symbol < rows[j].tile.Symbol
+	})
+	if len(rows) > limit {
+		rows = rows[:limit]
+	}
+	out.Coins = make([]LiquidationCoinTile, 0, len(rows))
+	for _, r := range rows {
+		out.Coins = append(out.Coins, r.tile)
 	}
 	return out
 }

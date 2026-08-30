@@ -233,6 +233,21 @@ func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/liquidations", q)
 }
 
+// GetLiquidationOverview returns market-wide 1h/4h/12h/24h totals plus ranked coins.
+func (c *APIClient) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/liquidations/overview", q)
+}
+
 // GetOrderBookHeatmap returns recent resting bid/ask size over time.
 func (c *APIClient) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
 	q := url.Values{}

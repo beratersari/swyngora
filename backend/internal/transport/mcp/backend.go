@@ -1055,6 +1055,56 @@ func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	})
 }
 
+func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationOverview(ctx, exchange, window, limit)
+	if err != nil {
+		return nil, err
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "longNotional": w.LongNotional, "shortNotional": w.ShortNotional,
+			"totalNotional": w.TotalNotional, "count": w.Count,
+			"coverageSeconds": w.CoverageSeconds, "complete": w.Complete,
+		}
+		if w.Biggest != nil {
+			row["biggest"] = map[string]any{
+				"exchange": w.Biggest.Exchange, "side": w.Biggest.Side,
+				"price": w.Biggest.Price, "quantity": w.Biggest.Quantity, "notional": w.Biggest.Notional,
+				"time": w.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		wins = append(wins, row)
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		row := map[string]any{
+			"symbol": c.Symbol, "base": c.Base,
+			"longNotional": c.LongNotional, "shortNotional": c.ShortNotional,
+			"totalNotional": c.TotalNotional, "count": c.Count,
+		}
+		if c.Biggest != nil {
+			row["biggest"] = map[string]any{
+				"exchange": c.Biggest.Exchange, "side": c.Biggest.Side,
+				"price": c.Biggest.Price, "quantity": c.Biggest.Quantity, "notional": c.Biggest.Notional,
+				"time": c.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		coins = append(coins, row)
+	}
+	since := ""
+	if !got.CollectingSince.IsZero() {
+		since = got.CollectingSince.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "coinWindow": got.CoinWindow, "collectingSince": since,
+		"live": got.Live, "venueCount": got.VenueCount, "windows": wins, "coins": coins,
+	})
+}
+
 func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

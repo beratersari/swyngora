@@ -745,6 +745,29 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	return s.liq.Snapshot(ex, symbol), nil
 }
 
+// GetLiquidationOverview returns market-wide 1h/4h/12h/24h totals plus ranked coins.
+func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (*domain.LiquidationOverview, error) {
+	_ = ctx
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	win, err := domain.ParseLiquidationOverviewWindow(window)
+	if err != nil {
+		return nil, err
+	}
+	lim := domain.ClampLiquidationOverviewLimit(limit)
+	if s.liq == nil {
+		return &domain.LiquidationOverview{
+			Exchange:   ex,
+			CoinWindow: win,
+			Windows:    []domain.LiquidationWindowTotals{},
+			Coins:      []domain.LiquidationCoinTile{},
+		}, nil
+	}
+	return s.liq.Overview(ex, win, lim), nil
+}
+
 // GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.
 func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)

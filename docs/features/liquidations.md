@@ -11,6 +11,10 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 - `GET /api/v1/market/liquidations?symbol=BTCUSDT`
   - `exchange=all` (default) sums **Binance USD-M** and **Bybit linear perpetual**
   - `exchange=binance` or `bybit` for one venue
+- `GET /api/v1/market/liquidations/overview`
+  - Market-wide **1h / 4h / 12h / 24h** totals (no symbol)
+  - `window` (default `24h`) ranks `coins` by total notional for a treemap
+  - `limit` default 50, max 100
 - Each window includes:
   - `longNotional` / `shortNotional` / `totalNotional` (USDT)
   - `count`
@@ -32,8 +36,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 | Domain | `backend/internal/domain/liquidation.go` |
 | Adapters | `adapter/binance/liqhub.go`, `adapter/bybit/liqhub.go` |
 | Service | `GetLiquidations` |
-| HTTP | `GET /api/v1/market/liquidations` |
-| MCP / AI | `get_liquidations` |
+| HTTP | `GET /api/v1/market/liquidations`, `GET /api/v1/market/liquidations/overview` |
+| MCP / AI | `get_liquidations`, `get_liquidation_overview` |
+| Web | `/liquidations` — market cards + treemap; Heatmap tab reuses `LiquidationHeatmap` |
 
 ## How to verify
 
@@ -41,6 +46,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 cd backend && go test ./internal/domain/ ./internal/adapter/binance/ ./internal/adapter/bybit/ ./internal/service/market/ ./internal/transport/http/handler/
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidations?symbol=BTCUSDT&exchange=binance"
+curl "http://localhost:8080/api/v1/market/liquidations/overview?window=24h&limit=20"
 ```
 
 ## Limits

@@ -492,6 +492,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidations/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market-wide futures liquidation overview
+         * @description CoinGlass-style **market desk**: long/short liquidation notional for the last
+         *     **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
+         *     notional in `window` (default 24h) for a treemap. Fed by the same Binance
+         *     USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
+         *     sums both venues. `complete` uses the all-market Binance live clock when
+         *     `exchange` is `all` or `binance`. Informational only.
+         */
+        get: operations["getMarketLiquidationOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/open-interest": {
         parameters: {
             query?: never;
@@ -3742,7 +3767,7 @@ export interface components {
         };
         LiquidationWindow: {
             /** @enum {string} */
-            window?: "5m" | "1h" | "4h" | "24h";
+            window?: "5m" | "1h" | "4h" | "12h" | "24h";
             /** @description Quote value of liquidated longs */
             longNotional?: string;
             /** @description Quote value of liquidated shorts */
@@ -3764,6 +3789,29 @@ export interface components {
             live?: boolean;
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
+            note?: string;
+        };
+        /** @description One coin's liquidation totals for the selected overview window */
+        MarketLiquidationCoin: {
+            symbol?: string;
+            base?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+            biggest?: components["schemas"]["LiquidationHit"];
+        };
+        /** @description Market-wide liquidation cards plus ranked coins for a treemap */
+        MarketLiquidationOverview: {
+            exchange?: string;
+            /** @enum {string} */
+            coinWindow?: "1h" | "4h" | "12h" | "24h";
+            /** Format: date-time */
+            collectingSince?: string;
+            live?: boolean;
+            venueCount?: number;
+            windows?: components["schemas"]["LiquidationWindow"][];
+            coins?: components["schemas"]["MarketLiquidationCoin"][];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -6052,6 +6100,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketLiquidations"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Window used to rank `coins` — 1h | 4h | 12h | 24h (default 24h) */
+                window?: "1h" | "4h" | "12h" | "24h";
+                /** @description Max coins in the ranked list (default 50, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market-wide windows plus ranked coins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationOverview"];
                 };
             };
             400: components["responses"]["Error"];

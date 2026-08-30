@@ -256,6 +256,26 @@ func (h *MarketHandler) GetLiquidations(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, liquidationsToDTO(got))
 }
 
+// GetLiquidationOverview handles GET /api/v1/market/liquidations/overview.
+func (h *MarketHandler) GetLiquidationOverview(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetLiquidationOverview(r.Context(), q.Get("exchange"), q.Get("window"), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, liquidationOverviewToDTO(got))
+}
+
 // GetOrderBookHeatmap handles GET /api/v1/market/orderbook/heatmap.
 func (h *MarketHandler) GetOrderBookHeatmap(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -700,6 +720,74 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
 		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. A dropped or never-connected stream does not grow coverage. Notional is quote (USDT). Informational only.",
+	}
+}
+
+type liquidationCoinDTO struct {
+	Symbol        string             `json:"symbol"`
+	Base          string             `json:"base"`
+	LongNotional  string             `json:"longNotional"`
+	ShortNotional string             `json:"shortNotional"`
+	TotalNotional string             `json:"totalNotional"`
+	Count         int                `json:"count"`
+	Biggest       *liquidationHitDTO `json:"biggest,omitempty"`
+}
+
+type liquidationOverviewResponse struct {
+	Exchange        string                 `json:"exchange"`
+	CoinWindow      string                 `json:"coinWindow"`
+	CollectingSince string                 `json:"collectingSince,omitempty"`
+	Live            bool                   `json:"live"`
+	VenueCount      int                    `json:"venueCount"`
+	Windows         []liquidationWindowDTO `json:"windows"`
+	Coins           []liquidationCoinDTO   `json:"coins"`
+	Note            string                 `json:"note"`
+}
+
+func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverviewResponse {
+	if a == nil {
+		return liquidationOverviewResponse{Windows: []liquidationWindowDTO{}, Coins: []liquidationCoinDTO{}}
+	}
+	wins := make([]liquidationWindowDTO, 0, len(a.Windows))
+	for _, w := range a.Windows {
+		row := liquidationWindowDTO{
+			Window: w.Window, LongNotional: w.LongNotional, ShortNotional: w.ShortNotional,
+			TotalNotional: w.TotalNotional, Count: w.Count,
+			CoverageSeconds: w.CoverageSeconds, Complete: w.Complete,
+		}
+		if w.Biggest != nil {
+			row.Biggest = &liquidationHitDTO{
+				Exchange: w.Biggest.Exchange, Side: w.Biggest.Side,
+				Price: w.Biggest.Price, Quantity: w.Biggest.Quantity, Notional: w.Biggest.Notional,
+				Time: w.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		wins = append(wins, row)
+	}
+	coins := make([]liquidationCoinDTO, 0, len(a.Coins))
+	for _, c := range a.Coins {
+		row := liquidationCoinDTO{
+			Symbol: c.Symbol, Base: c.Base,
+			LongNotional: c.LongNotional, ShortNotional: c.ShortNotional,
+			TotalNotional: c.TotalNotional, Count: c.Count,
+		}
+		if c.Biggest != nil {
+			row.Biggest = &liquidationHitDTO{
+				Exchange: c.Biggest.Exchange, Side: c.Biggest.Side,
+				Price: c.Biggest.Price, Quantity: c.Biggest.Quantity, Notional: c.Biggest.Notional,
+				Time: c.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		coins = append(coins, row)
+	}
+	since := ""
+	if !a.CollectingSince.IsZero() {
+		since = a.CollectingSince.UTC().Format(time.RFC3339Nano)
+	}
+	return liquidationOverviewResponse{
+		Exchange: a.Exchange, CoinWindow: a.CoinWindow, CollectingSince: since,
+		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins,
+		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. complete uses the all-market Binance clock when exchange=all or binance. Notional is quote (USDT). Informational only.",
 	}
 }
 

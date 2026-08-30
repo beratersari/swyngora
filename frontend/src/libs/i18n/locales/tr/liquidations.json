@@ -1,0 +1,40 @@
+{
+  "title": "Likidasyonlar",
+  "subtitle": "Binance USD-M ve Bybit linear genelinde vadeli long/short likidasyonlar.",
+  "tabs": {
+    "overview": "Genel bakış",
+    "heatmap": "Isı haritası"
+  },
+  "exchange": "Borsa",
+  "exchangeAll": "Tüm borsalar",
+  "cards": {
+    "total": "Toplam",
+    "long": "Long",
+    "short": "Short",
+    "count": "{{count}} işlem",
+    "selectAria": "Coin haritasında {{window}} göster"
+  },
+  "windows": {
+    "1h": "1S",
+    "4h": "4S",
+    "12h": "12S",
+    "24h": "24S"
+  },
+  "treemap": {
+    "aria": "Likidasyon coin haritası",
+    "empty": "Bu pencerede henüz likidasyon yok.",
+    "emptyHint": "Toplamlar canlı force-order akışı geldikçe dolar.",
+    "legendLong": "Daha çok long likide",
+    "legendShort": "Daha çok short likide",
+    "openHeatmap": "{{symbol}} ısı haritasını aç"
+  },
+  "heatmap": {
+    "symbol": "Sembol",
+    "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "status": {
+    "live": "Canlı",
+    "collecting": "Bu pencere hâlâ doluyor"
+  },
+  "disclaimer": "Yalnızca bilgi amaçlıdır. Yatırım tavsiyesi değildir. Binance her saniye sembol başına en büyük vuruşu örnekler."
+}

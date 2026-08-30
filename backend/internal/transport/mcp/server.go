@@ -37,6 +37,7 @@ type DataPort interface {
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -483,6 +484,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidations(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_overview",
+		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. Fed by Binance USD-M and Bybit linear streams. exchange=all (default) sums both. window (1h|4h|12h|24h, default 24h) selects which window ranks coins. Prefer this for 'how much was liquidated across the market' or a liquidation map."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("window", mcp.Description("1h | 4h | 12h | 24h — ranks coins (default 24h)")),
+		mcp.WithNumber("limit", mcp.Description("Max coins (default 50, max 100)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		limit := int(req.GetFloat("limit", 0))
+		raw, err := api.GetLiquidationOverview(ctx, req.GetString("exchange", "all"), req.GetString("window", "24h"), limit)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

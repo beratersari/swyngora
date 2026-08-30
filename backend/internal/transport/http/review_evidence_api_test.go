@@ -227,6 +227,7 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/orderbook/combined?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/liquidations/overview", http.StatusOK},
 	}
 	for _, tc := range paths {
 		t.Run(tc.path, func(t *testing.T) {

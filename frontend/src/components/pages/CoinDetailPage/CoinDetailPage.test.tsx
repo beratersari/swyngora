@@ -262,10 +262,10 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
   });
 
-  it('opens tape tab with the liquidation heatmap', async () => {
+  it('opens tape tab with liquidation totals', async () => {
     renderDetail('/markets/binance/BTCUSDT?tab=tape');
-    expect(await screen.findByTestId('liquidation-heatmap')).toBeInTheDocument();
-    expect(screen.getByTestId('liquidation-heatmap-canvas')).toBeInTheDocument();
+    expect(await screen.findAllByText(/^Liquidations$|^Likidasyonlar$/i)).not.toHaveLength(0);
+    expect(screen.queryByTestId('liquidation-heatmap')).not.toBeInTheDocument();
   });
 
   it('rejects unknown exchange path segments', async () => {
