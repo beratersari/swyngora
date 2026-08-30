@@ -54,6 +54,8 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated.
 - `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional that the book actually covers; market-wide uses the common venue range.
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
+- `GET /api/v1/market/liquidation-cascade` short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all`. See [`liquidations.md`](liquidations.md).
+- `GET /api/v1/market/liquidation-cascade/scan` market cascade plus coins currently bursting. See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/open-interest` current futures open interest plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear). Includes `funding`. See [`open-interest.md`](open-interest.md).
 - `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).
 - `GET /api/v1/market/funding-arb` long the cheaper-funding venue / short the richer one; sized after-fee payout + spot-perp. See [`funding-arb.md`](funding-arb.md).

@@ -57,6 +57,56 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationCascadeQuery: () => ({
+      data: {
+        symbol: 'BTCUSDT',
+        summary: 'No liquidation cascade on this coin.',
+        venues: [
+          { exchange: 'binance', grade: 'quiet', side: 'none', windows: [] },
+          { exchange: 'bybit', grade: 'quiet', side: 'none', windows: [] },
+        ],
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        summary: 'No liquidation cascade on this coin.',
+        venues: [
+          { exchange: 'binance', grade: 'quiet', side: 'none', windows: [] },
+          { exchange: 'bybit', grade: 'quiet', side: 'none', windows: [] },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
+    useGetMarketLiquidationCascadeScanQuery: () => ({
+      data: {
+        market: {
+          symbol: 'all',
+          summary: 'Market liquidation flow is in a normal range.',
+          venues: [
+            { exchange: 'binance', grade: 'quiet', side: 'none', windows: [] },
+            { exchange: 'bybit', grade: 'quiet', side: 'none', windows: [] },
+          ],
+        },
+        hits: [],
+      },
+      currentData: {
+        market: {
+          symbol: 'all',
+          summary: 'Market liquidation flow is in a normal range.',
+          venues: [
+            { exchange: 'binance', grade: 'quiet', side: 'none', windows: [] },
+            { exchange: 'bybit', grade: 'quiet', side: 'none', windows: [] },
+          ],
+        },
+        hits: [],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketLiquidationHuntHeatmapQuery: () => ({
       data: undefined,
       currentData: undefined,
@@ -87,6 +137,11 @@ describe('LiquidationsPage', () => {
   it('opens the chart tab from the URL', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=chart'] });
     expect(await screen.findByTestId('liquidation-bar-chart')).toBeInTheDocument();
+  });
+
+  it('opens the cascade tab from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=cascade'] });
+    expect(await screen.findByTestId('liquidation-cascade')).toBeInTheDocument();
   });
 
   it('opens the heatmap tab from the URL', async () => {

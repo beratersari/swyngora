@@ -46,6 +46,10 @@ import type {
   MarketLiquidationOverview,
   MarketLiquidationLevels,
   LiquidationLevelsQuery,
+  MarketLiquidationCascade,
+  MarketLiquidationCascadeScan,
+  LiquidationCascadeQuery,
+  LiquidationCascadeScanQuery,
   MarketCvd,
   OpenInterestQuery,
   LiquidationsQuery,
@@ -80,6 +84,8 @@ export type {
   MarketLiquidations,
   MarketLiquidationOverview,
   MarketLiquidationLevels,
+  MarketLiquidationCascade,
+  MarketLiquidationCascadeScan,
   MarketCvd,
   CandlesQuery,
   Ticker24hQuery,
@@ -267,6 +273,26 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationCascade: build.query<
+      MarketLiquidationCascade,
+      LiquidationCascadeQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-cascade',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidationCascadeScan: build.query<
+      MarketLiquidationCascadeScan,
+      LiquidationCascadeScanQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-cascade/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketLiquidationHuntHeatmap: build.query<
       LiquidationHuntHeatmap,
       LiquidationHuntHeatmapQuery
@@ -404,6 +430,8 @@ export const {
   useGetMarketLiquidationsQuery,
   useGetMarketLiquidationOverviewQuery,
   useGetMarketLiquidationLevelsQuery,
+  useGetMarketLiquidationCascadeQuery,
+  useGetMarketLiquidationCascadeScanQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,

@@ -1141,6 +1141,82 @@ func (b *Backend) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 	})
 }
 
+func (b *Backend) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationCascade(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(cascadeReportJSON(got))
+}
+
+func (b *Backend) ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanLiquidationCascades(ctx, exchange)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		hits = append(hits, map[string]any{
+			"symbol": h.Symbol, "side": h.Side, "grade": h.Grade, "score": h.Score,
+			"hottest": h.Hottest, "both": h.Both, "summary": h.Summary,
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange,
+		"asOf":     got.AsOf.UTC().Format(time.RFC3339Nano),
+		"market":   cascadeReportJSON(&got.Market),
+		"hits":     hits,
+		"summary":  got.Summary,
+		"note":     got.Note,
+	})
+}
+
+func cascadeReportJSON(got *domain.CascadeReport) map[string]any {
+	if got == nil {
+		return map[string]any{"venues": []any{}}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		windows := make([]map[string]any, 0, len(v.Windows))
+		for _, w := range v.Windows {
+			windows = append(windows, map[string]any{
+				"window": w.Window, "longNotional": w.LongNotional, "shortNotional": w.ShortNotional,
+				"totalNotional": w.TotalNotional, "longTypical": w.LongTypical, "shortTypical": w.ShortTypical,
+				"longRatio": w.LongRatio, "shortRatio": w.ShortRatio, "maxRatio": w.MaxRatio,
+				"side": w.Side, "grade": w.Grade, "count": w.Count,
+				"sampleBuckets": w.SampleBuckets, "complete": w.Complete,
+			})
+		}
+		row := map[string]any{
+			"exchange": string(v.Exchange), "symbol": v.Symbol, "windows": windows,
+			"side": v.Side, "grade": v.Grade, "score": v.Score, "hottest": v.Hottest,
+			"summary": v.Summary,
+		}
+		if !v.StartedAt.IsZero() {
+			row["startedAt"] = v.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		venues = append(venues, row)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange,
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.Both != nil {
+		out["both"] = map[string]any{
+			"agree": got.Both.Agree, "side": got.Both.Side, "grade": got.Both.Grade,
+			"score": got.Both.Score, "hottest": got.Both.Hottest, "summary": got.Both.Summary,
+		}
+	}
+	return out
+}
+
 func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

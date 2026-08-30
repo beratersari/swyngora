@@ -4,6 +4,7 @@
   "tabs": {
     "overview": "Overview",
     "chart": "Chart",
+    "cascade": "Cascade",
     "heatmap": "Heatmap"
   },
   "exchange": "Venue",
@@ -45,6 +46,34 @@
     "aria": "Liquidation bar chart",
     "empty": "No liquidation bars in this window yet.",
     "emptyHint": "Pick another coin or wait for the live feed."
+  },
+  "cascade": {
+    "coin": "Scope",
+    "market": "Whole market",
+    "empty": "No liquidation cascade right now.",
+    "hint": "A cascade is a short burst of long or short liquidations far above that stream's own typical rate. Binance and Bybit are scored separately.",
+    "window": "Window",
+    "ratio": "Vs typical",
+    "grade": "Grade",
+    "gradeLabel": "Grade",
+    "side": "Side",
+    "score": "Score",
+    "hottest": "Hottest",
+    "both": "Both",
+    "yes": "Both",
+    "hitsTitle": "Coins bursting now",
+    "grades": {
+      "quiet": "Quiet",
+      "elevated": "Elevated",
+      "cascade": "Cascade",
+      "extreme": "Extreme"
+    },
+    "sides": {
+      "long": "Long",
+      "short": "Short",
+      "both": "Both sides",
+      "none": "None"
+    }
   },
   "status": {
     "live": "Live",

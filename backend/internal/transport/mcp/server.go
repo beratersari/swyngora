@@ -39,6 +39,8 @@ type DataPort interface {
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error)
 	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
+	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -512,6 +514,29 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetLiquidationLevels(ctx, req.GetString("exchange", "all"), req.GetString("symbol", "all"), req.GetString("range", "24h"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_cascade",
+		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Binance and Bybit are scored separately. both.agree is true only when the same side is cascading on both venues. symbol=all is market-wide (pooled coins). Prefer this for 'is there a liquidation cascade on BTC' or 'is the market cascading'."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all for the market (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetLiquidationCascade(ctx, req.GetString("exchange", "all"), req.GetString("symbol", "all"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_liquidation_cascades",
+		mcp.WithDescription("Market-wide liquidation cascade scan: pooled market risk plus coins currently bursting (elevated / cascade / extreme). Binance and Bybit stay separate; a hit's both flag means the same side is cascading on both venues. Prefer this for 'which coins are in a liquidation cascade'."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanLiquidationCascades(ctx, req.GetString("exchange", "all"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

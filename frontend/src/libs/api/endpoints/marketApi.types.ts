@@ -56,6 +56,14 @@ export type MarketLiquidationLevels = components['schemas']['MarketLiquidationLe
 export type LiquidationLevelsQuery = NonNullable<
   operations['getMarketLiquidationLevels']['parameters']['query']
 >;
+export type MarketLiquidationCascade = components['schemas']['MarketLiquidationCascade'];
+export type MarketLiquidationCascadeScan = components['schemas']['MarketLiquidationCascadeScan'];
+export type LiquidationCascadeQuery = NonNullable<
+  operations['getMarketLiquidationCascade']['parameters']['query']
+>;
+export type LiquidationCascadeScanQuery = NonNullable<
+  operations['scanMarketLiquidationCascades']['parameters']['query']
+>;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
 
 export type MarketCvdVenue = {

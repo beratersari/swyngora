@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parseLiqCascadeSymbol,
   parseLiqChartSymbol,
   parseLiqExchange,
   parseLiqSymbol,
@@ -11,7 +12,10 @@ describe('LiquidationsPage helpers', () => {
   it('parses view, window, venue, and symbol', () => {
     expect(parseLiqView('heatmap')).toBe('heatmap');
     expect(parseLiqView('chart')).toBe('chart');
+    expect(parseLiqView('cascade')).toBe('cascade');
     expect(parseLiqView(null)).toBe('overview');
+    expect(parseLiqCascadeSymbol(null)).toBe('all');
+    expect(parseLiqCascadeSymbol('eth')).toBe('ETHUSDT');
     expect(parseLiqChartSymbol('all')).toBe('all');
     expect(parseLiqChartSymbol('eth')).toBe('ETHUSDT');
     expect(parseLiqWindow('12h')).toBe('12h');

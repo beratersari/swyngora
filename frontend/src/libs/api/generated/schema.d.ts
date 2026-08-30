@@ -1511,6 +1511,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-cascade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidation cascade risk (one coin or whole market)
+         * @description Detects a **liquidation cascade**: a short burst of long or short
+         *     liquidations far above that stream's own typical rate.
+         *
+         *     Compares the last **1 minute**, **5 minutes**, and **15 minutes** to
+         *     the median of prior blocks over ~6 hours. `grade` is quiet / elevated
+         *     / cascade / extreme. Binance and Bybit are scored **separately**.
+         *     `both.agree` is true only when the **same side** is cascading on both
+         *     venues. `symbol=all` pools every tracked coin (market-wide risk).
+         *     Informational only.
+         */
+        get: operations["getMarketLiquidationCascade"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-cascade/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market liquidation cascade scan
+         * @description Scores **market-wide** cascade risk (pooled liquidations) and ranks
+         *     coins that are currently elevated or cascading. Binance and Bybit stay
+         *     separate; a hit's `both` flag means the same side is cascading on both
+         *     venues. Informational only.
+         */
+        get: operations["scanMarketLiquidationCascades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -3869,6 +3920,81 @@ export interface components {
             lastPrice?: string;
             levels?: components["schemas"]["MarketLiquidationLevelBar"][];
             bars?: components["schemas"]["MarketLiquidationTimeBar"][];
+            note?: string;
+        };
+        MarketLiquidationCascadeWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            longTypical?: string;
+            shortTypical?: string;
+            longRatio?: number;
+            shortRatio?: number;
+            maxRatio?: number;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            count?: number;
+            sampleBuckets?: number;
+            complete?: boolean;
+        };
+        MarketLiquidationCascadeVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["MarketLiquidationCascadeWindow"][];
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            hottest?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            summary?: string;
+        };
+        /** @description Same-side burst on Binance and Bybit together */
+        MarketLiquidationCascadeBoth: {
+            /** @description True only when the same side is cascade+ on both venues */
+            agree?: boolean;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            hottest?: string;
+            summary?: string;
+        };
+        /** @description Cascade risk for one coin or the pooled market (symbol=all) */
+        MarketLiquidationCascade: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketLiquidationCascadeVenue"][];
+            both?: components["schemas"]["MarketLiquidationCascadeBoth"];
+            summary?: string;
+            note?: string;
+        };
+        MarketLiquidationCascadeHit: {
+            symbol?: string;
+            side?: string;
+            grade?: string;
+            score?: number;
+            hottest?: string;
+            both?: boolean;
+            summary?: string;
+        };
+        /** @description Market-wide cascade plus coins currently bursting */
+        MarketLiquidationCascadeScan: {
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            market?: components["schemas"]["MarketLiquidationCascade"];
+            hits?: components["schemas"]["MarketLiquidationCascadeHit"][];
+            summary?: string;
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -7418,6 +7544,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketLiquidationLevels"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationCascade: {
+        parameters: {
+            query?: {
+                /** @description Pair (BTCUSDT) or all for the pooled market */
+                symbol?: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue cascade scores plus both-venues flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationCascade"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    scanMarketLiquidationCascades: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market cascade plus ranked bursting coins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationCascadeScan"];
                 };
             };
             400: components["responses"]["Error"];

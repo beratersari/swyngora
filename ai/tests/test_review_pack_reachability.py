@@ -35,6 +35,8 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_liquidation_heatmap",
         "get_liquidation_overview",
         "get_liquidation_levels",
+        "get_liquidation_cascade",
+        "scan_liquidation_cascades",
         "get_squeeze_risk",
         "get_positioning",
         "get_venue_divergence",

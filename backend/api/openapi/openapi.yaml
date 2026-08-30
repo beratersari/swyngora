@@ -2529,6 +2529,63 @@ paths:
                 $ref: '#/components/schemas/MarketLiquidationLevels'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-cascade:
+    get:
+      summary: Liquidation cascade risk (one coin or whole market)
+      description: |
+        Detects a **liquidation cascade**: a short burst of long or short
+        liquidations far above that stream's own typical rate.
+
+        Compares the last **1 minute**, **5 minutes**, and **15 minutes** to
+        the median of prior blocks over ~6 hours. `grade` is quiet / elevated
+        / cascade / extreme. Binance and Bybit are scored **separately**.
+        `both.agree` is true only when the **same side** is cascading on both
+        venues. `symbol=all` pools every tracked coin (market-wide risk).
+        Informational only.
+      operationId: getMarketLiquidationCascade
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          description: Pair (BTCUSDT) or all for the pooled market
+          schema: { type: string, default: all, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Per-venue cascade scores plus both-venues flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationCascade'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-cascade/scan:
+    get:
+      summary: Market liquidation cascade scan
+      description: |
+        Scores **market-wide** cascade risk (pooled liquidations) and ranks
+        coins that are currently elevated or cascading. Binance and Bybit stay
+        separate; a hit's `both` flag means the same side is cascading on both
+        venues. Informational only.
+      operationId: scanMarketLiquidationCascades
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Market cascade plus ranked bursting coins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationCascadeScan'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -7208,6 +7265,82 @@ components:
         bars:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationTimeBar' }
+        note: { type: string }
+    MarketLiquidationCascadeWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1m, 5m, 15m] }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        longTypical: { type: string }
+        shortTypical: { type: string }
+        longRatio: { type: number }
+        shortRatio: { type: number }
+        maxRatio: { type: number }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        count: { type: integer }
+        sampleBuckets: { type: integer }
+        complete: { type: boolean }
+    MarketLiquidationCascadeVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeWindow' }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        hottest: { type: string }
+        startedAt: { type: string, format: date-time }
+        summary: { type: string }
+    MarketLiquidationCascadeBoth:
+      type: object
+      description: Same-side burst on Binance and Bybit together
+      properties:
+        agree: { type: boolean, description: True only when the same side is cascade+ on both venues }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        hottest: { type: string }
+        summary: { type: string }
+    MarketLiquidationCascade:
+      type: object
+      description: Cascade risk for one coin or the pooled market (symbol=all)
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeVenue' }
+        both: { $ref: '#/components/schemas/MarketLiquidationCascadeBoth' }
+        summary: { type: string }
+        note: { type: string }
+    MarketLiquidationCascadeHit:
+      type: object
+      properties:
+        symbol: { type: string }
+        side: { type: string }
+        grade: { type: string }
+        score: { type: number }
+        hottest: { type: string }
+        both: { type: boolean }
+        summary: { type: string }
+    MarketLiquidationCascadeScan:
+      type: object
+      description: Market-wide cascade plus coins currently bursting
+      properties:
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        market: { $ref: '#/components/schemas/MarketLiquidationCascade' }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeHit' }
+        summary: { type: string }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object

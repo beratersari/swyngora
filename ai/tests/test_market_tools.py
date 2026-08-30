@@ -89,6 +89,23 @@ class _Transport(httpx.BaseTransport):
                     "windows": [{"window": "24h", "change": "+10", "direction": "up"}],
                 },
             )
+        if request.url.path.endswith("/liquidation-cascade/scan"):
+            return httpx.Response(
+                200,
+                json={
+                    "market": {"symbol": "all", "summary": "quiet"},
+                    "hits": [{"symbol": "SOLUSDT", "grade": "cascade", "side": "long"}],
+                },
+            )
+        if request.url.path.endswith("/liquidation-cascade"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol") or "all",
+                    "venues": [{"exchange": "binance", "grade": "quiet"}],
+                    "summary": "quiet",
+                },
+            )
         if request.url.path.endswith("/liquidation-levels"):
             return httpx.Response(
                 200,
@@ -342,6 +359,13 @@ def test_market_tools_hit_api(monkeypatch):
     assert "get_liquidation_levels" in by_name
     lv = json.loads(by_name["get_liquidation_levels"].invoke({"symbol": "all"}))
     assert lv["kind"] == "totals"
+
+    assert "get_liquidation_cascade" in by_name
+    cas = json.loads(by_name["get_liquidation_cascade"].invoke({"symbol": "BTCUSDT"}))
+    assert cas["symbol"] == "BTCUSDT"
+    assert "scan_liquidation_cascades" in by_name
+    scan = json.loads(by_name["scan_liquidation_cascades"].invoke({}))
+    assert scan["hits"][0]["symbol"] == "SOLUSDT"
 
     assert "get_orderbook_heatmap" in by_name
     heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))

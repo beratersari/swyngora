@@ -4,6 +4,7 @@
   "tabs": {
     "overview": "Genel bakış",
     "chart": "Grafik",
+    "cascade": "Çığ",
     "heatmap": "Isı haritası"
   },
   "exchange": "Borsa",
@@ -45,6 +46,34 @@
     "aria": "Likidasyon çubuk grafiği",
     "empty": "Bu pencerede henüz likidasyon çubuğu yok.",
     "emptyHint": "Başka bir coin seçin veya canlı akışı bekleyin."
+  },
+  "cascade": {
+    "coin": "Kapsam",
+    "market": "Tüm piyasa",
+    "empty": "Şu anda likidasyon çığı yok.",
+    "hint": "Çığ, o akışın kendi tipik hızının çok üstünde kısa bir long veya short likidasyon patlamasıdır. Binance ve Bybit ayrı puanlanır.",
+    "window": "Pencere",
+    "ratio": "Tiğe göre",
+    "grade": "Derece",
+    "gradeLabel": "Derece",
+    "side": "Taraf",
+    "score": "Skor",
+    "hottest": "En sıcak",
+    "both": "İkisi",
+    "yes": "İkisi",
+    "hitsTitle": "Şu an patlayan coinler",
+    "grades": {
+      "quiet": "Sakin",
+      "elevated": "Yüksek",
+      "cascade": "Çığ",
+      "extreme": "Aşırı"
+    },
+    "sides": {
+      "long": "Long",
+      "short": "Short",
+      "both": "İki taraf",
+      "none": "Yok"
+    }
   },
   "status": {
     "live": "Canlı",

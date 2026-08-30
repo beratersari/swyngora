@@ -445,6 +445,24 @@ class LiquidationLevelsInput(BaseModel):
     )
 
 
+class LiquidationCascadeInput(BaseModel):
+    symbol: str = Field(
+        default="all",
+        description="Pair e.g. BTCUSDT, or all for market-wide pooled risk",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
+class LiquidationCascadeScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
 class LiquidationOverviewInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -1759,6 +1777,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidation-levels",
             {"symbol": symbol, "exchange": exchange, "range": range},
+        )
+
+    def get_liquidation_cascade(symbol: str = "all", exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-cascade",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def scan_liquidation_cascades(exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-cascade/scan",
+            {"exchange": exchange},
         )
 
     def get_liquidation_overview(
@@ -3779,6 +3809,29 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange=binance|bybit|all. range=12h|24h|3d|7d."
             ),
             args_schema=LiquidationLevelsInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_cascade,
+            name="get_liquidation_cascade",
+            description=(
+                "Detect a liquidation cascade: a short burst of long or short "
+                "liquidations far above that stream's own typical rate "
+                "(1m / 5m / 15m vs the prior 6 hours). Binance and Bybit are "
+                "scored separately. both.agree is true only when the same side "
+                "is cascading on both venues. symbol=all is market-wide."
+            ),
+            args_schema=LiquidationCascadeInput,
+        ),
+        StructuredTool.from_function(
+            scan_liquidation_cascades,
+            name="scan_liquidation_cascades",
+            description=(
+                "Market-wide liquidation cascade scan: pooled market risk plus "
+                "coins currently bursting (elevated / cascade / extreme). "
+                "A hit's both flag means the same side is cascading on Binance "
+                "and Bybit."
+            ),
+            args_schema=LiquidationCascadeScanInput,
         ),
         StructuredTool.from_function(
             get_orderbook_heatmap,

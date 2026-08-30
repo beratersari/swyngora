@@ -44,6 +44,8 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_liquidations",
         "get_liquidation_overview",
         "get_liquidation_levels",
+        "get_liquidation_cascade",
+        "scan_liquidation_cascades",
         "get_market_liquidity",
         "get_orderbook_heatmap",
         "estimate_market_impact",

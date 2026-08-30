@@ -1249,6 +1249,67 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationCascade_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeReportDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || len(body.Venues) != 2 || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationCascade_Market(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=all", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeReportDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "all" || body.Venues == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestScanLiquidationCascades_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade/scan", nil)
+	rr := httptest.NewRecorder()
+	h.ScanLiquidationCascades(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeScanDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Market.Symbol != "all" || body.Hits == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationCascade_BadExchange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT&exchange=okx", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetLiquidationLevels_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-levels?symbol=all&range=24h", nil)

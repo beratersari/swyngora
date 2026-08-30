@@ -1,13 +1,19 @@
 import { isCardWindow, type LiqCardWindowId } from '@/components/organisms/LiquidationWindowCards';
 import { DEFAULT_LIQ_SYMBOL, DEFAULT_LIQ_WINDOW } from './LiquidationsPage.constants';
 
-export type LiqPageView = 'overview' | 'heatmap' | 'chart';
+export type LiqPageView = 'overview' | 'heatmap' | 'chart' | 'cascade';
 export type LiqPageExchange = 'all' | 'binance' | 'bybit';
 export type LiqChartRange = '12h' | '24h';
 
 export function parseLiqView(raw: string | null): LiqPageView {
-  if (raw === 'heatmap' || raw === 'chart') return raw;
+  if (raw === 'heatmap' || raw === 'chart' || raw === 'cascade') return raw;
   return 'overview';
+}
+
+export function parseLiqCascadeSymbol(raw: string | null): string {
+  const s = (raw ?? '').trim().toUpperCase().replace(/-/g, '');
+  if (!s || s === 'ALL' || s === '*') return 'all';
+  return parseLiqChartSymbol(s);
 }
 
 export function parseLiqChartSymbol(raw: string | null): string {

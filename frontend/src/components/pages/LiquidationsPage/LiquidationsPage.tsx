@@ -17,10 +17,16 @@ import {
   LIQ_LEVELS_POLL_MS,
   LiquidationBarChart,
 } from '@/components/organisms/LiquidationBarChart';
+import {
+  LIQ_CASCADE_POLL_MS,
+  LiquidationCascade,
+} from '@/components/organisms/LiquidationCascade';
 import { LiquidationTreemap } from '@/components/organisms/LiquidationTreemap';
 import { LiquidationWindowCards } from '@/components/organisms/LiquidationWindowCards';
 import {
   rtkErrorMessage,
+  useGetMarketLiquidationCascadeQuery,
+  useGetMarketLiquidationCascadeScanQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
@@ -30,6 +36,7 @@ import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { DEFAULT_LIQ_SYMBOL, LIQ_OVERVIEW_POLL_MS } from './LiquidationsPage.constants';
 import {
+  parseLiqCascadeSymbol,
   parseLiqChartRange,
   parseLiqChartSymbol,
   parseLiqExchange,
@@ -57,6 +64,7 @@ export function LiquidationsPage() {
   const exchange = parseLiqExchange(searchParams.get('exchange'));
   const symbol = parseLiqSymbol(searchParams.get('symbol'));
   const chartSymbol = parseLiqChartSymbol(searchParams.get('symbol'));
+  const cascadeSymbol = parseLiqCascadeSymbol(searchParams.get('symbol'));
   const chartRange = parseLiqChartRange(searchParams.get('range'));
   const [liqHeatRange, setLiqHeatRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqHeatVenue, setLiqHeatVenue] = useState<LiqHeatVenue>('combined');
@@ -79,7 +87,10 @@ export function LiquidationsPage() {
   const overviewQuery = useGetMarketLiquidationOverviewQuery(
     { exchange, window: windowId, limit: 80 },
     {
-      pollingInterval: visible && (view === 'overview' || view === 'chart') ? LIQ_OVERVIEW_POLL_MS : 0,
+      pollingInterval:
+        visible && (view === 'overview' || view === 'chart' || view === 'cascade')
+          ? LIQ_OVERVIEW_POLL_MS
+          : 0,
       refetchOnFocus: true,
     },
   );
@@ -108,15 +119,38 @@ export function LiquidationsPage() {
     { skip: view !== 'heatmap' || !symbol },
   );
 
+  const cascadeScanQuery = useGetMarketLiquidationCascadeScanQuery(
+    { exchange },
+    {
+      skip: view !== 'cascade',
+      pollingInterval: visible && view === 'cascade' ? LIQ_CASCADE_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const cascadeQuery = useGetMarketLiquidationCascadeQuery(
+    { exchange, symbol: cascadeSymbol },
+    {
+      skip: view !== 'cascade' || cascadeSymbol === 'all',
+      pollingInterval: visible && view === 'cascade' && cascadeSymbol !== 'all' ? LIQ_CASCADE_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const cascadeScan = rtkCurrent(cascadeScanQuery);
+  const cascadeReport =
+    cascadeSymbol === 'all' ? cascadeScan?.market : rtkCurrent(cascadeQuery);
+
   const symbolOptions = useMemo(() => {
     const fromCoins = coins
       .map((c) => c.symbol)
       .filter((s): s is string => Boolean(s));
-    if (symbol && !fromCoins.includes(symbol)) {
-      return [symbol, ...fromCoins];
+    const extra = [symbol, cascadeSymbol].filter(
+      (s): s is string => Boolean(s) && s !== 'all' && !fromCoins.includes(s),
+    );
+    if (extra.length) {
+      return [...extra, ...fromCoins];
     }
     return fromCoins.length ? fromCoins : [DEFAULT_LIQ_SYMBOL];
-  }, [coins, symbol]);
+  }, [coins, symbol, cascadeSymbol]);
 
   return (
     <PageStack>
@@ -136,6 +170,7 @@ export function LiquidationsPage() {
           options={[
             { value: 'overview', label: t('liquidations:tabs.overview') },
             { value: 'chart', label: t('liquidations:tabs.chart') },
+            { value: 'cascade', label: t('liquidations:tabs.cascade') },
             { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
           ]}
         />
@@ -157,6 +192,27 @@ export function LiquidationsPage() {
             }
           />
         </Field>
+        {view === 'cascade' ? (
+          <Field>
+            <Text variant="caption" color="secondary" id="liq-cascade-coin-label">
+              {t('liquidations:cascade.coin')}
+            </Text>
+            <Select
+              aria-labelledby="liq-cascade-coin-label"
+              showSearch
+              value={cascadeSymbol}
+              style={{ minWidth: 168 }}
+              options={[
+                { value: 'all', label: t('liquidations:cascade.market') },
+                ...symbolOptions.map((s) => ({
+                  value: s,
+                  label: s.replace(/USDT$|USDC$/i, '') || s,
+                })),
+              ]}
+              onChange={(next) => patchParams({ symbol: next === 'all' ? 'all' : next })}
+            />
+          </Field>
+        ) : null}
         {view === 'chart' ? (
           <>
             <Field>
@@ -231,6 +287,29 @@ export function LiquidationsPage() {
                 })
               : null
           }
+        />
+      ) : view === 'cascade' ? (
+        <LiquidationCascade
+          report={cascadeReport}
+          hits={cascadeScan?.hits ?? []}
+          isLoading={
+            cascadeSymbol === 'all'
+              ? rtkCurrentPending(cascadeScanQuery)
+              : rtkCurrentPending(cascadeQuery)
+          }
+          isFetching={cascadeScanQuery.isFetching || cascadeQuery.isFetching}
+          errorMessage={
+            cascadeScanQuery.isError
+              ? rtkErrorMessage(cascadeScanQuery.error, {
+                  resource: t('liquidations:tabs.cascade'),
+                })
+              : cascadeQuery.isError
+                ? rtkErrorMessage(cascadeQuery.error, {
+                    resource: t('liquidations:tabs.cascade'),
+                  })
+                : null
+          }
+          onOpenCoin={(next) => patchParams({ symbol: next })}
         />
       ) : (
         <HeatmapStack>
