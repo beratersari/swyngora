@@ -27,8 +27,8 @@ export const Stats = styled.div`
 export const Frame = styled.div`
   position: relative;
   min-width: 0;
+  flex: 1 1 auto;
   min-height: 420px;
-  height: 100%;
   background: ${({ theme }) => theme.semantic.bg.canvas};
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: 8px;
@@ -44,6 +44,8 @@ export const Frame = styled.div`
 
 export const Plot = styled.svg`
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 `;
