@@ -23,6 +23,7 @@ const (
 type LiquidationSink interface {
 	Record(domain.LiquidationEvent)
 	SetLive(domain.Exchange, bool)
+	NoteSeen(domain.Exchange)
 }
 
 // LiquidationHub listens to Binance USD-M !forceOrder@arr.
@@ -124,6 +125,7 @@ func (h *LiquidationHub) listen(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		h.sink.NoteSeen(domain.ExchangeBinance)
 		ev, ok := ParseForceOrder(payload)
 		if !ok {
 			continue

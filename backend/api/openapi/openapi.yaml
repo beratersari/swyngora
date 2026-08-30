@@ -7194,7 +7194,35 @@ components:
         count: { type: integer }
         biggest: { $ref: '#/components/schemas/LiquidationHit' }
         coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. }
-        complete: { type: boolean, description: False until this coin+venue has had a live websocket for the full window }
+        complete: { type: boolean, description: False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. }
+    LiquidationGap:
+      type: object
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time, description: Omitted while the gap is still open }
+        seconds: { type: integer }
+    LiquidationVenueHealth:
+      type: object
+      properties:
+        exchange: { type: string }
+        live: { type: boolean }
+        lastEventAt: { type: string, format: date-time, description: Last liquidation print on this venue }
+        lastSeenAt: { type: string, format: date-time, description: Last websocket payload from this venue }
+        coverageSeconds: { type: integer }
+        gaps:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationGap' }
+    LiquidationFeed:
+      type: object
+      description: Per-venue last print, last socket message, and disconnects. Combined never substitutes one venue for the other.
+      properties:
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationVenueHealth' }
+        missing:
+          type: array
+          items: { type: string }
+          description: Venues that are down, stalled, or never started
     MarketLiquidations:
       type: object
       description: Rolling futures liquidation totals from live streams
@@ -7202,11 +7230,12 @@ components:
         symbol: { type: string }
         exchange: { type: string }
         collectingSince: { type: string, format: date-time }
-        live: { type: boolean }
+        live: { type: boolean, description: Combined is true only when every requested venue is live }
         venueCount: { type: integer }
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
         note: { type: string }
     MarketLiquidationCoin:
       type: object
@@ -7226,7 +7255,7 @@ components:
         exchange: { type: string }
         coinWindow: { type: string, enum: [1h, 4h, 12h, 24h] }
         collectingSince: { type: string, format: date-time }
-        live: { type: boolean }
+        live: { type: boolean, description: Combined is true only when both Binance and Bybit streams are live }
         venueCount: { type: integer }
         windows:
           type: array
@@ -7234,7 +7263,14 @@ components:
         coins:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationCoin' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
         note: { type: string }
+    MarketLiquidationLeverageSlice:
+      type: object
+      properties:
+        leverage: { type: integer, enum: [10, 25, 50, 100] }
+        longNotional: { type: string }
+        shortNotional: { type: string }
     MarketLiquidationLevelBar:
       type: object
       properties:
@@ -7242,6 +7278,12 @@ components:
         longNotional: { type: string }
         shortNotional: { type: string }
         totalNotional: { type: string }
+        cumLong: { type: string, description: Long notional from last price to this bar }
+        cumShort: { type: string, description: Short notional from last price to this bar }
+        cumTotal: { type: string }
+        byLeverage:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLeverageSlice' }
     MarketLiquidationTimeBar:
       type: object
       properties:
@@ -7260,13 +7302,21 @@ components:
         range: { type: string }
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
-        lastPrice: { type: string }
+        lastPrice: { type: string, description: Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. }
+        lastPrices:
+          type: object
+          additionalProperties: { type: string }
+          description: Each venue's own last price
         levels:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationLevelBar' }
         bars:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationTimeBar' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
+        missing:
+          type: array
+          items: { type: string }
         note: { type: string }
     MarketLiquidationCascadeWindow:
       type: object
@@ -7387,8 +7437,13 @@ components:
           type: array
           items: { type: array, items: { type: number } }
         maxIntensity: { type: number }
-        coverage: { type: number, description: Fraction of time columns with open interest }
+        coverage: { type: number, description: Fraction of time columns with this venue's own price and open interest. Combined requires both venues. }
         columnsWithOi: { type: integer }
+        lastPrice: { type: number, description: That venue's own last print. Combined is omitted. }
+        hasData:
+          type: array
+          items: { type: boolean }
+          description: Per time column, whether this venue (or both, for combined) had own price+OI
     LiquidationHuntHeatmap:
       type: object
       description: Price × time estimated liquidation intensity
@@ -7412,6 +7467,10 @@ components:
         bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
         combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
         review: { $ref: '#/components/schemas/LiquidationHuntHeatmapReview' }
+        missingVenues:
+          type: array
+          items: { type: string }
+          description: Venues with no own price+OI in this window. Combined does not fill those cells from the other venue.
         note: { type: string }
     LiquidationHuntHeatmapReviewHorizon:
       type: object

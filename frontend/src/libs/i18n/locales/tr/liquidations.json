@@ -40,9 +40,11 @@
     "range": "Aralık",
     "levelsTitle": "Likidasyon seviyeleri",
     "totalsTitle": "Toplam likidasyonlar",
-    "levelsHint": "Her fiyattaki tahmini long ve short likidasyon tutarı. Long (kırmızı) solda, short (yeşil) sağda.",
+    "levelsHint": "Yatay CoinGlass haritası: last üstünde short, altında long. Renkler 100x / 50x / 25x / 10x. Bir çubuğun üzerine gelince o seviye ve last’ten buraya kadar toplam görünür.",
     "totalsHint": "Seçilen borsada izlenen tüm coinlerin zaman içindeki gerçekleşen long ve short likidasyonları.",
     "lastPrice": "Son",
+    "leverage": "{{lev}}x",
+    "cumToLevel": "Last’ten buraya",
     "aria": "Likidasyon çubuk grafiği",
     "empty": "Bu pencerede henüz likidasyon çubuğu yok.",
     "emptyHint": "Başka bir coin seçin veya canlı akışı bekleyin."
@@ -82,6 +84,17 @@
       "both": "İki taraf",
       "none": "Yok"
     }
+  },
+  "feed": {
+    "binance": "Binance",
+    "bybit": "Bybit",
+    "status": "Akış",
+    "down": "Kapalı",
+    "lastPrint": "Son işlem",
+    "lastSeen": "Son soket",
+    "gaps": "Son 6 saatte {{hours}}s boşluk",
+    "noGaps": "Son 6 saatte boşluk yok",
+    "missingVenues": "{{venues}} verisi yok. Birleşik görünüm diğer borsadan doldurulmaz."
   },
   "status": {
     "live": "Canlı",

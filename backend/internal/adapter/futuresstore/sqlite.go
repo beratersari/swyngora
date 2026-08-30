@@ -3,6 +3,7 @@ package futuresstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -149,6 +150,22 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 			return fmt.Errorf("liquidation coverage schema: %w", err)
 		}
 		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
+			return err
+		}
+		v = 3
+	}
+	if v < 4 {
+		for _, stmt := range []string{
+			`ALTER TABLE liquidation_coverage ADD COLUMN last_event_ms INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE liquidation_coverage ADD COLUMN last_seen_ms INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE liquidation_coverage ADD COLUMN last_saved_ms INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE liquidation_coverage ADD COLUMN gaps_json TEXT NOT NULL DEFAULT ''`,
+		} {
+			if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+				return err
+			}
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
 			return err
 		}
 	}
@@ -395,11 +412,15 @@ func (s *SQLite) UpsertLiquidationCoverage(ctx context.Context, rows []domain.Li
 		return err
 	}
 	stmt, err := tx.PrepareContext(ctx, `
-INSERT INTO liquidation_coverage (exchange, symbol, first_watch_ms, live_ms)
-VALUES (?, ?, ?, ?)
+INSERT INTO liquidation_coverage (exchange, symbol, first_watch_ms, live_ms, last_event_ms, last_seen_ms, last_saved_ms, gaps_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(exchange, symbol) DO UPDATE SET
 	first_watch_ms = MIN(first_watch_ms, excluded.first_watch_ms),
-	live_ms = MAX(live_ms, excluded.live_ms)`)
+	live_ms = MAX(live_ms, excluded.live_ms),
+	last_event_ms = MAX(last_event_ms, excluded.last_event_ms),
+	last_seen_ms = MAX(last_seen_ms, excluded.last_seen_ms),
+	last_saved_ms = excluded.last_saved_ms,
+	gaps_json = excluded.gaps_json`)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
@@ -410,7 +431,13 @@ ON CONFLICT(exchange, symbol) DO UPDATE SET
 			continue
 		}
 		sym := domain.NormalizeLiquidationSymbol(row.Symbol)
-		if _, err := stmt.ExecContext(ctx, string(row.Exchange), sym, row.FirstWatch.UTC().UnixMilli(), row.Live.Milliseconds()); err != nil {
+		gaps, err := marshalLiqGaps(row.Gaps)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if _, err := stmt.ExecContext(ctx, string(row.Exchange), sym, row.FirstWatch.UTC().UnixMilli(), row.Live.Milliseconds(),
+			unixMS(row.LastEvent), unixMS(row.LastSeen), unixMS(row.LastSaved), gaps); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -426,7 +453,8 @@ func (s *SQLite) ListLiquidationCoverage(ctx context.Context) ([]domain.Liquidat
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.db.QueryContext(ctx, `
-SELECT exchange, symbol, first_watch_ms, live_ms FROM liquidation_coverage`)
+SELECT exchange, symbol, first_watch_ms, live_ms, last_event_ms, last_seen_ms, last_saved_ms, gaps_json
+FROM liquidation_coverage`)
 	if err != nil {
 		return nil, err
 	}
@@ -435,13 +463,18 @@ SELECT exchange, symbol, first_watch_ms, live_ms FROM liquidation_coverage`)
 	for rows.Next() {
 		var row domain.LiquidationCoverage
 		var ex string
-		var firstMS, liveMS int64
-		if err := rows.Scan(&ex, &row.Symbol, &firstMS, &liveMS); err != nil {
+		var firstMS, liveMS, eventMS, seenMS, savedMS int64
+		var gaps string
+		if err := rows.Scan(&ex, &row.Symbol, &firstMS, &liveMS, &eventMS, &seenMS, &savedMS, &gaps); err != nil {
 			return nil, err
 		}
 		row.Exchange = domain.Exchange(ex)
 		row.FirstWatch = time.UnixMilli(firstMS).UTC()
 		row.Live = time.Duration(liveMS) * time.Millisecond
+		row.LastEvent = fromUnixMS(eventMS)
+		row.LastSeen = fromUnixMS(seenMS)
+		row.LastSaved = fromUnixMS(savedMS)
+		row.Gaps = unmarshalLiqGaps(gaps)
 		out = append(out, row)
 	}
 	return out, rows.Err()
@@ -466,6 +499,59 @@ func (s *SQLite) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, int
 	n1, _ := r1.RowsAffected()
 	n2, _ := r2.RowsAffected()
 	return int(n1), int(n2), nil
+}
+
+type liqGapRow struct {
+	From    int64 `json:"from"`
+	To      int64 `json:"to,omitempty"`
+	Seconds int64 `json:"seconds,omitempty"`
+}
+
+func unixMS(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UTC().UnixMilli()
+}
+
+func fromUnixMS(ms int64) time.Time {
+	if ms <= 0 {
+		return time.Time{}
+	}
+	return time.UnixMilli(ms).UTC()
+}
+
+func marshalLiqGaps(in []domain.LiquidationGap) (string, error) {
+	if len(in) == 0 {
+		return "", nil
+	}
+	rows := make([]liqGapRow, 0, len(in))
+	for _, g := range in {
+		rows = append(rows, liqGapRow{From: unixMS(g.From), To: unixMS(g.To), Seconds: g.Seconds})
+	}
+	b, err := json.Marshal(rows)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func unmarshalLiqGaps(raw string) []domain.LiquidationGap {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var rows []liqGapRow
+	if err := json.Unmarshal([]byte(raw), &rows); err != nil {
+		return nil
+	}
+	out := make([]domain.LiquidationGap, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, domain.LiquidationGap{
+			From: fromUnixMS(r.From), To: fromUnixMS(r.To), Seconds: r.Seconds,
+		})
+	}
+	return out
 }
 
 // UpsertTakerBuckets inserts or replaces buy/sell bars.

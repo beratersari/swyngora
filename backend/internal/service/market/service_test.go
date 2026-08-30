@@ -793,6 +793,31 @@ func TestGetLiquidationLevels_AllCoinsFromBook(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationLevels_DoesNotBorrowOtherLastPrice(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{ticker: &domain.Ticker24h{LastPrice: "100"}},
+		domain.ExchangeBybit:   &fakeMarket{tickerErr: domain.ErrNotFound},
+	}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: &fakeOI{ser: &domain.OpenInterestSeries{Current: domain.OpenInterestPoint{Value: 1_000_000}}},
+	})
+	got, err := svc.GetLiquidationLevels(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastPrice != "" {
+		t.Fatalf("combined last must stay empty, got %s", got.LastPrice)
+	}
+	found := false
+	for _, m := range got.Missing {
+		if m == "bybit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected bybit missing %+v", got.Missing)
+	}
+}
+
 func TestGetLiquidationLevels_BadRange(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	_, err := svc.GetLiquidationLevels(context.Background(), "all", "BTCUSDT", "9h")

@@ -21,6 +21,7 @@ import {
   LIQ_CASCADE_POLL_MS,
   LiquidationCascade,
 } from '@/components/organisms/LiquidationCascade';
+import { LiquidationFeedHealth } from '@/components/organisms/LiquidationFeedHealth';
 import { LiquidationTreemap } from '@/components/organisms/LiquidationTreemap';
 import { LiquidationWindowCards } from '@/components/organisms/LiquidationWindowCards';
 import {
@@ -114,9 +115,10 @@ export function LiquidationsPage() {
       refetchOnFocus: true,
     },
   );
+  const heatTickerExchange = liqHeatVenue === 'bybit' ? 'bybit' : liqHeatVenue === 'binance' ? 'binance' : null;
   const tickerQuery = useGetTicker24hQuery(
-    { symbol, exchange: exchange === 'bybit' ? 'bybit' : 'binance' },
-    { skip: view !== 'heatmap' || !symbol },
+    { symbol, exchange: heatTickerExchange ?? 'binance' },
+    { skip: view !== 'heatmap' || !symbol || heatTickerExchange == null },
   );
 
   const cascadeScanQuery = useGetMarketLiquidationCascadeScanQuery(
@@ -247,6 +249,8 @@ export function LiquidationsPage() {
         ) : null}
       </Toolbar>
 
+      <LiquidationFeedHealth feed={overview?.feed ?? rtkCurrent(levelsQuery)?.feed} />
+
       {overviewQuery.isError ? (
         <Alert
           type="error"
@@ -335,7 +339,14 @@ export function LiquidationsPage() {
               onVenueChange={setLiqHeatVenue}
               side={liqHeatSide}
               onSideChange={setLiqHeatSide}
-              lastPrice={Number(rtkCurrent(tickerQuery)?.lastPrice)}
+              lastPrice={
+                liqHeatVenue === 'combined'
+                  ? undefined
+                  : Number(
+                      rtkCurrent(heatQuery)?.[liqHeatVenue]?.lastPrice ||
+                        rtkCurrent(tickerQuery)?.lastPrice,
+                    ) || undefined
+              }
               isLoading={rtkCurrentPending(heatQuery)}
               isFetching={heatQuery.isFetching}
               errorMessage={

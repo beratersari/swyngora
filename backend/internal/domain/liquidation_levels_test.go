@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -20,6 +21,99 @@ func TestParseLiquidationLevelsSymbol(t *testing.T) {
 	got, err = ParseLiquidationLevelsSymbol("btcusdt")
 	if err != nil || got != "BTCUSDT" {
 		t.Fatalf("btc %s %v", got, err)
+	}
+}
+
+func TestChartLeverageBucket(t *testing.T) {
+	if ChartLeverageBucket(5) != 10 || ChartLeverageBucket(10) != 10 {
+		t.Fatal("10x")
+	}
+	if ChartLeverageBucket(25) != 25 {
+		t.Fatal("25x")
+	}
+	if ChartLeverageBucket(50) != 50 {
+		t.Fatal("50x")
+	}
+	if ChartLeverageBucket(75) != 100 || ChartLeverageBucket(125) != 100 {
+		t.Fatal("100x")
+	}
+}
+
+func TestBuildLiquidationLevelsFromHunt_OwnVenueAndCum(t *testing.T) {
+	rep := HuntReport{
+		Symbol:   "BTCUSDT",
+		Exchange: "binance",
+		Venues: []HuntVenueReport{
+			{
+				Exchange: ExchangeBinance, Price: 100, OpenInterestValue: 1_000_000,
+				UpPressure: []HuntBand{
+					{Side: LiquidationSideShort, Leverage: 100, Price: 101, EstNotional: 40},
+					{Side: LiquidationSideShort, Leverage: 10, Price: 110, EstNotional: 80},
+				},
+				DownPressure: []HuntBand{
+					{Side: LiquidationSideLong, Leverage: 50, Price: 96, EstNotional: 30},
+				},
+			},
+			{
+				Exchange: ExchangeBybit, Price: 50, OpenInterestValue: 1_000_000,
+				UpPressure: []HuntBand{
+					{Side: LiquidationSideShort, Leverage: 10, Price: 55, EstNotional: 999},
+				},
+			},
+		},
+	}
+	got := BuildLiquidationLevelsFromHunt(rep)
+	if got.LastPrice != "100" {
+		t.Fatalf("binance last %s", got.LastPrice)
+	}
+	if got.LastPrices["bybit"] != "" {
+		t.Fatal("single-venue report must not copy the other last price")
+	}
+	var saw100, saw10, saw50 bool
+	var maxCumShort float64
+	for _, lv := range got.Levels {
+		for _, sl := range lv.ByLeverage {
+			if sl.Leverage == 100 && sl.ShortNotional != "0" {
+				saw100 = true
+			}
+			if sl.Leverage == 10 && sl.ShortNotional != "0" {
+				saw10 = true
+			}
+			if sl.Leverage == 50 && sl.LongNotional != "0" {
+				saw50 = true
+			}
+		}
+		if v, _ := strconv.ParseFloat(lv.CumShort, 64); v > maxCumShort {
+			maxCumShort = v
+		}
+	}
+	if !saw100 || !saw10 || !saw50 {
+		t.Fatalf("leverage slices missing 100=%v 10=%v 50=%v", saw100, saw10, saw50)
+	}
+	if maxCumShort < 100 {
+		t.Fatalf("cum to far short bar should include nearer shorts, got %v", maxCumShort)
+	}
+
+	all := BuildLiquidationLevelsFromHunt(HuntReport{Symbol: "BTCUSDT", Exchange: "all", Venues: rep.Venues})
+	if all.LastPrice != "" {
+		t.Fatalf("combined last must stay empty, got %s", all.LastPrice)
+	}
+	if all.LastPrices["binance"] == "" || all.LastPrices["bybit"] == "" {
+		t.Fatalf("combined lastPrices %+v", all.LastPrices)
+	}
+}
+
+func TestBuildLiquidationLevelsFromHunt_MissingVenue(t *testing.T) {
+	got := BuildLiquidationLevelsFromHunt(HuntReport{
+		Symbol: "ETHUSDT", Exchange: "all",
+		Venues: []HuntVenueReport{
+			{Exchange: ExchangeBinance, Price: 3000, OpenInterestValue: 100, DownPressure: []HuntBand{
+				{Side: LiquidationSideLong, Leverage: 25, Price: 2900, EstNotional: 10},
+			}},
+		},
+	})
+	if len(got.Missing) != 1 || got.Missing[0] != "bybit" {
+		t.Fatalf("missing %+v", got.Missing)
 	}
 }
 

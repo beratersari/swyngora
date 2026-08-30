@@ -114,6 +114,13 @@ func (s *PersistSink) SetLive(ex domain.Exchange, live bool) {
 	}
 }
 
+// NoteSeen records that the venue socket delivered a payload.
+func (s *PersistSink) NoteSeen(ex domain.Exchange) {
+	if s != nil && s.Book != nil {
+		s.Book.NoteSeen(ex)
+	}
+}
+
 // MarkWatch forwards Bybit per-symbol coverage to the book.
 func (s *PersistSink) MarkWatch(ex domain.Exchange, symbol string) {
 	if s != nil && s.Book != nil {
@@ -145,6 +152,13 @@ func RestoreBook(ctx context.Context, book *domain.LiquidationBook, hist *Servic
 	}
 	for _, c := range cov {
 		book.RestoreTracking(c.Exchange, c.Symbol, c.FirstWatch, c.Live)
+		book.RestoreFeed(c, now)
+	}
+	if len(cov) == 0 {
+		// Upgrade path: last print per venue from restored events.
+		for _, e := range ev {
+			book.NoteSeen(e.Exchange)
+		}
 	}
 	return len(ev)
 }

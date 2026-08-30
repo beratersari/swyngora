@@ -40,9 +40,11 @@
     "range": "Range",
     "levelsTitle": "Liquidation levels",
     "totalsTitle": "Total liquidations",
-    "levelsHint": "Estimated long and short liquidation notional at each price. Longs (red) to the left, shorts (green) to the right.",
+    "levelsHint": "Horizontal CoinGlass-style map: shorts above last, longs below. Colors are 100x / 50x / 25x / 10x. Hover a bar for that level and the total from last price to it.",
     "totalsHint": "Observed long and short liquidations over time for every tracked coin on the selected venue.",
     "lastPrice": "Last",
+    "leverage": "{{lev}}x",
+    "cumToLevel": "From last to here",
     "aria": "Liquidation bar chart",
     "empty": "No liquidation bars in this window yet.",
     "emptyHint": "Pick another coin or wait for the live feed."
@@ -82,6 +84,17 @@
       "both": "Both sides",
       "none": "None"
     }
+  },
+  "feed": {
+    "binance": "Binance",
+    "bybit": "Bybit",
+    "status": "Feed",
+    "down": "Down",
+    "lastPrint": "Last print",
+    "lastSeen": "Last socket",
+    "gaps": "{{hours}}h gap in last 6h",
+    "noGaps": "No gaps in last 6h",
+    "missingVenues": "No data from {{venues}}. Combined does not fill that from the other venue."
   },
   "status": {
     "live": "Live",

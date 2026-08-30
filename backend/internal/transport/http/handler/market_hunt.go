@@ -282,11 +282,21 @@ func (h *MarketHandler) GetLiquidationLevels(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, liquidationLevelsToDTO(got))
 }
 
-type liquidationLevelBarDTO struct {
-	Price         string `json:"price"`
+type liquidationLeverageSliceDTO struct {
+	Leverage      int    `json:"leverage"`
 	LongNotional  string `json:"longNotional"`
 	ShortNotional string `json:"shortNotional"`
-	TotalNotional string `json:"totalNotional"`
+}
+
+type liquidationLevelBarDTO struct {
+	Price         string                        `json:"price"`
+	LongNotional  string                        `json:"longNotional"`
+	ShortNotional string                        `json:"shortNotional"`
+	TotalNotional string                        `json:"totalNotional"`
+	CumLong       string                        `json:"cumLong,omitempty"`
+	CumShort      string                        `json:"cumShort,omitempty"`
+	CumTotal      string                        `json:"cumTotal,omitempty"`
+	ByLeverage    []liquidationLeverageSliceDTO `json:"byLeverage,omitempty"`
 }
 
 type liquidationTimeBarDTO struct {
@@ -298,16 +308,19 @@ type liquidationTimeBarDTO struct {
 }
 
 type liquidationLevelsResponse struct {
-	Kind      string                   `json:"kind"`
-	Symbol    string                   `json:"symbol"`
-	Exchange  string                   `json:"exchange"`
-	Range     string                   `json:"range"`
-	From      string                   `json:"from,omitempty"`
-	To        string                   `json:"to,omitempty"`
-	LastPrice string                   `json:"lastPrice,omitempty"`
-	Levels    []liquidationLevelBarDTO `json:"levels"`
-	Bars      []liquidationTimeBarDTO  `json:"bars"`
-	Note      string                   `json:"note"`
+	Kind       string                   `json:"kind"`
+	Symbol     string                   `json:"symbol"`
+	Exchange   string                   `json:"exchange"`
+	Range      string                   `json:"range"`
+	From       string                   `json:"from,omitempty"`
+	To         string                   `json:"to,omitempty"`
+	LastPrice  string                   `json:"lastPrice,omitempty"`
+	LastPrices map[string]string        `json:"lastPrices,omitempty"`
+	Levels     []liquidationLevelBarDTO `json:"levels"`
+	Bars       []liquidationTimeBarDTO  `json:"bars"`
+	Feed       liquidationFeedDTO       `json:"feed"`
+	Missing    []string                 `json:"missing,omitempty"`
+	Note       string                   `json:"note"`
 }
 
 func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
@@ -316,15 +329,22 @@ func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevels
 	}
 	levels := make([]liquidationLevelBarDTO, 0, len(a.Levels))
 	for _, lv := range a.Levels {
+		slices := make([]liquidationLeverageSliceDTO, 0, len(lv.ByLeverage))
+		for _, sl := range lv.ByLeverage {
+			slices = append(slices, liquidationLeverageSliceDTO{
+				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
+			})
+		}
 		levels = append(levels, liquidationLevelBarDTO{
 			Price: lv.Price, LongNotional: lv.LongNotional, ShortNotional: lv.ShortNotional,
-			TotalNotional: lv.TotalNotional,
+			TotalNotional: lv.TotalNotional, CumLong: lv.CumLong, CumShort: lv.CumShort,
+			CumTotal: lv.CumTotal, ByLeverage: slices,
 		})
 	}
 	bars := make([]liquidationTimeBarDTO, 0, len(a.Bars))
 	for _, b := range a.Bars {
 		bars = append(bars, liquidationTimeBarDTO{
-			T: b.Time.UTC().Format(time.RFC3339Nano),
+			T:            b.Time.UTC().Format(time.RFC3339Nano),
 			LongNotional: b.LongNotional, ShortNotional: b.ShortNotional,
 			TotalNotional: b.TotalNotional, Count: b.Count,
 		})
@@ -338,7 +358,8 @@ func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevels
 	}
 	return liquidationLevelsResponse{
 		Kind: a.Kind, Symbol: a.Symbol, Exchange: a.Exchange, Range: a.Range,
-		From: from, To: to, LastPrice: a.LastPrice, Levels: levels, Bars: bars, Note: a.Note,
+		From: from, To: to, LastPrice: a.LastPrice, LastPrices: a.LastPrices,
+		Levels: levels, Bars: bars, Feed: feedToDTO(a.Feed), Missing: a.Missing, Note: a.Note,
 	}
 }
 
@@ -350,24 +371,27 @@ type huntHeatmapGridDTO struct {
 	MaxIntensity  float64     `json:"maxIntensity"`
 	Coverage      float64     `json:"coverage"`
 	ColumnsWithOi int         `json:"columnsWithOi"`
+	LastPrice     float64     `json:"lastPrice,omitempty"`
+	HasData       []bool      `json:"hasData,omitempty"`
 }
 
 type huntHeatmapResponse struct {
-	Symbol    string               `json:"symbol"`
-	Range     string               `json:"range"`
-	From      time.Time            `json:"from"`
-	To        time.Time            `json:"to"`
-	StepSec   int                  `json:"stepSec"`
-	PriceMin  float64              `json:"priceMin"`
-	PriceMax  float64              `json:"priceMax"`
-	PriceStep float64              `json:"priceStep"`
-	Prices    []float64            `json:"prices"`
-	Times     []time.Time          `json:"times"`
-	Binance   huntHeatmapGridDTO   `json:"binance"`
-	Bybit     huntHeatmapGridDTO   `json:"bybit"`
-	Combined  huntHeatmapGridDTO   `json:"combined"`
-	Review    huntHeatmapReviewDTO `json:"review"`
-	Note      string               `json:"note"`
+	Symbol        string               `json:"symbol"`
+	Range         string               `json:"range"`
+	From          time.Time            `json:"from"`
+	To            time.Time            `json:"to"`
+	StepSec       int                  `json:"stepSec"`
+	PriceMin      float64              `json:"priceMin"`
+	PriceMax      float64              `json:"priceMax"`
+	PriceStep     float64              `json:"priceStep"`
+	Prices        []float64            `json:"prices"`
+	Times         []time.Time          `json:"times"`
+	Binance       huntHeatmapGridDTO   `json:"binance"`
+	Bybit         huntHeatmapGridDTO   `json:"bybit"`
+	Combined      huntHeatmapGridDTO   `json:"combined"`
+	Review        huntHeatmapReviewDTO `json:"review"`
+	MissingVenues []string             `json:"missingVenues,omitempty"`
+	Note          string               `json:"note"`
 }
 
 type huntHeatmapReviewHorizonDTO struct {
@@ -441,11 +465,12 @@ func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
 		Symbol: a.Symbol, Range: a.Range, From: a.From.UTC(), To: a.To.UTC(),
 		StepSec: a.StepSec, PriceMin: a.PriceMin, PriceMax: a.PriceMax, PriceStep: a.PriceStep,
 		Prices: a.Prices, Times: a.Times,
-		Binance:  huntGridToDTO(a.Binance),
-		Bybit:    huntGridToDTO(a.Bybit),
-		Combined: huntGridToDTO(a.Combined),
-		Review:   huntReviewToDTO(a.Review),
-		Note:     a.Note,
+		Binance:       huntGridToDTO(a.Binance),
+		Bybit:         huntGridToDTO(a.Bybit),
+		Combined:      huntGridToDTO(a.Combined),
+		Review:        huntReviewToDTO(a.Review),
+		MissingVenues: a.MissingVenues,
+		Note:          a.Note,
 	}
 }
 
@@ -497,5 +522,6 @@ func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {
 	return huntHeatmapGridDTO{
 		Exchange: g.Exchange, Longs: g.Longs, Shorts: g.Shorts, Totals: g.Totals,
 		MaxIntensity: g.MaxIntensity, Coverage: g.Coverage, ColumnsWithOi: g.ColumnsWithOI,
+		LastPrice: g.LastPrice, HasData: g.HasData,
 	}
 }

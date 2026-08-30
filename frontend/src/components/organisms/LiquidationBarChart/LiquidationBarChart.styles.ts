@@ -22,7 +22,7 @@ export const LegendRow = styled.div`
   gap: 16px;
 `;
 
-export const Swatch = styled.span<{ $tone: 'long' | 'short' | 'last' }>`
+export const Swatch = styled.span<{ $tone?: 'long' | 'short' | 'last'; $color?: string }>`
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -35,12 +35,14 @@ export const Swatch = styled.span<{ $tone: 'long' | 'short' | 'last' }>`
     width: 10px;
     height: 10px;
     border-radius: 2px;
-    background: ${({ $tone, theme }) =>
-      $tone === 'long'
-        ? theme.semantic.chart.down
-        : $tone === 'short'
-          ? theme.semantic.chart.up
-          : theme.semantic.action.primary};
+    background: ${({ $tone, $color, theme }) =>
+      $color
+        ? $color
+        : $tone === 'long'
+          ? theme.semantic.chart.down
+          : $tone === 'short'
+            ? theme.semantic.chart.up
+            : theme.semantic.action.primary};
   }
 `;
 

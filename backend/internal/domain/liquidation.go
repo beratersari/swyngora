@@ -19,8 +19,8 @@ const (
 	LiquidationWindow12h = "12h"
 	LiquidationWindow24h = "24h"
 
-	maxLiquidationEventsPerSymbol = 20000
-	liquidationRetain             = 24 * time.Hour
+	maxLiquidationEventsPerSymbol   = 20000
+	liquidationRetain               = 24 * time.Hour
 	defaultLiquidationOverviewLimit = 50
 	maxLiquidationOverviewLimit     = 100
 )
@@ -88,6 +88,7 @@ type LiquidationSnapshot struct {
 	Live            bool
 	VenueCount      int
 	Windows         []LiquidationWindowTotals
+	Feed            LiquidationFeed
 }
 
 // LiquidationCoinTile is one coin's totals for the selected overview window.
@@ -110,6 +111,7 @@ type LiquidationOverview struct {
 	VenueCount      int
 	Windows         []LiquidationWindowTotals
 	Coins           []LiquidationCoinTile
+	Feed            LiquidationFeed
 }
 
 // LiquidationCoverage is durable live-socket time for one venue or one pair.
@@ -119,6 +121,10 @@ type LiquidationCoverage struct {
 	Symbol     string
 	FirstWatch time.Time
 	Live       time.Duration
+	LastEvent  time.Time
+	LastSeen   time.Time
+	LastSaved  time.Time
+	Gaps       []LiquidationGap
 }
 
 // NormalizeLiquidationSymbol maps spot-style ids (BTC-USD) to USDT linear (BTCUSDT).
@@ -322,6 +328,9 @@ type LiquidationBook struct {
 	watchClock map[string]*liveClock
 	now        func() time.Time
 	live       map[Exchange]bool
+	lastEvent  map[Exchange]time.Time
+	lastSeen   map[Exchange]time.Time
+	gaps       map[Exchange][]LiquidationGap
 }
 
 func watchKey(symbol string, ex Exchange) string {
@@ -338,6 +347,9 @@ func NewLiquidationBook() *LiquidationBook {
 		watchClock: map[string]*liveClock{},
 		now:        time.Now,
 		live:       map[Exchange]bool{},
+		lastEvent:  map[Exchange]time.Time{},
+		lastSeen:   map[Exchange]time.Time{},
+		gaps:       map[Exchange][]LiquidationGap{},
 	}
 }
 
@@ -350,6 +362,7 @@ func (b *LiquidationBook) SetLive(ex Exchange, live bool) {
 	}
 	b.mu.Lock()
 	now := b.now().UTC()
+	was := b.live[ex]
 	b.live[ex] = live
 	if b.venueClock[ex] == nil {
 		b.venueClock[ex] = &liveClock{}
@@ -359,6 +372,13 @@ func (b *LiquidationBook) SetLive(ex Exchange, live bool) {
 		if _, ok := b.venueSince[ex]; !ok {
 			b.venueSince[ex] = now
 		}
+		if b.lastSeen == nil {
+			b.lastSeen = map[Exchange]time.Time{}
+		}
+		b.lastSeen[ex] = now
+		b.closeOpenGapLocked(ex, now)
+	} else if was {
+		b.recordGapLocked(ex, now, time.Time{})
 	}
 	suffix := "|" + string(ex)
 	for k, c := range b.watchClock {
@@ -407,6 +427,12 @@ func (b *LiquidationBook) Record(e LiquidationEvent) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now().UTC()
+	if b.lastEvent == nil {
+		b.lastEvent = map[Exchange]time.Time{}
+	}
+	if t, ok := b.lastEvent[e.Exchange]; !ok || e.Time.After(t) {
+		b.lastEvent[e.Exchange] = e.Time
+	}
 	// Events do not start a clock. Coverage is only live-socket time from
 	// SetLive / MarkWatch. A first print must not reset Binance venue coverage.
 	cut := now.Add(-liquidationRetain)
@@ -441,16 +467,15 @@ func (b *LiquidationBook) trackingStartLocked(symbol, exchange string) time.Time
 	if exchange != "all" {
 		return b.startOfLocked(symbol, Exchange(exchange))
 	}
+	// Combined never borrows the other venue's start. Both must be tracking.
 	var latest time.Time
-	any := false
-	for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
+	for _, ex := range liquidationVenues() {
 		t := b.startOfLocked(symbol, ex)
 		if t.IsZero() {
-			continue
+			return time.Time{}
 		}
-		if !any || t.After(latest) {
+		if latest.IsZero() || t.After(latest) {
 			latest = t
-			any = true
 		}
 	}
 	return latest
@@ -460,16 +485,16 @@ func (b *LiquidationBook) coverageLocked(symbol, exchange string, now time.Time)
 	if exchange != "all" {
 		return b.coverageOneLocked(symbol, Exchange(exchange), now)
 	}
+	// Combined uses the shorter live clock. A venue that never started is 0,
+	// not "use the other exchange instead".
 	var minCov time.Duration
-	any := false
-	for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
+	for i, ex := range liquidationVenues() {
 		if b.startOfLocked(symbol, ex).IsZero() {
-			continue
+			return 0
 		}
 		c := b.coverageOneLocked(symbol, ex, now)
-		if !any || c < minCov {
+		if i == 0 || c < minCov {
 			minCov = c
-			any = true
 		}
 	}
 	return minCov
@@ -504,17 +529,18 @@ func (b *LiquidationBook) Snapshot(exchange, symbol string) *LiquidationSnapshot
 	started := b.trackingStartLocked(symbol, exchange)
 	out.CollectingSince = started
 	liveCount := 0
-	if exchange == "all" {
-		for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
-			if b.live[ex] {
-				liveCount++
-			}
-		}
-	} else if b.live[Exchange(exchange)] {
-		liveCount = 1
+	want := liquidationVenues()
+	if exchange != "all" {
+		want = []Exchange{Exchange(exchange)}
 	}
-	out.Live = liveCount > 0
+	for _, ex := range want {
+		if b.effectivelyLiveLocked(ex, now) {
+			liveCount++
+		}
+	}
 	out.VenueCount = liveCount
+	out.Live = liveCount == len(want)
+	out.Feed = b.feedLocked(exchange, now)
 	list := b.bySym[symbol]
 	filtered := make([]LiquidationEvent, 0, len(list))
 	for _, e := range list {
@@ -587,24 +613,37 @@ func (b *LiquidationBook) RecentLarge(since time.Time, minNotional float64) []Li
 }
 
 func (b *LiquidationBook) marketStartLocked(exchange string) time.Time {
-	if exchange == "all" {
-		t := b.venueSince[ExchangeBinance]
-		if !t.IsZero() {
-			return t
-		}
-		return b.venueSince[ExchangeBybit]
+	if exchange != "all" {
+		return b.venueSince[Exchange(exchange)]
 	}
-	return b.venueSince[Exchange(exchange)]
+	var latest time.Time
+	for _, ex := range liquidationVenues() {
+		t := b.venueSince[ex]
+		if t.IsZero() {
+			return time.Time{}
+		}
+		if latest.IsZero() || t.After(latest) {
+			latest = t
+		}
+	}
+	return latest
 }
 
 func (b *LiquidationBook) marketCoverageLocked(exchange string, now time.Time) time.Duration {
-	if exchange == "all" {
-		if !b.venueSince[ExchangeBinance].IsZero() {
-			return b.venueClock[ExchangeBinance].elapsed(now)
-		}
-		return b.venueClock[ExchangeBybit].elapsed(now)
+	if exchange != "all" {
+		return b.venueClock[Exchange(exchange)].elapsed(now)
 	}
-	return b.venueClock[Exchange(exchange)].elapsed(now)
+	var minCov time.Duration
+	for i, ex := range liquidationVenues() {
+		if b.venueSince[ex].IsZero() {
+			return 0
+		}
+		c := b.venueClock[ex].elapsed(now)
+		if i == 0 || c < minCov {
+			minCov = c
+		}
+	}
+	return minCov
 }
 
 // Overview sums every tracked coin for the desk windows and ranks coins
@@ -628,17 +667,18 @@ func (b *LiquidationBook) Overview(exchange, coinWindow string, limit int) *Liqu
 	now := b.now().UTC()
 	out.CollectingSince = b.marketStartLocked(exchange)
 	liveCount := 0
-	if exchange == "all" {
-		for _, ex := range []Exchange{ExchangeBinance, ExchangeBybit} {
-			if b.live[ex] {
-				liveCount++
-			}
-		}
-	} else if b.live[Exchange(exchange)] {
-		liveCount = 1
+	want := liquidationVenues()
+	if exchange != "all" {
+		want = []Exchange{Exchange(exchange)}
 	}
-	out.Live = liveCount > 0
+	for _, ex := range want {
+		if b.effectivelyLiveLocked(ex, now) {
+			liveCount++
+		}
+	}
 	out.VenueCount = liveCount
+	out.Live = liveCount == len(want)
+	out.Feed = b.feedLocked(exchange, now)
 
 	bySym := make(map[string][]LiquidationEvent, len(b.bySym))
 	all := make([]LiquidationEvent, 0, 256)
@@ -766,6 +806,10 @@ func (b *LiquidationBook) CoverageSnapshot(now time.Time) []LiquidationCoverage 
 			Exchange:   ex,
 			FirstWatch: first,
 			Live:       clampLiveCoverage(b.venueClock[ex].elapsed(now)),
+			LastEvent:  b.lastEvent[ex],
+			LastSeen:   b.lastSeen[ex],
+			LastSaved:  now,
+			Gaps:       append([]LiquidationGap(nil), b.gaps[ex]...),
 		})
 	}
 	for k, first := range b.watchSince {
@@ -837,6 +881,7 @@ func CoverageFromEvents(events []LiquidationEvent, now time.Time) []LiquidationC
 			Exchange:   ex,
 			FirstWatch: s.first,
 			Live:       spanLive(s),
+			LastEvent:  s.last,
 		})
 	}
 	for k, s := range pairs {

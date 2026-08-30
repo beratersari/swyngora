@@ -21,12 +21,25 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `biggest` (side, price, qty, notional, venue, time)
   - `complete` — false until **this coin on this venue** has had a **live websocket**
     for the full window. Time does not count if the socket never connects or drops.
-    Combined `all` uses the shorter live coverage of the venues watching that coin.
+    Combined `all` uses the shorter live coverage **and requires both venues**.
+    A venue that never started or is down is listed in `feed.missing` and is
+    **not** replaced by the other exchange.
 - Streams (background, always on):
   - Binance: `wss://fstream.binance.com/ws/!forceOrder@arr` (all USD-M symbols). At most the **largest** liquidation per symbol per ~1s.
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
+- `feed` on coin, overview, and chart responses:
+  - per venue `live`, `lastEventAt` (last print), `lastSeenAt` (last websocket
+    payload), `coverageSeconds`, and `gaps` (disconnects in the last 6 hours)
+  - `missing` lists venues that are down, stalled (>2 minutes silent), or never started
+  - a restart inserts a downtime gap from the last coverage save so the book
+    does not pretend it was live while the process was off
 - Side meaning: **long** = long positions were force-closed; **short** = shorts were force-closed.
 - Live windows are computed from an in-memory 24h book. Every print is written to SQLite (Binance and Bybit in separate rows). On startup the last **24 hours** are reloaded, including live-coverage clocks, so 1h/4h/12h/24h totals stay usable after a restart. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
+- Chart (`GET /liquidation-levels`): CoinGlass-style **horizontal** price bars
+  from each venue's own last price, open interest, and a **10x / 25x / 50x / 100x**
+  mix. Each bar includes `byLeverage` plus `cumLong` / `cumShort` / `cumTotal`
+  from last price to that level. Combined does not copy Binance's last as the
+  combined last. Market-wide `symbol=all` stays observed time bars.
 - Hypothetical “what if spot is walked to force liquidations” is a separate model: [`liquidation-hunt.md`](liquidation-hunt.md).
 - Cascade detector: `GET /api/v1/market/liquidation-cascade`
   - Compares the last **1m / 5m / 15m** long and short notional to that stream's own typical (median of prior blocks over ~6 hours).

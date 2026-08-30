@@ -69,11 +69,14 @@ func TestBuildHuntHeatmap_IntensityAtLeverageBand(t *testing.T) {
 	if idx < 0 || got.Binance.Shorts[len(got.Times)-1][idx] <= 0 {
 		t.Fatalf("expected short intensity at 10x band idx=%d up=%.0f shorts=%v", idx, up, lastCol(got.Binance.Shorts))
 	}
-	if got.Combined.MaxIntensity < got.Binance.MaxIntensity-1 {
-		t.Fatalf("combined should include binance %v vs %v", got.Combined.MaxIntensity, got.Binance.MaxIntensity)
+	if got.Combined.MaxIntensity != 0 || got.Combined.ColumnsWithOI != 0 {
+		t.Fatalf("combined must stay empty without Bybit %+v", got.Combined)
 	}
 	if got.Bybit.MaxIntensity != 0 {
 		t.Fatalf("bybit should be empty")
+	}
+	if len(got.MissingVenues) != 1 || got.MissingVenues[0] != "bybit" {
+		t.Fatalf("missing %+v", got.MissingVenues)
 	}
 }
 
@@ -198,6 +201,12 @@ func TestBuildHuntHeatmap_MissingVenuePricesStayEmpty(t *testing.T) {
 	}
 	if got.Bybit.MaxIntensity != 0 || got.Bybit.ColumnsWithOI != 0 {
 		t.Fatalf("bybit borrowed prices %+v", got.Bybit)
+	}
+	if got.Combined.ColumnsWithOI != 0 || got.Combined.MaxIntensity != 0 {
+		t.Fatalf("combined must not use Binance-only columns %+v", got.Combined)
+	}
+	if len(got.MissingVenues) != 1 || got.MissingVenues[0] != "bybit" {
+		t.Fatalf("missing %+v", got.MissingVenues)
 	}
 }
 

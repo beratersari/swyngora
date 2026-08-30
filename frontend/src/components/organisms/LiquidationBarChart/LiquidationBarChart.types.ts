@@ -7,11 +7,21 @@ export type LiquidationBarChartProps = {
   errorMessage?: string | null;
 };
 
+export type LeverageSlice = {
+  leverage: 10 | 25 | 50 | 100;
+  longN: number;
+  shortN: number;
+};
+
 export type LevelRow = {
   price: number;
   longN: number;
   shortN: number;
   totalN: number;
+  cumLong: number;
+  cumShort: number;
+  cumTotal: number;
+  byLeverage: LeverageSlice[];
 };
 
 export type TimeRow = {
@@ -29,4 +39,8 @@ export type BarHover = {
   longN: number;
   shortN: number;
   totalN: number;
+  cumLong?: number;
+  cumShort?: number;
+  cumTotal?: number;
+  byLeverage?: LeverageSlice[];
 };

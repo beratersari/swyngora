@@ -37,7 +37,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `LiquidationHeatmap` | LiquidationsPage (`?view=heatmap`) |
 | `LiquidationBarChart` | LiquidationsPage (`?view=chart`) |
 | `LiquidationCascade` | LiquidationsPage (`?view=cascade`) |
-| `LiquidationTreemap` / `LiquidationWindowCards` | LiquidationsPage overview |
+| `LiquidationTreemap` / `LiquidationWindowCards` / `LiquidationFeedHealth` | LiquidationsPage overview + feed health |
 | `PriceChangeHeatmap` | HeatmapPage |
 | `RSIHeatmap` | HeatmapPage (`?view=rsi`) — ranked scatter |
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |

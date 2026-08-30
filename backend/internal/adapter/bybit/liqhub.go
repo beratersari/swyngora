@@ -28,6 +28,7 @@ const (
 type LiquidationSink interface {
 	Record(domain.LiquidationEvent)
 	SetLive(domain.Exchange, bool)
+	NoteSeen(domain.Exchange)
 	MarkWatch(domain.Exchange, string)
 }
 
@@ -206,6 +207,7 @@ func (h *LiquidationHub) listen(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		h.sink.NoteSeen(domain.ExchangeBybit)
 		for _, ev := range ParseAllLiquidation(payload) {
 			h.sink.Record(ev)
 		}

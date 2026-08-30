@@ -3857,8 +3857,40 @@ export interface components {
             biggest?: components["schemas"]["LiquidationHit"];
             /** @description Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. */
             coverageSeconds?: number;
-            /** @description False until this coin+venue has had a live websocket for the full window */
+            /** @description False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. */
             complete?: boolean;
+        };
+        LiquidationGap: {
+            /** Format: date-time */
+            from?: string;
+            /**
+             * Format: date-time
+             * @description Omitted while the gap is still open
+             */
+            to?: string;
+            seconds?: number;
+        };
+        LiquidationVenueHealth: {
+            exchange?: string;
+            live?: boolean;
+            /**
+             * Format: date-time
+             * @description Last liquidation print on this venue
+             */
+            lastEventAt?: string;
+            /**
+             * Format: date-time
+             * @description Last websocket payload from this venue
+             */
+            lastSeenAt?: string;
+            coverageSeconds?: number;
+            gaps?: components["schemas"]["LiquidationGap"][];
+        };
+        /** @description Per-venue last print, last socket message, and disconnects. Combined never substitutes one venue for the other. */
+        LiquidationFeed: {
+            venues?: components["schemas"]["LiquidationVenueHealth"][];
+            /** @description Venues that are down, stalled, or never started */
+            missing?: string[];
         };
         /** @description Rolling futures liquidation totals from live streams */
         MarketLiquidations: {
@@ -3866,9 +3898,11 @@ export interface components {
             exchange?: string;
             /** Format: date-time */
             collectingSince?: string;
+            /** @description Combined is true only when every requested venue is live */
             live?: boolean;
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
+            feed?: components["schemas"]["LiquidationFeed"];
             note?: string;
         };
         /** @description One coin's liquidation totals for the selected overview window */
@@ -3888,17 +3922,31 @@ export interface components {
             coinWindow?: "1h" | "4h" | "12h" | "24h";
             /** Format: date-time */
             collectingSince?: string;
+            /** @description Combined is true only when both Binance and Bybit streams are live */
             live?: boolean;
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
             coins?: components["schemas"]["MarketLiquidationCoin"][];
+            feed?: components["schemas"]["LiquidationFeed"];
             note?: string;
+        };
+        MarketLiquidationLeverageSlice: {
+            /** @enum {integer} */
+            leverage?: 10 | 25 | 50 | 100;
+            longNotional?: string;
+            shortNotional?: string;
         };
         MarketLiquidationLevelBar: {
             price?: string;
             longNotional?: string;
             shortNotional?: string;
             totalNotional?: string;
+            /** @description Long notional from last price to this bar */
+            cumLong?: string;
+            /** @description Short notional from last price to this bar */
+            cumShort?: string;
+            cumTotal?: string;
+            byLeverage?: components["schemas"]["MarketLiquidationLeverageSlice"][];
         };
         MarketLiquidationTimeBar: {
             /** Format: date-time */
@@ -3919,9 +3967,16 @@ export interface components {
             from?: string;
             /** Format: date-time */
             to?: string;
+            /** @description Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. */
             lastPrice?: string;
+            /** @description Each venue's own last price */
+            lastPrices?: {
+                [key: string]: string;
+            };
             levels?: components["schemas"]["MarketLiquidationLevelBar"][];
             bars?: components["schemas"]["MarketLiquidationTimeBar"][];
+            feed?: components["schemas"]["LiquidationFeed"];
+            missing?: string[];
             note?: string;
         };
         MarketLiquidationCascadeWindow: {
@@ -4038,9 +4093,13 @@ export interface components {
             shorts?: number[][];
             totals?: number[][];
             maxIntensity?: number;
-            /** @description Fraction of time columns with open interest */
+            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires both venues. */
             coverage?: number;
             columnsWithOi?: number;
+            /** @description That venue's own last print. Combined is omitted. */
+            lastPrice?: number;
+            /** @description Per time column, whether this venue (or both, for combined) had own price+OI */
+            hasData?: boolean[];
         };
         /** @description Price × time estimated liquidation intensity */
         LiquidationHuntHeatmap: {
@@ -4062,6 +4121,8 @@ export interface components {
             bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             review?: components["schemas"]["LiquidationHuntHeatmapReview"];
+            /** @description Venues with no own price+OI in this window. Combined does not fill those cells from the other venue. */
+            missingVenues?: string[];
             note?: string;
         };
         LiquidationHuntHeatmapReviewHorizon: {

@@ -478,7 +478,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidations",
-		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, and the biggest hit. Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both. complete only counts time the websocket was actually live for that coin and venue; coverage does not grow if the stream never connects or drops. Prefer this for 'how much BTC was liquidated'."),
+		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, the biggest hit, and feed health (lastEventAt, lastSeenAt, gaps in the last 6h, missing venues). Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both but never substitutes one venue for the other; combined live/complete require both streams. Prefer this for 'how much BTC was liquidated' or 'is the Bybit feed down'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -494,7 +494,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_overview",
-		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. Fed by Binance USD-M and Bybit linear streams. exchange=all (default) sums both. window (1h|4h|12h|24h, default 24h) selects which window ranks coins. Prefer this for 'how much was liquidated across the market' or a liquidation map."),
+		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. feed lists last print and disconnects per venue. Combined live/complete require both Binance and Bybit; a missing venue is listed, not replaced. window (1h|4h|12h|24h, default 24h) selects which window ranks coins."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("window", mcp.Description("1h | 4h | 12h | 24h — ranks coins (default 24h)")),
 		mcp.WithNumber("limit", mcp.Description("Max coins (default 50, max 100)")),
@@ -508,7 +508,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_levels",
-		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT (or ETHUSDT) returns estimated long/short notional at each price level for Binance, Bybit, or combined. symbol=all returns observed time bars of total liquidations across every tracked coin. range=12h|24h|3d|7d (totals clamp to 24h). Prefer this for liquidation levels or the market-wide liquidation chart."),
+		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x leverage, plus cumulative from last price to that bar. Each venue uses its own last price; combined lastPrice is empty and missing lists a venue with no data. symbol=all returns observed time bars. range=12h|24h|3d|7d (totals clamp to 24h)."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default all)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = combined)")),
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),

@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff watch venues:** create and edit pick which of Binance / Coinbase / Bybit to walk (at least two). Unselected venues are not fetched or ranked (`docs/features/price-diff.md`)
 
 ### Changed
+- **Liquidation combined views:** never substitute one venue's clock, last price, or heatmap column for the other. Combined `live` / `complete` require both Binance and Bybit. `feed` reports last print, last socket payload, and disconnects in the last 6 hours (`docs/features/liquidations.md`)
+- **Liquidation levels chart:** CoinGlass-style horizontal bars colored by 10x / 25x / 50x / 100x, with cumulative notional from last price to the hovered level (`docs/features/liquidations.md`)
 - **Price-diff watches:** set `notional`, `minProfit`, and optional `minDurationSec`; opportunities open only when that size fills on **fresh** live books and after-fee profit meets the floor for the whole duration — not from ticker last-price gaps or a one-tick spike (`docs/features/price-diff.md`)
 - **Price-diff scan:** missing venue books are listed as `unavailable` (not ranked or chosen as best); `minProfitPct` / `minProfitAmount` hide tiny fills (`docs/features/price-diff.md`)
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)

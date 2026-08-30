@@ -797,7 +797,7 @@ func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 		} else {
 			bars = []domain.LiquidationTimeBar{}
 		}
-		return &domain.LiquidationLevelsReport{
+		rep := &domain.LiquidationLevelsReport{
 			Kind:     domain.LiquidationLevelsKindTotal,
 			Symbol:   "all",
 			Exchange: ex,
@@ -805,33 +805,29 @@ func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 			From:     from,
 			To:       now,
 			Bars:     bars,
-			Note:     "Observed long/short liquidations for every tracked coin. Binance USD-M and Bybit linear stay separate unless exchange=all. Informational only.",
-		}, nil
+			Note:     "Observed long/short liquidations for every tracked coin. Binance USD-M and Bybit linear stay separate unless exchange=all. Combined does not invent the other venue's prints. Informational only.",
+		}
+		if s.liq != nil {
+			rep.Feed = s.liq.Feed(ex)
+			rep.Missing = append([]string{}, rep.Feed.Missing...)
+		}
+		return rep, nil
 	}
-	heat, err := s.GetLiquidationHuntHeatmap(ctx, "all", sym, string(spec.Range))
+	hunt, err := s.GetLiquidationHunt(ctx, ex, sym)
 	if err != nil {
 		return nil, err
 	}
-	grid := domain.PickHuntHeatmapGrid(*heat, ex)
-	last := ""
-	tkrEx := ex
-	if tkrEx == "all" {
-		tkrEx = string(domain.ExchangeBinance)
+	rep := domain.BuildLiquidationLevelsFromHunt(*hunt)
+	rep.Range = string(spec.Range)
+	rep.From = now.Add(-spec.Window)
+	rep.To = now
+	if s.liq != nil {
+		rep.Feed = s.liq.Feed(ex)
+		if len(rep.Missing) == 0 {
+			rep.Missing = append([]string{}, rep.Feed.Missing...)
+		}
 	}
-	if tkr, terr := s.GetTicker24h(ctx, tkrEx, sym); terr == nil && tkr != nil {
-		last = tkr.LastPrice
-	}
-	return &domain.LiquidationLevelsReport{
-		Kind:      domain.LiquidationLevelsKindMap,
-		Symbol:    sym,
-		Exchange:  ex,
-		Range:     heat.Range,
-		From:      heat.From,
-		To:        heat.To,
-		LastPrice: last,
-		Levels:    domain.CollapseHuntHeatmapLevels(grid, heat.Prices),
-		Note:      "Estimated liquidation notional at each price (same model as the hunt heatmap, summed over the window). Longs liquidate if price falls into the bin; shorts if it rises. Informational only.",
-	}, nil
+	return &rep, nil
 }
 
 // GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.

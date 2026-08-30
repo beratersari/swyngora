@@ -13,12 +13,15 @@ import {
   LIQ_BAR_PLOT,
   LIQ_BAR_SHORT,
   LIQ_BAR_SPINE,
+  LIQ_LEVERAGE_COLOR,
+  LIQ_LEVERAGE_ORDER,
 } from './LiquidationBarChart.constants';
 import {
+  barSide,
   isLevelsKind,
-  maxSide,
   maxTotal,
   parseNotional,
+  sliceNotional,
   toLevelRows,
   toTimeRows,
 } from './LiquidationBarChart.helpers';
@@ -122,9 +125,26 @@ export function LiquidationBarChart({
       <Text variant="caption" color="secondary">
         {mapMode ? t('chart.levelsHint') : t('chart.totalsHint')}
       </Text>
+      {data?.missing && data.missing.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('feed.missingVenues', { venues: data.missing.join(', ') })}
+        />
+      ) : null}
       <LegendRow>
-        <Swatch $tone="long">{t('cards.long')}</Swatch>
-        <Swatch $tone="short">{t('cards.short')}</Swatch>
+        {mapMode
+          ? LIQ_LEVERAGE_ORDER.map((lev) => (
+              <Swatch key={lev} $color={LIQ_LEVERAGE_COLOR[lev]}>
+                {t('chart.leverage', { lev })}
+              </Swatch>
+            ))
+          : (
+            <>
+              <Swatch $tone="long">{t('cards.long')}</Swatch>
+              <Swatch $tone="short">{t('cards.short')}</Swatch>
+            </>
+          )}
         {mapMode ? <Swatch $tone="last">{t('chart.lastPrice')}</Swatch> : null}
       </LegendRow>
       <MapFrame ref={frameRef} role="img" aria-label={t('chart.aria')}>
@@ -149,6 +169,18 @@ export function LiquidationBarChart({
               <span>{t('cards.total')}</span>
               <span>{formatCompact(hover.totalN, 'USDT')}</span>
             </TipRow>
+            {hover.cumTotal != null && hover.cumTotal > 0 ? (
+              <TipRow>
+                <span>{t('chart.cumToLevel')}</span>
+                <span>{formatCompact(hover.cumTotal, 'USDT')}</span>
+              </TipRow>
+            ) : null}
+            {hover.byLeverage?.map((sl) => (
+              <TipRow key={sl.leverage}>
+                <span>{t('chart.leverage', { lev: sl.leverage })}</span>
+                <span>{formatCompact(sl.longN + sl.shortN, 'USDT')}</span>
+              </TipRow>
+            ))}
           </HoverCard>
         ) : null}
       </MapFrame>
@@ -169,25 +201,27 @@ function drawLevels(
   lastPrice: number,
 ) {
   const box = plotBox(w, h);
-  const peak = maxSide(rows) || 1;
-  const mid = box.x + box.w / 2;
+  const peak = maxTotal(rows) || 1;
   const rowH = box.h / Math.max(rows.length, 1);
   ctx.strokeStyle = LIQ_BAR_SPINE;
   ctx.beginPath();
-  ctx.moveTo(mid, box.y);
-  ctx.lineTo(mid, box.y + box.h);
+  ctx.moveTo(box.x, box.y);
+  ctx.lineTo(box.x, box.y + box.h);
   ctx.stroke();
   ctx.font = '11px Inter, Segoe UI, sans-serif';
-  ctx.fillStyle = LIQ_BAR_INK;
   rows.forEach((row, i) => {
     const y = box.y + i * rowH + 1;
     const bh = Math.max(2, rowH - 2);
-    const lw = (row.longN / peak) * (box.w / 2 - 4);
-    const sw = (row.shortN / peak) * (box.w / 2 - 4);
-    ctx.fillStyle = LIQ_BAR_LONG;
-    ctx.fillRect(mid - lw, y, lw, bh);
-    ctx.fillStyle = LIQ_BAR_SHORT;
-    ctx.fillRect(mid, y, sw, bh);
+    const side = barSide(row, lastPrice);
+    let x = box.x + 1;
+    for (const lev of LIQ_LEVERAGE_ORDER) {
+      const n = sliceNotional(row, lev, side);
+      if (n <= 0) continue;
+      const bw = (n / peak) * (box.w - 8);
+      ctx.fillStyle = LIQ_LEVERAGE_COLOR[lev];
+      ctx.fillRect(x, y, Math.max(1, bw), bh);
+      x += bw;
+    }
     if (i % Math.ceil(rows.length / 8) === 0 || i === rows.length - 1) {
       ctx.fillStyle = LIQ_BAR_INK;
       ctx.textAlign = 'right';
@@ -206,6 +240,9 @@ function drawLevels(
     ctx.lineTo(box.x + box.w, y);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.fillStyle = LIQ_BAR_LAST;
+    ctx.textAlign = 'left';
+    ctx.fillText(formatAxisPrice(lastPrice), box.x + 6, Math.max(box.y + 12, y - 4));
   }
 }
 
@@ -259,12 +296,16 @@ function hitLevel(
   const row = rows[i];
   if (!row) return null;
   return {
-    x: Math.min(x + 12, w - 190),
-    y: Math.max(8, y - 72),
+    x: Math.min(x + 12, w - 220),
+    y: Math.max(8, y - 96),
     title: formatAxisPrice(row.price),
     longN: row.longN,
     shortN: row.shortN,
     totalN: row.totalN,
+    cumLong: row.cumLong,
+    cumShort: row.cumShort,
+    cumTotal: row.cumTotal,
+    byLeverage: row.byLeverage,
   };
 }
 

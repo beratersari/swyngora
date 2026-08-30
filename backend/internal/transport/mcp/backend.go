@@ -1052,7 +1052,38 @@ func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	return mustJSON(map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange, "collectingSince": since,
 		"live": got.Live, "venueCount": got.VenueCount, "windows": wins,
+		"feed": liquidationFeedJSON(got.Feed),
 	})
+}
+
+func liquidationFeedJSON(f domain.LiquidationFeed) map[string]any {
+	venues := make([]map[string]any, 0, len(f.Venues))
+	for _, v := range f.Venues {
+		row := map[string]any{
+			"exchange": v.Exchange, "live": v.Live, "coverageSeconds": v.CoverageSeconds,
+		}
+		if !v.LastEventAt.IsZero() {
+			row["lastEventAt"] = v.LastEventAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !v.LastSeenAt.IsZero() {
+			row["lastSeenAt"] = v.LastSeenAt.UTC().Format(time.RFC3339Nano)
+		}
+		gaps := make([]map[string]any, 0, len(v.Gaps))
+		for _, g := range v.Gaps {
+			gap := map[string]any{"from": g.From.UTC().Format(time.RFC3339Nano), "seconds": g.Seconds}
+			if !g.To.IsZero() {
+				gap["to"] = g.To.UTC().Format(time.RFC3339Nano)
+			}
+			gaps = append(gaps, gap)
+		}
+		row["gaps"] = gaps
+		venues = append(venues, row)
+	}
+	missing := f.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	return map[string]any{"venues": venues, "missing": missing}
 }
 
 func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error) {
@@ -1102,6 +1133,7 @@ func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window s
 	return mustJSON(map[string]any{
 		"exchange": got.Exchange, "coinWindow": got.CoinWindow, "collectingSince": since,
 		"live": got.Live, "venueCount": got.VenueCount, "windows": wins, "coins": coins,
+		"feed": liquidationFeedJSON(got.Feed),
 	})
 }
 
@@ -1115,15 +1147,22 @@ func (b *Backend) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 	}
 	levels := make([]map[string]any, 0, len(got.Levels))
 	for _, lv := range got.Levels {
+		lev := make([]map[string]any, 0, len(lv.ByLeverage))
+		for _, sl := range lv.ByLeverage {
+			lev = append(lev, map[string]any{
+				"leverage": sl.Leverage, "longNotional": sl.LongNotional, "shortNotional": sl.ShortNotional,
+			})
+		}
 		levels = append(levels, map[string]any{
 			"price": lv.Price, "longNotional": lv.LongNotional, "shortNotional": lv.ShortNotional,
-			"totalNotional": lv.TotalNotional,
+			"totalNotional": lv.TotalNotional, "cumLong": lv.CumLong, "cumShort": lv.CumShort,
+			"cumTotal": lv.CumTotal, "byLeverage": lev,
 		})
 	}
 	bars := make([]map[string]any, 0, len(got.Bars))
 	for _, bar := range got.Bars {
 		bars = append(bars, map[string]any{
-			"t": bar.Time.UTC().Format(time.RFC3339Nano),
+			"t":            bar.Time.UTC().Format(time.RFC3339Nano),
 			"longNotional": bar.LongNotional, "shortNotional": bar.ShortNotional,
 			"totalNotional": bar.TotalNotional, "count": bar.Count,
 		})
@@ -1137,7 +1176,9 @@ func (b *Backend) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 	}
 	return mustJSON(map[string]any{
 		"kind": got.Kind, "symbol": got.Symbol, "exchange": got.Exchange, "range": got.Range,
-		"from": from, "to": to, "lastPrice": got.LastPrice, "levels": levels, "bars": bars, "note": got.Note,
+		"from": from, "to": to, "lastPrice": got.LastPrice, "lastPrices": got.LastPrices,
+		"levels": levels, "bars": bars, "feed": liquidationFeedJSON(got.Feed),
+		"missing": got.Missing, "note": got.Note,
 	})
 }
 
@@ -1229,7 +1270,7 @@ func cascadeReportJSON(got *domain.CascadeReport) map[string]any {
 	}
 	out := map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange,
-		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"asOf":   got.AsOf.UTC().Format(time.RFC3339Nano),
 		"venues": venues, "episodes": episodes, "summary": got.Summary, "note": got.Note,
 	}
 	if got.Both != nil {

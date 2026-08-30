@@ -682,6 +682,26 @@ type liquidationWindowDTO struct {
 	Complete        bool               `json:"complete"`
 }
 
+type liquidationGapDTO struct {
+	From    string `json:"from"`
+	To      string `json:"to,omitempty"`
+	Seconds int64  `json:"seconds"`
+}
+
+type liquidationVenueHealthDTO struct {
+	Exchange        string              `json:"exchange"`
+	Live            bool                `json:"live"`
+	LastEventAt     string              `json:"lastEventAt,omitempty"`
+	LastSeenAt      string              `json:"lastSeenAt,omitempty"`
+	CoverageSeconds int64               `json:"coverageSeconds"`
+	Gaps            []liquidationGapDTO `json:"gaps"`
+}
+
+type liquidationFeedDTO struct {
+	Venues  []liquidationVenueHealthDTO `json:"venues"`
+	Missing []string                    `json:"missing"`
+}
+
 type liquidationsResponse struct {
 	Symbol          string                 `json:"symbol"`
 	Exchange        string                 `json:"exchange"`
@@ -689,6 +709,7 @@ type liquidationsResponse struct {
 	Live            bool                   `json:"live"`
 	VenueCount      int                    `json:"venueCount"`
 	Windows         []liquidationWindowDTO `json:"windows"`
+	Feed            liquidationFeedDTO     `json:"feed"`
 	Note            string                 `json:"note"`
 }
 
@@ -718,9 +739,38 @@ func liquidationsToDTO(a *domain.LiquidationSnapshot) liquidationsResponse {
 	}
 	return liquidationsResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, CollectingSince: since,
-		Live: a.Live, VenueCount: a.VenueCount, Windows: wins,
-		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. A dropped or never-connected stream does not grow coverage. Notional is quote (USDT). Informational only.",
+		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Feed: feedToDTO(a.Feed),
+		Note: "Binance USD-M and Bybit linear perpetual liquidations. complete counts only time the websocket was actually live for that coin and venue. Combined never uses the other venue as a stand-in. A dropped or never-connected stream does not grow coverage. feed.lastEventAt is the last print; feed.gaps are disconnects in the last 6h. Notional is quote (USDT). Informational only.",
 	}
+}
+
+func feedToDTO(f domain.LiquidationFeed) liquidationFeedDTO {
+	venues := make([]liquidationVenueHealthDTO, 0, len(f.Venues))
+	for _, v := range f.Venues {
+		row := liquidationVenueHealthDTO{
+			Exchange: v.Exchange, Live: v.Live, CoverageSeconds: v.CoverageSeconds,
+			Gaps: make([]liquidationGapDTO, 0, len(v.Gaps)),
+		}
+		if !v.LastEventAt.IsZero() {
+			row.LastEventAt = v.LastEventAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !v.LastSeenAt.IsZero() {
+			row.LastSeenAt = v.LastSeenAt.UTC().Format(time.RFC3339Nano)
+		}
+		for _, g := range v.Gaps {
+			gap := liquidationGapDTO{From: g.From.UTC().Format(time.RFC3339Nano), Seconds: g.Seconds}
+			if !g.To.IsZero() {
+				gap.To = g.To.UTC().Format(time.RFC3339Nano)
+			}
+			row.Gaps = append(row.Gaps, gap)
+		}
+		venues = append(venues, row)
+	}
+	missing := f.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	return liquidationFeedDTO{Venues: venues, Missing: missing}
 }
 
 type liquidationCoinDTO struct {
@@ -741,6 +791,7 @@ type liquidationOverviewResponse struct {
 	VenueCount      int                    `json:"venueCount"`
 	Windows         []liquidationWindowDTO `json:"windows"`
 	Coins           []liquidationCoinDTO   `json:"coins"`
+	Feed            liquidationFeedDTO     `json:"feed"`
 	Note            string                 `json:"note"`
 }
 
@@ -786,8 +837,8 @@ func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverview
 	}
 	return liquidationOverviewResponse{
 		Exchange: a.Exchange, CoinWindow: a.CoinWindow, CollectingSince: since,
-		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins,
-		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. complete uses the all-market Binance clock when exchange=all or binance. Notional is quote (USDT). Informational only.",
+		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins, Feed: feedToDTO(a.Feed),
+		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require both venues; a missing venue is listed in feed.missing and is never replaced by the other. Notional is quote (USDT). Informational only.",
 	}
 }
 

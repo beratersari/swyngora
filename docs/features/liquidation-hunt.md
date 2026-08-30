@@ -89,10 +89,12 @@ Each column uses historical **open interest**, **that venue's own price**
 prints in that column are added into the matching price bin.
 
 `binance` and `bybit` are modeled separately and **never borrow each other's
-prices**. If Bybit candles are missing, the Bybit grid stays empty. `combined`
-is the **sum** of their cells (not an average). `longs` are longs that would
-liquidate if price falls into that bin; `shorts` are shorts that would
-liquidate if price rises into that bin; `totals` = longs + shorts.
+prices**. If Bybit candles are missing, the Bybit grid stays empty and
+`missingVenues` includes `bybit`. `combined` sums a column **only when both
+venues had their own price and OI** — a missing venue is not filled from the
+other. Each grid has that venue's own `lastPrice` (combined omits it). `longs`
+are longs that would liquidate if price falls into that bin; `shorts` are
+shorts that would liquidate if price rises into that bin; `totals` = longs + shorts.
 
 ### Did the hot zones work? (`review`)
 
