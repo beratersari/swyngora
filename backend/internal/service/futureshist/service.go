@@ -211,16 +211,52 @@ func (s *Service) SaveLiquidation(ctx context.Context, e domain.LiquidationEvent
 	_, _ = s.Store.InsertLiquidation(ctx, e)
 }
 
-// LoadRecentLiquidations returns events since cutoff (for in-memory book restore).
+// LoadRecentLiquidations returns every stored print since cutoff (no 20k cap).
 func (s *Service) LoadRecentLiquidations(ctx context.Context, since time.Time) []domain.LiquidationEvent {
 	if s == nil || s.Store == nil {
 		return nil
 	}
-	ev, err := s.Store.ListLiquidationsSince(ctx, since, 20000)
+	ev, err := s.Store.ListLiquidationsSince(ctx, since, 0)
 	if err != nil {
 		return nil
 	}
 	return ev
+}
+
+type liquidationCoverageStore interface {
+	UpsertLiquidationCoverage(ctx context.Context, rows []domain.LiquidationCoverage) error
+	ListLiquidationCoverage(ctx context.Context) ([]domain.LiquidationCoverage, error)
+}
+
+// SaveCoverage writes live-socket clocks so they survive a restart.
+func (s *Service) SaveCoverage(ctx context.Context, rows []domain.LiquidationCoverage) {
+	if s == nil || len(rows) == 0 {
+		return
+	}
+	cs, ok := s.Store.(liquidationCoverageStore)
+	if !ok {
+		return
+	}
+	if err := cs.UpsertLiquidationCoverage(ctx, rows); err != nil {
+		s.log().Warn("liquidation coverage save failed", "err", err)
+	}
+}
+
+// LoadCoverage returns persisted venue/pair clocks.
+func (s *Service) LoadCoverage(ctx context.Context) []domain.LiquidationCoverage {
+	if s == nil {
+		return nil
+	}
+	cs, ok := s.Store.(liquidationCoverageStore)
+	if !ok {
+		return nil
+	}
+	rows, err := cs.ListLiquidationCoverage(ctx)
+	if err != nil {
+		s.log().Warn("liquidation coverage load failed", "err", err)
+		return nil
+	}
+	return rows
 }
 
 func (s *Service) log() *slog.Logger {

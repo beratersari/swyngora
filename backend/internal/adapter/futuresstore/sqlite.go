@@ -134,6 +134,23 @@ CREATE INDEX IF NOT EXISTS idx_taker_buckets_lookup
 		if err := sqliteutil.SetUserVersion(s.db, 2); err != nil {
 			return err
 		}
+		v = 2
+	}
+	if v < 3 {
+		const cov = `
+CREATE TABLE IF NOT EXISTS liquidation_coverage (
+	exchange       TEXT NOT NULL,
+	symbol         TEXT NOT NULL DEFAULT '',
+	first_watch_ms INTEGER NOT NULL,
+	live_ms        INTEGER NOT NULL,
+	PRIMARY KEY (exchange, symbol)
+);`
+		if _, err := s.db.Exec(cov); err != nil {
+			return fmt.Errorf("liquidation coverage schema: %w", err)
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -303,14 +320,38 @@ func (s *SQLite) ListLiquidations(ctx context.Context, exchange, symbol string, 
 	return out, rows.Err()
 }
 
-// ListLiquidationsSince returns events for all symbols since from (newest first).
+// ListLiquidationsSince returns every stored print at or after from, oldest first.
+// limit <= 0 means no cap (pages through the 24h restore set).
 func (s *SQLite) ListLiquidationsSince(ctx context.Context, from time.Time, limit int) ([]domain.LiquidationEvent, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("futures store is nil")
 	}
-	if limit <= 0 || limit > 20000 {
-		limit = 20000
+	const page = 5000
+	var out []domain.LiquidationEvent
+	for {
+		want := page
+		if limit > 0 {
+			left := limit - len(out)
+			if left <= 0 {
+				break
+			}
+			if left < want {
+				want = left
+			}
+		}
+		batch, err := s.listLiquidationsPage(ctx, from, len(out), want)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, batch...)
+		if len(batch) < want {
+			break
+		}
 	}
+	return out, nil
+}
+
+func (s *SQLite) listLiquidationsPage(ctx context.Context, from time.Time, offset, limit int) ([]domain.LiquidationEvent, error) {
 	args := []any{}
 	q := `SELECT exchange, symbol, side, time_ms, price, quantity, notional
 		FROM futures_liquidations`
@@ -318,8 +359,8 @@ func (s *SQLite) ListLiquidationsSince(ctx context.Context, from time.Time, limi
 		q += ` WHERE time_ms >= ?`
 		args = append(args, from.UTC().UnixMilli())
 	}
-	q += ` ORDER BY time_ms ASC LIMIT ?`
-	args = append(args, limit)
+	q += ` ORDER BY time_ms ASC, exchange ASC, symbol ASC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.db.QueryContext(ctx, q, args...)
@@ -338,6 +379,70 @@ func (s *SQLite) ListLiquidationsSince(ctx context.Context, from time.Time, limi
 		e.Exchange = domain.Exchange(ex)
 		e.Time = time.UnixMilli(ms).UTC()
 		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// UpsertLiquidationCoverage stores venue or per-pair live coverage.
+func (s *SQLite) UpsertLiquidationCoverage(ctx context.Context, rows []domain.LiquidationCoverage) error {
+	if s == nil || s.db == nil || len(rows) == 0 {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	stmt, err := tx.PrepareContext(ctx, `
+INSERT INTO liquidation_coverage (exchange, symbol, first_watch_ms, live_ms)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(exchange, symbol) DO UPDATE SET
+	first_watch_ms = MIN(first_watch_ms, excluded.first_watch_ms),
+	live_ms = MAX(live_ms, excluded.live_ms)`)
+	if err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+	for _, row := range rows {
+		if row.Exchange == "" || row.FirstWatch.IsZero() {
+			continue
+		}
+		sym := domain.NormalizeLiquidationSymbol(row.Symbol)
+		if _, err := stmt.ExecContext(ctx, string(row.Exchange), sym, row.FirstWatch.UTC().UnixMilli(), row.Live.Milliseconds()); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ListLiquidationCoverage returns every stored coverage row.
+func (s *SQLite) ListLiquidationCoverage(ctx context.Context) ([]domain.LiquidationCoverage, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("futures store is nil")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, `
+SELECT exchange, symbol, first_watch_ms, live_ms FROM liquidation_coverage`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.LiquidationCoverage
+	for rows.Next() {
+		var row domain.LiquidationCoverage
+		var ex string
+		var firstMS, liveMS int64
+		if err := rows.Scan(&ex, &row.Symbol, &firstMS, &liveMS); err != nil {
+			return nil, err
+		}
+		row.Exchange = domain.Exchange(ex)
+		row.FirstWatch = time.UnixMilli(firstMS).UTC()
+		row.Live = time.Duration(liveMS) * time.Millisecond
+		out = append(out, row)
 	}
 	return out, rows.Err()
 }

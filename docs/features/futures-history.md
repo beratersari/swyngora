@@ -11,8 +11,10 @@ and can be queried later by users or the AI.
 - Background worker (default every **5 minutes**) samples configured + recently
   requested symbols on **each venue independently**. If Bybit errors, Binance
   is still saved (and the reverse).
-- Liquidation events are written as they arrive on the websocket (async queue)
-  and reloaded into the in-memory book on startup (last 24h).
+- Liquidation events are written as they arrive on the websocket (async queue,
+  flushed on shutdown; overflow writes synchronously). The last **24 hours**
+  are reloaded into the in-memory book on startup, **per venue**, with
+  coverage clocks so rolling windows stay complete after a restart.
 - Duplicates are ignored:
   - snapshots: `(metric, exchange, symbol, sampled_at, predicted)`
   - liquidations: `(exchange, symbol, side, time, price, quantity)`

@@ -112,6 +112,15 @@ type LiquidationOverview struct {
 	Coins           []LiquidationCoinTile
 }
 
+// LiquidationCoverage is durable live-socket time for one venue or one pair.
+// Empty Symbol is venue-wide (Binance USD-M all-market).
+type LiquidationCoverage struct {
+	Exchange   Exchange
+	Symbol     string
+	FirstWatch time.Time
+	Live       time.Duration
+}
+
 // NormalizeLiquidationSymbol maps spot-style ids (BTC-USD) to USDT linear (BTCUSDT).
 func NormalizeLiquidationSymbol(raw string) string {
 	s := strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(raw), "-", ""))
@@ -677,6 +686,158 @@ func (b *LiquidationBook) Overview(exchange, coinWindow string, limit int) *Liqu
 	out.Coins = make([]LiquidationCoinTile, 0, len(rows))
 	for _, r := range rows {
 		out.Coins = append(out.Coins, r.tile)
+	}
+	return out
+}
+
+func clampLiveCoverage(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
+	}
+	if d > liquidationRetain {
+		return liquidationRetain
+	}
+	return d
+}
+
+// RestoreTracking seeds first-watch and accumulated live time from durable
+// history so 1h/4h/12h/24h windows stay usable after a process restart.
+// Empty symbol is venue-wide. Does not start a live session.
+func (b *LiquidationBook) RestoreTracking(ex Exchange, symbol string, first time.Time, live time.Duration) {
+	if b == nil || ex == "" || first.IsZero() {
+		return
+	}
+	first = first.UTC()
+	live = clampLiveCoverage(live)
+	symbol = NormalizeLiquidationSymbol(symbol)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if symbol == "" {
+		if t, ok := b.venueSince[ex]; !ok || first.Before(t) {
+			b.venueSince[ex] = first
+		}
+		if b.venueClock[ex] == nil {
+			b.venueClock[ex] = &liveClock{}
+		}
+		if b.venueClock[ex].accumulated < live {
+			b.venueClock[ex].accumulated = live
+		}
+		return
+	}
+	k := watchKey(symbol, ex)
+	if t, ok := b.watchSince[k]; !ok || first.Before(t) {
+		b.watchSince[k] = first
+	}
+	if b.watchClock[k] == nil {
+		b.watchClock[k] = &liveClock{}
+	}
+	if b.watchClock[k].accumulated < live {
+		b.watchClock[k].accumulated = live
+	}
+}
+
+// CoverageSnapshot is venue and per-pair live time for durable save.
+func (b *LiquidationBook) CoverageSnapshot(now time.Time) []LiquidationCoverage {
+	if b == nil {
+		return nil
+	}
+	if now.IsZero() {
+		now = b.now().UTC()
+	} else {
+		now = now.UTC()
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]LiquidationCoverage, 0, len(b.venueSince)+len(b.watchSince))
+	for ex, first := range b.venueSince {
+		out = append(out, LiquidationCoverage{
+			Exchange:   ex,
+			FirstWatch: first,
+			Live:       clampLiveCoverage(b.venueClock[ex].elapsed(now)),
+		})
+	}
+	for k, first := range b.watchSince {
+		sym, ex, ok := splitWatchKey(k)
+		if !ok {
+			continue
+		}
+		out = append(out, LiquidationCoverage{
+			Exchange:   ex,
+			Symbol:     sym,
+			FirstWatch: first,
+			Live:       clampLiveCoverage(b.watchClock[k].elapsed(now)),
+		})
+	}
+	return out
+}
+
+func splitWatchKey(k string) (symbol string, ex Exchange, ok bool) {
+	i := strings.LastIndexByte(k, '|')
+	if i <= 0 || i == len(k)-1 {
+		return "", "", false
+	}
+	return k[:i], Exchange(k[i+1:]), true
+}
+
+// CoverageFromEvents rebuilds first-watch + live span from stored prints
+// when no coverage rows exist yet (upgrade path).
+func CoverageFromEvents(events []LiquidationEvent, now time.Time) []LiquidationCoverage {
+	type span struct{ first, last time.Time }
+	venues := map[Exchange]span{}
+	pairs := map[string]span{}
+	for _, e := range events {
+		if e.Exchange == "" || e.Time.IsZero() {
+			continue
+		}
+		t := e.Time.UTC()
+		vs := venues[e.Exchange]
+		if vs.first.IsZero() || t.Before(vs.first) {
+			vs.first = t
+		}
+		if vs.last.IsZero() || t.After(vs.last) {
+			vs.last = t
+		}
+		venues[e.Exchange] = vs
+		sym := NormalizeLiquidationSymbol(e.Symbol)
+		if sym == "" {
+			continue
+		}
+		k := watchKey(sym, e.Exchange)
+		ps := pairs[k]
+		if ps.first.IsZero() || t.Before(ps.first) {
+			ps.first = t
+		}
+		if ps.last.IsZero() || t.After(ps.last) {
+			ps.last = t
+		}
+		pairs[k] = ps
+	}
+	out := make([]LiquidationCoverage, 0, len(venues)+len(pairs))
+	spanLive := func(s span) time.Duration {
+		live := s.last.Sub(s.first)
+		if !now.IsZero() && now.Sub(s.last) >= 0 && now.Sub(s.last) < time.Minute {
+			live = now.Sub(s.first)
+		}
+		return clampLiveCoverage(live)
+	}
+	for ex, s := range venues {
+		out = append(out, LiquidationCoverage{
+			Exchange:   ex,
+			FirstWatch: s.first,
+			Live:       spanLive(s),
+		})
+	}
+	for k, s := range pairs {
+		sym, ex, ok := splitWatchKey(k)
+		if !ok {
+			continue
+		}
+		out = append(out, LiquidationCoverage{
+			Exchange:   ex,
+			Symbol:     sym,
+			FirstWatch: s.first,
+			Live:       spanLive(s),
+		})
 	}
 	return out
 }

@@ -148,6 +148,83 @@ func TestLiquidationBook_Overview(t *testing.T) {
 	}
 }
 
+func TestLiquidationBook_RestoreTrackingKeepsVenuesAndCoverage(t *testing.T) {
+	b := NewLiquidationBook()
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	first := now.Add(-20 * time.Hour)
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong,
+		Price: 64000, Quantity: 1, Notional: 1000, Time: now.Add(-30 * time.Minute),
+	})
+	b.Record(LiquidationEvent{
+		Exchange: ExchangeBybit, Symbol: "ETHUSDT", Side: LiquidationSideShort,
+		Price: 3000, Quantity: 2, Notional: 6000, Time: now.Add(-2 * time.Hour),
+	})
+	b.RestoreTracking(ExchangeBinance, "", first, 24*time.Hour)
+	b.RestoreTracking(ExchangeBybit, "ETHUSDT", now.Add(-10*time.Hour), 10*time.Hour)
+
+	bn := b.Snapshot("binance", "BTCUSDT")
+	var w1h, w24 LiquidationWindowTotals
+	for _, w := range bn.Windows {
+		switch w.Window {
+		case LiquidationWindow1h:
+			w1h = w
+		case LiquidationWindow24h:
+			w24 = w
+		}
+	}
+	if !w24.Complete || w1h.Count != 1 {
+		t.Fatalf("binance after restore 1h=%+v 24h=%+v", w1h, w24)
+	}
+	bb := b.Snapshot("bybit", "ETHUSDT")
+	if bb.Windows[0].Count != 0 {
+		t.Fatalf("bybit 5m should be empty %+v", bb.Windows[0])
+	}
+	var w4 LiquidationWindowTotals
+	for _, w := range bb.Windows {
+		if w.Window == LiquidationWindow4h {
+			w4 = w
+		}
+	}
+	if w4.Count != 1 || w4.ShortNotional != "6000" {
+		t.Fatalf("bybit 4h %+v", w4)
+	}
+	if b.Snapshot("binance", "ETHUSDT").Windows[0].Count != 0 {
+		t.Fatal("binance must not include Bybit prints")
+	}
+
+	fresh := NewLiquidationBook()
+	fresh.now = func() time.Time { return now }
+	for _, c := range b.CoverageSnapshot(now) {
+		fresh.RestoreTracking(c.Exchange, c.Symbol, c.FirstWatch, c.Live)
+	}
+	if !fresh.Snapshot("binance", "BTCUSDT").Windows[len(fresh.Snapshot("binance", "BTCUSDT").Windows)-1].Complete {
+		t.Fatal("coverage snapshot must restore 24h complete")
+	}
+}
+
+func TestCoverageFromEvents_SeparateVenues(t *testing.T) {
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	rows := CoverageFromEvents([]LiquidationEvent{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Time: now.Add(-6 * time.Hour)},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Time: now.Add(-time.Hour)},
+		{Exchange: ExchangeBybit, Symbol: "ETHUSDT", Time: now.Add(-2 * time.Hour)},
+	}, now)
+	var bn, bbBTC bool
+	for _, c := range rows {
+		if c.Exchange == ExchangeBinance && c.Symbol == "" && c.Live == 0 {
+			bn = true
+		}
+		if c.Exchange == ExchangeBybit && c.Symbol == "BTCUSDT" {
+			bbBTC = true
+		}
+	}
+	if !bn || !bbBTC {
+		t.Fatalf("%+v", rows)
+	}
+}
+
 func TestLiquidationBook_RecentLarge(t *testing.T) {
 	b := NewLiquidationBook()
 	now := time.Date(2026, 8, 16, 15, 0, 0, 0, time.UTC)
