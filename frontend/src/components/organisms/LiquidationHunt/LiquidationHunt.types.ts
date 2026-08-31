@@ -7,6 +7,8 @@ export type HuntFactor = {
   label?: string;
   score?: number;
   weight?: number;
+  sharePct?: number;
+  effect?: number;
   detail?: string;
 };
 
@@ -22,6 +24,8 @@ export type HuntInputStatus = {
   have?: string;
   need?: string;
   coverPct?: number;
+  age?: string;
+  stale?: boolean;
 };
 
 export type HuntCoverage = {

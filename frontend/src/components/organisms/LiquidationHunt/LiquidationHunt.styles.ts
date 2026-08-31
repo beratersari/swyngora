@@ -251,6 +251,45 @@ export const InputList = styled.ul`
   gap: 6px;
 `;
 
+export const FactorList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+export const FactorRow = styled.li`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  align-items: baseline;
+`;
+
+export const FactorName = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.semantic.text.secondary};
+`;
+
+export const FactorMeta = styled.span<{ $tone?: 'up' | 'down' | 'muted' }>`
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: ${({ theme, $tone }) =>
+    $tone === 'up'
+      ? theme.semantic.status.success
+      : $tone === 'down'
+        ? theme.semantic.status.error
+        : theme.semantic.text.primary};
+`;
+
+export const FactorShare = styled.span`
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: ${({ theme }) => theme.semantic.text.secondary};
+`;
+
 export const InputPill = styled.li<{ $tone: 'ok' | 'weak' | 'missing' | 'error' }>`
   display: inline-flex;
   align-items: center;

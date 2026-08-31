@@ -167,13 +167,18 @@ type HuntInputStatus struct {
 	Have     string  `json:"have,omitempty"`
 	Need     string  `json:"need,omitempty"`
 	CoverPct float64 `json:"coverPct,omitempty"`
+	Age      string  `json:"age,omitempty"`
+	Stale    bool    `json:"stale,omitempty"`
 }
 
 // HuntSpan is how much of a lookback window we actually have.
 type HuntSpan struct {
-	HaveSec  float64 `json:"haveSec"`
-	NeedSec  float64 `json:"needSec"`
-	CoverPct float64 `json:"coverPct"`
+	HaveSec      float64 `json:"haveSec"`
+	NeedSec      float64 `json:"needSec"`
+	CoverPct     float64 `json:"coverPct"`
+	SampleAgeSec float64 `json:"sampleAgeSec,omitempty"`
+	Stale        bool    `json:"stale,omitempty"`
+	ChangePct    float64 `json:"changePct,omitempty"`
 }
 
 // HuntCoverage is how complete the hunt inputs are for one venue or the combined read.

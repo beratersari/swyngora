@@ -39,7 +39,7 @@
     "symbol": "Symbol",
     "pick": "Choose a coin to compare up and down liquidation hunts.",
     "empty": "No hunt read yet for this coin.",
-    "hint": "Scores say which side looks easier or more likely. Thin or missing inputs pull the score toward even. A venue with an error is shown but left out of the combined lean. Informational only, not a prediction.",
+    "hint": "Scores say which side looks easier or more likely. Each driver shows how many points it adds or subtracts versus even. Thin, missing, or stale inputs (for example a 2h-old OI print used as if it were 1h) pull the score toward even. A venue with an error is shown but left out of the combined lean. Informational only, not a prediction.",
     "last": "Last",
     "oi": "Open interest",
     "fundingPayer": "{{side}}s pay funding",
@@ -72,7 +72,13 @@
         "weak": "weak",
         "missing": "missing",
         "error": "error"
-      }
+      },
+      "stale": "{{age}} old"
+    },
+    "factors": {
+      "title": "What moved the score",
+      "share": "{{pct}}% of mix",
+      "effect": "{{value}} vs even"
     }
   },
   "chart": {

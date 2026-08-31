@@ -248,11 +248,9 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		}
 	}
 	if oiSer != nil {
-		sig.OI1hPct = domain.OIChangePctFromSeries(oiSer, time.Hour, now)
-		sig.OI4hPct = domain.OIChangePctFromSeries(oiSer, 4*time.Hour, now)
-		sig.OISpan1h = domain.HuntOILookbackSpan(oiSer, time.Hour, now)
-		sig.OISpan4h = domain.HuntOILookbackSpan(oiSer, 4*time.Hour, now)
-		if !math.IsNaN(sig.OI1hPct) || !math.IsNaN(sig.OI4hPct) || sig.OISpan1h.CoverPct > 0 || sig.OISpan4h.CoverPct > 0 {
+		sig.OI1hPct, sig.OISpan1h = domain.HuntOILookback(oiSer, time.Hour, now)
+		sig.OI4hPct, sig.OISpan4h = domain.HuntOILookback(oiSer, 4*time.Hour, now)
+		if !math.IsNaN(sig.OI1hPct) || !math.IsNaN(sig.OI4hPct) || sig.OISpan1h.Stale || sig.OISpan4h.Stale || sig.OISpan1h.CoverPct > 0 || sig.OISpan4h.CoverPct > 0 {
 			sig.HasOI = true
 		}
 	}

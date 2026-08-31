@@ -39,7 +39,7 @@
     "symbol": "Sembol",
     "pick": "Yukarı ve aşağı likidasyon avını karşılaştırmak için bir coin seçin.",
     "empty": "Bu coin için henüz av okuması yok.",
-    "hint": "Skorlar hangi yönün daha kolay veya daha olası göründüğünü söyler. Eksik veya zayıf veriler skoru ortaya çeker. Hata veren borsa gösterilir ama birleşik okumaya girmez. Yalnızca bilgi amaçlıdır, tahmin değildir.",
+    "hint": "Skorlar hangi yönün daha kolay veya daha olası göründüğünü söyler. Her etken, ortaya göre kaç puan eklediğini veya çıkardığını gösterir. Eksik, zayıf veya bayat veriler (örneğin 1 saat gibi kullanılan 2 saatlik OI) skoru ortaya çeker. Hata veren borsa gösterilir ama birleşik okumaya girmez. Yalnızca bilgi amaçlıdır, tahmin değildir.",
     "last": "Son",
     "oi": "Açık pozisyon",
     "fundingPayer": "Fonlamayı {{side}}lar ödüyor",
@@ -72,7 +72,13 @@
         "weak": "zayıf",
         "missing": "eksik",
         "error": "hata"
-      }
+      },
+      "stale": "{{age}} eski"
+    },
+    "factors": {
+      "title": "Skoru ne oynattı",
+      "share": "karışımın %{{pct}}’i",
+      "effect": "ortaya göre {{value}}"
     }
   },
   "chart": {

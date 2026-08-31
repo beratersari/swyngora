@@ -4127,6 +4127,10 @@ export interface components {
             /** @description 0–100 for this direction */
             score?: number;
             weight?: number;
+            /** @description 0–100 of the mix used for this direction */
+            sharePct?: number;
+            /** @description Signed points this factor adds to the direction score versus 50 */
+            effect?: number;
             detail?: string;
         };
         /** @description How easy / likely one hunt direction looks (does not change zone math) */
@@ -4152,6 +4156,10 @@ export interface components {
             need?: string;
             /** @description 0–100 of the requested lookback */
             coverPct?: number;
+            /** @description How old the sample is when it is not the requested window, e.g. 2h */
+            age?: string;
+            /** @description True when an older print was found instead of the requested 1h/4h sample */
+            stale?: boolean;
         };
         /** @description How complete the hunt inputs are. Unusable venues are shown but not mixed into combined bias. */
         LiquidationHuntCoverage: {

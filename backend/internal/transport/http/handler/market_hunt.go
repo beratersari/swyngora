@@ -108,11 +108,13 @@ type huntVenueDTO struct {
 }
 
 type huntFactorDTO struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	Score  float64 `json:"score"`
-	Weight float64 `json:"weight"`
-	Detail string  `json:"detail"`
+	ID       string  `json:"id"`
+	Label    string  `json:"label"`
+	Score    float64 `json:"score"`
+	Weight   float64 `json:"weight"`
+	SharePct float64 `json:"sharePct,omitempty"`
+	Effect   float64 `json:"effect"`
+	Detail   string  `json:"detail"`
 }
 
 type huntDirectionScoreDTO struct {
@@ -133,6 +135,8 @@ type huntInputStatusDTO struct {
 	Have     string  `json:"have,omitempty"`
 	Need     string  `json:"need,omitempty"`
 	CoverPct float64 `json:"coverPct,omitempty"`
+	Age      string  `json:"age,omitempty"`
+	Stale    bool    `json:"stale,omitempty"`
 }
 
 type huntCoverageDTO struct {
@@ -240,11 +244,13 @@ func huntDirectionToDTO(s domain.HuntDirectionScore) huntDirectionScoreDTO {
 	factors := make([]huntFactorDTO, 0, len(s.Factors))
 	for _, f := range s.Factors {
 		factors = append(factors, huntFactorDTO{
-			ID:     f.ID,
-			Label:  f.Label,
-			Score:  f.Score,
-			Weight: f.Weight,
-			Detail: f.Detail,
+			ID:       f.ID,
+			Label:    f.Label,
+			Score:    f.Score,
+			Weight:   f.Weight,
+			SharePct: f.SharePct,
+			Effect:   f.Effect,
+			Detail:   f.Detail,
 		})
 	}
 	reasons := s.Reasons
@@ -273,6 +279,8 @@ func huntCoverageToDTO(c domain.HuntCoverage) huntCoverageDTO {
 			Have:     in.Have,
 			Need:     in.Need,
 			CoverPct: in.CoverPct,
+			Age:      in.Age,
+			Stale:    in.Stale,
 		})
 	}
 	missing := c.Missing

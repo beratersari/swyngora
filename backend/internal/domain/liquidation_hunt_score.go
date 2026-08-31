@@ -23,11 +23,13 @@ const (
 
 // HuntFactor is one scored driver of how easy / likely a hunt direction is.
 type HuntFactor struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	Score  float64 `json:"score"`
-	Weight float64 `json:"weight"`
-	Detail string  `json:"detail"`
+	ID       string  `json:"id"`
+	Label    string  `json:"label"`
+	Score    float64 `json:"score"`
+	Weight   float64 `json:"weight"`
+	SharePct float64 `json:"sharePct,omitempty"`
+	Effect   float64 `json:"effect"`
+	Detail   string  `json:"detail"`
 }
 
 // HuntDirectionScore is the 0–100 read for up (hunt shorts) or down (hunt longs).
@@ -146,8 +148,11 @@ func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
 	v.Coverage = cov
 	up := scoreHuntDirection("up", *v, sig)
 	down := scoreHuntDirection("down", *v, sig)
+	keep := huntScoreKeep(cov.Score)
 	up.Score = shrinkHuntScore(up.Score, cov.Score)
 	down.Score = shrinkHuntScore(down.Score, cov.Score)
+	applyHuntFactorEffects(up.Factors, keep)
+	applyHuntFactorEffects(down.Factors, keep)
 	up.Level = HuntEaseFromScore(up.Score)
 	down.Level = HuntEaseFromScore(down.Score)
 	up.Coverage = cov.Score
@@ -169,6 +174,10 @@ func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
 // shrinkHuntScore pulls a raw factor mix toward 50 when inputs are thin,
 // so a one-factor read cannot look as decisive as a full tape.
 func shrinkHuntScore(raw, coverage float64) float64 {
+	return clampScore(50 + (raw-50)*huntScoreKeep(coverage))
+}
+
+func huntScoreKeep(coverage float64) float64 {
 	c := coverage / 100
 	if c < 0 {
 		c = 0
@@ -176,8 +185,30 @@ func shrinkHuntScore(raw, coverage float64) float64 {
 	if c > 1 {
 		c = 1
 	}
-	keep := 0.30 + 0.70*c
-	return clampScore(50 + (raw-50)*keep)
+	return 0.30 + 0.70*c
+}
+
+// applyHuntFactorEffects fills sharePct (mix weight) and effect (signed
+// points this factor adds to the direction score versus 50).
+func applyHuntFactorEffects(factors []HuntFactor, keep float64) {
+	var den float64
+	for _, f := range factors {
+		den += f.Weight
+	}
+	if den <= 0 {
+		return
+	}
+	if keep < 0 {
+		keep = 0
+	}
+	if keep > 1 {
+		keep = 1
+	}
+	for i := range factors {
+		share := factors[i].Weight / den
+		factors[i].SharePct = clampScore(share * 100)
+		factors[i].Effect = round1((factors[i].Score - 50) * share * keep)
+	}
 }
 
 // CombineHuntBias is an OI-weighted lean across usable venues only.
@@ -440,19 +471,33 @@ func huntTrendFactor(dir string, sig HuntSignals) HuntFactor {
 		f.Weight = 0
 		return f
 	}
-	p1, p4, p24 := sig.Price1hPct, sig.Price4hPct, sig.Price24hPct
+	if sig.PriceFromTicker && !sig.Has1hPrice && !sig.Has4hPrice {
+		px := sig.Price24hPct
+		score := 50.0
+		if !math.IsNaN(px) {
+			if dir == "up" {
+				score += clampAbs(px, 6) * 1.2
+			} else {
+				score -= clampAbs(px, 6) * 1.2
+			}
+		}
+		f.Weight *= 0.5
+		f.Score = clampScore(50 + (score-50)*0.4)
+		f.Detail = "trend is the 24h ticker only, not a 1h/4h path"
+		return f
+	}
+	p1, p4 := sig.Price1hPct, sig.Price4hPct
 	o1, o4 := sig.OI1hPct, sig.OI4hPct
 	if !sig.HasOI {
 		o1, o4 = math.NaN(), math.NaN()
 	}
-	if sig.OISpan1h.NeedSec > 0 && HuntSpanFraction(sig.OISpan1h) < 0.7 {
-		o1 = math.NaN()
-	}
-	if sig.OISpan4h.NeedSec > 0 && HuntSpanFraction(sig.OISpan4h) < 0.7 {
-		o4 = math.NaN()
-	}
-	if sig.PriceSpan4h.NeedSec > 0 && HuntSpanFraction(sig.PriceSpan4h) < 0.85 {
+	o1 = huntWindowOI(o1, sig.OISpan1h)
+	o4 = huntWindowOI(o4, sig.OISpan4h)
+	if sig.PriceSpan4h.NeedSec > 0 && (sig.PriceSpan4h.Stale || HuntSpanFraction(sig.PriceSpan4h) < 0.85) {
 		p4 = math.NaN()
+	}
+	if sig.PriceSpan1h.NeedSec > 0 && (sig.PriceSpan1h.Stale || HuntSpanFraction(sig.PriceSpan1h) < 0.85) && !sig.Has1hPrice {
+		p1 = math.NaN()
 	}
 	w4 := BuildPositioningWindow("4h", p4, o4)
 	w1 := BuildPositioningWindow("1h", p1, o1)
@@ -473,8 +518,8 @@ func huntTrendFactor(dir string, sig HuntSignals) HuntFactor {
 	case dir == "down" && upish:
 		score = 42 - primary.Confidence*0.28
 	}
-	// raw 4h/1h price as a light extra tilt when regime is neutral
-	px := firstFinite(p4, p1, p24)
+	// 1h/4h price only — do not fall back to a 24h ticker as if it were 1h.
+	px := firstFinite(p4, p1)
 	if primary.Regime == RegimeNeutral && !math.IsNaN(px) {
 		if dir == "up" {
 			score += clampAbs(px, 6) * 3
@@ -486,11 +531,59 @@ func huntTrendFactor(dir string, sig HuntSignals) HuntFactor {
 	if primary.Regime != RegimeNeutral && primary.Label != "" {
 		f.Detail = fmt.Sprintf("%s %s (price %s, OI %s)", primary.Window, primary.Label, primary.PriceDir, primary.OIDir)
 	} else if !math.IsNaN(px) {
-		f.Detail = fmt.Sprintf("price %s over the last trend window (%s)", signedPct(px), firstWindowLabel(p4, p1, p24))
+		f.Detail = fmt.Sprintf("price %s over the last trend window (%s)", signedPct(px), firstWindowLabel(p4, p1, math.NaN()))
 	} else {
 		f.Detail = "price trend is flat / mixed"
 	}
+	if note := huntStaleOINote(sig); note != "" {
+		keep := huntStaleOIKeep(sig)
+		f.Score = clampScore(50 + (f.Score-50)*keep)
+		f.Detail += "; " + note
+	}
 	return f
+}
+
+// huntWindowOI is the % change for a named window only when the sample
+// actually matches that window. A 2h-old print is not a 1h change.
+func huntWindowOI(pct float64, span HuntSpan) float64 {
+	if span.Stale || (span.NeedSec > 0 && HuntSpanFraction(span) < 0.85) {
+		return math.NaN()
+	}
+	return pct
+}
+
+func huntHasWindowOI(span HuntSpan) bool {
+	return !span.Stale && span.NeedSec > 0 && HuntSpanFraction(span) >= 0.85
+}
+
+func huntStaleOINote(sig HuntSignals) string {
+	if huntHasWindowOI(sig.OISpan4h) || huntHasWindowOI(sig.OISpan1h) {
+		return ""
+	}
+	span := sig.OISpan4h
+	need := "4h"
+	if !span.Stale || span.SampleAgeSec <= 0 {
+		span = sig.OISpan1h
+		need = "1h"
+	}
+	if !span.Stale || span.SampleAgeSec <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("OI sample is %s old, not used as %s", formatHuntDur(span.SampleAgeSec), need)
+}
+
+func huntStaleOIKeep(sig HuntSignals) float64 {
+	if huntHasWindowOI(sig.OISpan4h) || huntHasWindowOI(sig.OISpan1h) {
+		return 1
+	}
+	keep := 1.0
+	if sig.OISpan4h.Stale {
+		keep = math.Min(keep, 0.35+HuntSpanFraction(sig.OISpan4h)*0.4)
+	}
+	if sig.OISpan1h.Stale {
+		keep = math.Min(keep, 0.35+HuntSpanFraction(sig.OISpan1h)*0.4)
+	}
+	return keep
 }
 
 func huntCrowdingFactor(dir string, v HuntVenueReport) HuntFactor {
@@ -570,9 +663,11 @@ func huntFlowFactor(dir string, sig HuntSignals) HuntFactor {
 	if sig.HasLiqWindows {
 		longN, shortN := sig.LongLiq1h, sig.ShortLiq1h
 		liqFrac := HuntSpanFraction(sig.LiqSpan1h)
+		liqWin := "1h"
 		if longN+shortN <= 0 {
 			longN, shortN = sig.LongLiq4h, sig.ShortLiq4h
 			liqFrac = HuntSpanFraction(sig.LiqSpan4h)
+			liqWin = "4h"
 		}
 		tot := longN + shortN
 		if tot > 0 {
@@ -588,9 +683,9 @@ func huntFlowFactor(dir string, sig HuntSignals) HuntFactor {
 			}
 			score += tilt
 			if shortShare >= 0.58 {
-				bits = append(bits, "recent liquidations are mostly shorts")
+				bits = append(bits, fmt.Sprintf("%s liquidations are mostly shorts", liqWin))
 			} else if shortShare <= 0.42 {
-				bits = append(bits, "recent liquidations are mostly longs")
+				bits = append(bits, fmt.Sprintf("%s liquidations are mostly longs", liqWin))
 			}
 		}
 	}
@@ -759,7 +854,19 @@ func HuntSpanFromDurations(have, need time.Duration) HuntSpan {
 }
 
 // HuntSpanFraction is 0–1 of the requested window actually collected.
+// A stale (too-old) sample uses CoverPct, never Have/Need, so a 2h-old
+// print cannot look like a full 1h window.
 func HuntSpanFraction(s HuntSpan) float64 {
+	if s.Stale {
+		f := s.CoverPct / 100
+		if f > 0.7 {
+			return 0.7
+		}
+		if f < 0 {
+			return 0
+		}
+		return f
+	}
 	if s.NeedSec <= 0 {
 		return 0
 	}
@@ -777,33 +884,77 @@ func applyHuntSpan(in *HuntInputStatus, s HuntSpan) {
 	if in == nil || s.NeedSec <= 0 {
 		return
 	}
-	in.Have = formatHuntDur(s.HaveSec)
 	in.Need = formatHuntDur(s.NeedSec)
 	in.CoverPct = s.CoverPct
+	if s.Stale && s.SampleAgeSec > 0 {
+		in.Stale = true
+		in.Age = formatHuntDur(s.SampleAgeSec)
+		in.Have = in.Age
+		return
+	}
+	in.Have = formatHuntDur(s.HaveSec)
+}
+
+// HuntOILookback is the OI % change and how well the sample matches `window`.
+// A point older than the window+slack is marked Stale: ChangePct is still
+// filled so the UI can show age, but it is not a 1h/4h change.
+func HuntOILookback(ser *OpenInterestSeries, window time.Duration, now time.Time) (float64, HuntSpan) {
+	span := HuntSpan{NeedSec: window.Seconds()}
+	if ser == nil {
+		return math.NaN(), span
+	}
+	target := now.Add(-window)
+	past, complete := FindOpenInterestSample(ser.History, target, OpenInterestSampleSlack(window))
+	if past.Time.IsZero() {
+		return math.NaN(), span
+	}
+	age := now.Sub(past.Time)
+	if age < 0 {
+		age = 0
+	}
+	span.SampleAgeSec = age.Seconds()
+	pct := oiPctFromPoints(ser.Current, past)
+	span.ChangePct = pct
+	if complete {
+		span.HaveSec = window.Seconds()
+		span.CoverPct = 100
+		return pct, span
+	}
+	span.Stale = true
+	span.HaveSec = 0
+	cover := 0.0
+	if age > 0 {
+		cover = 100 * window.Seconds() / age.Seconds()
+	}
+	if cover > 70 {
+		cover = 70
+	}
+	span.CoverPct = clampScore(cover)
+	return math.NaN(), span
 }
 
 // HuntOILookbackSpan is how far back OI history actually reaches vs the window.
 func HuntOILookbackSpan(ser *OpenInterestSeries, window time.Duration, now time.Time) HuntSpan {
-	if ser == nil {
-		return HuntSpan{NeedSec: window.Seconds()}
+	_, span := HuntOILookback(ser, window, now)
+	return span
+}
+
+func oiPctFromPoints(cur, past OpenInterestPoint) float64 {
+	if past.Contracts <= 0 {
+		if past.Value > 0 && cur.Value > 0 {
+			p, good := oiPctChange(cur.Value, past.Value)
+			if !good {
+				return math.NaN()
+			}
+			return p
+		}
+		return math.NaN()
 	}
-	target := now.Add(-window)
-	past, complete := FindOpenInterestSample(ser.History, target, OpenInterestSampleSlack(window))
-	if complete {
-		return HuntSpanFromDurations(window, window)
+	p, good := oiPctChange(cur.Contracts, past.Contracts)
+	if !good {
+		return math.NaN()
 	}
-	if past.Time.IsZero() {
-		return HuntSpan{NeedSec: window.Seconds()}
-	}
-	have := now.Sub(past.Time)
-	if have >= window {
-		// Reached past the window start, but the sample sits outside slack —
-		// do not report a full window.
-		out := HuntSpanFromDurations(window, window)
-		out.CoverPct = 65
-		return out
-	}
-	return HuntSpanFromDurations(have, window)
+	return p
 }
 
 // HuntPriceLookbackSpan uses hourly bar count (need 2 bars for 1h, 5 for 4h).
@@ -881,11 +1032,16 @@ func huntInputOI(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
 		return in
 	}
 	span := sig.OISpan4h
-	if span.NeedSec <= 0 {
+	if span.NeedSec <= 0 || (span.CoverPct <= 0 && sig.OISpan1h.Stale) {
 		span = sig.OISpan1h
 	}
 	if span.NeedSec > 0 {
 		applyHuntSpan(&in, span)
+		if span.Stale {
+			in.Status = HuntInputWeak
+			in.Detail = fmt.Sprintf("open interest sample is %s old (need %s)", in.Age, in.Need)
+			return in
+		}
 		st := huntSpanStatus(span)
 		if st == HuntInputOK && sig.HasOI {
 			in.Status = HuntInputOK

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -269,12 +270,68 @@ func TestHuntOILookbackSpan_ShortHistoryIsPartial(t *testing.T) {
 	if full.CoverPct < 85 {
 		t.Fatalf("1h sample should be complete: %+v", full)
 	}
-	stale := HuntOILookbackSpan(&OpenInterestSeries{
+	staleSer := &OpenInterestSeries{
 		Current: OpenInterestPoint{Time: now, Contracts: 110, Value: 110},
 		History: []OpenInterestPoint{{Time: now.Add(-2 * time.Hour), Contracts: 100, Value: 100}},
-	}, time.Hour, now)
-	if stale.CoverPct >= 85 {
+	}
+	stale := HuntOILookbackSpan(staleSer, time.Hour, now)
+	if !stale.Stale || stale.CoverPct >= 85 || stale.SampleAgeSec < 7000 {
 		t.Fatalf("stale sample older than slack must not look complete: %+v", stale)
+	}
+	pct, _ := HuntOILookback(staleSer, time.Hour, now)
+	if !math.IsNaN(pct) {
+		t.Fatalf("2h-old print must not be returned as a 1h OI change: %v", pct)
+	}
+}
+
+func TestHuntTrendFactor_Stale1hOIIsNotUsedAs1h(t *testing.T) {
+	sig := fullHuntSignals()
+	sig.OI1hPct = 8
+	sig.OI4hPct = math.NaN()
+	sig.OISpan1h = HuntSpan{HaveSec: 0, NeedSec: 3600, CoverPct: 50, SampleAgeSec: 7200, Stale: true, ChangePct: 8}
+	sig.OISpan4h = HuntSpan{NeedSec: 4 * 3600}
+	fresh := huntTrendFactor("up", fullHuntSignals())
+	stale := huntTrendFactor("up", sig)
+	if !strings.Contains(stale.Detail, "old") {
+		t.Fatalf("stale OI must be labeled: %s", stale.Detail)
+	}
+	if math.Abs(stale.Score-50) >= math.Abs(fresh.Score-50) {
+		t.Fatalf("stale 1h OI should shrink the trend tilt: fresh=%v stale=%v", fresh.Score, stale.Score)
+	}
+}
+
+func TestHuntInputOI_StaleSampleShowsAge(t *testing.T) {
+	sig := fullHuntSignals()
+	sig.OISpan1h = HuntSpan{NeedSec: 3600, CoverPct: 50, SampleAgeSec: 7200, Stale: true}
+	sig.OISpan4h = HuntSpan{NeedSec: 4 * 3600, CoverPct: 25, SampleAgeSec: 8 * 3600, Stale: true}
+	in := huntInputOI(HuntVenueReport{OpenInterestValue: 1e6}, sig)
+	if in.Status == HuntInputOK || !in.Stale || in.Age == "" {
+		t.Fatalf("want stale age on OI input: %+v", in)
+	}
+	if !strings.Contains(in.Detail, "old") {
+		t.Fatalf("detail should say how old: %s", in.Detail)
+	}
+}
+
+func TestAssembleHuntScore_ReportsFactorEffects(t *testing.T) {
+	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	AttachHuntDirectionScores(&got, fullHuntSignals())
+	if len(got.UpScore.Factors) == 0 {
+		t.Fatal("want factors")
+	}
+	var share, effect float64
+	for _, f := range got.UpScore.Factors {
+		if f.SharePct <= 0 {
+			t.Fatalf("factor %s missing share: %+v", f.ID, f)
+		}
+		share += f.SharePct
+		effect += f.Effect
+	}
+	if share < 99 || share > 101 {
+		t.Fatalf("shares should sum to ~100: %v", share)
+	}
+	if math.Abs((50+effect)-got.UpScore.Score) > 1.5 {
+		t.Fatalf("effects should explain the score: score=%v effectSum=%v", got.UpScore.Score, effect)
 	}
 }
 

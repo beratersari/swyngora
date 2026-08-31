@@ -42,12 +42,34 @@ export function inputTone(status?: HuntInputState): 'ok' | 'weak' | 'missing' | 
   return 'missing';
 }
 
-export function inputSpanText(have?: string, need?: string, coverPct?: number): string {
+export function inputSpanText(
+  have?: string,
+  need?: string,
+  coverPct?: number,
+  age?: string,
+  stale?: boolean,
+): string {
+  const pct = Number.isFinite(coverPct) && coverPct != null ? ` (${Math.round(coverPct)}%)` : '';
+  if (stale && age && need) {
+    return `${age} old / ${need}${pct}`;
+  }
   if (have && need) {
-    const pct = Number.isFinite(coverPct) && coverPct != null ? ` (${Math.round(coverPct)}%)` : '';
     return `${have} / ${need}${pct}`;
   }
   return '';
+}
+
+export function formatEffect(raw?: number | null): string {
+  const n = raw ?? 0;
+  if (!Number.isFinite(n) || Math.abs(n) < 0.05) return '0';
+  const abs = Math.abs(n).toFixed(1);
+  return n > 0 ? `+${abs}` : `−${abs}`;
+}
+
+export function effectTone(raw?: number | null): 'up' | 'down' | 'muted' {
+  const n = raw ?? 0;
+  if (!Number.isFinite(n) || Math.abs(n) < 0.15) return 'muted';
+  return n > 0 ? 'up' : 'down';
 }
 
 export function venueLabel(exchange?: string): string {

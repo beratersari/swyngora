@@ -7,6 +7,8 @@ import {
   compareRows,
   coverageTone,
   easeTone,
+  effectTone,
+  formatEffect,
   inputSpanText,
   inputTone,
   leanTone,
@@ -22,6 +24,11 @@ import {
   CoverageMeter,
   CoverageRow,
   EaseChip,
+  FactorList,
+  FactorMeta,
+  FactorName,
+  FactorRow,
+  FactorShare,
   Hint,
   InputList,
   InputPill,
@@ -209,6 +216,23 @@ function DirectionCard({
       <ScoreBar>
         <ScoreFill $side={side} $pct={value} />
       </ScoreBar>
+      {(score?.factors ?? []).length > 0 ? (
+        <FactorList data-testid={`liquidation-hunt-${side}-factors`}>
+          {(score?.factors ?? []).map((factor) => (
+            <FactorRow key={factor.id ?? factor.label} title={factor.detail}>
+              <FactorName>{factor.label || factor.id}</FactorName>
+              <FactorMeta $tone={effectTone(factor.effect)}>
+                {formatEffect(factor.effect)}
+              </FactorMeta>
+              <FactorShare>
+                {t('hunt.factors.share', { pct: Math.round(scoreValue(factor.sharePct)) })}
+                {' · '}
+                {t('hunt.factors.effect', { value: formatEffect(factor.effect) })}
+              </FactorShare>
+            </FactorRow>
+          ))}
+        </FactorList>
+      ) : null}
       <MetricTable>
         {rows.map((row) => (
           <span key={row.id} style={{ display: 'contents' }}>
@@ -261,7 +285,7 @@ function CoverageStrip({ coverage, excluded }: { coverage?: HuntCoverage; exclud
           {coverage.inputs.map((input) => (
             <InputPill key={input.id ?? input.label} $tone={inputTone(input.status)} title={input.detail}>
               {input.label || input.id}:{' '}
-              {inputSpanText(input.have, input.need, input.coverPct) ||
+              {inputSpanText(input.have, input.need, input.coverPct, input.age, input.stale) ||
                 t(`hunt.coverage.status.${inputTone(input.status)}`)}
             </InputPill>
           ))}

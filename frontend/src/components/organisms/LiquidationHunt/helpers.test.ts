@@ -4,6 +4,7 @@ import {
   coverageTone,
   easeTone,
   formatTarget,
+  formatEffect,
   inputSpanText,
   inputTone,
   leanTone,
@@ -24,6 +25,9 @@ describe('LiquidationHunt helpers', () => {
     expect(coverageTone('thin')).toBe('thin');
     expect(inputTone('error')).toBe('error');
     expect(inputSpanText('18m', '1h', 25)).toBe('18m / 1h (25%)');
+    expect(inputSpanText('2h', '1h', 50, '2h', true)).toBe('2h old / 1h (50%)');
+    expect(formatEffect(4.2)).toBe('+4.2');
+    expect(formatEffect(-1.5)).toBe('−1.5');
   });
 
   it('formats a target with move and builds compare rows', () => {

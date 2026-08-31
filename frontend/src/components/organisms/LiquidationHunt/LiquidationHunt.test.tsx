@@ -40,9 +40,19 @@ const sample: HuntReport = {
         inputs: [
           { id: 'book', label: 'Spot book', status: 'ok' },
           { id: 'flow', label: 'Taker + recent liqs', status: 'weak', have: '18m', need: '1h', coverPct: 30 },
+          { id: 'oi', label: 'Open interest', status: 'weak', age: '2h', need: '1h', coverPct: 50, stale: true },
         ],
       },
-      upScore: { direction: 'up', score: 68, level: 'likely', reasons: ['Shorts are crowded'] },
+      upScore: {
+        direction: 'up',
+        score: 68,
+        level: 'likely',
+        reasons: ['Shorts are crowded'],
+        factors: [
+          { id: 'crowding', label: 'Crowding + funding', score: 80, sharePct: 22, effect: 6.6 },
+          { id: 'proximity', label: 'Distance to zone', score: 70, sharePct: 20, effect: 4.0 },
+        ],
+      },
       downScore: { direction: 'down', score: 41, level: 'mixed', reasons: ['Target is farther'] },
       upHunt: {
         target: { price: '64800', movePct: '1.25' },
@@ -77,6 +87,9 @@ describe('LiquidationHunt', () => {
     expect(screen.getAllByTestId('liquidation-hunt-coverage').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/inputs look complete/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/18m \/ 1h/i)).toBeInTheDocument();
+    expect(screen.getByText(/2h old \/ 1h/i)).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('+6.6');
+    expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('Crowding + funding');
   });
 
   it('marks an unusable venue as excluded', async () => {

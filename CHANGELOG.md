@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **Liquidation hunt OI age:** a sample older than the requested 1h/4h window is no longer used as that window's OI change. Coverage shows `age` / `stale`, the trend score shrinks, and each factor reports `sharePct` + `effect` so you can see what moved the lean (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt lookbacks:** a partial 1h taker (or short OI / liq / price history) is no longer treated as a full window. Each time-based input reports `have` / `need` / `coverPct` and incomplete spans shrink that factor (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt coverage:** a venue that fails to load needed data (book, OI, …) is shown with an error but **excluded** from the combined lean. Missing or weak inputs shrink the score toward even and are listed on `coverage` (complete / usable / thin / insufficient). Web Hunt tab shows the quality strip (`docs/features/liquidation-hunt.md`)
 - **RSI heatmap hover and aspect:** the scatter keeps a 1:1 plot (dots stay circular) and the card only appears when the pointer is on a coin, not in empty space (`docs/features/rsi-heatmap.md`)
