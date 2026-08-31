@@ -1257,6 +1257,12 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	if v.UpHunt.Direction != "up" || v.DownHunt.Direction != "down" {
 		t.Fatalf("hunts: %+v", v)
 	}
+	if v.UpCascade.Direction != "up" || v.DownCascade.Direction != "down" {
+		t.Fatalf("cascade: %+v", v)
+	}
+	if v.UpCascade.Steps == nil || v.DownCascade.Steps == nil {
+		t.Fatalf("cascade steps: %+v", v)
+	}
 	if v.Coverage.Level == "" {
 		t.Fatalf("want coverage: %+v", v)
 	}

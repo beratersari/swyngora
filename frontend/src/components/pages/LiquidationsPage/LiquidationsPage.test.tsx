@@ -119,6 +119,12 @@ vi.mock('@/libs/api', async (importOriginal) => {
             downScore: { direction: 'down', score: 41, level: 'mixed', reasons: [] },
             upHunt: { target: { price: '65000', movePct: '1.5' }, houseEdge: 'profit' },
             downHunt: { target: { price: '63000', movePct: '-1.5' }, houseEdge: 'loss' },
+            upCascade: {
+              direction: 'up',
+              summary: '2 short liquidations above zones.',
+              steps: [{ index: 1, band: { price: '64256', leverage: '125' }, zoneNotional: '800000', reachable: true }],
+            },
+            downCascade: { direction: 'down', steps: [] },
           },
         ],
       },
@@ -133,6 +139,12 @@ vi.mock('@/libs/api', async (importOriginal) => {
             downScore: { direction: 'down', score: 41, level: 'mixed', reasons: [] },
             upHunt: { target: { price: '65000', movePct: '1.5' }, houseEdge: 'profit' },
             downHunt: { target: { price: '63000', movePct: '-1.5' }, houseEdge: 'loss' },
+            upCascade: {
+              direction: 'up',
+              summary: '2 short liquidations above zones.',
+              steps: [{ index: 1, band: { price: '64256', leverage: '125' }, zoneNotional: '800000', reachable: true }],
+            },
+            downCascade: { direction: 'down', steps: [] },
           },
         ],
       },
@@ -186,5 +198,12 @@ describe('LiquidationsPage', () => {
   it('opens the hunt tab from the URL', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=hunt'] });
     expect(await screen.findByTestId('liquidation-hunt')).toBeInTheDocument();
+    expect(screen.queryByTestId('liquidation-hunt-path-up')).not.toBeInTheDocument();
+  });
+
+  it('opens the hunt cascade path from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=hunt&panel=path'] });
+    expect(await screen.findByTestId('liquidation-hunt-path-up')).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-path-step')).toHaveTextContent('125x');
   });
 });

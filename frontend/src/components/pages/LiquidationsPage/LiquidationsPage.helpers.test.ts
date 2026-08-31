@@ -4,6 +4,7 @@ import {
   parseLiqChartSymbol,
   parseLiqExchange,
   parseLiqSymbol,
+  parseLiqHuntPanel,
   parseLiqView,
   parseLiqWindow,
 } from './LiquidationsPage.helpers';
@@ -14,6 +15,8 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqView('chart')).toBe('chart');
     expect(parseLiqView('cascade')).toBe('cascade');
     expect(parseLiqView('hunt')).toBe('hunt');
+    expect(parseLiqHuntPanel('path')).toBe('path');
+    expect(parseLiqHuntPanel(null)).toBe('compare');
     expect(parseLiqView(null)).toBe('overview');
     expect(parseLiqCascadeSymbol(null)).toBe('all');
     expect(parseLiqCascadeSymbol('eth')).toBe('ETHUSDT');

@@ -1468,10 +1468,12 @@ export interface paths {
          *     part of estimated liquidations become exit flow). Also scores which
          *     direction looks easier or more likely (`upScore` / `downScore` plus
          *     `bias`) from zone distance, visible book cost, price+OI trend,
-         *     crowding/funding, and recent taker / liquidation flow. Uses live spot
-         *     book, open interest, account long/short (blended toward 50/50),
-         *     funding, and recent liquidation prints. Leverage mix is assumed.
-         *     Direction scores do not change the zone or P&L numbers.
+         *     crowding/funding, and recent taker / liquidation flow. `upCascade` /
+         *     `downCascade` list zones in price order and whether earlier estimated
+         *     liquidations cheapen the next hop. Uses live spot book, open interest,
+         *     account long/short (blended toward 50/50), funding, and recent
+         *     liquidation prints. Leverage mix is assumed. Direction scores and
+         *     cascade paths do not change the zone or P&L numbers.
          */
         get: operations["getMarketLiquidationHunt"];
         put?: never;
@@ -4163,13 +4165,13 @@ export interface components {
             status?: "ok" | "weak" | "missing" | "error";
             weight?: number;
             detail?: string;
-            /** @description Collected span, e.g. 18m */
+            /** @description Collected span */
             have?: string;
-            /** @description Requested window, e.g. 1h */
+            /** @description Requested window */
             need?: string;
             /** @description 0–100 of the requested lookback */
             coverPct?: number;
-            /** @description How old the sample is when it is not the requested window, e.g. 2h */
+            /** @description How old the sample is when it is not the requested window */
             age?: string;
             /** @description True when an older print was found instead of the requested 1h/4h sample */
             stale?: boolean;
@@ -4237,6 +4239,36 @@ export interface components {
             houseEdge?: "profit" | "loss" | "unreachable";
             efficiency?: string;
         };
+        /** @description One price-ordered liquidation zone on a hunt cascade path */
+        LiquidationHuntCascadeStep: {
+            index?: number;
+            band?: components["schemas"]["LiquidationHuntBand"];
+            fromPrice?: string;
+            movePct?: string;
+            hopPct?: string;
+            zoneNotional?: string;
+            cumulativeNotional?: string;
+            standalone?: components["schemas"]["LiquidationHuntWalk"];
+            incremental?: components["schemas"]["LiquidationHuntWalk"];
+            remaining?: components["schemas"]["LiquidationHuntWalk"];
+            priorCascadeNotional?: string;
+            assistancePct?: string;
+            easier?: boolean;
+            selfFueling?: boolean;
+            reachable?: boolean;
+            note?: string;
+        };
+        /** @description Zones from last price outward; earlier estimated liquidations may cheapen later hops */
+        LiquidationHuntCascadePath: {
+            /** @enum {string} */
+            direction?: "up" | "down";
+            steps?: components["schemas"]["LiquidationHuntCascadeStep"][];
+            reachableCount?: number;
+            easierCount?: number;
+            selfFuelingCount?: number;
+            chainEasier?: boolean;
+            summary?: string;
+        };
         LiquidationHuntVenue: {
             exchange?: string;
             symbol?: string;
@@ -4263,13 +4295,15 @@ export interface components {
             }[];
             upHunt?: components["schemas"]["LiquidationHuntScenario"];
             downHunt?: components["schemas"]["LiquidationHuntScenario"];
+            upCascade?: components["schemas"]["LiquidationHuntCascadePath"];
+            downCascade?: components["schemas"]["LiquidationHuntCascadePath"];
             upScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
             error?: string;
         };
-        /** @description Hypothetical per-venue hunt plus directional ease scores */
+        /** @description Hypothetical per-venue hunt plus directional ease scores and cascade paths */
         LiquidationHunt: {
             symbol?: string;
             exchange?: string;

@@ -82,6 +82,37 @@ export type HuntWalk = {
   visibleNotional?: string;
 };
 
+export type HuntPanel = 'compare' | 'path';
+
+export type HuntCascadeStep = {
+  index?: number;
+  band?: HuntBand;
+  fromPrice?: string;
+  movePct?: string;
+  hopPct?: string;
+  zoneNotional?: string;
+  cumulativeNotional?: string;
+  standalone?: HuntWalk;
+  incremental?: HuntWalk;
+  remaining?: HuntWalk;
+  priorCascadeNotional?: string;
+  assistancePct?: string;
+  easier?: boolean;
+  selfFueling?: boolean;
+  reachable?: boolean;
+  note?: string;
+};
+
+export type HuntCascadePath = {
+  direction?: string;
+  steps?: HuntCascadeStep[];
+  reachableCount?: number;
+  easierCount?: number;
+  selfFuelingCount?: number;
+  chainEasier?: boolean;
+  summary?: string;
+};
+
 export type HuntScenario = {
   direction?: string;
   thesis?: string;
@@ -118,6 +149,8 @@ export type HuntVenue = {
   downPressure?: HuntBand[];
   upHunt?: HuntScenario;
   downHunt?: HuntScenario;
+  upCascade?: HuntCascadePath;
+  downCascade?: HuntCascadePath;
   upScore?: HuntDirectionScore;
   downScore?: HuntDirectionScore;
   bias?: HuntBias;
@@ -140,4 +173,6 @@ export type LiquidationHuntProps = {
   isLoading?: boolean;
   isFetching?: boolean;
   errorMessage?: string | null;
+  panel?: HuntPanel;
+  onPanelChange?: (panel: HuntPanel) => void;
 };

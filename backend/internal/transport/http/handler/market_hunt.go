@@ -63,6 +63,35 @@ type huntWalkDTO struct {
 	VisibleNotional   string `json:"visibleNotional"`
 }
 
+type huntCascadeStepDTO struct {
+	Index                int         `json:"index"`
+	Band                 huntBandDTO `json:"band"`
+	FromPrice            string      `json:"fromPrice"`
+	MovePct              string      `json:"movePct"`
+	HopPct               string      `json:"hopPct"`
+	ZoneNotional         string      `json:"zoneNotional"`
+	CumulativeNotional   string      `json:"cumulativeNotional"`
+	Standalone           huntWalkDTO `json:"standalone"`
+	Incremental          huntWalkDTO `json:"incremental"`
+	Remaining            huntWalkDTO `json:"remaining"`
+	PriorCascadeNotional string      `json:"priorCascadeNotional"`
+	AssistancePct        string      `json:"assistancePct"`
+	Easier               bool        `json:"easier"`
+	SelfFueling          bool        `json:"selfFueling"`
+	Reachable            bool        `json:"reachable"`
+	Note                 string      `json:"note"`
+}
+
+type huntCascadePathDTO struct {
+	Direction        string               `json:"direction"`
+	Steps            []huntCascadeStepDTO `json:"steps"`
+	ReachableCount   int                  `json:"reachableCount"`
+	EasierCount      int                  `json:"easierCount"`
+	SelfFuelingCount int                  `json:"selfFuelingCount"`
+	ChainEasier      bool                 `json:"chainEasier"`
+	Summary          string               `json:"summary"`
+}
+
 type huntScenarioDTO struct {
 	Direction           string      `json:"direction"`
 	Thesis              string      `json:"thesis"`
@@ -100,6 +129,8 @@ type huntVenueDTO struct {
 	Observed           []huntClusterDTO      `json:"observed"`
 	UpHunt             huntScenarioDTO       `json:"upHunt"`
 	DownHunt           huntScenarioDTO       `json:"downHunt"`
+	UpCascade          huntCascadePathDTO    `json:"upCascade"`
+	DownCascade        huntCascadePathDTO    `json:"downCascade"`
 	UpScore            huntDirectionScoreDTO `json:"upScore"`
 	DownScore          huntDirectionScoreDTO `json:"downScore"`
 	Bias               huntBiasDTO           `json:"bias"`
@@ -209,7 +240,7 @@ func huntToDTO(a *domain.HuntReport) huntResponse {
 	}
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. upCascade / downCascade list zones in price order and whether earlier estimated liquidations cheapen the next hop. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
 
 func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 	return huntVenueDTO{
@@ -232,6 +263,8 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		Observed:           huntClustersToDTO(v.Observed),
 		UpHunt:             huntScenarioToDTO(v.UpHunt),
 		DownHunt:           huntScenarioToDTO(v.DownHunt),
+		UpCascade:          huntCascadeToDTO(v.UpCascade),
+		DownCascade:        huntCascadeToDTO(v.DownCascade),
 		UpScore:            huntDirectionToDTO(v.UpScore),
 		DownScore:          huntDirectionToDTO(v.DownScore),
 		Bias:               huntBiasValueToDTO(v.Bias),
@@ -365,6 +398,39 @@ func huntClustersToDTO(in []domain.HuntCluster) []huntClusterDTO {
 		})
 	}
 	return out
+}
+
+func huntCascadeToDTO(p domain.HuntCascadePath) huntCascadePathDTO {
+	steps := make([]huntCascadeStepDTO, 0, len(p.Steps))
+	for _, s := range p.Steps {
+		steps = append(steps, huntCascadeStepDTO{
+			Index:                s.Index,
+			Band:                 firstBandDTO(s.Band),
+			FromPrice:            formatHistQty(s.FromPrice),
+			MovePct:              domain.FormatSignedPct(s.MovePct),
+			HopPct:               domain.FormatSignedPct(s.HopPct),
+			ZoneNotional:         formatHistQty(s.ZoneNotional),
+			CumulativeNotional:   formatHistQty(s.CumulativeNotional),
+			Standalone:           huntWalkToDTO(s.Standalone),
+			Incremental:          huntWalkToDTO(s.Incremental),
+			Remaining:            huntWalkToDTO(s.Remaining),
+			PriorCascadeNotional: formatHistQty(s.PriorCascadeNotional),
+			AssistancePct:        formatHistQty(s.AssistancePct),
+			Easier:               s.Easier,
+			SelfFueling:          s.SelfFueling,
+			Reachable:            s.Reachable,
+			Note:                 s.Note,
+		})
+	}
+	return huntCascadePathDTO{
+		Direction:        p.Direction,
+		Steps:            steps,
+		ReachableCount:   p.ReachableCount,
+		EasierCount:      p.EasierCount,
+		SelfFuelingCount: p.SelfFuelingCount,
+		ChainEasier:      p.ChainEasier,
+		Summary:          p.Summary,
+	}
 }
 
 func huntScenarioToDTO(s domain.HuntScenario) huntScenarioDTO {

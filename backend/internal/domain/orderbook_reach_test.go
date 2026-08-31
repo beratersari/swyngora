@@ -33,6 +33,34 @@ func TestWalkBookToPrice_SellAndExhausted(t *testing.T) {
 	}
 }
 
+func TestLevelsBeyond_BuyAndSell(t *testing.T) {
+	asks := []ImpactSourceLevel{{Price: 100.10, Quantity: 1}, {Price: 100.50, Quantity: 2}, {Price: 101, Quantity: 1}}
+	got := LevelsBeyond(ImpactSideBuy, asks, 100.50)
+	if len(got) != 1 || got[0].Price != 101 {
+		t.Fatalf("%+v", got)
+	}
+	bids := []ImpactSourceLevel{{Price: 99.90, Quantity: 1}, {Price: 99.50, Quantity: 1}, {Price: 99, Quantity: 1}}
+	down := LevelsBeyond(ImpactSideSell, bids, 99.50)
+	if len(down) != 1 || down[0].Price != 99 {
+		t.Fatalf("%+v", down)
+	}
+}
+
+func TestConsumeBookNotional_SplitsLevel(t *testing.T) {
+	lv := []ImpactSourceLevel{{Price: 10, Quantity: 2}, {Price: 11, Quantity: 4}}
+	end, left, spent := ConsumeBookNotional(lv, 20)
+	if end != 10 || spent != 20 || len(left) != 1 || left[0].Price != 11 || left[0].Quantity != 4 {
+		t.Fatalf("full first end=%v spent=%v left=%+v", end, spent, left)
+	}
+	end, left, spent = ConsumeBookNotional(lv, 25)
+	if end != 11 || spent != 25 || len(left) != 1 || left[0].Price != 11 {
+		t.Fatalf("partial end=%v spent=%v left=%+v", end, spent, left)
+	}
+	if left[0].Quantity < 3.54 || left[0].Quantity > 3.55 {
+		t.Fatalf("leftover qty %v", left[0].Quantity)
+	}
+}
+
 func TestWalkBookQuantity_Partial(t *testing.T) {
 	lv := []ImpactSourceLevel{{Price: 10, Quantity: 2}, {Price: 11, Quantity: 2}}
 	filled, spent, avg, end, exh := WalkBookQuantity(lv, 3)

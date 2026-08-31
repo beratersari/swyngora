@@ -79,6 +79,24 @@
       "title": "Skoru ne oynattı",
       "share": "karışımın %{{pct}}’i",
       "effect": "ortaya göre {{value}}"
+    },
+    "panels": {
+      "compare": "Karşılaştır",
+      "path": "Çığ yolu"
+    },
+    "path": {
+      "hint": "Bölgeler last fiyattan dışa doğru. Bir bölge tetiklenince tahmini likidasyonun bir kısmı bir sonraki adımı ucuzlatan çıkış akışı sayılır. Av ile aynı varsayımlar. Yalnızca bilgi amaçlıdır.",
+      "empty": "Görünür defterde çığ yolu yok.",
+      "step": "Bölge {{n}}",
+      "leverage": "{{lev}}x",
+      "fromLast": "Last’ten spot",
+      "hop": "Bu adım",
+      "afterCascade": "Önceki çığdan sonra",
+      "zoneLiq": "Bölgedeki tahmin",
+      "easier": "Daha kolay",
+      "selfFueling": "Kendi yürüyor",
+      "stillNeeds": "Masa gerekir",
+      "unreachable": "Ulaşılamaz"
     }
   },
   "chart": {

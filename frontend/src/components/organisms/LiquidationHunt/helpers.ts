@@ -1,12 +1,18 @@
 import type {
+  HuntCascadeStep,
   HuntCoverageLevel,
   HuntEase,
   HuntHouseEdge,
   HuntInputState,
   HuntLean,
+  HuntPanel,
   HuntScenario,
   HuntVenue,
 } from './LiquidationHunt.types';
+
+export function parseHuntPanel(raw?: string | null): HuntPanel {
+  return raw === 'path' ? 'path' : 'compare';
+}
 
 export function leanTone(lean?: HuntLean): 'up' | 'down' | 'even' {
   if (lean === 'up') return 'up';
@@ -180,6 +186,22 @@ function reachLabel(sc?: HuntScenario): string {
   if (sc.spot.exhausted) return 'Visible book only';
   if (sc.spot.reachable) return 'Reachable';
   return 'Unreachable';
+}
+
+export type PathStepTone = 'easier' | 'self' | 'needs' | 'unreachable';
+
+export function pathStepTone(step?: HuntCascadeStep): PathStepTone {
+  if (!step) return 'needs';
+  if (!step.reachable) return 'unreachable';
+  if (step.selfFueling) return 'self';
+  if (step.easier) return 'easier';
+  return 'needs';
+}
+
+export function pathLeverageLabel(step?: HuntCascadeStep): string | null {
+  const lev = parseNum(step?.band?.leverage);
+  if (lev == null || lev <= 0) return null;
+  return `${lev}x`;
 }
 
 function cheaperTone(

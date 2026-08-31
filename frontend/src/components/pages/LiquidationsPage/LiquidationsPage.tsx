@@ -47,6 +47,7 @@ import {
   parseLiqChartSymbol,
   parseLiqExchange,
   parseLiqSymbol,
+  parseLiqHuntPanel,
   parseLiqView,
   parseLiqWindow,
   type LiqPageExchange,
@@ -66,6 +67,7 @@ export function LiquidationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const visible = useDocumentVisible();
   const view = parseLiqView(searchParams.get('view'));
+  const huntPanel = parseLiqHuntPanel(searchParams.get('panel'));
   const windowId = parseLiqWindow(searchParams.get('window'));
   const exchange = parseLiqExchange(searchParams.get('exchange'));
   const symbol = parseLiqSymbol(searchParams.get('symbol'));
@@ -350,6 +352,8 @@ export function LiquidationsPage() {
             data={rtkCurrent(huntQuery)}
             isLoading={rtkCurrentPending(huntQuery)}
             isFetching={huntQuery.isFetching}
+            panel={huntPanel}
+            onPanelChange={(next) => patchParams({ panel: next === 'compare' ? null : next })}
             errorMessage={
               huntQuery.isError
                 ? rtkErrorMessage(huntQuery.error, {

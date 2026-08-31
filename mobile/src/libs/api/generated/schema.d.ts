@@ -500,12 +500,13 @@ export interface paths {
          * @description Long/short liquidation notional, count, and the biggest hit for the last
          *     **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
          *     (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
-         *     websocket streams. Totals only include events seen since this process
-         *     started. `coverageSeconds` / `complete` count only time the websocket
-         *     was actually connected for that coin and venue — they do not advance if
-         *     the stream never connects or drops. Combined `all` uses the shorter live
-         *     coverage of the venues watching that coin. `exchange=all` (default) sums
-         *     both venues. Informational only.
+         *     websocket streams. After a reconnect, each venue tries its own history
+         *     for the hole; overlapping live+history prints are counted once. Venues
+         *     stay separate. `coverageSeconds` / `complete` count live-socket time plus
+         *     history that filled a disconnect. Combined `all` uses the shorter coverage
+         *     of the venues watching that coin. `feed.gaps` lists still-unfilled holes
+         *     in the last 6h; `missingSeconds` is how much time is still missing. A
+         *     fully filled hole is omitted. Informational only.
          */
         get: operations["getMarketLiquidations"];
         put?: never;
@@ -1464,9 +1465,15 @@ export interface paths {
          *     liquidation pressure sits if price moves up or down, how much **spot**
          *     buying or selling the visible book needs to reach those areas, and a
          *     rough desk result (unwind on the current opposite side vs assuming
-         *     part of estimated liquidations become exit flow). Uses live spot book,
-         *     open interest, account long/short (blended toward 50/50), funding, and
-         *     recent liquidation prints. Leverage mix is assumed.
+         *     part of estimated liquidations become exit flow). Also scores which
+         *     direction looks easier or more likely (`upScore` / `downScore` plus
+         *     `bias`) from zone distance, visible book cost, price+OI trend,
+         *     crowding/funding, and recent taker / liquidation flow. `upCascade` /
+         *     `downCascade` list zones in price order and whether earlier estimated
+         *     liquidations cheapen the next hop. Uses live spot book, open interest,
+         *     account long/short (blended toward 50/50), funding, and recent
+         *     liquidation prints. Leverage mix is assumed. Direction scores and
+         *     cascade paths do not change the zone or P&L numbers.
          */
         get: operations["getMarketLiquidationHunt"];
         put?: never;
@@ -1887,9 +1894,14 @@ export interface paths {
          *     kind=price (default): last price above/below targetPrice. mode defaults to one_time.
          *     kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
          *     kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
-         *     Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
-         *     mode=repeating (default for book): fires on each new appearance; does not re-fire while the
-         *     condition stays true; re-arms when it clears. Informational only.
+         *     kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
+         *     targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+         *     kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
+         *     or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+         *     kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
+         *     default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
+         *     Repeating fires once when the wave crosses, stays quiet while that window stays above,
+         *     re-arms when it drops so a new wave can fire. Informational only.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -3885,9 +3897,9 @@ export interface components {
             totalNotional?: string;
             count?: number;
             biggest?: components["schemas"]["LiquidationHit"];
-            /** @description Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. */
+            /** @description Seconds the websocket was actually live for this coin+venue */
             coverageSeconds?: number;
-            /** @description False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. */
+            /** @description False until this coin+venue has had live or backfilled coverage for the full window. Combined is false unless both venues were covered for the whole window. */
             complete?: boolean;
         };
         LiquidationGap: {
@@ -4135,9 +4147,11 @@ export interface components {
         };
         /** @description How easy / likely one hunt direction looks (does not change zone math) */
         LiquidationHuntDirectionScore: {
+            /** @enum {string} */
             direction?: "up" | "down";
             /** @description 0–100 */
             score?: number;
+            /** @enum {string} */
             level?: "easier" | "likely" | "mixed" | "hard";
             /** @description 0–100 completeness of inputs used for this score */
             coverage?: number;
@@ -4147,16 +4161,17 @@ export interface components {
         LiquidationHuntInputStatus: {
             id?: string;
             label?: string;
+            /** @enum {string} */
             status?: "ok" | "weak" | "missing" | "error";
             weight?: number;
             detail?: string;
-            /** @description Collected span, e.g. 18m */
+            /** @description Collected span */
             have?: string;
-            /** @description Requested window, e.g. 1h */
+            /** @description Requested window */
             need?: string;
             /** @description 0–100 of the requested lookback */
             coverPct?: number;
-            /** @description How old the sample is when it is not the requested window, e.g. 2h */
+            /** @description How old the sample is when it is not the requested window */
             age?: string;
             /** @description True when an older print was found instead of the requested 1h/4h sample */
             stale?: boolean;
@@ -4165,6 +4180,7 @@ export interface components {
         LiquidationHuntCoverage: {
             /** @description 0–100 */
             score?: number;
+            /** @enum {string} */
             level?: "complete" | "usable" | "thin" | "insufficient";
             usable?: boolean;
             inputs?: components["schemas"]["LiquidationHuntInputStatus"][];
@@ -4173,6 +4189,7 @@ export interface components {
             summary?: string;
         };
         LiquidationHuntBias: {
+            /** @enum {string} */
             lean?: "up" | "down" | "even";
             margin?: number;
             upScore?: number;
@@ -4205,6 +4222,7 @@ export interface components {
             visibleNotional?: string;
         };
         LiquidationHuntScenario: {
+            /** @enum {string} */
             direction?: "up" | "down";
             thesis?: string;
             target?: components["schemas"]["LiquidationHuntBand"];
@@ -4217,8 +4235,39 @@ export interface components {
             fees?: string;
             netBookOnly?: string;
             netWithCascade?: string;
+            /** @enum {string} */
             houseEdge?: "profit" | "loss" | "unreachable";
             efficiency?: string;
+        };
+        /** @description One price-ordered liquidation zone on a hunt cascade path */
+        LiquidationHuntCascadeStep: {
+            index?: number;
+            band?: components["schemas"]["LiquidationHuntBand"];
+            fromPrice?: string;
+            movePct?: string;
+            hopPct?: string;
+            zoneNotional?: string;
+            cumulativeNotional?: string;
+            standalone?: components["schemas"]["LiquidationHuntWalk"];
+            incremental?: components["schemas"]["LiquidationHuntWalk"];
+            remaining?: components["schemas"]["LiquidationHuntWalk"];
+            priorCascadeNotional?: string;
+            assistancePct?: string;
+            easier?: boolean;
+            selfFueling?: boolean;
+            reachable?: boolean;
+            note?: string;
+        };
+        /** @description Zones from last price outward; earlier estimated liquidations may cheapen later hops */
+        LiquidationHuntCascadePath: {
+            /** @enum {string} */
+            direction?: "up" | "down";
+            steps?: components["schemas"]["LiquidationHuntCascadeStep"][];
+            reachableCount?: number;
+            easierCount?: number;
+            selfFuelingCount?: number;
+            chainEasier?: boolean;
+            summary?: string;
         };
         LiquidationHuntVenue: {
             exchange?: string;
@@ -4246,16 +4295,19 @@ export interface components {
             }[];
             upHunt?: components["schemas"]["LiquidationHuntScenario"];
             downHunt?: components["schemas"]["LiquidationHuntScenario"];
+            upCascade?: components["schemas"]["LiquidationHuntCascadePath"];
+            downCascade?: components["schemas"]["LiquidationHuntCascadePath"];
             upScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
             error?: string;
         };
-        /** @description Hypothetical per-venue hunt plus directional ease scores */
+        /** @description Hypothetical per-venue hunt plus directional ease scores and cascade paths */
         LiquidationHunt: {
             symbol?: string;
             exchange?: string;
+            /** Format: date-time */
             asOf?: string;
             assumptions?: {
                 [key: string]: unknown;
@@ -4832,7 +4884,7 @@ export interface components {
             symbol?: string;
             /** @enum {string} */
             kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-            /** @description price/imbalance above|below; wall bid|ask|any */
+            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
             condition?: string;
             targetPrice?: number;
             /** @description Analysis band for imbalance/wall alerts */
@@ -8498,20 +8550,22 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /**
+                     * @description Spot venues
                      * @default binance
-                     * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                    exchange?: string;
                     symbol: string;
                     /**
                      * @default price
                      * @enum {string}
                      */
                     kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-                    /** @description price/imbalance above|below; wall bid|ask|any */
+                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
                     condition: string;
-                    /** @description Price target, |imbalance| threshold, or wall min share (0 = any detected wall) */
+                    /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), or liquidation_notional USDT amount */
                     targetPrice?: number;
+                    /** @description liquidation_notional lookback 1m|5m|15m|1h (default 5m) */
+                    window?: string;
                     /** @description ±% of mid for live book analysis (0.25–10, default 2; book kinds only) */
                     rangePct?: number;
                     /**

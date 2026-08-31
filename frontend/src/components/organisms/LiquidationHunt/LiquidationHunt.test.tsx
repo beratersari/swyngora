@@ -70,6 +70,45 @@ const sample: HuntReport = {
         netWithCascade: '-40000',
         houseEdge: 'loss',
       },
+      upCascade: {
+        direction: 'up',
+        summary: '3 short liquidations above zones (2 reachable). Hitting earlier zones cheapens 1 later hop(s).',
+        chainEasier: true,
+        steps: [
+          {
+            index: 1,
+            band: { price: '64256', leverage: '125', movePct: '+0.40' },
+            zoneNotional: '800000',
+            standalone: { notional: '180000', reachable: true },
+            reachable: true,
+            note: 'First zone from last price.',
+          },
+          {
+            index: 2,
+            band: { price: '64384', leverage: '100', movePct: '+0.60' },
+            hopPct: '+0.20',
+            zoneNotional: '2100000',
+            incremental: { notional: '90000', reachable: true },
+            remaining: { notional: '40000', reachable: true },
+            easier: true,
+            assistancePct: '56',
+            note: 'Triggering the previous zone covers about 56% of this hop.',
+          },
+        ],
+      },
+      downCascade: {
+        direction: 'down',
+        summary: '2 long liquidations below zones.',
+        steps: [
+          {
+            index: 1,
+            band: { price: '63744', leverage: '125', movePct: '-0.40' },
+            zoneNotional: '700000',
+            standalone: { notional: '220000', reachable: true },
+            reachable: true,
+          },
+        ],
+      },
     },
   ],
 };
@@ -90,6 +129,17 @@ describe('LiquidationHunt', () => {
     expect(screen.getByText(/2h old \/ 1h/i)).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('+6.6');
     expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('Crowding + funding');
+    expect(screen.queryByTestId('liquidation-hunt-path-up')).not.toBeInTheDocument();
+  });
+
+  it('opens the cascade path subview without the compare scores', async () => {
+    renderWithTheme(<LiquidationHunt data={sample} panel="path" />);
+    expect(await screen.findByTestId('liquidation-hunt-path-up')).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-path-down')).toBeInTheDocument();
+    expect(screen.queryByTestId('liquidation-hunt-up')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('liquidation-hunt-path-step').length).toBe(3);
+    expect(screen.getByText(/56% of this hop/i)).toBeInTheDocument();
+    expect(screen.getByText(/first zone from last price/i)).toBeInTheDocument();
   });
 
   it('marks an unusable venue as excluded', async () => {

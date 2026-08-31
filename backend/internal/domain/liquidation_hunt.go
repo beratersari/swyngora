@@ -126,6 +126,8 @@ type HuntVenueReport struct {
 	Observed           []HuntCluster      `json:"observed"`
 	UpHunt             HuntScenario       `json:"upHunt"`
 	DownHunt           HuntScenario       `json:"downHunt"`
+	UpCascade          HuntCascadePath    `json:"upCascade"`
+	DownCascade        HuntCascadePath    `json:"downCascade"`
 	UpScore            HuntDirectionScore `json:"upScore"`
 	DownScore          HuntDirectionScore `json:"downScore"`
 	Bias               HuntBias           `json:"bias"`
@@ -412,6 +414,8 @@ func BuildHuntVenue(in HuntInputs) HuntVenueReport {
 	out.DownHunt = buildHuntScenario("down",
 		"Sell spot to push price down, liquidate longs, then buy back cheaper.",
 		out.DownPressure, in.Price, in.Bids, in.Asks, ImpactSideSell)
+	out.UpCascade = BuildHuntCascadePath("up", up, in.Price, in.Asks, ImpactSideBuy)
+	out.DownCascade = BuildHuntCascadePath("down", down, in.Price, in.Bids, ImpactSideSell)
 	return out
 }
 

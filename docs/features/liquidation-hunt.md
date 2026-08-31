@@ -34,6 +34,7 @@ Each venue report includes:
 | `houseEdge` | `profit` / `loss` / `unreachable` from `netWithCascade` |
 | `efficiency` | estimated liquidated notional ÷ spot notional |
 | `upScore` / `downScore` | 0–100 ease / likelihood for that direction, with `level`, `coverage`, `factors`, and `reasons` |
+| `upCascade` / `downCascade` | Zones in price order from last outward: distance, estimated liq in the zone, hop cost, and whether earlier estimated liquidations cheapen the next hop (`easier` / `selfFueling`) |
 | `coverage` | How complete the inputs are (`complete` / `usable` / `thin` / `insufficient`); `usable=false` venues are shown but **not** mixed into combined `bias` |
 | `bias` | `up` / `down` / `even` plus a one-line summary (venue and report-level). Combined lists `included` / `excluded` venues |
 
@@ -56,7 +57,28 @@ Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.in
 
 `level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
 
-Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, spot cost, estimated liq, efficiency, desk result, and reasons.
+Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, spot cost, estimated liq, efficiency, desk result, and reasons. Cascade path is a Hunt sub-tab (`?view=hunt&panel=path`) so the compare view stays uncluttered.
+
+### Cascade path
+
+`venues[].upCascade` / `downCascade` walk the **same** modeled (+ observed) zones from last price outward (closest first). They do **not** change hunt P&L or direction scores.
+
+Each step:
+
+| Field | Meaning |
+|---|---|
+| `band` | That zone (leverage / side / price) |
+| `movePct` | Distance from last |
+| `hopPct` | Distance from the previous zone |
+| `zoneNotional` | Estimated liquidation in this band only (`EstNotional`) |
+| `cumulativeNotional` | Estimated liquidation from last through this band |
+| `standalone` | Visible spot walk from last to this price (no chain help) |
+| `incremental` | Visible spot walk from the previous zone to this one |
+| `remaining` | Incremental walk after `HuntCascadeFillRate` of earlier `EstNotional` is applied as assumed exit flow |
+| `easier` | Remaining hop is cheaper than walking it without prior cascade |
+| `selfFueling` | Prior assumed exit flow already walks through this zone |
+
+Observed-only clusters are shown but **not** used as fuel for the next hop. One venue is never filled from the other.
 
 ### Assumptions (also returned on `assumptions`)
 
@@ -76,11 +98,11 @@ Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, 
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_cascade.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
 | Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
 | HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
 | MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
-| Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt`; `/liquidations?view=heatmap` — `LiquidationHeatmap` |
+| Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt` (Compare + Cascade path); `/liquidations?view=heatmap` — `LiquidationHeatmap` |
 
 ## How to verify
 
@@ -90,8 +112,9 @@ curl "http://localhost:8080/api/v1/market/liquidation-hunt?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h"
 ```
 
-Read `venues[].upHunt` and `venues[].downHunt`. Treat `houseEdge` as a model
-output, not a claim about any exchange.
+Read `venues[].upHunt` / `downHunt` and `venues[].upCascade` / `downCascade`.
+Treat `houseEdge` and path `easier` / `selfFueling` as model output, not a
+claim about any exchange.
 
 ## Price × time heatmap
 

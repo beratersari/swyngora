@@ -71,6 +71,66 @@ func WalkBookToPrice(side string, mid float64, levels []ImpactSourceLevel, targe
 	return out
 }
 
+// LevelsBeyond keeps depth strictly past fromPrice (asks above, bids below).
+func LevelsBeyond(side string, levels []ImpactSourceLevel, fromPrice float64) []ImpactSourceLevel {
+	if fromPrice <= 0 {
+		return levels
+	}
+	buy := side != ImpactSideSell
+	out := make([]ImpactSourceLevel, 0, len(levels))
+	for _, lv := range levels {
+		if lv.Price <= 0 || lv.Quantity <= 0 {
+			continue
+		}
+		if buy && lv.Price > fromPrice {
+			out = append(out, lv)
+		}
+		if !buy && lv.Price < fromPrice {
+			out = append(out, lv)
+		}
+	}
+	return out
+}
+
+// ConsumeBookNotional walks quote value off the front of the book and returns
+// leftover levels (a partially eaten first leftover level is kept).
+func ConsumeBookNotional(levels []ImpactSourceLevel, notional float64) (endPrice float64, leftover []ImpactSourceLevel, spent float64) {
+	leftover = levels
+	if notional <= 0 || len(levels) == 0 {
+		return 0, leftover, 0
+	}
+	remain := notional
+	for i, lv := range levels {
+		if lv.Price <= 0 || lv.Quantity <= 0 {
+			continue
+		}
+		if remain <= 1e-12 {
+			leftover = levels[i:]
+			return endPrice, leftover, spent
+		}
+		levelN := lv.Price * lv.Quantity
+		if remain >= levelN-1e-12 {
+			spent += levelN
+			remain -= levelN
+			endPrice = lv.Price
+			leftover = levels[i+1:]
+			continue
+		}
+		takeQty := remain / lv.Price
+		spent += remain
+		endPrice = lv.Price
+		rest := lv
+		rest.Quantity = lv.Quantity - takeQty
+		if rest.Quantity < 1e-12 {
+			leftover = levels[i+1:]
+		} else {
+			leftover = append([]ImpactSourceLevel{rest}, levels[i+1:]...)
+		}
+		return endPrice, leftover, spent
+	}
+	return endPrice, leftover, spent
+}
+
 // WalkBookQuantity takes a fixed base size from the same ordered levels.
 func WalkBookQuantity(levels []ImpactSourceLevel, quantity float64) (filled, spent, avg, end float64, exhausted bool) {
 	if quantity <= 0 {

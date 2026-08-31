@@ -1,4 +1,5 @@
-import { Alert } from 'antd';
+import { useState } from 'react';
+import { Alert, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
@@ -12,6 +13,9 @@ import {
   inputSpanText,
   inputTone,
   leanTone,
+  parseHuntPanel,
+  pathLeverageLabel,
+  pathStepTone,
   scoreValue,
   venueLabel,
 } from './helpers';
@@ -36,6 +40,13 @@ import {
   MetricTable,
   MetricValue,
   Panel,
+  PanelSwitch,
+  PathChip,
+  PathIndex,
+  PathList,
+  PathMeta,
+  PathStep,
+  PathStepHead,
   ReasonItem,
   ReasonList,
   ScoreBar,
@@ -50,19 +61,34 @@ import {
   VenueStack,
 } from './LiquidationHunt.styles';
 import type {
+  HuntCascadePath,
+  HuntCascadeStep,
   HuntCoverage,
   HuntDirectionScore,
+  HuntPanel,
   HuntVenue,
   LiquidationHuntProps,
 } from './LiquidationHunt.types';
 
-export function LiquidationHunt({ data, isLoading, errorMessage }: LiquidationHuntProps) {
+export function LiquidationHunt({
+  data,
+  isLoading,
+  errorMessage,
+  panel,
+  onPanelChange,
+}: LiquidationHuntProps) {
   const { t } = useTranslation(['liquidations', 'common']);
   const { formatCompact, formatPrice } = useDisplayCurrency();
   const money = (v: string | number | null | undefined) => formatCompact(v, 'USDT');
   const px = (v: string | number | null | undefined) => formatPrice(v, 'USDT');
   const venues = data?.venues ?? [];
   const lean = leanTone(data?.bias?.lean);
+  const [localPanel, setLocalPanel] = useState<HuntPanel>('compare');
+  const activePanel = panel ?? localPanel;
+  const setPanel = (next: HuntPanel) => {
+    if (onPanelChange) onPanelChange(next);
+    else setLocalPanel(next);
+  };
   const metricLabels: Record<string, string> = {
     target: t('liquidations:hunt.metrics.target'),
     spot: t('liquidations:hunt.metrics.spot'),
@@ -85,11 +111,23 @@ export function LiquidationHunt({ data, isLoading, errorMessage }: LiquidationHu
     <Panel data-testid="liquidation-hunt">
       {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
 
+      <PanelSwitch>
+        <Segmented
+          size="small"
+          value={activePanel}
+          onChange={(next) => setPanel(parseHuntPanel(String(next)))}
+          options={[
+            { value: 'compare', label: t('liquidations:hunt.panels.compare') },
+            { value: 'path', label: t('liquidations:hunt.panels.path') },
+          ]}
+        />
+      </PanelSwitch>
+
       <Banner $tone={lean}>
         <BannerTitle>{data?.bias?.summary || t('liquidations:hunt.empty')}</BannerTitle>
         <CoverageStrip coverage={data?.coverage ?? data?.bias?.coverage} />
         <Text variant="bodySm" color="secondary">
-          {t('liquidations:hunt.hint')}
+          {t(activePanel === 'path' ? 'liquidations:hunt.path.hint' : 'liquidations:hunt.hint')}
         </Text>
       </Banner>
 
@@ -107,6 +145,7 @@ export function LiquidationHunt({ data, isLoading, errorMessage }: LiquidationHu
               formatPx={px}
               metricLabels={metricLabels}
               winner={leanTone(venue.bias?.lean ?? data?.bias?.lean)}
+              panel={activePanel}
             />
           ))}
         </VenueStack>
@@ -123,12 +162,14 @@ function VenueCard({
   formatPx,
   metricLabels,
   winner,
+  panel,
 }: {
   venue: HuntVenue;
   money: (v: string | number | null | undefined) => string;
   formatPx: (v: string | number | null | undefined) => string;
   metricLabels: Record<string, string>;
   winner: 'up' | 'down' | 'even';
+  panel: HuntPanel;
 }) {
   const { t } = useTranslation(['liquidations', 'common']);
   const rows = compareRows(venue, money);
@@ -155,6 +196,24 @@ function VenueCard({
       </VenueHead>
       <CoverageStrip coverage={venue.coverage} excluded={!venue.coverage?.usable || Boolean(venue.error)} />
       {venue.error ? <Alert type="warning" showIcon message={venue.error} /> : null}
+      {panel === 'path' ? (
+        <CompareGrid>
+          <PathCard
+            side="up"
+            title={t('liquidations:hunt.upTitle')}
+            path={venue.upCascade}
+            money={money}
+            formatPx={formatPx}
+          />
+          <PathCard
+            side="down"
+            title={t('liquidations:hunt.downTitle')}
+            path={venue.downCascade}
+            money={money}
+            formatPx={formatPx}
+          />
+        </CompareGrid>
+      ) : (
       <CompareGrid>
         <DirectionCard
           side="up"
@@ -175,7 +234,106 @@ function VenueCard({
           metricLabels={metricLabels}
         />
       </CompareGrid>
+      )}
     </VenueBlock>
+  );
+}
+
+function PathCard({
+  side,
+  title,
+  path,
+  money,
+  formatPx,
+}: {
+  side: 'up' | 'down';
+  title: string;
+  path?: HuntCascadePath;
+  money: (v: string | number | null | undefined) => string;
+  formatPx: (v: string | number | null | undefined) => string;
+}) {
+  const { t } = useTranslation('liquidations');
+  const steps = path?.steps ?? [];
+  return (
+    <SideCard $side={side} data-testid={`liquidation-hunt-path-${side}`}>
+      <SideHead>
+        <div>
+          <Text variant="h4">{title}</Text>
+          <Text variant="caption" color="secondary">
+            {path?.summary || t('hunt.path.empty')}
+          </Text>
+        </div>
+      </SideHead>
+      {steps.length === 0 ? (
+        <Text variant="bodySm" color="secondary">
+          {t('hunt.path.empty')}
+        </Text>
+      ) : (
+        <PathList>
+          {steps.map((step) => (
+            <PathStepRow key={step.index ?? step.band?.price} step={step} money={money} formatPx={formatPx} />
+          ))}
+        </PathList>
+      )}
+    </SideCard>
+  );
+}
+
+function PathStepRow({
+  step,
+  money,
+  formatPx,
+}: {
+  step: HuntCascadeStep;
+  money: (v: string | number | null | undefined) => string;
+  formatPx: (v: string | number | null | undefined) => string;
+}) {
+  const { t } = useTranslation('liquidations');
+  const tone = pathStepTone(step);
+  const lev = pathLeverageLabel(step);
+  const chip =
+    tone === 'self'
+      ? t('hunt.path.selfFueling')
+      : tone === 'easier'
+        ? t('hunt.path.easier')
+        : tone === 'unreachable'
+          ? t('hunt.path.unreachable')
+          : t('hunt.path.stillNeeds');
+  return (
+    <PathStep $tone={tone} data-testid="liquidation-hunt-path-step">
+      <PathStepHead>
+        <PathIndex>
+          {t('hunt.path.step', { n: step.index ?? 0 })}
+          {lev ? ` · ${t('hunt.path.leverage', { lev: lev.replace('x', '') })}` : ''}
+        </PathIndex>
+        <PathChip $tone={tone}>{chip}</PathChip>
+      </PathStepHead>
+      <Text variant="bodySm">
+        {formatPx(step.band?.price)}
+        {step.movePct ? ` (${step.movePct})` : ''}
+      </Text>
+      <PathMeta>
+        <MetricLabel>{t('hunt.path.zoneLiq')}</MetricLabel>
+        <MetricValue>{money(step.zoneNotional)}</MetricValue>
+        <MetricLabel>{t('hunt.path.fromLast')}</MetricLabel>
+        <MetricValue>{money(step.standalone?.notional)}</MetricValue>
+        {(step.index ?? 0) > 1 ? (
+          <>
+            <MetricLabel>{t('hunt.path.hop')}</MetricLabel>
+            <MetricValue>{money(step.incremental?.notional)}</MetricValue>
+            <MetricLabel>{t('hunt.path.afterCascade')}</MetricLabel>
+            <MetricValue $tone={tone === 'easier' || tone === 'self' ? 'profit' : 'muted'}>
+              {step.selfFueling ? t('hunt.path.selfFueling') : money(step.remaining?.notional)}
+            </MetricValue>
+          </>
+        ) : null}
+      </PathMeta>
+      {step.note ? (
+        <Text variant="caption" color="secondary">
+          {step.note}
+        </Text>
+      ) : null}
+    </PathStep>
   );
 }
 

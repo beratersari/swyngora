@@ -8,6 +8,9 @@ import {
   inputSpanText,
   inputTone,
   leanTone,
+  parseHuntPanel,
+  pathLeverageLabel,
+  pathStepTone,
   scoreValue,
   venueLabel,
 } from './helpers';
@@ -53,5 +56,16 @@ describe('LiquidationHunt helpers', () => {
     const rows = compareRows(venue, (v) => String(v ?? '—'));
     expect(rows.find((r) => r.id === 'spot')?.upTone).toBe('up');
     expect(rows.find((r) => r.id === 'desk')?.downTone).toBe('loss');
+  });
+
+  it('parses the hunt panel and path step tones', () => {
+    expect(parseHuntPanel('path')).toBe('path');
+    expect(parseHuntPanel('compare')).toBe('compare');
+    expect(parseHuntPanel(null)).toBe('compare');
+    expect(pathStepTone({ reachable: false })).toBe('unreachable');
+    expect(pathStepTone({ reachable: true, selfFueling: true })).toBe('self');
+    expect(pathStepTone({ reachable: true, easier: true })).toBe('easier');
+    expect(pathStepTone({ reachable: true })).toBe('needs');
+    expect(pathLeverageLabel({ band: { leverage: '125' } })).toBe('125x');
   });
 });

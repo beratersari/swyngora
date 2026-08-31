@@ -290,6 +290,82 @@ export const FactorShare = styled.span`
   color: ${({ theme }) => theme.semantic.text.secondary};
 `;
 
+export const PanelSwitch = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+`;
+
+export const PathList = styled.ol`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+export const PathStep = styled.li<{ $tone: 'easier' | 'self' | 'needs' | 'unreachable' }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid
+    ${({ theme, $tone }) =>
+      $tone === 'easier' || $tone === 'self'
+        ? theme.semantic.status.success
+        : $tone === 'unreachable'
+          ? theme.semantic.border.danger
+          : theme.semantic.border.default};
+  background: ${({ theme, $tone }) =>
+    $tone === 'easier' || $tone === 'self'
+      ? theme.semantic.bg.successSoft
+      : $tone === 'unreachable'
+        ? theme.semantic.bg.dangerSoft
+        : theme.semantic.bg.canvas};
+`;
+
+export const PathStepHead = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+`;
+
+export const PathIndex = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: ${({ theme }) => theme.semantic.text.secondary};
+`;
+
+export const PathChip = styled.span<{ $tone: 'easier' | 'self' | 'needs' | 'unreachable' }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.semantic.text.primary};
+  background: ${({ theme, $tone }) =>
+    $tone === 'easier' || $tone === 'self'
+      ? theme.semantic.bg.successSoft
+      : $tone === 'unreachable'
+        ? theme.semantic.bg.dangerSoft
+        : theme.semantic.bg.accentMuted};
+`;
+
+export const PathMeta = styled.div`
+  display: grid;
+  grid-template-columns: minmax(88px, 36%) 1fr;
+  gap: 2px 10px;
+`;
+
 export const InputPill = styled.li<{ $tone: 'ok' | 'weak' | 'missing' | 'error' }>`
   display: inline-flex;
   align-items: center;

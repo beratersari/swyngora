@@ -79,6 +79,24 @@
       "title": "What moved the score",
       "share": "{{pct}}% of mix",
       "effect": "{{value}} vs even"
+    },
+    "panels": {
+      "compare": "Compare",
+      "path": "Cascade path"
+    },
+    "path": {
+      "hint": "Zones from last price outward. After a zone is hit, part of its estimated liquidations is treated as exit flow that can cheapen the next hop. Same assumptions as the hunt. Informational only.",
+      "empty": "No cascade path on the visible book.",
+      "step": "Zone {{n}}",
+      "leverage": "{{lev}}x",
+      "fromLast": "Spot from last",
+      "hop": "This hop",
+      "afterCascade": "After prior cascade",
+      "zoneLiq": "Est. in zone",
+      "easier": "Easier",
+      "selfFueling": "Self-fueling",
+      "stillNeeds": "Needs desk",
+      "unreachable": "Unreachable"
     }
   },
   "chart": {

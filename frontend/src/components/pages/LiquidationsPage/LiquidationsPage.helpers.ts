@@ -1,13 +1,19 @@
+import type { HuntPanel } from '@/components/organisms/LiquidationHunt/LiquidationHunt.types';
 import { isCardWindow, type LiqCardWindowId } from '@/components/organisms/LiquidationWindowCards';
 import { DEFAULT_LIQ_SYMBOL, DEFAULT_LIQ_WINDOW } from './LiquidationsPage.constants';
 
 export type LiqPageView = 'overview' | 'heatmap' | 'chart' | 'cascade' | 'hunt';
 export type LiqPageExchange = 'all' | 'binance' | 'bybit';
 export type LiqChartRange = '12h' | '24h';
+export type LiqHuntPanel = HuntPanel;
 
 export function parseLiqView(raw: string | null): LiqPageView {
   if (raw === 'heatmap' || raw === 'chart' || raw === 'cascade' || raw === 'hunt') return raw;
   return 'overview';
+}
+
+export function parseLiqHuntPanel(raw: string | null): LiqHuntPanel {
+  return raw === 'path' ? 'path' : 'compare';
 }
 
 export function parseLiqCascadeSymbol(raw: string | null): string {
