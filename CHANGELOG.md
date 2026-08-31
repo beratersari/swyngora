@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **No query-string API secrets:** `?token=` / `?apiKey=` no longer authenticate any HTTP route. Browsers mint a 60s one-time ticket (`POST /api/v1/realtime/ticket`) and pass `?ticket=` on the WebSocket only.
+- **Remote master token cannot impersonate tenants:** unless `ALLOW_MASTER_IMPERSONATE=true` or the peer is loopback, the process master token cannot select an arbitrary `clientId` for tenant APIs or MCP tools. First-key bootstrap (`POST /api/v1/account/api-keys` when that client has zero keys) still works.
+- **AI tenant bind fails closed:** overlapping chats no longer inherit another session's `clientId` / `can_trade` or progress callback when ContextVars are missing.
+- **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
+
 ### Added
 - **Liquidation alert subscribe + window fill:** creating a coin liquidation alert watches that pair immediately (Bybit subscribe) and fills the last window from that venue's history so a 5m notional alert does not wait 5 minutes. Overlapping live and history prints count once (`docs/features/price-alerts.md`)
 - **Liquidation alerts:** repeating `liquidation_feed` (venue down/stalled longer than N seconds), `liquidation_cascade` (min grade on a coin or `symbol=all`), and `liquidation_notional` (long/short/total USDT in 1m/5m/15m/1h on Binance, Bybit, or both). Same edge machine — one fire per wave, quiet while still true, re-arm when the feed is live, the cascade ends, or the window drops below the dollar line (`POST /api/v1/alerts`, MCP `create_liquidation_*_alert`) (`docs/features/price-alerts.md`)
@@ -47,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **RSI heatmap hover and aspect:** the scatter keeps a 1:1 plot (dots stay circular) and the card only appears when the pointer is on a coin, not in empty space (`docs/features/rsi-heatmap.md`)
 - **Recurring buy maxPrice race:** PATCH of maxPrice / pause / budget / end takes the same book lock as the fill and the live plan is re-read inside that lock immediately before the cash debit, so an in-flight worker cannot buy with the old limit (`docs/features/recurring-buys.md`)
 - **Recurring buy budget cash:** `spent` is slipped fill plus taker fee (wallet debit), not raw order notional (`docs/features/recurring-buys.md`)
 - **Recurring buy spent vs fill:** trade, `spent`, and the succeeded run commit in one transaction so a failed spent update cannot leave budget uncounted; the same period cannot increment `spent` twice (`docs/features/recurring-buys.md`)

@@ -8,7 +8,7 @@ from swyngora_ai.config import Settings
 from swyngora_ai.tools.market_http import build_market_tools
 
 
-def test_finding11_mutating_tool_allowed_when_can_trade_defaults_true(monkeypatch):
+def test_finding11_unbound_mutating_tool_is_denied(monkeypatch):
     posted: list[str] = []
 
     class _Transport(httpx.BaseTransport):
@@ -25,9 +25,10 @@ def test_finding11_mutating_tool_allowed_when_can_trade_defaults_true(monkeypatc
 
     monkeypatch.setattr(httpx, "Client", fake_client)
     tools = {t.name: t for t in build_market_tools(Settings(api_base_url="http://test"))}
-    # No bind_tool_scope — ContextVar default is True (CLI / missing flags).
+    # No bind — unbound workers must fail closed (not inherit another chat).
     out = tools["place_portfolio_order"].invoke(
         {"client_id": "c1", "symbol": "BTCUSDT", "side": "buy", "quantity": 1}
     )
-    assert "403" not in out
-    assert any("portfolio" in p for p in posted)
+    assert "403" in out
+    assert "read-only" in out
+    assert not posted

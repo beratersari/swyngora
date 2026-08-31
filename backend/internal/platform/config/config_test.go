@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -233,6 +235,40 @@ func TestTelegramDisabledByDefault(t *testing.T) {
 	cfg := Load()
 	if cfg.TelegramBotToken != "" {
 		t.Fatal("expected empty token")
+	}
+}
+
+func TestLoadDotEnv_DoesNotOverrideEmptyEnv(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, ".env")
+	if err := os.WriteFile(p, []byte("TELEGRAM_BOT_TOKEN=from-file\nAPI_AUTH_TOKEN=file-master\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TELEGRAM_BOT_TOKEN", "")
+	t.Setenv("API_AUTH_TOKEN", "already-set")
+	LoadDotEnv(p)
+	if os.Getenv("TELEGRAM_BOT_TOKEN") != "" {
+		t.Fatalf("empty env was overwritten: %q", os.Getenv("TELEGRAM_BOT_TOKEN"))
+	}
+	if os.Getenv("API_AUTH_TOKEN") != "already-set" {
+		t.Fatalf("set env overwritten: %q", os.Getenv("API_AUTH_TOKEN"))
+	}
+	t.Setenv("UNSET_DOTENV_KEY", "")
+	os.Unsetenv("UNSET_DOTENV_KEY")
+	if err := os.WriteFile(p, []byte("UNSET_DOTENV_KEY=from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	LoadDotEnv(p)
+	if os.Getenv("UNSET_DOTENV_KEY") != "from-file" {
+		t.Fatalf("unset key not loaded: %q", os.Getenv("UNSET_DOTENV_KEY"))
+	}
+}
+
+func TestLoad_AllowMasterImpersonate(t *testing.T) {
+	t.Setenv("ALLOW_MASTER_IMPERSONATE", "true")
+	cfg := Load()
+	if !cfg.AllowMasterImpersonate {
+		t.Fatal("want AllowMasterImpersonate true")
 	}
 }
 

@@ -56,8 +56,10 @@ def emit(event_type: str, text: str = "", **extra: Any) -> None:
     cb = _progress_cb.get()
     if cb is None:
         with _stack_lock:
-            if _callback_stack:
-                cb = _callback_stack[-1]
+            # Recover only when exactly one chat is in flight. Two or more
+            # overlapping chats must not inherit the other user's callback.
+            if len(_callback_stack) == 1:
+                cb = _callback_stack[0]
     if cb is None:
         return
     payload: dict[str, Any] = {"type": event_type, "text": text}

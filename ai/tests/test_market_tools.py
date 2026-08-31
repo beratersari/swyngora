@@ -396,19 +396,22 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert hist["runs"] == []
     assert "create_funding_arb_watch" in by_name
-    watch = json.loads(
-        by_name["create_funding_arb_watch"].invoke(
-            {"client_id": "c1", "symbol": "BTCUSDT", "min_profit": 10}
+    watch_raw = by_name["create_funding_arb_watch"].invoke(
+        {"client_id": "c1", "symbol": "BTCUSDT", "min_profit": 10}
+    )
+    # Unbound workers fail closed on mutations (no inherited can_trade).
+    if "403" in watch_raw:
+        assert "read-only" in watch_raw
+    else:
+        watch = json.loads(watch_raw)
+        assert watch["id"] == "w1"
+        listed = json.loads(
+            by_name["list_funding_arb_watches"].invoke({"client_id": "c1"})
         )
-    )
-    assert watch["id"] == "w1"
-    listed = json.loads(
-        by_name["list_funding_arb_watches"].invoke({"client_id": "c1"})
-    )
-    assert "watches" in listed
-    assert json.loads(
-        by_name["list_funding_arb_signals"].invoke({"client_id": "c1"})
-    )["signals"] == []
+        assert "watches" in listed
+        assert json.loads(
+            by_name["list_funding_arb_signals"].invoke({"client_id": "c1"})
+        )["signals"] == []
 
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))

@@ -159,6 +159,49 @@ func TestAPIAuth_UserKeyBindsClientAndScope(t *testing.T) {
 	}
 }
 
+func TestAPIAuth_QuerySecretRejected(t *testing.T) {
+	h := APIAuth("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	for _, raw := range []string{
+		"/api/v1/watchlist?token=secret",
+		"/api/v1/portfolio?apiKey=secret",
+		"/api/v1/ws?token=secret",
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, raw, nil))
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("%s: want 401 got %d", raw, rec.Code)
+		}
+	}
+}
+
+func TestAPIAuth_WSTicketAccepted(t *testing.T) {
+	iss := NewWSTicketIssuer()
+	tok, _, err := iss.Issue(AuthIdentity{ClientID: "alice", UserKey: true, CanTrade: true, KeyID: "k1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var gotClient string
+	h := APIAuthWithOptions(APIAuthOptions{Master: "secret", Tickets: iss})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := IdentityFrom(r.Context())
+		if id != nil {
+			gotClient = id.ClientID
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/ws?ticket="+tok+"&clientId=ignored", nil))
+	if rec.Code != http.StatusOK || gotClient != "alice" {
+		t.Fatalf("ticket ws: code=%d client=%q", rec.Code, gotClient)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/ws?ticket="+tok, nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("reused ticket: %d", rec.Code)
+	}
+}
+
 func TestAPIAuth_OPTIONSBypass(t *testing.T) {
 	h := APIAuth("secret")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

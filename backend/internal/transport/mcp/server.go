@@ -284,7 +284,16 @@ func bindMCPTenant(ctx context.Context, req *mcp.CallToolRequest) error {
 		return nil
 	}
 	id := middleware.IdentityFrom(ctx)
-	if id == nil || !id.UserKey {
+	if id == nil {
+		return nil
+	}
+	if id.Master && id.DenyImpersonate && !id.Loopback {
+		if strings.TrimSpace(req.GetString("clientId", "")) != "" {
+			return fmt.Errorf("%w: master token cannot select a tenant from this client", domain.ErrForbidden)
+		}
+		return nil
+	}
+	if !id.UserKey {
 		return nil
 	}
 	name := strings.TrimSpace(req.Params.Name)
@@ -4151,7 +4160,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			"httpInfo":    "GET /api/v1/realtime",
 			"protocol":    1,
 			"maxSymbols":  100,
-			"auth":        "Same as REST (Bearer / X-API-Key). Browsers may pass ?token= and ?clientId=.",
+			"auth":        "REST: Bearer / X-API-Key. Browsers: POST /api/v1/realtime/ticket then ?ticket= on the WebSocket. Long-lived secrets are not accepted on the query string.",
 			"reconnect":   "On reconnect, resend subscribe_prices and subscribe_portfolio. Server snapshots current state.",
 			"clientTypes": []string{"subscribe_prices", "unsubscribe_prices", "subscribe_portfolio", "unsubscribe_portfolio", "ping"},
 			"serverTypes": []string{"hello", "ack", "price", "portfolio", "error", "pong"},

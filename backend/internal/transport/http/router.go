@@ -58,6 +58,10 @@ type RouterOptions struct {
 	Accounts *account.Service
 	// Realtime is the WebSocket hub for live prices + paper portfolio events.
 	Realtime *realtime.Hub
+	// StrictMasterTenant rejects a remote process-master token from acting as
+	// an arbitrary clientId (loopback and user keys are unchanged). cmd/server
+	// sets this unless ALLOW_MASTER_IMPERSONATE=true. Tests stay loose by default.
+	StrictMasterTenant bool
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -74,11 +78,13 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	health := handler.NewHealthHandler()
 	mh := handler.NewMarketHandler(marketSvc)
+	tickets := middleware.NewWSTicketIssuer()
 
 	mux.Handle("GET /health", health)
 	if opts.Realtime != nil {
-		rh := handler.NewRealtimeHandler(opts.Realtime, opts.CORSAllowOrigins)
+		rh := handler.NewRealtimeHandler(opts.Realtime, opts.CORSAllowOrigins).WithTickets(tickets)
 		mux.HandleFunc("GET /api/v1/realtime", rh.Info)
+		mux.HandleFunc("POST /api/v1/realtime/ticket", rh.IssueTicket)
 		mux.HandleFunc("GET /api/v1/ws", rh.ServeWS)
 	}
 	mux.HandleFunc("GET /api/v1/market/candles", mh.GetCandles)
@@ -334,8 +340,14 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	var h http.Handler = mux
 	h = middleware.AccountGate(opts.Accounts)(h)
 	h = middleware.APIKeyScope(h)
+	h = middleware.MasterTenant(opts.StrictMasterTenant, opts.APIKeys)(h)
 	// Auth wraps the mux so /mcp and tenant APIs are protected when a token is configured.
-	h = middleware.APIAuthWith(opts.APIAuthToken, opts.APIKeys)(h)
+	h = middleware.APIAuthWithOptions(middleware.APIAuthOptions{
+		Master:                opts.APIAuthToken,
+		Keys:                  opts.APIKeys,
+		Tickets:               tickets,
+		DenyMasterImpersonate: opts.StrictMasterTenant,
+	})(h)
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
 	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h
