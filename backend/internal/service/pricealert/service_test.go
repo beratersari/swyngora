@@ -357,6 +357,20 @@ func TestCreate_OrderBookImbalanceAndWall(t *testing.T) {
 	}
 }
 
+type prepTape struct {
+	calls []struct {
+		ex, sym string
+		look    time.Duration
+	}
+}
+
+func (p *prepTape) Prepare(_ context.Context, exchange, symbol string, lookback time.Duration) {
+	p.calls = append(p.calls, struct {
+		ex, sym string
+		look    time.Duration
+	}{exchange, symbol, lookback})
+}
+
 func TestCreate_LiquidationFeedAndCascade(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()
@@ -396,6 +410,31 @@ func TestCreate_LiquidationFeedAndCascade(t *testing.T) {
 	}
 	if not.Kind != domain.AlertKindLiqNotional || not.RangePct != 5 || not.Condition != "long" || !not.Armed {
 		t.Fatalf("%+v", not)
+	}
+}
+
+func TestCreate_LiquidationNotionalPreparesTape(t *testing.T) {
+	svc, _ := newSvc(t)
+	tape := &prepTape{}
+	svc.Tape = tape
+	_, err := svc.Create(context.Background(), CreateInput{
+		ClientID: "prep", Kind: "liquidation_notional", Exchange: "bybit", Symbol: "PEPEUSDT",
+		Condition: "both", TargetPrice: 1e6, Window: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tape.calls) != 1 || tape.calls[0].sym != "PEPEUSDT" || tape.calls[0].ex != "bybit" || tape.calls[0].look != 5*time.Minute {
+		t.Fatalf("prepare %+v", tape.calls)
+	}
+	_, err = svc.Create(context.Background(), CreateInput{
+		ClientID: "prep", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tape.calls) != 1 {
+		t.Fatalf("feed should not prepare a coin %+v", tape.calls)
 	}
 }
 

@@ -31,9 +31,16 @@ type CreateInput struct {
 	Window string
 }
 
+// LiquidationTape subscribes a coin and fills a lookback from venue history.
+type LiquidationTape interface {
+	Prepare(ctx context.Context, exchange, symbol string, lookback time.Duration)
+}
+
 // Service orchestrates price-alert use cases.
 type Service struct {
 	store domain.PriceAlertPort
+	// Tape watches and backfills liquidation prints for new coin alerts.
+	Tape LiquidationTape
 	// AllowPrivateWebhooks permits loopback/RFC1918 webhook targets (local tests only).
 	// Production must leave this false to prevent SSRF.
 	AllowPrivateWebhooks bool
@@ -117,7 +124,33 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		Status:      domain.AlertStatusActive,
 		CreatedAt:   time.Now().UTC(),
 	}
-	return s.store.Create(ctx, alert)
+	out, err := s.store.Create(ctx, alert)
+	if err != nil {
+		return nil, err
+	}
+	s.prepareLiquidationTape(ctx, out)
+	return out, nil
+}
+
+func (s *Service) prepareLiquidationTape(ctx context.Context, a *domain.PriceAlert) {
+	if s == nil || s.Tape == nil || a == nil || !domain.IsLiquidationAlert(a.Kind) {
+		return
+	}
+	if domain.IsLiqFeedAlert(a.Kind) {
+		return
+	}
+	sym := domain.NormalizeLiquidationSymbol(a.Symbol)
+	if sym == "" || strings.EqualFold(sym, "all") || sym == domain.LiqAlertSymbolAll {
+		return
+	}
+	var lookback time.Duration
+	switch {
+	case domain.IsLiqNotionalAlert(a.Kind):
+		lookback = domain.LiqNotionalWindow(*a)
+	case domain.IsLiqCascadeAlert(a.Kind):
+		lookback = 6 * time.Hour
+	}
+	s.Tape.Prepare(ctx, string(a.Exchange), sym, lookback)
 }
 
 // Get returns one alert for the client.

@@ -1921,7 +1921,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_liquidation_notional_alert",
-		mcp.WithDescription("Alert when a coin's liquidations in a window exceed a USDT amount. side=long|short|both (total). exchange=binance|bybit|all (all sums both). window=1m|5m|15m|1h (default 5m). Repeating: fires once when the wave crosses the line, stays quiet while that wave stays above, re-arms when the window drops so a new wave can fire."),
+		mcp.WithDescription("Alert when a coin's liquidations in a window exceed a USDT amount. side=long|short|both (total). exchange=binance|bybit|all (all sums both). window=1m|5m|15m|1h (default 5m). Creating the alert subscribes the coin and fills the last window from history (no double-count with live). Repeating: fires once when the wave crosses the line, stays quiet while that wave stays above, re-arms when the window drops so a new wave can fire."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("notional", mcp.Required(), mcp.Description("USDT threshold e.g. 20000000")),

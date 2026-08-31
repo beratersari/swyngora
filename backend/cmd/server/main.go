@@ -227,6 +227,9 @@ func main() {
 		HTTP:    httpClient,
 		Sink:    liqSink,
 	})
+	if liqSink.Backfill != nil {
+		liqSink.Backfill.Watch = bybitLiq.Watch
+	}
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
 
@@ -331,6 +334,9 @@ func main() {
 	}()
 	alertSvc := pricealert.New(alertStore)
 	alertSvc.AllowPrivateWebhooks = cfg.WebhookAllowPrivate
+	if liqSink != nil && liqSink.Backfill != nil {
+		alertSvc.Tape = liqSink.Backfill
+	}
 	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
 
 	portfolioStore, err := portfoliostore.Open(cfg.PortfolioDBPath)

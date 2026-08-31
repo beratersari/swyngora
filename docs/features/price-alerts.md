@@ -115,6 +115,8 @@ POST /api/v1/alerts
 
 `liquidation_notional` sums Binance + Bybit when `exchange=all`. Repeating fires when the rolling window first crosses the dollar line, stays quiet while that wave stays above it, and re-arms when the window drops so the next wave can fire. `window` is `1m` / `5m` / `15m` / `1h` (default 5m).
 
+Creating a coin alert (`liquidation_notional` or `liquidation_cascade`) **subscribes** that pair on the live Bybit stream if it is not already in the automatic set. It also fills the lookback from each venue's own history (the alert window, or 6h for cascade) so a 5m alert does not wait 5 minutes for live prints. Live and history prints that share venue + symbol + side + time + price + qty count once. A missing history API still leaves the live subscribe in place.
+
 MCP: `create_orderbook_alert`, `create_liquidation_feed_alert`, `create_liquidation_cascade_alert`, `create_liquidation_notional_alert`. Informational only.
 
 ## Webhook security (SSRF)

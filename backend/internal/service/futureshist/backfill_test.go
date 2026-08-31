@@ -19,6 +19,51 @@ func (s *histStub) ListLiquidationHistory(_ context.Context, q domain.Liquidatio
 	return s.res, s.err
 }
 
+func TestBackfiller_PrepareWatchesAndDedupes(t *testing.T) {
+	now := time.Now().UTC()
+	book := domain.NewLiquidationBook()
+	book.UseClock(func() time.Time { return now })
+	live := domain.LiquidationEvent{
+		Exchange: domain.ExchangeBybit, Symbol: "PEPEUSDT", Side: domain.LiquidationSideLong,
+		Price: 1, Quantity: 1, Notional: 10, Time: now.Add(-time.Minute),
+	}
+	book.Record(live)
+	var watched []string
+	stub := &histStub{res: domain.LiquidationHistoryResult{
+		Events: []domain.LiquidationEvent{
+			live,
+			{Exchange: domain.ExchangeBybit, Symbol: "PEPEUSDT", Side: domain.LiquidationSideShort, Price: 1, Quantity: 2, Notional: 20, Time: now.Add(-2 * time.Minute)},
+			{Exchange: domain.ExchangeBinance, Symbol: "PEPEUSDT", Side: domain.LiquidationSideLong, Price: 1, Quantity: 3, Notional: 30, Time: now.Add(-2 * time.Minute)},
+		},
+	}}
+	st := &memStore{}
+	bf := &Backfiller{
+		Book:    book,
+		Hist:    &Service{Store: st},
+		Sources: map[domain.Exchange]domain.LiquidationHistoryPort{domain.ExchangeBybit: stub},
+		Watch:   func(s string) { watched = append(watched, s) },
+	}
+	bf.Prepare(context.Background(), "bybit", "PEPEUSDT", 5*time.Minute)
+	if len(watched) != 1 || watched[0] != "PEPEUSDT" {
+		t.Fatalf("watch %+v", watched)
+	}
+	if len(stub.calls) != 1 || stub.calls[0].Exchange != domain.ExchangeBybit {
+		t.Fatalf("history calls %+v", stub.calls)
+	}
+	if windowCount(book.Snapshot("bybit", "PEPEUSDT"), domain.LiquidationWindow5m) != 2 {
+		t.Fatalf("want live+one new, got %+v", book.Snapshot("bybit", "PEPEUSDT"))
+	}
+	if windowCount(book.Snapshot("binance", "PEPEUSDT"), domain.LiquidationWindow5m) != 0 {
+		t.Fatal("bybit prepare must not record binance prints")
+	}
+	st.mu.Lock()
+	n := len(st.liq)
+	st.mu.Unlock()
+	if n != 2 {
+		t.Fatalf("persisted %d (dedupe live overlap)", n)
+	}
+}
+
 func TestBackfiller_FillDoesNotCrossVenue(t *testing.T) {
 	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
 	cur := now
