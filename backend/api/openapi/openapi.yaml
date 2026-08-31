@@ -7599,14 +7599,20 @@ components:
         hopPct: { type: string }
         zoneNotional: { type: string }
         cumulativeNotional: { type: string }
+        fuelAdds: { type: string, description: Assumed exit flow this zone adds if it has estimated notional }
         standalone: { $ref: '#/components/schemas/LiquidationHuntWalk' }
         incremental: { $ref: '#/components/schemas/LiquidationHuntWalk' }
         remaining: { $ref: '#/components/schemas/LiquidationHuntWalk' }
         priorCascadeNotional: { type: string }
-        assistancePct: { type: string }
+        fuelSpent: { type: string }
+        assistancePct: { type: string, description: Omitted when the hop cannot be scored }
+        strength: { type: string, description: 0–100 hop feed strength; omitted when inputs are missing }
+        strengthLevel: { type: string, enum: [self, strong, mixed, weak] }
+        role: { type: string, enum: [start, self, helped, stall, unreachable, missing, observed] }
         easier: { type: boolean }
         selfFueling: { type: boolean }
         reachable: { type: boolean }
+        zoneEst: { type: string, enum: [model, observed, missing], description: What liquidation size was used }
         note: { type: string }
     LiquidationHuntCascadePath:
       type: object
@@ -7619,6 +7625,12 @@ components:
         reachableCount: { type: integer }
         easierCount: { type: integer }
         selfFuelingCount: { type: integer }
+        feedsUntilIndex: { type: integer }
+        feedsUntilPrice: { type: string }
+        stallsAtIndex: { type: integer }
+        stallsAtPrice: { type: string }
+        stallRole: { type: string }
+        stallNote: { type: string }
         chainEasier: { type: boolean }
         summary: { type: string }
     LiquidationHuntVenue:

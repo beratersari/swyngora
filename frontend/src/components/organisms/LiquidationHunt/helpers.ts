@@ -188,14 +188,31 @@ function reachLabel(sc?: HuntScenario): string {
   return 'Unreachable';
 }
 
-export type PathStepTone = 'easier' | 'self' | 'needs' | 'unreachable';
+export type PathStepTone = 'start' | 'self' | 'helped' | 'stall' | 'unreachable' | 'missing';
 
 export function pathStepTone(step?: HuntCascadeStep): PathStepTone {
-  if (!step) return 'needs';
+  switch (step?.role) {
+    case 'start':
+      return 'start';
+    case 'self':
+      return 'self';
+    case 'helped':
+      return 'helped';
+    case 'stall':
+    case 'observed':
+      return 'stall';
+    case 'missing':
+      return 'missing';
+    case 'unreachable':
+      return 'unreachable';
+    default:
+      break;
+  }
+  if (!step) return 'missing';
   if (!step.reachable) return 'unreachable';
   if (step.selfFueling) return 'self';
-  if (step.easier) return 'easier';
-  return 'needs';
+  if (step.easier) return 'helped';
+  return 'stall';
 }
 
 export function pathLeverageLabel(step?: HuntCascadeStep): string | null {

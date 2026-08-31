@@ -62,10 +62,12 @@ describe('LiquidationHunt helpers', () => {
     expect(parseHuntPanel('path')).toBe('path');
     expect(parseHuntPanel('compare')).toBe('compare');
     expect(parseHuntPanel(null)).toBe('compare');
-    expect(pathStepTone({ reachable: false })).toBe('unreachable');
-    expect(pathStepTone({ reachable: true, selfFueling: true })).toBe('self');
-    expect(pathStepTone({ reachable: true, easier: true })).toBe('easier');
-    expect(pathStepTone({ reachable: true })).toBe('needs');
+    expect(pathStepTone({ role: 'unreachable' })).toBe('unreachable');
+    expect(pathStepTone({ role: 'self' })).toBe('self');
+    expect(pathStepTone({ role: 'helped' })).toBe('helped');
+    expect(pathStepTone({ role: 'stall' })).toBe('stall');
+    expect(pathStepTone({ role: 'missing' })).toBe('missing');
+    expect(pathStepTone({ role: 'start' })).toBe('start');
     expect(pathLeverageLabel({ band: { leverage: '125' } })).toBe('125x');
   });
 });

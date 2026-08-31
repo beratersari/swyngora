@@ -7,10 +7,21 @@ import (
 )
 
 const (
-	maxHuntCascadeSteps     = 8
-	huntCascadeMergePct     = 0.08
-	huntCascadeEasierRatio  = 0.92
-	huntCascadeSelfFuelFrac = 0.02
+	maxHuntCascadeSteps = 8
+	huntCascadeMergePct = 0.08
+
+	HuntCascadeRoleStart        = "start"
+	HuntCascadeRoleSelf         = "self"
+	HuntCascadeRoleHelped       = "helped"
+	HuntCascadeRoleStall        = "stall"
+	HuntCascadeRoleUnreachable  = "unreachable"
+	HuntCascadeRoleMissing      = "missing"
+	HuntCascadeRoleObservedOnly = "observed"
+
+	HuntCascadeStrengthSelf   = "self"
+	HuntCascadeStrengthStrong = "strong"
+	HuntCascadeStrengthMixed  = "mixed"
+	HuntCascadeStrengthWeak   = "weak"
 )
 
 // HuntCascadeStep is one zone on a price-ordered hunt path.
@@ -22,14 +33,20 @@ type HuntCascadeStep struct {
 	HopPct               float64   `json:"hopPct"`
 	ZoneNotional         float64   `json:"zoneNotional"`
 	CumulativeNotional   float64   `json:"cumulativeNotional"`
+	FuelAdds             float64   `json:"fuelAdds"`
 	Standalone           BookReach `json:"standalone"`
 	Incremental          BookReach `json:"incremental"`
 	Remaining            BookReach `json:"remaining"`
 	PriorCascadeNotional float64   `json:"priorCascadeNotional"`
-	AssistancePct        float64   `json:"assistancePct"`
+	FuelSpent            float64   `json:"fuelSpent"`
+	AssistancePct        *float64  `json:"assistancePct,omitempty"`
+	Strength             *float64  `json:"strength,omitempty"`
+	StrengthLevel        string    `json:"strengthLevel,omitempty"`
+	Role                 string    `json:"role"`
 	Easier               bool      `json:"easier"`
 	SelfFueling          bool      `json:"selfFueling"`
 	Reachable            bool      `json:"reachable"`
+	ZoneEst              string    `json:"zoneEst"`
 	Note                 string    `json:"note"`
 }
 
@@ -42,12 +59,21 @@ type HuntCascadePath struct {
 	ReachableCount   int               `json:"reachableCount"`
 	EasierCount      int               `json:"easierCount"`
 	SelfFuelingCount int               `json:"selfFuelingCount"`
+	FeedsUntilIndex  int               `json:"feedsUntilIndex,omitempty"`
+	FeedsUntilPrice  float64           `json:"feedsUntilPrice,omitempty"`
+	StallsAtIndex    int               `json:"stallsAtIndex,omitempty"`
+	StallsAtPrice    float64           `json:"stallsAtPrice,omitempty"`
+	StallRole        string            `json:"stallRole,omitempty"`
+	StallNote        string            `json:"stallNote,omitempty"`
 	ChainEasier      bool              `json:"chainEasier"`
 	Summary          string            `json:"summary"`
 }
 
-// BuildHuntCascadePath walks bands nearest-to-last first and asks whether
-// HuntCascadeFillRate of earlier EstNotional covers part of the next hop.
+// BuildHuntCascadePath walks bands nearest-to-last first.
+// A later hop is self-fueling only when prior assumed exit flow
+// (HuntCascadeFillRate × earlier EstNotional) is at least the visible
+// hop cost from WalkBookToPrice. Remaining, assistance, and easier are
+// taken from that same final walk — the self-fueling flag is never undone.
 func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []ImpactSourceLevel, side string) HuntCascadePath {
 	out := HuntCascadePath{Direction: dir, Steps: []HuntCascadeStep{}}
 	if mid <= 0 {
@@ -62,7 +88,7 @@ func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []Impa
 	var priorEst float64
 	prevPrice := mid
 	for i, b := range ordered {
-		step := huntCascadeStep(dir, i+1, b, mid, prevPrice, priorEst, push, side)
+		step := huntCascadeStep(i+1, b, mid, prevPrice, priorEst, push, side)
 		out.Steps = append(out.Steps, step)
 		if step.Reachable {
 			out.ReachableCount++
@@ -76,12 +102,13 @@ func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []Impa
 		priorEst += b.EstNotional
 		prevPrice = b.Price
 	}
+	markHuntCascadeStall(&out)
 	out.ChainEasier = out.EasierCount > 0 || out.SelfFuelingCount > 0
 	out.Summary = huntCascadeSummary(out)
 	return out
 }
 
-func huntCascadeStep(dir string, index int, b HuntBand, mid, fromPrice, priorEst float64, push []ImpactSourceLevel, side string) HuntCascadeStep {
+func huntCascadeStep(index int, b HuntBand, mid, fromPrice, priorEst float64, push []ImpactSourceLevel, side string) HuntCascadeStep {
 	step := HuntCascadeStep{
 		Index:                index,
 		Band:                 b,
@@ -90,65 +117,180 @@ func huntCascadeStep(dir string, index int, b HuntBand, mid, fromPrice, priorEst
 		HopPct:               (b.Price - fromPrice) / mid * 100,
 		ZoneNotional:         b.EstNotional,
 		CumulativeNotional:   priorEst + b.EstNotional,
+		FuelAdds:             b.EstNotional * HuntCascadeFillRate,
 		PriorCascadeNotional: priorEst * HuntCascadeFillRate,
 	}
+	if b.EstNotional > 0 {
+		step.ZoneEst = "model"
+	} else if b.ObservedNotional > 0 {
+		step.ZoneEst = "observed"
+		step.FuelAdds = 0
+	} else {
+		step.ZoneEst = "missing"
+		step.FuelAdds = 0
+	}
+
 	step.Standalone = WalkBookToPrice(side, mid, push, b.Price)
 	hopBook := push
 	if index > 1 {
 		hopBook = LevelsBeyond(side, push, fromPrice)
 	}
+	noHopBook := len(hopBook) == 0
 	step.Incremental = WalkBookToPrice(side, fromPrice, hopBook, b.Price)
 	step.Remaining = step.Incremental
-	if step.PriorCascadeNotional > 0 && len(hopBook) > 0 {
-		endPx, leftover, _ := ConsumeBookNotional(hopBook, step.PriorCascadeNotional)
-		if cascadeReached(side, endPx, b.Price) {
-			step.SelfFueling = true
-			step.Remaining = BookReach{
-				Side:              side,
-				TargetPrice:       b.Price,
-				MidPrice:          fromPrice,
-				EndPrice:          endPx,
-				MaxReachablePrice: endPx,
-				Reachable:         true,
+
+	switch {
+	case noHopBook:
+		step.Role = HuntCascadeRoleMissing
+		step.Note = huntCascadeStartOrHop(index) + "No visible hop book."
+	case !step.Incremental.Reachable:
+		if step.PriorCascadeNotional > 0 {
+			_, _, spent := ConsumeBookNotional(hopBook, step.PriorCascadeNotional)
+			step.FuelSpent = spent
+		}
+		step.Role = HuntCascadeRoleUnreachable
+		step.Reachable = false
+		step.Note = huntCascadeStartOrHop(index) + "Visible book does not reach this zone."
+	case index == 1:
+		step.Reachable = true
+		step.Role = HuntCascadeRoleStart
+		if step.ZoneEst == "observed" {
+			step.Note = "First zone from last price. Observed cluster only — not used as cascade fuel."
+		} else if step.ZoneEst == "missing" {
+			step.Note = "First zone from last price. No estimated liquidation in this band."
+		} else {
+			step.Note = fmt.Sprintf("First zone from last price. Hitting it adds %s assumed exit flow (%.0f%% of estimated liq).",
+				compactUSD(step.FuelAdds), HuntCascadeFillRate*100)
+		}
+	case step.PriorCascadeNotional >= step.Incremental.Notional && step.Incremental.Notional > 0:
+		step.SelfFueling = true
+		step.Reachable = true
+		step.Easier = true
+		step.FuelSpent = step.Incremental.Notional
+		step.Remaining = BookReach{
+			Side:              side,
+			TargetPrice:       b.Price,
+			MidPrice:          fromPrice,
+			EndPrice:          b.Price,
+			MaxReachablePrice: b.Price,
+			Reachable:         true,
+		}
+		step.AssistancePct = floatPtr(100)
+		step.Strength = floatPtr(100)
+		step.StrengthLevel = HuntCascadeStrengthSelf
+		step.Role = HuntCascadeRoleSelf
+		step.Note = fmt.Sprintf("Prior assumed exit flow (%s) covers this hop (%s).",
+			compactUSD(step.PriorCascadeNotional), compactUSD(step.Incremental.Notional))
+	case step.PriorCascadeNotional > 0:
+		endPx, leftover, spent := ConsumeBookNotional(hopBook, step.PriorCascadeNotional)
+		step.FuelSpent = spent
+		start := endPx
+		if start <= 0 {
+			start = fromPrice
+		}
+		step.Remaining = WalkBookToPrice(side, start, leftover, b.Price)
+		step.Reachable = step.Remaining.Reachable
+		if step.Incremental.Notional > 0 && step.Remaining.Reachable {
+			saved := step.Incremental.Notional - step.Remaining.Notional
+			if saved < 0 {
+				saved = 0
+			}
+			assist := clampScore(100 * saved / step.Incremental.Notional)
+			step.AssistancePct = floatPtr(assist)
+			step.Strength = floatPtr(assist)
+			step.StrengthLevel = huntCascadeStrengthLevel(assist)
+			if saved > 0 {
+				step.Easier = true
+				step.Role = HuntCascadeRoleHelped
+				step.Note = fmt.Sprintf("Prior assumed exit flow (%s) covers %.0f%% of this hop; desk still needs %s.",
+					compactUSD(step.PriorCascadeNotional), assist, compactUSD(step.Remaining.Notional))
+			} else {
+				step.Role = HuntCascadeRoleStall
+				step.Note = fmt.Sprintf("Prior assumed exit flow (%s) does not reduce this hop (%s).",
+					compactUSD(step.PriorCascadeNotional), compactUSD(step.Incremental.Notional))
 			}
 		} else {
-			start := endPx
-			if start <= 0 {
-				start = fromPrice
-			}
-			step.Remaining = WalkBookToPrice(side, start, leftover, b.Price)
+			step.Role = HuntCascadeRoleUnreachable
+			step.Note = fmt.Sprintf("After spending %s of prior flow, leftover book does not reach this zone.",
+				compactUSD(spent))
 		}
+	default:
+		step.Reachable = step.Incremental.Reachable
+		step.Role = HuntCascadeRoleStall
+		step.Note = "No prior estimated liquidation to use as exit flow. This hop needs the full visible spot walk."
 	}
-	step.Reachable = step.Remaining.Reachable || step.SelfFueling || step.Incremental.Reachable && step.Remaining.Notional <= 0
-	if step.SelfFueling {
-		step.AssistancePct = 100
-	} else if step.Remaining.Reachable && step.Incremental.Notional > 0 {
-		saved := step.Incremental.Notional - step.Remaining.Notional
-		if saved < 0 {
-			saved = 0
-		}
-		step.AssistancePct = clampScore(100 * saved / step.Incremental.Notional)
+
+	if index == 1 && step.Role != HuntCascadeRoleMissing && step.Role != HuntCascadeRoleUnreachable {
+		step.Role = HuntCascadeRoleStart
 	}
-	if index > 1 && (step.SelfFueling || (step.Remaining.Reachable && step.Incremental.Notional > 0 &&
-		step.Remaining.Notional+1e-9 < step.Incremental.Notional*huntCascadeEasierRatio)) {
-		step.Easier = true
+	if step.ZoneEst == "observed" && index > 1 && step.Role != HuntCascadeRoleMissing && step.Role != HuntCascadeRoleUnreachable && step.Role != HuntCascadeRoleSelf && step.Role != HuntCascadeRoleHelped {
+		step.Role = HuntCascadeRoleObservedOnly
+		step.Note = "Observed cluster only — not used as cascade fuel. " + step.Note
 	}
-	if step.SelfFueling && step.Incremental.Notional > 0 &&
-		step.PriorCascadeNotional < step.Incremental.Notional*huntCascadeSelfFuelFrac {
-		step.SelfFueling = false
-	}
-	step.Note = huntCascadeNote(step, index, b)
 	return step
 }
 
-func cascadeReached(side string, endPrice, target float64) bool {
-	if endPrice <= 0 || target <= 0 {
-		return false
+func huntCascadeStartOrHop(index int) string {
+	if index == 1 {
+		return "First zone. "
 	}
-	if side == ImpactSideSell {
-		return endPrice <= target
+	return ""
+}
+
+func huntCascadeStrengthLevel(score float64) string {
+	switch {
+	case score >= 100:
+		return HuntCascadeStrengthSelf
+	case score >= 70:
+		return HuntCascadeStrengthStrong
+	case score >= 40:
+		return HuntCascadeStrengthMixed
+	default:
+		return HuntCascadeStrengthWeak
 	}
-	return endPrice >= target
+}
+
+func floatPtr(v float64) *float64 {
+	x := v
+	return &x
+}
+
+func markHuntCascadeStall(p *HuntCascadePath) {
+	if p == nil {
+		return
+	}
+	var lastSelf int
+	var lastSelfPx float64
+	for _, s := range p.Steps {
+		if s.SelfFueling {
+			lastSelf = s.Index
+			lastSelfPx = s.Band.Price
+		}
+	}
+	if lastSelf > 0 {
+		p.FeedsUntilIndex = lastSelf
+		p.FeedsUntilPrice = lastSelfPx
+	}
+	for _, s := range p.Steps {
+		if s.Index == 1 {
+			if s.Role == HuntCascadeRoleUnreachable || s.Role == HuntCascadeRoleMissing {
+				p.StallsAtIndex = s.Index
+				p.StallsAtPrice = s.Band.Price
+				p.StallRole = s.Role
+				p.StallNote = s.Note
+				return
+			}
+			continue
+		}
+		if s.Role == HuntCascadeRoleSelf {
+			continue
+		}
+		p.StallsAtIndex = s.Index
+		p.StallsAtPrice = s.Band.Price
+		p.StallRole = s.Role
+		p.StallNote = s.Note
+		return
+	}
 }
 
 func cascadePathBands(bands []HuntBand, mid float64, dir string) []HuntBand {
@@ -203,26 +345,6 @@ func cascadePathBands(bands []HuntBand, mid float64, dir string) []HuntBand {
 	return merged
 }
 
-func huntCascadeNote(step HuntCascadeStep, index int, b HuntBand) string {
-	switch {
-	case !step.Reachable && !step.Incremental.Reachable:
-		return "Visible book does not reach this zone."
-	case index == 1:
-		if b.EstNotional <= 0 && b.ObservedNotional > 0 {
-			return "First zone from last price (observed cluster; not used as cascade fuel)."
-		}
-		return "First zone from last price."
-	case step.SelfFueling:
-		return fmt.Sprintf("Prior estimated liquidations walk through this zone (about %s of assumed exit flow).", compactUSD(step.PriorCascadeNotional))
-	case step.Easier:
-		return fmt.Sprintf("Triggering the previous zone covers about %.0f%% of this hop.", step.AssistancePct)
-	case b.EstNotional <= 0 && b.ObservedNotional > 0:
-		return "Observed cluster only — not used as cascade fuel for the next hop."
-	default:
-		return "Prior cascade is small versus the remaining book to here."
-	}
-}
-
 func huntCascadeSummary(p HuntCascadePath) string {
 	n := len(p.Steps)
 	if n == 0 {
@@ -232,20 +354,40 @@ func huntCascadeSummary(p HuntCascadePath) string {
 	if p.Direction == "down" {
 		side = "long liquidations below"
 	}
-	switch {
-	case p.ReachableCount == 0:
-		return fmt.Sprintf("%d %s zones, none reachable on the visible book.", n, side)
-	case p.SelfFuelingCount > 0 && p.EasierCount > 0:
-		return fmt.Sprintf("%d %s zones (%d reachable). Hitting earlier zones cheapens %d later hop(s); %d look self-fueling.",
-			n, side, p.ReachableCount, p.EasierCount, p.SelfFuelingCount)
-	case p.SelfFuelingCount > 0:
-		return fmt.Sprintf("%d %s zones (%d reachable). %d later hop(s) look self-fueling after earlier liquidations.",
-			n, side, p.ReachableCount, p.SelfFuelingCount)
-	case p.EasierCount > 0:
-		return fmt.Sprintf("%d %s zones (%d reachable). Hitting earlier zones cheapens %d later hop(s).",
-			n, side, p.ReachableCount, p.EasierCount)
-	default:
-		return fmt.Sprintf("%d %s zones (%d reachable). Prior hops do not cheapen the next one enough — each step still needs desk flow.",
-			n, side, p.ReachableCount)
+	if p.StallsAtIndex == 1 && (p.StallRole == HuntCascadeRoleUnreachable || p.StallRole == HuntCascadeRoleMissing) {
+		return fmt.Sprintf("%d %s zones. Cannot start: %s", n, side, trimHuntCascadeNote(p.StallNote))
 	}
+	if p.FeedsUntilIndex > 0 && p.StallsAtIndex > p.FeedsUntilIndex {
+		return fmt.Sprintf("%d %s zones. Cascade feeds itself through zone %d (%s). Stalls at zone %d (%s) — extra spot is needed.",
+			n, side, p.FeedsUntilIndex, signedPct(p.stepMove(p.FeedsUntilIndex)),
+			p.StallsAtIndex, signedPct(p.stepMove(p.StallsAtIndex)))
+	}
+	if p.FeedsUntilIndex > 0 && p.StallsAtIndex == 0 {
+		return fmt.Sprintf("%d %s zones. Cascade stays self-fueling through zone %d (%s).",
+			n, side, p.FeedsUntilIndex, signedPct(p.stepMove(p.FeedsUntilIndex)))
+	}
+	if p.StallsAtIndex > 1 {
+		return fmt.Sprintf("%d %s zones. Cascade does not feed itself after the first zone. Extra spot is needed at zone %d (%s).",
+			n, side, p.StallsAtIndex, signedPct(p.stepMove(p.StallsAtIndex)))
+	}
+	if p.ReachableCount == 0 {
+		return fmt.Sprintf("%d %s zones, none reachable on the visible book.", n, side)
+	}
+	return fmt.Sprintf("%d %s zones (%d reachable on the visible book).", n, side, p.ReachableCount)
+}
+
+func (p HuntCascadePath) stepMove(index int) float64 {
+	for _, s := range p.Steps {
+		if s.Index == index {
+			return s.MovePct
+		}
+	}
+	return math.NaN()
+}
+
+func trimHuntCascadeNote(s string) string {
+	if s == "" {
+		return "visible book does not reach the first zone."
+	}
+	return s
 }

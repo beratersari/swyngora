@@ -71,14 +71,20 @@ type huntCascadeStepDTO struct {
 	HopPct               string      `json:"hopPct"`
 	ZoneNotional         string      `json:"zoneNotional"`
 	CumulativeNotional   string      `json:"cumulativeNotional"`
+	FuelAdds             string      `json:"fuelAdds"`
 	Standalone           huntWalkDTO `json:"standalone"`
 	Incremental          huntWalkDTO `json:"incremental"`
 	Remaining            huntWalkDTO `json:"remaining"`
 	PriorCascadeNotional string      `json:"priorCascadeNotional"`
-	AssistancePct        string      `json:"assistancePct"`
+	FuelSpent            string      `json:"fuelSpent"`
+	AssistancePct        string      `json:"assistancePct,omitempty"`
+	Strength             string      `json:"strength,omitempty"`
+	StrengthLevel        string      `json:"strengthLevel,omitempty"`
+	Role                 string      `json:"role"`
 	Easier               bool        `json:"easier"`
 	SelfFueling          bool        `json:"selfFueling"`
 	Reachable            bool        `json:"reachable"`
+	ZoneEst              string      `json:"zoneEst"`
 	Note                 string      `json:"note"`
 }
 
@@ -88,6 +94,12 @@ type huntCascadePathDTO struct {
 	ReachableCount   int                  `json:"reachableCount"`
 	EasierCount      int                  `json:"easierCount"`
 	SelfFuelingCount int                  `json:"selfFuelingCount"`
+	FeedsUntilIndex  int                  `json:"feedsUntilIndex,omitempty"`
+	FeedsUntilPrice  string               `json:"feedsUntilPrice,omitempty"`
+	StallsAtIndex    int                  `json:"stallsAtIndex,omitempty"`
+	StallsAtPrice    string               `json:"stallsAtPrice,omitempty"`
+	StallRole        string               `json:"stallRole,omitempty"`
+	StallNote        string               `json:"stallNote,omitempty"`
 	ChainEasier      bool                 `json:"chainEasier"`
 	Summary          string               `json:"summary"`
 }
@@ -411,26 +423,50 @@ func huntCascadeToDTO(p domain.HuntCascadePath) huntCascadePathDTO {
 			HopPct:               domain.FormatSignedPct(s.HopPct),
 			ZoneNotional:         formatHistQty(s.ZoneNotional),
 			CumulativeNotional:   formatHistQty(s.CumulativeNotional),
+			FuelAdds:             formatHistQty(s.FuelAdds),
 			Standalone:           huntWalkToDTO(s.Standalone),
 			Incremental:          huntWalkToDTO(s.Incremental),
 			Remaining:            huntWalkToDTO(s.Remaining),
 			PriorCascadeNotional: formatHistQty(s.PriorCascadeNotional),
-			AssistancePct:        formatHistQty(s.AssistancePct),
+			FuelSpent:            formatHistQty(s.FuelSpent),
+			AssistancePct:        formatOptionalPct(s.AssistancePct),
+			Strength:             formatOptionalPct(s.Strength),
+			StrengthLevel:        s.StrengthLevel,
+			Role:                 s.Role,
 			Easier:               s.Easier,
 			SelfFueling:          s.SelfFueling,
 			Reachable:            s.Reachable,
+			ZoneEst:              s.ZoneEst,
 			Note:                 s.Note,
 		})
 	}
-	return huntCascadePathDTO{
+	out := huntCascadePathDTO{
 		Direction:        p.Direction,
 		Steps:            steps,
 		ReachableCount:   p.ReachableCount,
 		EasierCount:      p.EasierCount,
 		SelfFuelingCount: p.SelfFuelingCount,
+		FeedsUntilIndex:  p.FeedsUntilIndex,
+		StallsAtIndex:    p.StallsAtIndex,
+		StallRole:        p.StallRole,
+		StallNote:        p.StallNote,
 		ChainEasier:      p.ChainEasier,
 		Summary:          p.Summary,
 	}
+	if p.FeedsUntilPrice > 0 {
+		out.FeedsUntilPrice = formatHistQty(p.FeedsUntilPrice)
+	}
+	if p.StallsAtPrice > 0 {
+		out.StallsAtPrice = formatHistQty(p.StallsAtPrice)
+	}
+	return out
+}
+
+func formatOptionalPct(v *float64) string {
+	if v == nil {
+		return ""
+	}
+	return formatHistQty(*v)
 }
 
 func huntScenarioToDTO(s domain.HuntScenario) huntScenarioDTO {

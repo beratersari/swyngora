@@ -85,18 +85,32 @@
       "path": "Cascade path"
     },
     "path": {
-      "hint": "Zones from last price outward. After a zone is hit, part of its estimated liquidations is treated as exit flow that can cheapen the next hop. Same assumptions as the hunt. Informational only.",
+      "hint": "Zones from last price outward. After a zone is hit, 50% of its estimated liquidation is assumed exit flow for the next hop. Strength is only shown when that hop can be scored. Missing book or missing zone size is labeled. Informational only.",
       "empty": "No cascade path on the visible book.",
       "step": "Zone {{n}}",
       "leverage": "{{lev}}x",
       "fromLast": "Spot from last",
       "hop": "This hop",
-      "afterCascade": "After prior cascade",
+      "afterCascade": "Desk after fuel",
       "zoneLiq": "Est. in zone",
-      "easier": "Easier",
-      "selfFueling": "Self-fueling",
-      "stillNeeds": "Needs desk",
-      "unreachable": "Unreachable"
+      "fuel": "Assumed fuel",
+      "strength": "Feed strength",
+      "zoneEst": "Zone size",
+      "zoneEstModel": "Estimated OI mix",
+      "zoneEstObserved": "Observed only — not fuel",
+      "zoneEstMissing": "No estimated size",
+      "roles": {
+        "start": "Start",
+        "self": "Self-fueling",
+        "helped": "Helped",
+        "stall": "Needs spot",
+        "unreachable": "Unreachable",
+        "missing": "Book missing",
+        "observed": "Observed only"
+      },
+      "remainingUnreached": "Zone not reached",
+      "remainingNone": "No leftover book",
+      "stallBanner": "Stops feeding itself at zone {{n}}"
     }
   },
   "chart": {

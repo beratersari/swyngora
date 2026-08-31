@@ -85,18 +85,32 @@
       "path": "Çığ yolu"
     },
     "path": {
-      "hint": "Bölgeler last fiyattan dışa doğru. Bir bölge tetiklenince tahmini likidasyonun bir kısmı bir sonraki adımı ucuzlatan çıkış akışı sayılır. Av ile aynı varsayımlar. Yalnızca bilgi amaçlıdır.",
+      "hint": "Bölgeler last fiyattan dışa doğru. Bir bölge tetiklenince tahmini likidasyonun %50’si sonraki adım için varsayılan çıkış akışıdır. Güç yalnızca o adım skorlanabiliyorsa yazılır. Eksik defter veya eksik bölge boyutu etiketlenir. Yalnızca bilgi amaçlıdır.",
       "empty": "Görünür defterde çığ yolu yok.",
       "step": "Bölge {{n}}",
       "leverage": "{{lev}}x",
       "fromLast": "Last’ten spot",
       "hop": "Bu adım",
-      "afterCascade": "Önceki çığdan sonra",
+      "afterCascade": "Yakıttan sonra masa",
       "zoneLiq": "Bölgedeki tahmin",
-      "easier": "Daha kolay",
-      "selfFueling": "Kendi yürüyor",
-      "stillNeeds": "Masa gerekir",
-      "unreachable": "Ulaşılamaz"
+      "fuel": "Varsayılan yakıt",
+      "strength": "Besleme gücü",
+      "zoneEst": "Bölge boyutu",
+      "zoneEstModel": "Tahmini OI karışımı",
+      "zoneEstObserved": "Yalnızca gözlenen — yakıt değil",
+      "zoneEstMissing": "Tahmini boyut yok",
+      "roles": {
+        "start": "Başlangıç",
+        "self": "Kendi yürüyor",
+        "helped": "Yardım etti",
+        "stall": "Spot gerekir",
+        "unreachable": "Ulaşılamaz",
+        "missing": "Defter yok",
+        "observed": "Yalnızca gözlenen"
+      },
+      "remainingUnreached": "Bölgeye ulaşılamadı",
+      "remainingNone": "Kalan defter yok",
+      "stallBanner": "Kendi beslemesi {{n}}. bölgede durur"
     }
   },
   "chart": {

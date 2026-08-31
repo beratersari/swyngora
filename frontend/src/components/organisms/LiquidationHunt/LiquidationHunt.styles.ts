@@ -306,7 +306,7 @@ export const PathList = styled.ol`
   gap: 8px;
 `;
 
-export const PathStep = styled.li<{ $tone: 'easier' | 'self' | 'needs' | 'unreachable' }>`
+export const PathStep = styled.li<{ $tone: 'start' | 'self' | 'helped' | 'stall' | 'unreachable' | 'missing' }>`
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -314,15 +314,17 @@ export const PathStep = styled.li<{ $tone: 'easier' | 'self' | 'needs' | 'unreac
   border-radius: 8px;
   border: 1px solid
     ${({ theme, $tone }) =>
-      $tone === 'easier' || $tone === 'self'
+      $tone === 'self' || $tone === 'helped'
         ? theme.semantic.status.success
-        : $tone === 'unreachable'
+        : $tone === 'unreachable' || $tone === 'missing'
           ? theme.semantic.border.danger
-          : theme.semantic.border.default};
+          : $tone === 'stall'
+            ? theme.semantic.status.warning
+            : theme.semantic.border.default};
   background: ${({ theme, $tone }) =>
-    $tone === 'easier' || $tone === 'self'
+    $tone === 'self' || $tone === 'helped'
       ? theme.semantic.bg.successSoft
-      : $tone === 'unreachable'
+      : $tone === 'unreachable' || $tone === 'missing'
         ? theme.semantic.bg.dangerSoft
         : theme.semantic.bg.canvas};
 `;
@@ -342,7 +344,7 @@ export const PathIndex = styled.span`
   color: ${({ theme }) => theme.semantic.text.secondary};
 `;
 
-export const PathChip = styled.span<{ $tone: 'easier' | 'self' | 'needs' | 'unreachable' }>`
+export const PathChip = styled.span<{ $tone: 'start' | 'self' | 'helped' | 'stall' | 'unreachable' | 'missing' }>`
   display: inline-flex;
   align-items: center;
   padding: 1px 7px;
@@ -353,11 +355,13 @@ export const PathChip = styled.span<{ $tone: 'easier' | 'self' | 'needs' | 'unre
   text-transform: uppercase;
   color: ${({ theme }) => theme.semantic.text.primary};
   background: ${({ theme, $tone }) =>
-    $tone === 'easier' || $tone === 'self'
+    $tone === 'self' || $tone === 'helped'
       ? theme.semantic.bg.successSoft
-      : $tone === 'unreachable'
+      : $tone === 'unreachable' || $tone === 'missing'
         ? theme.semantic.bg.dangerSoft
-        : theme.semantic.bg.accentMuted};
+        : $tone === 'stall'
+          ? theme.semantic.bg.accentMuted
+          : theme.semantic.bg.accentMuted};
 `;
 
 export const PathMeta = styled.div`

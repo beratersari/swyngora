@@ -68,17 +68,20 @@ Each step:
 | Field | Meaning |
 |---|---|
 | `band` | That zone (leverage / side / price) |
-| `movePct` | Distance from last |
-| `hopPct` | Distance from the previous zone |
-| `zoneNotional` | Estimated liquidation in this band only (`EstNotional`) |
-| `cumulativeNotional` | Estimated liquidation from last through this band |
-| `standalone` | Visible spot walk from last to this price (no chain help) |
-| `incremental` | Visible spot walk from the previous zone to this one |
-| `remaining` | Incremental walk after `HuntCascadeFillRate` of earlier `EstNotional` is applied as assumed exit flow |
-| `easier` | Remaining hop is cheaper than walking it without prior cascade |
-| `selfFueling` | Prior assumed exit flow already walks through this zone |
+| `movePct` / `hopPct` | Distance from last / from the previous zone |
+| `zoneNotional` | Estimated liquidation in this band (`EstNotional`) |
+| `zoneEst` | What that size is: `model` (used as fuel), `observed` (shown, **not** fuel), or `missing` |
+| `fuelAdds` | Assumed exit flow this zone adds if hit (`HuntCascadeFillRate` × estimated size) |
+| `standalone` / `incremental` | Visible spot walk from last / from the previous zone |
+| `remaining` | Desk walk **after** prior assumed exit flow. Matches the final hop, not a later-undone flag |
+| `priorCascadeNotional` / `fuelSpent` | Assumed fuel available / how much of it was spent on this hop |
+| `assistancePct` / `strength` | Omitted when the hop cannot be scored (no book, zone not reached). Otherwise 0–100 from remaining vs incremental |
+| `role` | `start` / `self` / `helped` / `stall` / `unreachable` / `missing` / `observed` |
+| `selfFueling` | Prior fuel ≥ visible hop cost from `WalkBookToPrice`. Never flipped off afterward |
 
-Observed-only clusters are shown but **not** used as fuel for the next hop. One venue is never filled from the other.
+Path-level `feedsUntilIndex` / `stallsAtIndex` mark where the chain last walks itself and where extra spot is first required.
+
+Observed-only clusters are shown but **not** used as fuel. Missing book or missing zone size is labeled — nothing is substituted from the other venue or from a default score.
 
 ### Assumptions (also returned on `assumptions`)
 

@@ -14,6 +14,7 @@ import {
   inputTone,
   leanTone,
   parseHuntPanel,
+  parseNum,
   pathLeverageLabel,
   pathStepTone,
   scoreValue,
@@ -264,6 +265,12 @@ function PathCard({
           </Text>
         </div>
       </SideHead>
+      {path?.stallsAtIndex ? (
+        <Text variant="caption" color="secondary" data-testid={`liquidation-hunt-path-${side}-stall`}>
+          {t('hunt.path.stallBanner', { n: path.stallsAtIndex })}
+          {path.stallNote ? ` — ${path.stallNote}` : ''}
+        </Text>
+      ) : null}
       {steps.length === 0 ? (
         <Text variant="bodySm" color="secondary">
           {t('hunt.path.empty')}
@@ -291,14 +298,26 @@ function PathStepRow({
   const { t } = useTranslation('liquidations');
   const tone = pathStepTone(step);
   const lev = pathLeverageLabel(step);
-  const chip =
-    tone === 'self'
-      ? t('hunt.path.selfFueling')
-      : tone === 'easier'
-        ? t('hunt.path.easier')
-        : tone === 'unreachable'
-          ? t('hunt.path.unreachable')
-          : t('hunt.path.stillNeeds');
+  const roleKey = step.role && ['start', 'self', 'helped', 'stall', 'unreachable', 'missing', 'observed'].includes(step.role)
+    ? step.role
+    : tone;
+  const strength = parseNum(step.strength);
+  const zoneEst =
+    step.zoneEst === 'observed'
+      ? t('hunt.path.zoneEstObserved')
+      : step.zoneEst === 'missing'
+        ? t('hunt.path.zoneEstMissing')
+        : step.zoneEst === 'model'
+          ? t('hunt.path.zoneEstModel')
+          : null;
+  const remaining =
+    step.selfFueling
+      ? t('hunt.path.roles.self')
+      : step.role === 'missing'
+        ? t('hunt.path.roles.missing')
+        : !step.remaining?.reachable && step.remaining?.exhausted
+          ? t('hunt.path.remainingUnreached')
+          : money(step.remaining?.notional);
   return (
     <PathStep $tone={tone} data-testid="liquidation-hunt-path-step">
       <PathStepHead>
@@ -306,15 +325,26 @@ function PathStepRow({
           {t('hunt.path.step', { n: step.index ?? 0 })}
           {lev ? ` · ${t('hunt.path.leverage', { lev: lev.replace('x', '') })}` : ''}
         </PathIndex>
-        <PathChip $tone={tone}>{chip}</PathChip>
+        <PathChip $tone={tone}>{t(`hunt.path.roles.${roleKey}`)}</PathChip>
       </PathStepHead>
       <Text variant="bodySm">
         {formatPx(step.band?.price)}
         {step.movePct ? ` (${step.movePct})` : ''}
       </Text>
+      {strength != null ? (
+        <ScoreBar title={t('hunt.path.strength')}>
+          <ScoreFill $side={step.band?.direction === 'down' ? 'down' : 'up'} $pct={strength} />
+        </ScoreBar>
+      ) : null}
       <PathMeta>
         <MetricLabel>{t('hunt.path.zoneLiq')}</MetricLabel>
         <MetricValue>{money(step.zoneNotional)}</MetricValue>
+        {zoneEst ? (
+          <>
+            <MetricLabel>{t('hunt.path.zoneEst')}</MetricLabel>
+            <MetricValue>{zoneEst}</MetricValue>
+          </>
+        ) : null}
         <MetricLabel>{t('hunt.path.fromLast')}</MetricLabel>
         <MetricValue>{money(step.standalone?.notional)}</MetricValue>
         {(step.index ?? 0) > 1 ? (
@@ -322,9 +352,13 @@ function PathStepRow({
             <MetricLabel>{t('hunt.path.hop')}</MetricLabel>
             <MetricValue>{money(step.incremental?.notional)}</MetricValue>
             <MetricLabel>{t('hunt.path.afterCascade')}</MetricLabel>
-            <MetricValue $tone={tone === 'easier' || tone === 'self' ? 'profit' : 'muted'}>
-              {step.selfFueling ? t('hunt.path.selfFueling') : money(step.remaining?.notional)}
-            </MetricValue>
+            <MetricValue $tone={tone === 'self' || tone === 'helped' ? 'profit' : 'muted'}>{remaining}</MetricValue>
+            {step.assistancePct != null && step.assistancePct !== '' ? (
+              <>
+                <MetricLabel>{t('hunt.path.strength')}</MetricLabel>
+                <MetricValue>{`${Math.round(Number(step.assistancePct))}`}</MetricValue>
+              </>
+            ) : null}
           </>
         ) : null}
       </PathMeta>

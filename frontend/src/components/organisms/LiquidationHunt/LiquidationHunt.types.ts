@@ -84,6 +84,18 @@ export type HuntWalk = {
 
 export type HuntPanel = 'compare' | 'path';
 
+export type HuntCascadeRole =
+  | 'start'
+  | 'self'
+  | 'helped'
+  | 'stall'
+  | 'unreachable'
+  | 'missing'
+  | 'observed'
+  | string;
+
+export type HuntCascadeStrengthLevel = 'self' | 'strong' | 'mixed' | 'weak' | string;
+
 export type HuntCascadeStep = {
   index?: number;
   band?: HuntBand;
@@ -92,14 +104,20 @@ export type HuntCascadeStep = {
   hopPct?: string;
   zoneNotional?: string;
   cumulativeNotional?: string;
+  fuelAdds?: string;
   standalone?: HuntWalk;
   incremental?: HuntWalk;
   remaining?: HuntWalk;
   priorCascadeNotional?: string;
+  fuelSpent?: string;
   assistancePct?: string;
+  strength?: string;
+  strengthLevel?: HuntCascadeStrengthLevel;
+  role?: HuntCascadeRole;
   easier?: boolean;
   selfFueling?: boolean;
   reachable?: boolean;
+  zoneEst?: string;
   note?: string;
 };
 
@@ -109,6 +127,12 @@ export type HuntCascadePath = {
   reachableCount?: number;
   easierCount?: number;
   selfFuelingCount?: number;
+  feedsUntilIndex?: number;
+  feedsUntilPrice?: string;
+  stallsAtIndex?: number;
+  stallsAtPrice?: string;
+  stallRole?: HuntCascadeRole;
+  stallNote?: string;
   chainEasier?: boolean;
   summary?: string;
 };

@@ -72,11 +72,15 @@ const sample: HuntReport = {
       },
       upCascade: {
         direction: 'up',
-        summary: '3 short liquidations above zones (2 reachable). Hitting earlier zones cheapens 1 later hop(s).',
+        summary: 'Cascade feeds itself through zone 1. Stalls at zone 2 — extra spot is needed.',
+        stallsAtIndex: 2,
+        stallNote: 'Prior assumed exit flow covers 56% of this hop; desk still needs 40000.',
         chainEasier: true,
         steps: [
           {
             index: 1,
+            role: 'start',
+            zoneEst: 'model',
             band: { price: '64256', leverage: '125', movePct: '+0.40' },
             zoneNotional: '800000',
             standalone: { notional: '180000', reachable: true },
@@ -85,6 +89,8 @@ const sample: HuntReport = {
           },
           {
             index: 2,
+            role: 'helped',
+            zoneEst: 'model',
             band: { price: '64384', leverage: '100', movePct: '+0.60' },
             hopPct: '+0.20',
             zoneNotional: '2100000',
@@ -92,7 +98,8 @@ const sample: HuntReport = {
             remaining: { notional: '40000', reachable: true },
             easier: true,
             assistancePct: '56',
-            note: 'Triggering the previous zone covers about 56% of this hop.',
+            strength: '56',
+            note: 'Prior assumed exit flow covers 56% of this hop.',
           },
         ],
       },
@@ -102,6 +109,8 @@ const sample: HuntReport = {
         steps: [
           {
             index: 1,
+            role: 'start',
+            zoneEst: 'model',
             band: { price: '63744', leverage: '125', movePct: '-0.40' },
             zoneNotional: '700000',
             standalone: { notional: '220000', reachable: true },
@@ -138,7 +147,8 @@ describe('LiquidationHunt', () => {
     expect(screen.getByTestId('liquidation-hunt-path-down')).toBeInTheDocument();
     expect(screen.queryByTestId('liquidation-hunt-up')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('liquidation-hunt-path-step').length).toBe(3);
-    expect(screen.getByText(/56% of this hop/i)).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-path-up-stall')).toHaveTextContent(/stops feeding itself at zone 2/i);
+    expect(screen.getAllByText(/56% of this hop/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/first zone from last price/i)).toBeInTheDocument();
   });
 

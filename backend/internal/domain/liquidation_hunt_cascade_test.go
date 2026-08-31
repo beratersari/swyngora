@@ -24,8 +24,8 @@ func TestBuildHuntCascadePath_OrdersClosestFirst(t *testing.T) {
 	if got.Steps[0].Band.Leverage != 125 || got.Steps[1].Band.Leverage != 50 || got.Steps[2].Band.Leverage != 25 {
 		t.Fatalf("order %+v %+v %+v", got.Steps[0].Band, got.Steps[1].Band, got.Steps[2].Band)
 	}
-	if got.Steps[0].Easier || got.Steps[0].Index != 1 {
-		t.Fatalf("first step must not be easier: %+v", got.Steps[0])
+	if got.Steps[0].Role != HuntCascadeRoleStart || got.Steps[0].SelfFueling {
+		t.Fatalf("first step: %+v", got.Steps[0])
 	}
 	if math.Abs(got.Steps[0].MovePct-0.4) > 0.05 {
 		t.Fatalf("move %+v", got.Steps[0])
@@ -35,8 +35,7 @@ func TestBuildHuntCascadePath_OrdersClosestFirst(t *testing.T) {
 	}
 }
 
-func TestBuildHuntCascadePath_PriorZoneCheapensNextHop(t *testing.T) {
-	// Fat first zone; thin book between 101 and 102 so 50% cascade fill walks through.
+func TestBuildHuntCascadePath_SelfFuelingWhenFuelCoversHop(t *testing.T) {
 	bands := []HuntBand{
 		{Direction: "up", Leverage: 100, Price: 101, EstNotional: 20_000},
 		{Direction: "up", Leverage: 50, Price: 102, EstNotional: 5_000},
@@ -52,21 +51,61 @@ func TestBuildHuntCascadePath_PriorZoneCheapensNextHop(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	second := got.Steps[1]
-	if second.PriorCascadeNotional <= 0 {
-		t.Fatalf("want prior cascade: %+v", second)
+	if second.PriorCascadeNotional != 10_000 {
+		t.Fatalf("fuel %v", second.PriorCascadeNotional)
 	}
-	if !second.Easier && !second.SelfFueling {
-		t.Fatalf("second hop should be cheaper or self-fueling: %+v", second)
+	if !second.SelfFueling || second.Role != HuntCascadeRoleSelf {
+		t.Fatalf("want self-fueling from fuel>=hop: %+v", second)
 	}
-	if second.Remaining.Notional >= second.Incremental.Notional && !second.SelfFueling {
-		t.Fatalf("remaining should drop: inc=%v rem=%v", second.Incremental.Notional, second.Remaining.Notional)
+	if second.Remaining.Notional != 0 || !second.Remaining.Reachable {
+		t.Fatalf("remaining must be the final zero walk: %+v", second.Remaining)
 	}
-	if !got.ChainEasier {
-		t.Fatalf("path should be chain-easier: %s", got.Summary)
+	if second.AssistancePct == nil || *second.AssistancePct != 100 || second.Strength == nil || *second.Strength != 100 {
+		t.Fatalf("strength %+v assist %+v", second.Strength, second.AssistancePct)
+	}
+	if got.FeedsUntilIndex != 2 || got.StallsAtIndex != 0 {
+		t.Fatalf("feeds/stall %+v", got)
 	}
 }
 
-func TestBuildHuntCascadePath_ThickBookDoesNotSelfFuel(t *testing.T) {
+func TestBuildHuntCascadePath_TinyFuelAtWallIsNotSelfFueling(t *testing.T) {
+	// First ask beyond 101 is already at 102. A $1 consume would set endPrice=102
+	// under the old price-touch rule. Fuel must cover WalkBookToPrice's hop cost.
+	bands := []HuntBand{
+		{Direction: "up", Leverage: 100, Price: 101, EstNotional: 4}, // fuel = 2
+		{Direction: "up", Leverage: 50, Price: 102, EstNotional: 5_000},
+	}
+	asks := []ImpactSourceLevel{
+		{Price: 100.50, Quantity: 2},
+		{Price: 101.00, Quantity: 2},
+		{Price: 102.00, Quantity: 20},
+	}
+	got := BuildHuntCascadePath("up", bands, 100, asks, ImpactSideBuy)
+	if len(got.Steps) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	second := got.Steps[1]
+	if !second.Incremental.Reachable || second.Incremental.Notional < 100 {
+		t.Fatalf("hop should be the 102 wall: %+v", second.Incremental)
+	}
+	if second.SelfFueling {
+		t.Fatalf("tiny fuel must not self-fuel: %+v", second)
+	}
+	if second.AssistancePct != nil && *second.AssistancePct == 100 {
+		t.Fatalf("assistance left at 100 after non-self hop: %+v", second)
+	}
+	if second.Remaining.Notional <= 0 && second.Remaining.Reachable {
+		t.Fatalf("remaining must be the leftover desk walk, not a zero self-fuel walk: %+v", second.Remaining)
+	}
+	if second.Role != HuntCascadeRoleHelped && second.Role != HuntCascadeRoleStall {
+		t.Fatalf("role %+v", second)
+	}
+	if got.StallsAtIndex != 2 {
+		t.Fatalf("should stall at hop 2: %+v", got)
+	}
+}
+
+func TestBuildHuntCascadePath_ThickBookStalls(t *testing.T) {
 	asks := make([]ImpactSourceLevel, 0, 20)
 	for i := 0; i < 20; i++ {
 		asks = append(asks, ImpactSourceLevel{Price: 100.10 + float64(i)*0.4, Quantity: 400})
@@ -82,12 +121,15 @@ func TestBuildHuntCascadePath_ThickBookDoesNotSelfFuel(t *testing.T) {
 	if got.Steps[1].SelfFueling {
 		t.Fatalf("thick book must not self-fuel: %+v", got.Steps[1])
 	}
-	if got.Steps[1].AssistancePct > 25 {
+	if got.Steps[1].AssistancePct != nil && *got.Steps[1].AssistancePct > 25 {
 		t.Fatalf("tiny first zone should barely help: %+v", got.Steps[1])
+	}
+	if got.StallsAtIndex != 2 {
+		t.Fatalf("stall %+v", got)
 	}
 }
 
-func TestBuildHuntCascadePath_UnreachableHopIsNotEasier(t *testing.T) {
+func TestBuildHuntCascadePath_UnreachableHopHasNoAssistance(t *testing.T) {
 	bands := []HuntBand{
 		{Direction: "up", Leverage: 100, Price: 101, EstNotional: 50_000},
 		{Direction: "up", Leverage: 10, Price: 110, EstNotional: 80_000},
@@ -101,10 +143,26 @@ func TestBuildHuntCascadePath_UnreachableHopIsNotEasier(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	if got.Steps[1].Reachable || got.Steps[1].Easier || got.Steps[1].SelfFueling {
-		t.Fatalf("unreachable hop must not look easier: %+v", got.Steps[1])
+		t.Fatalf("unreachable hop: %+v", got.Steps[1])
 	}
-	if got.Steps[1].AssistancePct != 0 {
-		t.Fatalf("unreachable assistance %+v", got.Steps[1])
+	if got.Steps[1].AssistancePct != nil || got.Steps[1].Strength != nil {
+		t.Fatalf("do not invent assistance/strength: %+v", got.Steps[1])
+	}
+	if got.Steps[1].Role != HuntCascadeRoleUnreachable && got.Steps[1].Role != HuntCascadeRoleMissing {
+		t.Fatalf("role %+v", got.Steps[1])
+	}
+}
+
+func TestBuildHuntCascadePath_MissingBook(t *testing.T) {
+	got := BuildHuntCascadePath("up", []HuntBand{{Direction: "up", Price: 101, EstNotional: 10}}, 100, nil, ImpactSideBuy)
+	if len(got.Steps) != 1 || got.Steps[0].Role != HuntCascadeRoleMissing {
+		t.Fatalf("%+v", got)
+	}
+	if got.Steps[0].Strength != nil || got.Steps[0].AssistancePct != nil {
+		t.Fatalf("missing book must not invent scores: %+v", got.Steps[0])
+	}
+	if got.StallsAtIndex != 1 {
+		t.Fatalf("stall at start %+v", got)
 	}
 }
 
@@ -112,7 +170,7 @@ func TestBuildHuntCascadePath_DownAndSkipsWrongSide(t *testing.T) {
 	bands := []HuntBand{
 		{Direction: "down", Leverage: 100, Price: 99.40, EstNotional: 10},
 		{Direction: "down", Leverage: 50, Price: 98.40, EstNotional: 20},
-		{Direction: "down", Leverage: 25, Price: 101, EstNotional: 99}, // wrong side
+		{Direction: "down", Leverage: 25, Price: 101, EstNotional: 99},
 	}
 	bids := []ImpactSourceLevel{
 		{Price: 99.80, Quantity: 2},
@@ -157,5 +215,8 @@ func TestBuildHuntVenue_AttachesCascadePaths(t *testing.T) {
 	}
 	if got.UpCascade.Steps[0].MovePct <= 0 || got.DownCascade.Steps[0].MovePct >= 0 {
 		t.Fatalf("signs up=%v down=%v", got.UpCascade.Steps[0].MovePct, got.DownCascade.Steps[0].MovePct)
+	}
+	if got.UpCascade.Steps[0].Role != HuntCascadeRoleStart {
+		t.Fatalf("start role %+v", got.UpCascade.Steps[0])
 	}
 }

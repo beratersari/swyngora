@@ -4248,14 +4248,29 @@ export interface components {
             hopPct?: string;
             zoneNotional?: string;
             cumulativeNotional?: string;
+            /** @description Assumed exit flow this zone adds if it has estimated notional */
+            fuelAdds?: string;
             standalone?: components["schemas"]["LiquidationHuntWalk"];
             incremental?: components["schemas"]["LiquidationHuntWalk"];
             remaining?: components["schemas"]["LiquidationHuntWalk"];
             priorCascadeNotional?: string;
+            fuelSpent?: string;
+            /** @description Omitted when the hop cannot be scored */
             assistancePct?: string;
+            /** @description 0–100 hop feed strength; omitted when inputs are missing */
+            strength?: string;
+            /** @enum {string} */
+            strengthLevel?: "self" | "strong" | "mixed" | "weak";
+            /** @enum {string} */
+            role?: "start" | "self" | "helped" | "stall" | "unreachable" | "missing" | "observed";
             easier?: boolean;
             selfFueling?: boolean;
             reachable?: boolean;
+            /**
+             * @description What liquidation size was used
+             * @enum {string}
+             */
+            zoneEst?: "model" | "observed" | "missing";
             note?: string;
         };
         /** @description Zones from last price outward; earlier estimated liquidations may cheapen later hops */
@@ -4266,6 +4281,12 @@ export interface components {
             reachableCount?: number;
             easierCount?: number;
             selfFuelingCount?: number;
+            feedsUntilIndex?: number;
+            feedsUntilPrice?: string;
+            stallsAtIndex?: number;
+            stallsAtPrice?: string;
+            stallRole?: string;
+            stallNote?: string;
             chainEasier?: boolean;
             summary?: string;
         };
