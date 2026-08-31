@@ -39,7 +39,7 @@
     "symbol": "Symbol",
     "pick": "Choose a coin to compare up and down liquidation hunts.",
     "empty": "No hunt read yet for this coin.",
-    "hint": "Scores say which side looks easier or more likely. Zone prices and desk P&L are the same model as before — informational only, not a prediction.",
+    "hint": "Scores say which side looks easier or more likely. Thin or missing inputs pull the score toward even. A venue with an error is shown but left out of the combined lean. Informational only, not a prediction.",
     "last": "Last",
     "oi": "Open interest",
     "fundingPayer": "{{side}}s pay funding",
@@ -60,6 +60,19 @@
       "efficiency": "Liq / spot",
       "desk": "Desk w/ cascade",
       "book": "Visible book"
+    },
+    "coverage": {
+      "complete": "Complete",
+      "usable": "Usable",
+      "thin": "Thin",
+      "insufficient": "Insufficient",
+      "excluded": "Not used in combined",
+      "status": {
+        "ok": "ok",
+        "weak": "weak",
+        "missing": "missing",
+        "error": "error"
+      }
     }
   },
   "chart": {

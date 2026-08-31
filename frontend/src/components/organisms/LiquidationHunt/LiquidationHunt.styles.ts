@@ -193,3 +193,81 @@ export const Hint = styled.p`
   line-height: 1.45;
   color: ${({ theme }) => theme.semantic.text.secondary};
 `;
+
+export const CoverageRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+`;
+
+export const CoverageChip = styled.span<{ $tone: 'complete' | 'usable' | 'thin' | 'insufficient' }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.semantic.text.primary};
+  background: ${({ theme, $tone }) =>
+    $tone === 'complete'
+      ? theme.semantic.bg.successSoft
+      : $tone === 'usable'
+        ? theme.semantic.bg.accentSoft
+        : $tone === 'thin'
+          ? theme.semantic.bg.accentMuted
+          : theme.semantic.bg.dangerSoft};
+`;
+
+export const CoverageMeter = styled.div`
+  flex: 1 1 120px;
+  min-width: 80px;
+  max-width: 220px;
+  height: 6px;
+  border-radius: 99px;
+  background: ${({ theme }) => theme.semantic.bg.accentMuted};
+  overflow: hidden;
+`;
+
+export const CoverageFill = styled.div<{ $pct: number; $tone: 'complete' | 'usable' | 'thin' | 'insufficient' }>`
+  height: 100%;
+  width: ${({ $pct }) => `${Math.max(0, Math.min(100, $pct))}%`};
+  background: ${({ theme, $tone }) =>
+    $tone === 'complete' || $tone === 'usable'
+      ? theme.semantic.status.success
+      : $tone === 'thin'
+        ? theme.semantic.status.warning
+        : theme.semantic.status.error};
+`;
+
+export const InputList = styled.ul`
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+`;
+
+export const InputPill = styled.li<{ $tone: 'ok' | 'weak' | 'missing' | 'error' }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  color: ${({ theme, $tone }) =>
+    $tone === 'ok'
+      ? theme.semantic.status.success
+      : $tone === 'weak'
+        ? theme.semantic.status.warning
+        : theme.semantic.status.error};
+  background: ${({ theme, $tone }) =>
+    $tone === 'ok'
+      ? theme.semantic.bg.successSoft
+      : $tone === 'error' || $tone === 'missing'
+        ? theme.semantic.bg.dangerSoft
+        : theme.semantic.bg.accentMuted};
+`;

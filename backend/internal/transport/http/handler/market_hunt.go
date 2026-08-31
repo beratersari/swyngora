@@ -103,6 +103,7 @@ type huntVenueDTO struct {
 	UpScore            huntDirectionScoreDTO `json:"upScore"`
 	DownScore          huntDirectionScoreDTO `json:"downScore"`
 	Bias               huntBiasDTO           `json:"bias"`
+	Coverage           huntCoverageDTO       `json:"coverage"`
 	Error              string                `json:"error,omitempty"`
 }
 
@@ -118,16 +119,38 @@ type huntDirectionScoreDTO struct {
 	Direction string          `json:"direction"`
 	Score     float64         `json:"score"`
 	Level     string          `json:"level"`
+	Coverage  float64         `json:"coverage"`
 	Factors   []huntFactorDTO `json:"factors"`
 	Reasons   []string        `json:"reasons"`
 }
 
+type huntInputStatusDTO struct {
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	Status string  `json:"status"`
+	Weight float64 `json:"weight"`
+	Detail string  `json:"detail"`
+}
+
+type huntCoverageDTO struct {
+	Score   float64              `json:"score"`
+	Level   string               `json:"level"`
+	Usable  bool                 `json:"usable"`
+	Inputs  []huntInputStatusDTO `json:"inputs"`
+	Missing []string             `json:"missing"`
+	Weak    []string             `json:"weak"`
+	Summary string               `json:"summary"`
+}
+
 type huntBiasDTO struct {
-	Lean      string  `json:"lean"`
-	Margin    float64 `json:"margin"`
-	UpScore   float64 `json:"upScore"`
-	DownScore float64 `json:"downScore"`
-	Summary   string  `json:"summary"`
+	Lean      string          `json:"lean"`
+	Margin    float64         `json:"margin"`
+	UpScore   float64         `json:"upScore"`
+	DownScore float64         `json:"downScore"`
+	Summary   string          `json:"summary"`
+	Coverage  huntCoverageDTO `json:"coverage"`
+	Included  []string        `json:"included,omitempty"`
+	Excluded  []string        `json:"excluded,omitempty"`
 }
 
 type huntResponse struct {
@@ -137,6 +160,7 @@ type huntResponse struct {
 	Assumptions huntAssumptionsDTO `json:"assumptions"`
 	Venues      []huntVenueDTO     `json:"venues"`
 	Bias        *huntBiasDTO       `json:"bias,omitempty"`
+	Coverage    *huntCoverageDTO   `json:"coverage,omitempty"`
 	Note        string             `json:"note"`
 }
 
@@ -171,13 +195,14 @@ func huntToDTO(a *domain.HuntReport) huntResponse {
 			LongShortIsAccounts: true,
 			LeverageMix:         mix,
 		},
-		Venues: venues,
-		Bias:   huntBiasToDTO(a.Bias),
-		Note:   huntDisclaimer,
+		Venues:   venues,
+		Bias:     huntBiasToDTO(a.Bias),
+		Coverage: huntCoveragePtrToDTO(a.Coverage),
+		Note:     huntDisclaimer,
 	}
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow — not a prediction."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
 
 func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 	return huntVenueDTO{
@@ -203,6 +228,7 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		UpScore:            huntDirectionToDTO(v.UpScore),
 		DownScore:          huntDirectionToDTO(v.DownScore),
 		Bias:               huntBiasValueToDTO(v.Bias),
+		Coverage:           huntCoverageToDTO(v.Coverage),
 		Error:              v.Error,
 	}
 }
@@ -226,9 +252,48 @@ func huntDirectionToDTO(s domain.HuntDirectionScore) huntDirectionScoreDTO {
 		Direction: s.Direction,
 		Score:     s.Score,
 		Level:     s.Level,
+		Coverage:  s.Coverage,
 		Factors:   factors,
 		Reasons:   reasons,
 	}
+}
+
+func huntCoverageToDTO(c domain.HuntCoverage) huntCoverageDTO {
+	inputs := make([]huntInputStatusDTO, 0, len(c.Inputs))
+	for _, in := range c.Inputs {
+		inputs = append(inputs, huntInputStatusDTO{
+			ID:     in.ID,
+			Label:  in.Label,
+			Status: in.Status,
+			Weight: in.Weight,
+			Detail: in.Detail,
+		})
+	}
+	missing := c.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	weak := c.Weak
+	if weak == nil {
+		weak = []string{}
+	}
+	return huntCoverageDTO{
+		Score:   c.Score,
+		Level:   c.Level,
+		Usable:  c.Usable,
+		Inputs:  inputs,
+		Missing: missing,
+		Weak:    weak,
+		Summary: c.Summary,
+	}
+}
+
+func huntCoveragePtrToDTO(c *domain.HuntCoverage) *huntCoverageDTO {
+	if c == nil {
+		return nil
+	}
+	out := huntCoverageToDTO(*c)
+	return &out
 }
 
 func huntBiasValueToDTO(b domain.HuntBias) huntBiasDTO {
@@ -238,6 +303,9 @@ func huntBiasValueToDTO(b domain.HuntBias) huntBiasDTO {
 		UpScore:   b.UpScore,
 		DownScore: b.DownScore,
 		Summary:   b.Summary,
+		Coverage:  huntCoverageToDTO(b.Coverage),
+		Included:  b.Included,
+		Excluded:  b.Excluded,
 	}
 }
 

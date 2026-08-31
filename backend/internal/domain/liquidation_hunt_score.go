@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 )
 
 const (
@@ -33,17 +34,21 @@ type HuntDirectionScore struct {
 	Direction string       `json:"direction"`
 	Score     float64      `json:"score"`
 	Level     string       `json:"level"`
+	Coverage  float64      `json:"coverage"`
 	Factors   []HuntFactor `json:"factors"`
 	Reasons   []string     `json:"reasons"`
 }
 
 // HuntBias compares the two directions.
 type HuntBias struct {
-	Lean      string  `json:"lean"`
-	Margin    float64 `json:"margin"`
-	UpScore   float64 `json:"upScore"`
-	DownScore float64 `json:"downScore"`
-	Summary   string  `json:"summary"`
+	Lean      string       `json:"lean"`
+	Margin    float64      `json:"margin"`
+	UpScore   float64      `json:"upScore"`
+	DownScore float64      `json:"downScore"`
+	Summary   string       `json:"summary"`
+	Coverage  HuntCoverage `json:"coverage"`
+	Included  []string     `json:"included,omitempty"`
+	Excluded  []string     `json:"excluded,omitempty"`
 }
 
 // HuntSignals are extra tape inputs. NaN / zero-weight means “unknown”.
@@ -53,11 +58,21 @@ type HuntSignals struct {
 	OI1hPct, OI4hPct                    float64
 	HasPrice                            bool
 	HasOI                               bool
+	Has1hPrice, Has4hPrice              bool
+	PriceFromTicker                     bool
 	TakerBuy1h, TakerSell1h             float64
 	HasTaker                            bool
 	LongLiq1h, ShortLiq1h               float64
 	LongLiq4h, ShortLiq4h               float64
 	HasLiqWindows                       bool
+	LiqFeedPresent                      bool
+	HasBook                             bool
+	HasLongShort                        bool
+	HasFunding                          bool
+	BookError                           string
+	OIError                             string
+	LSError                             string
+	FundError                           string
 }
 
 // HuntEaseFromScore maps 0–100 to a short label.
@@ -87,24 +102,95 @@ func HuntLeanFromScores(up, down float64) (lean string, margin float64) {
 	}
 }
 
-// AttachHuntDirectionScores fills UpScore / DownScore / Bias without changing
-// zone bands or hunt P&L fields.
+// HuntVenueIncluded is true when this venue may enter the combined lean.
+// An erroring or unusable venue is shown on its own card but never mixed in.
+func HuntVenueIncluded(v HuntVenueReport) bool {
+	if v.Error != "" {
+		return false
+	}
+	if v.Price <= 0 {
+		return false
+	}
+	if v.Coverage.Level != "" && !v.Coverage.Usable {
+		return false
+	}
+	return true
+}
+
+// HuntCoverageLevel maps 0–100 completeness to a short label.
+func HuntCoverageLevel(score float64) string {
+	switch {
+	case score >= 85:
+		return HuntCoverageComplete
+	case score >= 65:
+		return HuntCoverageUsable
+	case score >= 40:
+		return HuntCoverageThin
+	default:
+		return HuntCoverageInsufficient
+	}
+}
+
+// AttachHuntDirectionScores fills UpScore / DownScore / Bias / Coverage
+// without changing zone bands or hunt P&L fields.
 func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
 	if v == nil {
 		return
 	}
-	v.UpScore = scoreHuntDirection("up", *v, sig)
-	v.DownScore = scoreHuntDirection("down", *v, sig)
-	v.Bias = huntBiasFromScores(v.UpScore, v.DownScore)
+	cov := buildHuntCoverage(*v, sig)
+	v.Coverage = cov
+	up := scoreHuntDirection("up", *v, sig)
+	down := scoreHuntDirection("down", *v, sig)
+	up.Score = shrinkHuntScore(up.Score, cov.Score)
+	down.Score = shrinkHuntScore(down.Score, cov.Score)
+	up.Level = HuntEaseFromScore(up.Score)
+	down.Level = HuntEaseFromScore(down.Score)
+	up.Coverage = cov.Score
+	down.Coverage = cov.Score
+	if !cov.Usable {
+		up.Reasons = append([]string{"This venue is incomplete and is not used in the combined lean."}, up.Reasons...)
+		down.Reasons = append([]string{"This venue is incomplete and is not used in the combined lean."}, down.Reasons...)
+	} else if cov.Score < 85 && cov.Summary != "" {
+		note := cov.Summary
+		up.Reasons = append(up.Reasons, note)
+		down.Reasons = append(down.Reasons, note)
+	}
+	v.UpScore = up
+	v.DownScore = down
+	v.Bias = huntBiasFromScores(up, down)
+	v.Bias.Coverage = cov
 }
 
-// CombineHuntBias is an OI-weighted lean across venues. Venues with no price
-// and no score are skipped — never filled from the other exchange.
+// shrinkHuntScore pulls a raw factor mix toward 50 when inputs are thin,
+// so a one-factor read cannot look as decisive as a full tape.
+func shrinkHuntScore(raw, coverage float64) float64 {
+	c := coverage / 100
+	if c < 0 {
+		c = 0
+	}
+	if c > 1 {
+		c = 1
+	}
+	keep := 0.30 + 0.70*c
+	return clampScore(50 + (raw-50)*keep)
+}
+
+// CombineHuntBias is an OI-weighted lean across usable venues only.
+// A venue with an error or unusable coverage is listed in Excluded and
+// never filled from the other exchange.
 func CombineHuntBias(venues []HuntVenueReport) *HuntBias {
-	var upW, downW, oiSum float64
-	n := 0
+	var upW, downW, covW, oiSum float64
+	included := make([]string, 0, len(venues))
+	excluded := make([]string, 0, len(venues))
 	for _, v := range venues {
-		if v.Price <= 0 && v.UpScore.Score == 0 && v.DownScore.Score == 0 {
+		name := string(v.Exchange)
+		if name == "" {
+			name = v.Symbol
+		}
+		if !HuntVenueIncluded(v) {
+			if name != "" {
+				excluded = append(excluded, name)
+			}
 			continue
 		}
 		w := v.OpenInterestValue
@@ -113,11 +199,25 @@ func CombineHuntBias(venues []HuntVenueReport) *HuntBias {
 		}
 		upW += v.UpScore.Score * w
 		downW += v.DownScore.Score * w
+		covW += v.Coverage.Score * w
 		oiSum += w
-		n++
+		included = append(included, name)
 	}
-	if n == 0 || oiSum <= 0 {
-		return nil
+	if len(included) == 0 || oiSum <= 0 {
+		if len(excluded) == 0 {
+			return nil
+		}
+		cov := HuntCoverage{
+			Usable:  false,
+			Level:   HuntCoverageInsufficient,
+			Summary: "No venue had enough data for a combined lean.",
+		}
+		return &HuntBias{
+			Lean:     HuntLeanEven,
+			Summary:  cov.Summary,
+			Coverage: cov,
+			Excluded: excluded,
+		}
 	}
 	up := clampScore(upW / oiSum)
 	down := clampScore(downW / oiSum)
@@ -125,6 +225,17 @@ func CombineHuntBias(venues []HuntVenueReport) *HuntBias {
 		HuntDirectionScore{Direction: "up", Score: up, Level: HuntEaseFromScore(up)},
 		HuntDirectionScore{Direction: "down", Score: down, Level: HuntEaseFromScore(down)},
 	)
+	bias.Included = included
+	bias.Excluded = excluded
+	bias.Coverage = HuntCoverage{
+		Score:  clampScore(covW / oiSum),
+		Usable: true,
+	}
+	bias.Coverage.Level = HuntCoverageLevel(bias.Coverage.Score)
+	bias.Coverage.Summary = combinedCoverageSummary(bias)
+	if len(excluded) > 0 {
+		bias.Summary = bias.Summary + " Excluded from combined: " + joinHuntNames(excluded) + "."
+	}
 	return &bias
 }
 
@@ -522,4 +633,202 @@ func clampAbs(v, cap float64) float64 {
 		return -cap
 	}
 	return v
+}
+
+func buildHuntCoverage(v HuntVenueReport, sig HuntSignals) HuntCoverage {
+	book := huntInputBook(v, sig)
+	oi := huntInputOI(v, sig)
+	trend := huntInputTrend(sig)
+	crowd := huntInputCrowding(sig)
+	flow := huntInputFlow(sig)
+	inputs := []HuntInputStatus{book, oi, trend, crowd, flow}
+
+	var num, den float64
+	missing := make([]string, 0, 4)
+	weak := make([]string, 0, 4)
+	for _, in := range inputs {
+		den += in.Weight
+		switch in.Status {
+		case HuntInputOK:
+			num += in.Weight
+		case HuntInputWeak:
+			num += in.Weight * 0.5
+			weak = append(weak, in.Label)
+		case HuntInputMissing:
+			missing = append(missing, in.Label)
+		case HuntInputError:
+			missing = append(missing, in.Label)
+		}
+	}
+	score := 0.0
+	if den > 0 {
+		score = clampScore(100 * num / den)
+	}
+	usable := v.Error == "" && v.Price > 0 && book.Status != HuntInputError && book.Status != HuntInputMissing
+	if score < 40 {
+		usable = false
+	}
+	out := HuntCoverage{
+		Score:   score,
+		Level:   HuntCoverageLevel(score),
+		Usable:  usable,
+		Inputs:  inputs,
+		Missing: missing,
+		Weak:    weak,
+	}
+	out.Summary = huntCoverageSummary(out)
+	return out
+}
+
+func huntInputBook(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
+	in := HuntInputStatus{ID: "book", Label: "Spot book", Weight: 0.28}
+	depth := v.VisibleAskNotional + v.VisibleBidNotional
+	hasBook := sig.HasBook || depth > 0
+	if sig.BookError != "" {
+		in.Status = HuntInputError
+		in.Detail = sig.BookError
+		return in
+	}
+	if !hasBook {
+		in.Status = HuntInputMissing
+		in.Detail = "no visible spot book"
+		return in
+	}
+	if v.UpHunt.Spot.Exhausted && v.DownHunt.Spot.Exhausted {
+		in.Status = HuntInputWeak
+		in.Detail = "visible book is exhausted on both sides"
+		return in
+	}
+	in.Status = HuntInputOK
+	in.Detail = "live spot book"
+	return in
+}
+
+func huntInputOI(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
+	in := HuntInputStatus{ID: "oi", Label: "Open interest", Weight: 0.16}
+	if sig.OIError != "" && v.OpenInterestValue <= 0 {
+		in.Status = HuntInputError
+		in.Detail = sig.OIError
+		return in
+	}
+	if v.OpenInterestValue <= 0 {
+		in.Status = HuntInputMissing
+		in.Detail = "no open interest"
+		return in
+	}
+	if !sig.HasOI {
+		in.Status = HuntInputWeak
+		in.Detail = "open interest has no recent change history"
+		return in
+	}
+	in.Status = HuntInputOK
+	in.Detail = "open interest loaded"
+	return in
+}
+
+func huntInputTrend(sig HuntSignals) HuntInputStatus {
+	in := HuntInputStatus{ID: "trend", Label: "Price + OI trend", Weight: 0.20}
+	if !sig.HasPrice {
+		in.Status = HuntInputMissing
+		in.Detail = "no price change window"
+		return in
+	}
+	if sig.PriceFromTicker || !sig.Has4hPrice {
+		in.Status = HuntInputWeak
+		in.Detail = "trend is only a short or ticker window"
+		return in
+	}
+	in.Status = HuntInputOK
+	in.Detail = "1h/4h price path loaded"
+	return in
+}
+
+func huntInputCrowding(sig HuntSignals) HuntInputStatus {
+	in := HuntInputStatus{ID: "crowding", Label: "Crowding + funding", Weight: 0.18}
+	if sig.LSError != "" && !sig.HasLongShort {
+		in.Status = HuntInputError
+		in.Detail = sig.LSError
+		return in
+	}
+	if !sig.HasLongShort {
+		in.Status = HuntInputMissing
+		in.Detail = "no account long/short"
+		return in
+	}
+	if !sig.HasFunding {
+		in.Status = HuntInputWeak
+		in.Detail = "long/short without a funding print"
+		return in
+	}
+	in.Status = HuntInputOK
+	in.Detail = "long/short and funding loaded"
+	return in
+}
+
+func huntInputFlow(sig HuntSignals) HuntInputStatus {
+	in := HuntInputStatus{ID: "flow", Label: "Taker + recent liqs", Weight: 0.18}
+	if sig.HasTaker {
+		in.Status = HuntInputOK
+		in.Detail = "1h taker flow loaded"
+		return in
+	}
+	if sig.LiqFeedPresent || sig.HasLiqWindows {
+		in.Status = HuntInputWeak
+		in.Detail = "no taker tape; using observed liquidations only"
+		return in
+	}
+	in.Status = HuntInputMissing
+	in.Detail = "no taker flow or liquidation feed"
+	return in
+}
+
+func huntCoverageSummary(c HuntCoverage) string {
+	if !c.Usable {
+		if len(c.Missing) > 0 {
+			return fmt.Sprintf("Insufficient data (%s missing).", joinHuntNames(c.Missing))
+		}
+		return "Insufficient data for a combined lean."
+	}
+	switch c.Level {
+	case HuntCoverageComplete:
+		return "Inputs look complete."
+	case HuntCoverageUsable:
+		if len(c.Weak) > 0 {
+			return fmt.Sprintf("Usable, but %s is thin.", joinHuntNames(c.Weak))
+		}
+		return "Usable coverage."
+	case HuntCoverageThin:
+		bits := append([]string{}, c.Missing...)
+		bits = append(bits, c.Weak...)
+		if len(bits) > 0 {
+			return fmt.Sprintf("Thin coverage: %s.", joinHuntNames(bits))
+		}
+		return "Thin coverage."
+	default:
+		return "Insufficient data."
+	}
+}
+
+func combinedCoverageSummary(b HuntBias) string {
+	if len(b.Excluded) > 0 && len(b.Included) > 0 {
+		return fmt.Sprintf("Combined uses %s only (coverage %.0f). Left out: %s.",
+			joinHuntNames(b.Included), b.Coverage.Score, joinHuntNames(b.Excluded))
+	}
+	if b.Coverage.Level == HuntCoverageComplete {
+		return "Combined coverage looks complete."
+	}
+	return fmt.Sprintf("Combined coverage %.0f (%s).", b.Coverage.Score, b.Coverage.Level)
+}
+
+func joinHuntNames(in []string) string {
+	switch len(in) {
+	case 0:
+		return ""
+	case 1:
+		return in[0]
+	case 2:
+		return in[0] + " and " + in[1]
+	default:
+		return strings.Join(in[:len(in)-1], ", ") + ", and " + in[len(in)-1]
+	}
 }

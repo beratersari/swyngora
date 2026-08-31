@@ -57,10 +57,14 @@ func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol strin
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
 	out.Bias = domain.CombineHuntBias(out.Venues)
+	if out.Bias != nil {
+		cov := out.Bias.Coverage
+		out.Coverage = &cov
+	}
 	return out, nil
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow — not a prediction."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
 
 func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) domain.HuntVenueReport {
 	in := domain.HuntInputs{Exchange: ex, Symbol: symbol}
@@ -72,6 +76,7 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		OI4hPct:     math.NaN(),
 	}
 	var wg sync.WaitGroup
+	var sigMu sync.Mutex
 	var oiErr, lsErr, fundErr, bookErr error
 	var oiSer *domain.OpenInterestSeries
 
@@ -99,8 +104,11 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 				return
 			}
 			if ser != nil {
-				p := domain.NormalizeLongShortPoint(ser.Current)
-				in.LongShare, in.ShortShare = p.LongShare, p.ShortShare
+				pt := domain.NormalizeLongShortPoint(ser.Current)
+				in.LongShare, in.ShortShare = pt.LongShare, pt.ShortShare
+				sigMu.Lock()
+				sig.HasLongShort = true
+				sigMu.Unlock()
 			}
 		}
 	}()
@@ -114,6 +122,9 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			}
 			if ser != nil {
 				in.FundingRate = ser.Current.Rate
+				sigMu.Lock()
+				sig.HasFunding = true
+				sigMu.Unlock()
 			}
 		}
 	}()
@@ -127,6 +138,11 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		in.Price = domain.ImpactBookMid(books)
 		in.Asks = domain.CollectImpactLevels(domain.ImpactSideBuy, books)
 		in.Bids = domain.CollectImpactLevels(domain.ImpactSideSell, books)
+		if len(in.Asks)+len(in.Bids) > 0 {
+			sigMu.Lock()
+			sig.HasBook = true
+			sigMu.Unlock()
+		}
 	}()
 	go func() {
 		defer wg.Done()
@@ -135,10 +151,17 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			return
 		}
 		closes := domain.ClosesFromCandles(candles)
-		sig.Price1hPct = domain.PriceChangeOverBars(closes, 1)
-		sig.Price4hPct = domain.PriceChangeOverBars(closes, 4)
-		sig.Price24hPct = domain.PriceChangeOverBars(closes, 24)
+		p1 := domain.PriceChangeOverBars(closes, 1)
+		p4 := domain.PriceChangeOverBars(closes, 4)
+		p24 := domain.PriceChangeOverBars(closes, 24)
+		sigMu.Lock()
+		sig.Price1hPct = p1
+		sig.Price4hPct = p4
+		sig.Price24hPct = p24
 		sig.HasPrice = true
+		sig.Has1hPrice = !math.IsNaN(p1)
+		sig.Has4hPrice = !math.IsNaN(p4)
+		sigMu.Unlock()
 	}()
 	go func() {
 		defer wg.Done()
@@ -154,16 +177,28 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			if w.Window != domain.TakerWindow1h {
 				continue
 			}
+			sigMu.Lock()
 			sig.TakerBuy1h, sig.TakerSell1h = w.BuyNotional, w.SellNotional
 			sig.HasTaker = w.BuyNotional+w.SellNotional > 0
+			sigMu.Unlock()
 			return
 		}
 	}()
 	wg.Wait()
+	if bookErr != nil {
+		sig.BookError = bookErr.Error()
+	}
+	if lsErr != nil {
+		sig.LSError = lsErr.Error()
+	}
+	if fundErr != nil {
+		sig.FundError = fundErr.Error()
+	}
 
 	if s.liq != nil {
 		in.Liquidations = s.liq.Events(string(ex), symbol, now.Add(-24*time.Hour))
-		sig.HasLiqWindows = true
+		sig.LiqFeedPresent = true
+		sig.HasLiqWindows = len(in.Liquidations) > 0
 		cut1h := now.Add(-time.Hour)
 		cut4h := now.Add(-4 * time.Hour)
 		for _, e := range in.Liquidations {
@@ -194,6 +229,7 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 				if pct, perr := strconv.ParseFloat(tkr.PriceChangePercent, 64); perr == nil {
 					sig.Price24hPct = pct
 					sig.HasPrice = true
+					sig.PriceFromTicker = true
 				}
 			}
 		}
@@ -206,8 +242,10 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		}
 	}
 
+	if oiErr != nil && in.OIValue == 0 {
+		sig.OIError = oiErr.Error()
+	}
 	got := domain.BuildHuntVenue(in)
-	domain.AttachHuntDirectionScores(&got, sig)
 	switch {
 	case bookErr != nil && oiErr != nil:
 		got.Error = fmt.Sprintf("book: %v; open interest: %v", bookErr, oiErr)
@@ -215,6 +253,11 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		got.Error = bookErr.Error()
 	case oiErr != nil && in.OIValue == 0:
 		got.Error = oiErr.Error()
+	}
+	domain.AttachHuntDirectionScores(&got, sig)
+	if got.Error != "" {
+		got.Coverage.Usable = false
+		got.Bias.Coverage = got.Coverage
 	}
 	_ = lsErr
 	_ = fundErr

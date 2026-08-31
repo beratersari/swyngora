@@ -10,10 +10,32 @@ export type HuntFactor = {
   detail?: string;
 };
 
+export type HuntCoverageLevel = 'complete' | 'usable' | 'thin' | 'insufficient' | string;
+export type HuntInputState = 'ok' | 'weak' | 'missing' | 'error' | string;
+
+export type HuntInputStatus = {
+  id?: string;
+  label?: string;
+  status?: HuntInputState;
+  weight?: number;
+  detail?: string;
+};
+
+export type HuntCoverage = {
+  score?: number;
+  level?: HuntCoverageLevel;
+  usable?: boolean;
+  inputs?: HuntInputStatus[];
+  missing?: string[];
+  weak?: string[];
+  summary?: string;
+};
+
 export type HuntDirectionScore = {
   direction?: string;
   score?: number;
   level?: HuntEase;
+  coverage?: number;
   factors?: HuntFactor[];
   reasons?: string[];
 };
@@ -24,6 +46,9 @@ export type HuntBias = {
   upScore?: number;
   downScore?: number;
   summary?: string;
+  coverage?: HuntCoverage;
+  included?: string[];
+  excluded?: string[];
 };
 
 export type HuntBand = {
@@ -89,6 +114,7 @@ export type HuntVenue = {
   upScore?: HuntDirectionScore;
   downScore?: HuntDirectionScore;
   bias?: HuntBias;
+  coverage?: HuntCoverage;
   error?: string;
 };
 
@@ -98,6 +124,7 @@ export type HuntReport = {
   asOf?: string;
   venues?: HuntVenue[];
   bias?: HuntBias;
+  coverage?: HuntCoverage;
   note?: string;
 };
 

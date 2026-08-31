@@ -33,8 +33,9 @@ Each venue report includes:
 | `netWithCascade` | Part of estimated liquidations becomes exit flow at the target |
 | `houseEdge` | `profit` / `loss` / `unreachable` from `netWithCascade` |
 | `efficiency` | estimated liquidated notional ÷ spot notional |
-| `upScore` / `downScore` | 0–100 ease / likelihood for that direction, with `level`, `factors`, and `reasons` |
-| `bias` | `up` / `down` / `even` plus a one-line summary (venue and report-level) |
+| `upScore` / `downScore` | 0–100 ease / likelihood for that direction, with `level`, `coverage`, `factors`, and `reasons` |
+| `coverage` | How complete the inputs are (`complete` / `usable` / `thin` / `insufficient`); `usable=false` venues are shown but **not** mixed into combined `bias` |
+| `bias` | `up` / `down` / `even` plus a one-line summary (venue and report-level). Combined lists `included` / `excluded` venues |
 
 Zone bands and hunt P&L are **unchanged** by the scores. Scores only rank the two existing tours.
 
@@ -51,7 +52,7 @@ Each direction is a weighted mix of data the desk already has:
 | Crowding + funding | Estimated long/short OI share and who pays funding. Shorts crowded + shorts paying favors **up**. |
 | Taker + recent liqs | 1h aggressive buy/sell and 1h/4h observed liquidations. Buy-heavy / short-liq-heavy tape favors **up**. |
 
-Missing tape (no candles, no taker, no live book) drops that factor instead of pretending it is 50/50. Combined `bias` is **OI-weighted** across venues; one venue is never filled from the other.
+Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.inputs`. They drop that factor **and** pull the remaining score toward 50 so a one-source read cannot look as decisive as a full tape. Combined `bias` is **OI-weighted across usable venues only**. A venue that returns an error (book down, no OI, etc.) stays on the report for the user to see but is listed in `bias.excluded` and does **not** change the combined lean. One venue is never filled from the other.
 
 `level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
 

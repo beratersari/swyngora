@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   compareRows,
+  coverageTone,
   easeTone,
   formatTarget,
+  inputTone,
   leanTone,
   scoreValue,
   venueLabel,
@@ -18,6 +20,8 @@ describe('LiquidationHunt helpers', () => {
     expect(easeTone('nope')).toBe('mixed');
     expect(scoreValue(140)).toBe(100);
     expect(venueLabel('binance')).toBe('Binance');
+    expect(coverageTone('thin')).toBe('thin');
+    expect(inputTone('error')).toBe('error');
   });
 
   it('formats a target with move and builds compare rows', () => {

@@ -4135,8 +4135,28 @@ export interface components {
             /** @description 0–100 */
             score?: number;
             level?: "easier" | "likely" | "mixed" | "hard";
+            /** @description 0–100 completeness of inputs used for this score */
+            coverage?: number;
             factors?: components["schemas"]["LiquidationHuntFactor"][];
             reasons?: string[];
+        };
+        LiquidationHuntInputStatus: {
+            id?: string;
+            label?: string;
+            status?: "ok" | "weak" | "missing" | "error";
+            weight?: number;
+            detail?: string;
+        };
+        /** @description How complete the hunt inputs are. Unusable venues are shown but not mixed into combined bias. */
+        LiquidationHuntCoverage: {
+            /** @description 0–100 */
+            score?: number;
+            level?: "complete" | "usable" | "thin" | "insufficient";
+            usable?: boolean;
+            inputs?: components["schemas"]["LiquidationHuntInputStatus"][];
+            missing?: string[];
+            weak?: string[];
+            summary?: string;
         };
         LiquidationHuntBias: {
             lean?: "up" | "down" | "even";
@@ -4144,6 +4164,9 @@ export interface components {
             upScore?: number;
             downScore?: number;
             summary?: string;
+            coverage?: components["schemas"]["LiquidationHuntCoverage"];
+            included?: string[];
+            excluded?: string[];
         };
         LiquidationHuntBand: {
             side?: string;
@@ -4212,6 +4235,7 @@ export interface components {
             upScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             bias?: components["schemas"]["LiquidationHuntBias"];
+            coverage?: components["schemas"]["LiquidationHuntCoverage"];
             error?: string;
         };
         /** @description Hypothetical per-venue hunt plus directional ease scores */
@@ -4224,6 +4248,7 @@ export interface components {
             };
             venues?: components["schemas"]["LiquidationHuntVenue"][];
             bias?: components["schemas"]["LiquidationHuntBias"];
+            coverage?: components["schemas"]["LiquidationHuntCoverage"];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {

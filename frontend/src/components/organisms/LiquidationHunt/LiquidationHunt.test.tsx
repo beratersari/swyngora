@@ -23,13 +23,25 @@ const sample: HuntReport = {
     upScore: 68,
     downScore: 41,
     summary: 'Up looks easier (68 vs 41). Shorts are crowded.',
+    coverage: { score: 88, level: 'complete', usable: true, summary: 'Inputs look complete.' },
   },
+  coverage: { score: 88, level: 'complete', usable: true, summary: 'Inputs look complete.' },
   venues: [
     {
       exchange: 'binance',
       price: '64000',
       openInterestValue: '100000000',
       fundingPayer: 'short',
+      coverage: {
+        score: 88,
+        level: 'complete',
+        usable: true,
+        summary: 'Inputs look complete.',
+        inputs: [
+          { id: 'book', label: 'Spot book', status: 'ok' },
+          { id: 'trend', label: 'Price + OI trend', status: 'ok' },
+        ],
+      },
       upScore: { direction: 'up', score: 68, level: 'likely', reasons: ['Shorts are crowded'] },
       downScore: { direction: 'down', score: 41, level: 'mixed', reasons: ['Target is farther'] },
       upHunt: {
@@ -62,5 +74,39 @@ describe('LiquidationHunt', () => {
     expect(screen.getAllByText(/shorts are crowded/i).length).toBeGreaterThan(0);
     expect(screen.getByTestId('liquidation-hunt-up')).toHaveTextContent('1200000');
     expect(screen.getByTestId('liquidation-hunt-down')).toHaveTextContent('3400000');
+    expect(screen.getAllByTestId('liquidation-hunt-coverage').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/inputs look complete/i).length).toBeGreaterThan(0);
+  });
+
+  it('marks an unusable venue as excluded', async () => {
+    renderWithTheme(
+      <LiquidationHunt
+        data={{
+          ...sample,
+          bias: {
+            ...sample.bias,
+            summary: 'Combined uses binance only. Excluded from combined: bybit.',
+            excluded: ['bybit'],
+          },
+          venues: [
+            ...(sample.venues ?? []),
+            {
+              exchange: 'bybit',
+              error: 'book: timeout',
+              coverage: {
+                score: 22,
+                level: 'insufficient',
+                usable: false,
+                summary: 'Insufficient data (Spot book missing).',
+                missing: ['Spot book'],
+                inputs: [{ id: 'book', label: 'Spot book', status: 'error', detail: 'timeout' }],
+              },
+            },
+          ],
+        }}
+      />,
+    );
+    expect(await screen.findByText(/not used in combined/i)).toBeInTheDocument();
+    expect(screen.getByText(/book: timeout/i)).toBeInTheDocument();
   });
 });

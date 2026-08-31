@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **Liquidation hunt coverage:** a venue that fails to load needed data (book, OI, …) is shown with an error but **excluded** from the combined lean. Missing or weak inputs shrink the score toward even and are listed on `coverage` (complete / usable / thin / insufficient). Web Hunt tab shows the quality strip (`docs/features/liquidation-hunt.md`)
 - **RSI heatmap hover and aspect:** the scatter keeps a 1:1 plot (dots stay circular) and the card only appears when the pointer is on a coin, not in empty space (`docs/features/rsi-heatmap.md`)
 - **Recurring buy maxPrice race:** PATCH of maxPrice / pause / budget / end takes the same book lock as the fill and the live plan is re-read inside that lock immediately before the cash debit, so an in-flight worker cannot buy with the old limit (`docs/features/recurring-buys.md`)
 - **Recurring buy budget cash:** `spent` is slipped fill plus taker fee (wallet debit), not raw order notional (`docs/features/recurring-buys.md`)

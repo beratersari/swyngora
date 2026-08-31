@@ -7491,12 +7491,38 @@ components:
         direction: { type: string, enum: [up, down] }
         score: { type: number, description: 0–100 }
         level: { type: string, enum: [easier, likely, mixed, hard] }
+        coverage: { type: number, description: 0–100 completeness of inputs used for this score }
         factors:
           type: array
           items: { $ref: '#/components/schemas/LiquidationHuntFactor' }
         reasons:
           type: array
           items: { type: string }
+    LiquidationHuntInputStatus:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [ok, weak, missing, error] }
+        weight: { type: number }
+        detail: { type: string }
+    LiquidationHuntCoverage:
+      type: object
+      description: How complete the hunt inputs are. Unusable venues are shown but not mixed into combined bias.
+      properties:
+        score: { type: number, description: 0–100 }
+        level: { type: string, enum: [complete, usable, thin, insufficient] }
+        usable: { type: boolean }
+        inputs:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntInputStatus' }
+        missing:
+          type: array
+          items: { type: string }
+        weak:
+          type: array
+          items: { type: string }
+        summary: { type: string }
     LiquidationHuntBias:
       type: object
       properties:
@@ -7505,6 +7531,13 @@ components:
         upScore: { type: number }
         downScore: { type: number }
         summary: { type: string }
+        coverage: { $ref: '#/components/schemas/LiquidationHuntCoverage' }
+        included:
+          type: array
+          items: { type: string }
+        excluded:
+          type: array
+          items: { type: string }
     LiquidationHuntBand:
       type: object
       properties:
@@ -7584,6 +7617,7 @@ components:
         upScore: { $ref: '#/components/schemas/LiquidationHuntDirectionScore' }
         downScore: { $ref: '#/components/schemas/LiquidationHuntDirectionScore' }
         bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
+        coverage: { $ref: '#/components/schemas/LiquidationHuntCoverage' }
         error: { type: string }
     LiquidationHunt:
       type: object
@@ -7599,6 +7633,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/LiquidationHuntVenue' }
         bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
+        coverage: { $ref: '#/components/schemas/LiquidationHuntCoverage' }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object

@@ -1,4 +1,12 @@
-import type { HuntEase, HuntHouseEdge, HuntLean, HuntScenario, HuntVenue } from './LiquidationHunt.types';
+import type {
+  HuntCoverageLevel,
+  HuntEase,
+  HuntHouseEdge,
+  HuntInputState,
+  HuntLean,
+  HuntScenario,
+  HuntVenue,
+} from './LiquidationHunt.types';
 
 export function leanTone(lean?: HuntLean): 'up' | 'down' | 'even' {
   if (lean === 'up') return 'up';
@@ -16,6 +24,22 @@ export function easeTone(level?: HuntEase): 'easier' | 'likely' | 'mixed' | 'har
 export function houseTone(edge?: HuntHouseEdge): 'profit' | 'loss' | 'unreachable' {
   if (edge === 'profit' || edge === 'loss' || edge === 'unreachable') return edge;
   return 'unreachable';
+}
+
+export function coverageTone(
+  level?: HuntCoverageLevel,
+): 'complete' | 'usable' | 'thin' | 'insufficient' {
+  if (level === 'complete' || level === 'usable' || level === 'thin' || level === 'insufficient') {
+    return level;
+  }
+  return 'thin';
+}
+
+export function inputTone(status?: HuntInputState): 'ok' | 'weak' | 'missing' | 'error' {
+  if (status === 'ok' || status === 'weak' || status === 'missing' || status === 'error') {
+    return status;
+  }
+  return 'missing';
 }
 
 export function venueLabel(exchange?: string): string {

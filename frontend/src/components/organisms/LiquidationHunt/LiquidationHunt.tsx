@@ -5,7 +5,9 @@ import { Text } from '@/components/atoms/Text';
 import { useDisplayCurrency } from '@/libs/hooks';
 import {
   compareRows,
+  coverageTone,
   easeTone,
+  inputTone,
   leanTone,
   scoreValue,
   venueLabel,
@@ -14,8 +16,14 @@ import {
   Banner,
   BannerTitle,
   CompareGrid,
+  CoverageChip,
+  CoverageFill,
+  CoverageMeter,
+  CoverageRow,
   EaseChip,
   Hint,
+  InputList,
+  InputPill,
   MetricLabel,
   MetricTable,
   MetricValue,
@@ -33,7 +41,12 @@ import {
   VenueMeta,
   VenueStack,
 } from './LiquidationHunt.styles';
-import type { HuntDirectionScore, HuntVenue, LiquidationHuntProps } from './LiquidationHunt.types';
+import type {
+  HuntCoverage,
+  HuntDirectionScore,
+  HuntVenue,
+  LiquidationHuntProps,
+} from './LiquidationHunt.types';
 
 export function LiquidationHunt({ data, isLoading, errorMessage }: LiquidationHuntProps) {
   const { t } = useTranslation(['liquidations', 'common']);
@@ -66,6 +79,7 @@ export function LiquidationHunt({ data, isLoading, errorMessage }: LiquidationHu
 
       <Banner $tone={lean}>
         <BannerTitle>{data?.bias?.summary || t('liquidations:hunt.empty')}</BannerTitle>
+        <CoverageStrip coverage={data?.coverage ?? data?.bias?.coverage} />
         <Text variant="bodySm" color="secondary">
           {t('liquidations:hunt.hint')}
         </Text>
@@ -131,6 +145,7 @@ function VenueCard({
           ) : null}
         </VenueMeta>
       </VenueHead>
+      <CoverageStrip coverage={venue.coverage} excluded={!venue.coverage?.usable || Boolean(venue.error)} />
       {venue.error ? <Alert type="warning" showIcon message={venue.error} /> : null}
       <CompareGrid>
         <DirectionCard
@@ -138,7 +153,7 @@ function VenueCard({
           title={t('liquidations:hunt.upTitle')}
           subtitle={t('liquidations:hunt.upThesis')}
           score={venue.upScore}
-          winner={winner === 'up'}
+          winner={winner === 'up' && venue.coverage?.usable !== false}
           rows={rows}
           metricLabels={metricLabels}
         />
@@ -147,7 +162,7 @@ function VenueCard({
           title={t('liquidations:hunt.downTitle')}
           subtitle={t('liquidations:hunt.downThesis')}
           score={venue.downScore}
-          winner={winner === 'down'}
+          winner={winner === 'down' && venue.coverage?.usable !== false}
           rows={rows}
           metricLabels={metricLabels}
         />
@@ -211,5 +226,44 @@ function DirectionCard({
         </ReasonList>
       ) : null}
     </SideCard>
+  );
+}
+
+function CoverageStrip({ coverage, excluded }: { coverage?: HuntCoverage; excluded?: boolean }) {
+  const { t } = useTranslation('liquidations');
+  if (!coverage && !excluded) return null;
+  const level = coverageTone(coverage?.level);
+  const pct = scoreValue(coverage?.score);
+  return (
+    <div data-testid="liquidation-hunt-coverage">
+      <CoverageRow>
+        <CoverageChip $tone={level}>
+          {t(`hunt.coverage.${level}`)}
+          {coverage?.score != null ? ` ${Math.round(pct)}` : ''}
+        </CoverageChip>
+        <CoverageMeter>
+          <CoverageFill $tone={level} $pct={pct} />
+        </CoverageMeter>
+        {excluded ? (
+          <Text variant="caption" color="secondary">
+            {t('hunt.coverage.excluded')}
+          </Text>
+        ) : null}
+        {coverage?.summary ? (
+          <Text variant="caption" color="secondary">
+            {coverage.summary}
+          </Text>
+        ) : null}
+      </CoverageRow>
+      {coverage?.inputs && coverage.inputs.length > 0 ? (
+        <InputList>
+          {coverage.inputs.map((input) => (
+            <InputPill key={input.id ?? input.label} $tone={inputTone(input.status)} title={input.detail}>
+              {input.label || input.id}: {t(`hunt.coverage.status.${inputTone(input.status)}`)}
+            </InputPill>
+          ))}
+        </InputList>
+      ) : null}
+    </div>
   );
 }

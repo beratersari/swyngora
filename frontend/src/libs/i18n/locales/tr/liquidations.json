@@ -39,7 +39,7 @@
     "symbol": "Sembol",
     "pick": "Yukarı ve aşağı likidasyon avını karşılaştırmak için bir coin seçin.",
     "empty": "Bu coin için henüz av okuması yok.",
-    "hint": "Skorlar hangi yönün daha kolay veya daha olası göründüğünü söyler. Bölge fiyatları ve masa kâr/zararı önceki modelle aynıdır — yalnızca bilgi amaçlıdır, tahmin değildir.",
+    "hint": "Skorlar hangi yönün daha kolay veya daha olası göründüğünü söyler. Eksik veya zayıf veriler skoru ortaya çeker. Hata veren borsa gösterilir ama birleşik okumaya girmez. Yalnızca bilgi amaçlıdır, tahmin değildir.",
     "last": "Son",
     "oi": "Açık pozisyon",
     "fundingPayer": "Fonlamayı {{side}}lar ödüyor",
@@ -60,6 +60,19 @@
       "efficiency": "Liq / spot",
       "desk": "Masa (cascade)",
       "book": "Görünür defter"
+    },
+    "coverage": {
+      "complete": "Tam",
+      "usable": "Kullanılabilir",
+      "thin": "İnce",
+      "insufficient": "Yetersiz",
+      "excluded": "Birleşikte yok",
+      "status": {
+        "ok": "tamam",
+        "weak": "zayıf",
+        "missing": "eksik",
+        "error": "hata"
+      }
     }
   },
   "chart": {

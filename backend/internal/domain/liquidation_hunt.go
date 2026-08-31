@@ -129,6 +129,7 @@ type HuntVenueReport struct {
 	UpScore            HuntDirectionScore `json:"upScore"`
 	DownScore          HuntDirectionScore `json:"downScore"`
 	Bias               HuntBias           `json:"bias"`
+	Coverage           HuntCoverage       `json:"coverage"`
 	Error              string             `json:"error,omitempty"`
 }
 
@@ -140,7 +141,40 @@ type HuntReport struct {
 	Assumptions HuntAssumptions   `json:"assumptions"`
 	Venues      []HuntVenueReport `json:"venues"`
 	Bias        *HuntBias         `json:"bias,omitempty"`
+	Coverage    *HuntCoverage     `json:"coverage,omitempty"`
 	Note        string            `json:"note,omitempty"`
+}
+
+const (
+	HuntInputOK      = "ok"
+	HuntInputWeak    = "weak"
+	HuntInputMissing = "missing"
+	HuntInputError   = "error"
+
+	HuntCoverageComplete     = "complete"
+	HuntCoverageUsable       = "usable"
+	HuntCoverageThin         = "thin"
+	HuntCoverageInsufficient = "insufficient"
+)
+
+// HuntInputStatus is one data source used by the hunt score.
+type HuntInputStatus struct {
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	Status string  `json:"status"`
+	Weight float64 `json:"weight"`
+	Detail string  `json:"detail"`
+}
+
+// HuntCoverage is how complete the hunt inputs are for one venue or the combined read.
+type HuntCoverage struct {
+	Score   float64           `json:"score"`
+	Level   string            `json:"level"`
+	Usable  bool              `json:"usable"`
+	Inputs  []HuntInputStatus `json:"inputs"`
+	Missing []string          `json:"missing"`
+	Weak    []string          `json:"weak"`
+	Summary string            `json:"summary"`
 }
 
 // HuntInputs feeds BuildHuntVenue.

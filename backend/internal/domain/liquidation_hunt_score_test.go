@@ -5,6 +5,29 @@ import (
 	"testing"
 )
 
+func fullHuntSignals() HuntSignals {
+	return HuntSignals{
+		HasPrice:       true,
+		Has1hPrice:     true,
+		Has4hPrice:     true,
+		Price1hPct:     0.8,
+		Price4hPct:     2.1,
+		HasOI:          true,
+		OI1hPct:        0.6,
+		OI4hPct:        1.8,
+		HasTaker:       true,
+		TakerBuy1h:     70,
+		TakerSell1h:    30,
+		HasLiqWindows:  true,
+		LiqFeedPresent: true,
+		ShortLiq1h:     3_000_000,
+		LongLiq1h:      500_000,
+		HasBook:        true,
+		HasLongShort:   true,
+		HasFunding:     true,
+	}
+}
+
 func testHuntInputsCrowdedShorts() HuntInputs {
 	return HuntInputs{
 		Exchange:    ExchangeBinance,
@@ -34,19 +57,7 @@ func TestAttachHuntDirectionScores_DoesNotChangeZones(t *testing.T) {
 	beforeUp := got.UpHunt
 	beforeDown := got.DownHunt
 	beforeBands := len(got.UpPressure) + len(got.DownPressure)
-	AttachHuntDirectionScores(&got, HuntSignals{
-		HasPrice:      true,
-		Price1hPct:    1.2,
-		Price4hPct:    2.4,
-		HasOI:         true,
-		OI4hPct:       1.5,
-		HasTaker:      true,
-		TakerBuy1h:    80,
-		TakerSell1h:   20,
-		HasLiqWindows: true,
-		ShortLiq1h:    2_000_000,
-		LongLiq1h:     400_000,
-	})
+	AttachHuntDirectionScores(&got, fullHuntSignals())
 	if got.UpHunt.EstLiquidated != beforeUp.EstLiquidated || got.UpHunt.NetWithCascade != beforeUp.NetWithCascade {
 		t.Fatalf("up hunt mutated: before %+v after %+v", beforeUp, got.UpHunt)
 	}
@@ -60,20 +71,7 @@ func TestAttachHuntDirectionScores_DoesNotChangeZones(t *testing.T) {
 
 func TestAttachHuntDirectionScores_UpEasierWhenShortsCrowdedAndTrendUp(t *testing.T) {
 	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
-	AttachHuntDirectionScores(&got, HuntSignals{
-		HasPrice:      true,
-		Price1hPct:    0.8,
-		Price4hPct:    2.1,
-		HasOI:         true,
-		OI1hPct:       0.6,
-		OI4hPct:       1.8,
-		HasTaker:      true,
-		TakerBuy1h:    70,
-		TakerSell1h:   30,
-		HasLiqWindows: true,
-		ShortLiq1h:    3_000_000,
-		LongLiq1h:     500_000,
-	})
+	AttachHuntDirectionScores(&got, fullHuntSignals())
 	if got.UpScore.Score <= got.DownScore.Score {
 		t.Fatalf("want up > down: up=%v down=%v reasons=%v / %v", got.UpScore, got.DownScore, got.UpScore.Reasons, got.DownScore.Reasons)
 	}
@@ -102,19 +100,13 @@ func TestAttachHuntDirectionScores_DownEasierWhenLongsCrowdedAndTrendDown(t *tes
 		{Price: 90.00, Quantity: 4},
 	}
 	got := BuildHuntVenue(in)
-	AttachHuntDirectionScores(&got, HuntSignals{
-		HasPrice:      true,
-		Price1hPct:    -1.1,
-		Price4hPct:    -3.2,
-		HasOI:         true,
-		OI4hPct:       2.0,
-		HasTaker:      true,
-		TakerBuy1h:    25,
-		TakerSell1h:   75,
-		HasLiqWindows: true,
-		LongLiq1h:     4_000_000,
-		ShortLiq1h:    400_000,
-	})
+	sig := fullHuntSignals()
+	sig.Price1hPct = -1.1
+	sig.Price4hPct = -3.2
+	sig.OI4hPct = 2.0
+	sig.TakerBuy1h, sig.TakerSell1h = 25, 75
+	sig.LongLiq1h, sig.ShortLiq1h = 4_000_000, 400_000
+	AttachHuntDirectionScores(&got, sig)
 	if got.DownScore.Score <= got.UpScore.Score {
 		t.Fatalf("want down > up: up=%v down=%v", got.UpScore, got.DownScore)
 	}
@@ -125,7 +117,7 @@ func TestAttachHuntDirectionScores_DownEasierWhenLongsCrowdedAndTrendDown(t *tes
 
 func TestAttachHuntDirectionScores_MissingTapeStillScoresBook(t *testing.T) {
 	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
-	AttachHuntDirectionScores(&got, HuntSignals{})
+	AttachHuntDirectionScores(&got, HuntSignals{HasBook: true, HasLongShort: true, HasFunding: true})
 	if got.UpScore.Score <= 0 || got.DownScore.Score <= 0 {
 		t.Fatalf("book-only scores should still land: %+v %+v", got.UpScore, got.DownScore)
 	}
@@ -133,6 +125,54 @@ func TestAttachHuntDirectionScores_MissingTapeStillScoresBook(t *testing.T) {
 		if f.ID == "trend" || f.ID == "flow" {
 			t.Fatalf("missing tape should drop trend/flow: %+v", got.UpScore.Factors)
 		}
+	}
+	if got.Coverage.Score >= 85 || got.Coverage.Level == HuntCoverageComplete {
+		t.Fatalf("missing tape should not look complete: %+v", got.Coverage)
+	}
+}
+
+func TestAttachHuntDirectionScores_ThinCoverageShrinksVsFullTape(t *testing.T) {
+	full := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	thin := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	AttachHuntDirectionScores(&full, fullHuntSignals())
+	AttachHuntDirectionScores(&thin, HuntSignals{HasBook: true})
+	spreadFull := math.Abs(full.UpScore.Score - full.DownScore.Score)
+	spreadThin := math.Abs(thin.UpScore.Score - thin.DownScore.Score)
+	if spreadThin >= spreadFull {
+		t.Fatalf("thin coverage should shrink the lean: full=%v thin=%v", spreadFull, spreadThin)
+	}
+	if thin.Coverage.Usable && thin.Coverage.Score >= full.Coverage.Score {
+		t.Fatalf("thin coverage score should be lower: full=%v thin=%v", full.Coverage, thin.Coverage)
+	}
+}
+
+func TestCombineHuntBias_SkipsErroredVenue(t *testing.T) {
+	good := HuntVenueReport{
+		Exchange:          ExchangeBinance,
+		Price:             100,
+		OpenInterestValue: 5,
+		UpScore:           HuntDirectionScore{Score: 80},
+		DownScore:         HuntDirectionScore{Score: 30},
+		Coverage:          HuntCoverage{Score: 90, Level: HuntCoverageComplete, Usable: true},
+	}
+	bad := HuntVenueReport{
+		Exchange:          ExchangeBybit,
+		Price:             100,
+		OpenInterestValue: 50,
+		Error:             "book: timeout",
+		UpScore:           HuntDirectionScore{Score: 10},
+		DownScore:         HuntDirectionScore{Score: 95},
+		Coverage:          HuntCoverage{Score: 20, Level: HuntCoverageInsufficient, Usable: false},
+	}
+	got := CombineHuntBias([]HuntVenueReport{good, bad})
+	if got == nil || got.Lean != HuntLeanUp {
+		t.Fatalf("errored bybit must not flip combined: %+v", got)
+	}
+	if len(got.Excluded) != 1 || got.Excluded[0] != "bybit" {
+		t.Fatalf("excluded=%v", got.Excluded)
+	}
+	if got.UpScore < 70 {
+		t.Fatalf("combined should follow binance: %+v", got)
 	}
 }
 
@@ -166,7 +206,7 @@ func TestCombineHuntBias_SkipsEmptyVenues(t *testing.T) {
 		t.Fatal("empty")
 	}
 	got := CombineHuntBias([]HuntVenueReport{{Exchange: ExchangeBinance, Error: "down"}})
-	if got != nil {
-		t.Fatalf("no-price empty score should skip: %+v", got)
+	if got == nil || got.Coverage.Usable || len(got.Excluded) != 1 {
+		t.Fatalf("errored-only set should not lean: %+v", got)
 	}
 }
