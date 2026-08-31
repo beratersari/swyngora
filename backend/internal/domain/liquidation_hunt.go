@@ -159,11 +159,21 @@ const (
 
 // HuntInputStatus is one data source used by the hunt score.
 type HuntInputStatus struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	Status string  `json:"status"`
-	Weight float64 `json:"weight"`
-	Detail string  `json:"detail"`
+	ID       string  `json:"id"`
+	Label    string  `json:"label"`
+	Status   string  `json:"status"`
+	Weight   float64 `json:"weight"`
+	Detail   string  `json:"detail"`
+	Have     string  `json:"have,omitempty"`
+	Need     string  `json:"need,omitempty"`
+	CoverPct float64 `json:"coverPct,omitempty"`
+}
+
+// HuntSpan is how much of a lookback window we actually have.
+type HuntSpan struct {
+	HaveSec  float64 `json:"haveSec"`
+	NeedSec  float64 `json:"needSec"`
+	CoverPct float64 `json:"coverPct"`
 }
 
 // HuntCoverage is how complete the hunt inputs are for one venue or the combined read.

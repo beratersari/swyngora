@@ -19,6 +19,9 @@ export type HuntInputStatus = {
   status?: HuntInputState;
   weight?: number;
   detail?: string;
+  have?: string;
+  need?: string;
+  coverPct?: number;
 };
 
 export type HuntCoverage = {

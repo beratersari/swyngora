@@ -35,6 +35,13 @@ func TestBuildTakerVenueFlow_Windows(t *testing.T) {
 	if got.Windows[1].SellNotional != 120 { // 40+80
 		t.Fatalf("1h %+v", got.Windows[1])
 	}
+	if got.Windows[1].NeedSec != 3600 || got.Windows[1].HaveSec != 3600 || !got.Windows[1].Complete {
+		t.Fatalf("1h span %+v", got.Windows[1])
+	}
+	short := BuildTakerVenueFlow(ExchangeBybit, "BTCUSDT", buckets, now, now.Add(-20*time.Minute))
+	if short.Windows[1].Complete || short.Windows[1].HaveSec < 1100 || short.Windows[1].HaveSec > 1300 {
+		t.Fatalf("short 1h collection must not look complete: %+v", short.Windows[1])
+	}
 	if got.Windows[0].Dominant != TakerSideBuy {
 		t.Fatalf("dom %s", got.Windows[0].Dominant)
 	}

@@ -4146,6 +4146,12 @@ export interface components {
             status?: "ok" | "weak" | "missing" | "error";
             weight?: number;
             detail?: string;
+            /** @description Collected span, e.g. 18m */
+            have?: string;
+            /** @description Requested window, e.g. 1h */
+            need?: string;
+            /** @description 0–100 of the requested lookback */
+            coverPct?: number;
         };
         /** @description How complete the hunt inputs are. Unusable venues are shown but not mixed into combined bias. */
         LiquidationHuntCoverage: {

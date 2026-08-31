@@ -161,6 +161,8 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		sig.HasPrice = true
 		sig.Has1hPrice = !math.IsNaN(p1)
 		sig.Has4hPrice = !math.IsNaN(p4)
+		sig.PriceSpan1h = domain.HuntPriceLookbackSpan(len(closes), 1, time.Hour)
+		sig.PriceSpan4h = domain.HuntPriceLookbackSpan(len(closes), 4, 4*time.Hour)
 		sigMu.Unlock()
 	}()
 	go func() {
@@ -180,6 +182,7 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			sigMu.Lock()
 			sig.TakerBuy1h, sig.TakerSell1h = w.BuyNotional, w.SellNotional
 			sig.HasTaker = w.BuyNotional+w.SellNotional > 0
+			sig.TakerSpan = domain.HuntSpanFromTakerWindow(w)
 			sigMu.Unlock()
 			return
 		}
@@ -199,6 +202,16 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		in.Liquidations = s.liq.Events(string(ex), symbol, now.Add(-24*time.Hour))
 		sig.LiqFeedPresent = true
 		sig.HasLiqWindows = len(in.Liquidations) > 0
+		if snap := s.liq.Snapshot(string(ex), symbol); snap != nil {
+			for _, w := range snap.Windows {
+				switch w.Window {
+				case domain.LiquidationWindow1h:
+					sig.LiqSpan1h = domain.HuntSpanFromLiqWindow(w, time.Hour)
+				case domain.LiquidationWindow4h:
+					sig.LiqSpan4h = domain.HuntSpanFromLiqWindow(w, 4*time.Hour)
+				}
+			}
+		}
 		cut1h := now.Add(-time.Hour)
 		cut4h := now.Add(-4 * time.Hour)
 		for _, e := range in.Liquidations {
@@ -237,7 +250,9 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 	if oiSer != nil {
 		sig.OI1hPct = domain.OIChangePctFromSeries(oiSer, time.Hour, now)
 		sig.OI4hPct = domain.OIChangePctFromSeries(oiSer, 4*time.Hour, now)
-		if !math.IsNaN(sig.OI1hPct) || !math.IsNaN(sig.OI4hPct) {
+		sig.OISpan1h = domain.HuntOILookbackSpan(oiSer, time.Hour, now)
+		sig.OISpan4h = domain.HuntOILookbackSpan(oiSer, 4*time.Hour, now)
+		if !math.IsNaN(sig.OI1hPct) || !math.IsNaN(sig.OI4hPct) || sig.OISpan1h.CoverPct > 0 || sig.OISpan4h.CoverPct > 0 {
 			sig.HasOI = true
 		}
 	}

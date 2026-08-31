@@ -52,7 +52,7 @@ Each direction is a weighted mix of data the desk already has:
 | Crowding + funding | Estimated long/short OI share and who pays funding. Shorts crowded + shorts paying favors **up**. |
 | Taker + recent liqs | 1h aggressive buy/sell and 1h/4h observed liquidations. Buy-heavy / short-liq-heavy tape favors **up**. |
 
-Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.inputs`. They drop that factor **and** pull the remaining score toward 50 so a one-source read cannot look as decisive as a full tape. Combined `bias` is **OI-weighted across usable venues only**. A venue that returns an error (book down, no OI, etc.) stays on the report for the user to see but is listed in `bias.excluded` and does **not** change the combined lean. One venue is never filled from the other.
+Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.inputs`. Time-based inputs (1h taker, 1h/4h liquidations, OI history, 1h/4h price) include `have` / `need` / `coverPct` — a few minutes of taker prints is **not** a complete hour. Incomplete lookbacks shrink that factor's weight and pull the remaining score toward 50. Combined `bias` is **OI-weighted across usable venues only**. A venue that returns an error (book down, no OI, etc.) stays on the report for the user to see but is listed in `bias.excluded` and does **not** change the combined lean. One venue is never filled from the other.
 
 `level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
 

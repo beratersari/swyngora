@@ -7506,6 +7506,9 @@ components:
         status: { type: string, enum: [ok, weak, missing, error] }
         weight: { type: number }
         detail: { type: string }
+        have: { type: string, description: Collected span, e.g. 18m }
+        need: { type: string, description: Requested window, e.g. 1h }
+        coverPct: { type: number, description: 0–100 of the requested lookback }
     LiquidationHuntCoverage:
       type: object
       description: How complete the hunt inputs are. Unusable venues are shown but not mixed into combined bias.

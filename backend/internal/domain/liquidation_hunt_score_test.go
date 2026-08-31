@@ -3,23 +3,33 @@ package domain
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func fullHuntSignals() HuntSignals {
+	h1 := HuntSpanFromDurations(time.Hour, time.Hour)
+	h4 := HuntSpanFromDurations(4*time.Hour, 4*time.Hour)
 	return HuntSignals{
 		HasPrice:       true,
 		Has1hPrice:     true,
 		Has4hPrice:     true,
 		Price1hPct:     0.8,
 		Price4hPct:     2.1,
+		PriceSpan1h:    h1,
+		PriceSpan4h:    h4,
 		HasOI:          true,
 		OI1hPct:        0.6,
 		OI4hPct:        1.8,
+		OISpan1h:       h1,
+		OISpan4h:       h4,
 		HasTaker:       true,
 		TakerBuy1h:     70,
 		TakerSell1h:    30,
+		TakerSpan:      h1,
 		HasLiqWindows:  true,
 		LiqFeedPresent: true,
+		LiqSpan1h:      h1,
+		LiqSpan4h:      h4,
 		ShortLiq1h:     3_000_000,
 		LongLiq1h:      500_000,
 		HasBook:        true,
@@ -198,6 +208,122 @@ func TestHuntLeanFromScores_EvenInsideMargin(t *testing.T) {
 	}
 	if _, m := HuntLeanFromScores(70, 50); math.Abs(m-20) > 0.01 {
 		t.Fatalf("margin %v", m)
+	}
+}
+
+func TestHuntInputFlow_PartialTakerIsWeakNotComplete(t *testing.T) {
+	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	sig := fullHuntSignals()
+	sig.TakerSpan = HuntSpanFromDurations(15*time.Minute, time.Hour)
+	AttachHuntDirectionScores(&got, sig)
+	var flow HuntInputStatus
+	for _, in := range got.Coverage.Inputs {
+		if in.ID == "flow" {
+			flow = in
+		}
+	}
+	if flow.Status != HuntInputWeak {
+		t.Fatalf("partial 1h taker must be weak, got %+v", flow)
+	}
+	if flow.CoverPct < 20 || flow.CoverPct > 30 {
+		t.Fatalf("coverPct=%v have=%s need=%s", flow.CoverPct, flow.Have, flow.Need)
+	}
+	if flow.Have == "" || flow.Need == "" {
+		t.Fatalf("want have/need on flow: %+v", flow)
+	}
+}
+
+func TestHuntInputFlow_SomeTakerWithoutClockIsNotComplete(t *testing.T) {
+	in := huntInputFlow(HuntSignals{HasTaker: true, TakerBuy1h: 80, TakerSell1h: 20})
+	if in.Status == HuntInputOK {
+		t.Fatalf("prints without a collection clock must not look complete: %+v", in)
+	}
+}
+
+func TestHuntSpanFromTakerWindow_UsesHaveNeed(t *testing.T) {
+	s := HuntSpanFromTakerWindow(TakerWindowFlow{HaveSec: 900, NeedSec: 3600, Complete: false})
+	if math.Abs(s.CoverPct-25) > 0.6 {
+		t.Fatalf("%+v", s)
+	}
+	if HuntSpanFromTakerWindow(TakerWindowFlow{Complete: true}).CoverPct < 99 {
+		t.Fatal("complete window")
+	}
+}
+
+func TestHuntOILookbackSpan_ShortHistoryIsPartial(t *testing.T) {
+	now := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
+	ser := &OpenInterestSeries{
+		Current: OpenInterestPoint{Time: now, Contracts: 110, Value: 110},
+		History: []OpenInterestPoint{
+			{Time: now.Add(-20 * time.Minute), Contracts: 100, Value: 100},
+		},
+	}
+	s := HuntOILookbackSpan(ser, time.Hour, now)
+	if s.CoverPct >= 85 {
+		t.Fatalf("20m of 1h should be partial: %+v", s)
+	}
+	full := HuntOILookbackSpan(&OpenInterestSeries{
+		Current: OpenInterestPoint{Time: now, Contracts: 110, Value: 110},
+		History: []OpenInterestPoint{{Time: now.Add(-time.Hour), Contracts: 100, Value: 100}},
+	}, time.Hour, now)
+	if full.CoverPct < 85 {
+		t.Fatalf("1h sample should be complete: %+v", full)
+	}
+	stale := HuntOILookbackSpan(&OpenInterestSeries{
+		Current: OpenInterestPoint{Time: now, Contracts: 110, Value: 110},
+		History: []OpenInterestPoint{{Time: now.Add(-2 * time.Hour), Contracts: 100, Value: 100}},
+	}, time.Hour, now)
+	if stale.CoverPct >= 85 {
+		t.Fatalf("stale sample older than slack must not look complete: %+v", stale)
+	}
+}
+
+func TestHuntInputOI_Short4hHistoryIsWeakEvenIf1hIsFull(t *testing.T) {
+	sig := fullHuntSignals()
+	sig.OISpan1h = HuntSpanFromDurations(time.Hour, time.Hour)
+	sig.OISpan4h = HuntSpanFromDurations(45*time.Minute, 4*time.Hour)
+	in := huntInputOI(HuntVenueReport{OpenInterestValue: 1e6}, sig)
+	if in.Status == HuntInputOK {
+		t.Fatalf("4h OI missing must not look complete: %+v", in)
+	}
+	if in.Need != "4h" || in.CoverPct > 30 {
+		t.Fatalf("want 4h need with partial cover: %+v", in)
+	}
+}
+
+func TestHuntInputTrend_Short4hPriceIsWeakEvenIf1hIsFull(t *testing.T) {
+	sig := fullHuntSignals()
+	sig.PriceSpan1h = HuntSpanFromDurations(time.Hour, time.Hour)
+	sig.PriceSpan4h = HuntSpanFromDurations(time.Hour, 4*time.Hour)
+	sig.Has4hPrice = false
+	in := huntInputTrend(sig)
+	if in.Status == HuntInputOK {
+		t.Fatalf("1h of 4h price must not look complete: %+v", in)
+	}
+	if in.Need != "4h" {
+		t.Fatalf("want 4h need: %+v", in)
+	}
+}
+
+func TestAttachHuntDirectionScores_PartialTakerLowersCoverage(t *testing.T) {
+	full := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	part := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	sigFull := fullHuntSignals()
+	sigPart := fullHuntSignals()
+	sigPart.TakerSpan = HuntSpanFromDurations(10*time.Minute, time.Hour)
+	AttachHuntDirectionScores(&full, sigFull)
+	AttachHuntDirectionScores(&part, sigPart)
+	if part.Coverage.Score >= full.Coverage.Score {
+		t.Fatalf("partial 1h taker should lower coverage: full=%v part=%v", full.Coverage.Score, part.Coverage.Score)
+	}
+	var flow HuntInputStatus
+	for _, in := range part.Coverage.Inputs {
+		if in.ID == "flow" {
+			flow = in
+		}
+	}
+	if flow.Status != HuntInputWeak || flow.Have != "10m" || flow.Need != "1h" {
+		t.Fatalf("flow span: %+v", flow)
 	}
 }
 

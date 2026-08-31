@@ -39,7 +39,7 @@ const sample: HuntReport = {
         summary: 'Inputs look complete.',
         inputs: [
           { id: 'book', label: 'Spot book', status: 'ok' },
-          { id: 'trend', label: 'Price + OI trend', status: 'ok' },
+          { id: 'flow', label: 'Taker + recent liqs', status: 'weak', have: '18m', need: '1h', coverPct: 30 },
         ],
       },
       upScore: { direction: 'up', score: 68, level: 'likely', reasons: ['Shorts are crowded'] },
@@ -76,6 +76,7 @@ describe('LiquidationHunt', () => {
     expect(screen.getByTestId('liquidation-hunt-down')).toHaveTextContent('3400000');
     expect(screen.getAllByTestId('liquidation-hunt-coverage').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/inputs look complete/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/18m \/ 1h/i)).toBeInTheDocument();
   });
 
   it('marks an unusable venue as excluded', async () => {

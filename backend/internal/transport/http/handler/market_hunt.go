@@ -125,11 +125,14 @@ type huntDirectionScoreDTO struct {
 }
 
 type huntInputStatusDTO struct {
-	ID     string  `json:"id"`
-	Label  string  `json:"label"`
-	Status string  `json:"status"`
-	Weight float64 `json:"weight"`
-	Detail string  `json:"detail"`
+	ID       string  `json:"id"`
+	Label    string  `json:"label"`
+	Status   string  `json:"status"`
+	Weight   float64 `json:"weight"`
+	Detail   string  `json:"detail"`
+	Have     string  `json:"have,omitempty"`
+	Need     string  `json:"need,omitempty"`
+	CoverPct float64 `json:"coverPct,omitempty"`
 }
 
 type huntCoverageDTO struct {
@@ -262,11 +265,14 @@ func huntCoverageToDTO(c domain.HuntCoverage) huntCoverageDTO {
 	inputs := make([]huntInputStatusDTO, 0, len(c.Inputs))
 	for _, in := range c.Inputs {
 		inputs = append(inputs, huntInputStatusDTO{
-			ID:     in.ID,
-			Label:  in.Label,
-			Status: in.Status,
-			Weight: in.Weight,
-			Detail: in.Detail,
+			ID:       in.ID,
+			Label:    in.Label,
+			Status:   in.Status,
+			Weight:   in.Weight,
+			Detail:   in.Detail,
+			Have:     in.Have,
+			Need:     in.Need,
+			CoverPct: in.CoverPct,
 		})
 	}
 	missing := c.Missing

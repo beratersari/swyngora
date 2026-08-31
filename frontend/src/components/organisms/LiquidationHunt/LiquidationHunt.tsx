@@ -7,6 +7,7 @@ import {
   compareRows,
   coverageTone,
   easeTone,
+  inputSpanText,
   inputTone,
   leanTone,
   scoreValue,
@@ -259,7 +260,9 @@ function CoverageStrip({ coverage, excluded }: { coverage?: HuntCoverage; exclud
         <InputList>
           {coverage.inputs.map((input) => (
             <InputPill key={input.id ?? input.label} $tone={inputTone(input.status)} title={input.detail}>
-              {input.label || input.id}: {t(`hunt.coverage.status.${inputTone(input.status)}`)}
+              {input.label || input.id}:{' '}
+              {inputSpanText(input.have, input.need, input.coverPct) ||
+                t(`hunt.coverage.status.${inputTone(input.status)}`)}
             </InputPill>
           ))}
         </InputList>

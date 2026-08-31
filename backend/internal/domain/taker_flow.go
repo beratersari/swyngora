@@ -58,6 +58,8 @@ type TakerWindowFlow struct {
 	BuyShare     float64 // 0–1
 	Dominant     string  // buy | sell | balanced
 	Complete     bool
+	HaveSec      int64 // how long this process has actually collected
+	NeedSec      int64 // window length
 }
 
 // TakerVenueFlow is one venue's taker picture plus a short read.
@@ -162,8 +164,21 @@ func BuildTakerVenueFlowBucket(ex Exchange, symbol string, buckets []TakerBucket
 				sell += b.SellNotional
 			}
 		}
-		complete := !started.IsZero() && !started.After(cut)
-		out.Windows = append(out.Windows, SummarizeTakerWindow(buy, sell, w.ID, complete))
+		have := time.Duration(0)
+		if !started.IsZero() {
+			have = now.Sub(started)
+			if have < 0 {
+				have = 0
+			}
+			if have > w.Dur {
+				have = w.Dur
+			}
+		}
+		complete := have >= w.Dur && !started.IsZero()
+		win := SummarizeTakerWindow(buy, sell, w.ID, complete)
+		win.HaveSec = int64(have / time.Second)
+		win.NeedSec = int64(w.Dur / time.Second)
+		out.Windows = append(out.Windows, win)
 	}
 	if len(out.Windows) > 0 {
 		out.Dominant = out.Windows[0].Dominant

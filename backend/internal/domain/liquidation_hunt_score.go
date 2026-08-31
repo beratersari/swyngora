@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -62,10 +63,14 @@ type HuntSignals struct {
 	PriceFromTicker                     bool
 	TakerBuy1h, TakerSell1h             float64
 	HasTaker                            bool
+	TakerSpan                           HuntSpan
 	LongLiq1h, ShortLiq1h               float64
 	LongLiq4h, ShortLiq4h               float64
 	HasLiqWindows                       bool
 	LiqFeedPresent                      bool
+	LiqSpan1h, LiqSpan4h                HuntSpan
+	OISpan1h, OISpan4h                  HuntSpan
+	PriceSpan1h, PriceSpan4h            HuntSpan
 	HasBook                             bool
 	HasLongShort                        bool
 	HasFunding                          bool
@@ -440,6 +445,15 @@ func huntTrendFactor(dir string, sig HuntSignals) HuntFactor {
 	if !sig.HasOI {
 		o1, o4 = math.NaN(), math.NaN()
 	}
+	if sig.OISpan1h.NeedSec > 0 && HuntSpanFraction(sig.OISpan1h) < 0.7 {
+		o1 = math.NaN()
+	}
+	if sig.OISpan4h.NeedSec > 0 && HuntSpanFraction(sig.OISpan4h) < 0.7 {
+		o4 = math.NaN()
+	}
+	if sig.PriceSpan4h.NeedSec > 0 && HuntSpanFraction(sig.PriceSpan4h) < 0.85 {
+		p4 = math.NaN()
+	}
 	w4 := BuildPositioningWindow("4h", p4, o4)
 	w1 := BuildPositioningWindow("1h", p1, o1)
 	primary := w4
@@ -531,29 +545,44 @@ func huntFlowFactor(dir string, sig HuntSignals) HuntFactor {
 		if tot > 0 {
 			buyShare := sig.TakerBuy1h / tot
 			tilt := (buyShare - 0.5) * 80
+			frac := HuntSpanFraction(sig.TakerSpan)
+			if sig.TakerSpan.NeedSec <= 0 {
+				frac = 0.25
+			}
+			tilt *= frac
 			if dir == "down" {
 				tilt = -tilt
 			}
 			score += tilt
+			spanNote := ""
+			if sig.TakerSpan.NeedSec > 0 {
+				spanNote = fmt.Sprintf(" (%s of %s)", formatHuntDur(sig.TakerSpan.HaveSec), formatHuntDur(sig.TakerSpan.NeedSec))
+			}
 			if buyShare >= 0.525 {
-				bits = append(bits, fmt.Sprintf("1h takers are %.0f%% buy", buyShare*100))
+				bits = append(bits, fmt.Sprintf("1h takers are %.0f%% buy%s", buyShare*100, spanNote))
 			} else if buyShare <= 0.475 {
-				bits = append(bits, fmt.Sprintf("1h takers are %.0f%% sell", (1-buyShare)*100))
+				bits = append(bits, fmt.Sprintf("1h takers are %.0f%% sell%s", (1-buyShare)*100, spanNote))
 			} else {
-				bits = append(bits, "1h taker flow is balanced")
+				bits = append(bits, "1h taker flow is balanced"+spanNote)
 			}
 		}
 	}
 	if sig.HasLiqWindows {
 		longN, shortN := sig.LongLiq1h, sig.ShortLiq1h
+		liqFrac := HuntSpanFraction(sig.LiqSpan1h)
 		if longN+shortN <= 0 {
 			longN, shortN = sig.LongLiq4h, sig.ShortLiq4h
+			liqFrac = HuntSpanFraction(sig.LiqSpan4h)
 		}
 		tot := longN + shortN
 		if tot > 0 {
 			// shorts already liquidating → tape already walking up
 			shortShare := shortN / tot
 			tilt := (shortShare - 0.5) * 50
+			if liqFrac <= 0 {
+				liqFrac = 0.25
+			}
+			tilt *= liqFrac
 			if dir == "down" {
 				tilt = -tilt
 			}
@@ -652,7 +681,14 @@ func buildHuntCoverage(v HuntVenueReport, sig HuntSignals) HuntCoverage {
 		case HuntInputOK:
 			num += in.Weight
 		case HuntInputWeak:
-			num += in.Weight * 0.5
+			credit := in.CoverPct / 100
+			if credit < 0.25 {
+				credit = 0.25
+			}
+			if credit > 0.85 {
+				credit = 0.85
+			}
+			num += in.Weight * credit
 			weak = append(weak, in.Label)
 		case HuntInputMissing:
 			missing = append(missing, in.Label)
@@ -704,6 +740,134 @@ func huntInputBook(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
 	return in
 }
 
+// HuntSpanFromDurations is have/need for one lookback. have is capped at need.
+func HuntSpanFromDurations(have, need time.Duration) HuntSpan {
+	if need < 0 {
+		need = 0
+	}
+	if have < 0 {
+		have = 0
+	}
+	if need > 0 && have > need {
+		have = need
+	}
+	out := HuntSpan{HaveSec: have.Seconds(), NeedSec: need.Seconds()}
+	if need > 0 {
+		out.CoverPct = clampScore(100 * have.Seconds() / need.Seconds())
+	}
+	return out
+}
+
+// HuntSpanFraction is 0–1 of the requested window actually collected.
+func HuntSpanFraction(s HuntSpan) float64 {
+	if s.NeedSec <= 0 {
+		return 0
+	}
+	f := s.HaveSec / s.NeedSec
+	if f > 1 {
+		return 1
+	}
+	if f < 0 {
+		return 0
+	}
+	return f
+}
+
+func applyHuntSpan(in *HuntInputStatus, s HuntSpan) {
+	if in == nil || s.NeedSec <= 0 {
+		return
+	}
+	in.Have = formatHuntDur(s.HaveSec)
+	in.Need = formatHuntDur(s.NeedSec)
+	in.CoverPct = s.CoverPct
+}
+
+// HuntOILookbackSpan is how far back OI history actually reaches vs the window.
+func HuntOILookbackSpan(ser *OpenInterestSeries, window time.Duration, now time.Time) HuntSpan {
+	if ser == nil {
+		return HuntSpan{NeedSec: window.Seconds()}
+	}
+	target := now.Add(-window)
+	past, complete := FindOpenInterestSample(ser.History, target, OpenInterestSampleSlack(window))
+	if complete {
+		return HuntSpanFromDurations(window, window)
+	}
+	if past.Time.IsZero() {
+		return HuntSpan{NeedSec: window.Seconds()}
+	}
+	have := now.Sub(past.Time)
+	if have >= window {
+		// Reached past the window start, but the sample sits outside slack —
+		// do not report a full window.
+		out := HuntSpanFromDurations(window, window)
+		out.CoverPct = 65
+		return out
+	}
+	return HuntSpanFromDurations(have, window)
+}
+
+// HuntPriceLookbackSpan uses hourly bar count (need 2 bars for 1h, 5 for 4h).
+func HuntPriceLookbackSpan(hourlyCloses int, needBars int, need time.Duration) HuntSpan {
+	haveBars := hourlyCloses - 1
+	if haveBars < 0 {
+		haveBars = 0
+	}
+	if haveBars > needBars {
+		haveBars = needBars
+	}
+	return HuntSpanFromDurations(time.Duration(haveBars)*time.Hour, need)
+}
+
+// HuntSpanFromTakerWindow uses collected vs requested seconds on a taker window.
+func HuntSpanFromTakerWindow(w TakerWindowFlow) HuntSpan {
+	if w.NeedSec > 0 {
+		return HuntSpanFromDurations(time.Duration(w.HaveSec)*time.Second, time.Duration(w.NeedSec)*time.Second)
+	}
+	if w.Complete {
+		return HuntSpanFromDurations(time.Hour, time.Hour)
+	}
+	return HuntSpan{NeedSec: 3600}
+}
+
+// HuntSpanFromLiqWindow uses live coverage seconds for one liquidation lookback.
+func HuntSpanFromLiqWindow(w LiquidationWindowTotals, need time.Duration) HuntSpan {
+	have := time.Duration(w.CoverageSeconds) * time.Second
+	if w.Complete {
+		have = need
+	}
+	return HuntSpanFromDurations(have, need)
+}
+
+func formatHuntDur(sec float64) string {
+	if sec < 0 {
+		sec = 0
+	}
+	if sec >= 3600 {
+		h := sec / 3600
+		if math.Abs(h-math.Round(h)) < 0.05 {
+			return fmt.Sprintf("%.0fh", math.Round(h))
+		}
+		return fmt.Sprintf("%.1fh", h)
+	}
+	if sec >= 60 {
+		return fmt.Sprintf("%.0fm", math.Round(sec/60))
+	}
+	return fmt.Sprintf("%.0fs", sec)
+}
+
+func huntSpanStatus(s HuntSpan) string {
+	if s.NeedSec <= 0 || s.CoverPct <= 0 {
+		return HuntInputMissing
+	}
+	if s.CoverPct >= 85 {
+		return HuntInputOK
+	}
+	if s.CoverPct >= 20 {
+		return HuntInputWeak
+	}
+	return HuntInputMissing
+}
+
 func huntInputOI(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
 	in := HuntInputStatus{ID: "oi", Label: "Open interest", Weight: 0.16}
 	if sig.OIError != "" && v.OpenInterestValue <= 0 {
@@ -716,30 +880,72 @@ func huntInputOI(v HuntVenueReport, sig HuntSignals) HuntInputStatus {
 		in.Detail = "no open interest"
 		return in
 	}
-	if !sig.HasOI {
+	span := sig.OISpan4h
+	if span.NeedSec <= 0 {
+		span = sig.OISpan1h
+	}
+	if span.NeedSec > 0 {
+		applyHuntSpan(&in, span)
+		st := huntSpanStatus(span)
+		if st == HuntInputOK && sig.HasOI {
+			in.Status = HuntInputOK
+			in.Detail = fmt.Sprintf("open interest history %s of %s", in.Have, in.Need)
+			return in
+		}
+		if st != HuntInputMissing {
+			in.Status = HuntInputWeak
+			in.Detail = fmt.Sprintf("open interest history %s of %s", in.Have, in.Need)
+			return in
+		}
+	}
+	if sig.HasOI {
 		in.Status = HuntInputWeak
-		in.Detail = "open interest has no recent change history"
+		in.Detail = "open interest change is from a short or unmatched sample"
 		return in
 	}
-	in.Status = HuntInputOK
-	in.Detail = "open interest loaded"
+	in.Status = HuntInputWeak
+	in.Detail = "open interest has no recent change history"
 	return in
 }
 
 func huntInputTrend(sig HuntSignals) HuntInputStatus {
 	in := HuntInputStatus{ID: "trend", Label: "Price + OI trend", Weight: 0.20}
+	if sig.PriceFromTicker && !sig.Has1hPrice && !sig.Has4hPrice {
+		in.Status = HuntInputWeak
+		in.Detail = "trend is the 24h ticker only"
+		return in
+	}
+	span := sig.PriceSpan4h
+	label := "4h"
+	if span.NeedSec <= 0 {
+		span = sig.PriceSpan1h
+		label = "1h"
+	}
+	if span.NeedSec > 0 {
+		applyHuntSpan(&in, span)
+		st := huntSpanStatus(span)
+		if st == HuntInputOK && sig.Has4hPrice {
+			in.Status = HuntInputOK
+			in.Detail = fmt.Sprintf("price path %s of %s", in.Have, in.Need)
+			return in
+		}
+		if st != HuntInputMissing || sig.HasPrice {
+			in.Status = HuntInputWeak
+			if in.Have != "" {
+				in.Detail = fmt.Sprintf("%s price path %s of %s", label, in.Have, in.Need)
+			} else {
+				in.Detail = "trend is only a short or ticker window"
+			}
+			return in
+		}
+	}
 	if !sig.HasPrice {
 		in.Status = HuntInputMissing
 		in.Detail = "no price change window"
 		return in
 	}
-	if sig.PriceFromTicker || !sig.Has4hPrice {
-		in.Status = HuntInputWeak
-		in.Detail = "trend is only a short or ticker window"
-		return in
-	}
-	in.Status = HuntInputOK
-	in.Detail = "1h/4h price path loaded"
+	in.Status = HuntInputWeak
+	in.Detail = "trend is only a short or ticker window"
 	return in
 }
 
@@ -767,14 +973,38 @@ func huntInputCrowding(sig HuntSignals) HuntInputStatus {
 
 func huntInputFlow(sig HuntSignals) HuntInputStatus {
 	in := HuntInputStatus{ID: "flow", Label: "Taker + recent liqs", Weight: 0.18}
-	if sig.HasTaker {
-		in.Status = HuntInputOK
-		in.Detail = "1h taker flow loaded"
+	taker := sig.TakerSpan
+	if taker.NeedSec <= 0 && sig.HasTaker {
+		// Some prints but no clock — do not treat as a full hour.
+		taker = HuntSpan{HaveSec: 0, NeedSec: 3600, CoverPct: 0}
+	}
+	liq := sig.LiqSpan1h
+	if liq.NeedSec <= 0 {
+		liq = sig.LiqSpan4h
+	}
+	if sig.HasTaker && taker.NeedSec > 0 {
+		applyHuntSpan(&in, taker)
+		st := huntSpanStatus(taker)
+		if st == HuntInputOK {
+			in.Status = HuntInputOK
+			in.Detail = fmt.Sprintf("1h taker %s of %s", formatHuntDur(taker.HaveSec), formatHuntDur(taker.NeedSec))
+			return in
+		}
+		in.Status = HuntInputWeak
+		in.Detail = fmt.Sprintf("1h taker only %s of %s", formatHuntDur(taker.HaveSec), formatHuntDur(taker.NeedSec))
+		if liq.NeedSec > 0 && liq.CoverPct > 0 {
+			in.Detail += fmt.Sprintf("; liqs %s of %s", formatHuntDur(liq.HaveSec), formatHuntDur(liq.NeedSec))
+		}
 		return in
 	}
 	if sig.LiqFeedPresent || sig.HasLiqWindows {
 		in.Status = HuntInputWeak
-		in.Detail = "no taker tape; using observed liquidations only"
+		if liq.NeedSec > 0 {
+			applyHuntSpan(&in, liq)
+			in.Detail = fmt.Sprintf("no taker tape; liqs %s of %s", formatHuntDur(liq.HaveSec), formatHuntDur(liq.NeedSec))
+		} else {
+			in.Detail = "no taker tape; using observed liquidations only"
+		}
 		return in
 	}
 	in.Status = HuntInputMissing

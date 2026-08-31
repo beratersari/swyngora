@@ -4,6 +4,7 @@ import {
   coverageTone,
   easeTone,
   formatTarget,
+  inputSpanText,
   inputTone,
   leanTone,
   scoreValue,
@@ -22,6 +23,7 @@ describe('LiquidationHunt helpers', () => {
     expect(venueLabel('binance')).toBe('Binance');
     expect(coverageTone('thin')).toBe('thin');
     expect(inputTone('error')).toBe('error');
+    expect(inputSpanText('18m', '1h', 25)).toBe('18m / 1h (25%)');
   });
 
   it('formats a target with move and builds compare rows', () => {

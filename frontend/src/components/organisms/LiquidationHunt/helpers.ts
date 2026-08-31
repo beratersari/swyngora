@@ -42,6 +42,14 @@ export function inputTone(status?: HuntInputState): 'ok' | 'weak' | 'missing' | 
   return 'missing';
 }
 
+export function inputSpanText(have?: string, need?: string, coverPct?: number): string {
+  if (have && need) {
+    const pct = Number.isFinite(coverPct) && coverPct != null ? ` (${Math.round(coverPct)}%)` : '';
+    return `${have} / ${need}${pct}`;
+  }
+  return '';
+}
+
 export function venueLabel(exchange?: string): string {
   const v = (exchange ?? '').toLowerCase();
   if (v === 'binance') return 'Binance';
