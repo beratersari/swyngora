@@ -4084,8 +4084,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "book to push price and force futures liquidations, where is "
                 "the main long/short pressure, how much spot buy/sell the "
                 "visible book needs, and a rough desk result (book-only vs "
-                "with cascade exit). Venues are never averaged. Not evidence "
-                "of exchange behavior. Not financial advice."
+                "with cascade exit). Also returns upScore/downScore (0-100) "
+                "and bias with reasons from zone distance, book cost, "
+                "price+OI trend, crowding/funding, and recent flow. Scores "
+                "do not change zone or P&L numbers. Venues are never "
+                "averaged. Not evidence of exchange behavior. Not financial advice."
             ),
             args_schema=LiquidationHuntInput,
         ),

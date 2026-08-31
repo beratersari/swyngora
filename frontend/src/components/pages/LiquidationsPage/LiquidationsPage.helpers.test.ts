@@ -13,6 +13,7 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqView('heatmap')).toBe('heatmap');
     expect(parseLiqView('chart')).toBe('chart');
     expect(parseLiqView('cascade')).toBe('cascade');
+    expect(parseLiqView('hunt')).toBe('hunt');
     expect(parseLiqView(null)).toBe('overview');
     expect(parseLiqCascadeSymbol(null)).toBe('all');
     expect(parseLiqCascadeSymbol('eth')).toBe('ETHUSDT');

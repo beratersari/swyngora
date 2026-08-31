@@ -107,26 +107,29 @@ type HuntScenario struct {
 
 // HuntVenueReport is the hunt model for one futures venue.
 type HuntVenueReport struct {
-	Exchange           Exchange      `json:"exchange"`
-	Symbol             string        `json:"symbol"`
-	Price              float64       `json:"price"`
-	OpenInterestValue  float64       `json:"openInterestValue"`
-	EstLongNotional    float64       `json:"estLongNotional"`
-	EstShortNotional   float64       `json:"estShortNotional"`
-	LongShare          float64       `json:"longShare"`
-	ShortShare         float64       `json:"shortShare"`
-	EstLongShare       float64       `json:"estLongShare"`
-	EstShortShare      float64       `json:"estShortShare"`
-	FundingRate        float64       `json:"fundingRate"`
-	FundingPayer       string        `json:"fundingPayer"`
-	VisibleBidNotional float64       `json:"visibleBidNotional"`
-	VisibleAskNotional float64       `json:"visibleAskNotional"`
-	UpPressure         []HuntBand    `json:"upPressure"`
-	DownPressure       []HuntBand    `json:"downPressure"`
-	Observed           []HuntCluster `json:"observed"`
-	UpHunt             HuntScenario  `json:"upHunt"`
-	DownHunt           HuntScenario  `json:"downHunt"`
-	Error              string        `json:"error,omitempty"`
+	Exchange           Exchange           `json:"exchange"`
+	Symbol             string             `json:"symbol"`
+	Price              float64            `json:"price"`
+	OpenInterestValue  float64            `json:"openInterestValue"`
+	EstLongNotional    float64            `json:"estLongNotional"`
+	EstShortNotional   float64            `json:"estShortNotional"`
+	LongShare          float64            `json:"longShare"`
+	ShortShare         float64            `json:"shortShare"`
+	EstLongShare       float64            `json:"estLongShare"`
+	EstShortShare      float64            `json:"estShortShare"`
+	FundingRate        float64            `json:"fundingRate"`
+	FundingPayer       string             `json:"fundingPayer"`
+	VisibleBidNotional float64            `json:"visibleBidNotional"`
+	VisibleAskNotional float64            `json:"visibleAskNotional"`
+	UpPressure         []HuntBand         `json:"upPressure"`
+	DownPressure       []HuntBand         `json:"downPressure"`
+	Observed           []HuntCluster      `json:"observed"`
+	UpHunt             HuntScenario       `json:"upHunt"`
+	DownHunt           HuntScenario       `json:"downHunt"`
+	UpScore            HuntDirectionScore `json:"upScore"`
+	DownScore          HuntDirectionScore `json:"downScore"`
+	Bias               HuntBias           `json:"bias"`
+	Error              string             `json:"error,omitempty"`
 }
 
 // HuntReport is the API/use-case result. Venues are never averaged.
@@ -136,6 +139,7 @@ type HuntReport struct {
 	AsOf        time.Time         `json:"asOf"`
 	Assumptions HuntAssumptions   `json:"assumptions"`
 	Venues      []HuntVenueReport `json:"venues"`
+	Bias        *HuntBias         `json:"bias,omitempty"`
 	Note        string            `json:"note,omitempty"`
 }
 

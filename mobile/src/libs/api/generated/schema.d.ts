@@ -4121,6 +4121,111 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        LiquidationHuntFactor: {
+            id?: string;
+            label?: string;
+            /** @description 0–100 for this direction */
+            score?: number;
+            weight?: number;
+            detail?: string;
+        };
+        /** @description How easy / likely one hunt direction looks (does not change zone math) */
+        LiquidationHuntDirectionScore: {
+            direction?: "up" | "down";
+            /** @description 0–100 */
+            score?: number;
+            level?: "easier" | "likely" | "mixed" | "hard";
+            factors?: components["schemas"]["LiquidationHuntFactor"][];
+            reasons?: string[];
+        };
+        LiquidationHuntBias: {
+            lean?: "up" | "down" | "even";
+            margin?: number;
+            upScore?: number;
+            downScore?: number;
+            summary?: string;
+        };
+        LiquidationHuntBand: {
+            side?: string;
+            direction?: string;
+            leverage?: string;
+            price?: string;
+            movePct?: string;
+            estNotional?: string;
+            observedNotional?: string;
+            source?: string;
+        };
+        LiquidationHuntWalk: {
+            side?: string;
+            targetPrice?: string;
+            quantity?: string;
+            notional?: string;
+            averagePrice?: string;
+            endPrice?: string;
+            reachable?: boolean;
+            exhausted?: boolean;
+            maxReachablePrice?: string;
+            visibleNotional?: string;
+        };
+        LiquidationHuntScenario: {
+            direction?: "up" | "down";
+            thesis?: string;
+            target?: components["schemas"]["LiquidationHuntBand"];
+            spot?: components["schemas"]["LiquidationHuntWalk"];
+            estLiquidated?: string;
+            cascadeExitNotional?: string;
+            bookOnlyPnl?: string;
+            cascadeInventoryPnl?: string;
+            liquidationTake?: string;
+            fees?: string;
+            netBookOnly?: string;
+            netWithCascade?: string;
+            houseEdge?: "profit" | "loss" | "unreachable";
+            efficiency?: string;
+        };
+        LiquidationHuntVenue: {
+            exchange?: string;
+            symbol?: string;
+            price?: string;
+            openInterestValue?: string;
+            estLongNotional?: string;
+            estShortNotional?: string;
+            longPct?: string;
+            shortPct?: string;
+            estLongPct?: string;
+            estShortPct?: string;
+            fundingRate?: string;
+            fundingPayer?: string;
+            visibleBidNotional?: string;
+            visibleAskNotional?: string;
+            upPressure?: components["schemas"]["LiquidationHuntBand"][];
+            downPressure?: components["schemas"]["LiquidationHuntBand"][];
+            observed?: {
+                side?: string;
+                price?: string;
+                movePct?: string;
+                notional?: string;
+                count?: number;
+            }[];
+            upHunt?: components["schemas"]["LiquidationHuntScenario"];
+            downHunt?: components["schemas"]["LiquidationHuntScenario"];
+            upScore?: components["schemas"]["LiquidationHuntDirectionScore"];
+            downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
+            bias?: components["schemas"]["LiquidationHuntBias"];
+            error?: string;
+        };
+        /** @description Hypothetical per-venue hunt plus directional ease scores */
+        LiquidationHunt: {
+            symbol?: string;
+            exchange?: string;
+            asOf?: string;
+            assumptions?: {
+                [key: string]: unknown;
+            };
+            venues?: components["schemas"]["LiquidationHuntVenue"][];
+            bias?: components["schemas"]["LiquidationHuntBias"];
+            note?: string;
+        };
         LiquidationHuntHeatmapGrid: {
             exchange?: string;
             /** @description [time][price] estimated long-liquidation notional */
@@ -7642,7 +7747,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["LiquidationHunt"];
                 };
             };
             400: components["responses"]["Error"];

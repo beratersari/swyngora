@@ -63,6 +63,8 @@ import type {
   OrderBookHeatmapQuery,
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapQuery,
+  LiquidationHunt,
+  LiquidationHuntQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -96,6 +98,8 @@ export type {
   OrderBookHeatmapQuery,
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapQuery,
+  LiquidationHunt,
+  LiquidationHuntQuery,
   SupplyQuery,
   IntervalsQuery,
   IndicatorsQuery,
@@ -293,6 +297,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationHunt: build.query<LiquidationHunt, LiquidationHuntQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-hunt',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketLiquidationHuntHeatmap: build.query<
       LiquidationHuntHeatmap,
       LiquidationHuntHeatmapQuery
@@ -432,6 +443,7 @@ export const {
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationCascadeQuery,
   useGetMarketLiquidationCascadeScanQuery,
+  useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,

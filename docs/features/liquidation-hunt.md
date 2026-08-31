@@ -33,6 +33,29 @@ Each venue report includes:
 | `netWithCascade` | Part of estimated liquidations becomes exit flow at the target |
 | `houseEdge` | `profit` / `loss` / `unreachable` from `netWithCascade` |
 | `efficiency` | estimated liquidated notional ÷ spot notional |
+| `upScore` / `downScore` | 0–100 ease / likelihood for that direction, with `level`, `factors`, and `reasons` |
+| `bias` | `up` / `down` / `even` plus a one-line summary (venue and report-level) |
+
+Zone bands and hunt P&L are **unchanged** by the scores. Scores only rank the two existing tours.
+
+### Direction scores
+
+Each direction is a weighted mix of data the desk already has:
+
+| Factor | What it asks |
+|---|---|
+| Distance to zone | How far is the chosen target (`movePct`)? Closer is easier. |
+| Spot walk cost | How much visible spot is needed vs the other side? Thinner push side helps. |
+| Liq per spot | `efficiency` and whether the desk model is `profit` if cascade flow appears. |
+| Price + OI trend | Same regime model as positioning (`long_buildup` / `short_covering` lean **up**; `short_buildup` / `long_unwinding` lean **down**). |
+| Crowding + funding | Estimated long/short OI share and who pays funding. Shorts crowded + shorts paying favors **up**. |
+| Taker + recent liqs | 1h aggressive buy/sell and 1h/4h observed liquidations. Buy-heavy / short-liq-heavy tape favors **up**. |
+
+Missing tape (no candles, no taker, no live book) drops that factor instead of pretending it is 50/50. Combined `bias` is **OI-weighted** across venues; one venue is never filled from the other.
+
+`level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
+
+Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, spot cost, estimated liq, efficiency, desk result, and reasons.
 
 ### Assumptions (also returned on `assumptions`)
 
@@ -52,11 +75,11 @@ Each venue report includes:
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
 | Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
 | HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
 | MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
-| Web | `/liquidations?view=heatmap` — `frontend/src/components/organisms/LiquidationHeatmap` |
+| Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt`; `/liquidations?view=heatmap` — `LiquidationHeatmap` |
 
 ## How to verify
 

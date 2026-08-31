@@ -107,6 +107,40 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationHuntQuery: () => ({
+      data: {
+        symbol: 'BTCUSDT',
+        bias: { lean: 'up', summary: 'Up looks easier (68 vs 41).' },
+        venues: [
+          {
+            exchange: 'binance',
+            price: '64000',
+            upScore: { direction: 'up', score: 68, level: 'likely', reasons: ['Shorts crowded'] },
+            downScore: { direction: 'down', score: 41, level: 'mixed', reasons: [] },
+            upHunt: { target: { price: '65000', movePct: '1.5' }, houseEdge: 'profit' },
+            downHunt: { target: { price: '63000', movePct: '-1.5' }, houseEdge: 'loss' },
+          },
+        ],
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        bias: { lean: 'up', summary: 'Up looks easier (68 vs 41).' },
+        venues: [
+          {
+            exchange: 'binance',
+            price: '64000',
+            upScore: { direction: 'up', score: 68, level: 'likely', reasons: ['Shorts crowded'] },
+            downScore: { direction: 'down', score: 41, level: 'mixed', reasons: [] },
+            upHunt: { target: { price: '65000', movePct: '1.5' }, houseEdge: 'profit' },
+            downHunt: { target: { price: '63000', movePct: '-1.5' }, houseEdge: 'loss' },
+          },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketLiquidationHuntHeatmapQuery: () => ({
       data: undefined,
       currentData: undefined,
@@ -147,5 +181,10 @@ describe('LiquidationsPage', () => {
   it('opens the heatmap tab from the URL', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=heatmap'] });
     expect(await screen.findByTestId('liquidation-heatmap')).toBeInTheDocument();
+  });
+
+  it('opens the hunt tab from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=hunt'] });
+    expect(await screen.findByTestId('liquidation-hunt')).toBeInTheDocument();
   });
 });

@@ -2456,9 +2456,13 @@ paths:
         liquidation pressure sits if price moves up or down, how much **spot**
         buying or selling the visible book needs to reach those areas, and a
         rough desk result (unwind on the current opposite side vs assuming
-        part of estimated liquidations become exit flow). Uses live spot book,
-        open interest, account long/short (blended toward 50/50), funding, and
-        recent liquidation prints. Leverage mix is assumed.
+        part of estimated liquidations become exit flow). Also scores which
+        direction looks easier or more likely (`upScore` / `downScore` plus
+        `bias`) from zone distance, visible book cost, price+OI trend,
+        crowding/funding, and recent taker / liquidation flow. Uses live spot
+        book, open interest, account long/short (blended toward 50/50),
+        funding, and recent liquidation prints. Leverage mix is assumed.
+        Direction scores do not change the zone or P&L numbers.
       operationId: getMarketLiquidationHunt
       tags: [Market]
       parameters:
@@ -2476,7 +2480,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/LiquidationHunt'
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -7471,6 +7475,130 @@ components:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationCascadeHit' }
         summary: { type: string }
+        note: { type: string }
+    LiquidationHuntFactor:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        score: { type: number, description: 0–100 for this direction }
+        weight: { type: number }
+        detail: { type: string }
+    LiquidationHuntDirectionScore:
+      type: object
+      description: How easy / likely one hunt direction looks (does not change zone math)
+      properties:
+        direction: { type: string, enum: [up, down] }
+        score: { type: number, description: 0–100 }
+        level: { type: string, enum: [easier, likely, mixed, hard] }
+        factors:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntFactor' }
+        reasons:
+          type: array
+          items: { type: string }
+    LiquidationHuntBias:
+      type: object
+      properties:
+        lean: { type: string, enum: [up, down, even] }
+        margin: { type: number }
+        upScore: { type: number }
+        downScore: { type: number }
+        summary: { type: string }
+    LiquidationHuntBand:
+      type: object
+      properties:
+        side: { type: string }
+        direction: { type: string }
+        leverage: { type: string }
+        price: { type: string }
+        movePct: { type: string }
+        estNotional: { type: string }
+        observedNotional: { type: string }
+        source: { type: string }
+    LiquidationHuntWalk:
+      type: object
+      properties:
+        side: { type: string }
+        targetPrice: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
+        averagePrice: { type: string }
+        endPrice: { type: string }
+        reachable: { type: boolean }
+        exhausted: { type: boolean }
+        maxReachablePrice: { type: string }
+        visibleNotional: { type: string }
+    LiquidationHuntScenario:
+      type: object
+      properties:
+        direction: { type: string, enum: [up, down] }
+        thesis: { type: string }
+        target: { $ref: '#/components/schemas/LiquidationHuntBand' }
+        spot: { $ref: '#/components/schemas/LiquidationHuntWalk' }
+        estLiquidated: { type: string }
+        cascadeExitNotional: { type: string }
+        bookOnlyPnl: { type: string }
+        cascadeInventoryPnl: { type: string }
+        liquidationTake: { type: string }
+        fees: { type: string }
+        netBookOnly: { type: string }
+        netWithCascade: { type: string }
+        houseEdge: { type: string, enum: [profit, loss, unreachable] }
+        efficiency: { type: string }
+    LiquidationHuntVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        price: { type: string }
+        openInterestValue: { type: string }
+        estLongNotional: { type: string }
+        estShortNotional: { type: string }
+        longPct: { type: string }
+        shortPct: { type: string }
+        estLongPct: { type: string }
+        estShortPct: { type: string }
+        fundingRate: { type: string }
+        fundingPayer: { type: string }
+        visibleBidNotional: { type: string }
+        visibleAskNotional: { type: string }
+        upPressure:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntBand' }
+        downPressure:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntBand' }
+        observed:
+          type: array
+          items:
+            type: object
+            properties:
+              side: { type: string }
+              price: { type: string }
+              movePct: { type: string }
+              notional: { type: string }
+              count: { type: integer }
+        upHunt: { $ref: '#/components/schemas/LiquidationHuntScenario' }
+        downHunt: { $ref: '#/components/schemas/LiquidationHuntScenario' }
+        upScore: { $ref: '#/components/schemas/LiquidationHuntDirectionScore' }
+        downScore: { $ref: '#/components/schemas/LiquidationHuntDirectionScore' }
+        bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
+        error: { type: string }
+    LiquidationHunt:
+      type: object
+      description: Hypothetical per-venue hunt plus directional ease scores
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        assumptions:
+          type: object
+          additionalProperties: true
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntVenue' }
+        bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object

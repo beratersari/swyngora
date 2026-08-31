@@ -1247,6 +1247,16 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	if body.Symbol != "BTCUSDT" || body.Note == "" {
 		t.Fatalf("%+v", body)
 	}
+	if len(body.Venues) == 0 {
+		t.Fatalf("want venues: %+v", body)
+	}
+	v := body.Venues[0]
+	if v.UpScore.Direction != "up" || v.DownScore.Direction != "down" {
+		t.Fatalf("scores: %+v", v)
+	}
+	if v.UpHunt.Direction != "up" || v.DownHunt.Direction != "down" {
+		t.Fatalf("hunts: %+v", v)
+	}
 }
 
 func TestGetLiquidationCascade_OK(t *testing.T) {

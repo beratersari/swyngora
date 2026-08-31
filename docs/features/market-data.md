@@ -61,7 +61,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/funding-arb` long the cheaper-funding venue / short the richer one; sized after-fee payout + spot-perp. See [`funding-arb.md`](funding-arb.md).
 - `GET /api/v1/market/long-short-ratio` account long/short ratio plus recent 5m history. See [`long-short-ratio.md`](long-short-ratio.md).
 - `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
-- `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + rough desk result). See [`liquidation-hunt.md`](liquidation-hunt.md).
+- `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + desk result + up/down ease scores). See [`liquidation-hunt.md`](liquidation-hunt.md).
 - `GET /api/v1/market/liquidation-hunt/heatmap` price × time liquidation intensity (12h/24h/3d/7d; each venue's own price; Binance, Bybit, combined; 1h/4h/12h review scored only when later price and liquidation history are complete). See [`liquidation-hunt.md`](liquidation-hunt.md).
 - `GET /api/v1/market/squeeze-risk` long/short squeeze risk scores per venue + combined. See [`squeeze-risk.md`](squeeze-risk.md).
 - `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).

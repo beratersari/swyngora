@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"sync"
@@ -55,17 +56,26 @@ func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol strin
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
+	out.Bias = domain.CombineHuntBias(out.Venues)
 	return out, nil
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow — not a prediction."
 
 func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) domain.HuntVenueReport {
 	in := domain.HuntInputs{Exchange: ex, Symbol: symbol}
+	sig := domain.HuntSignals{
+		Price1hPct:  math.NaN(),
+		Price4hPct:  math.NaN(),
+		Price24hPct: math.NaN(),
+		OI1hPct:     math.NaN(),
+		OI4hPct:     math.NaN(),
+	}
 	var wg sync.WaitGroup
 	var oiErr, lsErr, fundErr, bookErr error
+	var oiSer *domain.OpenInterestSeries
 
-	wg.Add(4)
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		if p := s.oiPort(ex); p != nil {
@@ -74,6 +84,7 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 				oiErr = err
 				return
 			}
+			oiSer = ser
 			if ser != nil {
 				in.OIValue = ser.Current.Value
 			}
@@ -117,20 +128,86 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 		in.Asks = domain.CollectImpactLevels(domain.ImpactSideBuy, books)
 		in.Bids = domain.CollectImpactLevels(domain.ImpactSideSell, books)
 	}()
+	go func() {
+		defer wg.Done()
+		candles, err := s.GetCandles(ctx, string(ex), symbol, "1h", 30, nil, nil)
+		if err != nil || len(candles) == 0 {
+			return
+		}
+		closes := domain.ClosesFromCandles(candles)
+		sig.Price1hPct = domain.PriceChangeOverBars(closes, 1)
+		sig.Price4hPct = domain.PriceChangeOverBars(closes, 4)
+		sig.Price24hPct = domain.PriceChangeOverBars(closes, 24)
+		sig.HasPrice = true
+	}()
+	go func() {
+		defer wg.Done()
+		p := s.takerPort(ex)
+		if p == nil {
+			return
+		}
+		flow, err := p.GetTakerFlow(ctx, symbol)
+		if err != nil || flow == nil {
+			return
+		}
+		for _, w := range flow.Windows {
+			if w.Window != domain.TakerWindow1h {
+				continue
+			}
+			sig.TakerBuy1h, sig.TakerSell1h = w.BuyNotional, w.SellNotional
+			sig.HasTaker = w.BuyNotional+w.SellNotional > 0
+			return
+		}
+	}()
 	wg.Wait()
 
 	if s.liq != nil {
 		in.Liquidations = s.liq.Events(string(ex), symbol, now.Add(-24*time.Hour))
+		sig.HasLiqWindows = true
+		cut1h := now.Add(-time.Hour)
+		cut4h := now.Add(-4 * time.Hour)
+		for _, e := range in.Liquidations {
+			switch {
+			case e.Side == domain.LiquidationSideShort:
+				if !e.Time.Before(cut1h) {
+					sig.ShortLiq1h += e.Notional
+				}
+				if !e.Time.Before(cut4h) {
+					sig.ShortLiq4h += e.Notional
+				}
+			default:
+				if !e.Time.Before(cut1h) {
+					sig.LongLiq1h += e.Notional
+				}
+				if !e.Time.Before(cut4h) {
+					sig.LongLiq4h += e.Notional
+				}
+			}
+		}
 	}
 	if in.Price <= 0 {
 		if tkr, err := s.GetTicker24h(ctx, string(ex), symbol); err == nil && tkr != nil {
 			if px, perr := strconv.ParseFloat(tkr.LastPrice, 64); perr == nil {
 				in.Price = px
 			}
+			if !sig.HasPrice {
+				if pct, perr := strconv.ParseFloat(tkr.PriceChangePercent, 64); perr == nil {
+					sig.Price24hPct = pct
+					sig.HasPrice = true
+				}
+			}
+		}
+	}
+	if oiSer != nil {
+		sig.OI1hPct = domain.OIChangePctFromSeries(oiSer, time.Hour, now)
+		sig.OI4hPct = domain.OIChangePctFromSeries(oiSer, 4*time.Hour, now)
+		if !math.IsNaN(sig.OI1hPct) || !math.IsNaN(sig.OI4hPct) {
+			sig.HasOI = true
 		}
 	}
 
 	got := domain.BuildHuntVenue(in)
+	domain.AttachHuntDirectionScores(&got, sig)
 	switch {
 	case bookErr != nil && oiErr != nil:
 		got.Error = fmt.Sprintf("book: %v; open interest: %v", bookErr, oiErr)

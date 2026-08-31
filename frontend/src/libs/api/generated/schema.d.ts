@@ -500,12 +500,13 @@ export interface paths {
          * @description Long/short liquidation notional, count, and the biggest hit for the last
          *     **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
          *     (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
-         *     websocket streams. Totals only include events seen since this process
-         *     started. `coverageSeconds` / `complete` count only time the websocket
-         *     was actually connected for that coin and venue — they do not advance if
-         *     the stream never connects or drops. Combined `all` uses the shorter live
-         *     coverage of the venues watching that coin. `exchange=all` (default) sums
-         *     both venues. Informational only.
+         *     websocket streams. After a reconnect, each venue tries its own history
+         *     for the hole; overlapping live+history prints are counted once. Venues
+         *     stay separate. `coverageSeconds` / `complete` count live-socket time plus
+         *     history that filled a disconnect. Combined `all` uses the shorter coverage
+         *     of the venues watching that coin. `feed.gaps` lists still-unfilled holes
+         *     in the last 6h; `missingSeconds` is how much time is still missing. A
+         *     fully filled hole is omitted. Informational only.
          */
         get: operations["getMarketLiquidations"];
         put?: never;
@@ -1464,9 +1465,13 @@ export interface paths {
          *     liquidation pressure sits if price moves up or down, how much **spot**
          *     buying or selling the visible book needs to reach those areas, and a
          *     rough desk result (unwind on the current opposite side vs assuming
-         *     part of estimated liquidations become exit flow). Uses live spot book,
-         *     open interest, account long/short (blended toward 50/50), funding, and
-         *     recent liquidation prints. Leverage mix is assumed.
+         *     part of estimated liquidations become exit flow). Also scores which
+         *     direction looks easier or more likely (`upScore` / `downScore` plus
+         *     `bias`) from zone distance, visible book cost, price+OI trend,
+         *     crowding/funding, and recent taker / liquidation flow. Uses live spot
+         *     book, open interest, account long/short (blended toward 50/50),
+         *     funding, and recent liquidation prints. Leverage mix is assumed.
+         *     Direction scores do not change the zone or P&L numbers.
          */
         get: operations["getMarketLiquidationHunt"];
         put?: never;
@@ -1887,9 +1892,14 @@ export interface paths {
          *     kind=price (default): last price above/below targetPrice. mode defaults to one_time.
          *     kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
          *     kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
-         *     Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
-         *     mode=repeating (default for book): fires on each new appearance; does not re-fire while the
-         *     condition stays true; re-arms when it clears. Informational only.
+         *     kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
+         *     targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+         *     kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
+         *     or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+         *     kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
+         *     default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
+         *     Repeating fires once when the wave crosses, stays quiet while that window stays above,
+         *     re-arms when it drops so a new wave can fire. Informational only.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -3885,9 +3895,9 @@ export interface components {
             totalNotional?: string;
             count?: number;
             biggest?: components["schemas"]["LiquidationHit"];
-            /** @description Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. */
+            /** @description Seconds the websocket was actually live for this coin+venue */
             coverageSeconds?: number;
-            /** @description False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. */
+            /** @description False until this coin+venue has had live or backfilled coverage for the full window. Combined is false unless both venues were covered for the whole window. */
             complete?: boolean;
         };
         LiquidationGap: {
@@ -4119,6 +4129,117 @@ export interface components {
             market?: components["schemas"]["MarketLiquidationCascade"];
             hits?: components["schemas"]["MarketLiquidationCascadeHit"][];
             summary?: string;
+            note?: string;
+        };
+        LiquidationHuntFactor: {
+            id?: string;
+            label?: string;
+            /** @description 0–100 for this direction */
+            score?: number;
+            weight?: number;
+            detail?: string;
+        };
+        /** @description How easy / likely one hunt direction looks (does not change zone math) */
+        LiquidationHuntDirectionScore: {
+            /** @enum {string} */
+            direction?: "up" | "down";
+            /** @description 0–100 */
+            score?: number;
+            /** @enum {string} */
+            level?: "easier" | "likely" | "mixed" | "hard";
+            factors?: components["schemas"]["LiquidationHuntFactor"][];
+            reasons?: string[];
+        };
+        LiquidationHuntBias: {
+            /** @enum {string} */
+            lean?: "up" | "down" | "even";
+            margin?: number;
+            upScore?: number;
+            downScore?: number;
+            summary?: string;
+        };
+        LiquidationHuntBand: {
+            side?: string;
+            direction?: string;
+            leverage?: string;
+            price?: string;
+            movePct?: string;
+            estNotional?: string;
+            observedNotional?: string;
+            source?: string;
+        };
+        LiquidationHuntWalk: {
+            side?: string;
+            targetPrice?: string;
+            quantity?: string;
+            notional?: string;
+            averagePrice?: string;
+            endPrice?: string;
+            reachable?: boolean;
+            exhausted?: boolean;
+            maxReachablePrice?: string;
+            visibleNotional?: string;
+        };
+        LiquidationHuntScenario: {
+            /** @enum {string} */
+            direction?: "up" | "down";
+            thesis?: string;
+            target?: components["schemas"]["LiquidationHuntBand"];
+            spot?: components["schemas"]["LiquidationHuntWalk"];
+            estLiquidated?: string;
+            cascadeExitNotional?: string;
+            bookOnlyPnl?: string;
+            cascadeInventoryPnl?: string;
+            liquidationTake?: string;
+            fees?: string;
+            netBookOnly?: string;
+            netWithCascade?: string;
+            /** @enum {string} */
+            houseEdge?: "profit" | "loss" | "unreachable";
+            efficiency?: string;
+        };
+        LiquidationHuntVenue: {
+            exchange?: string;
+            symbol?: string;
+            price?: string;
+            openInterestValue?: string;
+            estLongNotional?: string;
+            estShortNotional?: string;
+            longPct?: string;
+            shortPct?: string;
+            estLongPct?: string;
+            estShortPct?: string;
+            fundingRate?: string;
+            fundingPayer?: string;
+            visibleBidNotional?: string;
+            visibleAskNotional?: string;
+            upPressure?: components["schemas"]["LiquidationHuntBand"][];
+            downPressure?: components["schemas"]["LiquidationHuntBand"][];
+            observed?: {
+                side?: string;
+                price?: string;
+                movePct?: string;
+                notional?: string;
+                count?: number;
+            }[];
+            upHunt?: components["schemas"]["LiquidationHuntScenario"];
+            downHunt?: components["schemas"]["LiquidationHuntScenario"];
+            upScore?: components["schemas"]["LiquidationHuntDirectionScore"];
+            downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
+            bias?: components["schemas"]["LiquidationHuntBias"];
+            error?: string;
+        };
+        /** @description Hypothetical per-venue hunt plus directional ease scores */
+        LiquidationHunt: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            assumptions?: {
+                [key: string]: unknown;
+            };
+            venues?: components["schemas"]["LiquidationHuntVenue"][];
+            bias?: components["schemas"]["LiquidationHuntBias"];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -4688,7 +4809,7 @@ export interface components {
             symbol?: string;
             /** @enum {string} */
             kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-            /** @description price/imbalance above|below; wall bid|ask|any */
+            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
             condition?: string;
             targetPrice?: number;
             /** @description Analysis band for imbalance/wall alerts */
@@ -7642,7 +7763,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["LiquidationHunt"];
                 };
             };
             400: components["responses"]["Error"];
@@ -8354,20 +8475,22 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /**
+                     * @description Spot venues
                      * @default binance
-                     * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                    exchange?: string;
                     symbol: string;
                     /**
                      * @default price
                      * @enum {string}
                      */
                     kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-                    /** @description price/imbalance above|below; wall bid|ask|any */
+                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
                     condition: string;
-                    /** @description Price target, |imbalance| threshold, or wall min share (0 = any detected wall) */
+                    /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), or liquidation_notional USDT amount */
                     targetPrice?: number;
+                    /** @description liquidation_notional lookback 1m|5m|15m|1h (default 5m) */
+                    window?: string;
                     /** @description ±% of mid for live book analysis (0.25–10, default 2; book kinds only) */
                     rangePct?: number;
                     /**

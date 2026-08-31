@@ -5,7 +5,8 @@
     "overview": "Overview",
     "chart": "Chart",
     "cascade": "Cascade",
-    "heatmap": "Heatmap"
+    "heatmap": "Heatmap",
+    "hunt": "Hunt"
   },
   "exchange": "Venue",
   "exchangeAll": "All venues",
@@ -33,6 +34,33 @@
   "heatmap": {
     "symbol": "Symbol",
     "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "hunt": {
+    "symbol": "Symbol",
+    "pick": "Choose a coin to compare up and down liquidation hunts.",
+    "empty": "No hunt read yet for this coin.",
+    "hint": "Scores say which side looks easier or more likely. Zone prices and desk P&L are the same model as before — informational only, not a prediction.",
+    "last": "Last",
+    "oi": "Open interest",
+    "fundingPayer": "{{side}}s pay funding",
+    "upTitle": "Up — hunt shorts",
+    "downTitle": "Down — hunt longs",
+    "upThesis": "Price rises into short liquidations",
+    "downThesis": "Price falls into long liquidations",
+    "levels": {
+      "easier": "Easier",
+      "likely": "Likely",
+      "mixed": "Mixed",
+      "hard": "Hard"
+    },
+    "metrics": {
+      "target": "Target",
+      "spot": "Spot to walk",
+      "liq": "Est. liquidated",
+      "efficiency": "Liq / spot",
+      "desk": "Desk w/ cascade",
+      "book": "Visible book"
+    }
   },
   "chart": {
     "coin": "Coin",

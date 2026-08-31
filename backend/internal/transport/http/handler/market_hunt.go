@@ -81,26 +81,53 @@ type huntScenarioDTO struct {
 }
 
 type huntVenueDTO struct {
-	Exchange           string           `json:"exchange"`
-	Symbol             string           `json:"symbol"`
-	Price              string           `json:"price"`
-	OpenInterestValue  string           `json:"openInterestValue"`
-	EstLongNotional    string           `json:"estLongNotional"`
-	EstShortNotional   string           `json:"estShortNotional"`
-	LongPct            string           `json:"longPct"`
-	ShortPct           string           `json:"shortPct"`
-	EstLongPct         string           `json:"estLongPct"`
-	EstShortPct        string           `json:"estShortPct"`
-	FundingRate        string           `json:"fundingRate"`
-	FundingPayer       string           `json:"fundingPayer"`
-	VisibleBidNotional string           `json:"visibleBidNotional"`
-	VisibleAskNotional string           `json:"visibleAskNotional"`
-	UpPressure         []huntBandDTO    `json:"upPressure"`
-	DownPressure       []huntBandDTO    `json:"downPressure"`
-	Observed           []huntClusterDTO `json:"observed"`
-	UpHunt             huntScenarioDTO  `json:"upHunt"`
-	DownHunt           huntScenarioDTO  `json:"downHunt"`
-	Error              string           `json:"error,omitempty"`
+	Exchange           string                `json:"exchange"`
+	Symbol             string                `json:"symbol"`
+	Price              string                `json:"price"`
+	OpenInterestValue  string                `json:"openInterestValue"`
+	EstLongNotional    string                `json:"estLongNotional"`
+	EstShortNotional   string                `json:"estShortNotional"`
+	LongPct            string                `json:"longPct"`
+	ShortPct           string                `json:"shortPct"`
+	EstLongPct         string                `json:"estLongPct"`
+	EstShortPct        string                `json:"estShortPct"`
+	FundingRate        string                `json:"fundingRate"`
+	FundingPayer       string                `json:"fundingPayer"`
+	VisibleBidNotional string                `json:"visibleBidNotional"`
+	VisibleAskNotional string                `json:"visibleAskNotional"`
+	UpPressure         []huntBandDTO         `json:"upPressure"`
+	DownPressure       []huntBandDTO         `json:"downPressure"`
+	Observed           []huntClusterDTO      `json:"observed"`
+	UpHunt             huntScenarioDTO       `json:"upHunt"`
+	DownHunt           huntScenarioDTO       `json:"downHunt"`
+	UpScore            huntDirectionScoreDTO `json:"upScore"`
+	DownScore          huntDirectionScoreDTO `json:"downScore"`
+	Bias               huntBiasDTO           `json:"bias"`
+	Error              string                `json:"error,omitempty"`
+}
+
+type huntFactorDTO struct {
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	Score  float64 `json:"score"`
+	Weight float64 `json:"weight"`
+	Detail string  `json:"detail"`
+}
+
+type huntDirectionScoreDTO struct {
+	Direction string          `json:"direction"`
+	Score     float64         `json:"score"`
+	Level     string          `json:"level"`
+	Factors   []huntFactorDTO `json:"factors"`
+	Reasons   []string        `json:"reasons"`
+}
+
+type huntBiasDTO struct {
+	Lean      string  `json:"lean"`
+	Margin    float64 `json:"margin"`
+	UpScore   float64 `json:"upScore"`
+	DownScore float64 `json:"downScore"`
+	Summary   string  `json:"summary"`
 }
 
 type huntResponse struct {
@@ -109,6 +136,7 @@ type huntResponse struct {
 	AsOf        time.Time          `json:"asOf"`
 	Assumptions huntAssumptionsDTO `json:"assumptions"`
 	Venues      []huntVenueDTO     `json:"venues"`
+	Bias        *huntBiasDTO       `json:"bias,omitempty"`
 	Note        string             `json:"note"`
 }
 
@@ -144,11 +172,12 @@ func huntToDTO(a *domain.HuntReport) huntResponse {
 			LeverageMix:         mix,
 		},
 		Venues: venues,
+		Bias:   huntBiasToDTO(a.Bias),
 		Note:   huntDisclaimer,
 	}
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow — not a prediction."
 
 func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 	return huntVenueDTO{
@@ -171,8 +200,53 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		Observed:           huntClustersToDTO(v.Observed),
 		UpHunt:             huntScenarioToDTO(v.UpHunt),
 		DownHunt:           huntScenarioToDTO(v.DownHunt),
+		UpScore:            huntDirectionToDTO(v.UpScore),
+		DownScore:          huntDirectionToDTO(v.DownScore),
+		Bias:               huntBiasValueToDTO(v.Bias),
 		Error:              v.Error,
 	}
+}
+
+func huntDirectionToDTO(s domain.HuntDirectionScore) huntDirectionScoreDTO {
+	factors := make([]huntFactorDTO, 0, len(s.Factors))
+	for _, f := range s.Factors {
+		factors = append(factors, huntFactorDTO{
+			ID:     f.ID,
+			Label:  f.Label,
+			Score:  f.Score,
+			Weight: f.Weight,
+			Detail: f.Detail,
+		})
+	}
+	reasons := s.Reasons
+	if reasons == nil {
+		reasons = []string{}
+	}
+	return huntDirectionScoreDTO{
+		Direction: s.Direction,
+		Score:     s.Score,
+		Level:     s.Level,
+		Factors:   factors,
+		Reasons:   reasons,
+	}
+}
+
+func huntBiasValueToDTO(b domain.HuntBias) huntBiasDTO {
+	return huntBiasDTO{
+		Lean:      b.Lean,
+		Margin:    b.Margin,
+		UpScore:   b.UpScore,
+		DownScore: b.DownScore,
+		Summary:   b.Summary,
+	}
+}
+
+func huntBiasToDTO(b *domain.HuntBias) *huntBiasDTO {
+	if b == nil {
+		return nil
+	}
+	out := huntBiasValueToDTO(*b)
+	return &out
 }
 
 func huntBandsToDTO(in []domain.HuntBand) []huntBandDTO {

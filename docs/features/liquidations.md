@@ -57,7 +57,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   mix. Each bar includes `byLeverage` plus `cumLong` / `cumShort` / `cumTotal`
   from last price to that level. Combined does not copy Binance's last as the
   combined last. Market-wide `symbol=all` stays observed time bars.
-- Hypothetical “what if spot is walked to force liquidations” is a separate model: [`liquidation-hunt.md`](liquidation-hunt.md).
+- Hypothetical “what if spot is walked to force liquidations” is a separate model, including up vs down ease scores: [`liquidation-hunt.md`](liquidation-hunt.md). Web tab: `/liquidations?view=hunt`.
 - Cascade detector: `GET /api/v1/market/liquidation-cascade`
   - Compares the last **1m / 5m / 15m** long and short notional to that stream's own typical (median of prior blocks over ~6 hours).
   - `grade` is `quiet` / `elevated` (≥2×) / `cascade` (≥4× + enough hits) / `extreme` (≥8×).

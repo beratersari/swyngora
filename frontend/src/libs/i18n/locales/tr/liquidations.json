@@ -5,7 +5,8 @@
     "overview": "Genel bakış",
     "chart": "Grafik",
     "cascade": "Çığ",
-    "heatmap": "Isı haritası"
+    "heatmap": "Isı haritası",
+    "hunt": "Av"
   },
   "exchange": "Borsa",
   "exchangeAll": "Tüm borsalar",
@@ -33,6 +34,33 @@
   "heatmap": {
     "symbol": "Sembol",
     "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "hunt": {
+    "symbol": "Sembol",
+    "pick": "Yukarı ve aşağı likidasyon avını karşılaştırmak için bir coin seçin.",
+    "empty": "Bu coin için henüz av okuması yok.",
+    "hint": "Skorlar hangi yönün daha kolay veya daha olası göründüğünü söyler. Bölge fiyatları ve masa kâr/zararı önceki modelle aynıdır — yalnızca bilgi amaçlıdır, tahmin değildir.",
+    "last": "Son",
+    "oi": "Açık pozisyon",
+    "fundingPayer": "Fonlamayı {{side}}lar ödüyor",
+    "upTitle": "Yukarı — short avı",
+    "downTitle": "Aşağı — long avı",
+    "upThesis": "Fiyat short likidasyonlarına yükselir",
+    "downThesis": "Fiyat long likidasyonlarına düşer",
+    "levels": {
+      "easier": "Daha kolay",
+      "likely": "Olası",
+      "mixed": "Karışık",
+      "hard": "Zor"
+    },
+    "metrics": {
+      "target": "Hedef",
+      "spot": "Spot yürüyüş",
+      "liq": "Tahmini likidasyon",
+      "efficiency": "Liq / spot",
+      "desk": "Masa (cascade)",
+      "book": "Görünür defter"
+    }
   },
   "chart": {
     "coin": "Coin",
