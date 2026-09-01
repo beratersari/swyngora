@@ -3,7 +3,10 @@ package dataimport
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -34,6 +37,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		{domain.ExportSectionAlerts, s.applyAlerts},
 		{domain.ExportSectionBacktests, s.applyBacktests},
 		{domain.ExportSectionPortfolios, s.applyPortfolios},
+		{domain.ExportSectionCustomSignals, s.applyCustomSignals},
 	}
 	for i, step := range steps {
 		if canceled() {
@@ -234,6 +238,45 @@ func (s *Service) applyBacktests(ctx context.Context, clientID string, mode doma
 			_ = s.data.Scanner.InsertBacktestSignal(ctx, sig)
 		}
 		existing[job.ID] = struct{}{}
+		n++
+	}
+	return n, nil
+}
+
+func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
+	if s.data.CustomSignals == nil {
+		return 0, nil
+	}
+	if mode == domain.ImportModeReplace {
+		if err := s.data.CustomSignals.PurgeProfiles(ctx, clientID); err != nil {
+			return 0, err
+		}
+	}
+	existing := map[string]struct{}{}
+	if mode == domain.ImportModeMerge {
+		list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
+		if err != nil {
+			return 0, err
+		}
+		for _, p := range list {
+			existing[strings.ToLower(p.Name)] = struct{}{}
+		}
+	}
+	n := 0
+	for _, p := range pl.CustomSignals {
+		key := strings.ToLower(p.Name)
+		if _, ok := existing[key]; ok {
+			continue
+		}
+		if cnt, err := s.data.CustomSignals.CountProfiles(ctx, clientID); err == nil && cnt >= domain.MaxCustomSignalProfilesPerClient {
+			break
+		}
+		p.ID = uuid.NewString()
+		p.ClientID = clientID
+		if _, err := s.data.CustomSignals.CreateProfile(ctx, p); err != nil {
+			continue
+		}
+		existing[key] = struct{}{}
 		n++
 	}
 	return n, nil

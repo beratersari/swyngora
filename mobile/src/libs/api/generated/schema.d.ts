@@ -3359,7 +3359,7 @@ export interface paths {
         /**
          * Start a user data export
          * @description Queues an export of the caller's own data as JSON or CSV.
-         *     Sections default to all of: watchlist, shares, alerts, backtests, portfolios.
+         *     Sections default to all of: watchlist, shares, alerts, backtests, portfolios, customSignals.
          *     Only one pending/running export is allowed per clientId (409 conflict otherwise).
          *     Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
          */
@@ -3541,7 +3541,7 @@ export interface paths {
         /**
          * Upload an export file and get a restore preview
          * @description Accepts multipart form field `file` (or raw JSON/CSV body).
-         *     Parses watchlist, shares, alerts, backtests, and paper portfolios; returns counts of valid, invalid,
+         *     Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
          *     willAdd (under merge), and duplicates. Does not apply data until confirm.
          *     Ownership is always the uploading clientId (file clientId is ignored).
          */
@@ -6069,7 +6069,7 @@ export interface components {
             clientId?: string;
             /** @enum {string} */
             format?: "json" | "csv";
-            sections?: ("watchlist" | "shares" | "alerts" | "backtests" | "portfolios")[];
+            sections?: ("watchlist" | "shares" | "alerts" | "backtests" | "portfolios" | "customSignals")[];
             /** @enum {string} */
             status?: "pending" | "running" | "completed" | "canceled" | "failed";
             /** @description 0–100 */
@@ -12172,7 +12172,7 @@ export interface operations {
                      */
                     format?: "json" | "csv";
                     /** @description Omit for all sections */
-                    sections?: ("watchlist" | "shares" | "alerts" | "backtests" | "portfolios")[];
+                    sections?: ("watchlist" | "shares" | "alerts" | "backtests" | "portfolios" | "customSignals")[];
                 };
             };
         };

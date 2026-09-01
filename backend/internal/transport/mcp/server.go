@@ -3887,10 +3887,10 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("start_export",
-		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, backtests, and/or paper portfolios as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
+		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, backtests, paper portfolios, and/or custom signal profiles as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),
-		mcp.WithString("sections", mcp.Description("Comma-separated: watchlist,shares,alerts,backtests,portfolios (default all)")),
+		mcp.WithString("sections", mcp.Description("Comma-separated: watchlist,shares,alerts,backtests,portfolios,customSignals (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3970,7 +3970,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_import",
-		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios. Returns valid/invalid/willAdd counts without applying. Pass export JSON as content. Then call confirm_import with mode merge|replace."),
+		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd counts without applying. Pass export JSON as content. Then call confirm_import with mode merge|replace."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),

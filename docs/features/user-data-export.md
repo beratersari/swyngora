@@ -2,14 +2,14 @@
 
 ## Problem / goal
 
-Users should be able to take their own product data offline: **watchlist**, **shares**, **price alert history**, **scanner backtest results**, and **paper portfolios**, as **JSON** or **CSV**. Large exports must not block the request forever — they run in the background with progress and cancel, only the owner can download the file, and files expire automatically.
+Users should be able to take their own product data offline: **watchlist**, **shares**, **price alert history**, **scanner backtest results**, **paper portfolios**, and **custom signal profiles**, as **JSON** or **CSV**. Large exports must not block the request forever — they run in the background with progress and cancel, only the owner can download the file, and files expire automatically.
 
 ## Behavior
 
 | Capability | Detail |
 |------------|--------|
 | Formats | `json` (default) or `csv` (multi-section with `# section:…` markers) |
-| Sections | `watchlist`, `shares`, `alerts`, `backtests`, `portfolios` (default: all) |
+| Sections | `watchlist`, `shares`, `alerts`, `backtests`, `portfolios`, `customSignals` (default: all) |
 | Tenancy | Opaque `clientId` / `X-Client-Id` (same as watchlist) |
 | Concurrency | At most **one** pending/running export per client (`409 conflict`) |
 | Lifecycle | `pending` → `running` → `completed` \| `canceled` \| `failed` |
@@ -36,6 +36,7 @@ Users should be able to take their own product data offline: **watchlist**, **sh
 | alerts | All price alerts for the client (active + triggered) |
 | backtests | Backtest jobs + all signals (paged) |
 | portfolios | Owned paper books: cash/balance, positions, trades, open orders, tax lots, recurring buys, margin positions/orders/trades, outgoing shares |
+| customSignals | Named custom swing mixes (factor weights + which mix is the Custom tab default) |
 
 ## Where the code lives
 

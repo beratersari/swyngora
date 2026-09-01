@@ -28,18 +28,24 @@ func (s *SQLite) CreateProfile(ctx context.Context, p domain.CustomSignalProfile
 	if p.IsDefault {
 		def = 1
 	}
-	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO custom_signal_profiles (id, client_id, name, weights_json, is_default, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, p.ID, p.ClientID, p.Name, raw, def,
-		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
-	if err != nil {
-		return nil, fmt.Errorf("insert custom signal profile: %w", err)
-	}
-	if p.IsDefault {
-		if err := s.setDefaultLocked(ctx, p.ClientID, p.ID); err != nil {
-			return nil, err
+	err = s.withTx(ctx, func(tx *sql.Tx) error {
+		if p.IsDefault {
+			if _, err := tx.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 0 WHERE client_id = ?`, p.ClientID); err != nil {
+				return err
+			}
 		}
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO custom_signal_profiles (id, client_id, name, weights_json, is_default, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, p.ID, p.ClientID, p.Name, raw, def,
+			p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
+		if err != nil {
+			return fmt.Errorf("insert custom signal profile: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &p, nil
 }
@@ -74,27 +80,35 @@ func (s *SQLite) UpdateProfile(ctx context.Context, p domain.CustomSignalProfile
 	if p.IsDefault {
 		def = 1
 	}
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE custom_signal_profiles
-		SET name = ?, weights_json = ?, is_default = ?, updated_at = ?
-		WHERE client_id = ? AND id = ?
-	`, p.Name, raw, def, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID, p.ID)
-	if err != nil {
-		return nil, fmt.Errorf("update custom signal profile: %w", err)
-	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
-		return nil, domain.ErrNotFound
-	}
-	if p.IsDefault {
-		if err := s.setDefaultLocked(ctx, p.ClientID, p.ID); err != nil {
-			return nil, err
+	err = s.withTx(ctx, func(tx *sql.Tx) error {
+		if p.IsDefault {
+			if _, err := tx.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 0 WHERE client_id = ?`, p.ClientID); err != nil {
+				return err
+			}
 		}
+		res, err := tx.ExecContext(ctx, `
+			UPDATE custom_signal_profiles
+			SET name = ?, weights_json = ?, is_default = ?, updated_at = ?
+			WHERE client_id = ? AND id = ?
+		`, p.Name, raw, def, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID, p.ID)
+		if err != nil {
+			return fmt.Errorf("update custom signal profile: %w", err)
+		}
+		n, _ := res.RowsAffected()
+		if n == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return &p, nil
 }
 
 // SetDefaultProfile marks one mix as the client's default (clears the others).
+// Clear + set run in one transaction so a mid-update failure cannot leave
+// zero or two defaults.
 func (s *SQLite) SetDefaultProfile(ctx context.Context, clientID, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -102,18 +116,42 @@ func (s *SQLite) SetDefaultProfile(ctx context.Context, clientID, id string) err
 }
 
 func (s *SQLite) setDefaultLocked(ctx context.Context, clientID, id string) error {
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM custom_signal_profiles WHERE client_id = ? AND id = ?`, clientID, id).Scan(&n); err != nil {
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		var n int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM custom_signal_profiles WHERE client_id = ? AND id = ?`, clientID, id).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return domain.ErrNotFound
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 0 WHERE client_id = ?`, clientID); err != nil {
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 1 WHERE client_id = ? AND id = ?`, clientID, id)
+		if err != nil {
+			return err
+		}
+		got, _ := res.RowsAffected()
+		if got == 0 {
+			return domain.ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (s *SQLite) withTx(ctx context.Context, fn func(*sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("custom signal begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := fn(tx); err != nil {
 		return err
 	}
-	if n == 0 {
-		return domain.ErrNotFound
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("custom signal commit: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 0 WHERE client_id = ?`, clientID); err != nil {
-		return err
-	}
-	_, err := s.db.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 1 WHERE client_id = ? AND id = ?`, clientID, id)
-	return err
+	return nil
 }
 
 // ListProfiles returns newest-updated first.

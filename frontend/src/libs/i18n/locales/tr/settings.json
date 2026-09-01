@@ -22,7 +22,7 @@
     "loadFailed": "API anahtarları yüklenemedi"
   },
   "export": {
-    "hint": "İzleme listesi, paylaşımlar, uyarılar, geriye dönük testler ve kâğıt defterleri JSON veya CSV olarak indirin.",
+    "hint": "İzleme listesi, paylaşımlar, uyarılar, geriye dönük testler, kâğıt defterler ve özel sinyal karışımlarını JSON veya CSV olarak indirin.",
     "format": "Biçim",
     "start": "Dışa aktarmayı başlat",
     "started": "Dışa aktarma kuyruğa alındı",

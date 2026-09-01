@@ -16,14 +16,24 @@ import (
 
 // payload is the JSON export shape.
 type payload struct {
-	ExportedAt string                 `json:"exportedAt"`
-	ClientID   string                 `json:"clientId"`
-	Sections   []string               `json:"sections"`
-	Watchlist  *watchlistPayload      `json:"watchlist,omitempty"`
-	Shares     []sharePayload         `json:"shares,omitempty"`
-	Alerts     []alertPayload         `json:"alerts,omitempty"`
-	Backtests  []backtestPayload      `json:"backtests,omitempty"`
-	Portfolios []portfolioBookPayload `json:"portfolios,omitempty"`
+	ExportedAt    string                 `json:"exportedAt"`
+	ClientID      string                 `json:"clientId"`
+	Sections      []string               `json:"sections"`
+	Watchlist     *watchlistPayload      `json:"watchlist,omitempty"`
+	Shares        []sharePayload         `json:"shares,omitempty"`
+	Alerts        []alertPayload         `json:"alerts,omitempty"`
+	Backtests     []backtestPayload      `json:"backtests,omitempty"`
+	Portfolios    []portfolioBookPayload `json:"portfolios,omitempty"`
+	CustomSignals []customSignalPayload  `json:"customSignals,omitempty"`
+}
+
+type customSignalPayload struct {
+	ID        string             `json:"id"`
+	Name      string             `json:"name"`
+	Weights   map[string]float64 `json:"weights"`
+	IsDefault bool               `json:"isDefault"`
+	CreatedAt string             `json:"createdAt"`
+	UpdatedAt string             `json:"updatedAt"`
 }
 
 type watchlistPayload struct {
@@ -245,6 +255,25 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 			}
 			for _, snap := range snaps {
 				pl.Portfolios = append(pl.Portfolios, snapshotToPayload(snap))
+			}
+		case domain.ExportSectionCustomSignals:
+			if s.data.CustomSignals == nil {
+				break
+			}
+			list, err := s.data.CustomSignals.ListProfiles(ctx, job.ClientID)
+			if err != nil {
+				return err
+			}
+			for _, p := range list {
+				pct := p.Weights.Pct
+				if pct == nil {
+					pct = map[string]float64{}
+				}
+				pl.CustomSignals = append(pl.CustomSignals, customSignalPayload{
+					ID: p.ID, Name: p.Name, Weights: pct, IsDefault: p.IsDefault,
+					CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
+					UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+				})
 			}
 		}
 	}
@@ -510,6 +539,20 @@ func buildCSV(pl *payload) ([]byte, error) {
 			"realizedPnL", "marginDelta", "principalPaid", "interestPaid", "leverage", "fee", "createdAt",
 		}, mtrRows)
 		_ = writeSection("portfolio_shares", []string{"portfolioId", "granteeClientId", "role", "createdAt", "updatedAt"}, shRows)
+	}
+	if pl.CustomSignals != nil {
+		rows := make([][]string, 0, len(pl.CustomSignals))
+		for _, p := range pl.CustomSignals {
+			wb, _ := json.Marshal(p.Weights)
+			def := "false"
+			if p.IsDefault {
+				def = "true"
+			}
+			rows = append(rows, []string{p.ID, p.Name, string(wb), def, p.CreatedAt, p.UpdatedAt})
+		}
+		if err := writeSection("customSignals", []string{"id", "name", "weights", "isDefault", "createdAt", "updatedAt"}, rows); err != nil {
+			return nil, err
+		}
 	}
 	w.Flush()
 	if err := w.Error(); err != nil {

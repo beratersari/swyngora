@@ -1103,7 +1103,7 @@ class ExportStartInput(BaseModel):
     format: str = Field(default="json", description="json or csv")
     sections: str = Field(
         default="",
-        description="Comma-separated: watchlist,shares,alerts,backtests,portfolios (empty=all)",
+        description="Comma-separated: watchlist,shares,alerts,backtests,portfolios,customSignals (empty=all)",
     )
 
 
@@ -4712,7 +4712,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="start_export",
             description=(
                 "Start a background export of the user's watchlist, shares, alerts, "
-                "backtests, and/or paper portfolios as json or csv. One active export per client. "
+                "backtests, paper portfolios, and/or custom signal profiles as json or csv. One active export per client. "
                 "Poll get_export for progress; download via HTTP when completed."
             ),
             args_schema=ExportStartInput,

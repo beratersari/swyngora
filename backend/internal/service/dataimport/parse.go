@@ -15,12 +15,13 @@ import (
 
 // Normalized payload ready to apply (IDs remapped to importer where needed).
 type payload struct {
-	WatchlistItems []domain.WatchlistItem     `json:"watchlistItems"`
-	Shares         []domain.WatchlistShare    `json:"shares"`
-	Alerts         []domain.PriceAlert        `json:"alerts"`
-	Backtests      []backtestBundle           `json:"backtests"`
-	Portfolios     []domain.PortfolioSnapshot `json:"portfolios"`
-	FileOwnerID    string                     `json:"fileOwnerId,omitempty"`
+	WatchlistItems []domain.WatchlistItem       `json:"watchlistItems"`
+	Shares         []domain.WatchlistShare      `json:"shares"`
+	Alerts         []domain.PriceAlert          `json:"alerts"`
+	Backtests      []backtestBundle             `json:"backtests"`
+	Portfolios     []domain.PortfolioSnapshot   `json:"portfolios"`
+	CustomSignals  []domain.CustomSignalProfile `json:"customSignals"`
+	FileOwnerID    string                       `json:"fileOwnerId,omitempty"`
 }
 
 type backtestBundle struct {
@@ -59,9 +60,17 @@ type wirePayload struct {
 		TriggeredAt    *string `json:"triggeredAt"`
 		TriggeredPrice float64 `json:"triggeredPrice"`
 	} `json:"alerts"`
-	ClientID   string              `json:"clientId"`
-	Portfolios []wirePortfolioBook `json:"portfolios"`
-	Backtests  []struct {
+	ClientID      string              `json:"clientId"`
+	Portfolios    []wirePortfolioBook `json:"portfolios"`
+	CustomSignals []struct {
+		ID        string             `json:"id"`
+		Name      string             `json:"name"`
+		Weights   map[string]float64 `json:"weights"`
+		IsDefault bool               `json:"isDefault"`
+		CreatedAt string             `json:"createdAt"`
+		UpdatedAt string             `json:"updatedAt"`
+	} `json:"customSignals"`
+	Backtests []struct {
 		ID           string `json:"id"`
 		RuleID       string `json:"ruleId"`
 		Exchange     string `json:"exchange"`
@@ -224,6 +233,21 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 		seenPF[key] = struct{}{}
 		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
 	}
+	seenCS := map[string]struct{}{}
+	for _, row := range w.CustomSignals {
+		p, err := normalizeCustomSignal(importer, row.ID, row.Name, row.Weights, row.IsDefault, row.CreatedAt, row.UpdatedAt)
+		if err != nil {
+			res.Invalid[domain.ExportSectionCustomSignals]++
+			continue
+		}
+		key := strings.ToLower(p.Name)
+		if _, ok := seenCS[key]; ok {
+			res.FileDuplicates[domain.ExportSectionCustomSignals]++
+			continue
+		}
+		seenCS[key] = struct{}{}
+		res.Payload.CustomSignals = append(res.Payload.CustomSignals, p)
+	}
 	return res, nil
 }
 
@@ -257,6 +281,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 	backtestsByID := map[string]*backtestBundle{}
 	csvBooks := map[string]*wirePortfolioBook{}
 	fileOwner := ""
+	seenCS := map[string]struct{}{}
 
 	for {
 		rec, err := r.Read()
@@ -489,6 +514,26 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					GranteeClientID: row["granteeClientId"], Role: row["role"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
 				})
 			}
+		case "customSignals":
+			var weights map[string]float64
+			if raw := strings.TrimSpace(row["weights"]); raw != "" {
+				if err := json.Unmarshal([]byte(raw), &weights); err != nil {
+					res.Invalid[domain.ExportSectionCustomSignals]++
+					continue
+				}
+			}
+			p, err := normalizeCustomSignal(importer, row["id"], row["name"], weights, parseCSVBool(row["isDefault"]), row["createdAt"], row["updatedAt"])
+			if err != nil {
+				res.Invalid[domain.ExportSectionCustomSignals]++
+				continue
+			}
+			key := strings.ToLower(p.Name)
+			if _, ok := seenCS[key]; ok {
+				res.FileDuplicates[domain.ExportSectionCustomSignals]++
+				continue
+			}
+			seenCS[key] = struct{}{}
+			res.Payload.CustomSignals = append(res.Payload.CustomSignals, p)
 		}
 	}
 	for id, b := range backtestsByID {
@@ -510,6 +555,40 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
 	}
 	return res, nil
+}
+
+func parseCSVBool(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "true", "yes", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeCustomSignal(importer, id, name string, weights map[string]float64, isDefault bool, createdAt, updatedAt string) (domain.CustomSignalProfile, error) {
+	_ = importer
+	_ = id // reminted on apply — profile ids are a global primary key
+	name, err := domain.NormalizeCustomSignalProfileName(name)
+	if err != nil {
+		return domain.CustomSignalProfile{}, err
+	}
+	w, err := domain.ParseCustomSignalWeightMap(weights)
+	if err != nil {
+		return domain.CustomSignalProfile{}, err
+	}
+	now := time.Now().UTC()
+	cAt, uAt := now, now
+	if t, err := parseTimeFlexible(createdAt); err == nil {
+		cAt = t
+	}
+	if t, err := parseTimeFlexible(updatedAt); err == nil {
+		uAt = t
+	}
+	return domain.CustomSignalProfile{
+		Name: name, Weights: w, IsDefault: isDefault,
+		CreatedAt: cAt, UpdatedAt: uAt,
+	}, nil
 }
 
 func parseOptFloat(s string) *float64 {

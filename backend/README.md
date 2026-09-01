@@ -160,7 +160,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`POST` | `/api/v1/swing/custom/profiles` | List / save a named custom mix (weights sum to 100) |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/swing/custom/profiles/{id}` | Get / update / delete a saved mix |
 | `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`) |
-| `POST` | `/api/v1/export` | Start JSON/CSV export of own watchlist/shares/alerts/backtests/portfolios |
+| `POST` | `/api/v1/export` | Start JSON/CSV export of own watchlist/shares/alerts/backtests/portfolios/customSignals |
 | `GET` | `/api/v1/export` | List export jobs |
 | `GET` | `/api/v1/export/{id}` | Export progress / status |
 | `POST` | `/api/v1/export/{id}/cancel` | Cancel pending/running export |
@@ -201,9 +201,9 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Swing engine:** `GET /api/v1/market/swing?symbol=` analyzes one pair on **closed** 4h+1d bars (Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB, BTC regime, min R:R 1.8 for trigger). `GET /api/v1/swing/setups` scans the watchlist (max 25). **Custom mixes** (`/api/v1/swing/custom/*`) let a client pick those pattern weights plus optional liquidation-hunt up score (must sum to 100; missing hunt adds 0). Saved profiles live in the scanner SQLite file. Informational only.
 
-**User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, backtests, and paper portfolios. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
+**User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
 
-**User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe (portfolios: merge skips existing id/name; replace recreates owned books; extra non-UUID or globally colliding book ids are reminted so they cannot occupy another tenant’s first book). See `docs/features/user-data-import.md`.
+**User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd counts; `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe (portfolios: merge skips existing id/name; replace recreates owned books; extra non-UUID or globally colliding book ids are reminted so they cannot occupy another tenant’s first book; custom signal mixes: merge skips the same name, replace replaces every mix, ids reminted). See `docs/features/user-data-import.md`.
 
 **Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; paper recurring plans are paused and open paper/margin orders canceled; workers skip the tenant. `X-Client-Id`, `?clientId=`, and JSON `clientId` must agree (else 400). Paper `PlaceOrder` and Telegram Confirm also refuse a closed owner. After grace, watchlists/shares/alerts/backtests/import-export files, paper books, price-diff watches, and funding-arb watches are purged. See `docs/features/account-close.md`.
 

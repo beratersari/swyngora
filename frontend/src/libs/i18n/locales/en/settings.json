@@ -22,7 +22,7 @@
     "loadFailed": "Could not load API keys"
   },
   "export": {
-    "hint": "Download your watchlist, shares, alerts, scanner backtests, and paper books as JSON or CSV.",
+    "hint": "Download your watchlist, shares, alerts, scanner backtests, paper books, and custom signal mixes as JSON or CSV.",
     "format": "Format",
     "start": "Start export",
     "started": "Export queued",

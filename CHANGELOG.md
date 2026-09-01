@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Custom signal export/import:** user data export/import includes named custom swing mixes (`customSignals` JSON/CSV section). Merge skips the same profile name; replace replaces every mix; ids are reminted; an imported default becomes this client's Custom tab default
 - **Custom signal default and duplicate:** save a mix as the Custom tab default; duplicate and edit named mixes (`POST /api/v1/swing/custom/profiles/{id}/default`, `.../duplicate`)
 - **Custom swing signals:** Signals desk Custom tab — pick swing-engine factors and optional liquidation-hunt up score, assign weights that must sum to 100, preview the score and each factor’s effect before saving, and reuse named mixes (`GET /api/v1/swing/custom/scan`, MCP `scan_custom_signals`) (`docs/features/swing-engine.md`)
 - **Liquidation max pain:** largest estimated liquidation pocket above last (shorts) and below last (longs) — price, size, distance, side. Separate from the hunt target. Web `/liquidations?view=max-pain`, `GET /api/v1/market/liquidation-max-pain`, MCP `get_liquidation_max_pain` (`docs/features/liquidation-max-pain.md`)
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **Custom signal default switch:** marking a mix as default (or creating/updating one as default) now runs in one SQLite transaction so a mid-update failure cannot leave zero or two defaults
 - **Liquidation hunt combined factor detail:** a combined `used` factor no longer keeps another venue's missing explanation. Combined rows list `usedVenues` / `missingVenues` and `venues[]`. Combined effects are OI-weighted across used venues only (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt custom weights:** a missing factor no longer has its percent silently given to the remaining factors. Requested percents stay as given; a missing factor keeps its share and adds 0 (neutral 50). `sharePct`, `effect`, and the direction score use the same mix (`50 + sum(effect)`) (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt cascade leftover scores:** a hop that is not self-fueling no longer keeps 100% assistance / zero remaining from an earlier self-fueling check. Remaining, assistance, and easier always match the final hop walk. Touching a wall price with tiny fuel is not treated as covering the hop (`docs/features/liquidation-hunt.md`)

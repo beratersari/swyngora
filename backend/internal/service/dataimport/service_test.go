@@ -10,6 +10,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -265,7 +266,7 @@ func sampleExportJSON() []byte {
 			{"id": "bt1", "ruleId": "r1", "exchange": "binance", "symbol": "BTCUSDT", "interval": "1h",
 				"rangeStart": time.Now().Add(-48 * time.Hour).UTC().Format(time.RFC3339Nano),
 				"rangeEnd":   time.Now().UTC().Format(time.RFC3339Nano),
-				"status": "completed", "signalCount": 1, "createdAt": time.Now().UTC().Format(time.RFC3339Nano),
+				"status":     "completed", "signalCount": 1, "createdAt": time.Now().UTC().Format(time.RFC3339Nano),
 				"signals": []map[string]any{
 					{"id": "s1", "signalAt": time.Now().UTC().Format(time.RFC3339Nano), "closePrice": 50, "summary": "hit"},
 				}},
@@ -497,5 +498,125 @@ func TestImport_PortfoliosMergeAndReplace(t *testing.T) {
 	}
 	if job2.SectionCounts[domain.ExportSectionPortfolios].WillAdd != 0 {
 		t.Fatalf("merge should skip: %+v", job2.SectionCounts[domain.ExportSectionPortfolios])
+	}
+}
+
+func sampleCustomSignalJSON() []byte {
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	pl := map[string]any{
+		"clientId": "other",
+		"customSignals": []map[string]any{
+			{
+				"id": "old-id-1", "name": "Hunt mix", "isDefault": true,
+				"weights": map[string]float64{
+					domain.CustomFactorRSIRecovery: 40,
+					domain.CustomFactorHuntUp:      60,
+				},
+				"createdAt": now, "updatedAt": now,
+			},
+			{
+				"id": "old-id-2", "name": "Hunt mix", "isDefault": false,
+				"weights":   map[string]float64{domain.CustomFactorHuntUp: 100},
+				"createdAt": now, "updatedAt": now,
+			},
+			{
+				"id": "old-id-3", "name": "Broken", "isDefault": false,
+				"weights":   map[string]float64{domain.CustomFactorHuntUp: 10},
+				"createdAt": now, "updatedAt": now,
+			},
+		},
+	}
+	b, _ := json.Marshal(pl)
+	return b
+}
+
+func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
+	dir := t.TempDir()
+	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	svc, err := New(importstore.NewMemory(), DataSources{CustomSignals: store}, Options{
+		FileDir: filepath.Join(dir, "imp"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	w, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "keep-me", ClientID: "user1", Name: "Hunt mix", Weights: w, IsDefault: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleCustomSignalJSON(), FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := job.SectionCounts[domain.ExportSectionCustomSignals]
+	if sec.Valid != 1 || sec.Invalid != 1 || sec.Duplicates != 2 || sec.WillAdd != 0 {
+		t.Fatalf("merge preview %+v", sec)
+	}
+
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	list, err := store.ListProfiles(ctx, "user1")
+	if err != nil || len(list) != 1 || list[0].ID != "keep-me" {
+		t.Fatalf("merge must skip existing name %+v %v", list, err)
+	}
+
+	job2, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleCustomSignalJSON(), FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job2.SectionCounts[domain.ExportSectionCustomSignals].Valid != 1 {
+		t.Fatalf("replace preview %+v", job2.SectionCounts[domain.ExportSectionCustomSignals])
+	}
+	if _, err := svc.Confirm(ctx, "user1", job2.ID, "replace"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	list, err = store.ListProfiles(ctx, "user1")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("replace list %+v %v", list, err)
+	}
+	got := list[0]
+	if got.ID == "old-id-1" || got.ID == "keep-me" {
+		t.Fatalf("id should be reminted, got %s", got.ID)
+	}
+	if got.Name != "Hunt mix" || !got.IsDefault || got.Weights.Pct[domain.CustomFactorHuntUp] != 60 {
+		t.Fatalf("imported %+v", got)
+	}
+}
+
+func TestImport_CustomSignalsCSV(t *testing.T) {
+	csv := `# meta,exportedAt,2026-01-01T00:00:00Z,clientId,other
+# section:customSignals
+id,name,weights,isDefault,createdAt,updatedAt
+old,"CSV mix","{""hunt_up"":100}",true,2026-01-01T00:00:00Z,2026-01-01T00:00:00Z
+`
+	parsed, err := parseExportFile(domain.ExportFormatCSV, []byte(csv), "user1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Payload.CustomSignals) != 1 {
+		t.Fatalf("got %+v invalid=%v", parsed.Payload.CustomSignals, parsed.Invalid)
+	}
+	p := parsed.Payload.CustomSignals[0]
+	if p.Name != "CSV mix" || !p.IsDefault || p.Weights.Pct[domain.CustomFactorHuntUp] != 100 {
+		t.Fatalf("%+v", p)
 	}
 }

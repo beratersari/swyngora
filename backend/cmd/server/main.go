@@ -409,10 +409,11 @@ func main() {
 		}
 	}()
 	exportSvc, err := exportsvc.New(exportStore, exportsvc.DataSources{
-		Watchlist: watchStore,
-		Alerts:    alertStore,
-		Scanner:   scannerStore,
-		Portfolio: portfolioStore,
+		Watchlist:     watchStore,
+		Alerts:        alertStore,
+		Scanner:       scannerStore,
+		Portfolio:     portfolioStore,
+		CustomSignals: scannerStore,
 	}, exportsvc.Options{
 		FileDir: cfg.ExportFileDir,
 		FileTTL: cfg.ExportFileTTL,
@@ -434,10 +435,11 @@ func main() {
 		}
 	}()
 	importSvc, err := dataimport.New(importStore, dataimport.DataSources{
-		Watchlist: watchStore,
-		Alerts:    alertStore,
-		Scanner:   scannerStore,
-		Portfolio: portfolioStore,
+		Watchlist:     watchStore,
+		Alerts:        alertStore,
+		Scanner:       scannerStore,
+		Portfolio:     portfolioStore,
+		CustomSignals: scannerStore,
 	}, dataimport.Options{
 		FileDir: cfg.ImportFileDir,
 		FileTTL: cfg.ImportFileTTL,

@@ -11,6 +11,7 @@ import (
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -385,6 +386,81 @@ func TestExport_PortfoliosSectionJSON(t *testing.T) {
 	book := list[0].(map[string]any)
 	if book["id"] != "user1" || book["cashBalance"].(float64) != 4500 {
 		t.Fatalf("%v", book)
+	}
+}
+
+func TestExport_CustomSignalsJSONAndCSV(t *testing.T) {
+	dir := t.TempDir()
+	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	ctx := context.Background()
+	now := time.Now().UTC()
+	w, err := domain.ParseCustomSignalWeightMap(map[string]float64{
+		domain.CustomFactorRSIRecovery: 40,
+		domain.CustomFactorHuntUp:      60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "p1", ClientID: "user1", Name: "Hunt mix", Weights: w, IsDefault: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc, err := New(exportstore.NewMemory(), DataSources{CustomSignals: store}, Options{
+		FileDir: filepath.Join(dir, "out"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	job, err := svc.Start(ctx, StartInput{ClientID: "user1", Format: "json", Sections: []string{"customSignals"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	got, err := svc.Get(ctx, "user1", job.ID)
+	if err != nil || got.Status != domain.ExportCompleted {
+		t.Fatalf("%+v %v", got, err)
+	}
+	raw, err := os.ReadFile(got.FilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pl map[string]any
+	if err := json.Unmarshal(raw, &pl); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := pl["customSignals"].([]any)
+	if len(list) != 1 {
+		t.Fatalf("customSignals=%v", pl["customSignals"])
+	}
+	row := list[0].(map[string]any)
+	if row["id"] != "p1" || row["name"] != "Hunt mix" || row["isDefault"] != true {
+		t.Fatalf("%v", row)
+	}
+	weights, _ := row["weights"].(map[string]any)
+	if weights[domain.CustomFactorHuntUp].(float64) != 60 {
+		t.Fatalf("weights=%v", weights)
+	}
+
+	job2, err := svc.Start(ctx, StartInput{ClientID: "user1", Format: "csv", Sections: []string{"customSignals"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	got2, _ := svc.Get(ctx, "user1", job2.ID)
+	csvRaw, _ := os.ReadFile(got2.FilePath)
+	if !contains(string(csvRaw), "section:customSignals") || !contains(string(csvRaw), "Hunt mix") {
+		t.Fatalf("csv=%s", csvRaw)
 	}
 }
 

@@ -15,18 +15,19 @@ import (
 
 // DataSources provides user-owned data for export (ports only — no HTTP).
 type DataSources struct {
-	Watchlist domain.WatchlistPort
-	Alerts    domain.PriceAlertPort
-	Scanner   domain.ScannerPort
-	Portfolio domain.PortfolioPort
+	Watchlist     domain.WatchlistPort
+	Alerts        domain.PriceAlertPort
+	Scanner       domain.ScannerPort
+	Portfolio     domain.PortfolioPort
+	CustomSignals domain.CustomSignalProfilePort
 }
 
 // Service orchestrates user data exports.
 type Service struct {
-	store    domain.ExportPort
-	data     DataSources
-	fileDir  string
-	fileTTL  time.Duration
+	store   domain.ExportPort
+	data    DataSources
+	fileDir string
+	fileTTL time.Duration
 }
 
 // Options configures the export service.

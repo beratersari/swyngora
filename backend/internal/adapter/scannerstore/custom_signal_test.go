@@ -54,6 +54,45 @@ func TestSQLite_CustomSignalProfiles(t *testing.T) {
 	if err != nil || !def.IsDefault {
 		t.Fatalf("default %+v %v", def, err)
 	}
+	w2, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "p2", ClientID: "c1", Name: "Other", Weights: w2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetDefaultProfile(ctx, "c1", "missing"); err != domain.ErrNotFound {
+		t.Fatalf("missing default err=%v", err)
+	}
+	still, err := s.GetProfile(ctx, "c1", "p1")
+	if err != nil || !still.IsDefault {
+		t.Fatalf("failed set-default must not clear existing %+v %v", still, err)
+	}
+	if err := s.SetDefaultProfile(ctx, "c1", "p2"); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := s.GetProfile(ctx, "c1", "p1")
+	b, _ := s.GetProfile(ctx, "c1", "p2")
+	if a.IsDefault || !b.IsDefault {
+		t.Fatalf("want only p2 default a=%v b=%v", a.IsDefault, b.IsDefault)
+	}
+	w3, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorRSIRecovery: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "p3", ClientID: "c1", Name: "Created default", Weights: w3, IsDefault: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ = s.GetProfile(ctx, "c1", "p2")
+	c, _ := s.GetProfile(ctx, "c1", "p3")
+	if b.IsDefault || !c.IsDefault {
+		t.Fatalf("create-as-default must clear others b=%v c=%v", b.IsDefault, c.IsDefault)
+	}
 	if err := s.DeleteProfile(ctx, "c1", "p1"); err != nil {
 		t.Fatal(err)
 	}

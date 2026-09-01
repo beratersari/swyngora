@@ -42,11 +42,12 @@ const (
 type ExportSection string
 
 const (
-	ExportSectionWatchlist  ExportSection = "watchlist"
-	ExportSectionShares     ExportSection = "shares"
-	ExportSectionAlerts     ExportSection = "alerts"
-	ExportSectionBacktests  ExportSection = "backtests"
-	ExportSectionPortfolios ExportSection = "portfolios"
+	ExportSectionWatchlist     ExportSection = "watchlist"
+	ExportSectionShares        ExportSection = "shares"
+	ExportSectionAlerts        ExportSection = "alerts"
+	ExportSectionBacktests     ExportSection = "backtests"
+	ExportSectionPortfolios    ExportSection = "portfolios"
+	ExportSectionCustomSignals ExportSection = "customSignals"
 )
 
 // AllExportSections is the default set when the client omits sections.
@@ -56,6 +57,7 @@ var AllExportSections = []ExportSection{
 	ExportSectionAlerts,
 	ExportSectionBacktests,
 	ExportSectionPortfolios,
+	ExportSectionCustomSignals,
 }
 
 // ExportJob is a background (or fast) user data export.
@@ -111,14 +113,29 @@ func NormalizeExportFormat(s string) (ExportFormat, error) {
 	return f, nil
 }
 
+func canonicalExportSection(s string) (ExportSection, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case string(ExportSectionWatchlist):
+		return ExportSectionWatchlist, true
+	case string(ExportSectionShares):
+		return ExportSectionShares, true
+	case string(ExportSectionAlerts):
+		return ExportSectionAlerts, true
+	case string(ExportSectionBacktests):
+		return ExportSectionBacktests, true
+	case string(ExportSectionPortfolios):
+		return ExportSectionPortfolios, true
+	case strings.ToLower(string(ExportSectionCustomSignals)):
+		return ExportSectionCustomSignals, true
+	default:
+		return "", false
+	}
+}
+
 // IsValidExportSection reports a known section name.
 func IsValidExportSection(s string) bool {
-	switch ExportSection(strings.ToLower(strings.TrimSpace(s))) {
-	case ExportSectionWatchlist, ExportSectionShares, ExportSectionAlerts, ExportSectionBacktests, ExportSectionPortfolios:
-		return true
-	default:
-		return false
-	}
+	_, ok := canonicalExportSection(s)
+	return ok
 }
 
 // NormalizeExportSections parses and de-duplicates sections; empty → all.
@@ -131,11 +148,10 @@ func NormalizeExportSections(raw []string) ([]ExportSection, error) {
 	seen := map[ExportSection]struct{}{}
 	out := make([]ExportSection, 0, len(raw))
 	for _, s := range raw {
-		s = strings.ToLower(strings.TrimSpace(s))
-		if !IsValidExportSection(s) {
-			return nil, fmt.Errorf("%w: unknown export section %q (watchlist|shares|alerts|backtests|portfolios)", ErrInvalidArgument, s)
+		sec, ok := canonicalExportSection(s)
+		if !ok {
+			return nil, fmt.Errorf("%w: unknown export section %q (watchlist|shares|alerts|backtests|portfolios|customSignals)", ErrInvalidArgument, s)
 		}
-		sec := ExportSection(s)
 		if _, ok := seen[sec]; ok {
 			continue
 		}
