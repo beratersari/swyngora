@@ -4153,13 +4153,22 @@ export interface components {
             disabled?: string[];
             note?: string;
         };
-        /** @description One factor under default vs applied weights (same requested percents; missing adds 0) */
+        /** @description One venue's contribution to a combined factor row */
+        LiquidationHuntScoreFactorVenue: {
+            exchange?: string;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
+            score?: number;
+            appliedEffect?: number;
+            detail?: string;
+        };
+        /** @description One factor under default vs applied weights (same requested percents; missing adds 0). Combined rows list which venues used or missed the factor. */
         LiquidationHuntScoreFactorCompare: {
             id?: string;
             label?: string;
             /** @enum {string} */
             status?: "used" | "missing" | "disabled";
-            /** @description Raw 0–100 for this factor (independent of mix) */
+            /** @description Raw 0–100 for this factor (independent of mix). Combined is OI-weighted across used venues only. */
             score?: number;
             defaultPct?: number;
             appliedPct?: number;
@@ -4168,6 +4177,10 @@ export interface components {
             /** @description appliedEffect − defaultEffect */
             deltaEffect?: number;
             detail?: string;
+            usedVenues?: string[];
+            missingVenues?: string[];
+            disabledVenues?: string[];
+            venues?: components["schemas"]["LiquidationHuntScoreFactorVenue"][];
         };
         /** @description The factor whose custom mix moved one direction score the most versus default */
         LiquidationHuntScoreLargestChange: {

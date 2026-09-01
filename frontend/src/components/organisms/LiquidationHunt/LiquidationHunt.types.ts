@@ -33,6 +33,14 @@ export type HuntScoreMix = {
   note?: string;
 };
 
+export type HuntScoreFactorVenue = {
+  exchange?: string;
+  status?: string;
+  score?: number;
+  appliedEffect?: number;
+  detail?: string;
+};
+
 export type HuntScoreFactorCompare = {
   id?: string;
   label?: string;
@@ -44,6 +52,10 @@ export type HuntScoreFactorCompare = {
   appliedEffect?: number;
   deltaEffect?: number;
   detail?: string;
+  usedVenues?: string[];
+  missingVenues?: string[];
+  disabledVenues?: string[];
+  venues?: HuntScoreFactorVenue[];
 };
 
 export type HuntScoreLargestChange = {
@@ -282,6 +294,9 @@ export type HuntMixPreviewFactor = {
   defaultEffect: number;
   appliedEffect: number;
   deltaEffect: number;
+  usedVenues?: string[];
+  missingVenues?: string[];
+  disabledVenues?: string[];
 };
 
 export type HuntMixPreview = {

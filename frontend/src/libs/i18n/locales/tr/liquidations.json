@@ -101,6 +101,8 @@
       "upFactors": "Yukarı faktörler",
       "downFactors": "Aşağı faktörler",
       "largestChange": "En büyük değişim: {{factor}} (varsayılana göre {{value}})",
+      "usedOn": "{{venues}} kullanıldı",
+      "missingOn": "{{venues}} eksik",
       "delta": "Fark",
       "missingKept": "veri yok — %{{pct}} kullanılmıyor",
       "vsDefault": "Özel {{applied}} / varsayılan {{base}} ({{delta}})",

@@ -36,7 +36,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_funding_arb_signals` | List min-profit crossings (open/closed/all) |
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
-| `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (optional custom weight* mix summing to 100; percents stay as given — missing factors add 0 and are not redistributed; scoreCompare has separate upFactors/downFactors and upLargestChange/downLargestChange) and cascade paths (running fuel pool, hop strength, stall) |
+| `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (optional custom weight* mix summing to 100; percents stay as given — missing factors add 0 and are not redistributed; scoreCompare has separate upFactors/downFactors, usedVenues/missingVenues on combined rows, and upLargestChange/downLargestChange) and cascade paths (running fuel pool, hop strength, stall) |
 | `get_liquidation_heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; Binance, Bybit, combined; own-venue prices; 1h/4h/12h hit review) |
 | `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
 | `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |

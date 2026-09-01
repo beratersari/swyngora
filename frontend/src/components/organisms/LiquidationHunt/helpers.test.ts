@@ -133,4 +133,32 @@ describe('LiquidationHunt helpers', () => {
     expect(preview?.downLargestChange?.id).toBe('proximity');
     expect(preview?.upLargestChange?.deltaEffect).not.toBe(preview?.downLargestChange?.deltaEffect);
   });
+
+  it('lists which venues used or missed a combined factor', () => {
+    const draft = defaultHuntWeightDraft();
+    const preview = previewHuntMix(
+      [
+        {
+          exchange: 'binance',
+          coverage: { score: 90, usable: true },
+          openInterestValue: '10',
+          upScore: { factors: [{ id: 'flow', score: 0, status: 'missing' }] },
+          downScore: { factors: [{ id: 'flow', score: 0, status: 'missing' }] },
+        },
+        {
+          exchange: 'bybit',
+          coverage: { score: 90, usable: true },
+          openInterestValue: '10',
+          upScore: { factors: [{ id: 'flow', score: 70, status: 'used' }] },
+          downScore: { factors: [{ id: 'flow', score: 40, status: 'used' }] },
+        },
+      ],
+      draft,
+    );
+    const flow = preview?.upFactors.find((f) => f.id === 'flow');
+    expect(flow?.status).toBe('used');
+    expect(flow?.usedVenues).toEqual(['bybit']);
+    expect(flow?.missingVenues).toEqual(['binance']);
+    expect(flow?.appliedEffect).toBeCloseTo((70 - 50) * 0.14, 0);
+  });
 });

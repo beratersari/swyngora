@@ -111,19 +111,32 @@ type HuntScoreSnapshot struct {
 	DownFactors []HuntScoreFactorCompare `json:"downFactors"`
 }
 
+// HuntScoreFactorVenue is one venue's contribution to a combined factor row.
+type HuntScoreFactorVenue struct {
+	Exchange      string  `json:"exchange"`
+	Status        string  `json:"status"`
+	Score         float64 `json:"score"`
+	AppliedEffect float64 `json:"appliedEffect"`
+	Detail        string  `json:"detail,omitempty"`
+}
+
 // HuntScoreFactorCompare is one factor under default vs applied weights
 // for a single hunt direction.
 type HuntScoreFactorCompare struct {
-	ID            string  `json:"id"`
-	Label         string  `json:"label"`
-	Status        string  `json:"status"`
-	Score         float64 `json:"score"`
-	DefaultPct    float64 `json:"defaultPct"`
-	AppliedPct    float64 `json:"appliedPct"`
-	DefaultEffect float64 `json:"defaultEffect"`
-	AppliedEffect float64 `json:"appliedEffect"`
-	DeltaEffect   float64 `json:"deltaEffect"`
-	Detail        string  `json:"detail,omitempty"`
+	ID             string                 `json:"id"`
+	Label          string                 `json:"label"`
+	Status         string                 `json:"status"`
+	Score          float64                `json:"score"`
+	DefaultPct     float64                `json:"defaultPct"`
+	AppliedPct     float64                `json:"appliedPct"`
+	DefaultEffect  float64                `json:"defaultEffect"`
+	AppliedEffect  float64                `json:"appliedEffect"`
+	DeltaEffect    float64                `json:"deltaEffect"`
+	Detail         string                 `json:"detail,omitempty"`
+	UsedVenues     []string               `json:"usedVenues,omitempty"`
+	MissingVenues  []string               `json:"missingVenues,omitempty"`
+	DisabledVenues []string               `json:"disabledVenues,omitempty"`
+	Venues         []HuntScoreFactorVenue `json:"venues,omitempty"`
 }
 
 // HuntScoreLargestChange is the factor whose custom mix moved one
@@ -673,8 +686,10 @@ func CombineHuntScoreCompare(venues []HuntVenueReport) HuntScoreCompare {
 
 func combineHuntFactorCompare(venues []HuntVenueReport, up bool) []HuntScoreFactorCompare {
 	type acc struct {
-		row HuntScoreFactorCompare
-		w   float64
+		label                             string
+		defaultPct, appliedPct            float64
+		scoreW, defW, appW, deltaW, usedW float64
+		venues                            []HuntScoreFactorVenue
 	}
 	byID := make(map[string]*acc, len(HuntScoreFactorIDs))
 	for _, v := range venues {
@@ -685,6 +700,10 @@ func combineHuntFactorCompare(venues []HuntVenueReport, up bool) []HuntScoreFact
 		if w <= 0 {
 			w = 1
 		}
+		name := string(v.Exchange)
+		if name == "" {
+			name = v.Symbol
+		}
 		rows := v.ScoreCompare.Delta.DownFactors
 		if up {
 			rows = v.ScoreCompare.Delta.UpFactors
@@ -692,22 +711,27 @@ func combineHuntFactorCompare(venues []HuntVenueReport, up bool) []HuntScoreFact
 		for _, f := range rows {
 			a := byID[f.ID]
 			if a == nil {
-				cp := f
-				a = &acc{row: cp, w: 0}
+				a = &acc{label: f.Label, defaultPct: f.DefaultPct, appliedPct: f.AppliedPct}
 				byID[f.ID] = a
 			}
-			a.row.Score = (a.row.Score*a.w + f.Score*w) / (a.w + w)
-			a.row.DefaultEffect = (a.row.DefaultEffect*a.w + f.DefaultEffect*w) / (a.w + w)
-			a.row.AppliedEffect = (a.row.AppliedEffect*a.w + f.AppliedEffect*w) / (a.w + w)
-			a.row.DeltaEffect = (a.row.DeltaEffect*a.w + f.DeltaEffect*w) / (a.w + w)
+			a.venues = append(a.venues, HuntScoreFactorVenue{
+				Exchange:      name,
+				Status:        f.Status,
+				Score:         f.Score,
+				AppliedEffect: f.AppliedEffect,
+				Detail:        f.Detail,
+			})
 			if f.Status == HuntFactorUsed {
-				a.row.Status = HuntFactorUsed
-			} else if a.row.Status == "" {
-				a.row.Status = f.Status
+				a.scoreW += f.Score * w
+				a.defW += f.DefaultEffect * w
+				a.appW += f.AppliedEffect * w
+				a.deltaW += f.DeltaEffect * w
+				a.usedW += w
 			}
-			a.row.DefaultPct = f.DefaultPct
-			a.row.AppliedPct = f.AppliedPct
-			a.w += w
+			if f.DefaultPct > 0 {
+				a.defaultPct = f.DefaultPct
+			}
+			a.appliedPct = f.AppliedPct
 		}
 	}
 	out := make([]HuntScoreFactorCompare, 0, len(HuntScoreFactorIDs))
@@ -716,13 +740,72 @@ func combineHuntFactorCompare(venues []HuntVenueReport, up bool) []HuntScoreFact
 		if a == nil {
 			continue
 		}
-		a.row.Score = round1(a.row.Score)
-		a.row.DefaultEffect = round1(a.row.DefaultEffect)
-		a.row.AppliedEffect = round1(a.row.AppliedEffect)
-		a.row.DeltaEffect = round1(a.row.DeltaEffect)
-		out = append(out, a.row)
+		row := HuntScoreFactorCompare{
+			ID:         id,
+			Label:      a.label,
+			DefaultPct: a.defaultPct,
+			AppliedPct: a.appliedPct,
+			Venues:     a.venues,
+		}
+		if a.usedW > 0 {
+			row.Score = round1(a.scoreW / a.usedW)
+			row.DefaultEffect = round1(a.defW / a.usedW)
+			row.AppliedEffect = round1(a.appW / a.usedW)
+			row.DeltaEffect = round1(a.deltaW / a.usedW)
+		}
+		for _, ven := range a.venues {
+			switch ven.Status {
+			case HuntFactorUsed:
+				row.UsedVenues = append(row.UsedVenues, ven.Exchange)
+			case HuntFactorDisabled:
+				row.DisabledVenues = append(row.DisabledVenues, ven.Exchange)
+			default:
+				row.MissingVenues = append(row.MissingVenues, ven.Exchange)
+			}
+		}
+		switch {
+		case len(row.UsedVenues) > 0:
+			row.Status = HuntFactorUsed
+		case len(row.DisabledVenues) > 0 && len(row.MissingVenues) == 0:
+			row.Status = HuntFactorDisabled
+		default:
+			row.Status = HuntFactorMissing
+		}
+		row.Detail = combinedHuntFactorDetail(row)
+		out = append(out, row)
 	}
 	return out
+}
+
+func combinedHuntFactorDetail(row HuntScoreFactorCompare) string {
+	var bits []string
+	if len(row.UsedVenues) > 0 {
+		bits = append(bits, "Used on "+joinHuntNames(row.UsedVenues))
+		var usedDetail string
+		for _, ven := range row.Venues {
+			if ven.Status == HuntFactorUsed && ven.Detail != "" {
+				usedDetail = ven.Detail
+				break
+			}
+		}
+		if usedDetail != "" {
+			bits[0] += " (" + usedDetail + ")"
+		}
+	}
+	if len(row.MissingVenues) > 0 {
+		bits = append(bits, "missing on "+joinHuntNames(row.MissingVenues))
+	}
+	if len(row.DisabledVenues) > 0 {
+		bits = append(bits, "disabled on "+joinHuntNames(row.DisabledVenues))
+	}
+	if len(bits) == 0 {
+		return ""
+	}
+	out := bits[0]
+	for i := 1; i < len(bits); i++ {
+		out += "; " + bits[i]
+	}
+	return out + "."
 }
 
 // CombineHuntBias is an OI-weighted lean across usable venues only.

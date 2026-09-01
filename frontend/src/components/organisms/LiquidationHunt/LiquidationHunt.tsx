@@ -693,6 +693,18 @@ function HuntWeightPreviewFactors({
             <FactorShare>{`${Math.round(factor.defaultPct)}% · ${formatEffect(factor.defaultEffect)}`}</FactorShare>
             <FactorShare>{`${Math.round(factor.appliedPct)}% · ${formatEffect(factor.appliedEffect)}`}</FactorShare>
             <FactorMeta $tone={effectTone(factor.deltaEffect)}>{formatEffect(factor.deltaEffect)}</FactorMeta>
+            {factor.usedVenues?.length || factor.missingVenues?.length ? (
+              <FactorShare>
+                {factor.usedVenues?.length
+                  ? t('hunt.weights.usedOn', { venues: factor.usedVenues.map((v) => venueLabel(v)).join(', ') })
+                  : ''}
+                {factor.missingVenues?.length
+                  ? `${factor.usedVenues?.length ? ' · ' : ''}${t('hunt.weights.missingOn', {
+                      venues: factor.missingVenues.map((v) => venueLabel(v)).join(', '),
+                    })}`
+                  : ''}
+              </FactorShare>
+            ) : null}
           </span>
         ))}
       </PreviewFactorTable>

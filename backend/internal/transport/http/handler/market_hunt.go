@@ -189,17 +189,29 @@ type huntScoreMixDTO struct {
 	Note           string             `json:"note"`
 }
 
-type huntScoreFactorCompareDTO struct {
-	ID            string  `json:"id"`
-	Label         string  `json:"label"`
+type huntScoreFactorVenueDTO struct {
+	Exchange      string  `json:"exchange"`
 	Status        string  `json:"status"`
 	Score         float64 `json:"score"`
-	DefaultPct    float64 `json:"defaultPct"`
-	AppliedPct    float64 `json:"appliedPct"`
-	DefaultEffect float64 `json:"defaultEffect"`
 	AppliedEffect float64 `json:"appliedEffect"`
-	DeltaEffect   float64 `json:"deltaEffect"`
 	Detail        string  `json:"detail,omitempty"`
+}
+
+type huntScoreFactorCompareDTO struct {
+	ID             string                    `json:"id"`
+	Label          string                    `json:"label"`
+	Status         string                    `json:"status"`
+	Score          float64                   `json:"score"`
+	DefaultPct     float64                   `json:"defaultPct"`
+	AppliedPct     float64                   `json:"appliedPct"`
+	DefaultEffect  float64                   `json:"defaultEffect"`
+	AppliedEffect  float64                   `json:"appliedEffect"`
+	DeltaEffect    float64                   `json:"deltaEffect"`
+	Detail         string                    `json:"detail,omitempty"`
+	UsedVenues     []string                  `json:"usedVenues,omitempty"`
+	MissingVenues  []string                  `json:"missingVenues,omitempty"`
+	DisabledVenues []string                  `json:"disabledVenues,omitempty"`
+	Venues         []huntScoreFactorVenueDTO `json:"venues,omitempty"`
 }
 
 type huntScoreSnapshotDTO struct {
@@ -562,11 +574,20 @@ func huntScoreCompareToDTO(c domain.HuntScoreCompare) huntScoreCompareDTO {
 	mapFactors := func(in []domain.HuntScoreFactorCompare) []huntScoreFactorCompareDTO {
 		out := make([]huntScoreFactorCompareDTO, 0, len(in))
 		for _, f := range in {
+			venues := make([]huntScoreFactorVenueDTO, 0, len(f.Venues))
+			for _, ven := range f.Venues {
+				venues = append(venues, huntScoreFactorVenueDTO{
+					Exchange: ven.Exchange, Status: ven.Status, Score: ven.Score,
+					AppliedEffect: ven.AppliedEffect, Detail: ven.Detail,
+				})
+			}
 			out = append(out, huntScoreFactorCompareDTO{
 				ID: f.ID, Label: f.Label, Status: f.Status, Score: f.Score,
 				DefaultPct: f.DefaultPct, AppliedPct: f.AppliedPct,
 				DefaultEffect: f.DefaultEffect, AppliedEffect: f.AppliedEffect,
 				DeltaEffect: f.DeltaEffect, Detail: f.Detail,
+				UsedVenues: f.UsedVenues, MissingVenues: f.MissingVenues,
+				DisabledVenues: f.DisabledVenues, Venues: venues,
 			})
 		}
 		return out

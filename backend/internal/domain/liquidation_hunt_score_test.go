@@ -512,6 +512,54 @@ func TestBuildHuntScoreCompare_SplitsUpAndDownAndPicksLargest(t *testing.T) {
 	}
 }
 
+func TestCombineHuntFactorCompare_DoesNotKeepFirstVenueMissingDetail(t *testing.T) {
+	missingFlow := HuntScoreFactorCompare{
+		ID: HuntFactorFlow, Label: huntScoreFactorLabel[HuntFactorFlow],
+		Status: HuntFactorMissing, Score: 0, AppliedPct: 14,
+		Detail: "No 1h taker or 1h liquidation window. A longer window was not substituted.",
+	}
+	usedFlow := HuntScoreFactorCompare{
+		ID: HuntFactorFlow, Label: huntScoreFactorLabel[HuntFactorFlow],
+		Status: HuntFactorUsed, Score: 70, AppliedPct: 14, AppliedEffect: 2.8, DeltaEffect: 1.2,
+		Detail: "1h takers are 62% buy",
+	}
+	binance := HuntVenueReport{
+		Exchange: ExchangeBinance, Price: 100, OpenInterestValue: 10,
+		Coverage:     HuntCoverage{Usable: true, Level: HuntCoverageComplete},
+		ScoreCompare: HuntScoreCompare{Delta: HuntScoreDelta{UpFactors: []HuntScoreFactorCompare{missingFlow}}},
+	}
+	bybit := HuntVenueReport{
+		Exchange: ExchangeBybit, Price: 100, OpenInterestValue: 10,
+		Coverage:     HuntCoverage{Usable: true, Level: HuntCoverageComplete},
+		ScoreCompare: HuntScoreCompare{Delta: HuntScoreDelta{UpFactors: []HuntScoreFactorCompare{usedFlow}}},
+	}
+	got := combineHuntFactorCompare([]HuntVenueReport{binance, bybit}, true)
+	var flow HuntScoreFactorCompare
+	for _, f := range got {
+		if f.ID == HuntFactorFlow {
+			flow = f
+		}
+	}
+	if flow.Status != HuntFactorUsed {
+		t.Fatalf("status %+v", flow)
+	}
+	if strings.Contains(flow.Detail, "No 1h taker") {
+		t.Fatalf("combined detail still has first-venue missing text: %s", flow.Detail)
+	}
+	if !strings.Contains(flow.Detail, "bybit") || !strings.Contains(flow.Detail, "binance") {
+		t.Fatalf("want both venues in detail: %s", flow.Detail)
+	}
+	if len(flow.UsedVenues) != 1 || flow.UsedVenues[0] != "bybit" {
+		t.Fatalf("used %+v", flow.UsedVenues)
+	}
+	if len(flow.MissingVenues) != 1 || flow.MissingVenues[0] != "binance" {
+		t.Fatalf("missing %+v", flow.MissingVenues)
+	}
+	if math.Abs(flow.AppliedEffect-2.8) > 0.05 {
+		t.Fatalf("missing venue must not dilute used effect: %+v", flow)
+	}
+}
+
 func TestHuntInputOI_Short4hHistoryIsWeakEvenIf1hIsFull(t *testing.T) {
 	sig := fullHuntSignals()
 	sig.OISpan1h = HuntSpanFromDurations(time.Hour, time.Hour)

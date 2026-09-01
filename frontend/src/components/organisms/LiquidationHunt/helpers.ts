@@ -158,44 +158,61 @@ export function previewHuntMix(venues: HuntVenue[], draft: HuntWeightDraftRow[])
   let defDown = 0;
   let appUp = 0;
   let appDown = 0;
-  const upAcc = new Map<string, HuntMixPreviewFactor & { w: number }>();
-  const downAcc = new Map<string, HuntMixPreviewFactor & { w: number }>();
-  const addFactors = (
-    acc: Map<string, HuntMixPreviewFactor & { w: number }>,
-    factors: HuntMixPreviewFactor[],
-    w: number,
-  ) => {
+  type factorAcc = HuntMixPreviewFactor & { usedW: number };
+  const upAcc = new Map<string, factorAcc>();
+  const downAcc = new Map<string, factorAcc>();
+  const addFactors = (acc: Map<string, factorAcc>, factors: HuntMixPreviewFactor[], exchange: string, w: number) => {
     for (const f of factors) {
-      const cur = acc.get(f.id);
-      if (!cur) {
-        acc.set(f.id, { ...f, w });
-        continue;
+      const cur = acc.get(f.id) ?? {
+        ...f,
+        score: 0,
+        defaultEffect: 0,
+        appliedEffect: 0,
+        deltaEffect: 0,
+        status: 'missing' as const,
+        usedVenues: [],
+        missingVenues: [],
+        disabledVenues: [],
+        usedW: 0,
+      };
+      if (f.status === 'used') {
+        cur.usedVenues = [...(cur.usedVenues ?? []), exchange];
+        cur.score = (cur.score * cur.usedW + f.score * w) / (cur.usedW + w);
+        cur.defaultEffect = (cur.defaultEffect * cur.usedW + f.defaultEffect * w) / (cur.usedW + w);
+        cur.appliedEffect = (cur.appliedEffect * cur.usedW + f.appliedEffect * w) / (cur.usedW + w);
+        cur.deltaEffect = (cur.deltaEffect * cur.usedW + f.deltaEffect * w) / (cur.usedW + w);
+        cur.usedW += w;
+        cur.status = 'used';
+      } else if (f.status === 'disabled') {
+        cur.disabledVenues = [...(cur.disabledVenues ?? []), exchange];
+        if (cur.status !== 'used') cur.status = 'disabled';
+      } else {
+        cur.missingVenues = [...(cur.missingVenues ?? []), exchange];
+        if (cur.status !== 'used' && cur.status !== 'disabled') cur.status = 'missing';
       }
-      cur.score = (cur.score * cur.w + f.score * w) / (cur.w + w);
-      cur.defaultEffect = (cur.defaultEffect * cur.w + f.defaultEffect * w) / (cur.w + w);
-      cur.appliedEffect = (cur.appliedEffect * cur.w + f.appliedEffect * w) / (cur.w + w);
-      cur.deltaEffect = (cur.deltaEffect * cur.w + f.deltaEffect * w) / (cur.w + w);
-      if (f.status === 'used') cur.status = 'used';
-      cur.w += w;
+      cur.defaultPct = f.defaultPct;
+      cur.appliedPct = f.appliedPct;
+      acc.set(f.id, cur);
     }
   };
   for (const row of rows) {
     const venue = venues.find((v) => v.exchange === row.exchange);
     const w = parseNum(venue?.openInterestValue) ?? 1;
+    const name = row.exchange || venue?.exchange || 'venue';
     oiSum += w;
     defUp += row.defaultUp * w;
     defDown += row.defaultDown * w;
     appUp += row.appliedUp * w;
     appDown += row.appliedDown * w;
-    addFactors(upAcc, row.upFactors, w);
-    addFactors(downAcc, row.downFactors, w);
+    addFactors(upAcc, row.upFactors, name, w);
+    addFactors(downAcc, row.downFactors, name, w);
   }
   if (oiSum <= 0) return rows[0];
   const defaultUp = clampScore(defUp / oiSum);
   const defaultDown = clampScore(defDown / oiSum);
   const appliedUp = clampScore(appUp / oiSum);
   const appliedDown = clampScore(appDown / oiSum);
-  const flatten = (acc: Map<string, HuntMixPreviewFactor & { w: number }>) =>
+  const flatten = (acc: Map<string, factorAcc>) =>
     HUNT_SCORE_FACTORS.map((factor) => {
       const cur = acc.get(factor.id);
       if (!cur) {
@@ -219,6 +236,9 @@ export function previewHuntMix(venues: HuntVenue[], draft: HuntWeightDraftRow[])
         defaultEffect: round1(cur.defaultEffect),
         appliedEffect: round1(cur.appliedEffect),
         deltaEffect: round1(cur.deltaEffect),
+        usedVenues: cur.usedVenues,
+        missingVenues: cur.missingVenues,
+        disabledVenues: cur.disabledVenues,
       };
     });
   const upFactors = flatten(upAcc);

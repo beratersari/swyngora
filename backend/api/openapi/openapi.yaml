@@ -7525,20 +7525,41 @@ components:
           type: array
           items: { type: string }
         note: { type: string }
+    LiquidationHuntScoreFactorVenue:
+      type: object
+      description: One venue's contribution to a combined factor row
+      properties:
+        exchange: { type: string }
+        status: { type: string, enum: [used, missing, disabled] }
+        score: { type: number }
+        appliedEffect: { type: number }
+        detail: { type: string }
     LiquidationHuntScoreFactorCompare:
       type: object
-      description: One factor under default vs applied weights (same requested percents; missing adds 0)
+      description: One factor under default vs applied weights (same requested percents; missing adds 0). Combined rows list which venues used or missed the factor.
       properties:
         id: { type: string }
         label: { type: string }
         status: { type: string, enum: [used, missing, disabled] }
-        score: { type: number, description: Raw 0–100 for this factor (independent of mix) }
+        score: { type: number, description: Raw 0–100 for this factor (independent of mix). Combined is OI-weighted across used venues only. }
         defaultPct: { type: number }
         appliedPct: { type: number }
         defaultEffect: { type: number }
         appliedEffect: { type: number }
         deltaEffect: { type: number, description: appliedEffect − defaultEffect }
         detail: { type: string }
+        usedVenues:
+          type: array
+          items: { type: string }
+        missingVenues:
+          type: array
+          items: { type: string }
+        disabledVenues:
+          type: array
+          items: { type: string }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntScoreFactorVenue' }
     LiquidationHuntScoreLargestChange:
       type: object
       description: The factor whose custom mix moved one direction score the most versus default
