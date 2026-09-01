@@ -68,7 +68,9 @@ python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 
 # Optional traces: copy LANGSMITH_* from .env.example into ai/.env,
 # set LANGSMITH_API_KEY, and LANGSMITH_ENDPOINT for your LangSmith org region
-# (India/APAC: https://apac.api.smith.langchain.com). Open project Swyngora.
+# (India/APAC: https://apac.api.smith.langchain.com). Restart both
+# swyngora-ai and swyngora-ai-serve. Open project Swyngora.
+# Mobile Ask / web /ai use the serve process, not the CLI.
 ```
 
 ## Environment

@@ -63,6 +63,8 @@ export SWYNGORA_API_URL=http://localhost:8080
 # export AI_MEMORY_PATH=data/ai-memory.db
 # Optional LangSmith: copy LANGSMITH_TRACING, LANGSMITH_PROJECT, LANGSMITH_API_KEY
 # from ai/.env.example into ai/.env and set LANGSMITH_API_KEY=...
+# Restart swyngora-ai (CLI) and swyngora-ai-serve (:8090). Mobile Ask / web /ai
+# go through serve, not the CLI.
 # LANGSMITH_ENDPOINT must match the LangSmith org region (Settings URL), not where you live:
 #   India / APAC: https://apac.api.smith.langchain.com
 #   EU:           https://eu.api.smith.langchain.com
