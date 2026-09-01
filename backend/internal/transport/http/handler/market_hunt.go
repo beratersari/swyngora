@@ -154,6 +154,7 @@ type huntVenueDTO struct {
 	Bias               huntBiasDTO           `json:"bias"`
 	Coverage           huntCoverageDTO       `json:"coverage"`
 	ScoreMix           huntScoreMixDTO       `json:"scoreMix"`
+	ScoreCompare       huntScoreCompareDTO   `json:"scoreCompare"`
 	Error              string                `json:"error,omitempty"`
 }
 
@@ -163,7 +164,7 @@ type huntFactorDTO struct {
 	Score        float64 `json:"score"`
 	Weight       float64 `json:"weight"`
 	RequestedPct float64 `json:"requestedPct"`
-	SharePct     float64 `json:"sharePct,omitempty"`
+	SharePct     float64 `json:"sharePct"`
 	Effect       float64 `json:"effect"`
 	Status       string  `json:"status"`
 	Detail       string  `json:"detail"`
@@ -186,6 +187,45 @@ type huntScoreMixDTO struct {
 	Missing        []string           `json:"missing"`
 	Disabled       []string           `json:"disabled"`
 	Note           string             `json:"note"`
+}
+
+type huntScoreFactorCompareDTO struct {
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	Status        string  `json:"status"`
+	Score         float64 `json:"score"`
+	DefaultPct    float64 `json:"defaultPct"`
+	AppliedPct    float64 `json:"appliedPct"`
+	DefaultEffect float64 `json:"defaultEffect"`
+	AppliedEffect float64 `json:"appliedEffect"`
+	DeltaEffect   float64 `json:"deltaEffect"`
+	Detail        string  `json:"detail,omitempty"`
+}
+
+type huntScoreSnapshotDTO struct {
+	Source    string                      `json:"source"`
+	UpScore   float64                     `json:"upScore"`
+	DownScore float64                     `json:"downScore"`
+	Lean      string                      `json:"lean"`
+	Margin    float64                     `json:"margin"`
+	LevelUp   string                      `json:"levelUp"`
+	LevelDown string                      `json:"levelDown"`
+	Summary   string                      `json:"summary"`
+	Factors   []huntScoreFactorCompareDTO `json:"factors"`
+}
+
+type huntScoreDeltaDTO struct {
+	UpScore     float64                     `json:"upScore"`
+	DownScore   float64                     `json:"downScore"`
+	LeanChanged bool                        `json:"leanChanged"`
+	Factors     []huntScoreFactorCompareDTO `json:"factors"`
+}
+
+type huntScoreCompareDTO struct {
+	Default huntScoreSnapshotDTO `json:"default"`
+	Applied huntScoreSnapshotDTO `json:"applied"`
+	Delta   huntScoreDeltaDTO    `json:"delta"`
+	Note    string               `json:"note"`
 }
 
 type huntDirectionScoreDTO struct {
@@ -232,15 +272,16 @@ type huntBiasDTO struct {
 }
 
 type huntResponse struct {
-	Symbol      string             `json:"symbol"`
-	Exchange    string             `json:"exchange"`
-	AsOf        time.Time          `json:"asOf"`
-	Assumptions huntAssumptionsDTO `json:"assumptions"`
-	Venues      []huntVenueDTO     `json:"venues"`
-	Bias        *huntBiasDTO       `json:"bias,omitempty"`
-	Coverage    *huntCoverageDTO   `json:"coverage,omitempty"`
-	ScoreMix    huntScoreMixDTO    `json:"scoreMix"`
-	Note        string             `json:"note"`
+	Symbol       string              `json:"symbol"`
+	Exchange     string              `json:"exchange"`
+	AsOf         time.Time           `json:"asOf"`
+	Assumptions  huntAssumptionsDTO  `json:"assumptions"`
+	Venues       []huntVenueDTO      `json:"venues"`
+	Bias         *huntBiasDTO        `json:"bias,omitempty"`
+	Coverage     *huntCoverageDTO    `json:"coverage,omitempty"`
+	ScoreMix     huntScoreMixDTO     `json:"scoreMix"`
+	ScoreCompare huntScoreCompareDTO `json:"scoreCompare"`
+	Note         string              `json:"note"`
 }
 
 func huntToDTO(a *domain.HuntReport) huntResponse {
@@ -274,11 +315,12 @@ func huntToDTO(a *domain.HuntReport) huntResponse {
 			LongShortIsAccounts: true,
 			LeverageMix:         mix,
 		},
-		Venues:   venues,
-		Bias:     huntBiasToDTO(a.Bias),
-		Coverage: huntCoveragePtrToDTO(a.Coverage),
-		ScoreMix: huntScoreMixToDTO(a.ScoreMix),
-		Note:     huntDisclaimer,
+		Venues:       venues,
+		Bias:         huntBiasToDTO(a.Bias),
+		Coverage:     huntCoveragePtrToDTO(a.Coverage),
+		ScoreMix:     huntScoreMixToDTO(a.ScoreMix),
+		ScoreCompare: huntScoreCompareToDTO(a.ScoreCompare),
+		Note:         huntDisclaimer,
 	}
 }
 
@@ -312,6 +354,7 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		Bias:               huntBiasValueToDTO(v.Bias),
 		Coverage:           huntCoverageToDTO(v.Coverage),
 		ScoreMix:           huntScoreMixToDTO(v.ScoreMix),
+		ScoreCompare:       huntScoreCompareToDTO(v.ScoreCompare),
 		Error:              v.Error,
 	}
 }
@@ -494,6 +537,37 @@ func huntCascadeToDTO(p domain.HuntCascadePath) huntCascadePathDTO {
 		out.StallsAtPrice = formatHistQty(p.StallsAtPrice)
 	}
 	return out
+}
+
+func huntScoreCompareToDTO(c domain.HuntScoreCompare) huntScoreCompareDTO {
+	mapFactors := func(in []domain.HuntScoreFactorCompare) []huntScoreFactorCompareDTO {
+		out := make([]huntScoreFactorCompareDTO, 0, len(in))
+		for _, f := range in {
+			out = append(out, huntScoreFactorCompareDTO{
+				ID: f.ID, Label: f.Label, Status: f.Status, Score: f.Score,
+				DefaultPct: f.DefaultPct, AppliedPct: f.AppliedPct,
+				DefaultEffect: f.DefaultEffect, AppliedEffect: f.AppliedEffect,
+				DeltaEffect: f.DeltaEffect, Detail: f.Detail,
+			})
+		}
+		return out
+	}
+	mapSnap := func(s domain.HuntScoreSnapshot) huntScoreSnapshotDTO {
+		return huntScoreSnapshotDTO{
+			Source: s.Source, UpScore: s.UpScore, DownScore: s.DownScore,
+			Lean: s.Lean, Margin: s.Margin, LevelUp: s.LevelUp, LevelDown: s.LevelDown,
+			Summary: s.Summary, Factors: mapFactors(s.Factors),
+		}
+	}
+	return huntScoreCompareDTO{
+		Default: mapSnap(c.Default),
+		Applied: mapSnap(c.Applied),
+		Delta: huntScoreDeltaDTO{
+			UpScore: c.Delta.UpScore, DownScore: c.Delta.DownScore,
+			LeanChanged: c.Delta.LeanChanged, Factors: mapFactors(c.Delta.Factors),
+		},
+		Note: c.Note,
+	}
 }
 
 func huntScoreMixToDTO(m domain.HuntScoreMix) huntScoreMixDTO {

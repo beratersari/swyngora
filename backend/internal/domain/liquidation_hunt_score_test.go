@@ -398,6 +398,61 @@ func TestAssembleHuntScore_ReportsFactorEffects(t *testing.T) {
 	}
 }
 
+func TestAttachHuntDirectionScores_MissingFactorDoesNotRescale(t *testing.T) {
+	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	w := HuntScoreWeights{Source: "custom", Pct: map[string]float64{
+		HuntFactorProximity: 40, HuntFactorBook: 30, HuntFactorTrend: 30,
+		HuntFactorEfficiency: 0, HuntFactorCrowding: 0, HuntFactorFlow: 0,
+	}}
+	AttachHuntDirectionScoresWeighted(&got, HuntSignals{HasBook: true}, w)
+	var prox, book, trend HuntFactor
+	for _, f := range got.UpScore.Factors {
+		switch f.ID {
+		case HuntFactorProximity:
+			prox = f
+		case HuntFactorBook:
+			book = f
+		case HuntFactorTrend:
+			trend = f
+		}
+	}
+	if prox.Status != HuntFactorUsed || prox.SharePct != 40 || prox.RequestedPct != 40 {
+		t.Fatalf("proximity should keep 40: %+v", prox)
+	}
+	if book.Status != HuntFactorUsed || book.SharePct != 30 {
+		t.Fatalf("book should keep 30: %+v", book)
+	}
+	if trend.Status != HuntFactorMissing || trend.SharePct != 30 || trend.Effect != 0 {
+		t.Fatalf("missing trend keeps 30 and adds 0: %+v", trend)
+	}
+	if got.ScoreMix.UsedTotal != 70 || got.ScoreMix.RequestedTotal != 100 {
+		t.Fatalf("mix %+v", got.ScoreMix)
+	}
+	keep := huntScoreKeep(got.Coverage.Score)
+	want := clampScore(50 + (prox.Score-50)*0.40*keep + (book.Score-50)*0.30*keep)
+	if math.Abs(got.UpScore.Score-want) > 0.15 {
+		t.Fatalf("score rescaled? got=%v want=%v prox=%v book=%v keep=%v", got.UpScore.Score, want, prox.Score, book.Score, keep)
+	}
+	rescaled := clampScore((prox.Score*0.40 + book.Score*0.30) / 0.70)
+	rescaled = shrinkHuntScore(rescaled, got.Coverage.Score)
+	if math.Abs(got.UpScore.Score-rescaled) < 0.15 && math.Abs(want-rescaled) > 0.5 {
+		t.Fatalf("score still looks renormalized: got=%v rescaled=%v unscaled=%v", got.UpScore.Score, rescaled, want)
+	}
+	var effectSum float64
+	for _, f := range got.UpScore.Factors {
+		effectSum += f.Effect
+	}
+	if math.Abs((50+effectSum)-got.UpScore.Score) > 0.2 {
+		t.Fatalf("effects must explain score: score=%v sum=%v", got.UpScore.Score, effectSum)
+	}
+	if got.ScoreCompare.Applied.Source != "custom" || got.ScoreCompare.Default.UpScore == 0 {
+		t.Fatalf("compare %+v", got.ScoreCompare)
+	}
+	if got.ScoreCompare.Delta.Factors == nil {
+		t.Fatal("want factor compare rows")
+	}
+}
+
 func TestHuntInputOI_Short4hHistoryIsWeakEvenIf1hIsFull(t *testing.T) {
 	sig := fullHuntSignals()
 	sig.OISpan1h = HuntSpanFromDurations(time.Hour, time.Hour)

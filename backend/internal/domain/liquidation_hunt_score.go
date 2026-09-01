@@ -97,6 +97,49 @@ type HuntScoreMix struct {
 	Note           string          `json:"note"`
 }
 
+// HuntScoreSnapshot is one mix's up/down scores (default or applied).
+type HuntScoreSnapshot struct {
+	Source    string                   `json:"source"`
+	UpScore   float64                  `json:"upScore"`
+	DownScore float64                  `json:"downScore"`
+	Lean      string                   `json:"lean"`
+	Margin    float64                  `json:"margin"`
+	LevelUp   string                   `json:"levelUp"`
+	LevelDown string                   `json:"levelDown"`
+	Summary   string                   `json:"summary"`
+	Factors   []HuntScoreFactorCompare `json:"factors"`
+}
+
+// HuntScoreFactorCompare is one factor under default vs applied weights.
+type HuntScoreFactorCompare struct {
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	Status        string  `json:"status"`
+	Score         float64 `json:"score"`
+	DefaultPct    float64 `json:"defaultPct"`
+	AppliedPct    float64 `json:"appliedPct"`
+	DefaultEffect float64 `json:"defaultEffect"`
+	AppliedEffect float64 `json:"appliedEffect"`
+	DeltaEffect   float64 `json:"deltaEffect"`
+	Detail        string  `json:"detail,omitempty"`
+}
+
+// HuntScoreDelta is applied minus default.
+type HuntScoreDelta struct {
+	UpScore     float64                  `json:"upScore"`
+	DownScore   float64                  `json:"downScore"`
+	LeanChanged bool                     `json:"leanChanged"`
+	Factors     []HuntScoreFactorCompare `json:"factors"`
+}
+
+// HuntScoreCompare is default vs applied mix for the desk and for AI.
+type HuntScoreCompare struct {
+	Default HuntScoreSnapshot `json:"default"`
+	Applied HuntScoreSnapshot `json:"applied"`
+	Delta   HuntScoreDelta    `json:"delta"`
+	Note    string            `json:"note"`
+}
+
 // DefaultHuntScoreWeights is the built-in mix (sums to 100).
 func DefaultHuntScoreWeights() HuntScoreWeights {
 	pct := make(map[string]float64, len(defaultHuntScorePct))
@@ -159,7 +202,7 @@ type HuntFactor struct {
 	Score        float64 `json:"score"`
 	Weight       float64 `json:"weight"`
 	RequestedPct float64 `json:"requestedPct"`
-	SharePct     float64 `json:"sharePct,omitempty"`
+	SharePct     float64 `json:"sharePct"`
 	Effect       float64 `json:"effect"`
 	Status       string  `json:"status"`
 	Detail       string  `json:"detail"`
@@ -278,7 +321,8 @@ func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
 }
 
 // AttachHuntDirectionScoresWeighted is AttachHuntDirectionScores with an
-// explicit mix. Custom weights are used as given and never renormalized.
+// explicit mix. Requested percents stay as given: a missing factor keeps its
+// percent and contributes 0 (neutral 50). Remaining factors are not increased.
 func AttachHuntDirectionScoresWeighted(v *HuntVenueReport, sig HuntSignals, w HuntScoreWeights) {
 	if v == nil {
 		return
@@ -288,17 +332,8 @@ func AttachHuntDirectionScoresWeighted(v *HuntVenueReport, sig HuntSignals, w Hu
 	}
 	cov := buildHuntCoverage(*v, sig)
 	v.Coverage = cov
-	up := scoreHuntDirection("up", *v, sig, w)
-	down := scoreHuntDirection("down", *v, sig, w)
-	keep := huntScoreKeep(cov.Score)
-	up.Score = shrinkHuntScore(up.Score, cov.Score)
-	down.Score = shrinkHuntScore(down.Score, cov.Score)
-	applyHuntFactorEffects(up.Factors, keep)
-	applyHuntFactorEffects(down.Factors, keep)
-	up.Level = HuntEaseFromScore(up.Score)
-	down.Level = HuntEaseFromScore(down.Score)
-	up.Coverage = cov.Score
-	down.Coverage = cov.Score
+	defUp, defDown := finishHuntDirectionPair(*v, sig, DefaultHuntScoreWeights(), cov)
+	up, down := finishHuntDirectionPair(*v, sig, w, cov)
 	if !cov.Usable {
 		up.Reasons = append([]string{"This venue is incomplete and is not used in the combined lean."}, up.Reasons...)
 		down.Reasons = append([]string{"This venue is incomplete and is not used in the combined lean."}, down.Reasons...)
@@ -312,6 +347,22 @@ func AttachHuntDirectionScoresWeighted(v *HuntVenueReport, sig HuntSignals, w Hu
 	v.Bias = huntBiasFromScores(up, down)
 	v.Bias.Coverage = cov
 	v.ScoreMix = BuildHuntScoreMix(w, up.Factors)
+	v.ScoreCompare = BuildHuntScoreCompare(defUp, defDown, up, down, w.Source)
+}
+
+func finishHuntDirectionPair(v HuntVenueReport, sig HuntSignals, w HuntScoreWeights, cov HuntCoverage) (up, down HuntDirectionScore) {
+	up = scoreHuntDirection("up", v, sig, w)
+	down = scoreHuntDirection("down", v, sig, w)
+	keep := huntScoreKeep(cov.Score)
+	up.Score = shrinkHuntScore(up.Score, cov.Score)
+	down.Score = shrinkHuntScore(down.Score, cov.Score)
+	applyHuntFactorEffects(up.Factors, keep)
+	applyHuntFactorEffects(down.Factors, keep)
+	up.Level = HuntEaseFromScore(up.Score)
+	down.Level = HuntEaseFromScore(down.Score)
+	up.Coverage = cov.Score
+	down.Coverage = cov.Score
+	return up, down
 }
 
 // shrinkHuntScore pulls a raw factor mix toward 50 when inputs are thin,
@@ -331,8 +382,9 @@ func huntScoreKeep(coverage float64) float64 {
 	return 0.30 + 0.70*c
 }
 
-// applyHuntFactorEffects fills sharePct (mix weight) and effect (signed
-// points this factor adds to the direction score versus 50).
+// applyHuntFactorEffects fills sharePct (requested mix percent) and effect
+// (signed points versus 50). sharePct is never renormalized; missing and
+// disabled factors keep their percent and add 0.
 func applyHuntFactorEffects(factors []HuntFactor, keep float64) {
 	if keep < 0 {
 		keep = 0
@@ -341,7 +393,6 @@ func applyHuntFactorEffects(factors []HuntFactor, keep float64) {
 		keep = 1
 	}
 	for i := range factors {
-		// Stated weight, not a silent rescale of whatever remains.
 		factors[i].SharePct = factors[i].RequestedPct
 		if factors[i].Status != HuntFactorUsed {
 			factors[i].Effect = 0
@@ -394,13 +445,209 @@ func BuildHuntScoreMix(w HuntScoreWeights, factors []HuntFactor) HuntScoreMix {
 	}
 	switch {
 	case len(out.Missing) > 0 && out.UsedTotal > 0:
-		out.Note = fmt.Sprintf("Score uses %.0f of the requested %.0f mix. Missing factors were not replaced and weights were not rescaled.", out.UsedTotal, out.RequestedTotal)
+		out.Note = fmt.Sprintf("Score uses %.0f of the requested %.0f mix. Missing factors keep their percent and add 0 (neutral). Other factors are not increased.", out.UsedTotal, out.RequestedTotal)
 	case len(out.Missing) > 0:
-		out.Note = "No requested factor had data. Score was not invented from a substitute mix."
+		out.Note = "No requested factor had data. Score stays at even (50); nothing was substituted or rescaled."
 	case out.Source == "custom":
-		out.Note = "Custom weights as given (sum 100)."
+		out.Note = "Custom weights as given (sum 100). Percents are not rescaled."
 	default:
 		out.Note = "Default weights."
+	}
+	return out
+}
+
+const huntScoreCompareNote = "Applied percents stay as requested. A missing factor keeps its percent and contributes 0 (neutral 50). Remaining factors are not increased to fill 100. effect is signed points versus 50; direction score = 50 + sum(effect)."
+
+// BuildHuntScoreCompare is default vs applied direction scores for one venue.
+func BuildHuntScoreCompare(defUp, defDown, appUp, appDown HuntDirectionScore, appliedSource string) HuntScoreCompare {
+	if appliedSource == "" {
+		appliedSource = "default"
+	}
+	rows := mergeHuntScoreFactorCompare(defUp, appUp)
+	defSnap := huntScoreSnapshot("default", defUp, defDown, rows)
+	appSnap := huntScoreSnapshot(appliedSource, appUp, appDown, rows)
+	return HuntScoreCompare{
+		Default: defSnap,
+		Applied: appSnap,
+		Delta: HuntScoreDelta{
+			UpScore:     round1(appSnap.UpScore - defSnap.UpScore),
+			DownScore:   round1(appSnap.DownScore - defSnap.DownScore),
+			LeanChanged: appSnap.Lean != defSnap.Lean,
+			Factors:     rows,
+		},
+		Note: huntScoreCompareNote,
+	}
+}
+
+func huntScoreSnapshot(source string, up, down HuntDirectionScore, factors []HuntScoreFactorCompare) HuntScoreSnapshot {
+	bias := huntBiasFromScores(up, down)
+	return HuntScoreSnapshot{
+		Source:    source,
+		UpScore:   up.Score,
+		DownScore: down.Score,
+		Lean:      bias.Lean,
+		Margin:    bias.Margin,
+		LevelUp:   up.Level,
+		LevelDown: down.Level,
+		Summary:   bias.Summary,
+		Factors:   factors,
+	}
+}
+
+func mergeHuntScoreFactorCompare(defUp, appUp HuntDirectionScore) []HuntScoreFactorCompare {
+	defBy := make(map[string]HuntFactor, len(defUp.Factors))
+	for _, f := range defUp.Factors {
+		defBy[f.ID] = f
+	}
+	appBy := make(map[string]HuntFactor, len(appUp.Factors))
+	for _, f := range appUp.Factors {
+		appBy[f.ID] = f
+	}
+	out := make([]HuntScoreFactorCompare, 0, len(HuntScoreFactorIDs))
+	for _, id := range HuntScoreFactorIDs {
+		def := defBy[id]
+		app := appBy[id]
+		row := HuntScoreFactorCompare{
+			ID:            id,
+			Label:         huntScoreFactorLabel[id],
+			Status:        app.Status,
+			Score:         app.Score,
+			DefaultPct:    def.RequestedPct,
+			AppliedPct:    app.RequestedPct,
+			DefaultEffect: def.Effect,
+			AppliedEffect: app.Effect,
+			DeltaEffect:   round1(app.Effect - def.Effect),
+			Detail:        app.Detail,
+		}
+		if row.Status == "" {
+			row.Status = def.Status
+		}
+		if row.Score == 0 && def.Score != 0 {
+			row.Score = def.Score
+		}
+		if row.DefaultPct == 0 {
+			row.DefaultPct = defaultHuntScorePct[id]
+		}
+		if row.Detail == "" {
+			row.Detail = def.Detail
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// CombineHuntScoreCompare is an OI-weighted default vs applied compare
+// across usable venues (same inclusion rules as CombineHuntBias).
+func CombineHuntScoreCompare(venues []HuntVenueReport) HuntScoreCompare {
+	var defUp, defDown, appUp, appDown, oiSum float64
+	var n int
+	for _, v := range venues {
+		if !HuntVenueIncluded(v) {
+			continue
+		}
+		w := v.OpenInterestValue
+		if w <= 0 {
+			w = 1
+		}
+		defUp += v.ScoreCompare.Default.UpScore * w
+		defDown += v.ScoreCompare.Default.DownScore * w
+		appUp += v.ScoreCompare.Applied.UpScore * w
+		appDown += v.ScoreCompare.Applied.DownScore * w
+		oiSum += w
+		n++
+	}
+	if n == 0 || oiSum <= 0 {
+		if len(venues) == 1 && venues[0].ScoreCompare.Note != "" {
+			return venues[0].ScoreCompare
+		}
+		src := "default"
+		for _, v := range venues {
+			if v.ScoreCompare.Applied.Source != "" {
+				src = v.ScoreCompare.Applied.Source
+				break
+			}
+		}
+		return HuntScoreCompare{
+			Default: HuntScoreSnapshot{Source: "default"},
+			Applied: HuntScoreSnapshot{Source: src},
+			Note:    huntScoreCompareNote,
+		}
+	}
+	def := HuntDirectionScore{Direction: "up", Score: clampScore(defUp / oiSum), Level: HuntEaseFromScore(defUp / oiSum)}
+	defD := HuntDirectionScore{Direction: "down", Score: clampScore(defDown / oiSum), Level: HuntEaseFromScore(defDown / oiSum)}
+	app := HuntDirectionScore{Direction: "up", Score: clampScore(appUp / oiSum), Level: HuntEaseFromScore(appUp / oiSum)}
+	appD := HuntDirectionScore{Direction: "down", Score: clampScore(appDown / oiSum), Level: HuntEaseFromScore(appDown / oiSum)}
+	src := "default"
+	for _, v := range venues {
+		if HuntVenueIncluded(v) && v.ScoreCompare.Applied.Source != "" {
+			src = v.ScoreCompare.Applied.Source
+			break
+		}
+	}
+	out := BuildHuntScoreCompare(def, defD, app, appD, src)
+	if n == 1 {
+		for _, v := range venues {
+			if HuntVenueIncluded(v) {
+				out.Default.Factors = v.ScoreCompare.Default.Factors
+				out.Applied.Factors = v.ScoreCompare.Applied.Factors
+				out.Delta.Factors = v.ScoreCompare.Delta.Factors
+				break
+			}
+		}
+	} else {
+		out.Default.Factors = combineHuntFactorCompare(venues)
+		out.Applied.Factors = out.Default.Factors
+		out.Delta.Factors = out.Default.Factors
+	}
+	return out
+}
+
+func combineHuntFactorCompare(venues []HuntVenueReport) []HuntScoreFactorCompare {
+	type acc struct {
+		row HuntScoreFactorCompare
+		w   float64
+	}
+	byID := make(map[string]*acc, len(HuntScoreFactorIDs))
+	for _, v := range venues {
+		if !HuntVenueIncluded(v) {
+			continue
+		}
+		w := v.OpenInterestValue
+		if w <= 0 {
+			w = 1
+		}
+		for _, f := range v.ScoreCompare.Delta.Factors {
+			a := byID[f.ID]
+			if a == nil {
+				cp := f
+				a = &acc{row: cp, w: 0}
+				byID[f.ID] = a
+			}
+			a.row.Score = (a.row.Score*a.w + f.Score*w) / (a.w + w)
+			a.row.DefaultEffect = (a.row.DefaultEffect*a.w + f.DefaultEffect*w) / (a.w + w)
+			a.row.AppliedEffect = (a.row.AppliedEffect*a.w + f.AppliedEffect*w) / (a.w + w)
+			a.row.DeltaEffect = (a.row.DeltaEffect*a.w + f.DeltaEffect*w) / (a.w + w)
+			if f.Status == HuntFactorUsed {
+				a.row.Status = HuntFactorUsed
+			} else if a.row.Status == "" {
+				a.row.Status = f.Status
+			}
+			a.row.DefaultPct = f.DefaultPct
+			a.row.AppliedPct = f.AppliedPct
+			a.w += w
+		}
+	}
+	out := make([]HuntScoreFactorCompare, 0, len(HuntScoreFactorIDs))
+	for _, id := range HuntScoreFactorIDs {
+		a := byID[id]
+		if a == nil {
+			continue
+		}
+		a.row.Score = round1(a.row.Score)
+		a.row.DefaultEffect = round1(a.row.DefaultEffect)
+		a.row.AppliedEffect = round1(a.row.AppliedEffect)
+		a.row.DeltaEffect = round1(a.row.DeltaEffect)
+		out = append(out, a.row)
 	}
 	return out
 }
@@ -509,19 +756,17 @@ func applyHuntWeight(f HuntFactor, w HuntScoreWeights) HuntFactor {
 }
 
 func assembleHuntScore(dir string, factors []HuntFactor) HuntDirectionScore {
-	var num, den float64
+	// Requested percents stay as given. A missing/disabled factor keeps its
+	// percent and adds 0 (neutral 50). Do not divide by leftover used weight.
+	raw := 50.0
 	used := make([]HuntFactor, 0, len(factors))
 	for _, f := range factors {
-		if f.Status == HuntFactorUsed && f.Weight > 0 {
-			num += f.Score * f.Weight
-			den += f.Weight
+		if f.Status == HuntFactorUsed && f.RequestedPct > 0 {
+			raw += (f.Score - 50) * (f.RequestedPct / 100)
 			used = append(used, f)
 		}
 	}
-	score := 0.0
-	if den > 0 {
-		score = clampScore(num / den)
-	}
+	score := clampScore(raw)
 	return HuntDirectionScore{
 		Direction: dir,
 		Score:     score,

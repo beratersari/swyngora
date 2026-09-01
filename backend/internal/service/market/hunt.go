@@ -68,6 +68,7 @@ func (s *Service) GetLiquidationHuntWeighted(ctx context.Context, exchange, symb
 	}
 	if len(out.Venues) > 0 {
 		out.ScoreMix = out.Venues[0].ScoreMix
+		out.ScoreCompare = domain.CombineHuntScoreCompare(out.Venues)
 	} else {
 		out.ScoreMix = domain.BuildHuntScoreMix(weights, nil)
 	}

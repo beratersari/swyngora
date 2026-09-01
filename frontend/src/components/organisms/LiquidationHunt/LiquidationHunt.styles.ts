@@ -370,6 +370,59 @@ export const PathMeta = styled.div`
   gap: 2px 10px;
 `;
 
+export const PreviewBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid ${({ theme }) => theme.semantic.border.default};
+`;
+
+export const PreviewPair = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-width: 0;
+
+  @media (max-width: 560px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+export const PreviewCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid ${({ theme }) => theme.semantic.border.default};
+`;
+
+export const PreviewScores = styled.div`
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  font-variant-numeric: tabular-nums;
+`;
+
+export const PreviewFactorTable = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) repeat(3, minmax(52px, auto));
+  gap: 4px 8px;
+  align-items: baseline;
+  font-size: 12px;
+`;
+
+export const PreviewHead = styled.span`
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: ${({ theme }) => theme.semantic.text.secondary};
+`;
+
 export const InputPill = styled.li<{ $tone: 'ok' | 'weak' | 'missing' | 'error' }>`
   display: inline-flex;
   align-items: center;

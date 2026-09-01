@@ -4141,7 +4141,7 @@ export interface components {
             status?: "used" | "missing" | "disabled";
             detail?: string;
         };
-        /** @description How direction scores were built (requested vs actually used weights) */
+        /** @description How direction scores were built. requested percents stay as given; missing factors are not redistributed. */
         LiquidationHuntScoreMix: {
             /** @enum {string} */
             source?: "default" | "custom";
@@ -4153,16 +4153,62 @@ export interface components {
             disabled?: string[];
             note?: string;
         };
+        /** @description One factor under default vs applied weights (same requested percents; missing adds 0) */
+        LiquidationHuntScoreFactorCompare: {
+            id?: string;
+            label?: string;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
+            /** @description Raw 0–100 for this factor (independent of mix) */
+            score?: number;
+            defaultPct?: number;
+            appliedPct?: number;
+            defaultEffect?: number;
+            appliedEffect?: number;
+            /** @description appliedEffect − defaultEffect */
+            deltaEffect?: number;
+            detail?: string;
+        };
+        /** @description Up/down scores for one mix (default or applied) */
+        LiquidationHuntScoreSnapshot: {
+            /** @enum {string} */
+            source?: "default" | "custom";
+            upScore?: number;
+            downScore?: number;
+            /** @enum {string} */
+            lean?: "up" | "down" | "even";
+            margin?: number;
+            /** @enum {string} */
+            levelUp?: "easier" | "likely" | "mixed" | "hard";
+            /** @enum {string} */
+            levelDown?: "easier" | "likely" | "mixed" | "hard";
+            summary?: string;
+            factors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+        };
+        /** @description Default mix vs applied mix. Direction score = 50 + sum(effect). Missing factors keep their percent and contribute 0. */
+        LiquidationHuntScoreCompare: {
+            default?: components["schemas"]["LiquidationHuntScoreSnapshot"];
+            applied?: components["schemas"]["LiquidationHuntScoreSnapshot"];
+            delta?: {
+                upScore?: number;
+                downScore?: number;
+                leanChanged?: boolean;
+                factors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+            };
+            note?: string;
+        };
         LiquidationHuntFactor: {
             id?: string;
             label?: string;
             /** @description 0–100 for this direction */
             score?: number;
+            /** @description requestedPct/100 when used; 0 when missing or disabled */
             weight?: number;
+            /** @description Mix percent as requested (not rescaled) */
             requestedPct?: number;
-            /** @description Stated mix percent; not silently rescaled */
+            /** @description Same as requestedPct; missing factors keep this percent and add 0 */
             sharePct?: number;
-            /** @description Signed points this factor adds to the direction score versus 50 */
+            /** @description Signed points versus 50. Direction score = 50 + sum(effect) */
             effect?: number;
             /** @enum {string} */
             status?: "used" | "missing" | "disabled";
@@ -4347,6 +4393,7 @@ export interface components {
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
             scoreMix?: components["schemas"]["LiquidationHuntScoreMix"];
+            scoreCompare?: components["schemas"]["LiquidationHuntScoreCompare"];
             error?: string;
         };
         /** @description Hypothetical per-venue hunt plus directional ease scores and cascade paths */
@@ -4362,6 +4409,7 @@ export interface components {
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
             scoreMix?: components["schemas"]["LiquidationHuntScoreMix"];
+            scoreCompare?: components["schemas"]["LiquidationHuntScoreCompare"];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -7872,7 +7920,7 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | all (default all = both, never averaged) */
                 exchange?: string;
-                /** @description Custom mix percent for distance to zone. If any weight* is sent, omitted factors are 0 and the six must sum to 100 (not rescaled). */
+                /** @description Custom mix percent for distance to zone. If any weight* is sent, omitted factors are 0 and the six must sum to 100. Percents stay as given — a missing factor keeps its percent and adds 0 (neutral 50); remaining factors are not increased. */
                 weightProximity?: number;
                 weightBook?: number;
                 weightEfficiency?: number;

@@ -53,7 +53,7 @@ Each direction is a weighted mix of data the desk already has:
 | Crowding + funding | Estimated long/short OI share and who pays funding. Shorts crowded + shorts paying favors **up**. |
 | Taker + recent liqs | 1h aggressive buy/sell and 1h/4h observed liquidations. Buy-heavy / short-liq-heavy tape favors **up**. |
 
-Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.inputs`. Time-based inputs (1h taker, 1h/4h liquidations, OI history, 1h/4h price) include `have` / `need` / `coverPct` — a few minutes of taker prints is **not** a complete hour. An OI (or other) sample older than the requested window is marked `stale` with `age` and is **not** used as that window's change; the trend score shrinks toward 50. Each `upScore` / `downScore` factor includes `sharePct` (mix weight) and `effect` (signed points versus 50) so you can see what moved the direction. Incomplete lookbacks shrink that factor's weight and pull the remaining score toward 50. Combined `bias` is **OI-weighted across usable venues only**. A venue that returns an error (book down, no OI, etc.) stays on the report for the user to see but is listed in `bias.excluded` and does **not** change the combined lean. One venue is never filled from the other.
+Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.inputs`. Time-based inputs (1h taker, 1h/4h liquidations, OI history, 1h/4h price) include `have` / `need` / `coverPct` — a few minutes of taker prints is **not** a complete hour. An OI (or other) sample older than the requested window is marked `stale` with `age` and is **not** used as that window's change; the trend score shrinks toward 50. Each `upScore` / `downScore` factor includes `sharePct` (the requested mix percent — not renormalized) and `effect` (signed points versus 50). Direction score is `50 + sum(effect)` after a coverage shrink toward 50. A missing factor keeps its percent and adds 0; other factors are **not** increased to fill 100. Incomplete lookbacks pull that factor's own score toward 50 (they do not steal weight from neighbors). Combined `bias` is **OI-weighted across usable venues only**. A venue that returns an error (book down, no OI, etc.) stays on the report for the user to see but is listed in `bias.excluded` and does **not** change the combined lean. One venue is never filled from the other.
 
 `level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
 
@@ -87,9 +87,9 @@ Fuel is a **running pool**. A hop spends `fuelSpent` from `priorCascadeNotional`
 
 Default mix (percent): proximity 20, book 16, efficiency 12, trend 20, crowding 18, flow 14.
 
-`GET /api/v1/market/liquidation-hunt?weightProximity=40&weightBook=60` (and the other `weight*` keys) applies a **custom** mix. Omitted keys are 0 (disabled). The six must sum to **100** or the request is 400 — the server does not rescale.
+`GET /api/v1/market/liquidation-hunt?weightProximity=40&weightBook=60` (and the other `weight*` keys) applies a **custom** mix. Omitted keys are 0 (disabled). The six must sum to **100** or the request is 400 — the server does not rescale incoming percents, and it does **not** rescale again when a factor has no data.
 
-`scoreMix` on the report lists `requested`, `used`, `missing`, and `disabled` so an AI (or the desk) can see how the score was built. A missing input is not replaced (no 24h ticker for trend, no 4h window for 1h flow). Web: **Custom weights** on Hunt.
+`scoreMix` lists `requested`, `used`, `missing`, and `disabled`. `scoreCompare` is default vs applied: up/down scores, lean, and each factor's `defaultPct` / `appliedPct` / `defaultEffect` / `appliedEffect` / `deltaEffect`. Use that to compare mixes (desk or AI) without re-deriving the math. A missing input is not replaced (no 24h ticker for trend, no 4h window for 1h flow). Web: **Custom weights** on Hunt previews default vs draft scores before apply.
 
 Observed-only clusters are shown but **not** used as fuel. Missing book or missing zone size is labeled — nothing is substituted from the other venue or from a default score.
 

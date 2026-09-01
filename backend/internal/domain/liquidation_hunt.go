@@ -133,20 +133,22 @@ type HuntVenueReport struct {
 	Bias               HuntBias           `json:"bias"`
 	Coverage           HuntCoverage       `json:"coverage"`
 	ScoreMix           HuntScoreMix       `json:"scoreMix"`
+	ScoreCompare       HuntScoreCompare   `json:"scoreCompare"`
 	Error              string             `json:"error,omitempty"`
 }
 
 // HuntReport is the API/use-case result. Venues are never averaged.
 type HuntReport struct {
-	Symbol      string            `json:"symbol"`
-	Exchange    string            `json:"exchange"`
-	AsOf        time.Time         `json:"asOf"`
-	Assumptions HuntAssumptions   `json:"assumptions"`
-	Venues      []HuntVenueReport `json:"venues"`
-	Bias        *HuntBias         `json:"bias,omitempty"`
-	Coverage    *HuntCoverage     `json:"coverage,omitempty"`
-	ScoreMix    HuntScoreMix      `json:"scoreMix"`
-	Note        string            `json:"note,omitempty"`
+	Symbol       string            `json:"symbol"`
+	Exchange     string            `json:"exchange"`
+	AsOf         time.Time         `json:"asOf"`
+	Assumptions  HuntAssumptions   `json:"assumptions"`
+	Venues       []HuntVenueReport `json:"venues"`
+	Bias         *HuntBias         `json:"bias,omitempty"`
+	Coverage     *HuntCoverage     `json:"coverage,omitempty"`
+	ScoreMix     HuntScoreMix      `json:"scoreMix"`
+	ScoreCompare HuntScoreCompare  `json:"scoreCompare"`
+	Note         string            `json:"note,omitempty"`
 }
 
 const (

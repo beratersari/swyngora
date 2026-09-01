@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithTheme } from '@/test/render';
 import { LiquidationHunt } from './LiquidationHunt';
 import type { HuntReport } from './LiquidationHunt.types';
@@ -50,11 +51,28 @@ const sample: HuntReport = {
         level: 'likely',
         reasons: ['Shorts are crowded'],
         factors: [
-          { id: 'crowding', label: 'Crowding + funding', score: 80, sharePct: 22, effect: 6.6 },
-          { id: 'proximity', label: 'Distance to zone', score: 70, sharePct: 20, effect: 4.0 },
+          { id: 'proximity', label: 'Distance to zone', score: 70, sharePct: 20, effect: 4.0, status: 'used' },
+          { id: 'book', label: 'Spot walk cost', score: 60, sharePct: 16, effect: 1.6, status: 'used' },
+          { id: 'efficiency', label: 'Liq per spot', score: 55, sharePct: 12, effect: 0.6, status: 'used' },
+          { id: 'trend', label: 'Price + OI trend', score: 50, sharePct: 20, effect: 0, status: 'missing' },
+          { id: 'crowding', label: 'Crowding + funding', score: 80, sharePct: 18, effect: 5.4, status: 'used' },
+          { id: 'flow', label: 'Taker + recent liqs', score: 58, sharePct: 14, effect: 1.1, status: 'used' },
         ],
       },
-      downScore: { direction: 'down', score: 41, level: 'mixed', reasons: ['Target is farther'] },
+      downScore: {
+        direction: 'down',
+        score: 41,
+        level: 'mixed',
+        reasons: ['Target is farther'],
+        factors: [
+          { id: 'proximity', score: 40, status: 'used' },
+          { id: 'book', score: 45, status: 'used' },
+          { id: 'efficiency', score: 42, status: 'used' },
+          { id: 'trend', status: 'missing' },
+          { id: 'crowding', score: 30, status: 'used' },
+          { id: 'flow', score: 44, status: 'used' },
+        ],
+      },
       upHunt: {
         target: { price: '64800', movePct: '1.25' },
         spot: { notional: '1200000', reachable: true },
@@ -137,10 +155,20 @@ describe('LiquidationHunt', () => {
     expect(screen.getAllByText(/inputs look complete/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/18m \/ 1h/i)).toBeInTheDocument();
     expect(screen.getByText(/2h old \/ 1h/i)).toBeInTheDocument();
-    expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('+6.6');
+    expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('+5.4');
     expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('Crowding + funding');
     expect(screen.queryByTestId('liquidation-hunt-path-up')).not.toBeInTheDocument();
     expect(screen.getByTestId('liquidation-hunt-weights')).toBeInTheDocument();
+  });
+
+  it('previews default vs draft scores in the custom weights dialog', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<LiquidationHunt data={sample} />);
+    await user.click(screen.getByTestId('liquidation-hunt-weights'));
+    expect(await screen.findByTestId('liquidation-hunt-weights-preview')).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-weights-preview-default')).toHaveTextContent(/up/i);
+    expect(screen.getByTestId('liquidation-hunt-weights-preview-custom')).toHaveTextContent(/up/i);
+    expect(screen.getByTestId('liquidation-hunt-weights-preview-factors')).toHaveTextContent(/no data/i);
   });
 
   it('opens the cascade path subview without the compare scores', async () => {

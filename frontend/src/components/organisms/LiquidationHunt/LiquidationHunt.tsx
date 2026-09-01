@@ -19,6 +19,7 @@ import {
   parseNum,
   pathLeverageLabel,
   pathStepTone,
+  previewHuntMix,
   scoreValue,
   venueLabel,
 } from './helpers';
@@ -51,6 +52,12 @@ import {
   PathMeta,
   PathStep,
   PathStepHead,
+  PreviewBlock,
+  PreviewCard,
+  PreviewFactorTable,
+  PreviewHead,
+  PreviewPair,
+  PreviewScores,
   ReasonItem,
   ReasonList,
   ScoreBar,
@@ -69,7 +76,9 @@ import type {
   HuntCascadeStep,
   HuntCoverage,
   HuntDirectionScore,
+  HuntMixPreview,
   HuntPanel,
+  HuntScoreCompare,
   HuntScoreMix,
   HuntVenue,
   HuntWeightDraftRow,
@@ -149,7 +158,7 @@ export function LiquidationHunt({
         <Text variant="bodySm" color="secondary">
           {t(activePanel === 'path' ? 'liquidations:hunt.path.hint' : 'liquidations:hunt.hint')}
         </Text>
-        <ScoreMixStrip mix={data?.scoreMix} />
+        <ScoreMixStrip mix={data?.scoreMix} compare={data?.scoreCompare} />
       </Banner>
 
       {venues.length === 0 ? (
@@ -177,6 +186,7 @@ export function LiquidationHunt({
       <HuntWeightsModal
         open={weightsOpen}
         draft={draft}
+        venues={venues}
         onDraft={setDraft}
         onClose={() => setWeightsOpen(false)}
         onApply={() => {
@@ -483,9 +493,11 @@ function DirectionCard({
   );
 }
 
-function ScoreMixStrip({ mix }: { mix?: HuntScoreMix }) {
+function ScoreMixStrip({ mix, compare }: { mix?: HuntScoreMix; compare?: HuntScoreCompare }) {
   const { t } = useTranslation('liquidations');
   if (!mix) return null;
+  const applied = compare?.applied;
+  const base = compare?.default;
   return (
     <Text variant="caption" color="secondary" data-testid="liquidation-hunt-score-mix">
       {mix.note || t('hunt.weights.defaultNote')}
@@ -493,6 +505,16 @@ function ScoreMixStrip({ mix }: { mix?: HuntScoreMix }) {
       {mix.usedTotal != null && mix.requestedTotal != null
         ? ` · ${t('hunt.weights.usedOf', { used: Math.round(mix.usedTotal), total: Math.round(mix.requestedTotal) })}`
         : ''}
+      {mix.source === 'custom' && applied && base ? (
+        <>
+          {' · '}
+          {t('hunt.weights.vsDefault', {
+            applied: `${Math.round(applied.upScore ?? 0)}/${Math.round(applied.downScore ?? 0)}`,
+            base: `${Math.round(base.upScore ?? 0)}/${Math.round(base.downScore ?? 0)}`,
+            delta: `${formatEffect(compare.delta?.upScore)} / ${formatEffect(compare.delta?.downScore)}`,
+          })}
+        </>
+      ) : null}
     </Text>
   );
 }
@@ -500,6 +522,7 @@ function ScoreMixStrip({ mix }: { mix?: HuntScoreMix }) {
 function HuntWeightsModal({
   open,
   draft,
+  venues,
   onDraft,
   onClose,
   onApply,
@@ -507,6 +530,7 @@ function HuntWeightsModal({
 }: {
   open: boolean;
   draft: HuntWeightDraftRow[];
+  venues: HuntVenue[];
   onDraft: (next: HuntWeightDraftRow[]) => void;
   onClose: () => void;
   onApply: () => void;
@@ -515,10 +539,12 @@ function HuntWeightsModal({
   const { t } = useTranslation('liquidations');
   const total = huntWeightTotal(draft);
   const ok = Math.abs(total - 100) < 0.05;
+  const preview = previewHuntMix(venues, draft);
   return (
     <Modal
       open={open}
       title={t('hunt.weights.title')}
+      width={720}
       onCancel={onClose}
       footer={[
         <Button key="reset" onClick={onReset}>
@@ -567,7 +593,73 @@ function HuntWeightsModal({
         {t('hunt.weights.total', { total: Math.round(total * 10) / 10 })}
         {!ok ? ` — ${t('hunt.weights.needHundred')}` : ''}
       </Text>
+      {preview ? <HuntWeightPreview preview={preview} /> : null}
     </Modal>
+  );
+}
+
+function HuntWeightPreview({ preview }: { preview: HuntMixPreview }) {
+  const { t } = useTranslation('liquidations');
+  return (
+    <PreviewBlock data-testid="liquidation-hunt-weights-preview">
+      <Text variant="bodySm">{t('hunt.weights.preview')}</Text>
+      <Text variant="caption" color="secondary">
+        {t('hunt.weights.previewHint')}
+      </Text>
+      <PreviewPair>
+        <PreviewCard data-testid="liquidation-hunt-weights-preview-default">
+          <Text variant="caption" color="secondary">
+            {t('hunt.weights.defaultMix')}
+          </Text>
+          <PreviewScores>
+            <MetricLabel>{t('hunt.weights.up')}</MetricLabel>
+            <MetricValue $tone="up">{Math.round(preview.defaultUp)}</MetricValue>
+            <MetricLabel>{t('hunt.weights.down')}</MetricLabel>
+            <MetricValue $tone="down">{Math.round(preview.defaultDown)}</MetricValue>
+          </PreviewScores>
+        </PreviewCard>
+        <PreviewCard data-testid="liquidation-hunt-weights-preview-custom">
+          <Text variant="caption" color="secondary">
+            {t('hunt.weights.draftMix')}
+          </Text>
+          <PreviewScores>
+            <MetricLabel>{t('hunt.weights.up')}</MetricLabel>
+            <MetricValue $tone="up">
+              {Math.round(preview.appliedUp)}{' '}
+              <Text variant="caption" color="secondary">
+                {formatEffect(preview.upDelta)}
+              </Text>
+            </MetricValue>
+            <MetricLabel>{t('hunt.weights.down')}</MetricLabel>
+            <MetricValue $tone="down">
+              {Math.round(preview.appliedDown)}{' '}
+              <Text variant="caption" color="secondary">
+                {formatEffect(preview.downDelta)}
+              </Text>
+            </MetricValue>
+          </PreviewScores>
+        </PreviewCard>
+      </PreviewPair>
+      <PreviewFactorTable data-testid="liquidation-hunt-weights-preview-factors">
+        <PreviewHead>{t('hunt.factors.title')}</PreviewHead>
+        <PreviewHead>{t('hunt.weights.defaultMix')}</PreviewHead>
+        <PreviewHead>{t('hunt.weights.draftMix')}</PreviewHead>
+        <PreviewHead>{t('hunt.weights.delta')}</PreviewHead>
+        {preview.factors.map((factor) => (
+          <span key={factor.id} style={{ display: 'contents' }}>
+            <FactorName title={factor.status === 'missing' ? t('hunt.weights.missingKept', { pct: Math.round(factor.appliedPct) }) : undefined}>
+              {t(`hunt.weights.factors.${factor.id}`)}
+              {factor.status === 'missing' && factor.appliedPct > 0
+                ? ` · ${t('hunt.weights.missingKept', { pct: Math.round(factor.appliedPct) })}`
+                : ''}
+            </FactorName>
+            <FactorShare>{`${Math.round(factor.defaultPct)}% · ${formatEffect(factor.defaultEffect)}`}</FactorShare>
+            <FactorShare>{`${Math.round(factor.appliedPct)}% · ${formatEffect(factor.appliedEffect)}`}</FactorShare>
+            <FactorMeta $tone={effectTone(factor.deltaEffect)}>{formatEffect(factor.deltaEffect)}</FactorMeta>
+          </span>
+        ))}
+      </PreviewFactorTable>
+    </PreviewBlock>
   );
 }
 

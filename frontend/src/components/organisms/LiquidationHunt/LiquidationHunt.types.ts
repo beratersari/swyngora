@@ -33,6 +33,43 @@ export type HuntScoreMix = {
   note?: string;
 };
 
+export type HuntScoreFactorCompare = {
+  id?: string;
+  label?: string;
+  status?: string;
+  score?: number;
+  defaultPct?: number;
+  appliedPct?: number;
+  defaultEffect?: number;
+  appliedEffect?: number;
+  deltaEffect?: number;
+  detail?: string;
+};
+
+export type HuntScoreSnapshot = {
+  source?: string;
+  upScore?: number;
+  downScore?: number;
+  lean?: HuntLean;
+  margin?: number;
+  levelUp?: HuntEase;
+  levelDown?: HuntEase;
+  summary?: string;
+  factors?: HuntScoreFactorCompare[];
+};
+
+export type HuntScoreCompare = {
+  default?: HuntScoreSnapshot;
+  applied?: HuntScoreSnapshot;
+  delta?: {
+    upScore?: number;
+    downScore?: number;
+    leanChanged?: boolean;
+    factors?: HuntScoreFactorCompare[];
+  };
+  note?: string;
+};
+
 export type HuntCoverageLevel = 'complete' | 'usable' | 'thin' | 'insufficient' | string;
 export type HuntInputState = 'ok' | 'weak' | 'missing' | 'error' | string;
 
@@ -200,6 +237,8 @@ export type HuntVenue = {
   downScore?: HuntDirectionScore;
   bias?: HuntBias;
   coverage?: HuntCoverage;
+  scoreMix?: HuntScoreMix;
+  scoreCompare?: HuntScoreCompare;
   error?: string;
 };
 
@@ -211,7 +250,33 @@ export type HuntReport = {
   bias?: HuntBias;
   coverage?: HuntCoverage;
   scoreMix?: HuntScoreMix;
+  scoreCompare?: HuntScoreCompare;
   note?: string;
+};
+
+export type HuntMixPreviewFactor = {
+  id: string;
+  defaultPct: number;
+  appliedPct: number;
+  score: number;
+  status: 'used' | 'missing' | 'disabled';
+  defaultEffect: number;
+  appliedEffect: number;
+  deltaEffect: number;
+};
+
+export type HuntMixPreview = {
+  exchange?: string;
+  coverage: number;
+  defaultUp: number;
+  defaultDown: number;
+  appliedUp: number;
+  appliedDown: number;
+  defaultLean: HuntLean;
+  appliedLean: HuntLean;
+  upDelta: number;
+  downDelta: number;
+  factors: HuntMixPreviewFactor[];
 };
 
 export type HuntWeightDraftRow = {

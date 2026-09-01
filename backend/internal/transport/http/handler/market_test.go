@@ -1269,6 +1269,9 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	if body.ScoreMix.Source != "default" || body.ScoreMix.RequestedTotal != 100 {
 		t.Fatalf("score mix %+v", body.ScoreMix)
 	}
+	if body.ScoreCompare.Default.Source != "default" || body.ScoreCompare.Applied.Source == "" {
+		t.Fatalf("score compare %+v", body.ScoreCompare)
+	}
 }
 
 func TestGetLiquidationHunt_BadWeights(t *testing.T) {

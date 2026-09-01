@@ -9,12 +9,15 @@ import {
   inputTone,
   leanTone,
   defaultHuntWeightDraft,
+  huntLeanFromScores,
+  huntScoreKeep,
   huntWeightTotal,
   isDefaultHuntWeightDraft,
   parseHuntPanel,
   parseHuntWeightDraft,
   pathLeverageLabel,
   pathStepTone,
+  previewHuntMix,
   scoreValue,
   venueLabel,
 } from './helpers';
@@ -85,5 +88,44 @@ describe('LiquidationHunt helpers', () => {
     expect(custom?.find((r) => r.id === 'trend')?.enabled).toBe(false);
     const partial = parseHuntWeightDraft((k) => (k === 'weightProximity' ? '40' : ''));
     expect(huntWeightTotal(partial ?? [])).toBe(40);
+  });
+
+  it('does not redistribute a missing factor when previewing a custom mix', () => {
+    expect(huntLeanFromScores(70, 50).lean).toBe('up');
+    expect(huntScoreKeep(100)).toBeCloseTo(1, 5);
+    const venue: HuntVenue = {
+      coverage: { score: 100, usable: true },
+      openInterestValue: '1',
+      upScore: {
+        factors: [
+          { id: 'proximity', score: 80, status: 'used', requestedPct: 20 },
+          { id: 'book', score: 60, status: 'used', requestedPct: 16 },
+          { id: 'trend', score: 0, status: 'missing', requestedPct: 20 },
+        ],
+      },
+      downScore: {
+        factors: [
+          { id: 'proximity', score: 40, status: 'used' },
+          { id: 'book', score: 50, status: 'used' },
+          { id: 'trend', status: 'missing' },
+        ],
+      },
+    };
+    const draft = defaultHuntWeightDraft().map((row) => {
+      if (row.id === 'proximity') return { ...row, enabled: true, pct: 40 };
+      if (row.id === 'book') return { ...row, enabled: true, pct: 30 };
+      if (row.id === 'trend') return { ...row, enabled: true, pct: 30 };
+      return { ...row, enabled: false, pct: 0 };
+    });
+    const preview = previewHuntMix([venue], draft);
+    expect(preview).not.toBeNull();
+    expect(preview?.appliedUp).toBeCloseTo(65, 0);
+    const trend = preview?.factors.find((f) => f.id === 'trend');
+    expect(trend?.status).toBe('missing');
+    expect(trend?.appliedPct).toBe(30);
+    expect(trend?.appliedEffect).toBe(0);
+    const prox = preview?.factors.find((f) => f.id === 'proximity');
+    expect(prox?.appliedPct).toBe(40);
+    expect(prox?.appliedEffect).toBeCloseTo(12, 0);
   });
 });
