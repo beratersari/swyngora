@@ -85,6 +85,36 @@ def test_orchestrator_chat_with_scripted_model():
     assert isinstance(out.references, list)
 
 
+def test_orchestrator_chat_attaches_trace_metadata(monkeypatch):
+    captured: dict[str, Any] = {}
+
+    def _capture(
+        graph: Any, messages: Any, config: Any, specialist: str | None = None
+    ) -> list[AIMessage]:
+        captured.update(config)
+        return [AIMessage(content="ok. Not financial advice.")]
+
+    monkeypatch.setattr("swyngora_ai.graph.orchestrator.run_agent_with_progress", _capture)
+    settings = Settings(_env_file=None, llm_provider="ollama")
+    orch = Orchestrator(
+        settings=settings,
+        memory=SessionMemory(),
+        model=ScriptedModel(responses=[AIMessage(content="unused")]),
+    )
+    orch.chat("What is BTC price?", session_id="desk-1")
+    assert captured["run_name"] == "swyngora-chat"
+    assert captured["tags"] == ["cli", settings.llm_provider]
+    assert captured["metadata"] == {
+        "session_id": "desk-1",
+        "provider": settings.llm_provider,
+        "surface": "cli",
+    }
+    orch.chat("What is BTC price?", session_id="http-1", surface="serve")
+    assert captured["tags"] == ["serve", settings.llm_provider]
+    assert captured["metadata"]["surface"] == "serve"
+    assert captured["metadata"]["session_id"] == "http-1"
+
+
 def test_orchestrator_emits_live_process_events():
     events: list[dict[str, Any]] = []
     model = ScriptedModel(

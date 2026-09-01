@@ -72,6 +72,20 @@ def test_one_shot_prints_reply_not_dataclass(monkeypatch) -> None:
     assert fake.chats == [("What is BTC RSI?", "desk")]
 
 
+def test_cli_loads_env_files(monkeypatch) -> None:
+    called: list[int] = []
+    fake = _FakeOrch()
+    monkeypatch.setattr("swyngora_ai.cli._build_orchestrator", lambda: fake)
+
+    def _mark() -> None:
+        called.append(1)
+
+    monkeypatch.setattr("swyngora_ai.config.load_env_files", _mark)
+    result = runner.invoke(app, ["hi"])
+    assert result.exit_code == 0
+    assert called == [1]
+
+
 def test_provider_sets_env(monkeypatch) -> None:
     fake = _FakeOrch()
     monkeypatch.setattr("swyngora_ai.cli._build_orchestrator", lambda: fake)

@@ -119,6 +119,7 @@ class Handler(BaseHTTPRequestHandler):
                 client_id=client_id,
                 can_trade=can_trade,
                 can_manage_keys=can_manage_keys,
+                surface="serve",
             )
             self._json(
                 200,
@@ -157,6 +158,7 @@ class Handler(BaseHTTPRequestHandler):
                     client_id=client_id,
                     can_trade=can_trade,
                     can_manage_keys=can_manage_keys,
+                    surface="serve",
                 )
                 q.put(
                     {

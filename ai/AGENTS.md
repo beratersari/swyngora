@@ -31,3 +31,5 @@ swyngora-ai "your question"
 Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, `ty`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.
 
 Ruff and ty config live in `pyproject.toml`. Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
+
+Optional LangSmith: copy `LANGSMITH_TRACING` / `LANGSMITH_PROJECT` / `LANGSMITH_API_KEY` from `.env.example` into `ai/.env` and set `LANGSMITH_API_KEY`. Set `LANGSMITH_ENDPOINT` to the LangSmith org region (Settings URL): India/APAC `https://apac.api.smith.langchain.com`, EU `https://eu.api.smith.langchain.com`, US omit. Wrong host returns 403. The CLI loads `.env` into `os.environ`. No `--trace` flag. Empty key = no traces.

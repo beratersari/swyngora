@@ -65,6 +65,10 @@ python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 # POST /v1/chat/stream   → NDJSON status/thinking/tool/final/done
 
 # Flags: --session, --provider ollama|grok; swyngora-ai --help
+
+# Optional traces: copy LANGSMITH_* from .env.example into ai/.env,
+# set LANGSMITH_API_KEY, and LANGSMITH_ENDPOINT for your LangSmith org region
+# (India/APAC: https://apac.api.smith.langchain.com). Open project Swyngora.
 ```
 
 ## Environment
@@ -85,6 +89,10 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 | `AI_DEFAULT_CLIENT_ID` | `ai-assistant` | Watchlist client id |
 | `AI_MAX_ITERATIONS` | `8` | Specialist ReAct depth hint |
 | `AI_TEMPERATURE` | `0.2` | Sampling temperature |
+| `LANGSMITH_API_KEY` | empty | Personal LangSmith key. CLI traces go to **your** LangSmith |
+| `LANGSMITH_TRACING` | — | Set `true` in `.env` (copied from `.env.example`) to send traces |
+| `LANGSMITH_PROJECT` | `Swyngora` | LangSmith project name (created automatically) |
+| `LANGSMITH_ENDPOINT` | US host | Must match the org region in LangSmith Settings. India/APAC: `https://apac.api.smith.langchain.com`. EU: `https://eu.api.smith.langchain.com`. US default: omit. Wrong host → 403. |
 
 ## Tests
 

@@ -253,11 +253,13 @@ class Orchestrator:
         *,
         can_trade: bool = True,
         can_manage_keys: bool = True,
+        surface: str = "cli",
     ) -> ChatResult:
         """Run one user turn; returns answer + tool/thinking trace.
 
         on_event: optional callback(dict) for live updates (type/text).
         can_trade / can_manage_keys gate HTTP tools when the Go proxy uses master auth.
+        surface: LangSmith tag (cli | serve); traces only if LANGSMITH_* is set.
         """
         tools_acc: list[str] = []
         thinking_acc: list[str] = []
@@ -303,7 +305,14 @@ class Orchestrator:
                     if isinstance(self.memory, FinMem):
                         self.memory.note_tape(cid)
             config: RunnableConfig = {
-                "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
+                "recursion_limit": max(24, self.settings.max_agent_iterations * 4),
+                "run_name": "swyngora-chat",
+                "tags": [surface, self.settings.llm_provider],
+                "metadata": {
+                    "session_id": public_session,
+                    "provider": self.settings.llm_provider,
+                    "surface": surface,
+                },
             }
 
             emit("status", "Orchestrator running…")

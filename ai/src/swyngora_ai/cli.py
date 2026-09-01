@@ -173,6 +173,9 @@ def run(
     ] = None,
 ) -> None:
     """Swyngora multi-agent AI assistant."""
+    from swyngora_ai.config import load_env_files
+
+    load_env_files()
     if provider is not None:
         os.environ["AI_LLM_PROVIDER"] = provider.value
     orch = _build_orchestrator()
