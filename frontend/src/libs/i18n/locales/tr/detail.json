@@ -118,6 +118,7 @@
     "intervals": "aralıklar",
     "orderBook": "emir defteri",
     "tape": "vadeli bant",
+    "liqHeatmap": "likidasyon ısı haritası",
     "postDelist": "delist sonrası fiyat"
   },
   "tape": {
@@ -173,6 +174,57 @@
     "asks": "Satış",
     "cumulative": "Birikimli",
     "empty": "Bu çift için derinlik yok."
+  },
+  "liqHeatmap": {
+    "title": "Likidasyon ısı haritası",
+    "subtitle": "Tarihsel açık faiz, hunt kaldıraç karışımı ve gözlenen likidasyonlardan fiyat × zaman yoğunluğu. Binance ve Bybit ayrı; birleşik hücrelerin toplamıdır. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "range": "Aralık",
+    "venue": "Borsa",
+    "side": "Taraf",
+    "low": "İnce",
+    "high": "Yoğun",
+    "total": "Toplam",
+    "longs": "Long",
+    "shorts": "Short",
+    "coverage": "Sütunların %{{pct}} kadarında OI var",
+    "empty": "Bu çift için henüz likidasyon haritası yok.",
+    "review": {
+      "title": "Sıcak bölgeler tuttu mu?",
+      "subtitle": "İsabet oranı ve likidasyon artışı yalnızca o borsada yeterli ileri fiyat ve likidasyon geçmişi olan sinyallerden hesaplanır. Eksik veri ayrıca sayılır ve diğer borsadan doldurulmaz. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+      "horizon": "Ufuk",
+      "signals": "Sinyal",
+      "validated": "Doğrulanan",
+      "missing": "Eksik",
+      "priceMissing": "Fiyat yok",
+      "liqMissing": "Liq yok",
+      "hits": "İsabet",
+      "falseSignals": "Yanlış",
+      "hitRate": "İsabet oranı",
+      "avgTime": "Ort. süre",
+      "liqRose": "Liq arttı",
+      "pending": "Bekleyen",
+      "signalsTitle": "Her sinyal",
+      "signalsSubtitle": "En yeni üstte. Her satır bir sıcak bölge. 1s / 4s / 12s isabet, süre ve fiyat veya likidasyon boşluğunu gösterir.",
+      "when": "Zaman",
+      "area": "Bölge",
+      "side": "Taraf"
+    },
+    "ranges": {
+      "12h": "12s",
+      "24h": "24s",
+      "3d": "3g",
+      "7d": "7g"
+    },
+    "venues": {
+      "combined": "Birleşik",
+      "binance": "Binance",
+      "bybit": "Bybit"
+    },
+    "sides": {
+      "totals": "Tümü",
+      "longs": "Long",
+      "shorts": "Short"
+    }
   },
   "orderHeatmap": {
     "title": "Likidite ısı haritası",

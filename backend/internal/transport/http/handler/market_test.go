@@ -228,6 +228,33 @@ func TestGetLiquidations_OK(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationOverview_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidations/overview?window=1h&limit=10", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationOverview(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body liquidationOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Exchange != "all" || body.CoinWindow != "1h" || body.Coins == nil || body.Windows == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationOverview_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidations/overview?limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationOverview(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetOrderBookHeatmap_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/heatmap?symbol=BTCUSDT&window=300", nil)
@@ -1219,6 +1246,117 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	}
 	if body.Symbol != "BTCUSDT" || body.Note == "" {
 		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationCascade_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeReportDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || len(body.Venues) != 2 || body.Note == "" || body.Episodes == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationCascade_Market(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=all", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeReportDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "all" || body.Venues == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestScanLiquidationCascades_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade/scan", nil)
+	rr := httptest.NewRecorder()
+	h.ScanLiquidationCascades(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body cascadeScanDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Market.Symbol != "all" || body.Hits == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationCascade_BadExchange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT&exchange=okx", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationCascade(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetLiquidationLevels_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-levels?symbol=all&range=24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationLevels(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body liquidationLevelsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Kind != "totals" || body.Symbol != "all" || body.Bars == nil {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHuntHeatmap(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body huntHeatmapResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Range != "24h" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+	if len(body.Times) == 0 || len(body.Prices) == 0 {
+		t.Fatalf("missing axes times=%d prices=%d", len(body.Times), len(body.Prices))
+	}
+	if len(body.Review.Binance.Horizons) != 3 || body.Review.HotFrac <= 0 {
+		t.Fatalf("review %+v", body.Review)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_BadRange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=9h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHuntHeatmap(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

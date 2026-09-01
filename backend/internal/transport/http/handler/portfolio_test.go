@@ -566,6 +566,62 @@ func TestPortfolioHTTP_RecurringBuyNamedInterval(t *testing.T) {
 	}
 }
 
+func TestPortfolioHTTP_RecurringBuyTimezoneAndMaxPrice(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-rb-tz", "startingBalance": 100000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-rb-tz", "symbol": "BTCUSDT", "name": "Monday Istanbul",
+		"amount": 500, "frequency": "weekly", "weekday": "monday",
+		"timeZone": "Europe/Istanbul", "hour": 9, "minute": 0, "maxPrice": 65000,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/recurring-buys", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.CreateRecurringBuy(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("plan %d %s", rr.Code, rr.Body.String())
+	}
+	var plan map[string]any
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["timeZone"] != "Europe/Istanbul" || plan["hour"].(float64) != 9 || plan["maxPrice"].(float64) != 65000 {
+		t.Fatalf("%v", plan)
+	}
+	id := plan["id"].(string)
+	body, _ = json.Marshal(map[string]any{"maxPrice": 64000, "hour": 10})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/portfolio/recurring-buys/"+id+"?clientId=http-rb-tz", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.UpdateRecurringBuy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch %d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["hour"].(float64) != 10 || plan["maxPrice"].(float64) != 64000 {
+		t.Fatalf("%v", plan)
+	}
+	body, _ = json.Marshal(map[string]any{"budget": 8000, "endDate": "2026-12-31"})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/portfolio/recurring-buys/"+id+"?clientId=http-rb-tz", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.UpdateRecurringBuy(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch budget/end %d %s", rr.Code, rr.Body.String())
+	}
+	_ = json.Unmarshal(rr.Body.Bytes(), &plan)
+	if plan["budget"].(float64) != 8000 || plan["endDate"] != "2026-12-31" {
+		t.Fatalf("%v", plan)
+	}
+}
+
 func TestPortfolioHTTP_AllocationBasketRebalance(t *testing.T) {
 	h := newPortfolioHandler(t)
 	body, _ := json.Marshal(map[string]any{"clientId": "http-bsk", "startingBalance": 10000})

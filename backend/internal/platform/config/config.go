@@ -172,6 +172,10 @@ type Config struct {
 	// AllowOpenAuth permits empty APIAuthToken when HTTPAddr is not loopback.
 	// Default false — refuse open auth on 0.0.0.0 / LAN binds.
 	AllowOpenAuth bool
+	// AllowMasterImpersonate lets a remote client use the process master token
+	// as any X-Client-Id. Default false — only loopback (local Vite, AI HTTP
+	// tools) may impersonate. User keys stay bound to their client.
+	AllowMasterImpersonate bool
 	// MCPEnabled mounts streamable MCP at /mcp (default true). Set false to disable the agent surface.
 	MCPEnabled bool
 	// WebhookAllowPrivate permits loopback/RFC1918 webhook targets (local tests only). Default false (SSRF-safe).
@@ -299,8 +303,11 @@ func Load() Config {
 		// AllowOpenAuth permits empty API_AUTH_TOKEN when HTTP_ADDR is non-loopback.
 		// Default false: refuse to start open auth on 0.0.0.0 / LAN binds.
 		AllowOpenAuth: boolEnv("ALLOW_OPEN_AUTH", false),
-		MCPEnabled:          boolEnv("MCP_ENABLED", true),
-		WebhookAllowPrivate: boolEnv("WEBHOOK_ALLOW_PRIVATE", false),
+		// AllowMasterImpersonate permits the master token to act as any clientId
+		// from a non-loopback peer. Default false.
+		AllowMasterImpersonate: boolEnv("ALLOW_MASTER_IMPERSONATE", false),
+		MCPEnabled:             boolEnv("MCP_ENABLED", true),
+		WebhookAllowPrivate:    boolEnv("WEBHOOK_ALLOW_PRIVATE", false),
 	}
 }
 
@@ -529,8 +536,9 @@ func LoadDotEnv(path string) {
 				val = val[1 : len(val)-1]
 			}
 		}
-		if os.Getenv(key) == "" {
-			_ = os.Setenv(key, val)
+		if _, exists := os.LookupEnv(key); exists {
+			continue
 		}
+		_ = os.Setenv(key, val)
 	}
 }

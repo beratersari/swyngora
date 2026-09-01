@@ -16,7 +16,11 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `analyze_market_orderbook` | Combined Binance+Coinbase+Bybit pressure in one shared price band |
 | `get_market_liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `get_orderbook_heatmap` | Resting bid/ask size over time (pre-warmed for live crypto pairs; not executed volume) |
-| `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations (Binance USD-M + Bybit linear) |
+| `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations + `feed` last print / still-unfilled gaps / `missingSeconds` / missing venues |
+| `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap + `feed` |
+| `get_liquidation_levels` | CoinGlass-style 10x/25x/50x/100x price bars + cumulative to last; `symbol=all` time bars |
+| `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); `episodes` = start, duration, long/short notional, price; combined when both venues fire together |
+| `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |
@@ -33,6 +37,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
+| `get_liquidation_heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; Binance, Bybit, combined; own-venue prices; 1h/4h/12h hit review) |
 | `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
 | `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |
 | `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
@@ -85,6 +90,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_price_alerts` | List price alerts for a client |
 | `create_price_alert` | Create one-shot above/below price alert |
 | `create_orderbook_alert` | Live imbalance or wall alert (edge re-arm, no re-fire while still true) |
+| `create_liquidation_feed_alert` | Fire when Binance/Bybit liquidation feed stays down; no re-fire until it recovers |
+| `create_liquidation_cascade_alert` | Fire on a big cascade; payload names the exchange and coin |
+| `create_liquidation_notional_alert` | Fire when a coin's long/short/total liquidations in 1m/5m/15m/1h exceed a USDT amount; one fire per wave |
 | `delete_price_alert` | Delete a price alert by id |
 | `get_alert_webhook` | Get client webhook URL for alert notifications |
 | `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |
@@ -122,8 +130,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `cancel_portfolio_order` | Cancel open pending paper order |
 | `list_portfolio_trades` | Paper trade history |
 | `list_portfolio_lots` | Open (or closed) tax lots for FIFO/LIFO sells |
-| `create_recurring_buy` | Create named paper recurring buy (daily/weekly/monthly/interval) |
-| `update_recurring_buy` | Update recurring buy name, amount, or schedule |
+| `create_recurring_buy` | Create named paper recurring buy (schedule, DST-aware timeZone, maxPrice, budget, endDate) |
+| `update_recurring_buy` | Update recurring buy name, amount, schedule, timezone/clock, maxPrice, budget, or end |
 | `list_recurring_buys` | List recurring buy plans |
 | `get_recurring_buy` | Get one recurring buy plan |
 | `pause_recurring_buy` | Pause a plan |
@@ -147,9 +155,12 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_margin_orders` | Margin limit orders |
 | `cancel_margin_order` | Cancel margin limit (releases reserve) |
 | `list_margin_trades` | Margin trade history |
-| `create_price_diff_watch` | Track a coin; open only when a fresh-book fill meets minProfit for minDurationSec |
+| `create_price_diff_watch` | Track a coin on chosen venues; open only when a fresh-book fill meets minProfit for minDurationSec |
 | `list_price_diff_watches` | List price-diff watches |
 | `get_price_diff_watch` | Get one price-diff watch |
+| `update_price_diff_watch` | Change notional, minProfit, minDurationSec, fees, or exchanges; resets duration timer |
+| `pause_price_diff_watch` | Pause; close open opportunities; stop searching |
+| `resume_price_diff_watch` | Resume; duration timer starts from zero |
 | `delete_price_diff_watch` | Delete watch and opportunities |
 | `list_price_diff_opportunities` | List open/closed opportunities |
 | `get_price_diff_opportunity` | Get one opportunity |
@@ -186,7 +197,8 @@ cd backend && go run ./cmd/server
 
 | Control | Env | Notes |
 |---------|-----|--------|
-| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires master token or a user `trade` key (`Authorization: Bearer` / `X-API-Key`) |
+| Shared API token | `API_AUTH_TOKEN` | When set, `/mcp` requires master token or a user `trade` key (`Authorization: Bearer` / `X-API-Key`). Query-string secrets are rejected. |
+| Remote master | `ALLOW_MASTER_IMPERSONATE` | Default false: a remote master token cannot pass `clientId` on tenant tools. Loopback (AI HTTP tools) still can. |
 | Closed account | (in-process tools) | Tools that send `clientId` call `RequireActive` — closed clients get a tool error (HTTP AccountGate cannot read JSON body on `/mcp`) |
 | User API key | HTTP identity | `bindMCPTenant` forces tool `clientId` to the key binding (mismatch → error); `create_api_key` / `list_api_keys` / `revoke_api_key` denied for user keys (mirror REST) |
 | Disable MCP | `MCP_ENABLED=false` | Do not mount `/mcp` at all |

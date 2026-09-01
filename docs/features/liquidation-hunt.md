@@ -52,17 +52,81 @@ Each venue report includes:
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `orderbook_reach.go` |
-| Service | `backend/internal/service/market/hunt.go` |
-| HTTP | `GET /api/v1/market/liquidation-hunt` |
-| MCP / AI | `estimate_liquidation_hunt` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
+| Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
+| HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
+| MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
+| Web | `/liquidations?view=heatmap` — `frontend/src/components/organisms/LiquidationHeatmap` |
 
 ## How to verify
 
 ```bash
-cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/
+cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -count=1
 curl "http://localhost:8080/api/v1/market/liquidation-hunt?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h"
 ```
 
 Read `venues[].upHunt` and `venues[].downHunt`. Treat `houseEdge` as a model
 output, not a claim about any exchange.
+
+## Price × time heatmap
+
+`GET /api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h`
+
+CoinGlass-style grid: **time on X**, **price on Y** (highest bin first), **color =
+estimated liquidation notional** at that price in that column.
+
+| `range` | Window | Column step |
+|---------|--------|-------------|
+| `12h` | 12 hours | 15 minutes |
+| `24h` | 24 hours | 30 minutes |
+| `3d` | 3 days | 1 hour |
+| `7d` | 7 days | 2 hours |
+
+Each column uses historical **open interest**, **that venue's own price**
+(spot candles from that exchange only), the same **leverage mix** as the hunt
+(tilted by funding), and blended **account long/short**. Observed liquidation
+prints in that column are added into the matching price bin.
+
+`binance` and `bybit` are modeled separately and **never borrow each other's
+prices**. If Bybit candles are missing, the Bybit grid stays empty and
+`missingVenues` includes `bybit`. `combined` sums a column **only when both
+venues had their own price and OI** — a missing venue is not filled from the
+other. Each grid has that venue's own `lastPrice` (combined omits it). `longs`
+are longs that would liquidate if price falls into that bin; `shorts` are
+shorts that would liquidate if price rises into that bin; `totals` = longs + shorts.
+
+### Did the hot zones work? (`review`)
+
+After the grid is built, each **high** area (contiguous bins at ≥ 60% of that
+column's peak, excluding the bin that already holds the venue mark) is checked
+against **later candles from the same venue**:
+
+| Horizon | Question |
+|---------|----------|
+| `1h` / `4h` / `12h` | Did that venue's own price trade through the zone? How long did it take? Did observed liquidations in that zone rise vs the same-length window before the signal? |
+
+- **Validated** — that venue's later candles span the horizon **and**
+  liquidation history covers the same-length windows before and after.
+- **Missing** — too recent (`pending`), no venue-local forward price path
+  (`priceMissing`), or no liquidation history covering the window
+  (`liqMissing`). Not filled from the other exchange.
+- **Hit / false / hit rate** — scored only on **validated** signals.
+- **Liqs rose** — among validated hits, whether observed notional in the zone
+  rose vs the prior window.
+- **Combined** uses the summed grid and counts a hit if **either** venue's own
+  price reached the zone.
+
+`signals[]` lists each hot area (time, price band, side) with a 1h / 4h / 12h
+row: `hit` / `miss` / `pending` / `price_gap` / `liq_gap`, time-to-hit,
+how far later candles reached (`priceCoveredSec` of `horizonSec`), and
+observed liquidation notional before vs after. Gaps are labeled (`no_price`,
+`price_short`, `no_liq`, `liq_short`) and are not filled from the other
+exchange.
+
+MCP: `get_liquidation_heatmap`.
+
+On the product web app the same grid is the **Liquidation heatmap** on coin
+detail → Tape: ranges 12h / 24h / 3d / 7d, venue Combined / Binance / Bybit,
+and All / Longs / Shorts, plus the 1h / 4h / 12h hit-rate table. Combined is
+the sum of venue cells.

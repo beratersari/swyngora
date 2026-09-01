@@ -745,6 +745,91 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	return s.liq.Snapshot(ex, symbol), nil
 }
 
+// GetLiquidationOverview returns market-wide 1h/4h/12h/24h totals plus ranked coins.
+func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (*domain.LiquidationOverview, error) {
+	_ = ctx
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	win, err := domain.ParseLiquidationOverviewWindow(window)
+	if err != nil {
+		return nil, err
+	}
+	lim := domain.ClampLiquidationOverviewLimit(limit)
+	if s.liq == nil {
+		return &domain.LiquidationOverview{
+			Exchange:   ex,
+			CoinWindow: win,
+			Windows:    []domain.LiquidationWindowTotals{},
+			Coins:      []domain.LiquidationCoinTile{},
+		}, nil
+	}
+	return s.liq.Overview(ex, win, lim), nil
+}
+
+// GetLiquidationLevels returns CoinGlass-style price bars for one coin, or
+// observed time bars when symbol is all.
+func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.LiquidationLevelsReport, error) {
+	sym, err := domain.ParseLiquidationLevelsSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	ex, err := domain.ParseLiquidationExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	spec, err := domain.ParseLiquidationLevelsRange(rawRange)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	from := now.Add(-spec.Window)
+	if sym == "all" {
+		if spec.Window > 24*time.Hour {
+			from = now.Add(-24 * time.Hour)
+			spec.Window = 24 * time.Hour
+		}
+		step := domain.LiquidationTimeBarStep(spec.Window)
+		var bars []domain.LiquidationTimeBar
+		if s.liq != nil {
+			bars = s.liq.TimeBars(ex, "all", from, now, step)
+		} else {
+			bars = []domain.LiquidationTimeBar{}
+		}
+		rep := &domain.LiquidationLevelsReport{
+			Kind:     domain.LiquidationLevelsKindTotal,
+			Symbol:   "all",
+			Exchange: ex,
+			Range:    string(spec.Range),
+			From:     from,
+			To:       now,
+			Bars:     bars,
+			Note:     "Observed long/short liquidations for every tracked coin. Binance USD-M and Bybit linear stay separate unless exchange=all. Combined does not invent the other venue's prints. Informational only.",
+		}
+		if s.liq != nil {
+			rep.Feed = s.liq.Feed(ex)
+			rep.Missing = append([]string{}, rep.Feed.Missing...)
+		}
+		return rep, nil
+	}
+	hunt, err := s.GetLiquidationHunt(ctx, ex, sym)
+	if err != nil {
+		return nil, err
+	}
+	rep := domain.BuildLiquidationLevelsFromHunt(*hunt)
+	rep.Range = string(spec.Range)
+	rep.From = now.Add(-spec.Window)
+	rep.To = now
+	if s.liq != nil {
+		rep.Feed = s.liq.Feed(ex)
+		if len(rep.Missing) == 0 {
+			rep.Missing = append([]string{}, rep.Feed.Missing...)
+		}
+	}
+	return &rep, nil
+}
+
 // GetOpenInterest returns current futures open interest and 5m/1h/4h/24h change.
 func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)

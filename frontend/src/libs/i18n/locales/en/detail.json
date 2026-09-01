@@ -118,6 +118,7 @@
     "intervals": "intervals",
     "orderBook": "order book",
     "tape": "futures tape",
+    "liqHeatmap": "liquidation heatmap",
     "postDelist": "post-delist price"
   },
   "tape": {
@@ -173,6 +174,57 @@
     "asks": "Asks",
     "cumulative": "Cumulative",
     "empty": "No depth for this pair."
+  },
+  "liqHeatmap": {
+    "title": "Liquidation heatmap",
+    "subtitle": "Estimated liquidation intensity by price and time from historical open interest, each venue's own price, the hunt leverage mix, and observed prints. Binance and Bybit separately, or combined as a sum. Informational only — not financial advice.",
+    "range": "Range",
+    "venue": "Venue",
+    "side": "Side",
+    "low": "Thin",
+    "high": "Heavy",
+    "total": "Total",
+    "longs": "Longs",
+    "shorts": "Shorts",
+    "coverage": "{{pct}}% of columns have OI",
+    "empty": "No liquidation map for this pair yet.",
+    "review": {
+      "title": "Did the hot zones work?",
+      "subtitle": "Hit rate and liquidation-increase use only signals with enough later price path and liquidation history for that venue. Missing data is counted separately and is not filled from the other exchange. Informational only — not financial advice.",
+      "horizon": "Horizon",
+      "signals": "Signals",
+      "validated": "Validated",
+      "missing": "Missing",
+      "priceMissing": "No price",
+      "liqMissing": "No liqs",
+      "hits": "Hits",
+      "falseSignals": "False",
+      "hitRate": "Hit rate",
+      "avgTime": "Avg time",
+      "liqRose": "Liqs rose",
+      "pending": "Pending",
+      "signalsTitle": "Each signal",
+      "signalsSubtitle": "Newest first. Each row is one hot area. 1h / 4h / 12h show hit or miss, how long it took, and any price or liquidation gap.",
+      "when": "Time",
+      "area": "Area",
+      "side": "Side"
+    },
+    "ranges": {
+      "12h": "12h",
+      "24h": "24h",
+      "3d": "3d",
+      "7d": "7d"
+    },
+    "venues": {
+      "combined": "Combined",
+      "binance": "Binance",
+      "bybit": "Bybit"
+    },
+    "sides": {
+      "totals": "All",
+      "longs": "Longs",
+      "shorts": "Shorts"
+    }
   },
   "orderHeatmap": {
     "title": "Liquidity heatmap",

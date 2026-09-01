@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -115,5 +116,75 @@ func TestQuoteOpportunity_NotFound(t *testing.T) {
 	h.QuoteOpportunity(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestPriceDiffWatchHTTP_PauseResumeAndPatch(t *testing.T) {
+	h := newPriceDiffHandler(t)
+	body, _ := json.Marshal(map[string]any{
+		"clientId": "pd-client", "symbol": "BTCUSDT", "notional": 10000, "minProfit": 5,
+		"minDurationSec": 30, "feeBinancePct": 0.1, "feeBybitPct": 0.1,
+		"exchanges": []string{"binance", "bybit"},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/price-diff/watches", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "pd-client")
+	rr := httptest.NewRecorder()
+	h.CreateWatch(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+	var created priceDiffWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Exchanges) != 2 || created.Exchanges[0] != "binance" || created.Exchanges[1] != "bybit" {
+		t.Fatalf("exchanges=%v", created.Exchanges)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/price-diff/watches/"+created.ID+"/pause", nil)
+	req.Header.Set("X-Client-Id", "pd-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.PauseWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("pause %d %s", rr.Code, rr.Body.String())
+	}
+	var paused priceDiffWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &paused); err != nil || paused.Status != "paused" {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+
+	patch, _ := json.Marshal(map[string]any{
+		"notional": 15000, "minProfit": 8, "minDurationSec": 45, "feeBinancePct": 0.2,
+		"exchanges": []string{"binance", "coinbase", "bybit"},
+	})
+	req = httptest.NewRequest(http.MethodPatch, "/api/v1/price-diff/watches/"+created.ID, bytes.NewReader(patch))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Id", "pd-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.UpdateWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("patch %d %s", rr.Code, rr.Body.String())
+	}
+	var updated priceDiffWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &updated); err != nil ||
+		updated.Notional != 15000 || updated.MinProfit != 8 || updated.MinDurationSec != 45 ||
+		updated.FeeBinancePct != 0.2 || updated.Status != "paused" || len(updated.Exchanges) != 3 {
+		t.Fatalf("%s %v", rr.Body.String(), err)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/price-diff/watches/"+created.ID+"/resume", nil)
+	req.Header.Set("X-Client-Id", "pd-client")
+	req.SetPathValue("id", created.ID)
+	rr = httptest.NewRecorder()
+	h.ResumeWatch(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("resume %d %s", rr.Code, rr.Body.String())
+	}
+	var resumed priceDiffWatchDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &resumed); err != nil || resumed.Status != "active" || resumed.MinProfit != 8 {
+		t.Fatalf("%s %v", rr.Body.String(), err)
 	}
 }

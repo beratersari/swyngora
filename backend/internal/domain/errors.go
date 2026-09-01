@@ -11,8 +11,10 @@ var (
 	ErrConflict = errors.New("conflict")
 	// ErrIdempotencyHit means this write collided with an existing idempotency key (replay).
 	ErrIdempotencyHit = errors.New("idempotency key already used")
-	ErrUpstream       = errors.New("upstream data source error")
-	ErrRateLimited    = errors.New("rate limited by upstream")
+	// ErrRecurringPeriodDone means this plan period already filled; do not debit again.
+	ErrRecurringPeriodDone = errors.New("recurring period already filled")
+	ErrUpstream            = errors.New("upstream data source error")
+	ErrRateLimited         = errors.New("rate limited by upstream")
 	// ErrSupplyUnmapped: base is not in the Binance marketing supply snapshot.
 	ErrSupplyUnmapped = errors.New("supply unmapped")
 	// ErrCatalogUnmapped: no CoinMarketCap id in the Binance marketing catalog.

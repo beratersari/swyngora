@@ -44,6 +44,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/realtime/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a one-time WebSocket ticket
+         * @description Returns a 60-second, single-use ticket bound to the caller. Browsers
+         *     send this as `?ticket=` on `GET /api/v1/ws` instead of the long-lived
+         *     API secret. Requires the same header auth as other tenant routes.
+         */
+        post: operations["createRealtimeTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ws": {
         parameters: {
             query?: never;
@@ -53,8 +75,10 @@ export interface paths {
         };
         /**
          * WebSocket realtime stream
-         * @description Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
-         *     browsers may pass `?token=` and must pass `?clientId=`.
+         * @description Upgrade to WebSocket. REST uses `Authorization` / `X-API-Key`.
+         *     Browsers mint a one-time ticket (`POST /api/v1/realtime/ticket`) and
+         *     pass `?ticket=` plus `?clientId=`. Long-lived secrets are not accepted
+         *     on the query string.
          *
          *     Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
          *     `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
@@ -484,6 +508,31 @@ export interface paths {
          *     both venues. Informational only.
          */
         get: operations["getMarketLiquidations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidations/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market-wide futures liquidation overview
+         * @description CoinGlass-style **market desk**: long/short liquidation notional for the last
+         *     **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
+         *     notional in `window` (default 24h) for a treemap. Fed by the same Binance
+         *     USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
+         *     sums both venues. `complete` uses the all-market Binance live clock when
+         *     `exchange` is `all` or `binance`. Informational only.
+         */
+        get: operations["getMarketLiquidationOverview"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1428,6 +1477,117 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-hunt/heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidation intensity heatmap (price × time)
+         * @description CoinGlass-style grid of estimated liquidation intensity at each price
+         *     for each time column. Built from historical open interest, mark price,
+         *     the hunt leverage mix (tilted by funding), blended account long/short,
+         *     and observed liquidation prints in that column.
+         *
+         *     `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+         *     separately and each venue uses only its own candles (never the
+         *     other exchange's price). `combined` is the sum of their cells.
+         *     `review` scores whether later price reached the hot zones within
+         *     1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
+         *     observed liquidations in that zone rose. Not a live book and not
+         *     financial advice.
+         */
+        get: operations["getMarketLiquidationHuntHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidation level bar chart
+         * @description CoinGlass-style **liquidation map** as bars.
+         *
+         *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
+         *       long/short notional at each price bin (hunt model summed over `range`).
+         *     - `symbol=all`: **total** observed liquidations for every tracked coin
+         *       as time bars (last 24h max). `exchange=binance|bybit|all`.
+         *
+         *     Informational only.
+         */
+        get: operations["getMarketLiquidationLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-cascade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquidation cascade risk (one coin or whole market)
+         * @description Detects a **liquidation cascade**: a short burst of long or short
+         *     liquidations far above that stream's own typical rate.
+         *
+         *     Compares the last **1 minute**, **5 minutes**, and **15 minutes** to
+         *     the median of prior blocks over ~6 hours. `grade` is quiet / elevated
+         *     / cascade / extreme. Binance and Bybit are scored **separately**.
+         *     `both.agree` is true only when the **same side** is cascading on both
+         *     venues. `episodes` lists each wave in the last 24h (start, duration,
+         *     long/short notional, price move). Overlapping same-side waves on both
+         *     venues are one `combined` episode. `symbol=all` pools every tracked
+         *     coin (market-wide risk; no price). Informational only.
+         */
+        get: operations["getMarketLiquidationCascade"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-cascade/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market liquidation cascade scan
+         * @description Scores **market-wide** cascade risk (pooled liquidations) and ranks
+         *     coins that are currently elevated or cascading. Binance and Bybit stay
+         *     separate; a hit's `both` flag means the same side is cascading on both
+         *     venues. Informational only.
+         */
+        get: operations["scanMarketLiquidationCascades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/supply": {
         parameters: {
             query?: never;
@@ -2358,6 +2518,14 @@ export interface paths {
          *     frequency: daily | weekly | monthly | interval.
          *     weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
          *     interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+         *     Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for a DST-aware
+         *     local clock (Monday 09:00; spring-forward snaps to the next valid local time,
+         *     fall-back uses the first occurrence). Optional maxPrice skips a run when last,
+         *     slipped fill, or fee-inclusive unit cost would exceed it (re-read after the
+         *     worker starts so a PATCH applies to an in-flight tick).
+         *     Optional budget is a total cash cap across succeeded runs (last buy may be partial).
+         *     Optional endDate (YYYY-MM-DD in timeZone, inclusive last local day) or endsAt (RFC3339)
+         *     stops further buys and marks the plan ended.
          *     Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
          *     Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
          *     Missed periods execute only the latest due slot (no backlog of intermediate buys).
@@ -2693,6 +2861,55 @@ export interface paths {
          * @description Removes the watch and its opportunities.
          */
         delete: operations["deletePriceDiffWatch"];
+        options?: never;
+        head?: never;
+        /**
+         * Update price-diff watch settings
+         * @description Change notional, minProfit, minDurationSec, minNetDiffPct, or per-venue fees
+         *     without deleting the watch. Clears the duration timer so the next hold
+         *     starts from zero. Does not change status.
+         */
+        patch: operations["updatePriceDiffWatch"];
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a price-diff watch
+         * @description Marks the watch paused first so an in-flight checker tick cannot open a
+         *     new opportunity. Open opportunities are closed. The duration timer is
+         *     dropped so resume starts a new wait.
+         */
+        post: operations["pausePriceDiffWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-diff/watches/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a price-diff watch
+         * @description Starts evaluating again. Does not continue a duration wait from before
+         *     pause — the timer starts from zero.
+         */
+        post: operations["resumePriceDiffWatch"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3309,6 +3526,12 @@ export interface components {
                 message?: string;
             };
         };
+        RealtimeTicket: {
+            ticket?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            clientId?: string;
+        };
         RealtimeInfo: {
             /** @example /api/v1/ws */
             path?: string;
@@ -3654,7 +3877,7 @@ export interface components {
         };
         LiquidationWindow: {
             /** @enum {string} */
-            window?: "5m" | "1h" | "4h" | "24h";
+            window?: "5m" | "1h" | "4h" | "12h" | "24h";
             /** @description Quote value of liquidated longs */
             longNotional?: string;
             /** @description Quote value of liquidated shorts */
@@ -3664,8 +3887,45 @@ export interface components {
             biggest?: components["schemas"]["LiquidationHit"];
             /** @description Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. */
             coverageSeconds?: number;
-            /** @description False until this coin+venue has had a live websocket for the full window */
+            /** @description False until this coin+venue has had a live websocket for the full window. Combined is false unless both venues were live for the whole window. */
             complete?: boolean;
+        };
+        LiquidationGap: {
+            /** Format: date-time */
+            from?: string;
+            /**
+             * Format: date-time
+             * @description Omitted while the gap is still open
+             */
+            to?: string;
+            /** @description Remaining unfilled duration of this hole */
+            seconds?: number;
+            /** @description Same as seconds — how much of this hole is still missing */
+            missingSeconds?: number;
+        };
+        LiquidationVenueHealth: {
+            exchange?: string;
+            live?: boolean;
+            /**
+             * Format: date-time
+             * @description Last liquidation print on this venue
+             */
+            lastEventAt?: string;
+            /**
+             * Format: date-time
+             * @description Last websocket payload from this venue
+             */
+            lastSeenAt?: string;
+            coverageSeconds?: number;
+            /** @description Sum of still-unfilled disconnect time in the last 6h */
+            missingSeconds?: number;
+            gaps?: components["schemas"]["LiquidationGap"][];
+        };
+        /** @description Per-venue last print, last socket message, and disconnects. Combined never substitutes one venue for the other. */
+        LiquidationFeed: {
+            venues?: components["schemas"]["LiquidationVenueHealth"][];
+            /** @description Venues that are down, stalled, or never started */
+            missing?: string[];
         };
         /** @description Rolling futures liquidation totals from live streams */
         MarketLiquidations: {
@@ -3673,9 +3933,307 @@ export interface components {
             exchange?: string;
             /** Format: date-time */
             collectingSince?: string;
+            /** @description Combined is true only when every requested venue is live */
             live?: boolean;
             venueCount?: number;
             windows?: components["schemas"]["LiquidationWindow"][];
+            feed?: components["schemas"]["LiquidationFeed"];
+            note?: string;
+        };
+        /** @description One coin's liquidation totals for the selected overview window */
+        MarketLiquidationCoin: {
+            symbol?: string;
+            base?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+            biggest?: components["schemas"]["LiquidationHit"];
+        };
+        /** @description Market-wide liquidation cards plus ranked coins for a treemap */
+        MarketLiquidationOverview: {
+            exchange?: string;
+            /** @enum {string} */
+            coinWindow?: "1h" | "4h" | "12h" | "24h";
+            /** Format: date-time */
+            collectingSince?: string;
+            /** @description Combined is true only when both Binance and Bybit streams are live */
+            live?: boolean;
+            venueCount?: number;
+            windows?: components["schemas"]["LiquidationWindow"][];
+            coins?: components["schemas"]["MarketLiquidationCoin"][];
+            feed?: components["schemas"]["LiquidationFeed"];
+            note?: string;
+        };
+        MarketLiquidationLeverageSlice: {
+            /** @enum {integer} */
+            leverage?: 10 | 25 | 50 | 100;
+            longNotional?: string;
+            shortNotional?: string;
+        };
+        MarketLiquidationLevelBar: {
+            price?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            /** @description Long notional from last price to this bar */
+            cumLong?: string;
+            /** @description Short notional from last price to this bar */
+            cumShort?: string;
+            cumTotal?: string;
+            byLeverage?: components["schemas"]["MarketLiquidationLeverageSlice"][];
+        };
+        MarketLiquidationTimeBar: {
+            /** Format: date-time */
+            t?: string;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+        };
+        /** @description Price-level map bars or market-wide time bars */
+        MarketLiquidationLevels: {
+            /** @enum {string} */
+            kind?: "levels" | "totals";
+            symbol?: string;
+            exchange?: string;
+            range?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** @description Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. */
+            lastPrice?: string;
+            /** @description Each venue's own last price */
+            lastPrices?: {
+                [key: string]: string;
+            };
+            levels?: components["schemas"]["MarketLiquidationLevelBar"][];
+            bars?: components["schemas"]["MarketLiquidationTimeBar"][];
+            feed?: components["schemas"]["LiquidationFeed"];
+            missing?: string[];
+            note?: string;
+        };
+        MarketLiquidationCascadeWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            longTypical?: string;
+            shortTypical?: string;
+            longRatio?: number;
+            shortRatio?: number;
+            maxRatio?: number;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            count?: number;
+            sampleBuckets?: number;
+            complete?: boolean;
+        };
+        MarketLiquidationCascadeVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["MarketLiquidationCascadeWindow"][];
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            hottest?: string;
+            /** Format: date-time */
+            startedAt?: string;
+            summary?: string;
+        };
+        /** @description Same-side burst on Binance and Bybit together */
+        MarketLiquidationCascadeBoth: {
+            /** @description True only when the same side is cascade+ on both venues */
+            agree?: boolean;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            hottest?: string;
+            summary?: string;
+        };
+        /** @description Cascade risk for one coin or the pooled market (symbol=all) */
+        MarketLiquidationCascade: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketLiquidationCascadeVenue"][];
+            both?: components["schemas"]["MarketLiquidationCascadeBoth"];
+            episodes?: components["schemas"]["MarketLiquidationCascadeEpisode"][];
+            summary?: string;
+            note?: string;
+        };
+        /** @description One liquidation wave (open or finished) in the last 24h */
+        MarketLiquidationCascadeEpisode: {
+            symbol?: string;
+            /** @description binance | bybit | both */
+            exchange?: string;
+            /** @description Same-side wave on Binance and Bybit at once */
+            combined?: boolean;
+            /** @enum {string} */
+            side?: "long" | "short" | "both" | "none";
+            /** @enum {string} */
+            grade?: "quiet" | "elevated" | "cascade" | "extreme";
+            score?: number;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            endedAt?: string;
+            open?: boolean;
+            durationSec?: number;
+            longNotional?: string;
+            shortNotional?: string;
+            totalNotional?: string;
+            count?: number;
+            peakRatio?: number;
+            priceOpen?: string;
+            priceClose?: string;
+            priceHigh?: string;
+            priceLow?: string;
+            /** @description Signed percent */
+            priceChangePct?: string;
+            summary?: string;
+        };
+        MarketLiquidationCascadeHit: {
+            symbol?: string;
+            side?: string;
+            grade?: string;
+            score?: number;
+            hottest?: string;
+            both?: boolean;
+            summary?: string;
+        };
+        /** @description Market-wide cascade plus coins currently bursting */
+        MarketLiquidationCascadeScan: {
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            market?: components["schemas"]["MarketLiquidationCascade"];
+            hits?: components["schemas"]["MarketLiquidationCascadeHit"][];
+            summary?: string;
+            note?: string;
+        };
+        LiquidationHuntHeatmapGrid: {
+            exchange?: string;
+            /** @description [time][price] estimated long-liquidation notional */
+            longs?: number[][];
+            shorts?: number[][];
+            totals?: number[][];
+            maxIntensity?: number;
+            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires both venues. */
+            coverage?: number;
+            columnsWithOi?: number;
+            /** @description That venue's own last print. Combined is omitted. */
+            lastPrice?: number;
+            /** @description Per time column, whether this venue (or both, for combined) had own price+OI */
+            hasData?: boolean[];
+        };
+        /** @description Price × time estimated liquidation intensity */
+        LiquidationHuntHeatmap: {
+            symbol?: string;
+            /** @enum {string} */
+            range?: "12h" | "24h" | "3d" | "7d";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            priceMin?: number;
+            priceMax?: number;
+            priceStep?: number;
+            /** @description Bin centers, highest price first */
+            prices?: number[];
+            times?: string[];
+            binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            review?: components["schemas"]["LiquidationHuntHeatmapReview"];
+            /** @description Venues with no own price+OI in this window. Combined does not fill those cells from the other venue. */
+            missingVenues?: string[];
+            note?: string;
+        };
+        LiquidationHuntHeatmapReviewHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "12h";
+            signals?: number;
+            /** @description Signals with enough later price path and liquidation history */
+            validated?: number;
+            /** @description Signals that cannot be scored (clock */
+            missing?: number;
+            priceReady?: number;
+            priceMissing?: number;
+            liqReady?: number;
+            liqMissing?: number;
+            /** @description Clock has not reached the end of the look-ahead yet */
+            pending?: number;
+            /** @description validated / signals */
+            coverage?: number;
+            /** @description Among validated only */
+            hits?: number;
+            /** @description Among validated only */
+            falseSignals?: number;
+            /** @description hits / validated */
+            hitRate?: number;
+            avgTimeToHitSec?: number;
+            medianTimeToHitSec?: number;
+            /** @description Validated hits where zone liquidation notional rose */
+            liqIncreased?: number;
+            /** @description liqIncreased / validated hits */
+            liqIncreaseRate?: number;
+            avgLiqBefore?: number;
+            avgLiqAfter?: number;
+        };
+        LiquidationHuntHeatmapReviewSignalHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "12h";
+            /** @enum {string} */
+            status?: "hit" | "miss" | "pending" | "price_gap" | "liq_gap";
+            validated?: boolean;
+            hit?: boolean;
+            pending?: boolean;
+            priceReady?: boolean;
+            liqReady?: boolean;
+            timeToHitSec?: number;
+            horizonSec?: number;
+            /** @description How far later candles reach after the signal */
+            priceCoveredSec?: number;
+            priceBars?: number;
+            liqBefore?: number;
+            liqAfter?: number;
+            liqIncreased?: boolean;
+            /** @description pending | no_price | price_short | no_liq | liq_short */
+            gap?: string;
+        };
+        /** @description One hot liquidation area at one time */
+        LiquidationHuntHeatmapReviewSignal: {
+            /** Format: date-time */
+            time?: string;
+            priceLo?: number;
+            priceHi?: number;
+            intensity?: number;
+            /** @description long (below mark) or short (above mark) */
+            side?: string;
+            horizons?: components["schemas"]["LiquidationHuntHeatmapReviewSignalHorizon"][];
+        };
+        LiquidationHuntHeatmapReviewVenue: {
+            exchange?: string;
+            horizons?: components["schemas"]["LiquidationHuntHeatmapReviewHorizon"][];
+            signals?: components["schemas"]["LiquidationHuntHeatmapReviewSignal"][];
+        };
+        /** @description Did later price actually reach the hot zones, and did real liquidations rise there */
+        LiquidationHuntHeatmapReview: {
+            hotFrac?: number;
+            binance?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            bybit?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            combined?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             note?: string;
         };
         OpenInterestLevel: {
@@ -4129,7 +4687,7 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall";
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
             /** @description price/imbalance above|below; wall bid|ask|any */
             condition?: string;
             targetPrice?: number;
@@ -4582,8 +5140,28 @@ export interface components {
             dayOfMonth?: number;
             /** @description Hours between interval buys */
             intervalHours?: number;
+            /** @description IANA timezone e.g. Europe/Istanbul */
+            timeZone?: string;
+            /** @description Local hour when a local clock is set */
+            hour?: number;
+            minute?: number;
+            /** @description Skip when last or fee+slippage unit cost would exceed this; 0 = none */
+            maxPrice?: number;
+            /** @description Total cash cap across succeeded runs; 0 = none */
+            budget?: number;
+            /** @description Cash spent on succeeded runs */
+            spent?: number;
+            /** @description budget minus spent when budget is set */
+            remainingBudget?: number;
+            /**
+             * Format: date-time
+             * @description Inclusive last allowed scheduled instant
+             */
+            endsAt?: string;
+            /** @description Local YYYY-MM-DD of endsAt */
+            endDate?: string;
             /** @enum {string} */
-            status?: "active" | "paused";
+            status?: "active" | "paused" | "ended";
             /** Format: date-time */
             nextRunAt?: string;
             /** Format: date-time */
@@ -4606,7 +5184,7 @@ export interface components {
             quantity?: number;
             price?: number;
             tradeId?: string;
-            /** @description e.g. insufficient cash balance, market price unavailable */
+            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit. */
             failReason?: string;
             /** Format: date-time */
             scheduledFor?: string;
@@ -4687,6 +5265,8 @@ export interface components {
             feeBinancePct?: number;
             feeCoinbasePct?: number;
             feeBybitPct?: number;
+            /** @description Venues this watch walks */
+            exchanges?: ("binance" | "coinbase" | "bybit")[];
             /** @enum {string} */
             status?: "active" | "paused";
             /** Format: date-time */
@@ -5250,12 +5830,38 @@ export interface operations {
             };
         };
     };
+    createRealtimeTicket: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ticket minted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RealtimeTicket"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
     realtimeWebSocket: {
         parameters: {
             query: {
                 clientId: string;
-                /** @description API token when the browser cannot set Authorization */
-                token?: string;
+                /** @description One-time ticket from POST /api/v1/realtime/ticket (60s, single use) */
+                ticket?: string;
                 /** @description Optional initial book (still send subscribe_portfolio) */
                 portfolioId?: string;
             };
@@ -5833,6 +6439,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketLiquidations"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Window used to rank `coins` — 1h | 4h | 12h | 24h (default 24h) */
+                window?: "1h" | "4h" | "12h" | "24h";
+                /** @description Max coins in the ranked list (default 50, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market-wide windows plus ranked coins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationOverview"];
                 };
             };
             400: components["responses"]["Error"];
@@ -7015,6 +7649,112 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketLiquidationHuntHeatmap: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description 12h | 24h | 3d | 7d */
+                range?: "12h" | "24h" | "3d" | "7d";
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price × time intensity grids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationHuntHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationLevels: {
+        parameters: {
+            query?: {
+                /** @description Pair (BTCUSDT) or all */
+                symbol?: string;
+                /** @description binance | bybit | all (default all = combined) */
+                exchange?: string;
+                /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
+                range?: "12h" | "24h" | "3d" | "7d";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price-level bars or time-total bars */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationLevels"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationCascade: {
+        parameters: {
+            query?: {
+                /** @description Pair (BTCUSDT) or all for the pooled market */
+                symbol?: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue cascade scores plus both-venues flag */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationCascade"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    scanMarketLiquidationCascades: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market cascade plus ranked bursting coins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketLiquidationCascadeScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
     getSupply: {
         parameters: {
             query?: {
@@ -7623,7 +8363,7 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall";
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
                     /** @description price/imbalance above|below; wall bid|ask|any */
                     condition: string;
                     /** @description Price target, |imbalance| threshold, or wall min share (0 = any detected wall) */
@@ -9163,7 +9903,7 @@ export interface operations {
                     /** @enum {string} */
                     frequency: "daily" | "weekly" | "monthly" | "interval";
                     /**
-                     * @description Weekly — buy on this UTC weekday
+                     * @description Weekly — buy on this weekday in timeZone (UTC if omitted)
                      * @enum {string}
                      */
                     weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
@@ -9171,6 +9911,41 @@ export interface operations {
                     dayOfMonth?: number;
                     /** @description Interval frequency — hours between buys (e.g. 12) */
                     intervalHours?: number;
+                    /**
+                     * @description IANA timezone e.g. Europe/Istanbul. Empty is UTC and keeps the startAt clock.
+                     * @example Europe/Istanbul
+                     */
+                    timeZone?: string;
+                    /**
+                     * @description Local hour to run (use with timeZone or UTC)
+                     * @example 9
+                     */
+                    hour?: number;
+                    /**
+                     * @description Local minute to run
+                     * @example 0
+                     */
+                    minute?: number;
+                    /**
+                     * @description Skip the run if last, slipped fill, or fee-inclusive unit cost exceeds this. 0 = no cap.
+                     * @example 65000
+                     */
+                    maxPrice?: number;
+                    /**
+                     * @description Total cash cap across succeeded runs (slipped fill + taker fee). 0 = no cap. Last buy may spend leftover.
+                     * @example 10000
+                     */
+                    budget?: number;
+                    /**
+                     * @description Last inclusive local calendar day (YYYY-MM-DD) in timeZone
+                     * @example 2026-12-31
+                     */
+                    endDate?: string;
+                    /**
+                     * Format: date-time
+                     * @description Inclusive last allowed scheduled instant (RFC3339)
+                     */
+                    endsAt?: string;
                     /**
                      * Format: date-time
                      * @description First scheduled run (RFC3339); default is now (next worker tick)
@@ -9274,6 +10049,16 @@ export interface operations {
                     weekday?: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
                     dayOfMonth?: number;
                     intervalHours?: number;
+                    /** @example Europe/Istanbul */
+                    timeZone?: string;
+                    hour?: number;
+                    minute?: number;
+                    maxPrice?: number;
+                    budget?: number;
+                    /** @example 2026-12-31 */
+                    endDate?: string;
+                    /** Format: date-time */
+                    endsAt?: string;
                     /** Format: date-time */
                     startAt?: string;
                 };
@@ -9781,6 +10566,14 @@ export interface operations {
                     feeCoinbasePct?: number;
                     /** @example 0.1 */
                     feeBybitPct?: number;
+                    /**
+                     * @description Venues to walk. Default all three. At least two required.
+                     * @example [
+                     *       "binance",
+                     *       "bybit"
+                     *     ]
+                     */
+                    exchanges?: ("binance" | "coinbase" | "bybit")[];
                 };
             };
         };
@@ -9845,6 +10638,103 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updatePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    clientId?: string;
+                    notional?: number;
+                    minProfit?: number;
+                    minDurationSec?: number;
+                    minNetDiffPct?: number;
+                    feeBinancePct?: number;
+                    feeCoinbasePct?: number;
+                    feeBybitPct?: number;
+                    /** @description Replace the venue set. At least two required. */
+                    exchanges?: ("binance" | "coinbase" | "bybit")[];
+                };
+            };
+        };
+        responses: {
+            /** @description Updated watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    pausePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    resumePriceDiffWatch: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active watch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceDiffWatch"];
+                };
             };
             404: components["responses"]["Error"];
         };

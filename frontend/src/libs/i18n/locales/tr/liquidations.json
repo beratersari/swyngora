@@ -1,0 +1,104 @@
+{
+  "title": "Likidasyonlar",
+  "subtitle": "Binance USD-M ve Bybit linear genelinde vadeli long/short likidasyonlar.",
+  "tabs": {
+    "overview": "Genel bakış",
+    "chart": "Grafik",
+    "cascade": "Çığ",
+    "heatmap": "Isı haritası"
+  },
+  "exchange": "Borsa",
+  "exchangeAll": "Tüm borsalar",
+  "cards": {
+    "total": "Toplam",
+    "long": "Long",
+    "short": "Short",
+    "count": "{{count}} işlem",
+    "selectAria": "Coin haritasında {{window}} göster"
+  },
+  "windows": {
+    "1h": "1S",
+    "4h": "4S",
+    "12h": "12S",
+    "24h": "24S"
+  },
+  "treemap": {
+    "aria": "Likidasyon coin haritası",
+    "empty": "Bu pencerede henüz likidasyon yok.",
+    "emptyHint": "Toplamlar canlı force-order akışı geldikçe dolar.",
+    "legendLong": "Daha çok long likide",
+    "legendShort": "Daha çok short likide",
+    "openHeatmap": "{{symbol}} ısı haritasını aç"
+  },
+  "heatmap": {
+    "symbol": "Sembol",
+    "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "chart": {
+    "coin": "Coin",
+    "allCoins": "Tüm coinler",
+    "range": "Aralık",
+    "levelsTitle": "Likidasyon seviyeleri",
+    "totalsTitle": "Toplam likidasyonlar",
+    "levelsHint": "Yatay CoinGlass haritası: last üstünde short, altında long. Renkler 100x / 50x / 25x / 10x. Bir çubuğun üzerine gelince o seviye ve last’ten buraya kadar toplam görünür.",
+    "totalsHint": "Seçilen borsada izlenen tüm coinlerin zaman içindeki gerçekleşen long ve short likidasyonları.",
+    "lastPrice": "Son",
+    "leverage": "{{lev}}x",
+    "cumToLevel": "Last’ten buraya",
+    "aria": "Likidasyon çubuk grafiği",
+    "empty": "Bu pencerede henüz likidasyon çubuğu yok.",
+    "emptyHint": "Başka bir coin seçin veya canlı akışı bekleyin."
+  },
+  "cascade": {
+    "coin": "Kapsam",
+    "market": "Tüm piyasa",
+    "empty": "Şu anda likidasyon çığı yok.",
+    "hint": "Çığ, o akışın kendi tipik hızının çok üstünde kısa bir long veya short likidasyon patlamasıdır. Dalgalar ne zaman başladığını, ne kadar sürdüğünü ve fiyat hareketini gösterir. Binance ve Bybit ayrı puanlanır.",
+    "window": "Pencere",
+    "ratio": "Tiğe göre",
+    "grade": "Derece",
+    "gradeLabel": "Derece",
+    "side": "Taraf",
+    "score": "Skor",
+    "hottest": "En sıcak",
+    "both": "İkisi",
+    "yes": "İkisi",
+    "hitsTitle": "Şu an patlayan coinler",
+    "episodesTitle": "Son 24 saatteki dalgalar",
+    "started": "Başladı",
+    "duration": "Sürdü",
+    "price": "Fiyat",
+    "status": "Durum",
+    "running": "Açık",
+    "ended": "Bitti",
+    "bothVenues": "İki borsa",
+    "grades": {
+      "quiet": "Sakin",
+      "elevated": "Yüksek",
+      "cascade": "Çığ",
+      "extreme": "Aşırı"
+    },
+    "sides": {
+      "long": "Long",
+      "short": "Short",
+      "both": "İki taraf",
+      "none": "Yok"
+    }
+  },
+  "feed": {
+    "binance": "Binance",
+    "bybit": "Bybit",
+    "status": "Akış",
+    "down": "Kapalı",
+    "lastPrint": "Son işlem",
+    "lastSeen": "Son soket",
+    "gaps": "Son 6 saatte {{hours}}s boşluk",
+    "noGaps": "Son 6 saatte boşluk yok",
+    "missingVenues": "{{venues}} verisi yok. Birleşik görünüm diğer borsadan doldurulmaz."
+  },
+  "status": {
+    "live": "Canlı",
+    "collecting": "Bu pencere hâlâ doluyor"
+  },
+  "disclaimer": "Yalnızca bilgi amaçlıdır. Yatırım tavsiyesi değildir. Binance her saniye sembol başına en büyük vuruşu örnekler."
+}

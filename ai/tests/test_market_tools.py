@@ -87,6 +87,46 @@ class _Transport(httpx.BaseTransport):
                     "windows": [{"window": "24h", "change": "+10", "direction": "up"}],
                 },
             )
+        if request.url.path.endswith("/liquidation-cascade/scan"):
+            return httpx.Response(
+                200,
+                json={
+                    "market": {"symbol": "all", "summary": "quiet"},
+                    "hits": [{"symbol": "SOLUSDT", "grade": "cascade", "side": "long"}],
+                },
+            )
+        if request.url.path.endswith("/liquidation-cascade"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol") or "all",
+                    "venues": [{"exchange": "binance", "grade": "quiet"}],
+                    "summary": "quiet",
+                },
+            )
+        if request.url.path.endswith("/liquidation-levels"):
+            return httpx.Response(
+                200,
+                json={
+                    "kind": "totals",
+                    "symbol": request.url.params.get("symbol") or "all",
+                    "bars": [
+                        {"t": "2026-08-30T12:00:00Z", "longNotional": "10", "shortNotional": "5"}
+                    ],
+                },
+            )
+        if request.url.path.endswith("/liquidations/overview"):
+            return httpx.Response(
+                200,
+                json={
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "coinWindow": request.url.params.get("window") or "24h",
+                    "windows": [
+                        {"window": "1h", "longNotional": "80", "shortNotional": "20", "count": 2}
+                    ],
+                    "coins": [{"symbol": "BTCUSDT", "totalNotional": "100"}],
+                },
+            )
         if request.url.path.endswith("/liquidations"):
             return httpx.Response(
                 200,
@@ -311,6 +351,22 @@ def test_market_tools_hit_api(monkeypatch):
     liqs = json.loads(by_name["get_liquidations"].invoke({"symbol": "BTCUSDT"}))
     assert liqs["windows"][0]["window"] == "24h"
 
+    assert "get_liquidation_overview" in by_name
+    ov = json.loads(by_name["get_liquidation_overview"].invoke({"window": "1h"}))
+    assert ov["coinWindow"] == "1h"
+    assert ov["coins"][0]["symbol"] == "BTCUSDT"
+
+    assert "get_liquidation_levels" in by_name
+    lv = json.loads(by_name["get_liquidation_levels"].invoke({"symbol": "all"}))
+    assert lv["kind"] == "totals"
+
+    assert "get_liquidation_cascade" in by_name
+    cas = json.loads(by_name["get_liquidation_cascade"].invoke({"symbol": "BTCUSDT"}))
+    assert cas["symbol"] == "BTCUSDT"
+    assert "scan_liquidation_cascades" in by_name
+    scan = json.loads(by_name["scan_liquidation_cascades"].invoke({}))
+    assert scan["hits"][0]["symbol"] == "SOLUSDT"
+
     assert "get_orderbook_heatmap" in by_name
     heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))
     assert heat["symbol"] == "BTCUSDT"
@@ -338,17 +394,21 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert hist["runs"] == []
     assert "create_funding_arb_watch" in by_name
-    watch = json.loads(
-        by_name["create_funding_arb_watch"].invoke(
-            {"client_id": "c1", "symbol": "BTCUSDT", "min_profit": 10}
+    watch_raw = by_name["create_funding_arb_watch"].invoke(
+        {"client_id": "c1", "symbol": "BTCUSDT", "min_profit": 10}
+    )
+    # Unbound workers fail closed on mutations (no inherited can_trade).
+    if "403" in watch_raw:
+        assert "read-only" in watch_raw
+    else:
+        watch = json.loads(watch_raw)
+        assert watch["id"] == "w1"
+        listed = json.loads(by_name["list_funding_arb_watches"].invoke({"client_id": "c1"}))
+        assert "watches" in listed
+        assert (
+            json.loads(by_name["list_funding_arb_signals"].invoke({"client_id": "c1"}))["signals"]
+            == []
         )
-    )
-    assert watch["id"] == "w1"
-    listed = json.loads(by_name["list_funding_arb_watches"].invoke({"client_id": "c1"}))
-    assert "watches" in listed
-    assert (
-        json.loads(by_name["list_funding_arb_signals"].invoke({"client_id": "c1"}))["signals"] == []
-    )
 
     assert "get_long_short_ratio" in by_name
     lsr = json.loads(by_name["get_long_short_ratio"].invoke({"symbol": "BTCUSDT"}))

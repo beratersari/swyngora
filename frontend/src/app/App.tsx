@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { to: '/markets', key: 'nav.markets' as const },
   { to: '/heatmap', key: 'nav.heatmap' as const },
   { to: '/watchlist', key: 'nav.watchlist' as const },
+  { to: '/liquidations', key: 'nav.liquidations' as const },
   { to: '/portfolio', key: 'nav.portfolio' as const },
   { to: '/signals', key: 'nav.signals' as const },
   { to: '/pumps', key: 'nav.pumps' as const },

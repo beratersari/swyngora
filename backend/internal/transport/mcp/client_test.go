@@ -281,6 +281,111 @@ func TestAPIClient_GetLiquidations(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetLiquidationOverview(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidations/overview" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("window") != "1h" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"exchange": "all", "coinWindow": "1h",
+			"windows": []any{map[string]any{"window": "1h", "count": 2}},
+			"coins":   []any{map[string]any{"symbol": "BTCUSDT", "totalNotional": "100"}},
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLiquidationOverview(context.Background(), "all", "1h", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["coinWindow"] != "1h" {
+		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_GetLiquidationCascade(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidation-cascade" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "BTCUSDT" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"symbol": "BTCUSDT", "summary": "quiet"})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLiquidationCascade(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" {
+		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_ScanLiquidationCascades(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidation-cascade/scan" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"market": map[string]any{"symbol": "all"}, "hits": []any{}})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.ScanLiquidationCascades(context.Background(), "all")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := m["hits"]; !ok {
+		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_GetLiquidationLevels(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/liquidation-levels" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("symbol") != "all" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"kind": "totals", "symbol": "all", "bars": []any{}})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetLiquidationLevels(context.Background(), "all", "all", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["kind"] != "totals" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetOrderBookHeatmap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/orderbook/heatmap" {
@@ -334,6 +439,40 @@ func TestAPIClient_GetMarketLiquidity(t *testing.T) {
 	}
 	if m["venueCount"] != float64(3) {
 		t.Fatalf("%v", m)
+	}
+}
+
+func TestAPIClient_UpdatePauseResumePriceDiffWatch(t *testing.T) {
+	var saw []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		saw = append(saw, r.Method+" "+r.URL.Path)
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": "w1", "status": "paused"})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	ctx := context.Background()
+	minP := 8.0
+	if _, err := c.UpdatePriceDiffWatch(ctx, "c1", "w1", nil, &minP, nil, nil, nil, nil, nil, []string{"binance", "bybit"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PausePriceDiffWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ResumePriceDiffWatch(ctx, "c1", "w1"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"PATCH /api/v1/price-diff/watches/w1",
+		"POST /api/v1/price-diff/watches/w1/pause",
+		"POST /api/v1/price-diff/watches/w1/resume",
+	}
+	if len(saw) != len(want) {
+		t.Fatalf("saw=%v", saw)
+	}
+	for i := range want {
+		if saw[i] != want[i] {
+			t.Fatalf("saw=%v want=%v", saw, want)
+		}
 	}
 }
 

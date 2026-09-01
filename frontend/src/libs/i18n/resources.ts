@@ -9,6 +9,7 @@ import compareEn from './locales/en/compare.json';
 import signalsEn from './locales/en/signals.json';
 import portfolioEn from './locales/en/portfolio.json';
 import heatmapEn from './locales/en/heatmap.json';
+import liquidationsEn from './locales/en/liquidations.json';
 import settingsEn from './locales/en/settings.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
@@ -21,6 +22,7 @@ import compareTr from './locales/tr/compare.json';
 import signalsTr from './locales/tr/signals.json';
 import portfolioTr from './locales/tr/portfolio.json';
 import heatmapTr from './locales/tr/heatmap.json';
+import liquidationsTr from './locales/tr/liquidations.json';
 import settingsTr from './locales/tr/settings.json';
 
 /**
@@ -40,6 +42,7 @@ export const resources = {
     signals: signalsEn,
     portfolio: portfolioEn,
     heatmap: heatmapEn,
+    liquidations: liquidationsEn,
     settings: settingsEn,
   },
   tr: {
@@ -54,6 +57,7 @@ export const resources = {
     signals: signalsTr,
     portfolio: portfolioTr,
     heatmap: heatmapTr,
+    liquidations: liquidationsTr,
     settings: settingsTr,
   },
 } as const;

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/alertstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -356,6 +357,87 @@ func TestCreate_OrderBookImbalanceAndWall(t *testing.T) {
 	}
 }
 
+type prepTape struct {
+	calls []struct {
+		ex, sym string
+		look    time.Duration
+	}
+}
+
+func (p *prepTape) Prepare(_ context.Context, exchange, symbol string, lookback time.Duration) {
+	p.calls = append(p.calls, struct {
+		ex, sym string
+		look    time.Duration
+	}{exchange, symbol, lookback})
+}
+
+func TestCreate_LiquidationFeedAndCascade(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	feed, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feed.Kind != domain.AlertKindLiqFeed || feed.Symbol != domain.LiqAlertSymbolAll || !feed.Armed || feed.Mode != domain.AlertModeRepeating {
+		t.Fatalf("%+v", feed)
+	}
+	cas, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_cascade", Exchange: "all", Symbol: "BTCUSDT", Condition: "cascade",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cas.Kind != domain.AlertKindLiqCascade || cas.Symbol != "BTCUSDT" || string(cas.Exchange) != "all" || !cas.Armed {
+		t.Fatalf("%+v", cas)
+	}
+	mkt, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_cascade", Symbol: "all",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mkt.Symbol != domain.LiqAlertSymbolAll {
+		t.Fatalf("%+v", mkt)
+	}
+	not, err := svc.Create(ctx, CreateInput{
+		ClientID: "lq", Kind: "liquidation_notional", Exchange: "bybit", Symbol: "BTCUSDT",
+		Condition: "long", TargetPrice: 20e6, Window: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if not.Kind != domain.AlertKindLiqNotional || not.RangePct != 5 || not.Condition != "long" || !not.Armed {
+		t.Fatalf("%+v", not)
+	}
+}
+
+func TestCreate_LiquidationNotionalPreparesTape(t *testing.T) {
+	svc, _ := newSvc(t)
+	tape := &prepTape{}
+	svc.Tape = tape
+	_, err := svc.Create(context.Background(), CreateInput{
+		ClientID: "prep", Kind: "liquidation_notional", Exchange: "bybit", Symbol: "PEPEUSDT",
+		Condition: "both", TargetPrice: 1e6, Window: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tape.calls) != 1 || tape.calls[0].sym != "PEPEUSDT" || tape.calls[0].ex != "bybit" || tape.calls[0].look != 5*time.Minute {
+		t.Fatalf("prepare %+v", tape.calls)
+	}
+	_, err = svc.Create(context.Background(), CreateInput{
+		ClientID: "prep", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 120,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tape.calls) != 1 {
+		t.Fatalf("feed should not prepare a coin %+v", tape.calls)
+	}
+}
+
 type fakeBook struct {
 	mu    sync.Mutex
 	books map[string]*domain.OrderBook
@@ -447,5 +529,127 @@ func TestChecker_OrderBookWallAppearAndClear(t *testing.T) {
 	cleared, _ := svc.Get(ctx, "w", a.ID)
 	if !cleared.Armed {
 		t.Fatalf("re-arm after wall gone %+v", cleared)
+	}
+}
+
+type fakeLiq struct {
+	feed   domain.LiquidationFeed
+	rep    *domain.CascadeReport
+	scan   *domain.CascadeScan
+	events []domain.LiquidationEvent
+}
+
+func (f *fakeLiq) GetLiquidationFeed(string) domain.LiquidationFeed { return f.feed }
+func (f *fakeLiq) GetLiquidationCascade(context.Context, string, string) (*domain.CascadeReport, error) {
+	return f.rep, nil
+}
+func (f *fakeLiq) ScanLiquidationCascades(context.Context, string) (*domain.CascadeScan, error) {
+	return f.scan, nil
+}
+func (f *fakeLiq) ListLiquidationEvents(string, string, time.Time) []domain.LiquidationEvent {
+	return f.events
+}
+
+func TestChecker_LiquidationFeedNoRetrigger(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "ff", Kind: "liquidation_feed", Exchange: "bybit", TargetPrice: 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
+	src := &fakeLiq{feed: domain.LiquidationFeed{Venues: []domain.LiquidationVenueHealth{{
+		Exchange: "bybit", Live: false, LastSeenAt: now.Add(-3 * time.Minute),
+	}}}}
+	c := &Checker{Alerts: svc, Liquidations: src, now: func() time.Time { return now }}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "ff", a.ID)
+	if got.Armed || got.TriggeredPrice < 170 {
+		t.Fatalf("first fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "ff", a.ID)
+	if still.TriggeredAt == nil || got.TriggeredAt == nil || !still.TriggeredAt.Equal(*got.TriggeredAt) {
+		t.Fatalf("re-fired while down %+v vs %+v", still, got)
+	}
+	src.feed.Venues[0].Live = true
+	src.feed.Venues[0].LastSeenAt = now
+	c.RunOnce(ctx)
+	ok, _ := svc.Get(ctx, "ff", a.ID)
+	if !ok.Armed {
+		t.Fatalf("re-arm when live %+v", ok)
+	}
+}
+
+func TestChecker_LiquidationCascadeNamesCoin(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "cc", Kind: "liquidation_cascade", Exchange: "all", Symbol: "BTCUSDT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeLiq{rep: &domain.CascadeReport{
+		Symbol: "BTCUSDT",
+		Venues: []domain.CascadeVenue{{
+			Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT",
+			Grade: domain.CascadeGradeCascade, Score: 5, Side: "long", Summary: "bybit long cascade",
+		}},
+	}}
+	c := &Checker{Alerts: svc, Liquidations: src, now: time.Now}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "cc", a.ID)
+	if got.Armed || got.TriggeredPrice != 5 {
+		t.Fatalf("cascade fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "cc", a.ID)
+	if still.TriggeredPrice != 5 {
+		t.Fatalf("re-fired %+v", still)
+	}
+}
+
+func TestChecker_LiquidationNotionalNoRetriggerUntilNewWave(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "nw", Kind: "liquidation_notional", Exchange: "all", Symbol: "BTCUSDT",
+		Condition: "both", TargetPrice: 20e6, Window: "5m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 30, 18, 0, 0, 0, time.UTC)
+	src := &fakeLiq{events: []domain.LiquidationEvent{
+		{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong, Notional: 12e6, Time: now.Add(-2 * time.Minute)},
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideShort, Notional: 10e6, Time: now.Add(-1 * time.Minute)},
+	}}
+	c := &Checker{Alerts: svc, Liquidations: src, now: func() time.Time { return now }}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "nw", a.ID)
+	if got.Armed || got.TriggeredPrice < 20e6 {
+		t.Fatalf("first wave %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "nw", a.ID)
+	if still.TriggeredAt == nil || got.TriggeredAt == nil || !still.TriggeredAt.Equal(*got.TriggeredAt) {
+		t.Fatalf("same wave re-fired %+v vs %+v", still, got)
+	}
+	src.events = nil
+	c.RunOnce(ctx)
+	armed, _ := svc.Get(ctx, "nw", a.ID)
+	if !armed.Armed {
+		t.Fatalf("re-arm after wave ends %+v", armed)
+	}
+	src.events = []domain.LiquidationEvent{
+		{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong, Notional: 25e6, Time: now.Add(-30 * time.Second)},
+	}
+	c.RunOnce(ctx)
+	again, _ := svc.Get(ctx, "nw", a.ID)
+	if again.Armed || again.TriggeredPrice != 25e6 {
+		t.Fatalf("new wave %+v", again)
 	}
 }

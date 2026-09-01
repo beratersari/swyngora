@@ -706,6 +706,126 @@ func TestGetLiquidations_FromBook(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationOverview_EmptyFeed(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetLiquidationOverview(context.Background(), "all", "", 0)
+	if err != nil || got.CoinWindow != "24h" || got.Exchange != "all" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Coins == nil || got.Windows == nil {
+		t.Fatal("expected empty slices")
+	}
+}
+
+func TestGetLiquidationOverview_FromBook(t *testing.T) {
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 100, Quantity: 2, Notional: 200, Time: time.Now().UTC(),
+	})
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT", Side: domain.LiquidationSideShort,
+		Price: 3, Quantity: 10, Notional: 30, Time: time.Now().UTC(),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetLiquidationOverview(context.Background(), "binance", "1h", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CoinWindow != "1h" || len(got.Windows) != 4 || len(got.Coins) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Coins[0].Symbol != "BTCUSDT" {
+		t.Fatalf("rank %+v", got.Coins)
+	}
+}
+
+func TestGetLiquidationOverview_BadWindow(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationOverview(context.Background(), "all", "5m", 10)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestGetLiquidationLevels_AllCoinsFromBook(t *testing.T) {
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 100, Quantity: 1, Notional: 80, Time: time.Now().UTC().Add(-10 * time.Minute),
+	})
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBybit, Symbol: "ETHUSDT", Side: domain.LiquidationSideShort,
+		Price: 3, Quantity: 2, Notional: 20, Time: time.Now().UTC().Add(-10 * time.Minute),
+	})
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	got, err := svc.GetLiquidationLevels(context.Background(), "all", "all", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != domain.LiquidationLevelsKindTotal || got.Symbol != "all" || len(got.Bars) == 0 {
+		t.Fatalf("%+v", got)
+	}
+	var longN, shortN float64
+	for _, b := range got.Bars {
+		if v, e := strconv.ParseFloat(b.LongNotional, 64); e == nil {
+			longN += v
+		}
+		if v, e := strconv.ParseFloat(b.ShortNotional, 64); e == nil {
+			shortN += v
+		}
+	}
+	if longN != 80 || shortN != 20 {
+		t.Fatalf("long=%v short=%v bars=%+v", longN, shortN, got.Bars)
+	}
+	onlyBn, err := svc.GetLiquidationLevels(context.Background(), "binance", "*", "12h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bnShort float64
+	for _, b := range onlyBn.Bars {
+		if v, e := strconv.ParseFloat(b.ShortNotional, 64); e == nil {
+			bnShort += v
+		}
+	}
+	if bnShort != 0 {
+		t.Fatalf("binance must omit Bybit shorts %+v", onlyBn.Bars)
+	}
+}
+
+func TestGetLiquidationLevels_DoesNotBorrowOtherLastPrice(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{ticker: &domain.Ticker24h{LastPrice: "100"}},
+		domain.ExchangeBybit:   &fakeMarket{tickerErr: domain.ErrNotFound},
+	}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: &fakeOI{ser: &domain.OpenInterestSeries{Current: domain.OpenInterestPoint{Value: 1_000_000}}},
+	})
+	got, err := svc.GetLiquidationLevels(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastPrice != "" {
+		t.Fatalf("combined last must stay empty, got %s", got.LastPrice)
+	}
+	found := false
+	for _, m := range got.Missing {
+		if m == "bybit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected bybit missing %+v", got.Missing)
+	}
+}
+
+func TestGetLiquidationLevels_BadRange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationLevels(context.Background(), "all", "BTCUSDT", "9h")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 type fakeOI struct {
 	ser *domain.OpenInterestSeries
 	err error
@@ -1734,6 +1854,109 @@ func TestGetLiquidationHunt_BadSymbol(t *testing.T) {
 	_, err := svc.GetLiquidationHunt(context.Background(), "all", "  ")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+type huntHeatFut struct {
+	oi []domain.FuturesSnapshot
+}
+
+func (h huntHeatFut) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	if q.Metric == "liquidations" {
+		return []domain.LiquidationEvent{}, nil
+	}
+	if q.Metric == domain.FuturesMetricOpenInterest {
+		return h.oi, nil
+	}
+	return []domain.FuturesSnapshot{}, nil
+}
+
+func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
+	now := time.Now().UTC()
+	var candles []domain.Candle
+	var oi []domain.FuturesSnapshot
+	for i := 0; i < 50; i++ {
+		ts := now.Add(-time.Duration(50-i) * 30 * time.Minute)
+		candles = append(candles, domain.Candle{CloseTime: ts, Close: "100000"})
+		oi = append(oi, domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance,
+			SampledAt: ts, Value: 5_000_000,
+		})
+	}
+	fm := &fakeMarket{candles: candles, ticker: &domain.Ticker24h{LastPrice: "100000"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+		domain.ExchangeBybit:   fm,
+	}, &fakeSupply{})
+	svc.SetFuturesHistory(huntHeatFut{oi: oi})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Range != "24h" || len(got.Times) == 0 || len(got.Prices) != domain.HuntHeatmapPriceBins {
+		t.Fatalf("shape %+v", got)
+	}
+	if got.Binance.MaxIntensity <= 0 {
+		t.Fatalf("binance empty %+v", got.Binance)
+	}
+	if got.Combined.MaxIntensity < got.Binance.MaxIntensity-1 {
+		t.Fatalf("combined %+v", got.Combined)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_BadRange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	_, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "9h")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_NoCrossVenuePrices(t *testing.T) {
+	now := time.Now().UTC()
+	var binC, bybC []domain.Candle
+	var oi []domain.FuturesSnapshot
+	for i := 0; i < 50; i++ {
+		ts := now.Add(-time.Duration(50-i) * 30 * time.Minute)
+		binC = append(binC, domain.Candle{CloseTime: ts, Close: "100000", High: "100200", Low: "99800"})
+		bybC = append(bybC, domain.Candle{CloseTime: ts, Close: "50000", High: "50100", Low: "49900"})
+		oi = append(oi, domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, SampledAt: ts, Value: 5_000_000,
+		})
+	}
+	bin := &fakeMarket{candles: binC, ticker: &domain.Ticker24h{LastPrice: "100000"}}
+	byb := &fakeMarket{candles: bybC, ticker: &domain.Ticker24h{LastPrice: "50000"}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	}, &fakeSupply{})
+	svc.SetFuturesHistory(huntHeatFut{oi: oi})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Binance.MaxIntensity <= 0 || got.Bybit.MaxIntensity <= 0 {
+		t.Fatalf("both venues should paint bin=%+v byb=%+v", got.Binance, got.Bybit)
+	}
+	if len(got.Review.Binance.Horizons) != 3 || got.Review.Combined.Exchange != "combined" {
+		t.Fatalf("review %+v", got.Review)
+	}
+
+	emptyByb := &fakeMarket{tickerErr: domain.ErrNotFound}
+	svc2 := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   emptyByb,
+	}, &fakeSupply{})
+	svc2.SetFuturesHistory(huntHeatFut{oi: oi})
+	got2, err := svc2.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.Binance.MaxIntensity <= 0 {
+		t.Fatalf("binance empty %+v", got2.Binance)
+	}
+	if got2.Bybit.MaxIntensity != 0 || got2.Bybit.ColumnsWithOI != 0 {
+		t.Fatalf("bybit used binance prices %+v", got2.Bybit)
 	}
 }
 

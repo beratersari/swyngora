@@ -269,6 +269,17 @@ func (b *Backend) GetLiquidationHunt(ctx context.Context, exchange, symbol strin
 	return mustJSON(got)
 }
 
+func (b *Backend) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationHuntHeatmap(ctx, exchange, symbol, rawRange)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
@@ -1041,7 +1052,234 @@ func (b *Backend) GetLiquidations(ctx context.Context, exchange, symbol string) 
 	return mustJSON(map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange, "collectingSince": since,
 		"live": got.Live, "venueCount": got.VenueCount, "windows": wins,
+		"feed": liquidationFeedJSON(got.Feed),
 	})
+}
+
+func liquidationFeedJSON(f domain.LiquidationFeed) map[string]any {
+	venues := make([]map[string]any, 0, len(f.Venues))
+	for _, v := range f.Venues {
+		row := map[string]any{
+			"exchange": v.Exchange, "live": v.Live, "coverageSeconds": v.CoverageSeconds,
+		}
+		if !v.LastEventAt.IsZero() {
+			row["lastEventAt"] = v.LastEventAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !v.LastSeenAt.IsZero() {
+			row["lastSeenAt"] = v.LastSeenAt.UTC().Format(time.RFC3339Nano)
+		}
+		gaps := make([]map[string]any, 0, len(v.Gaps))
+		for _, g := range v.Gaps {
+			gap := map[string]any{"from": g.From.UTC().Format(time.RFC3339Nano), "seconds": g.Seconds}
+			if !g.To.IsZero() {
+				gap["to"] = g.To.UTC().Format(time.RFC3339Nano)
+			}
+			gaps = append(gaps, gap)
+		}
+		row["gaps"] = gaps
+		venues = append(venues, row)
+	}
+	missing := f.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	return map[string]any{"venues": venues, "missing": missing}
+}
+
+func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationOverview(ctx, exchange, window, limit)
+	if err != nil {
+		return nil, err
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "longNotional": w.LongNotional, "shortNotional": w.ShortNotional,
+			"totalNotional": w.TotalNotional, "count": w.Count,
+			"coverageSeconds": w.CoverageSeconds, "complete": w.Complete,
+		}
+		if w.Biggest != nil {
+			row["biggest"] = map[string]any{
+				"exchange": w.Biggest.Exchange, "side": w.Biggest.Side,
+				"price": w.Biggest.Price, "quantity": w.Biggest.Quantity, "notional": w.Biggest.Notional,
+				"time": w.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		wins = append(wins, row)
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		row := map[string]any{
+			"symbol": c.Symbol, "base": c.Base,
+			"longNotional": c.LongNotional, "shortNotional": c.ShortNotional,
+			"totalNotional": c.TotalNotional, "count": c.Count,
+		}
+		if c.Biggest != nil {
+			row["biggest"] = map[string]any{
+				"exchange": c.Biggest.Exchange, "side": c.Biggest.Side,
+				"price": c.Biggest.Price, "quantity": c.Biggest.Quantity, "notional": c.Biggest.Notional,
+				"time": c.Biggest.Time.UTC().Format(time.RFC3339Nano),
+			}
+		}
+		coins = append(coins, row)
+	}
+	since := ""
+	if !got.CollectingSince.IsZero() {
+		since = got.CollectingSince.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "coinWindow": got.CoinWindow, "collectingSince": since,
+		"live": got.Live, "venueCount": got.VenueCount, "windows": wins, "coins": coins,
+		"feed": liquidationFeedJSON(got.Feed),
+	})
+}
+
+func (b *Backend) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationLevels(ctx, exchange, symbol, rawRange)
+	if err != nil {
+		return nil, err
+	}
+	levels := make([]map[string]any, 0, len(got.Levels))
+	for _, lv := range got.Levels {
+		lev := make([]map[string]any, 0, len(lv.ByLeverage))
+		for _, sl := range lv.ByLeverage {
+			lev = append(lev, map[string]any{
+				"leverage": sl.Leverage, "longNotional": sl.LongNotional, "shortNotional": sl.ShortNotional,
+			})
+		}
+		levels = append(levels, map[string]any{
+			"price": lv.Price, "longNotional": lv.LongNotional, "shortNotional": lv.ShortNotional,
+			"totalNotional": lv.TotalNotional, "cumLong": lv.CumLong, "cumShort": lv.CumShort,
+			"cumTotal": lv.CumTotal, "byLeverage": lev,
+		})
+	}
+	bars := make([]map[string]any, 0, len(got.Bars))
+	for _, bar := range got.Bars {
+		bars = append(bars, map[string]any{
+			"t":            bar.Time.UTC().Format(time.RFC3339Nano),
+			"longNotional": bar.LongNotional, "shortNotional": bar.ShortNotional,
+			"totalNotional": bar.TotalNotional, "count": bar.Count,
+		})
+	}
+	from, to := "", ""
+	if !got.From.IsZero() {
+		from = got.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !got.To.IsZero() {
+		to = got.To.UTC().Format(time.RFC3339Nano)
+	}
+	return mustJSON(map[string]any{
+		"kind": got.Kind, "symbol": got.Symbol, "exchange": got.Exchange, "range": got.Range,
+		"from": from, "to": to, "lastPrice": got.LastPrice, "lastPrices": got.LastPrices,
+		"levels": levels, "bars": bars, "feed": liquidationFeedJSON(got.Feed),
+		"missing": got.Missing, "note": got.Note,
+	})
+}
+
+func (b *Backend) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationCascade(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(cascadeReportJSON(got))
+}
+
+func (b *Backend) ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanLiquidationCascades(ctx, exchange)
+	if err != nil {
+		return nil, err
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		hits = append(hits, map[string]any{
+			"symbol": h.Symbol, "side": h.Side, "grade": h.Grade, "score": h.Score,
+			"hottest": h.Hottest, "both": h.Both, "summary": h.Summary,
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange,
+		"asOf":     got.AsOf.UTC().Format(time.RFC3339Nano),
+		"market":   cascadeReportJSON(&got.Market),
+		"hits":     hits,
+		"summary":  got.Summary,
+		"note":     got.Note,
+	})
+}
+
+func cascadeReportJSON(got *domain.CascadeReport) map[string]any {
+	if got == nil {
+		return map[string]any{"venues": []any{}}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		windows := make([]map[string]any, 0, len(v.Windows))
+		for _, w := range v.Windows {
+			windows = append(windows, map[string]any{
+				"window": w.Window, "longNotional": w.LongNotional, "shortNotional": w.ShortNotional,
+				"totalNotional": w.TotalNotional, "longTypical": w.LongTypical, "shortTypical": w.ShortTypical,
+				"longRatio": w.LongRatio, "shortRatio": w.ShortRatio, "maxRatio": w.MaxRatio,
+				"side": w.Side, "grade": w.Grade, "count": w.Count,
+				"sampleBuckets": w.SampleBuckets, "complete": w.Complete,
+			})
+		}
+		row := map[string]any{
+			"exchange": string(v.Exchange), "symbol": v.Symbol, "windows": windows,
+			"side": v.Side, "grade": v.Grade, "score": v.Score, "hottest": v.Hottest,
+			"summary": v.Summary,
+		}
+		if !v.StartedAt.IsZero() {
+			row["startedAt"] = v.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		venues = append(venues, row)
+	}
+	episodes := make([]map[string]any, 0, len(got.Episodes))
+	for _, ep := range got.Episodes {
+		row := map[string]any{
+			"symbol": ep.Symbol, "exchange": ep.Exchange, "combined": ep.Combined,
+			"side": ep.Side, "grade": ep.Grade, "score": ep.Score, "open": ep.Open,
+			"durationSec": ep.DurationSec, "longNotional": ep.LongNotional,
+			"shortNotional": ep.ShortNotional, "totalNotional": ep.TotalNotional,
+			"count": ep.Count, "peakRatio": ep.PeakRatio, "summary": ep.Summary,
+		}
+		if !ep.StartedAt.IsZero() {
+			row["startedAt"] = ep.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if !ep.EndedAt.IsZero() {
+			row["endedAt"] = ep.EndedAt.UTC().Format(time.RFC3339Nano)
+		}
+		if ep.PriceOpen != "" {
+			row["priceOpen"] = ep.PriceOpen
+			row["priceClose"] = ep.PriceClose
+			row["priceHigh"] = ep.PriceHigh
+			row["priceLow"] = ep.PriceLow
+			row["priceChangePct"] = ep.PriceChangePct
+		}
+		episodes = append(episodes, row)
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange,
+		"asOf":   got.AsOf.UTC().Format(time.RFC3339Nano),
+		"venues": venues, "episodes": episodes, "summary": got.Summary, "note": got.Note,
+	}
+	if got.Both != nil {
+		out["both"] = map[string]any{
+			"agree": got.Both.Agree, "side": got.Both.Side, "grade": got.Both.Grade,
+			"score": got.Both.Score, "hottest": got.Both.Hottest, "summary": got.Both.Summary,
+		}
+	}
+	return out
 }
 
 func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error) {
@@ -1841,6 +2079,61 @@ func (b *Backend) CreateOrderBookAlert(ctx context.Context, clientID, exchange, 
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Kind:        string(domain.AlertKindLiqFeed),
+		TargetPrice: minDownSeconds,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
+func (b *Backend) CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:  clientID,
+		Exchange:  exchange,
+		Symbol:    symbol,
+		Kind:      string(domain.AlertKindLiqCascade),
+		Condition: minGrade,
+		Mode:      mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
+func (b *Backend) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Kind:        string(domain.AlertKindLiqNotional),
+		Condition:   side,
+		TargetPrice: notional,
+		Window:      window,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
@@ -2586,7 +2879,7 @@ func (b *Backend) CancelPortfolioOrder(ctx context.Context, clientID, id string)
 	return mustJSON(map[string]any{"order": pendingOrderMap(o), "note": "Order canceled; unused reservation released; it will not execute."})
 }
 
-func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -2602,23 +2895,40 @@ func (b *Backend) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange
 		tu := t.UTC()
 		start = &tu
 	}
-	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, portfolio.RecurringBuyCreateInput{
+	in := portfolio.RecurringBuyCreateInput{
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Name: name,
 		Amount: amount, Frequency: frequency, Weekday: weekday,
 		DayOfMonth: dayOfMonth, IntervalHours: intervalHours, StartAt: start,
-	})
+		TimeZone: timeZone, MaxPrice: maxPrice, Budget: budget, EndDate: endDate,
+	}
+	if hour != domain.RecurringHourUnset {
+		h, m := hour, minute
+		in.Hour, in.Minute = &h, &m
+	}
+	if endsAt != "" {
+		t, err := time.Parse(time.RFC3339Nano, endsAt)
+		if err != nil {
+			t, err = time.Parse(time.RFC3339, endsAt)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%w: endsAt must be RFC3339", domain.ErrInvalidArgument)
+		}
+		tu := t.UTC()
+		in.EndsAt = &tu
+	}
+	plan, err := b.Portfolio.CreateRecurringBuyPlan(ctx, in)
 	if err != nil {
 		return nil, err
 	}
 	return mustJSON(recurringPlanMap(plan))
 }
 
-func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string, clearEnds bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	in := portfolio.RecurringBuyUpdateInput{ClientID: clientID, PlanID: id}
+	in := portfolio.RecurringBuyUpdateInput{ClientID: clientID, PlanID: id, PortfolioID: PortfolioIDFrom(ctx)}
 	if name != "" {
 		in.Name = &name
 	}
@@ -2636,6 +2946,37 @@ func (b *Backend) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name
 	}
 	if intervalHours > 0 {
 		in.IntervalHours = &intervalHours
+	}
+	if timeZone != "" {
+		in.TimeZone = &timeZone
+	}
+	if hour != domain.RecurringHourUnset {
+		h, m := hour, minute
+		in.Hour, in.Minute = &h, &m
+	}
+	if maxPrice >= 0 {
+		in.MaxPrice = &maxPrice
+	}
+	if budget >= 0 {
+		in.Budget = &budget
+	}
+	if clearEnds {
+		in.ClearEnds = true
+	} else {
+		if endDate != "" {
+			in.EndDate = &endDate
+		}
+		if endsAt != "" {
+			t, err := time.Parse(time.RFC3339Nano, endsAt)
+			if err != nil {
+				t, err = time.Parse(time.RFC3339, endsAt)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("%w: endsAt must be RFC3339", domain.ErrInvalidArgument)
+			}
+			tu := t.UTC()
+			in.EndsAt = &tu
+		}
 	}
 	if startAt != "" {
 		t, err := time.Parse(time.RFC3339Nano, startAt)
@@ -3128,6 +3469,28 @@ func recurringPlanMap(p *domain.RecurringBuyPlan) map[string]any {
 		"createdAt": p.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if p.TimeZone != "" {
+		m["timeZone"] = p.TimeZone
+	}
+	if p.HasLocalTime || p.TimeZone != "" {
+		m["hour"] = p.Hour
+		m["minute"] = p.Minute
+	}
+	if p.MaxPrice > 0 {
+		m["maxPrice"] = p.MaxPrice
+	}
+	if p.Budget > 0 {
+		m["budget"] = p.Budget
+		m["spent"] = p.Spent
+		rem := domain.RecurringRemainingBudget(*p)
+		if rem < 1e18 {
+			m["remainingBudget"] = rem
+		}
+	}
+	if p.EndsAt != nil && !p.EndsAt.IsZero() {
+		m["endsAt"] = p.EndsAt.UTC().Format(time.RFC3339Nano)
+		m["endDate"] = domain.RecurringEndDate(*p)
+	}
 	if p.LastRunAt != nil {
 		m["lastRunAt"] = p.LastRunAt.UTC().Format(time.RFC3339Nano)
 	}
@@ -3266,7 +3629,7 @@ func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 		"status":      string(a.Status),
 		"createdAt":   a.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
-	if domain.IsBookAlert(a.Kind) && a.RangePct > 0 {
+	if (domain.IsBookAlert(a.Kind) || domain.IsLiqNotionalAlert(a.Kind)) && a.RangePct > 0 {
 		m["rangePct"] = a.RangePct
 	}
 	if a.Mode == domain.AlertModeRepeating {
@@ -3734,7 +4097,7 @@ func (b *Backend) CancelImport(ctx context.Context, clientID, id string) (json.R
 	return importJobJSON(job)
 }
 
-func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
+func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error) {
 	if b.PriceDiff == nil {
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
 	}
@@ -3742,6 +4105,7 @@ func (b *Backend) CreatePriceDiffWatch(ctx context.Context, clientID, symbol str
 		ClientID: clientID, Symbol: symbol, Notional: notional, MinProfit: minProfit,
 		MinNetDiffPct: minNetDiffPct, MinDurationSec: minDurationSec,
 		FeeBinancePct: feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+		Exchanges: exchanges,
 	})
 	if err != nil {
 		return nil, err
@@ -3769,6 +4133,48 @@ func (b *Backend) GetPriceDiffWatch(ctx context.Context, clientID, id string) (j
 		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
 	}
 	w, err := b.PriceDiff.GetWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	in := pricediff.UpdateInput{
+		ClientID: clientID, ID: id,
+		Notional: notional, MinProfit: minProfit, MinNetDiffPct: minNetDiffPct,
+		MinDurationSec: minDurationSec,
+		FeeBinancePct:  feeBinance, FeeCoinbasePct: feeCoinbase, FeeBybitPct: feeBybit,
+	}
+	if len(exchanges) > 0 {
+		in.Exchanges = &exchanges
+	}
+	w, err := b.PriceDiff.UpdateWatch(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.PauseWatch(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(priceDiffWatchMap(w))
+}
+
+func (b *Backend) ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.PriceDiff == nil {
+		return nil, fmt.Errorf("%w: price-diff not configured", domain.ErrUpstream)
+	}
+	w, err := b.PriceDiff.ResumeWatch(ctx, clientID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -3866,11 +4272,17 @@ func (b *Backend) QuotePriceDiffOpportunity(ctx context.Context, clientID, id st
 }
 
 func priceDiffWatchMap(w *domain.PriceDiffWatch) map[string]any {
+	exs := w.WatchExchanges()
+	names := make([]string, 0, len(exs))
+	for _, ex := range exs {
+		names = append(names, string(ex))
+	}
 	return map[string]any{
 		"id": w.ID, "clientId": w.ClientID, "symbol": w.Symbol,
 		"notional": w.Notional, "minProfit": w.MinProfit, "minNetDiffPct": w.MinNetDiffPct,
 		"minDurationSec": w.MinDurationSec,
 		"feeBinancePct":  w.FeeBinancePct, "feeCoinbasePct": w.FeeCoinbasePct, "feeBybitPct": w.FeeBybitPct,
+		"exchanges": names,
 		"status":    string(w.Status),
 		"createdAt": w.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": w.UpdatedAt.UTC().Format(time.RFC3339Nano),

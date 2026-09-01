@@ -73,6 +73,18 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*Created, error) 
 	return &Created{Key: k, Secret: secret}, nil
 }
 
+// CountActive is the number of non-revoked keys for clientID (bootstrap gate).
+func (s *Service) CountActive(ctx context.Context, clientID string) (int, error) {
+	if s == nil || s.store == nil {
+		return 0, nil
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return 0, err
+	}
+	return s.store.CountActiveAPIKeys(ctx, clientID)
+}
+
 // List returns keys for the client (no secrets).
 func (s *Service) List(ctx context.Context, clientID string) ([]domain.APIKey, error) {
 	if s.store == nil {

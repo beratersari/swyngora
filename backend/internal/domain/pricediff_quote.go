@@ -609,6 +609,8 @@ type PriceDiffScanQuery struct {
 	MinProfitAmount float64
 	Books           map[Exchange]*RawOrderBook
 	Unavailable     []PriceDiffUnavailable
+	// Venues limits the scan. Empty means every crypto spot venue.
+	Venues []Exchange
 }
 
 // PriceDiffQuoteScan is every usable buy/sell venue pair quoted at the same size.
@@ -646,9 +648,13 @@ func ScanPriceDiffQuotes(q PriceDiffScanQuery) (*PriceDiffQuoteScan, error) {
 		q.Fees = map[Exchange]float64{}
 	}
 	unavailable := append([]PriceDiffUnavailable(nil), q.Unavailable...)
-	venues := make([]Exchange, 0, 3)
-	for _, ex := range SupportedExchanges {
-		if IsEquityExchange(ex) {
+	wanted := q.Venues
+	if len(wanted) == 0 {
+		wanted = append([]Exchange(nil), PriceDiffSpotExchanges...)
+	}
+	venues := make([]Exchange, 0, len(wanted))
+	for _, ex := range wanted {
+		if !IsPriceDiffSpotExchange(ex) {
 			continue
 		}
 		book, ok := q.Books[ex]
@@ -668,7 +674,7 @@ func ScanPriceDiffQuotes(q PriceDiffScanQuery) (*PriceDiffQuoteScan, error) {
 		Symbol:           q.Symbol,
 		MinProfitPct:     q.MinProfitPct,
 		MinProfitAmount:  q.MinProfitAmount,
-		VenueCount:       3,
+		VenueCount:       len(wanted),
 		LoadedVenueCount: len(venues),
 		Routes:           []PriceDiffQuote{},
 		Unavailable:      unavailable,

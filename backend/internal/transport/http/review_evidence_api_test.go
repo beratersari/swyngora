@@ -170,7 +170,7 @@ func TestReviewEvidence_ReadKeyCannotPOSTMCP(t *testing.T) {
 }
 
 func TestReviewEvidence_QueryTokenAuthenticatesTenantRoute(t *testing.T) {
-	// Finding: extractAPIToken accepts ?token= / ?apiKey= (lands in logs and history).
+	// Closed: long-lived secrets are not accepted on the query string.
 	watch := watchlist.New(watchliststore.NewMemory())
 	h := NewRouterWithOptions(evidenceMarket(), watch, RouterOptions{
 		RateLimitRPS: 0, APIAuthToken: evidenceMaster,
@@ -185,15 +185,15 @@ func TestReviewEvidence_QueryTokenAuthenticatesTenantRoute(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=ws-user&token="+evidenceMaster, nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("?token= want 200 got %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("?token= want 401 got %d %s", rr.Code, rr.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/watchlist?clientId=ws-user&apiKey="+evidenceMaster, nil)
 	rr = httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("?apiKey= want 200 got %d %s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("?apiKey= want 401 got %d %s", rr.Code, rr.Body.String())
 	}
 }
 
@@ -216,6 +216,7 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/positioning?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/squeeze-risk?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/liquidation-hunt?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=12h", http.StatusOK},
 		{"/api/v1/market/correlation?symbol=SOLUSDT", http.StatusOK},
 		{"/api/v1/market/breadth", http.StatusOK},
 		{"/api/v1/market/volatility?symbol=SOLUSDT", http.StatusOK},
@@ -226,6 +227,7 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/orderbook/combined?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/liquidations/overview", http.StatusOK},
 	}
 	for _, tc := range paths {
 		t.Run(tc.path, func(t *testing.T) {

@@ -22,8 +22,9 @@ by size, plotted against Wilder RSI.
   A Top 50 request reuses a larger cached map. Informational only — not financial advice
 
 Web: `/heatmap?view=rsi`. Timeframe and Top 50 / 100. Dots are equal
-size; left is rank #1 by market cap. Hover for RSI; click to open
-coin detail.
+size and stay circular (the scatter is not stretched to the frame);
+left is rank #1 by market cap. Hover a coin for RSI — empty plot
+space does not pick a nearby pair. Click to open coin detail.
 
 ## Where the code lives
 

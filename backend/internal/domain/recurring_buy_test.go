@@ -90,3 +90,147 @@ func TestRecurringIntervalAndSalaryDay(t *testing.T) {
 		t.Fatal("daily+weekday")
 	}
 }
+
+func TestRecurringMondayNineIstanbul(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Wednesday afternoon UTC → next Monday 09:00 Istanbul
+	wed := time.Date(2024, 6, 5, 15, 0, 0, 0, time.UTC)
+	p := RecurringBuyPlan{
+		Frequency: RecurringWeekly, Weekday: "monday",
+		TimeZone: "Europe/Istanbul", HasLocalTime: true, Hour: 9, Minute: 0,
+	}
+	got := AlignRecurringStart(wed, p)
+	want := time.Date(2024, 6, 10, 9, 0, 0, 0, loc).UTC()
+	if !got.Equal(want) {
+		t.Fatalf("align got %v want %v (local %v)", got, want, got.In(loc))
+	}
+	next := AdvanceRecurringSchedule(got, p)
+	wantNext := time.Date(2024, 6, 17, 9, 0, 0, 0, loc).UTC()
+	if !next.Equal(wantNext) {
+		t.Fatalf("advance got %v want %v", next, wantNext)
+	}
+	if k := RecurringPeriodKeyPlan(got, p); k != "2024-W24" {
+		t.Fatalf("period=%s", k)
+	}
+}
+
+func TestRecurringMaxPriceBlocks(t *testing.T) {
+	if got := RecurringMaxPriceBlocks(66000, 0.001, 0.001, 65000); got == "" {
+		t.Fatal("last over max should block")
+	}
+	if got := RecurringMaxPriceBlocks(64000, 0.001, 0.001, 65000); got != "" {
+		t.Fatalf("64k should buy: %s", got)
+	}
+	// last under max but slipped+fee crosses the cap
+	if got := RecurringMaxPriceBlocks(64990, 0.001, 0.001, 65000); got == "" {
+		t.Fatal("effective price over max should block")
+	}
+	if got := RecurringMaxPriceBlocks(64000, 0.001, 0.001, 0); got != "" {
+		t.Fatalf("no cap: %s", got)
+	}
+	if _, err := NormalizeRecurringTimeZone("Europe/Istanbul"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NormalizeRecurringTimeZone("Not/AZone"); err == nil {
+		t.Fatal("expected invalid timezone")
+	}
+	if v, err := ResolveRecurringMaxPrice(65000); err != nil || v != 65000 {
+		t.Fatalf("%v %v", v, err)
+	}
+	if _, err := ResolveRecurringMaxPrice(-1); err == nil {
+		t.Fatal("expected invalid maxPrice")
+	}
+	if !RecurringFailRetryable("market price unavailable") || RecurringFailRetryable("last price above maxPrice") {
+		t.Fatal("retryable classification")
+	}
+	if RecurringIdempotencyKey("p1", "2026-01-01") != "rb:p1:2026-01-01" {
+		t.Fatal(RecurringIdempotencyKey("p1", "2026-01-01"))
+	}
+}
+
+func TestRecurringDSTSpringForwardAndFallBack(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 2024-03-10 02:00–03:00 skipped. 02:30 snaps to the first valid clock (03:00 EDT).
+	gap := CivilLocalTime(2024, 3, 10, 2, 30, ny)
+	if gap.In(ny).Hour() != 3 || gap.In(ny).Minute() != 0 {
+		t.Fatalf("spring-forward 02:30 → %v", gap.In(ny))
+	}
+	// 2024-11-03 01:30 happens twice; first occurrence is EDT (-04:00).
+	dup := CivilLocalTime(2024, 11, 3, 1, 30, ny)
+	_, off := dup.Zone()
+	if off != -4*3600 {
+		t.Fatalf("fall-back should pick first 01:30 (EDT), got %v off=%d", dup, off)
+	}
+	// Weekly Monday 09:00 keeps wall clock across the March 2024 spring-forward.
+	p := RecurringBuyPlan{
+		Frequency: RecurringWeekly, Weekday: "monday",
+		TimeZone: "America/New_York", HasLocalTime: true, Hour: 9, Minute: 0,
+	}
+	before := time.Date(2024, 3, 4, 9, 0, 0, 0, ny) // EST
+	next := AdvanceRecurringSchedule(before.UTC(), p)
+	want := time.Date(2024, 3, 11, 9, 0, 0, 0, ny) // EDT
+	if !next.Equal(want.UTC()) {
+		t.Fatalf("DST week: got %v want %v (local %v)", next, want.UTC(), next.In(ny))
+	}
+	if before.UTC().Hour() == next.Hour() {
+		t.Fatal("UTC hour should shift when local offset changes")
+	}
+}
+
+func TestRecurringBudgetAndEndDate(t *testing.T) {
+	if _, err := ResolveRecurringBudget(-1); err == nil {
+		t.Fatal("negative budget")
+	}
+	if v, err := ResolveRecurringBudget(5000); err != nil || v != 5000 {
+		t.Fatalf("%v %v", v, err)
+	}
+	p := RecurringBuyPlan{Amount: 500, Budget: 1200, Spent: 800}
+	spend, reason := RecurringSpendAmount(p)
+	if reason != "" || spend != 400 {
+		t.Fatalf("partial leftover spend=%v reason=%q", spend, reason)
+	}
+	p.Spent = 1200
+	if _, reason := RecurringSpendAmount(p); reason != "budget exhausted" {
+		t.Fatalf("exhausted: %q", reason)
+	}
+	loc, _ := time.LoadLocation("America/New_York")
+	end, err := ParseRecurringEndDate("2026-12-31", "America/New_York")
+	if err != nil || end == nil {
+		t.Fatal(err)
+	}
+	if end.In(loc).Format("2006-01-02") != "2026-12-31" {
+		t.Fatalf("end local date %v", end.In(loc))
+	}
+	lastSlot := time.Date(2026, 12, 31, 9, 0, 0, 0, loc)
+	plan := RecurringBuyPlan{EndsAt: end, TimeZone: "America/New_York"}
+	if !RecurringPlanAllowsRun(plan, lastSlot) {
+		t.Fatal("last local day should run")
+	}
+	if RecurringPlanAllowsRun(plan, lastSlot.AddDate(0, 0, 1)) {
+		t.Fatal("day after end should not run")
+	}
+}
+
+func TestRecurringDailyNineIstanbulAfterHour(t *testing.T) {
+	loc, err := time.LoadLocation("Europe/Istanbul")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Monday 10:00 Istanbul → next is Tuesday 09:00
+	from := time.Date(2024, 6, 10, 10, 0, 0, 0, loc)
+	p := RecurringBuyPlan{
+		Frequency: RecurringDaily, TimeZone: "Europe/Istanbul",
+		HasLocalTime: true, Hour: 9, Minute: 0,
+	}
+	got := AlignRecurringStart(from, p)
+	want := time.Date(2024, 6, 11, 9, 0, 0, 0, loc).UTC()
+	if !got.Equal(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}

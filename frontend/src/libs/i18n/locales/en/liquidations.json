@@ -1,0 +1,104 @@
+{
+  "title": "Liquidations",
+  "subtitle": "Futures long vs short liquidations across Binance USD-M and Bybit linear.",
+  "tabs": {
+    "overview": "Overview",
+    "chart": "Chart",
+    "cascade": "Cascade",
+    "heatmap": "Heatmap"
+  },
+  "exchange": "Venue",
+  "exchangeAll": "All venues",
+  "cards": {
+    "total": "Total",
+    "long": "Long",
+    "short": "Short",
+    "count": "{{count}} hits",
+    "selectAria": "Show {{window}} on the coin map"
+  },
+  "windows": {
+    "1h": "1H",
+    "4h": "4H",
+    "12h": "12H",
+    "24h": "24H"
+  },
+  "treemap": {
+    "aria": "Liquidation coin map",
+    "empty": "No liquidations in this window yet.",
+    "emptyHint": "Totals fill as live force-order feeds arrive.",
+    "legendLong": "More longs liquidated",
+    "legendShort": "More shorts liquidated",
+    "openHeatmap": "Open heatmap for {{symbol}}"
+  },
+  "heatmap": {
+    "symbol": "Symbol",
+    "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "chart": {
+    "coin": "Coin",
+    "allCoins": "All coins",
+    "range": "Range",
+    "levelsTitle": "Liquidation levels",
+    "totalsTitle": "Total liquidations",
+    "levelsHint": "Horizontal CoinGlass-style map: shorts above last, longs below. Colors are 100x / 50x / 25x / 10x. Hover a bar for that level and the total from last price to it.",
+    "totalsHint": "Observed long and short liquidations over time for every tracked coin on the selected venue.",
+    "lastPrice": "Last",
+    "leverage": "{{lev}}x",
+    "cumToLevel": "From last to here",
+    "aria": "Liquidation bar chart",
+    "empty": "No liquidation bars in this window yet.",
+    "emptyHint": "Pick another coin or wait for the live feed."
+  },
+  "cascade": {
+    "coin": "Scope",
+    "market": "Whole market",
+    "empty": "No liquidation cascade right now.",
+    "hint": "A cascade is a short burst of long or short liquidations far above that stream's own typical rate. Waves list when it started, how long it lasted, and the price move. Binance and Bybit are scored separately.",
+    "window": "Window",
+    "ratio": "Vs typical",
+    "grade": "Grade",
+    "gradeLabel": "Grade",
+    "side": "Side",
+    "score": "Score",
+    "hottest": "Hottest",
+    "both": "Both",
+    "yes": "Both",
+    "hitsTitle": "Coins bursting now",
+    "episodesTitle": "Waves in the last 24 hours",
+    "started": "Started",
+    "duration": "Lasted",
+    "price": "Price",
+    "status": "Status",
+    "running": "Open",
+    "ended": "Ended",
+    "bothVenues": "Both venues",
+    "grades": {
+      "quiet": "Quiet",
+      "elevated": "Elevated",
+      "cascade": "Cascade",
+      "extreme": "Extreme"
+    },
+    "sides": {
+      "long": "Long",
+      "short": "Short",
+      "both": "Both sides",
+      "none": "None"
+    }
+  },
+  "feed": {
+    "binance": "Binance",
+    "bybit": "Bybit",
+    "status": "Feed",
+    "down": "Down",
+    "lastPrint": "Last print",
+    "lastSeen": "Last socket",
+    "gaps": "{{hours}}h gap in last 6h",
+    "noGaps": "No gaps in last 6h",
+    "missingVenues": "No data from {{venues}}. Combined does not fill that from the other venue."
+  },
+  "status": {
+    "live": "Live",
+    "collecting": "Still collecting this window"
+  },
+  "disclaimer": "Informational only. Not financial advice. Binance samples the largest hit per symbol each second."
+}

@@ -58,6 +58,10 @@ type RouterOptions struct {
 	Accounts *account.Service
 	// Realtime is the WebSocket hub for live prices + paper portfolio events.
 	Realtime *realtime.Hub
+	// StrictMasterTenant rejects a remote process-master token from acting as
+	// an arbitrary clientId (loopback and user keys are unchanged). cmd/server
+	// sets this unless ALLOW_MASTER_IMPERSONATE=true. Tests stay loose by default.
+	StrictMasterTenant bool
 }
 
 // NewRouter wires HTTP routes for the API with default rate limits.
@@ -74,11 +78,13 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	health := handler.NewHealthHandler()
 	mh := handler.NewMarketHandler(marketSvc)
+	tickets := middleware.NewWSTicketIssuer()
 
 	mux.Handle("GET /health", health)
 	if opts.Realtime != nil {
-		rh := handler.NewRealtimeHandler(opts.Realtime, opts.CORSAllowOrigins)
+		rh := handler.NewRealtimeHandler(opts.Realtime, opts.CORSAllowOrigins).WithTickets(tickets)
 		mux.HandleFunc("GET /api/v1/realtime", rh.Info)
+		mux.HandleFunc("POST /api/v1/realtime/ticket", rh.IssueTicket)
 		mux.HandleFunc("GET /api/v1/ws", rh.ServeWS)
 	}
 	mux.HandleFunc("GET /api/v1/market/candles", mh.GetCandles)
@@ -91,6 +97,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/orderbook/impact", mh.GetOrderBookImpact)
 	mux.HandleFunc("GET /api/v1/market/orderbook/liquidity", mh.GetMarketLiquidity)
 	mux.HandleFunc("GET /api/v1/market/orderbook/heatmap", mh.GetOrderBookHeatmap)
+	mux.HandleFunc("GET /api/v1/market/liquidations/overview", mh.GetLiquidationOverview)
 	mux.HandleFunc("GET /api/v1/market/liquidations", mh.GetLiquidations)
 	mux.HandleFunc("GET /api/v1/market/open-interest", mh.GetOpenInterest)
 	mux.HandleFunc("GET /api/v1/market/funding-rate", mh.GetFundingRate)
@@ -99,7 +106,11 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/funding-arb", mh.GetFundingArb)
 	mux.HandleFunc("GET /api/v1/market/long-short-ratio", mh.GetLongShortRatio)
 	mux.HandleFunc("GET /api/v1/market/futures-history", mh.GetFuturesHistory)
+	mux.HandleFunc("GET /api/v1/market/liquidation-hunt/heatmap", mh.GetLiquidationHuntHeatmap)
 	mux.HandleFunc("GET /api/v1/market/liquidation-hunt", mh.GetLiquidationHunt)
+	mux.HandleFunc("GET /api/v1/market/liquidation-levels", mh.GetLiquidationLevels)
+	mux.HandleFunc("GET /api/v1/market/liquidation-cascade/scan", mh.ScanLiquidationCascades)
+	mux.HandleFunc("GET /api/v1/market/liquidation-cascade", mh.GetLiquidationCascade)
 	mux.HandleFunc("GET /api/v1/market/squeeze-risk", mh.GetSqueezeRisk)
 	mux.HandleFunc("GET /api/v1/market/positioning", mh.GetPositioning)
 	mux.HandleFunc("GET /api/v1/market/venue-divergence", mh.GetVenueDivergence)
@@ -235,7 +246,10 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/price-diff/watches", pdh.CreateWatch)
 		mux.HandleFunc("GET /api/v1/price-diff/watches", pdh.ListWatches)
 		mux.HandleFunc("GET /api/v1/price-diff/watches/{id}/quote", pdh.QuoteWatch)
+		mux.HandleFunc("POST /api/v1/price-diff/watches/{id}/pause", pdh.PauseWatch)
+		mux.HandleFunc("POST /api/v1/price-diff/watches/{id}/resume", pdh.ResumeWatch)
 		mux.HandleFunc("GET /api/v1/price-diff/watches/{id}", pdh.GetWatch)
+		mux.HandleFunc("PATCH /api/v1/price-diff/watches/{id}", pdh.UpdateWatch)
 		mux.HandleFunc("DELETE /api/v1/price-diff/watches/{id}", pdh.DeleteWatch)
 		mux.HandleFunc("GET /api/v1/price-diff/quote/scan", pdh.QuoteScan)
 		mux.HandleFunc("GET /api/v1/price-diff/quote", pdh.QuoteRoute)
@@ -326,8 +340,14 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	var h http.Handler = mux
 	h = middleware.AccountGate(opts.Accounts)(h)
 	h = middleware.APIKeyScope(h)
+	h = middleware.MasterTenant(opts.StrictMasterTenant, opts.APIKeys)(h)
 	// Auth wraps the mux so /mcp and tenant APIs are protected when a token is configured.
-	h = middleware.APIAuthWith(opts.APIAuthToken, opts.APIKeys)(h)
+	h = middleware.APIAuthWithOptions(middleware.APIAuthOptions{
+		Master:                opts.APIAuthToken,
+		Keys:                  opts.APIKeys,
+		Tickets:               tickets,
+		DenyMasterImpersonate: opts.StrictMasterTenant,
+	})(h)
 	h = middleware.RateLimit(opts.RateLimitRPS, opts.RateLimitBurst)(h)
 	h = middleware.CORSWithOrigins(opts.CORSAllowOrigins)(h)
 	return h

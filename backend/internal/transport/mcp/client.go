@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // APIClient is a minimal HTTP client for the Swyngora backend API.
@@ -229,6 +231,57 @@ func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string
 		q.Set("exchange", exchange)
 	}
 	return c.get(ctx, "/api/v1/market/liquidations", q)
+}
+
+// GetLiquidationOverview returns market-wide 1h/4h/12h/24h totals plus ranked coins.
+func (c *APIClient) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/liquidations/overview", q)
+}
+
+// GetLiquidationLevels returns price-level bars or market-wide time bars.
+func (c *APIClient) GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if rawRange != "" {
+		q.Set("range", rawRange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-levels", q)
+}
+
+// GetLiquidationCascade scores a short-burst long/short liquidation cascade.
+func (c *APIClient) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-cascade", q)
+}
+
+// ScanLiquidationCascades scores market-wide cascade risk and lists bursting coins.
+func (c *APIClient) ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-cascade/scan", q)
 }
 
 // GetOrderBookHeatmap returns recent resting bid/ask size over time.
@@ -480,6 +533,19 @@ func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol str
 		q.Set("exchange", exchange)
 	}
 	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
+}
+
+// GetLiquidationHuntHeatmap returns a price × time liquidation intensity grid.
+func (c *APIClient) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if rawRange != "" {
+		q.Set("range", rawRange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-hunt/heatmap", q)
 }
 
 // GetSqueezeRisk returns long/short squeeze risk scores per venue and combined.
@@ -1218,6 +1284,43 @@ func (c *APIClient) CreateOrderBookAlert(ctx context.Context, clientID, exchange
 	})
 }
 
+// CreateLiquidationFeedAlert alerts when a venue's liquidation socket stays down.
+func (c *APIClient) CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"kind":        "liquidation_feed",
+		"targetPrice": minDownSeconds,
+		"mode":        mode,
+	})
+}
+
+// CreateLiquidationCascadeAlert alerts when a coin hits a cascade grade.
+func (c *APIClient) CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":  clientID,
+		"exchange":  exchange,
+		"symbol":    symbol,
+		"kind":      "liquidation_cascade",
+		"condition": minGrade,
+		"mode":      mode,
+	})
+}
+
+// CreateLiquidationNotionalAlert alerts when window notional crosses a USDT line.
+func (c *APIClient) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"symbol":      symbol,
+		"kind":        "liquidation_notional",
+		"condition":   side,
+		"targetPrice": notional,
+		"window":      window,
+		"mode":        mode,
+	})
+}
+
 // DeletePriceAlert deletes an alert by id.
 func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}
@@ -1652,7 +1755,7 @@ func (c *APIClient) ListPortfolioTrades(ctx context.Context, clientID string, li
 }
 
 // CreateRecurringBuyPlan creates a paper recurring buy plan.
-func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol,
 		"amount": amount, "frequency": frequency,
@@ -1672,11 +1775,30 @@ func (c *APIClient) CreateRecurringBuyPlan(ctx context.Context, clientID, exchan
 	if intervalHours > 0 {
 		body["intervalHours"] = intervalHours
 	}
+	if timeZone != "" {
+		body["timeZone"] = timeZone
+	}
+	if hour != domain.RecurringHourUnset {
+		body["hour"] = hour
+		body["minute"] = minute
+	}
+	if maxPrice > 0 {
+		body["maxPrice"] = maxPrice
+	}
+	if budget > 0 {
+		body["budget"] = budget
+	}
+	if endDate != "" {
+		body["endDate"] = endDate
+	}
+	if endsAt != "" {
+		body["endsAt"] = endsAt
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/recurring-buys", body)
 }
 
 // UpdateRecurringBuyPlan patches name/amount/schedule. Zero/empty optional fields are omitted.
-func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error) {
+func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string, clearEnds bool) (json.RawMessage, error) {
 	q := url.Values{}
 	if clientID != "" {
 		q.Set("clientId", clientID)
@@ -1706,6 +1828,31 @@ func (c *APIClient) UpdateRecurringBuyPlan(ctx context.Context, clientID, id, na
 	}
 	if intervalHours > 0 {
 		body["intervalHours"] = intervalHours
+	}
+	if timeZone != "" {
+		body["timeZone"] = timeZone
+	}
+	if hour != domain.RecurringHourUnset {
+		body["hour"] = hour
+		body["minute"] = minute
+	}
+	if maxPrice >= 0 {
+		body["maxPrice"] = maxPrice
+	}
+	if budget >= 0 {
+		body["budget"] = budget
+	}
+	if clearEnds {
+		empty := ""
+		body["endDate"] = empty
+		body["endsAt"] = empty
+	} else {
+		if endDate != "" {
+			body["endDate"] = endDate
+		}
+		if endsAt != "" {
+			body["endsAt"] = endsAt
+		}
 	}
 	return c.sendJSON(ctx, http.MethodPatch, path, body)
 }
@@ -1998,12 +2145,16 @@ func (c *APIClient) ListMarginTrades(ctx context.Context, clientID string, limit
 }
 
 // CreatePriceDiffWatch creates a cross-exchange price difference watch.
-func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", map[string]any{
+func (c *APIClient) CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error) {
+	body := map[string]any{
 		"clientId": clientID, "symbol": symbol, "notional": notional, "minProfit": minProfit,
 		"minNetDiffPct": minNetDiffPct, "minDurationSec": minDurationSec,
 		"feeBinancePct": feeBinance, "feeCoinbasePct": feeCoinbase, "feeBybitPct": feeBybit,
-	})
+	}
+	if len(exchanges) > 0 {
+		body["exchanges"] = exchanges
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/price-diff/watches", body)
 }
 
 // ListPriceDiffWatches lists watches.
@@ -2018,6 +2169,62 @@ func (c *APIClient) GetPriceDiffWatch(ctx context.Context, clientID, id string) 
 	q := url.Values{}
 	q.Set("clientId", clientID)
 	return c.get(ctx, "/api/v1/price-diff/watches/"+url.PathEscape(id), q)
+}
+
+// UpdatePriceDiffWatch patches watch settings.
+func (c *APIClient) UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID}
+	if notional != nil {
+		body["notional"] = *notional
+	}
+	if minProfit != nil {
+		body["minProfit"] = *minProfit
+	}
+	if minNetDiffPct != nil {
+		body["minNetDiffPct"] = *minNetDiffPct
+	}
+	if minDurationSec != nil {
+		body["minDurationSec"] = *minDurationSec
+	}
+	if feeBinance != nil {
+		body["feeBinancePct"] = *feeBinance
+	}
+	if feeCoinbase != nil {
+		body["feeCoinbasePct"] = *feeCoinbase
+	}
+	if feeBybit != nil {
+		body["feeBybitPct"] = *feeBybit
+	}
+	if len(exchanges) > 0 {
+		body["exchanges"] = exchanges
+	}
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/price-diff/watches/"+url.PathEscape(id), body)
+}
+
+// PausePriceDiffWatch pauses a watch and closes open opportunities.
+func (c *APIClient) PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/price-diff/watches/" + url.PathEscape(id) + "/pause"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+// ResumePriceDiffWatch resumes a paused watch with a fresh duration timer.
+func (c *APIClient) ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/price-diff/watches/" + url.PathEscape(id) + "/resume"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
 }
 
 // DeletePriceDiffWatch deletes a watch.

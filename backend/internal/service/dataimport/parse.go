@@ -590,23 +590,50 @@ func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, targ
 	if id == "" {
 		return domain.PriceAlert{}, fmt.Errorf("id required")
 	}
-	rawEx := strings.TrimSpace(exchange)
-	var ex domain.Exchange
-	if rawEx == "" {
-		ex = domain.DefaultExchange
-	} else {
-		if !domain.IsValidExchange(rawEx) {
-			return domain.PriceAlert{}, fmt.Errorf("bad exchange")
-		}
-		ex = domain.ParseExchange(rawEx)
-	}
-	sym := domain.NormalizeSymbol(ex, symbol)
-	if sym == "" {
-		return domain.PriceAlert{}, fmt.Errorf("symbol required")
-	}
 	k, ok := domain.NormalizeAlertKind(kind)
 	if !ok {
 		return domain.PriceAlert{}, fmt.Errorf("bad kind")
+	}
+	var ex domain.Exchange
+	var sym string
+	if domain.IsLiquidationAlert(k) {
+		parsed, err := domain.ParseLiquidationExchange(exchange)
+		if err != nil {
+			return domain.PriceAlert{}, fmt.Errorf("bad exchange")
+		}
+		ex = domain.Exchange(parsed)
+		if k == domain.AlertKindLiqFeed {
+			sym = domain.LiqAlertSymbolAll
+		} else if k == domain.AlertKindLiqNotional {
+			sym = domain.NormalizeLiquidationSymbol(symbol)
+			if sym == "" || strings.EqualFold(sym, "all") {
+				return domain.PriceAlert{}, fmt.Errorf("symbol required")
+			}
+		} else {
+			s, err := domain.ParseLiquidationLevelsSymbol(symbol)
+			if err != nil {
+				return domain.PriceAlert{}, fmt.Errorf("symbol required")
+			}
+			if strings.EqualFold(s, "all") {
+				sym = domain.LiqAlertSymbolAll
+			} else {
+				sym = s
+			}
+		}
+	} else {
+		rawEx := strings.TrimSpace(exchange)
+		if rawEx == "" {
+			ex = domain.DefaultExchange
+		} else {
+			if !domain.IsValidExchange(rawEx) {
+				return domain.PriceAlert{}, fmt.Errorf("bad exchange")
+			}
+			ex = domain.ParseExchange(rawEx)
+		}
+		sym = domain.NormalizeSymbol(ex, symbol)
+		if sym == "" {
+			return domain.PriceAlert{}, fmt.Errorf("symbol required")
+		}
 	}
 	if err := domain.ValidateAlertSpec(k, condition, target, rangePct); err != nil {
 		return domain.PriceAlert{}, err

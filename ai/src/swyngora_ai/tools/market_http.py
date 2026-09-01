@@ -21,6 +21,8 @@ from swyngora_ai.tools.packs import filter_tools
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
 # Defaults True for CLI/local so tools work without an HTTP scope envelope.
+# Bound CLI/legacy turns default to trade. Unbound workers use _AMBIGUOUS_BIND
+# (deny). Orchestrator always calls bind_tool_scope for HTTP-scoped chats.
 bound_can_trade: ContextVar[bool] = ContextVar("bound_can_trade", default=True)
 bound_can_manage_keys: ContextVar[bool] = ContextVar("bound_can_manage_keys", default=True)
 _turn_tool_json: ContextVar[list[str] | None] = ContextVar("turn_tool_json", default=None)
@@ -45,6 +47,7 @@ _bind_stack: list[_ToolBind] = []
 _bind_live: ContextVar[bool] = ContextVar("bind_live", default=False)
 _P = TypeVar("_P")
 _AMBIGUOUS_BIND = _ToolBind("", False, False, ambiguous=True)
+_UNBOUND = _ToolBind("", False, False, ambiguous=False)
 
 
 def _context_bind() -> _ToolBind:
@@ -81,15 +84,22 @@ def _pop_matching(match: Callable[[_ToolBind], bool]) -> None:
 
 
 def _active_bind() -> _ToolBind:
+    """Use this task's ContextVars only. Never guess from the process stack.
+
+    LangChain/desk pool workers must go through submit_with_bound_context.
+    A missing bind fails closed so overlapping chats cannot inherit
+    another tenant's clientId or can_trade flag.
+    """
     if _bind_live.get() or bound_client_id.get():
         return _context_bind()
     with _bind_lock:
-        if not _bind_stack:
-            return _context_bind()
         clients = {b.client_id for b in _bind_stack if b.client_id}
-        if len(clients) > 1:
+        scopes = {(b.can_trade, b.can_manage_keys) for b in _bind_stack}
+        if len(clients) > 1 or len(scopes) > 1:
             return _AMBIGUOUS_BIND
-        return _bind_stack[-1]
+    # No ContextVar: do not guess tenant/scope from the stack (that leaked
+    # can_trade across overlapping same-tenant chats). Mutating tools deny.
+    return _UNBOUND
 
 
 def submit_with_bound_context(
@@ -430,6 +440,54 @@ class LiquidationsInput(BaseModel):
     )
 
 
+class LiquidationLevelsInput(BaseModel):
+    symbol: str = Field(
+        default="all",
+        description="Pair e.g. BTCUSDT, or all for market-wide time bars",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = combined)",
+    )
+    range: str = Field(
+        default="24h",
+        description="12h|24h|3d|7d (totals clamp to 24h)",
+    )
+
+
+class LiquidationCascadeInput(BaseModel):
+    symbol: str = Field(
+        default="all",
+        description="Pair e.g. BTCUSDT, or all for market-wide pooled risk",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
+class LiquidationCascadeScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+
+
+class LiquidationOverviewInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both venues)",
+    )
+    window: str = Field(
+        default="24h",
+        description="1h|4h|12h|24h — ranks coins (default 24h)",
+    )
+    limit: int = Field(
+        default=50,
+        description="Max coins (default 50, max 100)",
+    )
+
+
 class OpenInterestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -443,6 +501,15 @@ class LiquidationHuntInput(BaseModel):
     exchange: str = Field(
         default="all",
         description="binance|bybit|all (default all = both venues, never averaged)",
+    )
+
+
+class LiquidationHeatmapInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    range: str = Field(default="24h", description="12h | 24h | 3d | 7d")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
     )
 
 
@@ -1023,6 +1090,38 @@ class AlertCreateInput(BaseModel):
     )
 
 
+class LiquidationFeedAlertInput(BaseModel):
+    client_id: str
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    min_down_seconds: float = Field(
+        default=300,
+        ge=30,
+        description="Fire after the feed stays down this many seconds (default 300)",
+    )
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
+class LiquidationNotionalAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    notional: float = Field(gt=0, description="USDT threshold e.g. 20000000")
+    side: str = Field(default="both", description="long | short | both")
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    window: str = Field(default="5m", description="1m | 5m | 15m | 1h")
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
+class LiquidationCascadeAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair e.g. BTCUSDT, or all for a market scan")
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    min_grade: str = Field(
+        default="cascade",
+        description="cascade (default) | extreme | elevated",
+    )
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
 class OrderBookAlertInput(BaseModel):
     client_id: str
     symbol: str
@@ -1280,6 +1379,15 @@ class RecurringBuyCreateInput(BaseModel):
     weekday: str = Field(default="", description="Weekly: monday..sunday")
     day_of_month: int = Field(default=0, description="Monthly salary day 1-31")
     interval_hours: int = Field(default=0, description="Interval frequency hours 1-168")
+    time_zone: str = Field(default="", description="IANA timezone e.g. Europe/Istanbul")
+    hour: int | None = Field(default=None, description="Local hour 0-23")
+    minute: int = Field(default=0, description="Local minute 0-59")
+    max_price: float = Field(
+        default=0, description="Skip if last or fee+slippage unit exceeds this; 0 = no cap"
+    )
+    budget: float = Field(default=0, description="Total cash cap across succeeded runs; 0 = no cap")
+    end_date: str = Field(default="", description="Last inclusive local day YYYY-MM-DD")
+    ends_at: str = Field(default="", description="RFC3339 inclusive last scheduled instant")
     start_at: str = Field(default="", description="RFC3339 first run; default now")
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
@@ -1293,6 +1401,13 @@ class RecurringBuyUpdateInput(BaseModel):
     weekday: str = ""
     day_of_month: int = 0
     interval_hours: int = 0
+    time_zone: str = ""
+    hour: int | None = None
+    minute: int = 0
+    max_price: float | None = None
+    budget: float | None = None
+    end_date: str | None = None
+    ends_at: str | None = None
     start_at: str = ""
 
 
@@ -1381,11 +1496,34 @@ class PriceDiffWatchCreateInput(BaseModel):
     fee_binance_pct: float = Field(default=0, ge=0, description="Binance fee %")
     fee_coinbase_pct: float = Field(default=0, ge=0, description="Coinbase fee %")
     fee_bybit_pct: float = Field(default=0, ge=0, description="Bybit fee %")
+    exchanges: list[str] | None = Field(
+        default=None,
+        description="Venues to walk, e.g. [binance, bybit]. Default all three. At least two.",
+    )
 
 
 class PriceDiffWatchIdInput(BaseModel):
     client_id: str
     watch_id: str
+
+
+class PriceDiffWatchUpdateInput(BaseModel):
+    client_id: str
+    watch_id: str
+    notional: float | None = Field(default=None, description="New quote size to walk")
+    min_profit: float | None = Field(default=None, description="New after-fee profit floor")
+    min_duration_sec: float | None = Field(
+        default=None,
+        description="Seconds the fill must stay qualifying; 0 = first tick",
+    )
+    min_net_diff_pct: float | None = None
+    fee_binance_pct: float | None = None
+    fee_coinbase_pct: float | None = None
+    fee_bybit_pct: float | None = None
+    exchanges: list[str] | None = Field(
+        default=None,
+        description="Replace venues, e.g. [binance, bybit]. At least two.",
+    )
 
 
 class PriceDiffOppListInput(BaseModel):
@@ -1681,6 +1819,34 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_liquidation_levels(
+        symbol: str = "all", exchange: str = "all", range: str = "24h"
+    ) -> str:
+        return http.get(
+            "/api/v1/market/liquidation-levels",
+            {"symbol": symbol, "exchange": exchange, "range": range},
+        )
+
+    def get_liquidation_cascade(symbol: str = "all", exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-cascade",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def scan_liquidation_cascades(exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-cascade/scan",
+            {"exchange": exchange},
+        )
+
+    def get_liquidation_overview(
+        exchange: str = "all", window: str = "24h", limit: int = 50
+    ) -> str:
+        return http.get(
+            "/api/v1/market/liquidations/overview",
+            {"exchange": exchange, "window": window, "limit": limit},
+        )
+
     def get_open_interest(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/open-interest",
@@ -1691,6 +1857,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidation-hunt",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def get_liquidation_heatmap(symbol: str, range: str = "24h", exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-hunt/heatmap",
+            {"symbol": symbol, "range": range, "exchange": exchange},
         )
 
     def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
@@ -2484,6 +2656,65 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             },
         )
 
+    def create_liquidation_feed_alert(
+        client_id: str,
+        exchange: str = "all",
+        min_down_seconds: float = 300.0,
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_feed",
+                "exchange": exchange,
+                "targetPrice": min_down_seconds,
+                "mode": mode,
+            },
+        )
+
+    def create_liquidation_cascade_alert(
+        client_id: str,
+        symbol: str,
+        exchange: str = "all",
+        min_grade: str = "cascade",
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_cascade",
+                "exchange": exchange,
+                "symbol": symbol,
+                "condition": min_grade,
+                "mode": mode,
+            },
+        )
+
+    def create_liquidation_notional_alert(
+        client_id: str,
+        symbol: str,
+        notional: float,
+        side: str = "both",
+        exchange: str = "all",
+        window: str = "5m",
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "liquidation_notional",
+                "exchange": exchange,
+                "symbol": symbol,
+                "condition": side,
+                "targetPrice": notional,
+                "window": window,
+                "mode": mode,
+            },
+        )
+
     def delete_price_alert(client_id: str, id: str) -> str:
         return http.delete(f"/api/v1/alerts/{id}", {"clientId": client_id})
 
@@ -2923,6 +3154,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         weekday: str = "",
         day_of_month: int = 0,
         interval_hours: int = 0,
+        time_zone: str = "",
+        hour: int | None = None,
+        minute: int = 0,
+        max_price: float = 0,
+        budget: float = 0,
+        end_date: str = "",
+        ends_at: str = "",
         start_at: str = "",
         portfolio_id: str = "",
     ) -> str:
@@ -2941,6 +3179,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["dayOfMonth"] = day_of_month
         if interval_hours:
             body["intervalHours"] = interval_hours
+        if time_zone:
+            body["timeZone"] = time_zone
+        if hour is not None:
+            body["hour"] = hour
+            body["minute"] = minute
+        if max_price:
+            body["maxPrice"] = max_price
+        if budget:
+            body["budget"] = budget
+        if end_date:
+            body["endDate"] = end_date
+        if ends_at:
+            body["endsAt"] = ends_at
         if start_at:
             body["startAt"] = start_at
         if portfolio_id:
@@ -2956,6 +3207,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         weekday: str = "",
         day_of_month: int = 0,
         interval_hours: int = 0,
+        time_zone: str = "",
+        hour: int | None = None,
+        minute: int = 0,
+        max_price: float | None = None,
+        budget: float | None = None,
+        end_date: str | None = None,
+        ends_at: str | None = None,
         start_at: str = "",
     ) -> str:
         body: dict[str, Any] = {}
@@ -2971,6 +3229,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["dayOfMonth"] = day_of_month
         if interval_hours:
             body["intervalHours"] = interval_hours
+        if time_zone:
+            body["timeZone"] = time_zone
+        if hour is not None:
+            body["hour"] = hour
+            body["minute"] = minute
+        if max_price is not None:
+            body["maxPrice"] = max_price
+        if budget is not None:
+            body["budget"] = budget
+        if end_date is not None:
+            body["endDate"] = end_date
+        if ends_at is not None:
+            body["endsAt"] = ends_at
         if start_at:
             body["startAt"] = start_at
         return http.patch(
@@ -3172,21 +3443,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         fee_binance_pct: float = 0,
         fee_coinbase_pct: float = 0,
         fee_bybit_pct: float = 0,
+        exchanges: list[str] | None = None,
     ) -> str:
-        return http.post(
-            "/api/v1/price-diff/watches",
-            {
-                "clientId": client_id,
-                "symbol": symbol,
-                "notional": notional,
-                "minProfit": min_profit,
-                "minDurationSec": min_duration_sec,
-                "minNetDiffPct": min_net_diff_pct,
-                "feeBinancePct": fee_binance_pct,
-                "feeCoinbasePct": fee_coinbase_pct,
-                "feeBybitPct": fee_bybit_pct,
-            },
-        )
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "notional": notional,
+            "minProfit": min_profit,
+            "minDurationSec": min_duration_sec,
+            "minNetDiffPct": min_net_diff_pct,
+            "feeBinancePct": fee_binance_pct,
+            "feeCoinbasePct": fee_coinbase_pct,
+            "feeBybitPct": fee_bybit_pct,
+        }
+        if exchanges:
+            body["exchanges"] = exchanges
+        return http.post("/api/v1/price-diff/watches", body)
 
     def list_price_diff_watches(client_id: str) -> str:
         return http.get("/api/v1/price-diff/watches", {"clientId": client_id})
@@ -3195,6 +3467,49 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             f"/api/v1/price-diff/watches/{watch_id}",
             {"clientId": client_id},
+        )
+
+    def update_price_diff_watch(
+        client_id: str,
+        watch_id: str,
+        notional: float | None = None,
+        min_profit: float | None = None,
+        min_duration_sec: float | None = None,
+        min_net_diff_pct: float | None = None,
+        fee_binance_pct: float | None = None,
+        fee_coinbase_pct: float | None = None,
+        fee_bybit_pct: float | None = None,
+        exchanges: list[str] | None = None,
+    ) -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if notional is not None:
+            body["notional"] = notional
+        if min_profit is not None:
+            body["minProfit"] = min_profit
+        if min_duration_sec is not None:
+            body["minDurationSec"] = min_duration_sec
+        if min_net_diff_pct is not None:
+            body["minNetDiffPct"] = min_net_diff_pct
+        if fee_binance_pct is not None:
+            body["feeBinancePct"] = fee_binance_pct
+        if fee_coinbase_pct is not None:
+            body["feeCoinbasePct"] = fee_coinbase_pct
+        if fee_bybit_pct is not None:
+            body["feeBybitPct"] = fee_bybit_pct
+        if exchanges is not None:
+            body["exchanges"] = exchanges
+        return http.patch(f"/api/v1/price-diff/watches/{watch_id}", body)
+
+    def pause_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/price-diff/watches/{watch_id}/pause?clientId={client_id}",
+            {},
+        )
+
+    def resume_price_diff_watch(client_id: str, watch_id: str) -> str:
+        return http.post(
+            f"/api/v1/price-diff/watches/{watch_id}/resume?clientId={client_id}",
+            {},
         )
 
     def delete_price_diff_watch(client_id: str, watch_id: str) -> str:
@@ -3576,6 +3891,54 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=LiquidationsInput,
         ),
         StructuredTool.from_function(
+            get_liquidation_overview,
+            name="get_liquidation_overview",
+            description=(
+                "Market-wide futures liquidations: long vs short notional for the last "
+                "1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total "
+                "notional for a treemap. Binance USD-M + Bybit linear. exchange=all sums "
+                "both. window (1h|4h|12h|24h, default 24h) ranks coins. Prefer this for "
+                "the overall market liquidation situation."
+            ),
+            args_schema=LiquidationOverviewInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_levels,
+            name="get_liquidation_levels",
+            description=(
+                "CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns "
+                "estimated long/short notional at each price. symbol=all returns "
+                "observed time bars of total liquidations across every coin. "
+                "exchange=binance|bybit|all. range=12h|24h|3d|7d."
+            ),
+            args_schema=LiquidationLevelsInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_cascade,
+            name="get_liquidation_cascade",
+            description=(
+                "Detect a liquidation cascade: a short burst of long or short "
+                "liquidations far above that stream's own typical rate "
+                "(1m / 5m / 15m vs the prior 6 hours). episodes lists each "
+                "wave in the last 24h (start, duration, long/short notional, "
+                "price move). Binance and Bybit are scored separately; a "
+                "combined episode is the same-side wave on both venues at "
+                "once. symbol=all is market-wide."
+            ),
+            args_schema=LiquidationCascadeInput,
+        ),
+        StructuredTool.from_function(
+            scan_liquidation_cascades,
+            name="scan_liquidation_cascades",
+            description=(
+                "Market-wide liquidation cascade scan: pooled market risk plus "
+                "coins currently bursting (elevated / cascade / extreme). "
+                "A hit's both flag means the same side is cascading on Binance "
+                "and Bybit."
+            ),
+            args_schema=LiquidationCascadeScanInput,
+        ),
+        StructuredTool.from_function(
             get_orderbook_heatmap,
             name="get_orderbook_heatmap",
             description=(
@@ -3727,6 +4090,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "of exchange behavior. Not financial advice."
             ),
             args_schema=LiquidationHuntInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_heatmap,
+            name="get_liquidation_heatmap",
+            description=(
+                "Price × time liquidation intensity map (CoinGlass-style) from "
+                "historical open interest, price, the hunt leverage mix, and "
+                "observed liquidations. range=12h|24h|3d|7d. Returns Binance, "
+                "Bybit, and combined (sum) grids. Not financial advice."
+            ),
+            args_schema=LiquidationHeatmapInput,
         ),
         StructuredTool.from_function(
             get_squeeze_risk,
@@ -4242,6 +4616,37 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=OrderBookAlertInput,
         ),
         StructuredTool.from_function(
+            create_liquidation_feed_alert,
+            name="create_liquidation_feed_alert",
+            description=(
+                "Alert when Binance or Bybit stop sending liquidation data longer than "
+                "min_down_seconds (default 300). Fires once, stays quiet while still down, "
+                "re-arms when the feed is live again."
+            ),
+            args_schema=LiquidationFeedAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_liquidation_cascade_alert,
+            name="create_liquidation_cascade_alert",
+            description=(
+                "Alert when a coin has a big liquidation cascade. Payload names the exchange "
+                "and coin. symbol=BTCUSDT or all. min_grade=cascade (default) or extreme. "
+                "Fires once per wave and does not re-fire while the same cascade stays on."
+            ),
+            args_schema=LiquidationCascadeAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_liquidation_notional_alert,
+            name="create_liquidation_notional_alert",
+            description=(
+                "Alert when a coin's liquidations in a window exceed a USDT amount. "
+                "side=long|short|both, exchange=binance|bybit|all, window=1m|5m|15m|1h. "
+                "Fires once when the wave crosses the line and does not re-fire until "
+                "the window drops and a new wave starts."
+            ),
+            args_schema=LiquidationNotionalAlertInput,
+        ),
+        StructuredTool.from_function(
             delete_price_alert,
             name="delete_price_alert",
             description="Delete a price alert by id for a clientId.",
@@ -4485,14 +4890,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Create a named paper recurring buy: cash amount at market on "
                 "daily|weekly|monthly|interval. weekday for weekly, dayOfMonth for salary day, "
-                "intervalHours (e.g. 12) for interval. Simulated only."
+                "intervalHours (e.g. 12) for interval. time_zone (Europe/Istanbul) + hour/minute "
+                "for a DST-aware local clock (Monday 09:00). max_price skips a run if last or "
+                "fee+slippage unit would exceed it. budget is a total cash cap; end_date "
+                "(YYYY-MM-DD) or ends_at is the last inclusive run. Simulated only."
             ),
             args_schema=RecurringBuyCreateInput,
         ),
         StructuredTool.from_function(
             update_recurring_buy,
             name="update_recurring_buy",
-            description="Update a paper recurring buy name, amount, or schedule.",
+            description="Update a paper recurring buy name, amount, schedule, time_zone/hour/minute, max_price, budget, or end_date/ends_at.",
             args_schema=RecurringBuyUpdateInput,
         ),
         StructuredTool.from_function(
@@ -4639,6 +5047,30 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_price_diff_watch,
             name="get_price_diff_watch",
             description="Get one price-diff watch by id.",
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            update_price_diff_watch,
+            name="update_price_diff_watch",
+            description=(
+                "Change notional, min_profit, min_duration_sec, or fees on an existing "
+                "price-diff watch. Resets the duration timer. Does not change pause/active."
+            ),
+            args_schema=PriceDiffWatchUpdateInput,
+        ),
+        StructuredTool.from_function(
+            pause_price_diff_watch,
+            name="pause_price_diff_watch",
+            description=(
+                "Pause a price-diff watch. Stops searching and closes any open opportunity. "
+                "Resume starts the duration timer from zero."
+            ),
+            args_schema=PriceDiffWatchIdInput,
+        ),
+        StructuredTool.from_function(
+            resume_price_diff_watch,
+            name="resume_price_diff_watch",
+            description="Resume a paused price-diff watch. Does not continue a duration wait from before pause.",
             args_schema=PriceDiffWatchIdInput,
         ),
         StructuredTool.from_function(

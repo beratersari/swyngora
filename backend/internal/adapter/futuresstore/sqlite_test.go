@@ -118,6 +118,92 @@ func TestInsertLiquidation_NoDuplicatesAndPurge(t *testing.T) {
 	}
 }
 
+func TestListLiquidationsSince_PagesAllVenues(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	from := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	for i := 0; i < 12; i++ {
+		ex := domain.ExchangeBinance
+		if i%2 == 1 {
+			ex = domain.ExchangeBybit
+		}
+		_, err := s.InsertLiquidation(context.Background(), domain.LiquidationEvent{
+			Exchange: ex, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+			Price: 1, Quantity: float64(i + 1), Notional: float64(i + 1),
+			Time: from.Add(time.Duration(i) * time.Minute),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := s.ListLiquidationsSince(context.Background(), from, 0)
+	if err != nil || len(all) != 12 {
+		t.Fatalf("unlimited got %d %v", len(all), err)
+	}
+	var bn, bb int
+	for _, e := range all {
+		if e.Exchange == domain.ExchangeBinance {
+			bn++
+		}
+		if e.Exchange == domain.ExchangeBybit {
+			bb++
+		}
+	}
+	if bn != 6 || bb != 6 {
+		t.Fatalf("venues bn=%d bb=%d", bn, bb)
+	}
+	capped, err := s.ListLiquidationsSince(context.Background(), from, 5)
+	if err != nil || len(capped) != 5 {
+		t.Fatalf("cap %d %v", len(capped), err)
+	}
+}
+
+func TestLiquidationCoverage_Reopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "futures.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := time.Date(2026, 8, 30, 10, 0, 0, 0, time.UTC)
+	err = s.UpsertLiquidationCoverage(context.Background(), []domain.LiquidationCoverage{
+		{Exchange: domain.ExchangeBinance, FirstWatch: first, Live: 2 * time.Hour},
+		{Exchange: domain.ExchangeBybit, Symbol: "ETHUSDT", FirstWatch: first, Live: time.Hour},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.UpsertLiquidationCoverage(context.Background(), []domain.LiquidationCoverage{
+		{Exchange: domain.ExchangeBinance, FirstWatch: first.Add(time.Hour), Live: 3 * time.Hour},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	got, err := s2.ListLiquidationCoverage(context.Background())
+	if err != nil || len(got) != 2 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	var bn domain.LiquidationCoverage
+	for _, row := range got {
+		if row.Exchange == domain.ExchangeBinance && row.Symbol == "" {
+			bn = row
+		}
+	}
+	if !bn.FirstWatch.Equal(first) || bn.Live != 3*time.Hour {
+		t.Fatalf("merge %+v", bn)
+	}
+}
+
 func TestReopenKeepsRows(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "futures.db")

@@ -7,6 +7,7 @@ import { Text } from '@/components/atoms/Text';
 import type { PriceAlert } from '@/libs/api/endpoints/alertsApi';
 import { formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
+import { alertConditionLabel, alertSymbolLabel } from './helpers';
 import type { AlertsTableProps } from './AlertsTable.types';
 
 export function AlertsTable({
@@ -24,7 +25,9 @@ export function AlertsTable({
       key: 'symbol',
       render: (_, row) => (
         <Text variant="label" mono color="primary">
-          {formatSymbolDisplay(row.symbol)}
+          {row.kind === 'liquidation_feed' || (row.symbol ?? '').toUpperCase() === 'ALL'
+            ? alertSymbolLabel(row)
+            : formatSymbolDisplay(row.symbol)}
         </Text>
       ),
     },
@@ -40,7 +43,7 @@ export function AlertsTable({
       key: 'condition',
       render: (_, row) => (
         <Text variant="body">
-          {row.condition === 'above' ? '≥' : '≤'} {row.targetPrice}
+          {alertConditionLabel(row)}
           {row.mode === 'repeating' ? ` (${t('alerts:modes.repeating', { defaultValue: 'repeating' })})` : ''}
         </Text>
       ),
@@ -61,7 +64,7 @@ export function AlertsTable({
       key: 'actions',
       render: (_, row) => (
         <Space>
-          {onOpen && row.exchange && row.symbol ? (
+          {onOpen && row.exchange && row.symbol && row.kind !== 'liquidation_feed' && (row.symbol ?? '').toUpperCase() !== 'ALL' ? (
             <Button size="small" type="link" onClick={() => onOpen(row.exchange!, row.symbol!)}>
               {t('alerts:open')}
             </Button>

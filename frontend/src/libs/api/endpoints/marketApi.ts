@@ -11,6 +11,7 @@ import {
   tickerTagId,
   orderBookTagId,
   orderHeatmapTagId,
+  liqHeatmapTagId,
   transformExchangesResponse,
   transformIntervalsResponse,
   transformProductTagsResponse,
@@ -42,9 +43,17 @@ import type {
   HoldersQuery,
   MarketOpenInterest,
   MarketLiquidations,
+  MarketLiquidationOverview,
+  MarketLiquidationLevels,
+  LiquidationLevelsQuery,
+  MarketLiquidationCascade,
+  MarketLiquidationCascadeScan,
+  LiquidationCascadeQuery,
+  LiquidationCascadeScanQuery,
   MarketCvd,
   OpenInterestQuery,
   LiquidationsQuery,
+  LiquidationOverviewQuery,
   CvdQuery,
   Ticker24h,
   Ticker24hQuery,
@@ -52,6 +61,8 @@ import type {
   OrderBookQuery,
   OrderBookHeatmap,
   OrderBookHeatmapQuery,
+  LiquidationHuntHeatmap,
+  LiquidationHuntHeatmapQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -71,6 +82,10 @@ export type {
   HoldersQuery,
   MarketOpenInterest,
   MarketLiquidations,
+  MarketLiquidationOverview,
+  MarketLiquidationLevels,
+  MarketLiquidationCascade,
+  MarketLiquidationCascadeScan,
   MarketCvd,
   CandlesQuery,
   Ticker24hQuery,
@@ -79,6 +94,8 @@ export type {
   OrderBookQuery,
   OrderBookHeatmap,
   OrderBookHeatmapQuery,
+  LiquidationHuntHeatmap,
+  LiquidationHuntHeatmapQuery,
   SupplyQuery,
   IntervalsQuery,
   IndicatorsQuery,
@@ -236,6 +253,60 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationOverview: build.query<
+      MarketLiquidationOverview,
+      LiquidationOverviewQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidations/overview',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidationLevels: build.query<
+      MarketLiquidationLevels,
+      LiquidationLevelsQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-levels',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidationCascade: build.query<
+      MarketLiquidationCascade,
+      LiquidationCascadeQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-cascade',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidationCascadeScan: build.query<
+      MarketLiquidationCascadeScan,
+      LiquidationCascadeScanQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-cascade/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketLiquidationHuntHeatmap: build.query<
+      LiquidationHuntHeatmap,
+      LiquidationHuntHeatmapQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-hunt/heatmap',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      keepUnusedDataFor: 60,
+      providesTags: (_r, _e, arg) => [
+        { type: 'LiqHeatmap' as const, id: liqHeatmapTagId(arg) },
+      ],
+    }),
+
     getMarketCvd: build.query<MarketCvd, CvdQuery>({
       query: (arg) => ({
         url: '/api/v1/market/cvd',
@@ -357,6 +428,11 @@ export const {
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
+  useGetMarketLiquidationOverviewQuery,
+  useGetMarketLiquidationLevelsQuery,
+  useGetMarketLiquidationCascadeQuery,
+  useGetMarketLiquidationCascadeScanQuery,
+  useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,
   useLazyGetIndicatorsQuery,

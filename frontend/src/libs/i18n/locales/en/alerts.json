@@ -1,7 +1,7 @@
 {
   "title": "Alerts",
   "eyebrow": "Price triggers",
-  "subtitle": "Server-side price alerts (one-time or repeating). Informational only — not financial advice.",
+  "subtitle": "Server-side price, liquidation-feed, and cascade alerts. Informational only — not financial advice.",
   "createTitle": "Create alert",
   "createHint": "Fires when the condition is true (with a short cooldown). Enable browser notifications for desktop pop-ups.",
   "listTitle": "Your alerts",
@@ -29,6 +29,10 @@
   "firedToast": "Alert: {{label}}",
   "monitoringChip": "Monitoring {{count}} alert(s) · tab must stay open",
   "kinds": {
+    "price": "Price",
+    "liquidation_feed": "Liquidation feed",
+    "liquidation_cascade": "Liquidation cascade",
+    "liquidation_notional": "Liquidation notional",
     "price_above": "Price ≥",
     "price_below": "Price ≤",
     "change_pct_above": "24h change % ≥",
@@ -38,8 +42,16 @@
   "addToCompare": "Compare",
   "conditions": {
     "above": "Price above",
-    "below": "Price below"
+    "below": "Price below",
+    "cascade": "Cascade",
+    "extreme": "Extreme",
+    "both": "Long + short",
+    "long": "Longs",
+    "short": "Shorts"
   },
+  "minDownSeconds": "Down for (seconds)",
+  "notional": "USDT notional",
+  "window": "Window",
   "modes": {
     "one_time": "One-time",
     "repeating": "Repeating"

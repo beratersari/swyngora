@@ -6,20 +6,24 @@ Users want scheduled paper buys of a coin without placing each market order by h
 
 ## Behavior
 
-1. **Create** a plan: coin (`exchange` + `symbol`), cash `amount`, optional **`name`**, `frequency`, optional `startAt`.
+1. **Create** a plan: coin (`exchange` + `symbol`), cash `amount`, optional **`name`**, `frequency`, optional `startAt`, optional `timeZone` / `hour` / `minute`, optional `maxPrice`, optional `budget`, optional `endDate` / `endsAt`.
 2. **Schedules**
    | frequency | Extra fields | Example |
    |-----------|--------------|---------|
-   | `daily` | — | 50 USDT BTC every day |
-   | `weekly` | `weekday` (`monday`…`sunday`, UTC) | 500 USDT BTC every Monday |
+   | `daily` | optional `timeZone` + `hour`/`minute` | 50 USDT BTC every day at 09:00 Istanbul |
+   | `weekly` | `weekday` (`monday`…`sunday`) + optional local clock | 500 USDT BTC every Monday 09:00 `Europe/Istanbul` |
    | `monthly` | `dayOfMonth` `1–31` (clamped on short months) | 1500 USDT ETH on the 25th (salary day) |
-   | `interval` | `intervalHours` `1–168` | 1500 USDT ETH every 12 hours |
-3. **Name** (max 80 chars): e.g. `"Salary Day Buy"`, `"Buy Coins With 30% of My Money"`. Empty → `"BTCUSDT monthly"`. Names are labels only — amount is still a fixed cash notional, not a live % of balance.
-4. **Pause / resume / delete** at any time. **PATCH** updates name, amount, and/or schedule.
-5. When due, the worker buys **on the book that owns the plan** (Main or a named book) at **last price plus buy slippage** with `quantity = amount / (slippedFill × (1 + fee))` so the cash spend includes the taker fee. Sizing and the market fill use the **same last print** so a later ticker cannot overspend the plan. The plan stores the book id; execution places the order as the owner with that `portfolioId` so a second book does not block Main and UUID books still fill.
-6. **Insufficient cash** (or market unavailable): that run is stored as **failed**; the plan stays **active** and advances to the next period.
-7. **Idempotency:** `UNIQUE(plan_id, period_key)` on run rows — only one claim per period.
-8. **Catch-up:** if the server was down across multiple periods, only the **latest** due slot runs once (intermediate slots are skipped).
+   | `interval` | `intervalHours` `1–168` | 1500 USDT ETH every 12 hours (elapsed UTC, not wall clock) |
+3. **Local clock:** IANA `timeZone` (e.g. `Europe/Istanbul`, `America/New_York`). Empty timezone keeps the previous UTC `startAt` clock. `hour` `0–23` and `minute` `0–59` pin the **wall clock** in that zone. Weekday and month day are local. **DST:** a missing hour on a spring-forward day snaps to the first valid local time after the gap; a repeated hour on a fall-back day uses the first occurrence. Interval plans stay elapsed UTC hours.
+4. **Name** (max 80 chars): e.g. `"Salary Day Buy"`, `"Buy Coins With 30% of My Money"`. Empty → `"BTCUSDT monthly"`. Names are labels only — amount is still a fixed cash notional, not a live % of balance.
+5. **Pause / resume / delete** at any time. **PATCH** updates name, amount, schedule, timezone/clock, `maxPrice`, `budget`, and/or end.
+6. When due, the worker buys **on the book that owns the plan** (Main or a named book) at **last price plus buy slippage** with `quantity = amount / (slippedFill × (1 + fee))` so the cash spend includes the taker fee. Sizing and the market fill use the **same last print** so a later ticker cannot overspend the plan. The plan stores the book id; execution places the order as the owner with that `portfolioId` so a second book does not block Main and UUID books still fill.
+7. **`maxPrice`:** optional cap (0 = none). The run is skipped when **last**, **slipped fill**, or **fee-inclusive unit cost** would exceed it. Example: cap 65000 — last 66000 does not buy; last 64000 buys at the current slipped market; last 64980 can still skip if slip+fee pushes the real unit over 65000. A PATCH to `maxPrice` (or pause / budget / end) takes the same book lock as the fill; the live plan is re-read **inside that lock** immediately before the cash debit, so an in-flight worker cannot complete with the old limit. A skipped run is **failed** with that reason; the plan stays **active** and advances.
+8. **`budget`:** optional total cash cap (0 = none). `spent` is the **wallet debit** (slipped fill + taker fee), not raw order notional. Each run spends `min(amount, remaining)` of that cash. The last slice may be smaller than `amount`. When leftover cannot cover a minimum buy after fee and slippage, the run fails with `budget exhausted`. A successful fill writes the trade, `spent`, and the succeeded run **in one store transaction**, so a crash after the buy cannot leave budget uncounted. The same period is never charged twice (`last_period_key` + unique period).
+9. **Retries:** temporary failures (`market price unavailable`, `order failed`, `insufficient cash`, `plan unavailable`) leave the period due and retry on the next worker tick. They do not advance the schedule and do not add to `spent`. A retry uses a stable idempotency key for that plan period so a recovered fill is not bought or billed again. Permanent skips (`maxPrice`, budget exhausted, paused, ended) still fail the period and move on.
+10. **`endDate` / `endsAt`:** optional last inclusive run. `endDate` is `YYYY-MM-DD` in the plan timezone (that local day still runs). `endsAt` is an RFC3339 instant. After the last allowed slot the plan status is **`ended`**. Resume requires extending the end first.
+11. **Idempotency:** `UNIQUE(plan_id, period_key)` on run rows — only one succeeded fill per period. Temporary `in_progress` / retryable rows are updated in place.
+12. **Catch-up:** if the server was down across multiple periods, only the **latest** due slot runs once (intermediate slots are skipped).
 
 ## API
 
@@ -28,7 +32,7 @@ Users want scheduled paper buys of a coin without placing each market order by h
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create plan |
 | `GET` | `/api/v1/portfolio/recurring-buys` | List plans |
 | `GET` | `/api/v1/portfolio/recurring-buys/{id}` | Get plan |
-| `PATCH` | `/api/v1/portfolio/recurring-buys/{id}` | Update name / amount / schedule |
+| `PATCH` | `/api/v1/portfolio/recurring-buys/{id}` | Update name / amount / schedule / timeZone / clock / maxPrice / budget / endDate |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete |
@@ -68,8 +72,7 @@ Manual: create portfolio → create a second book → create a plan with `startA
 ## Limitations / follow-ups
 
 - Paper trading only; not real money.
-- Market orders only (cash notional); no limit-price recurring buys yet.
+- Market orders only (cash notional). `maxPrice` skips the period; it does not place a limit order.
 - Name does not compute a percent of wallet — use a fixed `amount`.
-- Weekday / day-of-month use **UTC**.
-- Plans are not included in user data export/import yet.
+- Weekday / day-of-month / clock use **UTC** unless `timeZone` is set (then DST rules of that zone apply).
 - UI for product web/mobile not in this change.

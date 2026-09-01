@@ -41,7 +41,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time (pre-warmed for all live crypto pairs; `window` seconds) |
-| `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear) |
+| `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear); reconnect holes filled from that venue's history when available |
+| `GET` | `/api/v1/market/liquidations/overview` | Market-wide 1h/4h/12h/24h totals + coins ranked for a treemap |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID fallback for UTXO coins like PIVX). Known addresses include a public `label` |
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
@@ -56,6 +57,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + rough desk result |
+| `GET` | `/api/v1/market/liquidation-hunt/heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; own-venue prices; Binance, Bybit, combined; 1h/4h/12h review) |
+| `GET` | `/api/v1/market/liquidation-levels` | CoinGlass-style 10x/25x/50x/100x price bars + cumulative to last; or time bars of all-coin totals |
+| `GET` | `/api/v1/market/liquidation-cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all` market |
+| `GET` | `/api/v1/market/liquidation-cascade/scan` | Market cascade plus coins currently bursting (venues stay separate) |
 | `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |
 | `GET` | `/api/v1/market/positioning` | Price+OI regime (buildup / unwinding / covering) per venue + combined market |
 | `GET` | `/api/v1/market/venue-divergence` | Binance vs Bybit: same or opposite, which signals differ and why |
@@ -115,7 +120,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (FIFO/LIFO remaining buys) |
 | `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |
-| `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name-schedule / delete plan |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name, schedule, timezone, maxPrice, budget, endDate / delete plan |
 | `POST`/`GET` | `/api/v1/portfolio/baskets` | Create / list named allocation baskets (target % mix) |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/baskets/{id}` | Get with live drift / update / delete |
 | `GET`/`POST` | `/api/v1/portfolio/baskets/{id}/preview` · `/rebalance` | Preview or user-triggered rebalance |
@@ -130,7 +135,9 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Stop-loss / take-profit |
 | `GET` | `/api/v1/portfolio/margin/trades` | Margin trade history |
 | `POST`/`GET` | `/api/v1/price-diff/watches` | Create / list cross-exchange price difference watches |
-| `GET`/`DELETE` | `/api/v1/price-diff/watches/{id}` | Get / delete watch |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/price-diff/watches/{id}` | Get / edit settings / delete watch |
+| `POST` | `/api/v1/price-diff/watches/{id}/pause` | Pause: stop searching and close open opportunities |
+| `POST` | `/api/v1/price-diff/watches/{id}/resume` | Resume: start searching again; duration timer starts from zero |
 | `GET` | `/api/v1/price-diff/opportunities` | List opportunities (`status=open\|closed\|all`) |
 | `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
 | `GET` | `/api/v1/price-diff/opportunities/{id}/quote` | Walk both books for a size (avg buy/sell, slippage, profit after fees, usable money, max size) |
@@ -177,13 +184,13 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Watchlist persistence:** client watchlists are stored in **SQLite** (default `data/watchlist.db`) so they survive process restarts. Configure path via `WATCHLIST_DB_PATH`. **Sharing:** owners grant `viewer` or `editor` access to other `clientId`s; editors may add/remove symbols only; all mutations write an audit log (`docs/features/watchlist-sharing.md`). **Multi-device sync:** each list has a monotonic `version`; send `baseVersion` on writes — non-overlapping adds auto-merge; delete-vs-update conflicts return **409** with both sides (`docs/features/watchlist-sync.md`).
 
-**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts. Webhook URLs are **SSRF-hardened** (no loopback/RFC1918/link-local/metadata; no HTTP redirects). Set `WEBHOOK_ALLOW_PRIVATE=true` only for local tests.
+**Price alerts:** above/below thresholds (`POST /api/v1/alerts`) with `mode=one_time` or `mode=repeating`. Also `kind=liquidation_feed` (Binance/Bybit socket down too long), `kind=liquidation_cascade` (big cascade on a coin; payload names venue + symbol), and `kind=liquidation_notional` (long/short/total USDT in 1m/5m/15m/1h). Repeating kinds fire once, stay quiet while still true, and re-arm when the condition clears. Optional webhook (`/api/v1/alerts/webhook`) supports `deliveryMode=immediate` or `hourly_digest`, plus **quiet hours** (`timeZone` + local start/end; midnight-crossing ranges OK). Delivery waits until quiet hours end; pending rows survive restarts. Webhook URLs are **SSRF-hardened** (no loopback/RFC1918/link-local/metadata; no HTTP redirects). Set `WEBHOOK_ALLOW_PRIVATE=true` only for local tests.
 
-**Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) take a `notional`, `minProfit`, and optional `minDurationSec`. The worker walks **fresh** live books and opens an opportunity only when that size can be bought and sold and after-fee profit (including slippage) meets the floor for the whole duration — not from ticker last-price gaps or a one-tick spike. Stale books are ignored. Open state is durable; no duplicate while open; re-opens after the fill drops and holds again. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`). **Executable quote** (`/price-diff/quote` or `/opportunities/{id}/quote`) walks the buy asks and sell bids for a `notional` or `quantity` and returns average prices, slippage, profit after fees, usable money, and max still-profitable size. **Scan** (`/price-diff/quote/scan` or `/watches/{id}/quote`) ranks every venue pair at that size.
+**Cross-exchange price diff:** watches (`/api/v1/price-diff/watches`) take a `notional`, `minProfit`, and optional `minDurationSec`. The worker walks **fresh** live books and opens an opportunity only when that size can be bought and sold and after-fee profit (including slippage) meets the floor for the whole duration — not from ticker last-price gaps or a one-tick spike. Stale books are ignored. Open state is durable; no duplicate while open; re-opens after the fill drops and holds again. `PATCH` edits notional, min profit, duration, fees, and `exchanges` (resets the duration timer). Pause marks the watch paused first so an in-flight tick cannot open, then **closes** open opportunities; resume starts the duration timer from zero. Optional `exchanges` (at least two of binance/coinbase/bybit) limits which books are walked. Interval `PRICE_DIFF_CHECK_INTERVAL` (default `30s`). **Executable quote** (`/price-diff/quote` or `/opportunities/{id}/quote`) walks the buy asks and sell bids for a `notional` or `quantity` and returns average prices, slippage, profit after fees, usable money, and max still-profitable size. **Scan** (`/price-diff/quote/scan` or `/watches/{id}/quote`) ranks every venue pair at that size.
 
 **Funding-arb follows:** `POST /api/v1/funding-arb/watches` with `minProfit` and no `symbol` follows the funding-arb scan (one scan follow per client). A background checker (`FUNDING_ARB_CHECK_INTERVAL`, default `30s`) re-scans and notifies the client's alert webhook (`type=funding_arb.triggered`) when a new coin first clears the floor. Same coin + same long/short while still above is not re-notified; a drop then re-cross notifies again. A coin missing from the volume-limited scan is re-quoted and closed only if net is really below the floor. `PATCH` edits min profit and other settings; pause/resume stop evaluation without deleting. Optional `durationHours` stops the follow and closes open signals when time is up. Optional `symbol` follows one pair. SQLite path `FUNDING_ARB_DB_PATH` (default `data/fundingarb.db`). See `docs/features/funding-arb.md`.
 
-**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price **plus per-exchange slippage and taker fee**, pending limit/stop orders with cash/position **reservations** (buy reserve covers slip + fee), **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans**, and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`). Rates: `GET /api/v1/portfolio/trading-costs`.
+**Paper trading:** virtual portfolio (`/api/v1/portfolio`) with starting cash, market buy/sell at last price **plus per-exchange slippage and taker fee**, pending limit/stop orders with cash/position **reservations** (buy reserve covers slip + fee), **partial fills**, **in-place amend** of open GTC limit/stop (`PATCH .../orders/{id}`), and **GTC/IOC/FOK** (+ optional GTC `expiresAt`) via the background filler, open positions, realized/unrealized P&L, trade history, **recurring buy (DCA) plans** (IANA `timeZone` + local clock, optional `maxPrice` after fee and slippage), and **isolated margin** long/short (1x–10x, market/limit, liquidation, partial close, SL/TP). Simulated only — not real money. SQLite path `PORTFOLIO_DB_PATH` (default `data/portfolio.db`); order check interval `PORTFOLIO_ORDER_CHECK_INTERVAL` (default `15s`); recurring buy interval `RECURRING_BUY_INTERVAL` (default `30s`). Live prices + order/position events: `GET /api/v1/ws` (`docs/features/realtime.md`). Rates: `GET /api/v1/portfolio/trading-costs`.
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). Select one or more conditions and `matchMode` `all` (every selected condition) or `any` (one is enough); a hit stores one combined result. Combo rules load enough candles for the longest selected condition. `PATCH` enables/disables a rule or edits periods and thresholds without deleting it. A background job evaluates **enabled** rules on `SCANNER_CHECK_INTERVAL` (default `60s`) and writes a hit only when the rule **becomes** true (not on every later bar that stays true). **Historical backtests** (`/api/v1/scanner/backtests`) snapshot the rule when queued, then replay that copy over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
 
@@ -197,7 +204,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Hardening:** per-IP rate limits with **capped bucket map**; sanitized public errors; candle/ticker singleflight; bounded candle + watchlist client maps; non-crypto product filter **fails closed** without last-good catalog (no equities/commodities as crypto); indicator batch uses process-wide upstream semaphore; **webhook SSRF blocks** private destinations; paper portfolio mutations **serialized per `clientId`** (service mutex + store write lock); optional **`API_AUTH_TOKEN`** protects tenant APIs + `/mcp` (market GETs stay public); closed `clientId`s are blocked on tenant REST and on MCP tools that send `clientId`; **`MCP_ENABLED=false`** unmounts MCP.
 
-**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Users can mint named `swy_…` keys (`read` or `trade`) for bots so they do not share the master token (`docs/features/api-keys.md`). **User keys force their bound `clientId`** on REST body/query/form fields and MCP tool args (mismatches → 403); key-admin MCP tools are denied for user keys. Empty `API_AUTH_TOKEN` open mode is only allowed on **loopback** unless `ALLOW_OPEN_AUTH=true`. Default listen is `127.0.0.1:8080`. Full multi-user identity (JWT/session) is a separate follow-up.
+**Auth note:** `clientId` / `X-Client-Id` is still a client-supplied label (not end-user login). For any network exposure set `API_AUTH_TOKEN` (and prefer non-`*` CORS). Users mint named `swy_…` keys (`read` or `trade`) so they do not share the master token (`docs/features/api-keys.md`). **User keys force their bound `clientId`**. The master token may impersonate a tenant only from **loopback** (or `ALLOW_MASTER_IMPERSONATE=true`). Query-string secrets are rejected; browsers mint `POST /api/v1/realtime/ticket`. Empty `API_AUTH_TOKEN` open mode is only allowed on **loopback** unless `ALLOW_OPEN_AUTH=true`. Default listen is `127.0.0.1:8080`. Full multi-user identity (JWT/session) is a separate follow-up.
 
 ## Run
 
@@ -247,8 +254,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | Variable | Default | Purpose |
 |---|---|---|
 | `HTTP_ADDR` | `127.0.0.1:8080` | Listen address (loopback default) |
-| `API_AUTH_TOKEN` | _(empty = open local mode on loopback only)_ | Master token for tenant routes + `/mcp` + key management; user `swy_…` keys also accepted |
+| `API_AUTH_TOKEN` | _(empty = open local mode on loopback only)_ | Master token for key management + loopback tenant access; user `swy_…` keys for remote tenants |
 | `ALLOW_OPEN_AUTH` | `false` | Permit empty `API_AUTH_TOKEN` when `HTTP_ADDR` is non-loopback (`0.0.0.0`, `:8080`, LAN) |
+| `ALLOW_MASTER_IMPERSONATE` | `false` | Let a remote client use the master token as any `X-Client-Id` |
 | `MCP_ENABLED` | `true` | Mount streamable MCP at `/mcp`; set `false` to disable |
 | `WEBHOOK_ALLOW_PRIVATE` | `false` | Allow loopback/private webhook targets (local tests only; SSRF risk if true) |
 | `TELEGRAM_BOT_TOKEN` | _(empty = disabled)_ | BotFather token; enables Telegram transport |
@@ -365,15 +373,16 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
 | Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go`, `sweep_test.go`, `volumesurge_test.go`, `vwap_test.go`, `around_test.go`, `funding_arb_test.go` (fakes for ports) |
+| Application | `internal/service/futureshist` | `sink_test.go`, `backfill_test.go` (reconnect history fill, no cross-venue) |
 | Application | `internal/service/fundingarb` | `service_test.go` (create, min-profit notify, re-arm) |
 | Infrastructure | `internal/adapter/fundingarbstore` | `sqlite_test.go` |
 | Infrastructure | `internal/adapter/binance` | `client_test.go`, `supply_test.go`, `openinterest_test.go` (`httptest`) |
 | Infrastructure | `internal/adapter/cache` | `ttl_test.go` |
 | Infrastructure | `internal/adapter/watchliststore` | `memory_test.go`, `sqlite_test.go` (incl. reopen/restart persistence) |
 | Infrastructure | `internal/adapter/alertstore` | `sqlite_test.go` (CRUD, one-shot trigger, reopen) |
-| Application | `internal/service/pricealert` | `service_test.go` (validation, max, checker once-only) |
+| Application | `internal/service/pricealert` | `service_test.go` (validation, max, checker once-only, liquidation feed/cascade no re-fire) |
 | Transport handlers | `internal/transport/http/handler` | `market_test.go`, `health_test.go`, `respond_test.go`, `pricediff_test.go`, `funding_arb_watch_test.go` |
 | Transport middleware | `internal/transport/http/middleware` | `cors_test.go`, `ratelimit_test.go` |
 | Transport router | `internal/transport/http` | `router_test.go` |

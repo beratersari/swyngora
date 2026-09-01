@@ -1044,48 +1044,50 @@ export function CoinDetailPage() {
                   key: 'tape',
                   label: t('detail:tabs.tape'),
                   children: (
-                    <TapePanel
-                      openInterest={rtkCurrent(openInterestQuery)}
-                      openInterestError={
-                        openInterestQuery.isError
-                          ? rtkErrorMessage(openInterestQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                404: t('detail:tape.none'),
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      liquidations={rtkCurrent(liquidationsQuery)}
-                      liquidationsError={
-                        liquidationsQuery.isError
-                          ? rtkErrorMessage(liquidationsQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                404: t('detail:tape.none'),
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      cvd={rtkCurrent(cvdQuery)}
-                      cvdError={
-                        cvdQuery.isError
-                          ? rtkErrorMessage(cvdQuery.error, {
-                              resource: t('detail:resource.tape'),
-                              statusMessages: {
-                                400: t('detail:tape.unsupported'),
-                              },
-                            })
-                          : null
-                      }
-                      isLoading={
-                        rtkCurrentPending(openInterestQuery) ||
-                        rtkCurrentPending(liquidationsQuery) ||
-                        rtkCurrentPending(cvdQuery)
-                      }
-                    />
+                    <TabStack>
+                      <TapePanel
+                        openInterest={rtkCurrent(openInterestQuery)}
+                        openInterestError={
+                          openInterestQuery.isError
+                            ? rtkErrorMessage(openInterestQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        liquidations={rtkCurrent(liquidationsQuery)}
+                        liquidationsError={
+                          liquidationsQuery.isError
+                            ? rtkErrorMessage(liquidationsQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        cvd={rtkCurrent(cvdQuery)}
+                        cvdError={
+                          cvdQuery.isError
+                            ? rtkErrorMessage(cvdQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
+                        isLoading={
+                          rtkCurrentPending(openInterestQuery) ||
+                          rtkCurrentPending(liquidationsQuery) ||
+                          rtkCurrentPending(cvdQuery)
+                        }
+                      />
+                    </TabStack>
                   ),
                 },
                 {

@@ -4,6 +4,7 @@ import { AlertsPage } from '@/components/pages/AlertsPage';
 import { CoinDetailPage } from '@/components/pages/CoinDetailPage';
 import { ComparePage } from '@/components/pages/ComparePage';
 import { HeatmapPage } from '@/components/pages/HeatmapPage';
+import { LiquidationsPage } from '@/components/pages/LiquidationsPage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
 import { PortfolioPage } from '@/components/pages/PortfolioPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
@@ -18,6 +19,7 @@ export function AppRoutes() {
       <Route path="/markets" element={<MarketsPage />} />
       <Route path="/markets/:exchange/:symbol" element={<CoinDetailPage />} />
       <Route path="/watchlist" element={<WatchlistPage />} />
+      <Route path="/liquidations" element={<LiquidationsPage />} />
       <Route path="/portfolio" element={<PortfolioPage />} />
       <Route path="/signals" element={<SignalsPage />} />
       <Route path="/pumps" element={<PumpsPage />} />

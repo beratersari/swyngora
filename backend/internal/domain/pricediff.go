@@ -53,9 +53,11 @@ type PriceDiffWatch struct {
 	FeeBinancePct  float64
 	FeeCoinbasePct float64
 	FeeBybitPct    float64
-	Status         PriceDiffWatchStatus
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// Exchanges is the venue set to walk. Empty means all crypto spot venues.
+	Exchanges []Exchange
+	Status    PriceDiffWatchStatus
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // PriceDiffRouteArm is when a watch first saw a qualifying book fill on a route.
@@ -221,6 +223,127 @@ func IsFreshOrderBook(b *RawOrderBook, now time.Time, maxAge time.Duration) bool
 	return age <= maxAge
 }
 
+// PriceDiffSpotExchanges is the default watch set (all crypto spot venues).
+var PriceDiffSpotExchanges = []Exchange{ExchangeBinance, ExchangeCoinbase, ExchangeBybit}
+
+// IsPriceDiffSpotExchange reports a venue that can appear on a price-diff watch.
+func IsPriceDiffSpotExchange(ex Exchange) bool {
+	return ex == ExchangeBinance || ex == ExchangeCoinbase || ex == ExchangeBybit
+}
+
+// NormalizePriceDiffExchanges dedupes and orders requested spot venues.
+// Empty input means every crypto spot venue.
+func NormalizePriceDiffExchanges(raw []string) ([]Exchange, error) {
+	if len(raw) == 0 {
+		out := make([]Exchange, len(PriceDiffSpotExchanges))
+		copy(out, PriceDiffSpotExchanges)
+		return out, nil
+	}
+	seen := map[Exchange]bool{}
+	var extra []Exchange
+	for _, s := range raw {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		ex := ParseExchange(s)
+		if ex == "" || !IsPriceDiffSpotExchange(ex) {
+			return nil, fmt.Errorf("%w: exchanges must be binance, coinbase, and/or bybit", ErrInvalidArgument)
+		}
+		if seen[ex] {
+			continue
+		}
+		seen[ex] = true
+		extra = append(extra, ex)
+	}
+	if len(extra) == 0 {
+		out := make([]Exchange, len(PriceDiffSpotExchanges))
+		copy(out, PriceDiffSpotExchanges)
+		return out, nil
+	}
+	out := make([]Exchange, 0, len(extra))
+	for _, ex := range PriceDiffSpotExchanges {
+		if seen[ex] {
+			out = append(out, ex)
+		}
+	}
+	return out, nil
+}
+
+// ResolvePriceDiffWatchExchanges requires at least two spot venues.
+func ResolvePriceDiffWatchExchanges(raw []string) ([]Exchange, error) {
+	exs, err := NormalizePriceDiffExchanges(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(exs) < 2 {
+		return nil, fmt.Errorf("%w: pick at least two of binance, coinbase, bybit", ErrInvalidArgument)
+	}
+	return exs, nil
+}
+
+// EncodePriceDiffExchanges stores venues as a stable CSV. Empty means default-all.
+func EncodePriceDiffExchanges(exs []Exchange) string {
+	if len(exs) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(exs))
+	for _, ex := range PriceDiffSpotExchanges {
+		for _, got := range exs {
+			if got == ex {
+				parts = append(parts, string(ex))
+				break
+			}
+		}
+	}
+	if len(parts) == 0 || len(parts) == len(PriceDiffSpotExchanges) {
+		return strings.Join(parts, ",")
+	}
+	return strings.Join(parts, ",")
+}
+
+// ParsePriceDiffExchanges reads a stored CSV. Empty is default-all (nil slice).
+func ParsePriceDiffExchanges(s string) []Exchange {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var raw []string
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			raw = append(raw, p)
+		}
+	}
+	exs, err := NormalizePriceDiffExchanges(raw)
+	if err != nil {
+		return nil
+	}
+	return exs
+}
+
+// WatchExchanges is the venue set this watch walks (never empty).
+func (w PriceDiffWatch) WatchExchanges() []Exchange {
+	if len(w.Exchanges) == 0 {
+		out := make([]Exchange, len(PriceDiffSpotExchanges))
+		copy(out, PriceDiffSpotExchanges)
+		return out
+	}
+	out := make([]Exchange, len(w.Exchanges))
+	copy(out, w.Exchanges)
+	return out
+}
+
+// AllowsExchange reports whether the watch walks this venue.
+func (w PriceDiffWatch) AllowsExchange(ex Exchange) bool {
+	for _, e := range w.WatchExchanges() {
+		if e == ex {
+			return true
+		}
+	}
+	return false
+}
+
 // ResolvePriceDiffMinDuration accepts seconds (0 = open on first qualifying tick).
 func ResolvePriceDiffMinDuration(sec float64) (time.Duration, error) {
 	if sec < 0 || sec > MaxPriceDiffMinDurationSec || math.IsNaN(sec) || math.IsInf(sec, 0) {
@@ -248,6 +371,8 @@ type PriceDiffPort interface {
 	ListActiveWatches(ctx context.Context) ([]PriceDiffWatch, error)
 	DeleteWatch(ctx context.Context, clientID, id string) error
 	CountWatches(ctx context.Context, clientID string) (int, error)
+	// UpdateWatch writes mutable settings and status.
+	UpdateWatch(ctx context.Context, w PriceDiffWatch) (*PriceDiffWatch, error)
 
 	// GetOpenOpportunity returns open opp for (watch, buy, sell) or ErrNotFound.
 	GetOpenOpportunity(ctx context.Context, watchID string, buy, sell Exchange) (*PriceDiffOpportunity, error)
@@ -267,4 +392,6 @@ type PriceDiffPort interface {
 	// SetRouteArm records first-seen time; an existing arm is left unchanged.
 	SetRouteArm(ctx context.Context, arm PriceDiffRouteArm) error
 	ClearRouteArm(ctx context.Context, watchID string, buy, sell Exchange) error
+	// ClearRouteArms drops every pending duration timer for a watch.
+	ClearRouteArms(ctx context.Context, watchID string) error
 }

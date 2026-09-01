@@ -94,12 +94,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RealtimeInfo'
+  /api/v1/realtime/ticket:
+    post:
+      summary: Mint a one-time WebSocket ticket
+      description: |
+        Returns a 60-second, single-use ticket bound to the caller. Browsers
+        send this as `?ticket=` on `GET /api/v1/ws` instead of the long-lived
+        API secret. Requires the same header auth as other tenant routes.
+      operationId: createRealtimeTicket
+      tags: [Realtime]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Ticket minted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RealtimeTicket'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /api/v1/ws:
     get:
       summary: WebSocket realtime stream
       description: |
-        Upgrade to WebSocket. Same auth as REST (`Authorization` / `X-API-Key`);
-        browsers may pass `?token=` and must pass `?clientId=`.
+        Upgrade to WebSocket. REST uses `Authorization` / `X-API-Key`.
+        Browsers mint a one-time ticket (`POST /api/v1/realtime/ticket`) and
+        pass `?ticket=` plus `?clientId=`. Long-lived secrets are not accepted
+        on the query string.
 
         Client JSON: `{ "type": "subscribe_prices", "symbols": [{ "exchange", "symbol" }] }`,
         `unsubscribe_prices`, `subscribe_portfolio` (`portfolioId`), `unsubscribe_portfolio`, `ping`.
@@ -115,9 +144,9 @@ paths:
           required: true
           schema: { type: string }
         - in: query
-          name: token
+          name: ticket
           schema: { type: string }
-          description: API token when the browser cannot set Authorization
+          description: One-time ticket from POST /api/v1/realtime/ticket (60s, single use)
         - in: query
           name: portfolioId
           schema: { type: string }
@@ -870,12 +899,13 @@ paths:
         Long/short liquidation notional, count, and the biggest hit for the last
         **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
         (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
-        websocket streams. Totals only include events seen since this process
-        started. `coverageSeconds` / `complete` count only time the websocket
-        was actually connected for that coin and venue — they do not advance if
-        the stream never connects or drops. Combined `all` uses the shorter live
-        coverage of the venues watching that coin. `exchange=all` (default) sums
-        both venues. Informational only.
+        websocket streams. After a reconnect, each venue tries its own history
+        for the hole; overlapping live+history prints are counted once. Venues
+        stay separate. `coverageSeconds` / `complete` count live-socket time plus
+        history that filled a disconnect. Combined `all` uses the shorter coverage
+        of the venues watching that coin. `feed.gaps` lists still-unfilled holes
+        in the last 6h; `missingSeconds` is how much time is still missing. A
+        fully filled hole is omitted. Informational only.
       operationId: getMarketLiquidations
       tags: [Market]
       parameters:
@@ -894,6 +924,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MarketLiquidations'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidations/overview:
+    get:
+      summary: Market-wide futures liquidation overview
+      description: |
+        CoinGlass-style **market desk**: long/short liquidation notional for the last
+        **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
+        notional in `window` (default 24h) for a treemap. Fed by the same Binance
+        USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
+        sums both venues. `complete` uses the all-market Binance live clock when
+        `exchange` is `all` or `binance`. Informational only.
+      operationId: getMarketLiquidationOverview
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+        - name: window
+          in: query
+          description: Window used to rank `coins` — 1h | 4h | 12h | 24h (default 24h)
+          schema: { type: string, default: 24h, enum: [1h, 4h, 12h, 24h], example: 24h }
+        - name: limit
+          in: query
+          description: Max coins in the ranked list (default 50, max 100)
+          schema: { type: integer, default: 50, minimum: 1, maximum: 100, example: 50 }
+      responses:
+        '200':
+          description: Market-wide windows plus ranked coins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationOverview'
         '400':
           $ref: '#/components/responses/Error'
   /api/v1/market/open-interest:
@@ -2417,6 +2481,143 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-hunt/heatmap:
+    get:
+      summary: Liquidation intensity heatmap (price × time)
+      description: |
+        CoinGlass-style grid of estimated liquidation intensity at each price
+        for each time column. Built from historical open interest, mark price,
+        the hunt leverage mix (tilted by funding), blended account long/short,
+        and observed liquidation prints in that column.
+
+        `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+        separately and each venue uses only its own candles (never the
+        other exchange's price). `combined` is the sum of their cells.
+        `review` scores whether later price reached the hot zones within
+        1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
+        observed liquidations in that zone rose. Not a live book and not
+        financial advice.
+      operationId: getMarketLiquidationHuntHeatmap
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: range
+          in: query
+          description: 12h | 24h | 3d | 7d
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Price × time intensity grids
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidationHuntHeatmap'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-levels:
+    get:
+      summary: Liquidation level bar chart
+      description: |
+        CoinGlass-style **liquidation map** as bars.
+
+        - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
+          long/short notional at each price bin (hunt model summed over `range`).
+        - `symbol=all`: **total** observed liquidations for every tracked coin
+          as time bars (last 24h max). `exchange=binance|bybit|all`.
+
+        Informational only.
+      operationId: getMarketLiquidationLevels
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          description: Pair (BTCUSDT) or all
+          schema: { type: string, default: all, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = combined)
+          schema: { type: string, default: all, example: all }
+        - name: range
+          in: query
+          description: 12h | 24h | 3d | 7d (totals clamp to 24h)
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+      responses:
+        '200':
+          description: Price-level bars or time-total bars
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationLevels'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-cascade:
+    get:
+      summary: Liquidation cascade risk (one coin or whole market)
+      description: |
+        Detects a **liquidation cascade**: a short burst of long or short
+        liquidations far above that stream's own typical rate.
+
+        Compares the last **1 minute**, **5 minutes**, and **15 minutes** to
+        the median of prior blocks over ~6 hours. `grade` is quiet / elevated
+        / cascade / extreme. Binance and Bybit are scored **separately**.
+        `both.agree` is true only when the **same side** is cascading on both
+        venues. `episodes` lists each wave in the last 24h (start, duration,
+        long/short notional, price move). Overlapping same-side waves on both
+        venues are one `combined` episode. `symbol=all` pools every tracked
+        coin (market-wide risk; no price). Informational only.
+      operationId: getMarketLiquidationCascade
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          description: Pair (BTCUSDT) or all for the pooled market
+          schema: { type: string, default: all, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Per-venue cascade scores plus both-venues flag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationCascade'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-cascade/scan:
+    get:
+      summary: Market liquidation cascade scan
+      description: |
+        Scores **market-wide** cascade risk (pooled liquidations) and ranks
+        coins that are currently elevated or cascading. Binance and Bybit stay
+        separate; a hit's `both` flag means the same side is cascading on both
+        venues. Informational only.
+      operationId: scanMarketLiquidationCascades
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all, example: all }
+      responses:
+        '200':
+          description: Market cascade plus ranked bursting coins
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketLiquidationCascadeScan'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/supply:
     get:
       summary: Asset circulating / total / max supply (Binance)
@@ -3117,9 +3318,14 @@ paths:
         kind=price (default): last price above/below targetPrice. mode defaults to one_time.
         kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
         kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
-        Book kinds are checked in the background from the live local book (±rangePct of mid, default 2%).
-        mode=repeating (default for book): fires on each new appearance; does not re-fire while the
-        condition stays true; re-arms when it clears. Informational only.
+        kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
+        targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+        kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
+        or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+        kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
+        default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
+        Repeating fires once when the wave crosses, stays quiet while that window stays above,
+        re-arms when it drops so a new wave can fire. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]
       requestBody:
@@ -3131,15 +3337,18 @@ paths:
               required: [symbol, condition]
               properties:
                 clientId: { type: string }
-                exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
+                exchange: { type: string, default: binance, description: Spot venues, or binance|bybit|all for liquidation kinds }
                 symbol: { type: string }
-                kind: { type: string, enum: [price, imbalance, wall], default: price }
+                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional], default: price }
                 condition:
                   type: string
-                  description: price/imbalance above|below; wall bid|ask|any
+                  description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both
                 targetPrice:
                   type: number
-                  description: Price target, |imbalance| threshold, or wall min share (0 = any detected wall)
+                  description: Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), or liquidation_notional USDT amount
+                window:
+                  type: string
+                  description: liquidation_notional lookback 1m|5m|15m|1h (default 5m)
                 rangePct:
                   type: number
                   description: ±% of mid for live book analysis (0.25–10, default 2; book kinds only)
@@ -4635,6 +4844,14 @@ paths:
         frequency: daily | weekly | monthly | interval.
         weekly + weekday (monday..sunday); monthly + dayOfMonth (1-31, salary day);
         interval + intervalHours (1-168, e.g. 12 = every 12 hours).
+        Optional timeZone (IANA, e.g. Europe/Istanbul) plus hour/minute for a DST-aware
+        local clock (Monday 09:00; spring-forward snaps to the next valid local time,
+        fall-back uses the first occurrence). Optional maxPrice skips a run when last,
+        slipped fill, or fee-inclusive unit cost would exceed it (re-read after the
+        worker starts so a PATCH applies to an in-flight tick).
+        Optional budget is a total cash cap across succeeded runs (last buy may be partial).
+        Optional endDate (YYYY-MM-DD in timeZone, inclusive last local day) or endsAt (RFC3339)
+        stops further buys and marks the plan ended.
         Optional name (e.g. "Salary Day Buy"); default is "<symbol> <frequency>".
         Amount is cash notional spent each run. Insufficient cash fails that run only; the plan stays active.
         Missed periods execute only the latest due slot (no backlog of intermediate buys).
@@ -4669,7 +4886,7 @@ paths:
                 weekday:
                   type: string
                   enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday]
-                  description: Weekly — buy on this UTC weekday
+                  description: Weekly — buy on this weekday in timeZone (UTC if omitted)
                 dayOfMonth:
                   type: integer
                   minimum: 1
@@ -4680,6 +4897,40 @@ paths:
                   minimum: 1
                   maximum: 168
                   description: Interval frequency — hours between buys (e.g. 12)
+                timeZone:
+                  type: string
+                  description: IANA timezone e.g. Europe/Istanbul. Empty is UTC and keeps the startAt clock.
+                  example: Europe/Istanbul
+                hour:
+                  type: integer
+                  minimum: 0
+                  maximum: 23
+                  description: Local hour to run (use with timeZone or UTC)
+                  example: 9
+                minute:
+                  type: integer
+                  minimum: 0
+                  maximum: 59
+                  description: Local minute to run
+                  example: 0
+                maxPrice:
+                  type: number
+                  minimum: 0
+                  description: Skip the run if last, slipped fill, or fee-inclusive unit cost exceeds this. 0 = no cap.
+                  example: 65000
+                budget:
+                  type: number
+                  minimum: 0
+                  description: Total cash cap across succeeded runs (slipped fill + taker fee). 0 = no cap. Last buy may spend leftover.
+                  example: 10000
+                endDate:
+                  type: string
+                  description: Last inclusive local calendar day (YYYY-MM-DD) in timeZone
+                  example: "2026-12-31"
+                endsAt:
+                  type: string
+                  format: date-time
+                  description: Inclusive last allowed scheduled instant (RFC3339)
                 startAt:
                   type: string
                   format: date-time
@@ -4776,6 +5027,13 @@ paths:
                 weekday: { type: string, enum: [monday, tuesday, wednesday, thursday, friday, saturday, sunday] }
                 dayOfMonth: { type: integer, minimum: 1, maximum: 31 }
                 intervalHours: { type: integer, minimum: 1, maximum: 168 }
+                timeZone: { type: string, example: Europe/Istanbul }
+                hour: { type: integer, minimum: 0, maximum: 23 }
+                minute: { type: integer, minimum: 0, maximum: 59 }
+                maxPrice: { type: number, minimum: 0 }
+                budget: { type: number, minimum: 0 }
+                endDate: { type: string, example: "2026-12-31" }
+                endsAt: { type: string, format: date-time }
                 startAt: { type: string, format: date-time }
       responses:
         '200':
@@ -5283,6 +5541,14 @@ paths:
                 feeBinancePct: { type: number, minimum: 0, example: 0.1 }
                 feeCoinbasePct: { type: number, minimum: 0, example: 0.6 }
                 feeBybitPct: { type: number, minimum: 0, example: 0.1 }
+                exchanges:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: string
+                    enum: [binance, coinbase, bybit]
+                  description: Venues to walk. Default all three. At least two required.
+                  example: [binance, bybit]
       responses:
         '201':
           description: Created watch
@@ -5333,6 +5599,58 @@ paths:
                 $ref: '#/components/schemas/PriceDiffWatch'
         '404':
           $ref: '#/components/responses/Error'
+    patch:
+      summary: Update price-diff watch settings
+      description: |
+        Change notional, minProfit, minDurationSec, minNetDiffPct, or per-venue fees
+        without deleting the watch. Clears the duration timer so the next hold
+        starts from zero. Does not change status.
+      operationId: updatePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clientId: { type: string }
+                notional: { type: number, exclusiveMinimum: 0 }
+                minProfit: { type: number, minimum: 0 }
+                minDurationSec: { type: number, minimum: 0 }
+                minNetDiffPct: { type: number, minimum: 0 }
+                feeBinancePct: { type: number, minimum: 0 }
+                feeCoinbasePct: { type: number, minimum: 0 }
+                feeBybitPct: { type: number, minimum: 0 }
+                exchanges:
+                  type: array
+                  minItems: 2
+                  items:
+                    type: string
+                    enum: [binance, coinbase, bybit]
+                  description: Replace the venue set. At least two required.
+      responses:
+        '200':
+          description: Updated watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
     delete:
       summary: Delete a price difference watch
       description: Removes the watch and its opportunities.
@@ -5352,6 +5670,63 @@ paths:
       responses:
         '200':
           description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}/pause:
+    post:
+      summary: Pause a price-diff watch
+      description: |
+        Marks the watch paused first so an in-flight checker tick cannot open a
+        new opportunity. Open opportunities are closed. The duration timer is
+        dropped so resume starts a new wait.
+      operationId: pausePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paused watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/price-diff/watches/{id}/resume:
+    post:
+      summary: Resume a price-diff watch
+      description: |
+        Starts evaluating again. Does not continue a duration wait from before
+        pause — the timer starts from zero.
+      operationId: resumePriceDiffWatch
+      tags: [PriceDiff]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active watch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceDiffWatch'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/price-diff/watches/{id}/quote:
@@ -6442,6 +6817,16 @@ components:
               type: string
             message:
               type: string
+    RealtimeTicket:
+      type: object
+      properties:
+        ticket:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        clientId:
+          type: string
     RealtimeInfo:
       type: object
       properties:
@@ -6850,14 +7235,44 @@ components:
     LiquidationWindow:
       type: object
       properties:
-        window: { type: string, enum: [5m, 1h, 4h, 24h] }
+        window: { type: string, enum: [5m, 1h, 4h, 12h, 24h] }
         longNotional: { type: string, description: Quote value of liquidated longs }
         shortNotional: { type: string, description: Quote value of liquidated shorts }
         totalNotional: { type: string }
         count: { type: integer }
         biggest: { $ref: '#/components/schemas/LiquidationHit' }
-        coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue (capped at the window). Does not grow while disconnected. }
-        complete: { type: boolean, description: False until this coin+venue has had a live websocket for the full window }
+        coverageSeconds: { type: integer, description: Seconds the websocket was actually live for this coin+venue, plus history that filled a disconnect (capped at the window). Does not grow while a hole is still unfilled. }
+        complete: { type: boolean, description: False until this coin+venue has had live or backfilled coverage for the full window. Combined is false unless both venues were covered for the whole window. }
+    LiquidationGap:
+      type: object
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time, description: Omitted while the gap is still open }
+        seconds: { type: integer, description: Remaining unfilled duration of this hole }
+        missingSeconds: { type: integer, description: Same as seconds — how much of this hole is still missing }
+    LiquidationVenueHealth:
+      type: object
+      properties:
+        exchange: { type: string }
+        live: { type: boolean }
+        lastEventAt: { type: string, format: date-time, description: Last liquidation print on this venue }
+        lastSeenAt: { type: string, format: date-time, description: Last websocket payload from this venue }
+        coverageSeconds: { type: integer }
+        missingSeconds: { type: integer, description: Sum of still-unfilled disconnect time in the last 6h }
+        gaps:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationGap' }
+    LiquidationFeed:
+      type: object
+      description: Per-venue last print, last socket message, and disconnects. Combined never substitutes one venue for the other.
+      properties:
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationVenueHealth' }
+        missing:
+          type: array
+          items: { type: string }
+          description: Venues that are down, stalled, or never started
     MarketLiquidations:
       type: object
       description: Rolling futures liquidation totals from live streams
@@ -6865,11 +7280,318 @@ components:
         symbol: { type: string }
         exchange: { type: string }
         collectingSince: { type: string, format: date-time }
-        live: { type: boolean }
+        live: { type: boolean, description: Combined is true only when every requested venue is live }
         venueCount: { type: integer }
         windows:
           type: array
           items: { $ref: '#/components/schemas/LiquidationWindow' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
+        note: { type: string }
+    MarketLiquidationCoin:
+      type: object
+      description: One coin's liquidation totals for the selected overview window
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+        biggest: { $ref: '#/components/schemas/LiquidationHit' }
+    MarketLiquidationOverview:
+      type: object
+      description: Market-wide liquidation cards plus ranked coins for a treemap
+      properties:
+        exchange: { type: string }
+        coinWindow: { type: string, enum: [1h, 4h, 12h, 24h] }
+        collectingSince: { type: string, format: date-time }
+        live: { type: boolean, description: Combined is true only when both Binance and Bybit streams are live }
+        venueCount: { type: integer }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationWindow' }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCoin' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
+        note: { type: string }
+    MarketLiquidationLeverageSlice:
+      type: object
+      properties:
+        leverage: { type: integer, enum: [10, 25, 50, 100] }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+    MarketLiquidationLevelBar:
+      type: object
+      properties:
+        price: { type: string }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        cumLong: { type: string, description: Long notional from last price to this bar }
+        cumShort: { type: string, description: Short notional from last price to this bar }
+        cumTotal: { type: string }
+        byLeverage:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLeverageSlice' }
+    MarketLiquidationTimeBar:
+      type: object
+      properties:
+        t: { type: string, format: date-time }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+    MarketLiquidationLevels:
+      type: object
+      description: Price-level map bars or market-wide time bars
+      properties:
+        kind: { type: string, enum: [levels, totals] }
+        symbol: { type: string }
+        exchange: { type: string }
+        range: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        lastPrice: { type: string, description: Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. }
+        lastPrices:
+          type: object
+          additionalProperties: { type: string }
+          description: Each venue's own last price
+        levels:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelBar' }
+        bars:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationTimeBar' }
+        feed: { $ref: '#/components/schemas/LiquidationFeed' }
+        missing:
+          type: array
+          items: { type: string }
+        note: { type: string }
+    MarketLiquidationCascadeWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1m, 5m, 15m] }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        longTypical: { type: string }
+        shortTypical: { type: string }
+        longRatio: { type: number }
+        shortRatio: { type: number }
+        maxRatio: { type: number }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        count: { type: integer }
+        sampleBuckets: { type: integer }
+        complete: { type: boolean }
+    MarketLiquidationCascadeVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeWindow' }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        hottest: { type: string }
+        startedAt: { type: string, format: date-time }
+        summary: { type: string }
+    MarketLiquidationCascadeBoth:
+      type: object
+      description: Same-side burst on Binance and Bybit together
+      properties:
+        agree: { type: boolean, description: True only when the same side is cascade+ on both venues }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        hottest: { type: string }
+        summary: { type: string }
+    MarketLiquidationCascade:
+      type: object
+      description: Cascade risk for one coin or the pooled market (symbol=all)
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeVenue' }
+        both: { $ref: '#/components/schemas/MarketLiquidationCascadeBoth' }
+        episodes:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeEpisode' }
+        summary: { type: string }
+        note: { type: string }
+    MarketLiquidationCascadeEpisode:
+      type: object
+      description: One liquidation wave (open or finished) in the last 24h
+      properties:
+        symbol: { type: string }
+        exchange: { type: string, description: binance | bybit | both }
+        combined: { type: boolean, description: Same-side wave on Binance and Bybit at once }
+        side: { type: string, enum: [long, short, both, none] }
+        grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
+        score: { type: number }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: string, format: date-time }
+        open: { type: boolean }
+        durationSec: { type: integer }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string }
+        count: { type: integer }
+        peakRatio: { type: number }
+        priceOpen: { type: string }
+        priceClose: { type: string }
+        priceHigh: { type: string }
+        priceLow: { type: string }
+        priceChangePct: { type: string, description: Signed percent, e.g. -1.24 }
+        summary: { type: string }
+    MarketLiquidationCascadeHit:
+      type: object
+      properties:
+        symbol: { type: string }
+        side: { type: string }
+        grade: { type: string }
+        score: { type: number }
+        hottest: { type: string }
+        both: { type: boolean }
+        summary: { type: string }
+    MarketLiquidationCascadeScan:
+      type: object
+      description: Market-wide cascade plus coins currently bursting
+      properties:
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        market: { $ref: '#/components/schemas/MarketLiquidationCascade' }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeHit' }
+        summary: { type: string }
+        note: { type: string }
+    LiquidationHuntHeatmapGrid:
+      type: object
+      properties:
+        exchange: { type: string }
+        longs:
+          type: array
+          items: { type: array, items: { type: number } }
+          description: "[time][price] estimated long-liquidation notional"
+        shorts:
+          type: array
+          items: { type: array, items: { type: number } }
+        totals:
+          type: array
+          items: { type: array, items: { type: number } }
+        maxIntensity: { type: number }
+        coverage: { type: number, description: Fraction of time columns with this venue's own price and open interest. Combined requires both venues. }
+        columnsWithOi: { type: integer }
+        lastPrice: { type: number, description: That venue's own last print. Combined is omitted. }
+        hasData:
+          type: array
+          items: { type: boolean }
+          description: Per time column, whether this venue (or both, for combined) had own price+OI
+    LiquidationHuntHeatmap:
+      type: object
+      description: Price × time estimated liquidation intensity
+      properties:
+        symbol: { type: string }
+        range: { type: string, enum: [12h, 24h, 3d, 7d] }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        stepSec: { type: integer }
+        priceMin: { type: number }
+        priceMax: { type: number }
+        priceStep: { type: number }
+        prices:
+          type: array
+          items: { type: number }
+          description: Bin centers, highest price first
+        times:
+          type: array
+          items: { type: string, format: date-time }
+        binance: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapGrid' }
+        review: { $ref: '#/components/schemas/LiquidationHuntHeatmapReview' }
+        missingVenues:
+          type: array
+          items: { type: string }
+          description: Venues with no own price+OI in this window. Combined does not fill those cells from the other venue.
+        note: { type: string }
+    LiquidationHuntHeatmapReviewHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 12h] }
+        signals: { type: integer }
+        validated: { type: integer, description: Signals with enough later price path and liquidation history }
+        missing: { type: integer, description: Signals that cannot be scored (clock, price, or liquidation gap) }
+        priceReady: { type: integer }
+        priceMissing: { type: integer }
+        liqReady: { type: integer }
+        liqMissing: { type: integer }
+        pending: { type: integer, description: Clock has not reached the end of the look-ahead yet }
+        coverage: { type: number, description: validated / signals }
+        hits: { type: integer, description: Among validated only }
+        falseSignals: { type: integer, description: Among validated only }
+        hitRate: { type: number, description: hits / validated }
+        avgTimeToHitSec: { type: number }
+        medianTimeToHitSec: { type: number }
+        liqIncreased: { type: integer, description: Validated hits where zone liquidation notional rose }
+        liqIncreaseRate: { type: number, description: liqIncreased / validated hits }
+        avgLiqBefore: { type: number }
+        avgLiqAfter: { type: number }
+    LiquidationHuntHeatmapReviewSignalHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 12h] }
+        status: { type: string, enum: [hit, miss, pending, price_gap, liq_gap] }
+        validated: { type: boolean }
+        hit: { type: boolean }
+        pending: { type: boolean }
+        priceReady: { type: boolean }
+        liqReady: { type: boolean }
+        timeToHitSec: { type: number }
+        horizonSec: { type: number }
+        priceCoveredSec: { type: number, description: How far later candles reach after the signal }
+        priceBars: { type: integer }
+        liqBefore: { type: number }
+        liqAfter: { type: number }
+        liqIncreased: { type: boolean }
+        gap: { type: string, description: pending | no_price | price_short | no_liq | liq_short }
+    LiquidationHuntHeatmapReviewSignal:
+      type: object
+      description: One hot liquidation area at one time
+      properties:
+        time: { type: string, format: date-time }
+        priceLo: { type: number }
+        priceHi: { type: number }
+        intensity: { type: number }
+        side: { type: string, description: long (below mark) or short (above mark) }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewSignalHorizon' }
+    LiquidationHuntHeatmapReviewVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewHorizon' }
+        signals:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewSignal' }
+    LiquidationHuntHeatmapReview:
+      type: object
+      description: Did later price actually reach the hot zones, and did real liquidations rise there
+      properties:
+        hotFrac: { type: number }
+        binance: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
+        bybit: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
+        combined: { $ref: '#/components/schemas/LiquidationHuntHeatmapReviewVenue' }
         note: { type: string }
     OpenInterestLevel:
       type: object
@@ -7374,8 +8096,8 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        kind: { type: string, enum: [price, imbalance, wall] }
-        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any }
+        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional] }
+        condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both }
         targetPrice: { type: number }
         rangePct: { type: number, description: Analysis band for imbalance/wall alerts }
         mode: { type: string, enum: [one_time, repeating] }
@@ -7838,9 +8560,36 @@ components:
         intervalHours:
           type: integer
           description: Hours between interval buys
+        timeZone:
+          type: string
+          description: IANA timezone e.g. Europe/Istanbul
+        hour:
+          type: integer
+          description: Local hour when a local clock is set
+        minute:
+          type: integer
+        maxPrice:
+          type: number
+          description: Skip when last or fee+slippage unit cost would exceed this; 0 = none
+        budget:
+          type: number
+          description: Total cash cap across succeeded runs; 0 = none
+        spent:
+          type: number
+          description: Cash spent on succeeded runs
+        remainingBudget:
+          type: number
+          description: budget minus spent when budget is set
+        endsAt:
+          type: string
+          format: date-time
+          description: Inclusive last allowed scheduled instant
+        endDate:
+          type: string
+          description: Local YYYY-MM-DD of endsAt
         status:
           type: string
-          enum: [active, paused]
+          enum: [active, paused, ended]
         nextRunAt: { type: string, format: date-time }
         lastRunAt: { type: string, format: date-time, nullable: true }
         lastPeriodKey:
@@ -7865,7 +8614,7 @@ components:
         tradeId: { type: string }
         failReason:
           type: string
-          description: e.g. insufficient cash balance, market price unavailable
+          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit.
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
     AllocationTarget:
@@ -7948,6 +8697,12 @@ components:
         feeBinancePct: { type: number }
         feeCoinbasePct: { type: number }
         feeBybitPct: { type: number }
+        exchanges:
+          type: array
+          items:
+            type: string
+            enum: [binance, coinbase, bybit]
+          description: Venues this watch walks
         status: { type: string, enum: [active, paused] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

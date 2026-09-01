@@ -124,6 +124,14 @@ export function orderHeatmapTagId(arg: {
   return `${arg.exchange ?? 'binance'}:${arg.symbol}:${arg.group ?? ''}:${arg.window ?? 600}`;
 }
 
+export function liqHeatmapTagId(arg: {
+  exchange?: string;
+  symbol: string;
+  range?: string;
+}): string {
+  return `${arg.exchange ?? 'all'}:${arg.symbol}:${arg.range ?? '24h'}`;
+}
+
 export function supplyTagId(arg: { asset?: string; symbol?: string } | void): string {
   return (arg && (arg.asset || arg.symbol)) || 'unknown';
 }

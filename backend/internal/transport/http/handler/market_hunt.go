@@ -259,3 +259,269 @@ func formatHuntRate(v float64) string {
 	dec, _ := domain.FormatFundingRate(v)
 	return dec
 }
+
+// GetLiquidationHuntHeatmap handles GET /api/v1/market/liquidation-hunt/heatmap.
+func (h *MarketHandler) GetLiquidationHuntHeatmap(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetLiquidationHuntHeatmap(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, huntHeatmapToDTO(got))
+}
+
+// GetLiquidationLevels handles GET /api/v1/market/liquidation-levels.
+func (h *MarketHandler) GetLiquidationLevels(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetLiquidationLevels(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, liquidationLevelsToDTO(got))
+}
+
+type liquidationLeverageSliceDTO struct {
+	Leverage      int    `json:"leverage"`
+	LongNotional  string `json:"longNotional"`
+	ShortNotional string `json:"shortNotional"`
+}
+
+type liquidationLevelBarDTO struct {
+	Price         string                        `json:"price"`
+	LongNotional  string                        `json:"longNotional"`
+	ShortNotional string                        `json:"shortNotional"`
+	TotalNotional string                        `json:"totalNotional"`
+	CumLong       string                        `json:"cumLong,omitempty"`
+	CumShort      string                        `json:"cumShort,omitempty"`
+	CumTotal      string                        `json:"cumTotal,omitempty"`
+	ByLeverage    []liquidationLeverageSliceDTO `json:"byLeverage,omitempty"`
+}
+
+type liquidationTimeBarDTO struct {
+	T             string `json:"t"`
+	LongNotional  string `json:"longNotional"`
+	ShortNotional string `json:"shortNotional"`
+	TotalNotional string `json:"totalNotional"`
+	Count         int    `json:"count"`
+}
+
+type liquidationLevelsResponse struct {
+	Kind       string                   `json:"kind"`
+	Symbol     string                   `json:"symbol"`
+	Exchange   string                   `json:"exchange"`
+	Range      string                   `json:"range"`
+	From       string                   `json:"from,omitempty"`
+	To         string                   `json:"to,omitempty"`
+	LastPrice  string                   `json:"lastPrice,omitempty"`
+	LastPrices map[string]string        `json:"lastPrices,omitempty"`
+	Levels     []liquidationLevelBarDTO `json:"levels"`
+	Bars       []liquidationTimeBarDTO  `json:"bars"`
+	Feed       liquidationFeedDTO       `json:"feed"`
+	Missing    []string                 `json:"missing,omitempty"`
+	Note       string                   `json:"note"`
+}
+
+func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
+	if a == nil {
+		return liquidationLevelsResponse{Levels: []liquidationLevelBarDTO{}, Bars: []liquidationTimeBarDTO{}}
+	}
+	levels := make([]liquidationLevelBarDTO, 0, len(a.Levels))
+	for _, lv := range a.Levels {
+		slices := make([]liquidationLeverageSliceDTO, 0, len(lv.ByLeverage))
+		for _, sl := range lv.ByLeverage {
+			slices = append(slices, liquidationLeverageSliceDTO{
+				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
+			})
+		}
+		levels = append(levels, liquidationLevelBarDTO{
+			Price: lv.Price, LongNotional: lv.LongNotional, ShortNotional: lv.ShortNotional,
+			TotalNotional: lv.TotalNotional, CumLong: lv.CumLong, CumShort: lv.CumShort,
+			CumTotal: lv.CumTotal, ByLeverage: slices,
+		})
+	}
+	bars := make([]liquidationTimeBarDTO, 0, len(a.Bars))
+	for _, b := range a.Bars {
+		bars = append(bars, liquidationTimeBarDTO{
+			T:            b.Time.UTC().Format(time.RFC3339Nano),
+			LongNotional: b.LongNotional, ShortNotional: b.ShortNotional,
+			TotalNotional: b.TotalNotional, Count: b.Count,
+		})
+	}
+	from, to := "", ""
+	if !a.From.IsZero() {
+		from = a.From.UTC().Format(time.RFC3339Nano)
+	}
+	if !a.To.IsZero() {
+		to = a.To.UTC().Format(time.RFC3339Nano)
+	}
+	return liquidationLevelsResponse{
+		Kind: a.Kind, Symbol: a.Symbol, Exchange: a.Exchange, Range: a.Range,
+		From: from, To: to, LastPrice: a.LastPrice, LastPrices: a.LastPrices,
+		Levels: levels, Bars: bars, Feed: feedToDTO(a.Feed), Missing: a.Missing, Note: a.Note,
+	}
+}
+
+type huntHeatmapGridDTO struct {
+	Exchange      string      `json:"exchange"`
+	Longs         [][]float64 `json:"longs"`
+	Shorts        [][]float64 `json:"shorts"`
+	Totals        [][]float64 `json:"totals"`
+	MaxIntensity  float64     `json:"maxIntensity"`
+	Coverage      float64     `json:"coverage"`
+	ColumnsWithOi int         `json:"columnsWithOi"`
+	LastPrice     float64     `json:"lastPrice,omitempty"`
+	HasData       []bool      `json:"hasData,omitempty"`
+}
+
+type huntHeatmapResponse struct {
+	Symbol        string               `json:"symbol"`
+	Range         string               `json:"range"`
+	From          time.Time            `json:"from"`
+	To            time.Time            `json:"to"`
+	StepSec       int                  `json:"stepSec"`
+	PriceMin      float64              `json:"priceMin"`
+	PriceMax      float64              `json:"priceMax"`
+	PriceStep     float64              `json:"priceStep"`
+	Prices        []float64            `json:"prices"`
+	Times         []time.Time          `json:"times"`
+	Binance       huntHeatmapGridDTO   `json:"binance"`
+	Bybit         huntHeatmapGridDTO   `json:"bybit"`
+	Combined      huntHeatmapGridDTO   `json:"combined"`
+	Review        huntHeatmapReviewDTO `json:"review"`
+	MissingVenues []string             `json:"missingVenues,omitempty"`
+	Note          string               `json:"note"`
+}
+
+type huntHeatmapReviewHorizonDTO struct {
+	Horizon            string  `json:"horizon"`
+	Signals            int     `json:"signals"`
+	Validated          int     `json:"validated"`
+	Missing            int     `json:"missing"`
+	PriceReady         int     `json:"priceReady"`
+	PriceMissing       int     `json:"priceMissing"`
+	LiqReady           int     `json:"liqReady"`
+	LiqMissing         int     `json:"liqMissing"`
+	Pending            int     `json:"pending"`
+	Coverage           float64 `json:"coverage"`
+	Hits               int     `json:"hits"`
+	FalseSignals       int     `json:"falseSignals"`
+	HitRate            float64 `json:"hitRate"`
+	AvgTimeToHitSec    float64 `json:"avgTimeToHitSec"`
+	MedianTimeToHitSec float64 `json:"medianTimeToHitSec"`
+	LiqIncreased       int     `json:"liqIncreased"`
+	LiqIncreaseRate    float64 `json:"liqIncreaseRate"`
+	AvgLiqBefore       float64 `json:"avgLiqBefore"`
+	AvgLiqAfter        float64 `json:"avgLiqAfter"`
+}
+
+type huntHeatmapReviewSignalHorizonDTO struct {
+	Horizon         string  `json:"horizon"`
+	Status          string  `json:"status"`
+	Validated       bool    `json:"validated"`
+	Hit             bool    `json:"hit"`
+	Pending         bool    `json:"pending"`
+	PriceReady      bool    `json:"priceReady"`
+	LiqReady        bool    `json:"liqReady"`
+	TimeToHitSec    float64 `json:"timeToHitSec,omitempty"`
+	HorizonSec      float64 `json:"horizonSec"`
+	PriceCoveredSec float64 `json:"priceCoveredSec"`
+	PriceBars       int     `json:"priceBars"`
+	LiqBefore       float64 `json:"liqBefore"`
+	LiqAfter        float64 `json:"liqAfter"`
+	LiqIncreased    bool    `json:"liqIncreased"`
+	Gap             string  `json:"gap,omitempty"`
+}
+
+type huntHeatmapReviewSignalDTO struct {
+	Time      time.Time                           `json:"time"`
+	PriceLo   float64                             `json:"priceLo"`
+	PriceHi   float64                             `json:"priceHi"`
+	Intensity float64                             `json:"intensity"`
+	Side      string                              `json:"side,omitempty"`
+	Horizons  []huntHeatmapReviewSignalHorizonDTO `json:"horizons"`
+}
+
+type huntHeatmapReviewVenueDTO struct {
+	Exchange string                        `json:"exchange"`
+	Horizons []huntHeatmapReviewHorizonDTO `json:"horizons"`
+	Signals  []huntHeatmapReviewSignalDTO  `json:"signals"`
+}
+
+type huntHeatmapReviewDTO struct {
+	HotFrac  float64                   `json:"hotFrac"`
+	Binance  huntHeatmapReviewVenueDTO `json:"binance"`
+	Bybit    huntHeatmapReviewVenueDTO `json:"bybit"`
+	Combined huntHeatmapReviewVenueDTO `json:"combined"`
+	Note     string                    `json:"note"`
+}
+
+func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
+	if a == nil {
+		return huntHeatmapResponse{}
+	}
+	return huntHeatmapResponse{
+		Symbol: a.Symbol, Range: a.Range, From: a.From.UTC(), To: a.To.UTC(),
+		StepSec: a.StepSec, PriceMin: a.PriceMin, PriceMax: a.PriceMax, PriceStep: a.PriceStep,
+		Prices: a.Prices, Times: a.Times,
+		Binance:       huntGridToDTO(a.Binance),
+		Bybit:         huntGridToDTO(a.Bybit),
+		Combined:      huntGridToDTO(a.Combined),
+		Review:        huntReviewToDTO(a.Review),
+		MissingVenues: a.MissingVenues,
+		Note:          a.Note,
+	}
+}
+
+func huntReviewToDTO(r domain.HuntHeatmapReview) huntHeatmapReviewDTO {
+	return huntHeatmapReviewDTO{
+		HotFrac:  r.HotFrac,
+		Binance:  huntReviewVenueToDTO(r.Binance),
+		Bybit:    huntReviewVenueToDTO(r.Bybit),
+		Combined: huntReviewVenueToDTO(r.Combined),
+		Note:     r.Note,
+	}
+}
+
+func huntReviewVenueToDTO(v domain.HuntHeatmapReviewVenue) huntHeatmapReviewVenueDTO {
+	hs := make([]huntHeatmapReviewHorizonDTO, 0, len(v.Horizons))
+	for _, h := range v.Horizons {
+		hs = append(hs, huntHeatmapReviewHorizonDTO{
+			Horizon: h.Horizon, Signals: h.Signals, Validated: h.Validated, Missing: h.Missing,
+			PriceReady: h.PriceReady, PriceMissing: h.PriceMissing, LiqReady: h.LiqReady,
+			LiqMissing: h.LiqMissing, Pending: h.Pending, Coverage: h.Coverage,
+			Hits: h.Hits, FalseSignals: h.FalseSignals, HitRate: h.HitRate,
+			AvgTimeToHitSec: h.AvgTimeToHitSec, MedianTimeToHitSec: h.MedianTimeToHitSec,
+			LiqIncreased: h.LiqIncreased, LiqIncreaseRate: h.LiqIncreaseRate,
+			AvgLiqBefore: h.AvgLiqBefore, AvgLiqAfter: h.AvgLiqAfter,
+		})
+	}
+	sigs := make([]huntHeatmapReviewSignalDTO, 0, len(v.Signals))
+	for _, s := range v.Signals {
+		rows := make([]huntHeatmapReviewSignalHorizonDTO, 0, len(s.Horizons))
+		for _, h := range s.Horizons {
+			rows = append(rows, huntHeatmapReviewSignalHorizonDTO{
+				Horizon: h.Horizon, Status: h.Status, Validated: h.Validated, Hit: h.Hit,
+				Pending: h.Pending, PriceReady: h.PriceReady, LiqReady: h.LiqReady,
+				TimeToHitSec: h.TimeToHitSec, HorizonSec: h.HorizonSec,
+				PriceCoveredSec: h.PriceCoveredSec, PriceBars: h.PriceBars,
+				LiqBefore: h.LiqBefore, LiqAfter: h.LiqAfter, LiqIncreased: h.LiqIncreased,
+				Gap: h.Gap,
+			})
+		}
+		sigs = append(sigs, huntHeatmapReviewSignalDTO{
+			Time: s.Time.UTC(), PriceLo: s.PriceLo, PriceHi: s.PriceHi,
+			Intensity: s.Intensity, Side: s.Side, Horizons: rows,
+		})
+	}
+	return huntHeatmapReviewVenueDTO{Exchange: v.Exchange, Horizons: hs, Signals: sigs}
+}
+
+func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {
+	return huntHeatmapGridDTO{
+		Exchange: g.Exchange, Longs: g.Longs, Shorts: g.Shorts, Totals: g.Totals,
+		MaxIntensity: g.MaxIntensity, Coverage: g.Coverage, ColumnsWithOi: g.ColumnsWithOI,
+		LastPrice: g.LastPrice, HasData: g.HasData,
+	}
+}

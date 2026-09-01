@@ -50,6 +50,9 @@ PUT /api/v1/alerts/webhook
 | `price` (default) | Last trade/ticker price | `above` / `below` | Price | `one_time` |
 | `imbalance` | Live book notional imbalance in ±`rangePct` of mid | `above` (buy) / `below` (sell) | 0.05–0.95 | `repeating` |
 | `wall` | Large clustered rest size in that band | `bid` / `ask` / `any` | Min share 0–1 (`0` = any detected wall) | `repeating` |
+| `liquidation_feed` | Binance / Bybit liquidation websocket down or stalled | `down` / `gap` / empty | Min down seconds (`0` = 300) | `repeating` |
+| `liquidation_cascade` | A coin (or market `symbol=all`) hits a cascade grade | `cascade` (default) / `extreme` / `elevated` | unused | `repeating` |
+| `liquidation_notional` | Long / short / total USDT liquidated in a window | `long` / `short` / `both` | USDT amount (e.g. 20000000) | `repeating` |
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 
@@ -77,7 +80,44 @@ POST /api/v1/alerts
 }
 ```
 
-MCP: `create_orderbook_alert`. Informational only.
+Repeating book and liquidation alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again. A liquidation feed alert does **not** keep sending while Bybit or Binance is still down. A cascade alert payload includes the **exchange** and **coin** that crossed the grade. A live feed with only an old unfilled history hole does not stay in the down state.
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_feed",
+  "exchange": "bybit",
+  "targetPrice": 300
+}
+```
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_cascade",
+  "exchange": "all",
+  "symbol": "BTCUSDT",
+  "condition": "cascade"
+}
+```
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_notional",
+  "exchange": "all",
+  "symbol": "BTCUSDT",
+  "condition": "both",
+  "targetPrice": 20000000,
+  "window": "5m"
+}
+```
+
+`liquidation_notional` sums Binance + Bybit when `exchange=all`. Repeating fires when the rolling window first crosses the dollar line, stays quiet while that wave stays above it, and re-arms when the window drops so the next wave can fire. `window` is `1m` / `5m` / `15m` / `1h` (default 5m).
+
+Creating a coin alert (`liquidation_notional` or `liquidation_cascade`) **subscribes** that pair on the live Bybit stream if it is not already in the automatic set. It also fills the lookback from each venue's own history (the alert window, or 6h for cascade) so a 5m alert does not wait 5 minutes for live prints. Live and history prints that share venue + symbol + side + time + price + qty count once. A missing history API still leaves the live subscribe in place.
+
+MCP: `create_orderbook_alert`, `create_liquidation_feed_alert`, `create_liquidation_cascade_alert`, `create_liquidation_notional_alert`. Informational only.
 
 ## Webhook security (SSRF)
 

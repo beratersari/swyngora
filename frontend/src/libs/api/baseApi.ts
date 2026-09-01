@@ -25,6 +25,7 @@ export const baseApi = createApi({
     'Ticker',
     'OrderBook',
     'OrderHeatmap',
+    'LiqHeatmap',
     'Supply',
     'Holders',
     'Interval',

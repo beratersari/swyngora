@@ -37,6 +37,10 @@ type DataPort interface {
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (json.RawMessage, error)
+	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
+	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -53,6 +57,7 @@ type DataPort interface {
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
@@ -107,6 +112,9 @@ type DataPort interface {
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
+	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
+	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
+	CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -147,8 +155,8 @@ type DataPort interface {
 	CancelPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	CancelAllPortfolioOrders(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int) (json.RawMessage, error)
-	UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int) (json.RawMessage, error)
+	CreateRecurringBuyPlan(ctx context.Context, clientID, exchange, symbol string, amount float64, frequency, startAt, name, weekday string, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string) (json.RawMessage, error)
+	UpdateRecurringBuyPlan(ctx context.Context, clientID, id, name, frequency, weekday, startAt string, amount float64, dayOfMonth, intervalHours int, timeZone string, hour, minute int, maxPrice, budget float64, endDate, endsAt string, clearEnds bool) (json.RawMessage, error)
 	ListRecurringBuyPlans(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PauseRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -187,9 +195,12 @@ type DataPort interface {
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
-	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64) (json.RawMessage, error)
+	CreatePriceDiffWatch(ctx context.Context, clientID, symbol string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit float64, exchanges []string) (json.RawMessage, error)
 	ListPriceDiffWatches(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	UpdatePriceDiffWatch(ctx context.Context, clientID, id string, notional, minProfit, minNetDiffPct, minDurationSec, feeBinance, feeCoinbase, feeBybit *float64, exchanges []string) (json.RawMessage, error)
+	PausePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ResumePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeletePriceDiffWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPriceDiffOpportunities(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPriceDiffOpportunity(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -273,7 +284,16 @@ func bindMCPTenant(ctx context.Context, req *mcp.CallToolRequest) error {
 		return nil
 	}
 	id := middleware.IdentityFrom(ctx)
-	if id == nil || !id.UserKey {
+	if id == nil {
+		return nil
+	}
+	if id.Master && id.DenyImpersonate && !id.Loopback {
+		if strings.TrimSpace(req.GetString("clientId", "")) != "" {
+			return fmt.Errorf("%w: master token cannot select a tenant from this client", domain.ErrForbidden)
+		}
+		return nil
+	}
+	if !id.UserKey {
 		return nil
 	}
 	name := strings.TrimSpace(req.Params.Name)
@@ -470,7 +490,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidations",
-		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, and the biggest hit. Fed by Binance USD-M and Bybit linear perpetual streams. exchange=all (default) sums both. complete only counts time the websocket was actually live for that coin and venue; coverage does not grow if the stream never connects or drops. Prefer this for 'how much BTC was liquidated'."),
+		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, the biggest hit, and feed health (lastEventAt, lastSeenAt, gaps in the last 6h, missingSeconds still unfilled after history backfill, missing venues). After a reconnect each venue fills its own hole from history when available; overlapping prints are not counted twice. exchange=all (default) sums both but never substitutes one venue for the other; combined live/complete require both streams. Prefer this for 'how much BTC was liquidated' or 'is the Bybit feed down'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -479,6 +499,56 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidations(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_overview",
+		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. feed lists last print, disconnects, and missingSeconds still unfilled after a same-venue history fill. Combined live/complete require both Binance and Bybit; a missing venue is listed, not replaced. window (1h|4h|12h|24h, default 24h) selects which window ranks coins."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("window", mcp.Description("1h | 4h | 12h | 24h — ranks coins (default 24h)")),
+		mcp.WithNumber("limit", mcp.Description("Max coins (default 50, max 100)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		limit := int(req.GetFloat("limit", 0))
+		raw, err := api.GetLiquidationOverview(ctx, req.GetString("exchange", "all"), req.GetString("window", "24h"), limit)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_levels",
+		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x leverage, plus cumulative from last price to that bar. Each venue uses its own last price; combined lastPrice is empty and missing lists a venue with no data. symbol=all returns observed time bars. range=12h|24h|3d|7d (totals clamp to 24h)."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = combined)")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetLiquidationLevels(ctx, req.GetString("exchange", "all"), req.GetString("symbol", "all"), req.GetString("range", "24h"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_cascade",
+		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). episodes lists each wave in the last 24h (when it started, how long, long/short notional, price move). Binance and Bybit are scored separately; a combined episode is the same-side wave on both venues at once. both.agree is the current snapshot. symbol=all is market-wide (pooled coins). Prefer this for 'when did the BTC liquidation cascade start' or 'how much was liquidated during the wave'."),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all for the market (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetLiquidationCascade(ctx, req.GetString("exchange", "all"), req.GetString("symbol", "all"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_liquidation_cascades",
+		mcp.WithDescription("Market-wide liquidation cascade scan: pooled market risk plus coins currently bursting (elevated / cascade / extreme). Binance and Bybit stay separate; a hit's both flag means the same side is cascading on both venues. Prefer this for 'which coins are in a liquidation cascade'."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanLiquidationCascades(ctx, req.GetString("exchange", "all"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -815,6 +885,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_heatmap",
+		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, each venue's own price (never borrowed from the other exchange), the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d. Returns Binance, Bybit, and combined (sum) grids plus a review: totals and a per-signal list (price area, 1h/4h/12h hit or miss, time-to-hit, how much later price and liquidation history was available, labeled gaps). Rates use only validated signals. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationHuntHeatmap(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -1801,6 +1888,76 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("create_liquidation_feed_alert",
+		mcp.WithDescription("Alert when Binance or Bybit stop sending liquidation data (down or stalled) longer than minDownSeconds (default 300). Repeating by default: fires once, stays quiet while the feed is still bad, re-arms when it is live again. Does not keep sending the same outage. exchange=binance|bybit|all."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("minDownSeconds", mcp.Description("How long the feed may stay down before fire (default 300, min 30)")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationFeedAlert(ctx, clientID, req.GetString("exchange", "all"), req.GetFloat("minDownSeconds", 0), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_cascade_alert",
+		mcp.WithDescription("Alert when a coin has a big liquidation cascade. Payload includes the exchange and coin. symbol=BTCUSDT or all (any bursting coin). minGrade=cascade (default) or extreme. Repeating: fires once per wave, does not re-fire while the same cascade stays on, re-arms when it goes quiet."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT, or all for a market scan")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("minGrade", mcp.Description("cascade (default) | extreme | elevated")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationCascadeAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("minGrade", ""), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_notional_alert",
+		mcp.WithDescription("Alert when a coin's liquidations in a window exceed a USDT amount. side=long|short|both (total). exchange=binance|bybit|all (all sums both). window=1m|5m|15m|1h (default 5m). Creating the alert subscribes the coin and fills the last window from history (no double-count with live). Repeating: fires once when the wave crosses the line, stays quiet while that wave stays above, re-arms when the window drops so a new wave can fire."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("notional", mcp.Required(), mcp.Description("USDT threshold e.g. 20000000")),
+		mcp.WithString("side", mcp.Description("long | short | both (default both)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("window", mcp.Description("1m | 5m | 15m | 1h (default 5m)")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		notional, err := req.RequireFloat("notional")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationNotionalAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("side", "both"), notional, req.GetString("window", "5m"), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("delete_price_alert",
 		mcp.WithDescription("Delete a price alert by id for a clientId."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
@@ -2650,7 +2807,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_recurring_buy",
-		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. Simulated only."),
+		mcp.WithDescription("Create a named paper recurring buy: cash amount at market on daily|weekly|monthly|interval. Use weekday (monday) for weekly, dayOfMonth (1-31) for salary day, intervalHours (e.g. 12) for interval. timeZone (Europe/Istanbul) + hour/minute for a DST-aware local clock. maxPrice skips a run if last or fee+slippage unit would exceed it. budget is a total cash cap; endDate (YYYY-MM-DD) or endsAt is the last inclusive run. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -2662,6 +2819,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("intervalHours", mcp.Description("Interval frequency: 1-168 hours")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 first run; default now")),
+		mcp.WithString("timeZone", mcp.Description("IANA timezone e.g. Europe/Istanbul")),
+		mcp.WithNumber("hour", mcp.Description("Local hour 0-23")),
+		mcp.WithNumber("minute", mcp.Description("Local minute 0-59")),
+		mcp.WithNumber("maxPrice", mcp.Description("Skip if last or fee+slippage unit exceeds this; 0 = no cap")),
+		mcp.WithNumber("budget", mcp.Description("Total cash cap across succeeded runs; 0 = no cap")),
+		mcp.WithString("endDate", mcp.Description("Last inclusive local day YYYY-MM-DD")),
+		mcp.WithString("endsAt", mcp.Description("RFC3339 inclusive last allowed scheduled instant")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -2680,8 +2844,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		hour := domain.RecurringHourUnset
+		if _, ok := req.GetArguments()["hour"]; ok {
+			hour = int(req.GetFloat("hour", 0))
+		}
 		raw, err := api.CreateRecurringBuyPlan(ctx, clientID, req.GetString("exchange", "binance"), symbol, amount, freq, req.GetString("startAt", ""),
-			req.GetString("name", ""), req.GetString("weekday", ""), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
+			req.GetString("name", ""), req.GetString("weekday", ""), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)),
+			req.GetString("timeZone", ""), hour, int(req.GetFloat("minute", 0)), req.GetFloat("maxPrice", 0),
+			req.GetFloat("budget", 0), req.GetString("endDate", ""), req.GetString("endsAt", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -2689,7 +2859,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("update_recurring_buy",
-		mcp.WithDescription("Update a paper recurring buy name, amount, or schedule (frequency/weekday/dayOfMonth/intervalHours). Simulated only."),
+		mcp.WithDescription("Update a paper recurring buy name, amount, schedule, timeZone/hour/minute, maxPrice, budget, or endDate/endsAt. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -2700,6 +2870,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("dayOfMonth", mcp.Description("1-31")),
 		mcp.WithNumber("intervalHours", mcp.Description("1-168")),
 		mcp.WithString("startAt", mcp.Description("RFC3339 to reschedule first/next run")),
+		mcp.WithString("timeZone", mcp.Description("IANA timezone e.g. Europe/Istanbul")),
+		mcp.WithNumber("hour", mcp.Description("Local hour 0-23")),
+		mcp.WithNumber("minute", mcp.Description("Local minute 0-59")),
+		mcp.WithNumber("maxPrice", mcp.Description("Skip if last or fee+slippage unit exceeds this; 0 = no cap")),
+		mcp.WithNumber("budget", mcp.Description("Total cash cap; 0 = no cap")),
+		mcp.WithString("endDate", mcp.Description("Last inclusive local day YYYY-MM-DD; empty clears")),
+		mcp.WithString("endsAt", mcp.Description("RFC3339 inclusive last instant; empty clears")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -2710,8 +2887,38 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		hour := domain.RecurringHourUnset
+		if _, ok := req.GetArguments()["hour"]; ok {
+			hour = int(req.GetFloat("hour", 0))
+		}
+		maxP := -1.0
+		if _, ok := req.GetArguments()["maxPrice"]; ok {
+			maxP = req.GetFloat("maxPrice", 0)
+		}
+		budget := -1.0
+		if _, ok := req.GetArguments()["budget"]; ok {
+			budget = req.GetFloat("budget", 0)
+		}
+		endDate := ""
+		endsAt := ""
+		clearEnds := false
+		if _, ok := req.GetArguments()["endDate"]; ok {
+			endDate = req.GetString("endDate", "")
+			if endDate == "" {
+				clearEnds = true
+			}
+		}
+		if _, ok := req.GetArguments()["endsAt"]; ok {
+			endsAt = req.GetString("endsAt", "")
+			if endsAt == "" && endDate == "" {
+				clearEnds = true
+			} else if endsAt != "" {
+				clearEnds = false
+			}
+		}
 		raw, err := api.UpdateRecurringBuyPlan(ctx, clientID, planID, req.GetString("name", ""), req.GetString("frequency", ""),
-			req.GetString("weekday", ""), req.GetString("startAt", ""), req.GetFloat("amount", 0), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)))
+			req.GetString("weekday", ""), req.GetString("startAt", ""), req.GetFloat("amount", 0), int(req.GetFloat("dayOfMonth", 0)), int(req.GetFloat("intervalHours", 0)),
+			req.GetString("timeZone", ""), hour, int(req.GetFloat("minute", 0)), maxP, budget, endDate, endsAt, clearEnds)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3627,7 +3834,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_price_diff_watch",
-		mcp.WithDescription("Track a coin across Binance/Coinbase/Bybit. Opens an opportunity only when that notional can be bought and sold on fresh live books and after-fee profit (including slippage) is at least minProfit. minDurationSec requires the fill to stay qualifying that long; a break resets the timer."),
+		mcp.WithDescription("Track a coin across chosen spot venues (default Binance+Coinbase+Bybit). Opens an opportunity only when that notional can be bought and sold on fresh live books and after-fee profit (including slippage) is at least minProfit. minDurationSec requires the fill to stay qualifying that long; a break resets the timer. exchanges is a CSV such as binance,bybit (at least two)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("notional", mcp.Required(), mcp.Description("Quote size to walk on the buy book e.g. 10000")),
@@ -3637,6 +3844,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee % e.g. 0.1")),
 		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee % e.g. 0.6")),
 		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee % e.g. 0.1")),
+		mcp.WithString("exchanges", mcp.Description("CSV of venues to walk, e.g. binance,bybit. Default all three.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3656,7 +3864,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		raw, err := api.CreatePriceDiffWatch(ctx, clientID, symbol, notional, minProfit,
 			req.GetFloat("minNetDiffPct", 0), req.GetFloat("minDurationSec", 0),
-			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0))
+			req.GetFloat("feeBinancePct", 0), req.GetFloat("feeCoinbasePct", 0), req.GetFloat("feeBybitPct", 0),
+			mcpCSVList(req, "exchanges"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3692,6 +3901,78 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("update_price_diff_watch",
+		mcp.WithDescription("Change notional, minProfit, minDurationSec, fees, or exchanges on an existing price-diff watch. Resets the duration timer. Does not change pause/active status."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+		mcp.WithNumber("notional", mcp.Description("New quote size to walk")),
+		mcp.WithNumber("minProfit", mcp.Description("New after-fee profit floor")),
+		mcp.WithNumber("minDurationSec", mcp.Description("Seconds the fill must stay qualifying; 0 = first tick")),
+		mcp.WithNumber("minNetDiffPct", mcp.Description("Optional extra profit % floor")),
+		mcp.WithNumber("feeBinancePct", mcp.Description("Binance fee %")),
+		mcp.WithNumber("feeCoinbasePct", mcp.Description("Coinbase fee %")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit fee %")),
+		mcp.WithString("exchanges", mcp.Description("CSV of venues to walk, e.g. binance,bybit (at least two)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.UpdatePriceDiffWatch(ctx, clientID, id,
+			optionalMCPFee(req, "notional"), optionalMCPFee(req, "minProfit"),
+			optionalMCPFee(req, "minNetDiffPct"), optionalMCPFee(req, "minDurationSec"),
+			optionalMCPFee(req, "feeBinancePct"), optionalMCPFee(req, "feeCoinbasePct"), optionalMCPFee(req, "feeBybitPct"),
+			mcpCSVList(req, "exchanges"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("pause_price_diff_watch",
+		mcp.WithDescription("Pause a price-diff watch. Marks it paused first so an in-flight tick cannot open. Closes any open opportunity. Resume starts the duration timer from zero."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.PausePriceDiffWatch(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("resume_price_diff_watch",
+		mcp.WithDescription("Resume a paused price-diff watch. Does not continue a duration wait from before pause."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("watchId", mcp.Required(), mcp.Description("Watch id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("watchId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ResumePriceDiffWatch(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3879,7 +4160,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			"httpInfo":    "GET /api/v1/realtime",
 			"protocol":    1,
 			"maxSymbols":  100,
-			"auth":        "Same as REST (Bearer / X-API-Key). Browsers may pass ?token= and ?clientId=.",
+			"auth":        "REST: Bearer / X-API-Key. Browsers: POST /api/v1/realtime/ticket then ?ticket= on the WebSocket. Long-lived secrets are not accepted on the query string.",
 			"reconnect":   "On reconnect, resend subscribe_prices and subscribe_portfolio. Server snapshots current state.",
 			"clientTypes": []string{"subscribe_prices", "unsubscribe_prices", "subscribe_portfolio", "unsubscribe_portfolio", "ping"},
 			"serverTypes": []string{"hello", "ack", "price", "portfolio", "error", "pong"},
@@ -3906,4 +4187,32 @@ func optionalMCPFee(req mcp.CallToolRequest, name string) *float64 {
 	}
 	v := req.GetFloat(name, 0)
 	return &v
+}
+
+func mcpCSVList(req mcp.CallToolRequest, name string) []string {
+	raw := strings.TrimSpace(req.GetString(name, ""))
+	if raw == "" {
+		if args := req.GetArguments(); args != nil {
+			if arr, ok := args[name].([]any); ok {
+				out := make([]string, 0, len(arr))
+				for _, v := range arr {
+					s := strings.TrimSpace(fmt.Sprint(v))
+					if s != "" && s != "<nil>" {
+						out = append(out, s)
+					}
+				}
+				return out
+			}
+		}
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

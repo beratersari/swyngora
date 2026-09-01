@@ -449,6 +449,10 @@ type PortfolioPort interface {
 	ListDueRecurringBuyPlans(ctx context.Context, now time.Time, limit int) ([]RecurringBuyPlan, error)
 	// ClaimRecurringBuyRun inserts a run row; returns false if period already claimed (unique).
 	ClaimRecurringBuyRun(ctx context.Context, run RecurringBuyRun) (claimed bool, out *RecurringBuyRun, err error)
+	// GetRecurringBuyRun returns the run for a plan period, or ErrNotFound.
+	GetRecurringBuyRun(ctx context.Context, planID, periodKey string) (*RecurringBuyRun, error)
+	// PutRecurringBuyRun upserts a run row without changing plan spent or next_run_at.
+	PutRecurringBuyRun(ctx context.Context, run RecurringBuyRun) error
 	// FinishRecurringBuyRun updates run outcome and advances the plan schedule.
 	FinishRecurringBuyRun(ctx context.Context, planID string, run RecurringBuyRun, nextRunAt time.Time, lastPeriodKey string, at time.Time) error
 	// SkipRecurringBuyPeriod advances schedule without a new buy when period already claimed.

@@ -20,6 +20,17 @@ export type OrderBookHeatmap = components['schemas']['OrderBookHeatmap'];
 export type OrderBookHeatmapQuery = NonNullable<
   operations['getSpotOrderBookHeatmap']['parameters']['query']
 >;
+export type LiquidationHuntHeatmap = components['schemas']['LiquidationHuntHeatmap'];
+export type LiquidationHuntHeatmapGrid = components['schemas']['LiquidationHuntHeatmapGrid'];
+export type LiquidationHuntHeatmapReview = components['schemas']['LiquidationHuntHeatmapReview'];
+export type LiquidationHuntHeatmapReviewVenue = components['schemas']['LiquidationHuntHeatmapReviewVenue'];
+export type LiquidationHuntHeatmapReviewHorizon = components['schemas']['LiquidationHuntHeatmapReviewHorizon'];
+export type LiquidationHuntHeatmapReviewSignal = components['schemas']['LiquidationHuntHeatmapReviewSignal'];
+export type LiquidationHuntHeatmapReviewSignalHorizon =
+  components['schemas']['LiquidationHuntHeatmapReviewSignalHorizon'];
+export type LiquidationHuntHeatmapQuery = NonNullable<
+  operations['getMarketLiquidationHuntHeatmap']['parameters']['query']
+>;
 
 export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;
@@ -35,6 +46,23 @@ export type OpenInterestQuery = NonNullable<
 >;
 export type LiquidationsQuery = NonNullable<
   operations['getMarketLiquidations']['parameters']['query']
+>;
+export type MarketLiquidationOverview = components['schemas']['MarketLiquidationOverview'];
+export type MarketLiquidationCoin = components['schemas']['MarketLiquidationCoin'];
+export type LiquidationOverviewQuery = NonNullable<
+  operations['getMarketLiquidationOverview']['parameters']['query']
+>;
+export type MarketLiquidationLevels = components['schemas']['MarketLiquidationLevels'];
+export type LiquidationLevelsQuery = NonNullable<
+  operations['getMarketLiquidationLevels']['parameters']['query']
+>;
+export type MarketLiquidationCascade = components['schemas']['MarketLiquidationCascade'];
+export type MarketLiquidationCascadeScan = components['schemas']['MarketLiquidationCascadeScan'];
+export type LiquidationCascadeQuery = NonNullable<
+  operations['getMarketLiquidationCascade']['parameters']['query']
+>;
+export type LiquidationCascadeScanQuery = NonNullable<
+  operations['scanMarketLiquidationCascades']['parameters']['query']
 >;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
 

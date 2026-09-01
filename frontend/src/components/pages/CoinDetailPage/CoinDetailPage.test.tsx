@@ -22,6 +22,7 @@ const mockOrderHeatmap = vi.fn();
 const mockOpenInterest = vi.fn();
 const mockLiquidations = vi.fn();
 const mockCvd = vi.fn();
+const mockLiqHeatmap = vi.fn();
 const mockProfile = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
@@ -38,6 +39,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetSpotOrderBookHeatmapQuery: () => mockOrderHeatmap(),
     useGetOpenInterestQuery: () => mockOpenInterest(),
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
+    useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
     useGetMarketCvdQuery: () => mockCvd(),
     useGetAssetProfileQuery: () => mockProfile(),
   };
@@ -199,6 +201,42 @@ describe('CoinDetailPage', () => {
     mockOpenInterest.mockReturnValue(emptyTape);
     mockLiquidations.mockReturnValue(emptyTape);
     mockCvd.mockReturnValue(emptyTape);
+    mockLiqHeatmap.mockReturnValue({
+      data: {
+        symbol: 'BTCUSDT',
+        range: '24h',
+        prices: [110_000, 100_000],
+        times: ['2026-08-29T12:00:00Z', '2026-08-29T12:30:00Z'],
+        combined: {
+          exchange: 'combined',
+          totals: [
+            [1, 2],
+            [3, 4],
+          ],
+          maxIntensity: 4,
+          coverage: 1,
+        },
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        range: '24h',
+        prices: [110_000, 100_000],
+        times: ['2026-08-29T12:00:00Z', '2026-08-29T12:30:00Z'],
+        combined: {
+          exchange: 'combined',
+          totals: [
+            [1, 2],
+            [3, 4],
+          ],
+          maxIntensity: 4,
+          coverage: 1,
+        },
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     mockProfile.mockReturnValue(emptyTape);
   });
 
@@ -222,6 +260,12 @@ describe('CoinDetailPage', () => {
     expect(await screen.findByTestId('order-book')).toBeInTheDocument();
     expect(screen.getByTestId('order-depth-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
+  });
+
+  it('opens tape tab with liquidation totals', async () => {
+    renderDetail('/markets/binance/BTCUSDT?tab=tape');
+    expect(await screen.findAllByText(/^Liquidations$|^Likidasyonlar$/i)).not.toHaveLength(0);
+    expect(screen.queryByTestId('liquidation-heatmap')).not.toBeInTheDocument();
   });
 
   it('rejects unknown exchange path segments', async () => {

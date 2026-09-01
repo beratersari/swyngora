@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import httpx
 
 from swyngora_ai.config import Settings
+from swyngora_ai.progress import emit, reset_progress, set_progress
 from swyngora_ai.tools.market_http import (
     bind_client_id,
     bind_tool_scope,
@@ -192,3 +193,94 @@ def test_pool_without_copied_context_does_not_guess_the_other_tenant(monkeypatch
         assert "ambiguous" in out, (own_id, out)
     leaked = [(_client_id(r), r.url.path) for r in transport.requests]
     assert not leaked, f"ambiguous bind still sent a tenant request: {leaked}"
+
+
+def test_same_tenant_different_scope_without_context_fails_closed(monkeypatch):
+    """Read-only and trade overlapping on one clientId must not share stack[-1]."""
+    transport = _RecordingTransport()
+    tools = _install(monkeypatch, transport)
+    started = threading.Barrier(2)
+    both_on_pool = threading.Barrier(2)
+    results: dict[str, str] = {}
+
+    def chat_turn(label: str, can_trade: bool) -> None:
+        tok = bind_client_id("same-tenant")
+        scope = bind_tool_scope(can_trade=can_trade, can_manage_keys=False)
+        try:
+            started.wait(timeout=5)
+
+            def on_pool() -> str:
+                both_on_pool.wait(timeout=5)
+                return tools["place_portfolio_order"].invoke(
+                    {
+                        "client_id": "model-should-be-ignored",
+                        "symbol": "BTCUSDT",
+                        "side": "buy",
+                        "quantity": 1,
+                    }
+                )
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                results[label] = pool.submit(on_pool).result(timeout=5)
+        finally:
+            reset_tool_scope(scope)
+            reset_bound_client_id(tok)
+
+    t1 = threading.Thread(target=chat_turn, args=("readonly", False))
+    t2 = threading.Thread(target=chat_turn, args=("trader", True))
+    t1.start()
+    t2.start()
+    t1.join(timeout=8)
+    t2.join(timeout=8)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
+    for label, out in results.items():
+        assert "403" in out, (label, out)
+    posted = [
+        r for r in transport.requests if r.method == "POST" and "/portfolio/orders" in r.url.path
+    ]
+    assert not posted, [(r.method, r.url.path, _client_id(r)) for r in posted]
+
+
+def test_progress_emit_does_not_cross_tenants_without_context():
+    received: dict[str, list[str]] = {"alice": [], "bob": []}
+    lock = threading.Lock()
+
+    def make_cb(name: str):
+        def cb(ev: dict[str, object]) -> None:
+            with lock:
+                received[name].append(str(ev.get("text") or ""))
+
+        return cb
+
+    started = threading.Barrier(2)
+    both_on_pool = threading.Barrier(2)
+    both_done = threading.Barrier(2)
+
+    def chat_turn(name: str) -> None:
+        tok = set_progress(make_cb(name))
+        try:
+            started.wait(timeout=5)
+
+            def on_pool() -> None:
+                both_on_pool.wait(timeout=5)
+                emit("tool", f"secret-for-{name}")
+                both_done.wait(timeout=5)
+
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(on_pool).result(timeout=5)
+        finally:
+            reset_progress(tok)
+
+    t1 = threading.Thread(target=chat_turn, args=("alice",))
+    t2 = threading.Thread(target=chat_turn, args=("bob",))
+    t1.start()
+    t2.start()
+    t1.join(timeout=8)
+    t2.join(timeout=8)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
+    alice_saw_bob = any("bob" in x for x in received["alice"])
+    bob_saw_alice = any("alice" in x for x in received["bob"])
+    assert not alice_saw_bob, received
+    assert not bob_saw_alice, received

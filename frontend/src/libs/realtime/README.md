@@ -3,6 +3,7 @@
 WebSocket client for live **price ticks** and **paper portfolio** order/position updates.
 
 - Protocol: `GET /api/v1/ws` (see `GET /api/v1/realtime` and `docs/features/realtime.md`)
+- Locked APIs: mint `POST /api/v1/realtime/ticket` then connect with `?ticket=` (never `?token=`)
 - One shared connection; pages subscribe/unsubscribe selected coins and one book
 - After disconnect, the client reconnects and resends subscriptions
 - Incoming events patch RTK Query caches (`getTicker24h`, `listSpotMarkets`, `getPortfolio`)

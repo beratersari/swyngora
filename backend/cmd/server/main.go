@@ -207,6 +207,16 @@ func main() {
 		Seeds:      histSeeds,
 	}
 	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
+	liqSink.Backfill = &futureshist.Backfiller{
+		Book: liqBook,
+		Hist: futuresHist,
+		Sources: map[domain.Exchange]domain.LiquidationHistoryPort{
+			domain.ExchangeBinance: binanceClient,
+			domain.ExchangeBybit:   bybitClient,
+		},
+		Seeds:  histSeeds,
+		Logger: logger,
+	}
 	binanceLiq := binance.NewLiquidationHub(binance.LiquidationOptions{
 		WSURL: cfg.BinanceFuturesWSURL,
 		Sink:  liqSink,
@@ -217,6 +227,9 @@ func main() {
 		HTTP:    httpClient,
 		Sink:    liqSink,
 	})
+	if liqSink.Backfill != nil {
+		liqSink.Backfill.Watch = bybitLiq.Watch
+	}
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
 
@@ -321,6 +334,9 @@ func main() {
 	}()
 	alertSvc := pricealert.New(alertStore)
 	alertSvc.AllowPrivateWebhooks = cfg.WebhookAllowPrivate
+	if liqSink != nil && liqSink.Backfill != nil {
+		alertSvc.Tape = liqSink.Backfill
+	}
 	logger.Info("price alerts store ready", "driver", "sqlite", "path", alertStore.Path())
 
 	portfolioStore, err := portfoliostore.Open(cfg.PortfolioDBPath)
@@ -444,12 +460,12 @@ func main() {
 	}()
 	apiKeySvc := apikey.New(accountStore)
 	accountSvc := account.New(accountStore, account.DataPurgeDeps{
-		Watchlist: watchStore,
-		Alerts:    alertStore,
-		Scanner:   scannerStore,
-		Exports:   exportStore,
-		Imports:   importStore,
-		APIKeys:   accountStore,
+		Watchlist:  watchStore,
+		Alerts:     alertStore,
+		Scanner:    scannerStore,
+		Exports:    exportStore,
+		Imports:    importStore,
+		APIKeys:    accountStore,
 		Paper:      portfolioSvc,
 		PriceDiff:  priceDiffSvc,
 		FundingArb: fundingArbSvc,
@@ -605,24 +621,25 @@ func main() {
 	}
 
 	handler := httpx.NewRouterWithOptions(marketSvc, watchSvc, httpx.RouterOptions{
-		RateLimitRPS:     cfg.RateLimitRPS,
-		RateLimitBurst:   cfg.RateLimitBurst,
-		CORSAllowOrigins: cfg.CORSAllowOrigins,
-		APIAuthToken:     cfg.APIAuthToken,
-		APIKeys:          apiKeySvc,
-		MCPHandler:       mcpHTTP,
-		AI:               aiClient,
-		AITimeout:        cfg.AITimeout,
-		Alerts:           alertSvc,
-		Portfolio:        portfolioSvc,
-		PriceDiff:        priceDiffSvc,
-		FundingArb:       fundingArbSvc,
-		Scanner:          scannerSvc,
-		Swing:            swingSvc,
-		Export:           exportSvc,
-		Import:           importSvc,
-		Accounts:         accountSvc,
-		Realtime:         realtimeHub,
+		RateLimitRPS:       cfg.RateLimitRPS,
+		RateLimitBurst:     cfg.RateLimitBurst,
+		CORSAllowOrigins:   cfg.CORSAllowOrigins,
+		APIAuthToken:       cfg.APIAuthToken,
+		StrictMasterTenant: !cfg.AllowMasterImpersonate,
+		APIKeys:            apiKeySvc,
+		MCPHandler:         mcpHTTP,
+		AI:                 aiClient,
+		AITimeout:          cfg.AITimeout,
+		Alerts:             alertSvc,
+		Portfolio:          portfolioSvc,
+		PriceDiff:          priceDiffSvc,
+		FundingArb:         fundingArbSvc,
+		Scanner:            scannerSvc,
+		Swing:              swingSvc,
+		Export:             exportSvc,
+		Import:             importSvc,
+		Accounts:           accountSvc,
+		Realtime:           realtimeHub,
 	})
 
 	job := &supplyjob.Runner{
@@ -673,12 +690,13 @@ func main() {
 	logger.Info("rsi heatmap warmer started", "exchange", "binance", "interval", "1h", "limit", 100)
 
 	alertChecker := &pricealert.Checker{
-		Alerts:   alertSvc,
-		Market:   marketSvc,
-		Books:    marketSvc,
-		Accounts: accountSvc,
-		Interval: cfg.AlertCheckInterval,
-		Logger:   logger,
+		Alerts:       alertSvc,
+		Market:       marketSvc,
+		Books:        marketSvc,
+		Liquidations: marketSvc,
+		Accounts:     accountSvc,
+		Interval:     cfg.AlertCheckInterval,
+		Logger:       logger,
 	}
 	go alertChecker.Start(ctx)
 

@@ -2,31 +2,52 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/render';
-import { plotX, plotY } from './helpers';
 import { RSIHeatmap } from './RSIHeatmap';
+
+const frameBox = {
+  width: 960,
+  height: 520,
+  top: 0,
+  left: 0,
+  bottom: 520,
+  right: 960,
+  x: 0,
+  y: 0,
+  toJSON() {
+    return {};
+  },
+} as DOMRect;
+
+const origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+const origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientHeight');
 
 describe('RSIHeatmap', () => {
   beforeEach(() => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 960,
-      height: 520,
-      top: 0,
-      left: 0,
-      bottom: 520,
-      right: 960,
-      x: 0,
-      y: 0,
-      toJSON() {
-        return {};
-      },
-    } as DOMRect);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(frameBox);
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 960,
+    });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 520,
+    });
     class FakeRO {
       cb: ResizeObserverCallback;
       constructor(cb: ResizeObserverCallback) {
         this.cb = cb;
       }
-      observe() {
-        this.cb([] as unknown as ResizeObserverEntry[], this as unknown as ResizeObserver);
+      observe(target: Element) {
+        const node = target as HTMLElement;
+        this.cb(
+          [
+            {
+              target,
+              contentRect: { width: node.clientWidth, height: node.clientHeight },
+            } as ResizeObserverEntry,
+          ],
+          this as unknown as ResizeObserver,
+        );
       }
       unobserve() {}
       disconnect() {}
@@ -37,6 +58,8 @@ describe('RSIHeatmap', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    if (origClientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', origClientWidth);
+    if (origClientHeight) Object.defineProperty(HTMLElement.prototype, 'clientHeight', origClientHeight);
   });
 
   it('plots each pair as a labeled dot and opens it on click', async () => {
@@ -59,7 +82,11 @@ describe('RSIHeatmap', () => {
       />,
     );
     expect(screen.getByTestId('rsi-heatmap')).toBeInTheDocument();
+    expect(screen.getByTestId('rsi-heat-scale')).toBeInTheDocument();
     expect(screen.getByTestId('rsi-avg-line')).toBeInTheDocument();
+    const fillOf = (id: string) =>
+      screen.getByTestId(id).querySelector('circle[fill]:not([fill="transparent"])');
+    expect(fillOf('rsi-dot-BTC')?.getAttribute('fill')).not.toBe(fillOf('rsi-dot-SHIB')?.getAttribute('fill'));
     expect(screen.getByText('BTC')).toBeInTheDocument();
     await userEvent.click(screen.getByTestId('rsi-dot-BTC'));
     expect(onOpen).toHaveBeenCalledWith('binance', 'BTCUSDT');
@@ -68,12 +95,14 @@ describe('RSIHeatmap', () => {
     const map = screen.getByTestId('rsi-heatmap');
     const svg = map.querySelector('svg');
     expect(svg).toBeTruthy();
-    fireEvent.mouseMove(svg as SVGElement, {
-      clientX: plotX(1, 3, 960),
-      clientY: plotY(28, 520),
-    });
+    expect(svg).not.toHaveAttribute('preserveAspectRatio', 'none');
+    fireEvent.mouseEnter(screen.getByTestId('rsi-dot-BTC'), { clientX: 190, clientY: 348 });
     expect(screen.getByText(/Rank #1/)).toBeInTheDocument();
-    fireEvent.mouseMove(svg as SVGElement, { clientX: 0, clientY: 0 });
+    fireEvent.mouseLeave(screen.getByTestId('rsi-dot-BTC'));
+    expect(screen.queryByText(/Rank #1/)).not.toBeInTheDocument();
+    fireEvent.mouseMove(svg as SVGElement, { clientX: 480, clientY: 260 });
+    expect(screen.queryByText(/Rank #1/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Rank #40/)).not.toBeInTheDocument();
     fireEvent.mouseLeave(map);
   });
 
@@ -90,11 +119,7 @@ describe('RSIHeatmap', () => {
     expect(screen.getByTestId('rsi-heatmap')).toBeInTheDocument();
     expect(screen.queryByTestId('rsi-avg-line')).not.toBeInTheDocument();
     await userEvent.click(screen.getByTestId('rsi-dot-ETH'));
-    const svg = screen.getByTestId('rsi-heatmap').querySelector('svg');
-    fireEvent.mouseMove(svg as SVGElement, {
-      clientX: plotX(1, 1, 960),
-      clientY: plotY(55, 520),
-    });
+    fireEvent.mouseEnter(screen.getByTestId('rsi-dot-ETH'));
     expect(screen.getByText(/Rank #1/)).toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
   });
@@ -116,6 +141,22 @@ describe('RSIHeatmap', () => {
     renderWithProviders(<RSIHeatmap />);
     expect(screen.getByText(/no markets to map/i)).toBeInTheDocument();
     expect(screen.queryByTestId('rsi-heatmap')).not.toBeInTheDocument();
+  });
+
+  it('sizes the plot to the frame after the skeleton unmounts', () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get: () => 1240,
+    });
+    const { rerender } = renderWithProviders(<RSIHeatmap isLoading data={{ items: [] }} />);
+    expect(screen.queryByTestId('rsi-heatmap')).not.toBeInTheDocument();
+    rerender(
+      <RSIHeatmap data={{ items: [{ rank: 1, symbol: 'BTCUSDT', base: 'BTC', rsi: 40 }] }} />,
+    );
+    expect(screen.getByTestId('rsi-heatmap').querySelector('svg')).toHaveAttribute(
+      'viewBox',
+      '0 0 1240 520',
+    );
   });
 
   it('skips ResizeObserver when the browser does not provide it', () => {

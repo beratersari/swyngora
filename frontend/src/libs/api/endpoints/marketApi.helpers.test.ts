@@ -4,6 +4,7 @@ import {
   compactParams,
   indicatorTagId,
   intervalTagId,
+  liqHeatmapTagId,
   productTagId,
   resolveExchangeArg,
   spotListTagId,
@@ -101,5 +102,6 @@ describe('tag ids', () => {
     expect(supplyTagId({ asset: 'BTC' })).toBe('BTC');
     expect(supplyTagId(undefined)).toBe('unknown');
     expect(indicatorTagId({ symbol: 'BTCUSDT' })).toContain('BTCUSDT');
+    expect(liqHeatmapTagId({ symbol: 'BTCUSDT', range: '7d' })).toBe('all:BTCUSDT:7d');
   });
 });

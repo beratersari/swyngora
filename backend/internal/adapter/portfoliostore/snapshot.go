@@ -355,9 +355,11 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO recurring_buy_plans (`+recurringPlanCols+`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, plan.ID, plan.ClientID, string(plan.Exchange), plan.Symbol, plan.Name, plan.Amount, string(plan.Frequency),
-			plan.Weekday, plan.DayOfMonth, plan.IntervalHours, string(plan.Status),
+			plan.Weekday, plan.DayOfMonth, plan.IntervalHours,
+			plan.TimeZone, boolToInt(plan.HasLocalTime), plan.Hour, plan.Minute, plan.MaxPrice,
+			plan.Budget, plan.Spent, nullTime(plan.EndsAt), string(plan.Status),
 			fmtTime(plan.NextRunAt), nullTime(plan.LastRunAt), plan.LastPeriodKey,
 			fmtTime(plan.CreatedAt), fmtTime(plan.UpdatedAt)); err != nil {
 			return err
