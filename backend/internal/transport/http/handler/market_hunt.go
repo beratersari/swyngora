@@ -203,22 +203,41 @@ type huntScoreFactorCompareDTO struct {
 }
 
 type huntScoreSnapshotDTO struct {
-	Source    string                      `json:"source"`
-	UpScore   float64                     `json:"upScore"`
-	DownScore float64                     `json:"downScore"`
-	Lean      string                      `json:"lean"`
-	Margin    float64                     `json:"margin"`
-	LevelUp   string                      `json:"levelUp"`
-	LevelDown string                      `json:"levelDown"`
-	Summary   string                      `json:"summary"`
-	Factors   []huntScoreFactorCompareDTO `json:"factors"`
+	Source      string                      `json:"source"`
+	UpScore     float64                     `json:"upScore"`
+	DownScore   float64                     `json:"downScore"`
+	Lean        string                      `json:"lean"`
+	Margin      float64                     `json:"margin"`
+	LevelUp     string                      `json:"levelUp"`
+	LevelDown   string                      `json:"levelDown"`
+	Summary     string                      `json:"summary"`
+	UpFactors   []huntScoreFactorCompareDTO `json:"upFactors"`
+	DownFactors []huntScoreFactorCompareDTO `json:"downFactors"`
+}
+
+type huntScoreLargestChangeDTO struct {
+	Direction     string  `json:"direction"`
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	Status        string  `json:"status"`
+	Score         float64 `json:"score"`
+	DefaultPct    float64 `json:"defaultPct"`
+	AppliedPct    float64 `json:"appliedPct"`
+	DefaultEffect float64 `json:"defaultEffect"`
+	AppliedEffect float64 `json:"appliedEffect"`
+	DeltaEffect   float64 `json:"deltaEffect"`
+	Detail        string  `json:"detail,omitempty"`
+	Summary       string  `json:"summary"`
 }
 
 type huntScoreDeltaDTO struct {
-	UpScore     float64                     `json:"upScore"`
-	DownScore   float64                     `json:"downScore"`
-	LeanChanged bool                        `json:"leanChanged"`
-	Factors     []huntScoreFactorCompareDTO `json:"factors"`
+	UpScore           float64                     `json:"upScore"`
+	DownScore         float64                     `json:"downScore"`
+	LeanChanged       bool                        `json:"leanChanged"`
+	UpFactors         []huntScoreFactorCompareDTO `json:"upFactors"`
+	DownFactors       []huntScoreFactorCompareDTO `json:"downFactors"`
+	UpLargestChange   *huntScoreLargestChangeDTO  `json:"upLargestChange,omitempty"`
+	DownLargestChange *huntScoreLargestChangeDTO  `json:"downLargestChange,omitempty"`
 }
 
 type huntScoreCompareDTO struct {
@@ -556,7 +575,7 @@ func huntScoreCompareToDTO(c domain.HuntScoreCompare) huntScoreCompareDTO {
 		return huntScoreSnapshotDTO{
 			Source: s.Source, UpScore: s.UpScore, DownScore: s.DownScore,
 			Lean: s.Lean, Margin: s.Margin, LevelUp: s.LevelUp, LevelDown: s.LevelDown,
-			Summary: s.Summary, Factors: mapFactors(s.Factors),
+			Summary: s.Summary, UpFactors: mapFactors(s.UpFactors), DownFactors: mapFactors(s.DownFactors),
 		}
 	}
 	return huntScoreCompareDTO{
@@ -564,9 +583,25 @@ func huntScoreCompareToDTO(c domain.HuntScoreCompare) huntScoreCompareDTO {
 		Applied: mapSnap(c.Applied),
 		Delta: huntScoreDeltaDTO{
 			UpScore: c.Delta.UpScore, DownScore: c.Delta.DownScore,
-			LeanChanged: c.Delta.LeanChanged, Factors: mapFactors(c.Delta.Factors),
+			LeanChanged:       c.Delta.LeanChanged,
+			UpFactors:         mapFactors(c.Delta.UpFactors),
+			DownFactors:       mapFactors(c.Delta.DownFactors),
+			UpLargestChange:   huntLargestChangeToDTO(c.Delta.UpLargestChange),
+			DownLargestChange: huntLargestChangeToDTO(c.Delta.DownLargestChange),
 		},
 		Note: c.Note,
+	}
+}
+
+func huntLargestChangeToDTO(c *domain.HuntScoreLargestChange) *huntScoreLargestChangeDTO {
+	if c == nil {
+		return nil
+	}
+	return &huntScoreLargestChangeDTO{
+		Direction: c.Direction, ID: c.ID, Label: c.Label, Status: c.Status, Score: c.Score,
+		DefaultPct: c.DefaultPct, AppliedPct: c.AppliedPct,
+		DefaultEffect: c.DefaultEffect, AppliedEffect: c.AppliedEffect,
+		DeltaEffect: c.DeltaEffect, Detail: c.Detail, Summary: c.Summary,
 	}
 }
 

@@ -448,8 +448,67 @@ func TestAttachHuntDirectionScores_MissingFactorDoesNotRescale(t *testing.T) {
 	if got.ScoreCompare.Applied.Source != "custom" || got.ScoreCompare.Default.UpScore == 0 {
 		t.Fatalf("compare %+v", got.ScoreCompare)
 	}
-	if got.ScoreCompare.Delta.Factors == nil {
-		t.Fatal("want factor compare rows")
+	if got.ScoreCompare.Delta.UpFactors == nil || got.ScoreCompare.Delta.DownFactors == nil {
+		t.Fatal("want up and down factor compare rows")
+	}
+	if got.ScoreCompare.Delta.UpLargestChange == nil {
+		t.Fatal("want up largest change")
+	}
+}
+
+func TestBuildHuntScoreCompare_SplitsUpAndDownAndPicksLargest(t *testing.T) {
+	defUp := HuntDirectionScore{Direction: "up", Score: 60, Level: HuntEaseLikely, Factors: []HuntFactor{
+		{ID: HuntFactorProximity, Label: huntScoreFactorLabel[HuntFactorProximity], RequestedPct: 20, Effect: 4, Status: HuntFactorUsed, Score: 70},
+		{ID: HuntFactorBook, Label: huntScoreFactorLabel[HuntFactorBook], RequestedPct: 16, Effect: 2, Status: HuntFactorUsed, Score: 62},
+		{ID: HuntFactorTrend, Label: huntScoreFactorLabel[HuntFactorTrend], RequestedPct: 20, Effect: 1, Status: HuntFactorUsed, Score: 55},
+	}}
+	defDown := HuntDirectionScore{Direction: "down", Score: 48, Level: HuntEaseMixed, Factors: []HuntFactor{
+		{ID: HuntFactorProximity, Label: huntScoreFactorLabel[HuntFactorProximity], RequestedPct: 20, Effect: -2, Status: HuntFactorUsed, Score: 40},
+		{ID: HuntFactorBook, Label: huntScoreFactorLabel[HuntFactorBook], RequestedPct: 16, Effect: 0, Status: HuntFactorUsed, Score: 50},
+		{ID: HuntFactorCrowding, Label: huntScoreFactorLabel[HuntFactorCrowding], RequestedPct: 18, Effect: 3, Status: HuntFactorUsed, Score: 66},
+	}}
+	appUp := HuntDirectionScore{Direction: "up", Score: 72, Level: HuntEaseEasier, Factors: []HuntFactor{
+		{ID: HuntFactorProximity, Label: huntScoreFactorLabel[HuntFactorProximity], RequestedPct: 40, Effect: 8, Status: HuntFactorUsed, Score: 70},
+		{ID: HuntFactorBook, Label: huntScoreFactorLabel[HuntFactorBook], RequestedPct: 30, Effect: 3.8, Status: HuntFactorUsed, Score: 62},
+		{ID: HuntFactorTrend, Label: huntScoreFactorLabel[HuntFactorTrend], RequestedPct: 30, Effect: 1.5, Status: HuntFactorUsed, Score: 55},
+	}}
+	appDown := HuntDirectionScore{Direction: "down", Score: 40, Level: HuntEaseMixed, Factors: []HuntFactor{
+		{ID: HuntFactorProximity, Label: huntScoreFactorLabel[HuntFactorProximity], RequestedPct: 40, Effect: -4, Status: HuntFactorUsed, Score: 40},
+		{ID: HuntFactorBook, Label: huntScoreFactorLabel[HuntFactorBook], RequestedPct: 30, Effect: 0, Status: HuntFactorUsed, Score: 50},
+		{ID: HuntFactorCrowding, Label: huntScoreFactorLabel[HuntFactorCrowding], RequestedPct: 0, Effect: 0, Status: HuntFactorDisabled, Score: 66},
+	}}
+	got := BuildHuntScoreCompare(defUp, defDown, appUp, appDown, "custom")
+	if len(got.Delta.UpFactors) == 0 || len(got.Delta.DownFactors) == 0 {
+		t.Fatalf("want both sides: %+v", got.Delta)
+	}
+	var upProx, downCrowd HuntScoreFactorCompare
+	for _, f := range got.Delta.UpFactors {
+		if f.ID == HuntFactorProximity {
+			upProx = f
+		}
+	}
+	for _, f := range got.Delta.DownFactors {
+		if f.ID == HuntFactorCrowding {
+			downCrowd = f
+		}
+	}
+	if math.Abs(upProx.DeltaEffect-4) > 0.05 {
+		t.Fatalf("up proximity delta %+v", upProx)
+	}
+	if math.Abs(downCrowd.DeltaEffect-(-3)) > 0.05 {
+		t.Fatalf("down crowding must use down effects, not up: %+v", downCrowd)
+	}
+	if got.Delta.UpLargestChange == nil || got.Delta.UpLargestChange.ID != HuntFactorProximity {
+		t.Fatalf("up largest %+v", got.Delta.UpLargestChange)
+	}
+	if got.Delta.DownLargestChange == nil || got.Delta.DownLargestChange.ID != HuntFactorCrowding {
+		t.Fatalf("down largest %+v", got.Delta.DownLargestChange)
+	}
+	if !strings.Contains(got.Delta.DownLargestChange.Summary, "Crowding") {
+		t.Fatalf("down summary %q", got.Delta.DownLargestChange.Summary)
+	}
+	if got.Delta.UpLargestChange.DeltaEffect == got.Delta.DownLargestChange.DeltaEffect {
+		t.Fatal("up and down largest change should differ")
 	}
 }
 

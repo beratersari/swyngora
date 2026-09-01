@@ -85,6 +85,39 @@ function assembleDirection(
   return { score: clampScore(50 + (clamped - 50) * keep), effects, statuses };
 }
 
+export function largestHuntFactorChange(factors: HuntMixPreviewFactor[]): HuntMixPreviewFactor | null {
+  let best: HuntMixPreviewFactor | null = null;
+  for (const factor of factors) {
+    if (Math.abs(factor.deltaEffect) < 0.05) continue;
+    if (!best || Math.abs(factor.deltaEffect) > Math.abs(best.deltaEffect)) {
+      best = factor;
+    }
+  }
+  return best;
+}
+
+function directionFactors(
+  score: HuntDirectionScore | undefined,
+  assembledDef: ReturnType<typeof assembleDirection>,
+  assembledApp: ReturnType<typeof assembleDirection>,
+  defaultPct: (id: string) => number,
+  appliedPct: (id: string) => number,
+): HuntMixPreviewFactor[] {
+  return HUNT_SCORE_FACTORS.map((factor) => {
+    const src = factorById(score, factor.id);
+    return {
+      id: factor.id,
+      defaultPct: defaultPct(factor.id),
+      appliedPct: appliedPct(factor.id),
+      score: src?.score ?? 0,
+      status: assembledApp.statuses.get(factor.id) ?? 'missing',
+      defaultEffect: assembledDef.effects.get(factor.id) ?? 0,
+      appliedEffect: assembledApp.effects.get(factor.id) ?? 0,
+      deltaEffect: round1((assembledApp.effects.get(factor.id) ?? 0) - (assembledDef.effects.get(factor.id) ?? 0)),
+    };
+  });
+}
+
 function previewOneVenue(venue: HuntVenue, draft: HuntWeightDraftRow[]): HuntMixPreview {
   const coverage = venue.coverage?.score ?? 100;
   const defaultPct = (id: string) => HUNT_SCORE_FACTORS.find((f) => f.id === id)?.defaultPct ?? 0;
@@ -95,19 +128,8 @@ function previewOneVenue(venue: HuntVenue, draft: HuntWeightDraftRow[]): HuntMix
   const appDown = assembleDirection(venue.downScore, appliedPct, coverage);
   const defLean = huntLeanFromScores(defUp.score, defDown.score);
   const appLean = huntLeanFromScores(appUp.score, appDown.score);
-  const factors: HuntMixPreviewFactor[] = HUNT_SCORE_FACTORS.map((factor) => {
-    const src = factorById(venue.upScore, factor.id);
-    return {
-      id: factor.id,
-      defaultPct: defaultPct(factor.id),
-      appliedPct: appliedPct(factor.id),
-      score: src?.score ?? 0,
-      status: appUp.statuses.get(factor.id) ?? 'missing',
-      defaultEffect: defUp.effects.get(factor.id) ?? 0,
-      appliedEffect: appUp.effects.get(factor.id) ?? 0,
-      deltaEffect: round1((appUp.effects.get(factor.id) ?? 0) - (defUp.effects.get(factor.id) ?? 0)),
-    };
-  });
+  const upFactors = directionFactors(venue.upScore, defUp, appUp, defaultPct, appliedPct);
+  const downFactors = directionFactors(venue.downScore, defDown, appDown, defaultPct, appliedPct);
   return {
     exchange: venue.exchange,
     coverage,
@@ -119,7 +141,10 @@ function previewOneVenue(venue: HuntVenue, draft: HuntWeightDraftRow[]): HuntMix
     appliedLean: appLean.lean,
     upDelta: round1(appUp.score - defUp.score),
     downDelta: round1(appDown.score - defDown.score),
-    factors,
+    upFactors,
+    downFactors,
+    upLargestChange: largestHuntFactorChange(upFactors),
+    downLargestChange: largestHuntFactorChange(downFactors),
   };
 }
 
@@ -133,7 +158,27 @@ export function previewHuntMix(venues: HuntVenue[], draft: HuntWeightDraftRow[])
   let defDown = 0;
   let appUp = 0;
   let appDown = 0;
-  const factorAcc = new Map<string, HuntMixPreviewFactor & { w: number }>();
+  const upAcc = new Map<string, HuntMixPreviewFactor & { w: number }>();
+  const downAcc = new Map<string, HuntMixPreviewFactor & { w: number }>();
+  const addFactors = (
+    acc: Map<string, HuntMixPreviewFactor & { w: number }>,
+    factors: HuntMixPreviewFactor[],
+    w: number,
+  ) => {
+    for (const f of factors) {
+      const cur = acc.get(f.id);
+      if (!cur) {
+        acc.set(f.id, { ...f, w });
+        continue;
+      }
+      cur.score = (cur.score * cur.w + f.score * w) / (cur.w + w);
+      cur.defaultEffect = (cur.defaultEffect * cur.w + f.defaultEffect * w) / (cur.w + w);
+      cur.appliedEffect = (cur.appliedEffect * cur.w + f.appliedEffect * w) / (cur.w + w);
+      cur.deltaEffect = (cur.deltaEffect * cur.w + f.deltaEffect * w) / (cur.w + w);
+      if (f.status === 'used') cur.status = 'used';
+      cur.w += w;
+    }
+  };
   for (const row of rows) {
     const venue = venues.find((v) => v.exchange === row.exchange);
     const w = parseNum(venue?.openInterestValue) ?? 1;
@@ -142,38 +187,18 @@ export function previewHuntMix(venues: HuntVenue[], draft: HuntWeightDraftRow[])
     defDown += row.defaultDown * w;
     appUp += row.appliedUp * w;
     appDown += row.appliedDown * w;
-    for (const f of row.factors) {
-      const acc = factorAcc.get(f.id);
-      if (!acc) {
-        factorAcc.set(f.id, { ...f, w });
-        continue;
-      }
-      acc.score = (acc.score * acc.w + f.score * w) / (acc.w + w);
-      acc.defaultEffect = (acc.defaultEffect * acc.w + f.defaultEffect * w) / (acc.w + w);
-      acc.appliedEffect = (acc.appliedEffect * acc.w + f.appliedEffect * w) / (acc.w + w);
-      acc.deltaEffect = (acc.deltaEffect * acc.w + f.deltaEffect * w) / (acc.w + w);
-      if (f.status === 'used') acc.status = 'used';
-      acc.w += w;
-    }
+    addFactors(upAcc, row.upFactors, w);
+    addFactors(downAcc, row.downFactors, w);
   }
   if (oiSum <= 0) return rows[0];
   const defaultUp = clampScore(defUp / oiSum);
   const defaultDown = clampScore(defDown / oiSum);
   const appliedUp = clampScore(appUp / oiSum);
   const appliedDown = clampScore(appDown / oiSum);
-  return {
-    coverage: rows[0]?.coverage ?? 100,
-    defaultUp,
-    defaultDown,
-    appliedUp,
-    appliedDown,
-    defaultLean: huntLeanFromScores(defaultUp, defaultDown).lean,
-    appliedLean: huntLeanFromScores(appliedUp, appliedDown).lean,
-    upDelta: round1(appliedUp - defaultUp),
-    downDelta: round1(appliedDown - defaultDown),
-    factors: HUNT_SCORE_FACTORS.map((factor) => {
-      const acc = factorAcc.get(factor.id);
-      if (!acc) {
+  const flatten = (acc: Map<string, HuntMixPreviewFactor & { w: number }>) =>
+    HUNT_SCORE_FACTORS.map((factor) => {
+      const cur = acc.get(factor.id);
+      if (!cur) {
         return {
           id: factor.id,
           defaultPct: factor.defaultPct,
@@ -186,16 +211,32 @@ export function previewHuntMix(venues: HuntVenue[], draft: HuntWeightDraftRow[])
         };
       }
       return {
-        id: acc.id,
-        defaultPct: acc.defaultPct,
-        appliedPct: acc.appliedPct,
-        score: round1(acc.score),
-        status: acc.status,
-        defaultEffect: round1(acc.defaultEffect),
-        appliedEffect: round1(acc.appliedEffect),
-        deltaEffect: round1(acc.deltaEffect),
+        id: cur.id,
+        defaultPct: cur.defaultPct,
+        appliedPct: cur.appliedPct,
+        score: round1(cur.score),
+        status: cur.status,
+        defaultEffect: round1(cur.defaultEffect),
+        appliedEffect: round1(cur.appliedEffect),
+        deltaEffect: round1(cur.deltaEffect),
       };
-    }),
+    });
+  const upFactors = flatten(upAcc);
+  const downFactors = flatten(downAcc);
+  return {
+    coverage: rows[0]?.coverage ?? 100,
+    defaultUp,
+    defaultDown,
+    appliedUp,
+    appliedDown,
+    defaultLean: huntLeanFromScores(defaultUp, defaultDown).lean,
+    appliedLean: huntLeanFromScores(appliedUp, appliedDown).lean,
+    upDelta: round1(appliedUp - defaultUp),
+    downDelta: round1(appliedDown - defaultDown),
+    upFactors,
+    downFactors,
+    upLargestChange: largestHuntFactorChange(upFactors),
+    downLargestChange: largestHuntFactorChange(downFactors),
   };
 }
 

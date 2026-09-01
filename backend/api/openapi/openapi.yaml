@@ -7539,9 +7539,25 @@ components:
         appliedEffect: { type: number }
         deltaEffect: { type: number, description: appliedEffect − defaultEffect }
         detail: { type: string }
+    LiquidationHuntScoreLargestChange:
+      type: object
+      description: The factor whose custom mix moved one direction score the most versus default
+      properties:
+        direction: { type: string, enum: [up, down] }
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [used, missing, disabled] }
+        score: { type: number }
+        defaultPct: { type: number }
+        appliedPct: { type: number }
+        defaultEffect: { type: number }
+        appliedEffect: { type: number }
+        deltaEffect: { type: number, description: appliedEffect − defaultEffect }
+        detail: { type: string }
+        summary: { type: string }
     LiquidationHuntScoreSnapshot:
       type: object
-      description: Up/down scores for one mix (default or applied)
+      description: Up/down scores for one mix (default or applied). Factor rows are per direction.
       properties:
         source: { type: string, enum: [default, custom] }
         upScore: { type: number }
@@ -7551,12 +7567,15 @@ components:
         levelUp: { type: string, enum: [easier, likely, mixed, hard] }
         levelDown: { type: string, enum: [easier, likely, mixed, hard] }
         summary: { type: string }
-        factors:
+        upFactors:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntScoreFactorCompare' }
+        downFactors:
           type: array
           items: { $ref: '#/components/schemas/LiquidationHuntScoreFactorCompare' }
     LiquidationHuntScoreCompare:
       type: object
-      description: Default mix vs applied mix. Direction score = 50 + sum(effect). Missing factors keep their percent and contribute 0.
+      description: Default mix vs applied mix. Direction score = 50 + sum(effect). Missing factors keep their percent and contribute 0. upFactors / downFactors are separate. upLargestChange / downLargestChange is the factor that moved that direction the most.
       properties:
         default: { $ref: '#/components/schemas/LiquidationHuntScoreSnapshot' }
         applied: { $ref: '#/components/schemas/LiquidationHuntScoreSnapshot' }
@@ -7566,9 +7585,14 @@ components:
             upScore: { type: number }
             downScore: { type: number }
             leanChanged: { type: boolean }
-            factors:
+            upFactors:
               type: array
               items: { $ref: '#/components/schemas/LiquidationHuntScoreFactorCompare' }
+            downFactors:
+              type: array
+              items: { $ref: '#/components/schemas/LiquidationHuntScoreFactorCompare' }
+            upLargestChange: { $ref: '#/components/schemas/LiquidationHuntScoreLargestChange' }
+            downLargestChange: { $ref: '#/components/schemas/LiquidationHuntScoreLargestChange' }
         note: { type: string }
     LiquidationHuntFactor:
       type: object

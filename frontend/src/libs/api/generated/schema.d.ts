@@ -4169,7 +4169,25 @@ export interface components {
             deltaEffect?: number;
             detail?: string;
         };
-        /** @description Up/down scores for one mix (default or applied) */
+        /** @description The factor whose custom mix moved one direction score the most versus default */
+        LiquidationHuntScoreLargestChange: {
+            /** @enum {string} */
+            direction?: "up" | "down";
+            id?: string;
+            label?: string;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
+            score?: number;
+            defaultPct?: number;
+            appliedPct?: number;
+            defaultEffect?: number;
+            appliedEffect?: number;
+            /** @description appliedEffect − defaultEffect */
+            deltaEffect?: number;
+            detail?: string;
+            summary?: string;
+        };
+        /** @description Up/down scores for one mix (default or applied). Factor rows are per direction. */
         LiquidationHuntScoreSnapshot: {
             /** @enum {string} */
             source?: "default" | "custom";
@@ -4183,9 +4201,10 @@ export interface components {
             /** @enum {string} */
             levelDown?: "easier" | "likely" | "mixed" | "hard";
             summary?: string;
-            factors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+            upFactors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+            downFactors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
         };
-        /** @description Default mix vs applied mix. Direction score = 50 + sum(effect). Missing factors keep their percent and contribute 0. */
+        /** @description Default mix vs applied mix. Direction score = 50 + sum(effect). Missing factors keep their percent and contribute 0. upFactors / downFactors are separate. upLargestChange / downLargestChange is the factor that moved that direction the most. */
         LiquidationHuntScoreCompare: {
             default?: components["schemas"]["LiquidationHuntScoreSnapshot"];
             applied?: components["schemas"]["LiquidationHuntScoreSnapshot"];
@@ -4193,7 +4212,10 @@ export interface components {
                 upScore?: number;
                 downScore?: number;
                 leanChanged?: boolean;
-                factors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+                upFactors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+                downFactors?: components["schemas"]["LiquidationHuntScoreFactorCompare"][];
+                upLargestChange?: components["schemas"]["LiquidationHuntScoreLargestChange"];
+                downLargestChange?: components["schemas"]["LiquidationHuntScoreLargestChange"];
             };
             note?: string;
         };

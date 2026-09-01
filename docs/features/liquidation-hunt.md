@@ -89,7 +89,7 @@ Default mix (percent): proximity 20, book 16, efficiency 12, trend 20, crowding 
 
 `GET /api/v1/market/liquidation-hunt?weightProximity=40&weightBook=60` (and the other `weight*` keys) applies a **custom** mix. Omitted keys are 0 (disabled). The six must sum to **100** or the request is 400 — the server does not rescale incoming percents, and it does **not** rescale again when a factor has no data.
 
-`scoreMix` lists `requested`, `used`, `missing`, and `disabled`. `scoreCompare` is default vs applied: up/down scores, lean, and each factor's `defaultPct` / `appliedPct` / `defaultEffect` / `appliedEffect` / `deltaEffect`. Use that to compare mixes (desk or AI) without re-deriving the math. A missing input is not replaced (no 24h ticker for trend, no 4h window for 1h flow). Web: **Custom weights** on Hunt previews default vs draft scores before apply.
+`scoreMix` lists `requested`, `used`, `missing`, and `disabled`. `scoreCompare` is default vs applied: up/down scores, lean, and **separate** `upFactors` / `downFactors` (`defaultPct` / `appliedPct` / `defaultEffect` / `appliedEffect` / `deltaEffect`). `delta.upLargestChange` / `downLargestChange` is the factor whose custom mix moved that direction the most (`deltaEffect` and a one-line `summary`). Use that to compare mixes (desk or AI) without re-deriving the math. A missing input is not replaced (no 24h ticker for trend, no 4h window for 1h flow). Web: **Custom weights** on Hunt previews default vs draft scores, both directions, before apply.
 
 Observed-only clusters are shown but **not** used as fuel. Missing book or missing zone size is labeled — nothing is substituted from the other venue or from a default score.
 

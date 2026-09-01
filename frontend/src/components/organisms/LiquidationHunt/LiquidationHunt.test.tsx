@@ -168,7 +168,8 @@ describe('LiquidationHunt', () => {
     expect(await screen.findByTestId('liquidation-hunt-weights-preview')).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-hunt-weights-preview-default')).toHaveTextContent(/up/i);
     expect(screen.getByTestId('liquidation-hunt-weights-preview-custom')).toHaveTextContent(/up/i);
-    expect(screen.getByTestId('liquidation-hunt-weights-preview-factors')).toHaveTextContent(/no data/i);
+    expect(screen.getByTestId('liquidation-hunt-weights-preview-factors-up')).toHaveTextContent(/no data/i);
+    expect(screen.getByTestId('liquidation-hunt-weights-preview-factors-down')).toBeInTheDocument();
   });
 
   it('opens the cascade path subview without the compare scores', async () => {

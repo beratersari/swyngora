@@ -99,18 +99,20 @@ type HuntScoreMix struct {
 
 // HuntScoreSnapshot is one mix's up/down scores (default or applied).
 type HuntScoreSnapshot struct {
-	Source    string                   `json:"source"`
-	UpScore   float64                  `json:"upScore"`
-	DownScore float64                  `json:"downScore"`
-	Lean      string                   `json:"lean"`
-	Margin    float64                  `json:"margin"`
-	LevelUp   string                   `json:"levelUp"`
-	LevelDown string                   `json:"levelDown"`
-	Summary   string                   `json:"summary"`
-	Factors   []HuntScoreFactorCompare `json:"factors"`
+	Source      string                   `json:"source"`
+	UpScore     float64                  `json:"upScore"`
+	DownScore   float64                  `json:"downScore"`
+	Lean        string                   `json:"lean"`
+	Margin      float64                  `json:"margin"`
+	LevelUp     string                   `json:"levelUp"`
+	LevelDown   string                   `json:"levelDown"`
+	Summary     string                   `json:"summary"`
+	UpFactors   []HuntScoreFactorCompare `json:"upFactors"`
+	DownFactors []HuntScoreFactorCompare `json:"downFactors"`
 }
 
-// HuntScoreFactorCompare is one factor under default vs applied weights.
+// HuntScoreFactorCompare is one factor under default vs applied weights
+// for a single hunt direction.
 type HuntScoreFactorCompare struct {
 	ID            string  `json:"id"`
 	Label         string  `json:"label"`
@@ -124,12 +126,33 @@ type HuntScoreFactorCompare struct {
 	Detail        string  `json:"detail,omitempty"`
 }
 
-// HuntScoreDelta is applied minus default.
+// HuntScoreLargestChange is the factor whose custom mix moved one
+// direction score the most versus the default mix.
+type HuntScoreLargestChange struct {
+	Direction     string  `json:"direction"`
+	ID            string  `json:"id"`
+	Label         string  `json:"label"`
+	Status        string  `json:"status"`
+	Score         float64 `json:"score"`
+	DefaultPct    float64 `json:"defaultPct"`
+	AppliedPct    float64 `json:"appliedPct"`
+	DefaultEffect float64 `json:"defaultEffect"`
+	AppliedEffect float64 `json:"appliedEffect"`
+	DeltaEffect   float64 `json:"deltaEffect"`
+	Detail        string  `json:"detail,omitempty"`
+	Summary       string  `json:"summary"`
+}
+
+// HuntScoreDelta is applied minus default. Up and down factor rows are
+// separate — a down move is not explained by the up mix.
 type HuntScoreDelta struct {
-	UpScore     float64                  `json:"upScore"`
-	DownScore   float64                  `json:"downScore"`
-	LeanChanged bool                     `json:"leanChanged"`
-	Factors     []HuntScoreFactorCompare `json:"factors"`
+	UpScore           float64                  `json:"upScore"`
+	DownScore         float64                  `json:"downScore"`
+	LeanChanged       bool                     `json:"leanChanged"`
+	UpFactors         []HuntScoreFactorCompare `json:"upFactors"`
+	DownFactors       []HuntScoreFactorCompare `json:"downFactors"`
+	UpLargestChange   *HuntScoreLargestChange  `json:"upLargestChange,omitempty"`
+	DownLargestChange *HuntScoreLargestChange  `json:"downLargestChange,omitempty"`
 }
 
 // HuntScoreCompare is default vs applied mix for the desk and for AI.
@@ -456,41 +479,84 @@ func BuildHuntScoreMix(w HuntScoreWeights, factors []HuntFactor) HuntScoreMix {
 	return out
 }
 
-const huntScoreCompareNote = "Applied percents stay as requested. A missing factor keeps its percent and contributes 0 (neutral 50). Remaining factors are not increased to fill 100. effect is signed points versus 50; direction score = 50 + sum(effect)."
+const huntScoreCompareNote = "Applied percents stay as requested. A missing factor keeps its percent and contributes 0 (neutral 50). Remaining factors are not increased to fill 100. effect is signed points versus 50; direction score = 50 + sum(effect). upFactors and downFactors are separate. upLargestChange / downLargestChange is the factor whose custom mix moved that direction the most."
 
 // BuildHuntScoreCompare is default vs applied direction scores for one venue.
 func BuildHuntScoreCompare(defUp, defDown, appUp, appDown HuntDirectionScore, appliedSource string) HuntScoreCompare {
 	if appliedSource == "" {
 		appliedSource = "default"
 	}
-	rows := mergeHuntScoreFactorCompare(defUp, appUp)
-	defSnap := huntScoreSnapshot("default", defUp, defDown, rows)
-	appSnap := huntScoreSnapshot(appliedSource, appUp, appDown, rows)
+	upRows := mergeHuntScoreFactorCompare(defUp, appUp)
+	downRows := mergeHuntScoreFactorCompare(defDown, appDown)
+	defSnap := huntScoreSnapshot("default", defUp, defDown, upRows, downRows)
+	appSnap := huntScoreSnapshot(appliedSource, appUp, appDown, upRows, downRows)
 	return HuntScoreCompare{
 		Default: defSnap,
 		Applied: appSnap,
 		Delta: HuntScoreDelta{
-			UpScore:     round1(appSnap.UpScore - defSnap.UpScore),
-			DownScore:   round1(appSnap.DownScore - defSnap.DownScore),
-			LeanChanged: appSnap.Lean != defSnap.Lean,
-			Factors:     rows,
+			UpScore:           round1(appSnap.UpScore - defSnap.UpScore),
+			DownScore:         round1(appSnap.DownScore - defSnap.DownScore),
+			LeanChanged:       appSnap.Lean != defSnap.Lean,
+			UpFactors:         upRows,
+			DownFactors:       downRows,
+			UpLargestChange:   HuntLargestFactorChange("up", upRows),
+			DownLargestChange: HuntLargestFactorChange("down", downRows),
 		},
 		Note: huntScoreCompareNote,
 	}
 }
 
-func huntScoreSnapshot(source string, up, down HuntDirectionScore, factors []HuntScoreFactorCompare) HuntScoreSnapshot {
+func huntScoreSnapshot(source string, up, down HuntDirectionScore, upRows, downRows []HuntScoreFactorCompare) HuntScoreSnapshot {
 	bias := huntBiasFromScores(up, down)
 	return HuntScoreSnapshot{
-		Source:    source,
-		UpScore:   up.Score,
-		DownScore: down.Score,
-		Lean:      bias.Lean,
-		Margin:    bias.Margin,
-		LevelUp:   up.Level,
-		LevelDown: down.Level,
-		Summary:   bias.Summary,
-		Factors:   factors,
+		Source:      source,
+		UpScore:     up.Score,
+		DownScore:   down.Score,
+		Lean:        bias.Lean,
+		Margin:      bias.Margin,
+		LevelUp:     up.Level,
+		LevelDown:   down.Level,
+		Summary:     bias.Summary,
+		UpFactors:   upRows,
+		DownFactors: downRows,
+	}
+}
+
+// HuntLargestFactorChange is the factor with the largest |deltaEffect|.
+// Nil when no custom mix moved that direction (all deltas ~0).
+func HuntLargestFactorChange(dir string, rows []HuntScoreFactorCompare) *HuntScoreLargestChange {
+	var best HuntScoreFactorCompare
+	found := false
+	for _, row := range rows {
+		if math.Abs(row.DeltaEffect) < 0.05 {
+			continue
+		}
+		if !found || math.Abs(row.DeltaEffect) > math.Abs(best.DeltaEffect) {
+			best = row
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	moved := "raised"
+	if best.DeltaEffect < 0 {
+		moved = "lowered"
+	}
+	return &HuntScoreLargestChange{
+		Direction:     dir,
+		ID:            best.ID,
+		Label:         best.Label,
+		Status:        best.Status,
+		Score:         best.Score,
+		DefaultPct:    best.DefaultPct,
+		AppliedPct:    best.AppliedPct,
+		DefaultEffect: best.DefaultEffect,
+		AppliedEffect: best.AppliedEffect,
+		DeltaEffect:   best.DeltaEffect,
+		Detail:        best.Detail,
+		Summary: fmt.Sprintf("%s: %s %s this score the most (%+.1f vs default).",
+			dir, best.Label, moved, best.DeltaEffect),
 	}
 }
 
@@ -588,21 +654,24 @@ func CombineHuntScoreCompare(venues []HuntVenueReport) HuntScoreCompare {
 	if n == 1 {
 		for _, v := range venues {
 			if HuntVenueIncluded(v) {
-				out.Default.Factors = v.ScoreCompare.Default.Factors
-				out.Applied.Factors = v.ScoreCompare.Applied.Factors
-				out.Delta.Factors = v.ScoreCompare.Delta.Factors
-				break
+				return v.ScoreCompare
 			}
 		}
-	} else {
-		out.Default.Factors = combineHuntFactorCompare(venues)
-		out.Applied.Factors = out.Default.Factors
-		out.Delta.Factors = out.Default.Factors
 	}
+	upRows := combineHuntFactorCompare(venues, true)
+	downRows := combineHuntFactorCompare(venues, false)
+	out.Default.UpFactors = upRows
+	out.Default.DownFactors = downRows
+	out.Applied.UpFactors = upRows
+	out.Applied.DownFactors = downRows
+	out.Delta.UpFactors = upRows
+	out.Delta.DownFactors = downRows
+	out.Delta.UpLargestChange = HuntLargestFactorChange("up", upRows)
+	out.Delta.DownLargestChange = HuntLargestFactorChange("down", downRows)
 	return out
 }
 
-func combineHuntFactorCompare(venues []HuntVenueReport) []HuntScoreFactorCompare {
+func combineHuntFactorCompare(venues []HuntVenueReport, up bool) []HuntScoreFactorCompare {
 	type acc struct {
 		row HuntScoreFactorCompare
 		w   float64
@@ -616,7 +685,11 @@ func combineHuntFactorCompare(venues []HuntVenueReport) []HuntScoreFactorCompare
 		if w <= 0 {
 			w = 1
 		}
-		for _, f := range v.ScoreCompare.Delta.Factors {
+		rows := v.ScoreCompare.Delta.DownFactors
+		if up {
+			rows = v.ScoreCompare.Delta.UpFactors
+		}
+		for _, f := range rows {
 			a := byID[f.ID]
 			if a == nil {
 				cp := f

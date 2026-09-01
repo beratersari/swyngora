@@ -640,12 +640,49 @@ function HuntWeightPreview({ preview }: { preview: HuntMixPreview }) {
           </PreviewScores>
         </PreviewCard>
       </PreviewPair>
-      <PreviewFactorTable data-testid="liquidation-hunt-weights-preview-factors">
+      <HuntWeightPreviewFactors
+        side="up"
+        factors={preview.upFactors}
+        largest={preview.upLargestChange}
+      />
+      <HuntWeightPreviewFactors
+        side="down"
+        factors={preview.downFactors}
+        largest={preview.downLargestChange}
+      />
+    </PreviewBlock>
+  );
+}
+
+function HuntWeightPreviewFactors({
+  side,
+  factors,
+  largest,
+}: {
+  side: 'up' | 'down';
+  factors: HuntMixPreview['upFactors'];
+  largest: HuntMixPreview['upLargestChange'];
+}) {
+  const { t } = useTranslation('liquidations');
+  return (
+    <div data-testid={`liquidation-hunt-weights-preview-factors-${side}`}>
+      <Text variant="caption" color="secondary">
+        {t(side === 'up' ? 'hunt.weights.upFactors' : 'hunt.weights.downFactors')}
+      </Text>
+      {largest ? (
+        <Text variant="bodySm" data-testid={`liquidation-hunt-weights-preview-largest-${side}`}>
+          {t('hunt.weights.largestChange', {
+            factor: t(`hunt.weights.factors.${largest.id}`),
+            value: formatEffect(largest.deltaEffect),
+          })}
+        </Text>
+      ) : null}
+      <PreviewFactorTable>
         <PreviewHead>{t('hunt.factors.title')}</PreviewHead>
         <PreviewHead>{t('hunt.weights.defaultMix')}</PreviewHead>
         <PreviewHead>{t('hunt.weights.draftMix')}</PreviewHead>
         <PreviewHead>{t('hunt.weights.delta')}</PreviewHead>
-        {preview.factors.map((factor) => (
+        {factors.map((factor) => (
           <span key={factor.id} style={{ display: 'contents' }}>
             <FactorName title={factor.status === 'missing' ? t('hunt.weights.missingKept', { pct: Math.round(factor.appliedPct) }) : undefined}>
               {t(`hunt.weights.factors.${factor.id}`)}
@@ -659,7 +696,7 @@ function HuntWeightPreview({ preview }: { preview: HuntMixPreview }) {
           </span>
         ))}
       </PreviewFactorTable>
-    </PreviewBlock>
+    </div>
   );
 }
 

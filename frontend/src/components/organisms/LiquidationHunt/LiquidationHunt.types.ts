@@ -46,6 +46,21 @@ export type HuntScoreFactorCompare = {
   detail?: string;
 };
 
+export type HuntScoreLargestChange = {
+  direction?: string;
+  id?: string;
+  label?: string;
+  status?: string;
+  score?: number;
+  defaultPct?: number;
+  appliedPct?: number;
+  defaultEffect?: number;
+  appliedEffect?: number;
+  deltaEffect?: number;
+  detail?: string;
+  summary?: string;
+};
+
 export type HuntScoreSnapshot = {
   source?: string;
   upScore?: number;
@@ -55,7 +70,8 @@ export type HuntScoreSnapshot = {
   levelUp?: HuntEase;
   levelDown?: HuntEase;
   summary?: string;
-  factors?: HuntScoreFactorCompare[];
+  upFactors?: HuntScoreFactorCompare[];
+  downFactors?: HuntScoreFactorCompare[];
 };
 
 export type HuntScoreCompare = {
@@ -65,7 +81,10 @@ export type HuntScoreCompare = {
     upScore?: number;
     downScore?: number;
     leanChanged?: boolean;
-    factors?: HuntScoreFactorCompare[];
+    upFactors?: HuntScoreFactorCompare[];
+    downFactors?: HuntScoreFactorCompare[];
+    upLargestChange?: HuntScoreLargestChange;
+    downLargestChange?: HuntScoreLargestChange;
   };
   note?: string;
 };
@@ -276,7 +295,10 @@ export type HuntMixPreview = {
   appliedLean: HuntLean;
   upDelta: number;
   downDelta: number;
-  factors: HuntMixPreviewFactor[];
+  upFactors: HuntMixPreviewFactor[];
+  downFactors: HuntMixPreviewFactor[];
+  upLargestChange: HuntMixPreviewFactor | null;
+  downLargestChange: HuntMixPreviewFactor | null;
 };
 
 export type HuntWeightDraftRow = {
