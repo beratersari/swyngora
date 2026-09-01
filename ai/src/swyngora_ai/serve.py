@@ -9,15 +9,16 @@ Supports:
 
 from __future__ import annotations
 
-import argparse
 import json
 import queue
 import sys
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Annotated, Any
 from urllib.parse import urlparse
+
+import typer
 
 from swyngora_ai.config import get_settings
 from swyngora_ai.graph.orchestrator import Orchestrator, build_orchestrator
@@ -94,7 +95,9 @@ class Handler(BaseHTTPRequestHandler):
         session_id = str(payload.get("sessionId") or payload.get("session_id") or "default")
         client_id = str(payload.get("clientId") or payload.get("client_id") or "").strip()
         # Missing flags deny mutations (Go proxy always sends both).
-        can_trade = payload["canTrade"] if "canTrade" in payload else payload.get("can_trade", False)
+        can_trade = (
+            payload["canTrade"] if "canTrade" in payload else payload.get("can_trade", False)
+        )
         can_manage_keys = (
             payload["canManageKeys"]
             if "canManageKeys" in payload
@@ -203,11 +206,14 @@ class Handler(BaseHTTPRequestHandler):
             pass
 
 
-def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description="Swyngora AI HTTP server")
-    p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--port", type=int, default=8090)
-    args = p.parse_args(argv)
+app = typer.Typer(
+    add_completion=False,
+    pretty_exceptions_enable=False,
+    context_settings={"help_option_names": ["-h", "--help"]},
+)
+
+
+def run_server(host: str, port: int) -> int:
     try:
         get_orch()
     except Exception as e:  # noqa: BLE001
@@ -216,10 +222,9 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = get_settings()
     model = cfg.grok_model if cfg.llm_provider == "grok" else cfg.ollama_model
-    httpd = ThreadingHTTPServer((args.host, args.port), Handler)
+    httpd = ThreadingHTTPServer((host, port), Handler)
     print(
-        f"swyngora-ai listening on http://{args.host}:{args.port} "
-        f"provider={cfg.llm_provider} model={model}",
+        f"swyngora-ai listening on http://{host}:{port} provider={cfg.llm_provider} model={model}",
         flush=True,
     )
     try:
@@ -229,5 +234,18 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+@app.command()
+def run(
+    host: Annotated[str, typer.Option("--host", help="Bind address")] = "127.0.0.1",
+    port: Annotated[int, typer.Option("--port", help="Bind port")] = 8090,
+) -> None:
+    """Swyngora AI HTTP server."""
+    raise typer.Exit(run_server(host, port))
+
+
+def main(argv: list[str] | None = None) -> None:
+    app(args=argv, prog_name="swyngora-ai-serve")
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

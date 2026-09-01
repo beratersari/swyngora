@@ -60,6 +60,7 @@ swyngora-ai "What is BTC RSI on binance 1h?"
 
 # HTTP (used by the Go proxy + web Process panel)
 python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
+# same: swyngora-ai-serve --host 127.0.0.1 --port 8090
 # POST /v1/chat          → JSON {reply, tools, thinking, references}
 # POST /v1/chat/stream   → NDJSON status/thinking/tool/final/done
 

@@ -1382,7 +1382,9 @@ class RecurringBuyCreateInput(BaseModel):
     time_zone: str = Field(default="", description="IANA timezone e.g. Europe/Istanbul")
     hour: int | None = Field(default=None, description="Local hour 0-23")
     minute: int = Field(default=0, description="Local minute 0-59")
-    max_price: float = Field(default=0, description="Skip if last or fee+slippage unit exceeds this; 0 = no cap")
+    max_price: float = Field(
+        default=0, description="Skip if last or fee+slippage unit exceeds this; 0 = no cap"
+    )
     budget: float = Field(default=0, description="Total cash cap across succeeded runs; 0 = no cap")
     end_date: str = Field(default="", description="Last inclusive local day YYYY-MM-DD")
     ends_at: str = Field(default="", description="RFC3339 inclusive last scheduled instant")
@@ -1482,7 +1484,9 @@ class PriceDiffWatchCreateInput(BaseModel):
     client_id: str
     symbol: str
     notional: float = Field(gt=0, description="Quote size to walk on live books e.g. 10000")
-    min_profit: float = Field(ge=0, description="Minimum after-fee profit in quote currency e.g. 20")
+    min_profit: float = Field(
+        ge=0, description="Minimum after-fee profit in quote currency e.g. 20"
+    )
     min_duration_sec: float = Field(
         default=0,
         ge=0,
@@ -1638,7 +1642,9 @@ class ScannerRuleDeleteInput(BaseModel):
 class ScannerRuleUpdateInput(BaseModel):
     client_id: str
     rule_id: str
-    enabled: bool | None = Field(default=None, description="true to run the rule, false to pause it")
+    enabled: bool | None = Field(
+        default=None, description="true to run the rule, false to pause it"
+    )
     interval: str | None = None
     conditions: str | None = Field(
         default=None,
@@ -1853,9 +1859,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
-    def get_liquidation_heatmap(
-        symbol: str, range: str = "24h", exchange: str = "all"
-    ) -> str:
+    def get_liquidation_heatmap(symbol: str, range: str = "24h", exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidation-hunt/heatmap",
             {"symbol": symbol, "range": range, "exchange": exchange},
@@ -2341,9 +2345,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id},
         )
 
-    def list_funding_arb_signals(
-        client_id: str, status: str = "open", limit: int = 50
-    ) -> str:
+    def list_funding_arb_signals(client_id: str, status: str = "open", limit: int = 50) -> str:
         params: dict[str, Any] = {"clientId": client_id, "status": status}
         if limit:
             params["limit"] = limit
@@ -4027,7 +4029,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_funding_arb_watches,
             name="list_funding_arb_watches",
             description="List funding-arb follow watches for a clientId.",
-            args_schema=PortfolioGetInput,
+            args_schema=ClientIdInput,
         ),
         StructuredTool.from_function(
             get_funding_arb_watch,

@@ -24,10 +24,10 @@ swyngora-ai = "swyngora_ai.cli:main"
 swyngora-ai-serve = "swyngora_ai.serve:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0.0", "pytest-asyncio>=0.24.0", "ruff>=0.16.3", "ty>=0.0.73"]
+dev = ["pytest>=8.0.0", "ruff>=0.16.5", "ty>=0.0.77"]
 
 [build-system]
-requires = ["uv_build>=0.12.3,<0.13"]
+requires = ["uv_build>=0.12.8,<0.13"]
 build-backend = "uv_build"
 
 [tool.pytest.ini_options]
@@ -154,3 +154,5 @@ invalid-ignore-comment = "error"
 pydantic-discarded-extra-argument = "error"
 deprecated = "error"
 unused-awaitable = "error"
+possibly-missing-import = "error"
+missing-slot = "error"

@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Liquidation hunt cascade fuel:** a hop spends from a running fuel pool. Leftover plus newly added zone fuel go to the next step; spent fuel is not reused (`docs/features/liquidation-hunt.md`)
 - **Liquidation combined views:** never substitute one venue's clock, last price, or heatmap column for the other. Combined `live` / `complete` require both Binance and Bybit. `feed` reports last print, last socket payload, and disconnects in the last 6 hours (`docs/features/liquidations.md`)
 - **Liquidation levels chart:** CoinGlass-style horizontal bars colored by 10x / 25x / 50x / 100x, with cumulative notional from last price to the hovered level (`docs/features/liquidations.md`)
+- **AI serve CLI:** `python -m swyngora_ai.serve` / `swyngora-ai-serve` use Typer (`--host` / `--port` unchanged)
 - **Price-diff watches:** set `notional`, `minProfit`, and optional `minDurationSec`; opportunities open only when that size fills on **fresh** live books and after-fee profit meets the floor for the whole duration — not from ticker last-price gaps or a one-tick spike (`docs/features/price-diff.md`)
 - **Price-diff scan:** missing venue books are listed as `unavailable` (not ranked or chosen as best); `minProfitPct` / `minProfitAmount` hide tiny fills (`docs/features/price-diff.md`)
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)

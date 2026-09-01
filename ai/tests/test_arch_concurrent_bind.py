@@ -237,9 +237,7 @@ def test_same_tenant_different_scope_without_context_fails_closed(monkeypatch):
     for label, out in results.items():
         assert "403" in out, (label, out)
     posted = [
-        r
-        for r in transport.requests
-        if r.method == "POST" and "/portfolio/orders" in r.url.path
+        r for r in transport.requests if r.method == "POST" and "/portfolio/orders" in r.url.path
     ]
     assert not posted, [(r.method, r.url.path, _client_id(r)) for r in posted]
 
@@ -249,7 +247,7 @@ def test_progress_emit_does_not_cross_tenants_without_context():
     lock = threading.Lock()
 
     def make_cb(name: str):
-        def cb(ev: dict) -> None:
+        def cb(ev: dict[str, object]) -> None:
             with lock:
                 received[name].append(str(ev.get("text") or ""))
 
