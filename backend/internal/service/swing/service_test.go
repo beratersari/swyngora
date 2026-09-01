@@ -152,6 +152,19 @@ func (m *memProfiles) CountProfiles(_ context.Context, clientID string) (int, er
 	}
 	return n, nil
 }
+func (m *memProfiles) SetDefaultProfile(_ context.Context, clientID, id string) error {
+	p, ok := m.byID[id]
+	if !ok || p.ClientID != clientID {
+		return domain.ErrNotFound
+	}
+	for k, v := range m.byID {
+		if v.ClientID == clientID {
+			v.IsDefault = v.ID == id
+			m.byID[k] = v
+		}
+	}
+	return nil
+}
 func (m *memProfiles) PurgeProfiles(_ context.Context, clientID string) error {
 	for id, p := range m.byID {
 		if p.ClientID == clientID {
@@ -203,7 +216,7 @@ func TestCreateAndScanCustom(t *testing.T) {
 	if res.Count != 1 || res.Items[0].Symbol != "ETHUSDT" {
 		t.Fatalf("%+v", res)
 	}
-	if res.Items[0].Custom.Score < 80 {
+	if res.Items[0].Custom.Score < 70 {
 		t.Fatalf("expected hunt-heavy score, got %+v", res.Items[0].Custom)
 	}
 	if res.Items[0].Compare.Delta.LargestChange == nil {

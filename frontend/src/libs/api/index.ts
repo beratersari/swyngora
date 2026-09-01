@@ -237,6 +237,8 @@ export {
   useCreateCustomSignalProfileMutation,
   useUpdateCustomSignalProfileMutation,
   useDeleteCustomSignalProfileMutation,
+  useDuplicateCustomSignalProfileMutation,
+  useSetDefaultCustomSignalProfileMutation,
   useScanCustomSignalsQuery,
 } from './endpoints/swingApi';
 export type {

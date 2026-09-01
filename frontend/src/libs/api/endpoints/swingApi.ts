@@ -78,6 +78,21 @@ export const swingApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['CustomSignalProfile', 'CustomSignalScan'],
     }),
+    duplicateCustomSignalProfile: build.mutation<CustomSignalProfile, { id: string; name?: string }>({
+      query: ({ id, name }) => ({
+        url: `/api/v1/swing/custom/profiles/${encodeURIComponent(id)}/duplicate`,
+        method: 'POST',
+        body: name ? { name } : {},
+      }),
+      invalidatesTags: ['CustomSignalProfile'],
+    }),
+    setDefaultCustomSignalProfile: build.mutation<CustomSignalProfile, { id: string }>({
+      query: ({ id }) => ({
+        url: `/api/v1/swing/custom/profiles/${encodeURIComponent(id)}/default`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['CustomSignalProfile'],
+    }),
     scanCustomSignals: build.query<CustomSignalScan, ScanCustomSignalsArg | void>({
       query: (arg) => ({
         url: '/api/v1/swing/custom/scan',
@@ -109,5 +124,7 @@ export const {
   useCreateCustomSignalProfileMutation,
   useUpdateCustomSignalProfileMutation,
   useDeleteCustomSignalProfileMutation,
+  useDuplicateCustomSignalProfileMutation,
+  useSetDefaultCustomSignalProfileMutation,
   useScanCustomSignalsQuery,
 } = swingApi;

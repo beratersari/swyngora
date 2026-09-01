@@ -63,9 +63,9 @@ function assemble(
   item: CustomSignalItem | undefined,
   pct: (id: CustomSignalFactorId) => number,
 ): { score: number; effects: Map<string, number>; statuses: Map<string, CustomMixPreviewFactor['status']> } {
-  let raw = 50;
   const effects = new Map<string, number>();
   const statuses = new Map<string, CustomMixPreviewFactor['status']>();
+  const live: { id: CustomSignalFactorId; pct: number; score: number }[] = [];
   for (const factor of CUSTOM_SIGNAL_FACTORS) {
     const src = item?.custom?.factors?.find((f) => f.id === factor.id);
     const share = pct(factor.id);
@@ -79,13 +79,30 @@ function assemble(
       effects.set(factor.id, 0);
       continue;
     }
-    const score = Number.isFinite(src?.score) ? (src?.score ?? 0) : 0;
-    const effect = (score - 50) * (share / 100);
-    raw += effect;
+    if (src?.status === 'idle' || !Number.isFinite(src?.score) || (src?.score ?? 0) <= 0) {
+      statuses.set(factor.id, 'idle');
+      effects.set(factor.id, 0);
+      continue;
+    }
     statuses.set(factor.id, 'used');
-    effects.set(factor.id, round1(effect));
+    live.push({ id: factor.id, pct: share, score: src?.score ?? 0 });
   }
-  return { score: clampScore(raw), effects, statuses };
+  let mass = 0;
+  let acc = 0;
+  for (const row of live) {
+    mass += row.pct;
+    acc += row.score * row.pct;
+  }
+  let score = 0;
+  if (mass > 0) {
+    score = acc / mass;
+    const breadth = Math.min(1, live.length / 5);
+    score *= 0.9 + 0.1 * breadth;
+    for (const row of live) {
+      effects.set(row.id, round1((row.score - 50) * (row.pct / mass)));
+    }
+  }
+  return { score: clampScore(score), effects, statuses };
 }
 
 export function largestCustomFactorChange(factors: CustomMixPreviewFactor[]): CustomMixPreviewFactor | null {
@@ -126,9 +143,16 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       symbol: item.symbol ?? '',
       interval: item.interval,
       price: item.price,
-      defaultScore: assembledDef.score,
+      defaultScore: Number.isFinite(item.engine?.swingScore)
+        ? round1(item.engine?.swingScore ?? assembledDef.score)
+        : assembledDef.score,
       appliedScore: assembledApp.score,
-      delta: round1(assembledApp.score - assembledDef.score),
+      delta: round1(
+        assembledApp.score -
+          (Number.isFinite(item.engine?.swingScore)
+            ? (item.engine?.swingScore ?? assembledDef.score)
+            : assembledDef.score),
+      ),
       grade: customSignalGrade(assembledApp.score),
       factors,
       largestChange: largestCustomFactorChange(factors),

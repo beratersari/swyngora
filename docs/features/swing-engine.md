@@ -29,7 +29,7 @@ MCP: `analyze_swing`, `scan_swing_setups`, `list_custom_signal_factors`, `list_c
 
 ### Custom mix
 
-The built-in engine on Setups is unchanged. The **Custom** tab lets the user pick which swing patterns to include, assign percents that must sum to 100, and optionally add **liquidation hunt (up)** — the combined hunt `upScore`. Requested percents stay as given; a missing hunt keeps its share and adds 0 (neutral 50). The desk previews the score vs the built-in mix and shows each factor’s effect before save. Mixes persist per `clientId` in the scanner SQLite file.
+The built-in engine on Setups is unchanged. The **Custom** tab lets the user pick which swing patterns to include, assign percents that must sum to 100, and optionally add **liquidation hunt (up)** — the combined hunt `upScore`. Scoring matches the engine: only present patterns (score > 0) are averaged; a pattern that did not fire is omitted, not scored as 0. The built-in comparison uses the engine `swingScore`. Users can edit, duplicate, and mark one saved mix as default — Custom opens that mix. Mixes persist per `clientId` in the scanner SQLite file.
 
 ## Code
 

@@ -1773,6 +1773,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/custom/profiles/{id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Duplicate a saved custom-signal mix */
+        post: operations["duplicateCustomSignalProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/custom/profiles/{id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a saved mix as the default Custom tab mix */
+        post: operations["setDefaultCustomSignalProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/swing/custom/profiles/{id}": {
         parameters: {
             query?: never;
@@ -5263,6 +5297,7 @@ export interface components {
                 [key: string]: number;
             };
             source?: string;
+            isDefault?: boolean;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -5278,6 +5313,7 @@ export interface components {
             weights?: {
                 [key: string]: number;
             };
+            isDefault?: boolean;
         };
         CustomSignalFactor: {
             id?: string;
@@ -5287,7 +5323,7 @@ export interface components {
             sharePct?: number;
             effect?: number;
             /** @enum {string} */
-            status?: "used" | "missing" | "disabled";
+            status?: "used" | "missing" | "disabled" | "idle";
             detail?: string;
         };
         CustomSignalScore: {
@@ -8558,6 +8594,62 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+        };
+    };
+    duplicateCustomSignalProfile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CustomSignalProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Copied profile */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfile"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    setDefaultCustomSignalProfile: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Default profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfile"];
+                };
+            };
+            404: components["responses"]["Error"];
         };
     };
     getCustomSignalProfile: {

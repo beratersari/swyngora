@@ -16,6 +16,7 @@ type customSignalProfileDTO struct {
 	Name      string             `json:"name"`
 	Weights   map[string]float64 `json:"weights"`
 	Source    string             `json:"source"`
+	IsDefault bool               `json:"isDefault"`
 	CreatedAt string             `json:"createdAt"`
 	UpdatedAt string             `json:"updatedAt"`
 }
@@ -46,6 +47,7 @@ func customProfileToDTO(p *domain.CustomSignalProfile) customSignalProfileDTO {
 	}
 	return customSignalProfileDTO{
 		ID: p.ID, ClientID: p.ClientID, Name: p.Name, Weights: pct, Source: src,
+		IsDefault: p.IsDefault,
 		CreatedAt: p.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -101,9 +103,10 @@ func (h *SwingHandler) ListCustomProfiles(w http.ResponseWriter, r *http.Request
 }
 
 type customProfileBody struct {
-	ClientID string             `json:"clientId"`
-	Name     string             `json:"name"`
-	Weights  map[string]float64 `json:"weights"`
+	ClientID  string             `json:"clientId"`
+	Name      string             `json:"name"`
+	Weights   map[string]float64 `json:"weights"`
+	IsDefault bool               `json:"isDefault"`
 }
 
 // CreateCustomProfile handles POST /api/v1/swing/custom/profiles
@@ -122,7 +125,7 @@ func (h *SwingHandler) CreateCustomProfile(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	p, err := h.svc.CreateProfile(r.Context(), swing.CreateProfileInput{
-		ClientID: clientID, Name: body.Name, Weights: body.Weights,
+		ClientID: clientID, Name: body.Name, Weights: body.Weights, IsDefault: body.IsDefault,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -150,9 +153,10 @@ func (h *SwingHandler) GetCustomProfile(w http.ResponseWriter, r *http.Request) 
 }
 
 type customProfilePatchBody struct {
-	ClientID string             `json:"clientId"`
-	Name     *string            `json:"name"`
-	Weights  map[string]float64 `json:"weights"`
+	ClientID  string             `json:"clientId"`
+	Name      *string            `json:"name"`
+	Weights   map[string]float64 `json:"weights"`
+	IsDefault *bool              `json:"isDefault"`
 }
 
 // UpdateCustomProfile handles PATCH /api/v1/swing/custom/profiles/{id}
@@ -173,7 +177,46 @@ func (h *SwingHandler) UpdateCustomProfile(w http.ResponseWriter, r *http.Reques
 	p, err := h.svc.UpdateProfile(r.Context(), swing.UpdateProfileInput{
 		ClientID: clientID, ID: r.PathValue("id"),
 		Name: body.Name, Weights: body.Weights, HasWeights: body.Weights != nil,
+		IsDefault: body.IsDefault,
 	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, customProfileToDTO(p))
+}
+
+// DuplicateCustomProfile handles POST /api/v1/swing/custom/profiles/{id}/duplicate
+func (h *SwingHandler) DuplicateCustomProfile(w http.ResponseWriter, r *http.Request) {
+	if h.svc == nil {
+		writeError(w, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream))
+		return
+	}
+	var body customProfileBody
+	_ = decodeJSON(r, &body, DefaultMaxJSONBody)
+	clientID, ok := mustResolveClientID(w, r, body.ClientID)
+	if !ok {
+		return
+	}
+	p, err := h.svc.DuplicateProfile(r.Context(), clientID, r.PathValue("id"), body.Name)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, customProfileToDTO(p))
+}
+
+// SetDefaultCustomProfile handles POST /api/v1/swing/custom/profiles/{id}/default
+func (h *SwingHandler) SetDefaultCustomProfile(w http.ResponseWriter, r *http.Request) {
+	if h.svc == nil {
+		writeError(w, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream))
+		return
+	}
+	clientID, ok := mustResolveClientID(w, r, "")
+	if !ok {
+		return
+	}
+	p, err := h.svc.SetDefaultProfile(r.Context(), clientID, r.PathValue("id"))
 	if err != nil {
 		writeError(w, err)
 		return

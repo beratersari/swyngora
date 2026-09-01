@@ -2902,6 +2902,59 @@ paths:
                 $ref: '#/components/schemas/CustomSignalProfile'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/swing/custom/profiles/{id}/duplicate:
+    post:
+      summary: Duplicate a saved custom-signal mix
+      operationId: duplicateCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomSignalProfileWrite'
+      responses:
+        '201':
+          description: Copied profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfile'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/swing/custom/profiles/{id}/default:
+    post:
+      summary: Mark a saved mix as the default Custom tab mix
+      operationId: setDefaultCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Default profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfile'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/swing/custom/profiles/{id}:
     get:
       summary: Get a saved custom-signal mix
@@ -8844,6 +8897,7 @@ components:
           type: object
           additionalProperties: { type: number }
         source: { type: string }
+        isDefault: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CustomSignalProfileList:
@@ -8862,6 +8916,7 @@ components:
         weights:
           type: object
           additionalProperties: { type: number }
+        isDefault: { type: boolean }
     CustomSignalFactor:
       type: object
       properties:
@@ -8871,7 +8926,7 @@ components:
         requestedPct: { type: number }
         sharePct: { type: number }
         effect: { type: number }
-        status: { type: string, enum: [used, missing, disabled] }
+        status: { type: string, enum: [used, missing, disabled, idle] }
         detail: { type: string }
     CustomSignalScore:
       type: object

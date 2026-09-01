@@ -27,6 +27,7 @@ const (
 	CustomFactorUsed     = "used"
 	CustomFactorMissing  = "missing"
 	CustomFactorDisabled = "disabled"
+	CustomFactorIdle     = "idle"
 
 	CustomSignalMixDefault = "default"
 	CustomSignalMixCustom  = "custom"
@@ -99,6 +100,7 @@ type CustomSignalProfile struct {
 	ClientID  string
 	Name      string
 	Weights   CustomSignalWeights
+	IsDefault bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -108,10 +110,34 @@ type CustomSignalProfilePort interface {
 	CreateProfile(ctx context.Context, p CustomSignalProfile) (*CustomSignalProfile, error)
 	GetProfile(ctx context.Context, clientID, id string) (*CustomSignalProfile, error)
 	UpdateProfile(ctx context.Context, p CustomSignalProfile) (*CustomSignalProfile, error)
+	SetDefaultProfile(ctx context.Context, clientID, id string) error
 	ListProfiles(ctx context.Context, clientID string) ([]CustomSignalProfile, error)
 	DeleteProfile(ctx context.Context, clientID, id string) error
 	CountProfiles(ctx context.Context, clientID string) (int, error)
 	PurgeProfiles(ctx context.Context, clientID string) error
+}
+
+// DuplicateCustomSignalProfileName appends " (copy)" and trims to the name cap.
+func DuplicateCustomSignalProfileName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Custom mix"
+	}
+	out := name + " (copy)"
+	if utf8.RuneCountInString(out) <= MaxCustomSignalProfileNameLen {
+		return out
+	}
+	// Keep the suffix; trim the base.
+	suffix := " (copy)"
+	maxBase := MaxCustomSignalProfileNameLen - utf8.RuneCountInString(suffix)
+	if maxBase < 1 {
+		return string([]rune(out)[:MaxCustomSignalProfileNameLen])
+	}
+	r := []rune(name)
+	if len(r) > maxBase {
+		r = r[:maxBase]
+	}
+	return strings.TrimSpace(string(r)) + suffix
 }
 
 // CustomSignalCatalogRow describes one mixable factor.
@@ -146,6 +172,7 @@ type CustomSignalMix struct {
 	RequestedTotal float64                 `json:"requestedTotal"`
 	UsedTotal      float64                 `json:"usedTotal"`
 	Missing        []string                `json:"missing"`
+	Idle           []string                `json:"idle,omitempty"`
 	Disabled       []string                `json:"disabled"`
 	Note           string                  `json:"note"`
 }
@@ -358,11 +385,14 @@ func NormalizeCustomSignalProfileName(name string) (string, error) {
 }
 
 // BuildCustomSignalRaws maps engine patterns + optional hunt into mix inputs.
-// A swing pattern that did not fire is used at score 0 (not missing).
+// A swing pattern that did not fire is idle (omitted from the average), not 0.
 // Hunt is missing when the report is nil or not usable.
 func BuildCustomSignalRaws(patterns []SwingPattern, hunt *CustomSignalRaw) map[string]CustomSignalRaw {
 	byName := map[string]SwingPattern{}
 	for _, p := range patterns {
+		if p.Score <= 0 {
+			continue
+		}
 		if prev, ok := byName[p.Name]; !ok || p.Score > prev.Score {
 			byName[p.Name] = p
 		}
@@ -373,7 +403,7 @@ func BuildCustomSignalRaws(patterns []SwingPattern, hunt *CustomSignalRaw) map[s
 			out[id] = CustomSignalRaw{Score: p.Score, Status: CustomFactorUsed, Detail: p.Description}
 			continue
 		}
-		out[id] = CustomSignalRaw{Score: 0, Status: CustomFactorUsed, Detail: "pattern not present"}
+		out[id] = CustomSignalRaw{Score: 0, Status: CustomFactorIdle, Detail: "pattern not present"}
 	}
 	if hunt != nil && hunt.Status != "" {
 		out[CustomFactorHuntUp] = *hunt
@@ -404,26 +434,30 @@ func HuntUpRaw(report *HuntReport) CustomSignalRaw {
 	}
 }
 
-// ScoreCustomSignal mixes raw factor scores. Requested percents stay as given.
-// Missing or disabled factors keep their share and add 0 (neutral 50).
-// Score = 50 + sum(effect), clamped 0–100.
+// ScoreCustomSignal mixes raw factor scores the same way as the swing engine:
+// a weighted average of factors that are present (score > 0), then the same
+// breadth shrink. Idle or missing factors are omitted — they are not scored as 0.
 func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) CustomSignalScore {
 	if w.Pct == nil {
 		w = DefaultCustomSignalWeights()
 	}
-	factors := make([]CustomSignalFactor, 0, len(CustomSignalFactorIDs))
-	var rawScore float64 = 50
-	used := make([]CustomSignalWeightRow, 0, len(CustomSignalFactorIDs))
+	type usedRow struct {
+		id, detail string
+		pct, score float64
+	}
+	var live []usedRow
+	var reqTotal float64
 	requested := make([]CustomSignalWeightRow, 0, len(CustomSignalFactorIDs))
 	var missing, disabled []string
-	var reqTotal, usedTotal float64
+	idle := make([]string, 0)
+	prelim := make([]CustomSignalFactor, 0, len(CustomSignalFactorIDs))
 	for _, id := range CustomSignalFactorIDs {
 		pct := w.pctOf(id)
 		src := raws[id]
+		reqTotal += pct
 		row := CustomSignalWeightRow{
 			ID: id, Label: CustomSignalFactorLabel(id), WeightPct: round1(pct),
 		}
-		reqTotal += pct
 		f := CustomSignalFactor{
 			ID: id, Label: CustomSignalFactorLabel(id),
 			Score: round1(src.Score), RequestedPct: round1(pct),
@@ -439,35 +473,82 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 			row.Status = CustomFactorMissing
 			row.Detail = src.Detail
 			missing = append(missing, id)
+		case src.Status == CustomFactorIdle || src.Score <= 0:
+			f.Status = CustomFactorIdle
+			row.Status = CustomFactorIdle
+			row.Detail = src.Detail
+			if row.Detail == "" {
+				row.Detail = "pattern not present"
+			}
+			idle = append(idle, id)
 		default:
-			effect := (src.Score - 50) * (pct / 100)
-			rawScore += effect
-			f.Effect = round1(effect)
-			f.Status = CustomFactorUsed
 			row.Status = CustomFactorUsed
 			row.Detail = src.Detail
-			used = append(used, row)
-			usedTotal += pct
+			f.Status = CustomFactorUsed
+			live = append(live, usedRow{id: id, detail: src.Detail, pct: pct, score: src.Score})
 		}
 		requested = append(requested, row)
+		prelim = append(prelim, f)
+	}
+
+	var mass, acc float64
+	used := make([]CustomSignalWeightRow, 0, len(live))
+	for _, u := range live {
+		mass += u.pct
+		acc += u.score * u.pct
+		used = append(used, CustomSignalWeightRow{
+			ID: u.id, Label: CustomSignalFactorLabel(u.id),
+			WeightPct: round1(u.pct), Status: CustomFactorUsed, Detail: u.detail,
+		})
+	}
+	score := 0.0
+	if mass > 0 {
+		score = acc / mass
+		breadth := math.Min(1, float64(len(live))/5)
+		score = score * (0.9 + 0.1*breadth)
+	}
+	score = clampScore(score)
+
+	byID := map[string]usedRow{}
+	for _, u := range live {
+		byID[u.id] = u
+	}
+	factors := make([]CustomSignalFactor, 0, len(prelim))
+	for _, f := range prelim {
+		if u, ok := byID[f.ID]; ok && mass > 0 {
+			share := u.pct / mass * 100
+			f.SharePct = round1(share)
+			f.Effect = round1((u.score - 50) * (u.pct / mass))
+		}
 		factors = append(factors, f)
 	}
-	score := clampScore(rawScore)
+
 	src := w.Source
 	if src == "" {
 		src = CustomSignalMixCustom
 	}
-	note := "Requested percents stay as given. A missing factor keeps its share and adds 0 (neutral 50)."
+	note := "Same average as the swing engine: only present patterns (score > 0) are mixed. Absent patterns are omitted, not scored as 0."
 	return CustomSignalScore{
 		Score:   score,
 		Grade:   customSignalGrade(score),
 		Factors: factors,
 		Mix: CustomSignalMix{
 			Source: src, Requested: requested, Used: used,
-			RequestedTotal: round1(reqTotal), UsedTotal: round1(usedTotal),
-			Missing: missing, Disabled: disabled, Note: note,
+			RequestedTotal: round1(reqTotal), UsedTotal: round1(mass),
+			Missing: missing, Idle: idle, Disabled: disabled, Note: note,
 		},
 	}
+}
+
+// AlignCustomDefaultToEngine sets the built-in snapshot to the engine swing score
+// so the Custom tab matches Setups (fresh-filter and all).
+func AlignCustomDefaultToEngine(cmp *CustomSignalCompare, engineScore float64) {
+	if cmp == nil {
+		return
+	}
+	cmp.Default.Score = clampScore(engineScore)
+	cmp.Default.Grade = customSignalGrade(cmp.Default.Score)
+	cmp.Delta.Score = round1(cmp.Applied.Score - cmp.Default.Score)
 }
 
 // CompareCustomSignal is default swing mix vs the applied mix on the same raws.

@@ -190,6 +190,15 @@ CREATE TABLE IF NOT EXISTS custom_signal_profiles (
 		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
 			return err
 		}
+		v = 4
+	}
+	if v < 5 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE custom_signal_profiles ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 5); err != nil {
+			return err
+		}
 	}
 	return nil
 }

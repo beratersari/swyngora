@@ -57,6 +57,8 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useCreateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useUpdateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useDeleteCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
+    useDuplicateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
+    useSetDefaultCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useLazyListSpotMarketsQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
   };
 });

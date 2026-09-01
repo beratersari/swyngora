@@ -55,6 +55,8 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "list_custom_signal_profiles",
         "create_custom_signal_profile",
         "update_custom_signal_profile",
+        "duplicate_custom_signal_profile",
+        "set_default_custom_signal_profile",
         "delete_custom_signal_profile",
         "scan_custom_signals",
         "detect_pump_events",

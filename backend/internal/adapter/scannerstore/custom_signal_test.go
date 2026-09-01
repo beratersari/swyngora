@@ -47,6 +47,13 @@ func TestSQLite_CustomSignalProfiles(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Name != "Renamed" {
 		t.Fatalf("%+v %v", list, err)
 	}
+	if err := s.SetDefaultProfile(ctx, "c1", "p1"); err != nil {
+		t.Fatal(err)
+	}
+	def, err := s.GetProfile(ctx, "c1", "p1")
+	if err != nil || !def.IsDefault {
+		t.Fatalf("default %+v %v", def, err)
+	}
 	if err := s.DeleteProfile(ctx, "c1", "p1"); err != nil {
 		t.Fatal(err)
 	}

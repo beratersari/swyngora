@@ -45,6 +45,8 @@ export function SignalsCustomPanel({
   onDraft,
   onSave,
   onSaveAs,
+  onDuplicate,
+  onSetDefault,
   onDelete,
   onApply,
   onReset,
@@ -62,7 +64,10 @@ export function SignalsCustomPanel({
 
   const options = [
     { value: CUSTOM_SIGNAL_BUILT_IN_ID, label: t('signals:custom.builtIn') },
-    ...profiles.map((p) => ({ value: p.id ?? '', label: p.name ?? p.id })),
+    ...profiles.map((p) => ({
+      value: p.id ?? '',
+      label: p.isDefault ? `${p.name ?? p.id} (${t('signals:custom.defaultBadge')})` : (p.name ?? p.id),
+    })),
   ];
 
   return (
@@ -150,6 +155,12 @@ export function SignalsCustomPanel({
           >
             {t('signals:custom.save')}
           </Button>
+          <Button disabled={builtIn} loading={saving} onClick={onDuplicate}>
+            {t('signals:custom.duplicate')}
+          </Button>
+          <Button disabled={builtIn || Boolean(selected?.isDefault)} loading={saving} onClick={onSetDefault}>
+            {t('signals:custom.setDefault')}
+          </Button>
           <Button onClick={onReset}>{t('signals:custom.reset')}</Button>
           <Button danger disabled={builtIn} onClick={onDelete}>
             {t('signals:custom.delete')}
@@ -203,7 +214,11 @@ export function SignalsCustomPanel({
                     <FactorLine key={f.id}>
                       <Text variant="caption" color="secondary">
                         {t(`signals:custom.factors.${f.id}`)}
-                        {f.status === 'missing' ? ` (${t('signals:custom.missing')})` : ''}
+                        {f.status === 'missing'
+                          ? ` (${t('signals:custom.missing')})`
+                          : f.status === 'idle'
+                            ? ` (${t('signals:custom.idle')})`
+                            : ''}
                       </Text>
                       <Text variant="caption" mono color="secondary">
                         {f.appliedPct}%

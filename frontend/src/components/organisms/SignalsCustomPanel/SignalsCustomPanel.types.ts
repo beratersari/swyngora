@@ -10,7 +10,7 @@ export type CustomWeightDraftRow = {
 export type CustomMixPreviewFactor = {
   id: CustomSignalFactorId;
   score: number;
-  status: 'used' | 'missing' | 'disabled';
+  status: 'used' | 'missing' | 'disabled' | 'idle';
   defaultPct: number;
   appliedPct: number;
   defaultEffect: number;
@@ -46,6 +46,8 @@ export type SignalsCustomPanelProps = {
   onDraft: (next: CustomWeightDraftRow[]) => void;
   onSave: (name: string) => void;
   onSaveAs: (name: string) => void;
+  onDuplicate: () => void;
+  onSetDefault: () => void;
   onDelete: () => void;
   onApply: () => void;
   onReset: () => void;

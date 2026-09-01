@@ -117,6 +117,19 @@ func (m *memSwingProfiles) CountProfiles(_ context.Context, clientID string) (in
 	}
 	return n, nil
 }
+func (m *memSwingProfiles) SetDefaultProfile(_ context.Context, clientID, id string) error {
+	p, ok := m.byID[id]
+	if !ok || p.ClientID != clientID {
+		return domain.ErrNotFound
+	}
+	for k, v := range m.byID {
+		if v.ClientID == clientID {
+			v.IsDefault = v.ID == id
+			m.byID[k] = v
+		}
+	}
+	return nil
+}
 func (m *memSwingProfiles) PurgeProfiles(_ context.Context, clientID string) error {
 	for id, p := range m.byID {
 		if p.ClientID == clientID {

@@ -374,6 +374,7 @@ class CustomSignalProfileInput(BaseModel):
     weights_json: str = Field(
         description='JSON object of factor id to percent summing to 100, e.g. {"hunt_up":40,"rsi_recovery":60}'
     )
+    is_default: bool = Field(default=False, description="Open Custom tab on this mix")
 
 
 class CustomSignalProfileUpdateInput(BaseModel):
@@ -381,6 +382,7 @@ class CustomSignalProfileUpdateInput(BaseModel):
     profile_id: str
     name: str = ""
     weights_json: str = Field(default="", description="JSON object of factor id to percent")
+    is_default: bool | None = None
 
 
 class CustomSignalProfileDeleteInput(BaseModel):
@@ -2553,22 +2555,42 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def list_custom_signal_profiles(client_id: str) -> str:
         return http.get("/api/v1/swing/custom/profiles", {"clientId": client_id})
 
-    def create_custom_signal_profile(client_id: str, name: str, weights_json: str) -> str:
+    def create_custom_signal_profile(
+        client_id: str, name: str, weights_json: str, is_default: bool = False
+    ) -> str:
         weights = json.loads(weights_json) if weights_json else {}
         return http.post(
             "/api/v1/swing/custom/profiles",
-            {"clientId": client_id, "name": name, "weights": weights},
+            {"clientId": client_id, "name": name, "weights": weights, "isDefault": is_default},
         )
 
     def update_custom_signal_profile(
-        client_id: str, profile_id: str, name: str = "", weights_json: str = ""
+        client_id: str,
+        profile_id: str,
+        name: str = "",
+        weights_json: str = "",
+        is_default: bool | None = None,
     ) -> str:
         body: dict[str, Any] = {"clientId": client_id}
         if name:
             body["name"] = name
         if weights_json:
             body["weights"] = json.loads(weights_json)
+        if is_default is not None:
+            body["isDefault"] = is_default
         return http.patch(f"/api/v1/swing/custom/profiles/{profile_id}", body)
+
+    def duplicate_custom_signal_profile(client_id: str, profile_id: str, name: str = "") -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if name:
+            body["name"] = name
+        return http.post(f"/api/v1/swing/custom/profiles/{profile_id}/duplicate", body)
+
+    def set_default_custom_signal_profile(client_id: str, profile_id: str) -> str:
+        return http.post(
+            f"/api/v1/swing/custom/profiles/{profile_id}/default",
+            {"clientId": client_id},
+        )
 
     def delete_custom_signal_profile(client_id: str, profile_id: str) -> str:
         return http.delete(
@@ -4597,6 +4619,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="update_custom_signal_profile",
             description="Update a saved custom-signal mix.",
             args_schema=CustomSignalProfileUpdateInput,
+        ),
+        StructuredTool.from_function(
+            duplicate_custom_signal_profile,
+            name="duplicate_custom_signal_profile",
+            description="Copy a saved custom-signal mix.",
+            args_schema=CustomSignalProfileDeleteInput,
+        ),
+        StructuredTool.from_function(
+            set_default_custom_signal_profile,
+            name="set_default_custom_signal_profile",
+            description="Open the Custom tab on this saved mix.",
+            args_schema=CustomSignalProfileDeleteInput,
         ),
         StructuredTool.from_function(
             delete_custom_signal_profile,

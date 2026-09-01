@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Button, Tabs, message } from 'antd';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +36,8 @@ import {
   useCreateCustomSignalProfileMutation,
   useUpdateCustomSignalProfileMutation,
   useDeleteCustomSignalProfileMutation,
+  useDuplicateCustomSignalProfileMutation,
+  useSetDefaultCustomSignalProfileMutation,
   useScanCustomSignalsQuery,
   type CreateScannerRuleArg,
   type ScanCustomSignalsArg,
@@ -98,21 +100,38 @@ export function SignalsPage() {
   const [startBacktest, startState] = useStartScannerBacktestMutation();
   const [cancelBacktest, cancelState] = useCancelScannerBacktestMutation();
   const customProfilesQuery = useListCustomSignalProfilesQuery(undefined, {
-    skip: tab !== 'custom',
     refetchOnFocus: true,
   });
+  const [defaultReady, setDefaultReady] = useState(false);
+  useEffect(() => {
+    if (customProfilesQuery.isLoading || defaultReady) {
+      return;
+    }
+    const def = (customProfilesQuery.data?.profiles ?? []).find((p) => p.isDefault);
+    if (def?.id) {
+      setCustomProfileId(def.id);
+      setCustomDraft(draftFromWeights(def.weights));
+    }
+    setDefaultReady(true);
+  }, [customProfilesQuery.isLoading, customProfilesQuery.data, defaultReady]);
   const customScanArg: ScanCustomSignalsArg = customApplied ?? {
     profileId: customProfileId || undefined,
     limit: 25,
   };
   const customScanQuery = useScanCustomSignalsQuery(customScanArg, {
-    skip: tab !== 'custom' || watchlist.isLoading || (watchlist.data?.items?.length ?? 0) === 0,
+    skip:
+      tab !== 'custom' ||
+      !defaultReady ||
+      watchlist.isLoading ||
+      (watchlist.data?.items?.length ?? 0) === 0,
     pollingInterval: visible && tab === 'custom' ? SIGNALS_RESULTS_POLL_MS * 2 : 0,
     refetchOnFocus: true,
   });
   const [createCustomProfile, createCustomState] = useCreateCustomSignalProfileMutation();
   const [updateCustomProfile, updateCustomState] = useUpdateCustomSignalProfileMutation();
   const [deleteCustomProfile, deleteCustomState] = useDeleteCustomSignalProfileMutation();
+  const [duplicateCustomProfile, duplicateCustomState] = useDuplicateCustomSignalProfileMutation();
+  const [setDefaultCustomProfile, setDefaultCustomState] = useSetDefaultCustomSignalProfileMutation();
 
   const selectedSignals = useListScannerBacktestSignalsQuery(
     { id: selectedBacktestId ?? '', limit: 100 },
@@ -283,8 +302,20 @@ export function SignalsPage() {
                 items={customScanQuery.data?.items ?? []}
                 loading={customScanQuery.isLoading || customProfilesQuery.isLoading}
                 scanning={customScanQuery.isFetching}
-                saving={createCustomState.isLoading || updateCustomState.isLoading || deleteCustomState.isLoading}
-                saveError={createCustomState.error ?? updateCustomState.error ?? deleteCustomState.error}
+                saving={
+                  createCustomState.isLoading ||
+                  updateCustomState.isLoading ||
+                  deleteCustomState.isLoading ||
+                  duplicateCustomState.isLoading ||
+                  setDefaultCustomState.isLoading
+                }
+                saveError={
+                  createCustomState.error ??
+                  updateCustomState.error ??
+                  deleteCustomState.error ??
+                  duplicateCustomState.error ??
+                  setDefaultCustomState.error
+                }
                 onSelectProfile={(id) => {
                   setCustomProfileId(id);
                   setCustomApplied(null);
@@ -321,6 +352,29 @@ export function SignalsPage() {
                       setCustomProfileId(p.id ?? '');
                       setCustomApplied(null);
                       void message.success(t('signals:custom.saveSuccess'));
+                      void customProfilesQuery.refetch();
+                    })
+                    .catch(() => undefined);
+                }}
+                onDuplicate={() => {
+                  if (!customProfileId) return;
+                  void duplicateCustomProfile({ id: customProfileId })
+                    .unwrap()
+                    .then((p) => {
+                      setCustomProfileId(p.id ?? '');
+                      setCustomDraft(draftFromWeights(p.weights));
+                      setCustomApplied(null);
+                      void message.success(t('signals:custom.duplicateSuccess'));
+                      void customProfilesQuery.refetch();
+                    })
+                    .catch(() => undefined);
+                }}
+                onSetDefault={() => {
+                  if (!customProfileId) return;
+                  void setDefaultCustomProfile({ id: customProfileId })
+                    .unwrap()
+                    .then(() => {
+                      void message.success(t('signals:custom.defaultSuccess'));
                       void customProfilesQuery.refetch();
                     })
                     .catch(() => undefined);

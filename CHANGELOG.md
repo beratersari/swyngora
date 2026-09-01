@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Custom signal default and duplicate:** save a mix as the Custom tab default; duplicate and edit named mixes (`POST /api/v1/swing/custom/profiles/{id}/default`, `.../duplicate`)
 - **Custom swing signals:** Signals desk Custom tab — pick swing-engine factors and optional liquidation-hunt up score, assign weights that must sum to 100, preview the score and each factor’s effect before saving, and reuse named mixes (`GET /api/v1/swing/custom/scan`, MCP `scan_custom_signals`) (`docs/features/swing-engine.md`)
 - **Liquidation max pain:** largest estimated liquidation pocket above last (shorts) and below last (longs) — price, size, distance, side. Separate from the hunt target. Web `/liquidations?view=max-pain`, `GET /api/v1/market/liquidation-max-pain`, MCP `get_liquidation_max_pain` (`docs/features/liquidation-max-pain.md`)
 - **Liquidation hunt custom score weights:** optional `weightProximity` / `weightBook` / `weightEfficiency` / `weightTrend` / `weightCrowding` / `weightFlow` (must sum to 100). Disabled factors are omitted. Missing data is not substituted. `scoreMix` shows requested vs used weights. `scoreCompare` is default vs applied with separate `upFactors` / `downFactors` and `upLargestChange` / `downLargestChange` (the factor that moved that direction the most). Web Hunt previews both sides in the Custom weights dialog (`GET /api/v1/market/liquidation-hunt`, MCP `estimate_liquidation_hunt`) (`docs/features/liquidation-hunt.md`)
@@ -51,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff watch venues:** create and edit pick which of Binance / Coinbase / Bybit to walk (at least two). Unselected venues are not fetched or ranked (`docs/features/price-diff.md`)
 
 ### Changed
+- **Custom swing mix:** absent patterns are omitted from the average (same as the swing engine) instead of scoring 0 and pulling the built-in comparison down
 - **Liquidation hunt cascade fuel:** a hop spends from a running fuel pool. Leftover plus newly added zone fuel go to the next step; spent fuel is not reused (`docs/features/liquidation-hunt.md`)
 - **Liquidation combined views:** never substitute one venue's clock, last price, or heatmap column for the other. Combined `live` / `complete` require both Binance and Bybit. `feed` reports last print, last socket payload, and disconnects in the last 6 hours (`docs/features/liquidations.md`)
 - **Liquidation levels chart:** CoinGlass-style horizontal bars colored by 10x / 25x / 50x / 100x, with cumulative notional from last price to the hovered level (`docs/features/liquidations.md`)

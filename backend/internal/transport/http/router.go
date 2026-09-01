@@ -278,6 +278,8 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/swing/custom/scan", swh.ScanCustom)
 		mux.HandleFunc("GET /api/v1/swing/custom/profiles", swh.ListCustomProfiles)
 		mux.HandleFunc("POST /api/v1/swing/custom/profiles", swh.CreateCustomProfile)
+		mux.HandleFunc("POST /api/v1/swing/custom/profiles/{id}/duplicate", swh.DuplicateCustomProfile)
+		mux.HandleFunc("POST /api/v1/swing/custom/profiles/{id}/default", swh.SetDefaultCustomProfile)
 		mux.HandleFunc("GET /api/v1/swing/custom/profiles/{id}", swh.GetCustomProfile)
 		mux.HandleFunc("PATCH /api/v1/swing/custom/profiles/{id}", swh.UpdateCustomProfile)
 		mux.HandleFunc("DELETE /api/v1/swing/custom/profiles/{id}", swh.DeleteCustomProfile)

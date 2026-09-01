@@ -4594,7 +4594,7 @@ func customProfileMap(p *domain.CustomSignalProfile) map[string]any {
 	}
 	return map[string]any{
 		"id": p.ID, "clientId": p.ClientID, "name": p.Name, "weights": pct,
-		"source":    p.Weights.Source,
+		"source": p.Weights.Source, "isDefault": p.IsDefault,
 		"createdAt": p.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -4625,28 +4625,50 @@ func (b *Backend) ListCustomSignalProfiles(ctx context.Context, clientID string)
 	return mustJSON(map[string]any{"profiles": items, "count": len(items)})
 }
 
-func (b *Backend) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error) {
+func (b *Backend) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64, isDefault bool) (json.RawMessage, error) {
 	if b.Swing == nil {
 		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
 	}
-	p, err := b.Swing.CreateProfile(ctx, swing.CreateProfileInput{ClientID: clientID, Name: name, Weights: weights})
+	p, err := b.Swing.CreateProfile(ctx, swing.CreateProfileInput{ClientID: clientID, Name: name, Weights: weights, IsDefault: isDefault})
 	if err != nil {
 		return nil, err
 	}
 	return mustJSON(customProfileMap(p))
 }
 
-func (b *Backend) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error) {
+func (b *Backend) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64, isDefault *bool) (json.RawMessage, error) {
 	if b.Swing == nil {
 		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
 	}
-	in := swing.UpdateProfileInput{ClientID: clientID, ID: id, HasWeights: weights != nil}
+	in := swing.UpdateProfileInput{ClientID: clientID, ID: id, HasWeights: weights != nil, IsDefault: isDefault}
 	if strings.TrimSpace(name) != "" {
 		n := name
 		in.Name = &n
 	}
 	in.Weights = weights
 	p, err := b.Swing.UpdateProfile(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(customProfileMap(p))
+}
+
+func (b *Backend) DuplicateCustomSignalProfile(ctx context.Context, clientID, id, name string) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	p, err := b.Swing.DuplicateProfile(ctx, clientID, id, name)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(customProfileMap(p))
+}
+
+func (b *Backend) SetDefaultCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	p, err := b.Swing.SetDefaultProfile(ctx, clientID, id)
 	if err != nil {
 		return nil, err
 	}

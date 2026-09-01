@@ -2,7 +2,9 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestParseCustomSignalWeights_DefaultAndCustom(t *testing.T) {
@@ -65,7 +67,7 @@ func TestParseCustomSignalWeightMap(t *testing.T) {
 	}
 }
 
-func TestScoreCustomSignal_MissingHuntAddsZero(t *testing.T) {
+func TestScoreCustomSignal_MissingHuntOmitted(t *testing.T) {
 	t.Parallel()
 	raws := BuildCustomSignalRaws([]SwingPattern{
 		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
@@ -75,12 +77,9 @@ func TestScoreCustomSignal_MissingHuntAddsZero(t *testing.T) {
 		CustomFactorHuntUp:       50,
 	}}
 	got := ScoreCustomSignal(raws, w)
-	// 50 + (90-50)*0.5 + 0 (missing hunt) = 70
-	if math.Abs(got.Score-70) > 0.05 {
-		t.Fatalf("score=%v want 70 factors=%+v", got.Score, got.Factors)
-	}
-	if got.Mix.UsedTotal != 50 {
-		t.Fatalf("usedTotal=%v", got.Mix.UsedTotal)
+	// Only EMA is present: same as engine on one pattern → 90 * (0.9 + 0.1/5) = 82.8
+	if math.Abs(got.Score-82.8) > 0.05 {
+		t.Fatalf("score=%v want 82.8 factors=%+v", got.Score, got.Factors)
 	}
 	var hunt CustomSignalFactor
 	for _, f := range got.Factors {
@@ -88,12 +87,12 @@ func TestScoreCustomSignal_MissingHuntAddsZero(t *testing.T) {
 			hunt = f
 		}
 	}
-	if hunt.Status != CustomFactorMissing || hunt.Effect != 0 || hunt.SharePct != 50 {
+	if hunt.Status != CustomFactorMissing || hunt.Effect != 0 {
 		t.Fatalf("hunt %+v", hunt)
 	}
 }
 
-func TestScoreCustomSignal_IdlePatternPullsDown(t *testing.T) {
+func TestScoreCustomSignal_IdlePatternDoesNotPullDown(t *testing.T) {
 	t.Parallel()
 	raws := BuildCustomSignalRaws(nil, &CustomSignalRaw{Score: 80, Status: CustomFactorUsed, Detail: "up"})
 	w := CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
@@ -101,9 +100,54 @@ func TestScoreCustomSignal_IdlePatternPullsDown(t *testing.T) {
 		CustomFactorHuntUp:       50,
 	}}
 	got := ScoreCustomSignal(raws, w)
-	// 50 + (0-50)*0.5 + (80-50)*0.5 = 40
-	if math.Abs(got.Score-40) > 0.05 {
-		t.Fatalf("score=%v want 40", got.Score)
+	// Idle EMA is omitted; only hunt 80 with one-factor breadth → 80 * 0.92 = 73.6
+	if math.Abs(got.Score-73.6) > 0.05 {
+		t.Fatalf("score=%v want 73.6 mix=%+v", got.Score, got.Mix)
+	}
+	var ema CustomSignalFactor
+	for _, f := range got.Factors {
+		if f.ID == CustomFactorEMACrossover {
+			ema = f
+		}
+	}
+	if ema.Status != CustomFactorIdle || ema.Effect != 0 {
+		t.Fatalf("ema %+v", ema)
+	}
+}
+
+func TestScoreCustomSignal_DefaultMatchesEngine(t *testing.T) {
+	t.Parallel()
+	pats := []SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90},
+		{Name: CustomFactorVolumeBreakout, Score: 70},
+	}
+	engine := computeSwingScore(pats)
+	got := ScoreCustomSignal(BuildCustomSignalRaws(pats, nil), DefaultCustomSignalWeights())
+	if math.Abs(got.Score-engine) > 0.05 {
+		t.Fatalf("custom=%v engine=%v", got.Score, engine)
+	}
+}
+
+func TestAlignCustomDefaultToEngine(t *testing.T) {
+	t.Parallel()
+	cmp := CompareCustomSignal(BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90},
+	}, nil), DefaultCustomSignalWeights())
+	AlignCustomDefaultToEngine(&cmp, 61.5)
+	if cmp.Default.Score != 61.5 {
+		t.Fatalf("%+v", cmp.Default)
+	}
+}
+
+func TestDuplicateCustomSignalProfileName(t *testing.T) {
+	t.Parallel()
+	if DuplicateCustomSignalProfileName("Hunt lean") != "Hunt lean (copy)" {
+		t.Fatal(DuplicateCustomSignalProfileName("Hunt lean"))
+	}
+	long := strings.Repeat("a", MaxCustomSignalProfileNameLen)
+	got := DuplicateCustomSignalProfileName(long)
+	if utf8.RuneCountInString(got) > MaxCustomSignalProfileNameLen || !strings.HasSuffix(got, "(copy)") {
+		t.Fatalf("%q len=%d", got, utf8.RuneCountInString(got))
 	}
 }
 

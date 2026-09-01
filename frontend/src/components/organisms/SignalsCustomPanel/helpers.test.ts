@@ -32,12 +32,12 @@ describe('custom signal helpers', () => {
         : { ...row, enabled: false, pct: 0 },
     );
     const rows = previewCustomMix([item({ symbol: 'ETHUSDT' })], draft);
-    expect(rows[0]?.appliedScore).toBe(80);
-    expect(rows[0]?.largestChange?.id).toBe('hunt_up');
-    expect(rows[0]?.factors.find((f) => f.id === 'hunt_up')?.appliedEffect).toBe(30);
+    // One present factor: 80 * (0.9 + 0.1/5) = 73.6
+    expect(rows[0]?.appliedScore).toBe(73.6);
+    expect(rows[0]?.factors.find((f) => f.id === 'hunt_up')?.appliedPct).toBe(100);
   });
 
-  it('missing hunt keeps its share and adds 0', () => {
+  it('does not score an idle pattern as 0', () => {
     const draft = defaultCustomWeightDraft().map((row) =>
       row.id === 'hunt_up'
         ? { ...row, enabled: true, pct: 50 }
@@ -49,19 +49,21 @@ describe('custom signal helpers', () => {
       [
         item({
           symbol: 'BTCUSDT',
+          engine: { swingScore: 61.5 },
           custom: {
             score: 50,
             factors: [
-              { id: 'ema_crossover', score: 90, status: 'used' },
-              { id: 'hunt_up', score: 50, status: 'missing' },
+              { id: 'ema_crossover', score: 0, status: 'idle' },
+              { id: 'hunt_up', score: 80, status: 'used' },
             ],
           },
         }),
       ],
       draft,
     );
-    expect(rows[0]?.appliedScore).toBe(70);
-    expect(rows[0]?.huntMissing).toBe(true);
-    expect(rows[0]?.factors.find((f) => f.id === 'hunt_up')?.appliedEffect).toBe(0);
+    expect(rows[0]?.appliedScore).toBe(73.6);
+    expect(rows[0]?.defaultScore).toBe(61.5);
+    expect(rows[0]?.factors.find((f) => f.id === 'ema_crossover')?.status).toBe('idle');
+    expect(rows[0]?.factors.find((f) => f.id === 'ema_crossover')?.appliedEffect).toBe(0);
   });
 });

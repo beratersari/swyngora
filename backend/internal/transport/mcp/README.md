@@ -81,6 +81,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_custom_signal_profiles` | Saved custom-signal mixes |
 | `create_custom_signal_profile` | Save a named mix (weights sum to 100) |
 | `update_custom_signal_profile` | Edit a saved mix |
+| `duplicate_custom_signal_profile` | Copy a saved mix |
+| `set_default_custom_signal_profile` | Mix the Custom tab opens with |
 | `delete_custom_signal_profile` | Delete a saved mix |
 | `scan_custom_signals` | Watchlist scored with a custom mix (`profileId` or weight*) |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |

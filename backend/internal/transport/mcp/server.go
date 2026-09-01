@@ -213,8 +213,10 @@ type DataPort interface {
 	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
 	ListCustomSignalFactors(ctx context.Context) (json.RawMessage, error)
 	ListCustomSignalProfiles(ctx context.Context, clientID string) (json.RawMessage, error)
-	CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error)
-	UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error)
+	CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64, isDefault bool) (json.RawMessage, error)
+	UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64, isDefault *bool) (json.RawMessage, error)
+	DuplicateCustomSignalProfile(ctx context.Context, clientID, id, name string) (json.RawMessage, error)
+	SetDefaultCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ScanCustomSignals(ctx context.Context, clientID, profileID, exchange string, limit int, weights domain.CustomSignalWeights, hasWeights bool) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
@@ -3701,6 +3703,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("name", mcp.Required(), mcp.Description("Profile name")),
 		mcp.WithString("weightsJson", mcp.Required(), mcp.Description("JSON object of factor id to percent, e.g. {\"hunt_up\":40,\"rsi_recovery\":60}")),
+		mcp.WithBoolean("isDefault", mcp.Description("If true, Custom tab opens this mix")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3714,7 +3717,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.CreateCustomSignalProfile(ctx, clientID, name, weights)
+		raw, err := api.CreateCustomSignalProfile(ctx, clientID, name, weights, req.GetBool("isDefault", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3727,6 +3730,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("id", mcp.Required(), mcp.Description("Profile id")),
 		mcp.WithString("name", mcp.Description("New name")),
 		mcp.WithString("weightsJson", mcp.Description("JSON object of factor id to percent")),
+		mcp.WithBoolean("isDefault", mcp.Description("Set true to make this the Custom tab default")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3743,7 +3747,53 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 				return mcp.NewToolResultError(err.Error()), nil
 			}
 		}
-		raw, err := api.UpdateCustomSignalProfile(ctx, clientID, id, req.GetString("name", ""), weights)
+		var def *bool
+		if _, ok := req.GetArguments()["isDefault"]; ok {
+			v := req.GetBool("isDefault", false)
+			def = &v
+		}
+		raw, err := api.UpdateCustomSignalProfile(ctx, clientID, id, req.GetString("name", ""), weights, def)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("duplicate_custom_signal_profile",
+		mcp.WithDescription("Copy a saved custom-signal mix. Optional name; default is \"{name} (copy)\"."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Profile id to copy")),
+		mcp.WithString("name", mcp.Description("Name for the copy")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DuplicateCustomSignalProfile(ctx, clientID, id, req.GetString("name", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("set_default_custom_signal_profile",
+		mcp.WithDescription("Mark a saved mix as the one the Custom tab opens with."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Profile id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.SetDefaultCustomSignalProfile(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

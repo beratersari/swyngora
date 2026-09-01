@@ -2509,13 +2509,13 @@ func (c *APIClient) ListCustomSignalProfiles(ctx context.Context, clientID strin
 	return c.get(ctx, "/api/v1/swing/custom/profiles", q)
 }
 
-func (c *APIClient) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error) {
+func (c *APIClient) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64, isDefault bool) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/swing/custom/profiles", map[string]any{
-		"clientId": clientID, "name": name, "weights": weights,
+		"clientId": clientID, "name": name, "weights": weights, "isDefault": isDefault,
 	})
 }
 
-func (c *APIClient) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error) {
+func (c *APIClient) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64, isDefault *bool) (json.RawMessage, error) {
 	body := map[string]any{"clientId": clientID}
 	if name != "" {
 		body["name"] = name
@@ -2523,7 +2523,28 @@ func (c *APIClient) UpdateCustomSignalProfile(ctx context.Context, clientID, id,
 	if weights != nil {
 		body["weights"] = weights
 	}
+	if isDefault != nil {
+		body["isDefault"] = *isDefault
+	}
 	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/swing/custom/profiles/"+url.PathEscape(id), body)
+}
+
+func (c *APIClient) DuplicateCustomSignalProfile(ctx context.Context, clientID, id, name string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/swing/custom/profiles/"+url.PathEscape(id)+"/duplicate", map[string]any{
+		"clientId": clientID, "name": name,
+	})
+}
+
+func (c *APIClient) SetDefaultCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/swing/custom/profiles/" + url.PathEscape(id) + "/default"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
 }
 
 func (c *APIClient) DeleteCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error) {

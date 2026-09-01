@@ -24,13 +24,22 @@ func (s *SQLite) CreateProfile(ctx context.Context, p domain.CustomSignalProfile
 	if err != nil {
 		return nil, err
 	}
+	def := 0
+	if p.IsDefault {
+		def = 1
+	}
 	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO custom_signal_profiles (id, client_id, name, weights_json, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, p.ID, p.ClientID, p.Name, raw,
+		INSERT INTO custom_signal_profiles (id, client_id, name, weights_json, is_default, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, p.ID, p.ClientID, p.Name, raw, def,
 		p.CreatedAt.UTC().Format(time.RFC3339Nano), p.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, fmt.Errorf("insert custom signal profile: %w", err)
+	}
+	if p.IsDefault {
+		if err := s.setDefaultLocked(ctx, p.ClientID, p.ID); err != nil {
+			return nil, err
+		}
 	}
 	return &p, nil
 }
@@ -40,7 +49,7 @@ func (s *SQLite) GetProfile(ctx context.Context, clientID, id string) (*domain.C
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	row := s.db.QueryRowContext(ctx, `
-		SELECT id, client_id, name, weights_json, created_at, updated_at
+		SELECT id, client_id, name, weights_json, is_default, created_at, updated_at
 		FROM custom_signal_profiles WHERE client_id = ? AND id = ?
 	`, clientID, id)
 	p, err := scanCustomProfile(row)
@@ -61,11 +70,15 @@ func (s *SQLite) UpdateProfile(ctx context.Context, p domain.CustomSignalProfile
 	if err != nil {
 		return nil, err
 	}
+	def := 0
+	if p.IsDefault {
+		def = 1
+	}
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE custom_signal_profiles
-		SET name = ?, weights_json = ?, updated_at = ?
+		SET name = ?, weights_json = ?, is_default = ?, updated_at = ?
 		WHERE client_id = ? AND id = ?
-	`, p.Name, raw, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID, p.ID)
+	`, p.Name, raw, def, p.UpdatedAt.UTC().Format(time.RFC3339Nano), p.ClientID, p.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update custom signal profile: %w", err)
 	}
@@ -73,7 +86,34 @@ func (s *SQLite) UpdateProfile(ctx context.Context, p domain.CustomSignalProfile
 	if n == 0 {
 		return nil, domain.ErrNotFound
 	}
+	if p.IsDefault {
+		if err := s.setDefaultLocked(ctx, p.ClientID, p.ID); err != nil {
+			return nil, err
+		}
+	}
 	return &p, nil
+}
+
+// SetDefaultProfile marks one mix as the client's default (clears the others).
+func (s *SQLite) SetDefaultProfile(ctx context.Context, clientID, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.setDefaultLocked(ctx, clientID, id)
+}
+
+func (s *SQLite) setDefaultLocked(ctx context.Context, clientID, id string) error {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM custom_signal_profiles WHERE client_id = ? AND id = ?`, clientID, id).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 0 WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE custom_signal_profiles SET is_default = 1 WHERE client_id = ? AND id = ?`, clientID, id)
+	return err
 }
 
 // ListProfiles returns newest-updated first.
@@ -81,9 +121,9 @@ func (s *SQLite) ListProfiles(ctx context.Context, clientID string) ([]domain.Cu
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, name, weights_json, created_at, updated_at
+		SELECT id, client_id, name, weights_json, is_default, created_at, updated_at
 		FROM custom_signal_profiles WHERE client_id = ?
-		ORDER BY updated_at DESC
+		ORDER BY is_default DESC, updated_at DESC
 	`, clientID)
 	if err != nil {
 		return nil, err
@@ -139,9 +179,11 @@ type customProfileRow interface {
 func scanCustomProfile(row customProfileRow) (*domain.CustomSignalProfile, error) {
 	var p domain.CustomSignalProfile
 	var raw, cAt, uAt string
-	if err := row.Scan(&p.ID, &p.ClientID, &p.Name, &raw, &cAt, &uAt); err != nil {
+	var def int
+	if err := row.Scan(&p.ID, &p.ClientID, &p.Name, &raw, &def, &cAt, &uAt); err != nil {
 		return nil, err
 	}
+	p.IsDefault = def != 0
 	w, err := decodeCustomWeights(raw)
 	if err != nil {
 		return nil, err

@@ -3,6 +3,7 @@ package swing
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,9 +64,10 @@ func (s *Service) GetProfile(ctx context.Context, clientID, id string) (*domain.
 
 // CreateProfileInput creates a named mix.
 type CreateProfileInput struct {
-	ClientID string
-	Name     string
-	Weights  map[string]float64
+	ClientID  string
+	Name      string
+	Weights   map[string]float64
+	IsDefault bool
 }
 
 // CreateProfile validates and stores a mix.
@@ -95,7 +97,7 @@ func (s *Service) CreateProfile(ctx context.Context, in CreateProfileInput) (*do
 	now := time.Now().UTC()
 	return s.profiles.CreateProfile(ctx, domain.CustomSignalProfile{
 		ID: uuid.NewString(), ClientID: clientID, Name: name, Weights: w,
-		CreatedAt: now, UpdatedAt: now,
+		IsDefault: in.IsDefault, CreatedAt: now, UpdatedAt: now,
 	})
 }
 
@@ -106,6 +108,7 @@ type UpdateProfileInput struct {
 	Name       *string
 	Weights    map[string]float64
 	HasWeights bool
+	IsDefault  *bool
 }
 
 // UpdateProfile saves an existing mix.
@@ -135,8 +138,50 @@ func (s *Service) UpdateProfile(ctx context.Context, in UpdateProfileInput) (*do
 		}
 		cur.Weights = w
 	}
+	if in.IsDefault != nil {
+		cur.IsDefault = *in.IsDefault
+	}
 	cur.UpdatedAt = time.Now().UTC()
-	return s.profiles.UpdateProfile(ctx, *cur)
+	p, err := s.profiles.UpdateProfile(ctx, *cur)
+	if err != nil {
+		return nil, err
+	}
+	if in.IsDefault != nil && *in.IsDefault {
+		if err := s.profiles.SetDefaultProfile(ctx, clientID, cur.ID); err != nil {
+			return nil, err
+		}
+		p.IsDefault = true
+	}
+	return p, nil
+}
+
+// DuplicateProfile copies a saved mix (not the default flag).
+func (s *Service) DuplicateProfile(ctx context.Context, clientID, id, name string) (*domain.CustomSignalProfile, error) {
+	src, err := s.GetProfile(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(name) == "" {
+		name = domain.DuplicateCustomSignalProfileName(src.Name)
+	}
+	return s.CreateProfile(ctx, CreateProfileInput{
+		ClientID: clientID, Name: name, Weights: src.Weights.Pct, IsDefault: false,
+	})
+}
+
+// SetDefaultProfile marks one saved mix as the one Custom should open with.
+func (s *Service) SetDefaultProfile(ctx context.Context, clientID, id string) (*domain.CustomSignalProfile, error) {
+	clientID, err := domain.NormalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	if s == nil || s.profiles == nil {
+		return nil, fmt.Errorf("%w: custom signal store not configured", domain.ErrUpstream)
+	}
+	if err := s.profiles.SetDefaultProfile(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return s.profiles.GetProfile(ctx, clientID, id)
 }
 
 // DeleteProfile removes a saved mix.
@@ -262,6 +307,8 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 	}
 	raws := domain.BuildCustomSignalRaws(dec.Patterns, hunt)
 	custom := domain.ScoreCustomSignal(raws, w)
+	cmp := domain.CompareCustomSignal(raws, w)
+	domain.AlignCustomDefaultToEngine(&cmp, dec.SwingScore)
 	return domain.CustomSignalItem{
 		Exchange:   ex,
 		Symbol:     symbol,
@@ -270,7 +317,7 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 		BarTime:    dec.BarTime,
 		Engine:     dec,
 		Custom:     custom,
-		Compare:    domain.CompareCustomSignal(raws, w),
+		Compare:    cmp,
 		HuntDetail: huntDetail,
 	}, nil
 }
