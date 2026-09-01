@@ -36,6 +36,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `OrderHeatmap` | CoinDetailPage |
 | `LiquidationHeatmap` | LiquidationsPage (`?view=heatmap`) |
 | `LiquidationHunt` | LiquidationsPage (`?view=hunt`) |
+| `LiquidationMaxPain` | LiquidationsPage (`?view=max-pain`) |
 | `LiquidationBarChart` | LiquidationsPage (`?view=chart`) |
 | `LiquidationCascade` | LiquidationsPage (`?view=cascade`) |
 | `LiquidationTreemap` / `LiquidationWindowCards` / `LiquidationFeedHealth` | LiquidationsPage overview + feed health |

@@ -542,6 +542,16 @@ func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol str
 	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
 }
 
+// GetLiquidationMaxPain returns the largest liquidation pockets above and below last.
+func (c *APIClient) GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-max-pain", q)
+}
+
 // GetLiquidationHuntHeatmap returns a price × time liquidation intensity grid.
 func (c *APIClient) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
 	q := url.Values{}

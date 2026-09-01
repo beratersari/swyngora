@@ -6,7 +6,8 @@
     "chart": "Grafik",
     "cascade": "Çığ",
     "heatmap": "Isı haritası",
-    "hunt": "Av"
+    "hunt": "Av",
+    "maxPain": "Max pain"
   },
   "exchange": "Borsa",
   "exchangeAll": "Tüm borsalar",
@@ -34,6 +35,26 @@
   "heatmap": {
     "symbol": "Sembol",
     "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "maxPain": {
+    "symbol": "Sembol",
+    "pick": "En büyük likidasyon ceplerini görmek için bir coin seçin.",
+    "empty": "Bu coin için henüz max pain cebi yok.",
+    "hint": "Last fiyatın üstündeki (short) ve altındaki (long) en büyük tahmini likidasyon boyutu. Av hedefi değildir — av ayrıca spot yürüyüş maliyetini de tartar. Yalnızca bilgi amaçlıdır.",
+    "last": "Last",
+    "oi": "Açık pozisyon",
+    "aboveTitle": "Üst — short",
+    "belowTitle": "Alt — long",
+    "aboveHint": "Fiyat buraya yükselirse short’lar likide olur",
+    "belowHint": "Fiyat buraya düşerse long’lar likide olur",
+    "distance": "Last’ten",
+    "size": "Tahmini likidasyon",
+    "leverage": "Kaldıraç",
+    "none": "Bu tarafta cep yok.",
+    "sides": {
+      "long": "Long",
+      "short": "Short"
+    }
   },
   "hunt": {
     "symbol": "Sembol",

@@ -57,7 +57,7 @@ Missing or failed inputs are marked `missing` / `weak` / `error` on `coverage.in
 
 `level` is `easier` (≥70) / `likely` (≥55) / `mixed` (≥40) / `hard`. Lean flips only when the two scores differ by at least 8 points.
 
-Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, spot cost, estimated liq, efficiency, desk result, and reasons. Cascade path is a Hunt sub-tab (`?view=hunt&panel=path`) so the compare view stays uncluttered.
+Web: `/liquidations?view=hunt` — side-by-side up vs down with scores, target, spot cost, estimated liq, efficiency, desk result, and reasons. Cascade path is a Hunt sub-tab (`?view=hunt&panel=path`) so the compare view stays uncluttered. The largest pocket by size alone is a separate tab: [`liquidation-max-pain.md`](liquidation-max-pain.md).
 
 ### Cascade path
 

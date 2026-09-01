@@ -2506,6 +2506,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-max-pain:
+    get:
+      summary: Largest liquidation pockets above and below last price
+      description: |
+        CoinGlass-style **max pain** for one coin: the price with the biggest
+        estimated liquidation size above last (shorts) and below last (longs).
+        This is **not** the hunt target (which also weighs spot-walk cost).
+        Size is modeled OI at an assumed leverage mix plus 24h observed
+        clusters. Venues stay separate; report-level above/below is the single
+        largest pocket on that side (prices are never averaged).
+      operationId: getMarketLiquidationMaxPain
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both, never averaged)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue max-pain pockets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidationMaxPain'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/liquidation-hunt/heatmap:
     get:
       summary: Liquidation intensity heatmap (price × time)
@@ -7817,6 +7849,53 @@ components:
         scoreMix: { $ref: '#/components/schemas/LiquidationHuntScoreMix' }
         scoreCompare: { $ref: '#/components/schemas/LiquidationHuntScoreCompare' }
         error: { type: string }
+    LiquidationMaxPainPocket:
+      type: object
+      description: One liquidation cluster by size (not a hunt target)
+      properties:
+        exchange: { type: string }
+        side: { type: string, enum: [long, short] }
+        direction: { type: string, enum: [up, down] }
+        price: { type: string }
+        movePct: { type: string }
+        notional: { type: string, description: Estimated plus observed notional }
+        estNotional: { type: string }
+        observedNotional: { type: string }
+        leverage: { type: string }
+        source: { type: string }
+    LiquidationMaxPainVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        price: { type: string }
+        openInterestValue: { type: string }
+        above: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        below: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        aboveLevels:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        belowLevels:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        error: { type: string }
+    LiquidationMaxPain:
+      type: object
+      description: Largest liquidation pockets above (shorts) and below (longs) last price
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        above: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        below: { $ref: '#/components/schemas/LiquidationMaxPainPocket' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationMaxPainVenue' }
+        summary: { type: string }
+        assumptions:
+          type: object
+          additionalProperties: true
+        note: { type: string }
     LiquidationHunt:
       type: object
       description: Hypothetical per-venue hunt plus directional ease scores and cascade paths

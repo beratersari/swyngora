@@ -65,6 +65,8 @@ import type {
   LiquidationHuntHeatmapQuery,
   LiquidationHunt,
   LiquidationHuntQuery,
+  LiquidationMaxPain,
+  LiquidationMaxPainQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -100,6 +102,8 @@ export type {
   LiquidationHuntHeatmapQuery,
   LiquidationHunt,
   LiquidationHuntQuery,
+  LiquidationMaxPain,
+  LiquidationMaxPainQuery,
   SupplyQuery,
   IntervalsQuery,
   IndicatorsQuery,
@@ -304,6 +308,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketLiquidationMaxPain: build.query<LiquidationMaxPain, LiquidationMaxPainQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-max-pain',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketLiquidationHuntHeatmap: build.query<
       LiquidationHuntHeatmap,
       LiquidationHuntHeatmapQuery
@@ -444,6 +455,7 @@ export const {
   useGetMarketLiquidationCascadeQuery,
   useGetMarketLiquidationCascadeScanQuery,
   useGetMarketLiquidationHuntQuery,
+  useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetIndicatorsQuery,

@@ -26,6 +26,10 @@ import {
   LiquidationHunt,
 } from '@/components/organisms/LiquidationHunt';
 import {
+  LIQ_MAX_PAIN_POLL_MS,
+  LiquidationMaxPain,
+} from '@/components/organisms/LiquidationMaxPain';
+import {
   huntWeightQueryParams,
   parseHuntWeightDraft,
 } from '@/components/organisms/LiquidationHunt/helpers';
@@ -37,6 +41,7 @@ import {
   useGetMarketLiquidationCascadeQuery,
   useGetMarketLiquidationCascadeScanQuery,
   useGetMarketLiquidationHuntQuery,
+  useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
@@ -119,6 +124,14 @@ export function LiquidationsPage() {
     },
   );
 
+  const maxPainQuery = useGetMarketLiquidationMaxPainQuery(
+    { symbol, exchange: exchange === 'all' ? 'all' : exchange },
+    {
+      skip: view !== 'max-pain' || !symbol,
+      pollingInterval: visible && view === 'max-pain' ? LIQ_MAX_PAIN_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
   const huntQuery = useGetMarketLiquidationHuntQuery(
     {
       symbol,
@@ -197,6 +210,7 @@ export function LiquidationsPage() {
             { value: 'overview', label: t('liquidations:tabs.overview') },
             { value: 'chart', label: t('liquidations:tabs.chart') },
             { value: 'cascade', label: t('liquidations:tabs.cascade') },
+            { value: 'max-pain', label: t('liquidations:tabs.maxPain') },
             { value: 'hunt', label: t('liquidations:tabs.hunt') },
             { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
           ]}
@@ -219,10 +233,16 @@ export function LiquidationsPage() {
             }
           />
         </Field>
-        {view === 'hunt' || view === 'heatmap' ? (
+        {view === 'hunt' || view === 'heatmap' || view === 'max-pain' ? (
           <Field>
             <Text variant="caption" color="secondary" id="liq-symbol-label">
-              {t(view === 'hunt' ? 'liquidations:hunt.symbol' : 'liquidations:heatmap.symbol')}
+              {t(
+                view === 'hunt'
+                  ? 'liquidations:hunt.symbol'
+                  : view === 'max-pain'
+                    ? 'liquidations:maxPain.symbol'
+                    : 'liquidations:heatmap.symbol',
+              )}
             </Text>
             <Select
               aria-labelledby="liq-symbol-label"
@@ -355,6 +375,24 @@ export function LiquidationsPage() {
           }
           onOpenCoin={(next) => patchParams({ symbol: next })}
         />
+      ) : view === 'max-pain' ? (
+        symbol ? (
+          <LiquidationMaxPain
+            data={rtkCurrent(maxPainQuery)}
+            isLoading={rtkCurrentPending(maxPainQuery)}
+            errorMessage={
+              maxPainQuery.isError
+                ? rtkErrorMessage(maxPainQuery.error, {
+                    resource: t('liquidations:tabs.maxPain'),
+                  })
+                : null
+            }
+          />
+        ) : (
+          <Text variant="bodySm" color="secondary">
+            {t('liquidations:maxPain.pick')}
+          </Text>
+        )
       ) : view === 'hunt' ? (
         symbol ? (
           <LiquidationHunt

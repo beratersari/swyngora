@@ -57,6 +57,10 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   mix. Each bar includes `byLeverage` plus `cumLong` / `cumShort` / `cumTotal`
   from last price to that level. Combined does not copy Binance's last as the
   combined last. Market-wide `symbol=all` stays observed time bars.
+- Max pain (`GET /liquidation-max-pain`): largest estimated pocket **above**
+  (shorts) and **below** (longs) last price. Not the hunt target.
+  See [`liquidation-max-pain.md`](liquidation-max-pain.md). Web:
+  `/liquidations?view=max-pain`.
 - Hypothetical “what if spot is walked to force liquidations” is a separate model, including up vs down ease scores: [`liquidation-hunt.md`](liquidation-hunt.md). Web tab: `/liquidations?view=hunt`.
 - Cascade detector: `GET /api/v1/market/liquidation-cascade`
   - Compares the last **1m / 5m / 15m** long and short notional to that stream's own typical (median of prior blocks over ~6 hours).
@@ -81,9 +85,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 | Domain | `backend/internal/domain/liquidation.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
 | Adapters | `adapter/binance/liqhub.go`, `adapter/binance/liqhist.go`, `adapter/bybit/liqhub.go`, `adapter/bybit/liqhist.go` |
 | Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades`; reconnect fill in `service/futureshist/backfill.go` |
-| HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan` |
-| MCP / AI | `get_liquidations`, `get_liquidation_overview`, `get_liquidation_levels`, `get_liquidation_cascade`, `scan_liquidation_cascades` |
-| Web | `/liquidations` — cards + treemap; **Chart** tab; **Cascade** tab (coin or market); Heatmap tab |
+| HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan`, `/liquidation-max-pain` |
+| MCP / AI | `get_liquidations`, `get_liquidation_overview`, `get_liquidation_levels`, `get_liquidation_cascade`, `scan_liquidation_cascades`, `get_liquidation_max_pain` |
+| Web | `/liquidations` — cards + treemap; **Chart** tab; **Cascade** tab; **Max pain** tab; Hunt; Heatmap |
 
 ## How to verify
 
@@ -97,6 +101,7 @@ curl "http://localhost:8080/api/v1/market/liquidation-levels?symbol=all&exchange
 curl "http://localhost:8080/api/v1/market/liquidation-cascade?symbol=BTCUSDT&exchange=all"
 curl "http://localhost:8080/api/v1/market/liquidation-cascade?symbol=all"
 curl "http://localhost:8080/api/v1/market/liquidation-cascade/scan"
+curl "http://localhost:8080/api/v1/market/liquidation-max-pain?symbol=BTCUSDT"
 ```
 
 ## Limits

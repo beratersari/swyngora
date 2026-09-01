@@ -6,7 +6,8 @@
     "chart": "Chart",
     "cascade": "Cascade",
     "heatmap": "Heatmap",
-    "hunt": "Hunt"
+    "hunt": "Hunt",
+    "maxPain": "Max pain"
   },
   "exchange": "Venue",
   "exchangeAll": "All venues",
@@ -34,6 +35,26 @@
   "heatmap": {
     "symbol": "Symbol",
     "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "maxPain": {
+    "symbol": "Symbol",
+    "pick": "Choose a coin to see the largest liquidation pockets.",
+    "empty": "No max-pain pockets yet for this coin.",
+    "hint": "The largest estimated liquidation size above last price (shorts) and below last price (longs). This is not the hunt target — hunt also weighs how expensive the spot walk is. Informational only.",
+    "last": "Last",
+    "oi": "Open interest",
+    "aboveTitle": "Above — shorts",
+    "belowTitle": "Below — longs",
+    "aboveHint": "Shorts liquidate if price rises here",
+    "belowHint": "Longs liquidate if price falls here",
+    "distance": "From last",
+    "size": "Est. liquidations",
+    "leverage": "Leverage",
+    "none": "No pocket on this side.",
+    "sides": {
+      "long": "Long",
+      "short": "Short"
+    }
   },
   "hunt": {
     "symbol": "Symbol",

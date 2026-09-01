@@ -15,6 +15,7 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqView('chart')).toBe('chart');
     expect(parseLiqView('cascade')).toBe('cascade');
     expect(parseLiqView('hunt')).toBe('hunt');
+    expect(parseLiqView('max-pain')).toBe('max-pain');
     expect(parseLiqHuntPanel('path')).toBe('path');
     expect(parseLiqHuntPanel(null)).toBe('compare');
     expect(parseLiqView(null)).toBe('overview');

@@ -56,6 +56,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
+| `GET` | `/api/v1/market/liquidation-max-pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (requested percents stay as given; missing factors add 0; `scoreCompare` has separate up/down factor effects and the largest custom-weight mover per side) + cascade paths |
 | `GET` | `/api/v1/market/liquidation-hunt/heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; own-venue prices; Binance, Bybit, combined; 1h/4h/12h review) |
 | `GET` | `/api/v1/market/liquidation-levels` | CoinGlass-style 10x/25x/50x/100x price bars + cumulative to last; or time bars of all-coin totals |

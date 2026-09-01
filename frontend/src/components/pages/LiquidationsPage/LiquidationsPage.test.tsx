@@ -107,6 +107,36 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationMaxPainQuery: () => ({
+      data: {
+        symbol: 'BTCUSDT',
+        summary: 'Largest short pocket is 8M above.',
+        venues: [
+          {
+            exchange: 'binance',
+            price: '64000',
+            above: { side: 'short', price: '65600', movePct: '+2.50%', notional: '8000000' },
+            below: { side: 'long', price: '62848', movePct: '-1.80%', notional: '5000000' },
+          },
+        ],
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        summary: 'Largest short pocket is 8M above.',
+        venues: [
+          {
+            exchange: 'binance',
+            price: '64000',
+            above: { side: 'short', price: '65600', movePct: '+2.50%', notional: '8000000' },
+            below: { side: 'long', price: '62848', movePct: '-1.80%', notional: '5000000' },
+          },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketLiquidationHuntQuery: () => ({
       data: {
         symbol: 'BTCUSDT',
@@ -193,6 +223,11 @@ describe('LiquidationsPage', () => {
   it('opens the heatmap tab from the URL', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=heatmap'] });
     expect(await screen.findByTestId('liquidation-heatmap')).toBeInTheDocument();
+  });
+
+  it('opens the max pain tab from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=max-pain'] });
+    expect(await screen.findByTestId('liquidation-max-pain')).toBeInTheDocument();
   });
 
   it('opens the hunt tab from the URL', async () => {

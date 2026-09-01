@@ -35,6 +35,10 @@ export type LiquidationHunt = components['schemas']['LiquidationHunt'];
 export type LiquidationHuntQuery = NonNullable<
   operations['getMarketLiquidationHunt']['parameters']['query']
 >;
+export type LiquidationMaxPain = components['schemas']['LiquidationMaxPain'];
+export type LiquidationMaxPainQuery = NonNullable<
+  operations['getMarketLiquidationMaxPain']['parameters']['query']
+>;
 
 export type CandlesQuery = NonNullable<operations['getCandles']['parameters']['query']>;
 export type Ticker24hQuery = NonNullable<operations['getTicker24h']['parameters']['query']>;

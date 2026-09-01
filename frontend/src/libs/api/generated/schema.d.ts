@@ -1484,6 +1484,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-max-pain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Largest liquidation pockets above and below last price
+         * @description CoinGlass-style **max pain** for one coin: the price with the biggest
+         *     estimated liquidation size above last (shorts) and below last (longs).
+         *     This is **not** the hunt target (which also weighs spot-walk cost).
+         *     Size is modeled OI at an assumed leverage mix plus 24h observed
+         *     clusters. Venues stay separate; report-level above/below is the single
+         *     largest pocket on that side (prices are never averaged).
+         */
+        get: operations["getMarketLiquidationMaxPain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/liquidation-hunt/heatmap": {
         parameters: {
             query?: never;
@@ -4430,6 +4455,48 @@ export interface components {
             scoreMix?: components["schemas"]["LiquidationHuntScoreMix"];
             scoreCompare?: components["schemas"]["LiquidationHuntScoreCompare"];
             error?: string;
+        };
+        /** @description One liquidation cluster by size (not a hunt target) */
+        LiquidationMaxPainPocket: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            /** @enum {string} */
+            direction?: "up" | "down";
+            price?: string;
+            movePct?: string;
+            /** @description Estimated plus observed notional */
+            notional?: string;
+            estNotional?: string;
+            observedNotional?: string;
+            leverage?: string;
+            source?: string;
+        };
+        LiquidationMaxPainVenue: {
+            exchange?: string;
+            symbol?: string;
+            price?: string;
+            openInterestValue?: string;
+            above?: components["schemas"]["LiquidationMaxPainPocket"];
+            below?: components["schemas"]["LiquidationMaxPainPocket"];
+            aboveLevels?: components["schemas"]["LiquidationMaxPainPocket"][];
+            belowLevels?: components["schemas"]["LiquidationMaxPainPocket"][];
+            error?: string;
+        };
+        /** @description Largest liquidation pockets above (shorts) and below (longs) last price */
+        LiquidationMaxPain: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            above?: components["schemas"]["LiquidationMaxPainPocket"];
+            below?: components["schemas"]["LiquidationMaxPainPocket"];
+            venues?: components["schemas"]["LiquidationMaxPainVenue"][];
+            summary?: string;
+            assumptions?: {
+                [key: string]: unknown;
+            };
+            note?: string;
         };
         /** @description Hypothetical per-venue hunt plus directional ease scores and cascade paths */
         LiquidationHunt: {
@@ -7976,6 +8043,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiquidationHunt"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationMaxPain: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both, never averaged) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue max-pain pockets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationMaxPain"];
                 };
             };
             400: components["responses"]["Error"];
