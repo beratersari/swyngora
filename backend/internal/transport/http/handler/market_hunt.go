@@ -10,7 +10,12 @@ import (
 // GetLiquidationHunt handles GET /api/v1/market/liquidation-hunt.
 func (h *MarketHandler) GetLiquidationHunt(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	got, err := h.svc.GetLiquidationHunt(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	weights, err := domain.ParseHuntScoreWeights(q.Get)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.GetLiquidationHuntWeighted(r.Context(), q.Get("exchange"), q.Get("symbol"), weights)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -77,6 +82,7 @@ type huntCascadeStepDTO struct {
 	Remaining            huntWalkDTO `json:"remaining"`
 	PriorCascadeNotional string      `json:"priorCascadeNotional"`
 	FuelSpent            string      `json:"fuelSpent"`
+	FuelLeft             string      `json:"fuelLeft"`
 	AssistancePct        string      `json:"assistancePct,omitempty"`
 	Strength             string      `json:"strength,omitempty"`
 	StrengthLevel        string      `json:"strengthLevel,omitempty"`
@@ -147,17 +153,39 @@ type huntVenueDTO struct {
 	DownScore          huntDirectionScoreDTO `json:"downScore"`
 	Bias               huntBiasDTO           `json:"bias"`
 	Coverage           huntCoverageDTO       `json:"coverage"`
+	ScoreMix           huntScoreMixDTO       `json:"scoreMix"`
 	Error              string                `json:"error,omitempty"`
 }
 
 type huntFactorDTO struct {
-	ID       string  `json:"id"`
-	Label    string  `json:"label"`
-	Score    float64 `json:"score"`
-	Weight   float64 `json:"weight"`
-	SharePct float64 `json:"sharePct,omitempty"`
-	Effect   float64 `json:"effect"`
-	Detail   string  `json:"detail"`
+	ID           string  `json:"id"`
+	Label        string  `json:"label"`
+	Score        float64 `json:"score"`
+	Weight       float64 `json:"weight"`
+	RequestedPct float64 `json:"requestedPct"`
+	SharePct     float64 `json:"sharePct,omitempty"`
+	Effect       float64 `json:"effect"`
+	Status       string  `json:"status"`
+	Detail       string  `json:"detail"`
+}
+
+type huntWeightRowDTO struct {
+	ID        string  `json:"id"`
+	Label     string  `json:"label"`
+	WeightPct float64 `json:"weightPct"`
+	Status    string  `json:"status"`
+	Detail    string  `json:"detail,omitempty"`
+}
+
+type huntScoreMixDTO struct {
+	Source         string             `json:"source"`
+	Requested      []huntWeightRowDTO `json:"requested"`
+	Used           []huntWeightRowDTO `json:"used"`
+	RequestedTotal float64            `json:"requestedTotal"`
+	UsedTotal      float64            `json:"usedTotal"`
+	Missing        []string           `json:"missing"`
+	Disabled       []string           `json:"disabled"`
+	Note           string             `json:"note"`
 }
 
 type huntDirectionScoreDTO struct {
@@ -211,6 +239,7 @@ type huntResponse struct {
 	Venues      []huntVenueDTO     `json:"venues"`
 	Bias        *huntBiasDTO       `json:"bias,omitempty"`
 	Coverage    *huntCoverageDTO   `json:"coverage,omitempty"`
+	ScoreMix    huntScoreMixDTO    `json:"scoreMix"`
 	Note        string             `json:"note"`
 }
 
@@ -248,6 +277,7 @@ func huntToDTO(a *domain.HuntReport) huntResponse {
 		Venues:   venues,
 		Bias:     huntBiasToDTO(a.Bias),
 		Coverage: huntCoveragePtrToDTO(a.Coverage),
+		ScoreMix: huntScoreMixToDTO(a.ScoreMix),
 		Note:     huntDisclaimer,
 	}
 }
@@ -281,6 +311,7 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		DownScore:          huntDirectionToDTO(v.DownScore),
 		Bias:               huntBiasValueToDTO(v.Bias),
 		Coverage:           huntCoverageToDTO(v.Coverage),
+		ScoreMix:           huntScoreMixToDTO(v.ScoreMix),
 		Error:              v.Error,
 	}
 }
@@ -289,13 +320,15 @@ func huntDirectionToDTO(s domain.HuntDirectionScore) huntDirectionScoreDTO {
 	factors := make([]huntFactorDTO, 0, len(s.Factors))
 	for _, f := range s.Factors {
 		factors = append(factors, huntFactorDTO{
-			ID:       f.ID,
-			Label:    f.Label,
-			Score:    f.Score,
-			Weight:   f.Weight,
-			SharePct: f.SharePct,
-			Effect:   f.Effect,
-			Detail:   f.Detail,
+			ID:           f.ID,
+			Label:        f.Label,
+			Score:        f.Score,
+			Weight:       f.Weight,
+			RequestedPct: f.RequestedPct,
+			SharePct:     f.SharePct,
+			Effect:       f.Effect,
+			Status:       f.Status,
+			Detail:       f.Detail,
 		})
 	}
 	reasons := s.Reasons
@@ -429,6 +462,7 @@ func huntCascadeToDTO(p domain.HuntCascadePath) huntCascadePathDTO {
 			Remaining:            huntWalkToDTO(s.Remaining),
 			PriorCascadeNotional: formatHistQty(s.PriorCascadeNotional),
 			FuelSpent:            formatHistQty(s.FuelSpent),
+			FuelLeft:             formatHistQty(s.FuelLeft),
 			AssistancePct:        formatOptionalPct(s.AssistancePct),
 			Strength:             formatOptionalPct(s.Strength),
 			StrengthLevel:        s.StrengthLevel,
@@ -460,6 +494,36 @@ func huntCascadeToDTO(p domain.HuntCascadePath) huntCascadePathDTO {
 		out.StallsAtPrice = formatHistQty(p.StallsAtPrice)
 	}
 	return out
+}
+
+func huntScoreMixToDTO(m domain.HuntScoreMix) huntScoreMixDTO {
+	mapRows := func(in []domain.HuntWeightRow) []huntWeightRowDTO {
+		out := make([]huntWeightRowDTO, 0, len(in))
+		for _, r := range in {
+			out = append(out, huntWeightRowDTO{
+				ID: r.ID, Label: r.Label, WeightPct: r.WeightPct, Status: r.Status, Detail: r.Detail,
+			})
+		}
+		return out
+	}
+	missing := m.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	disabled := m.Disabled
+	if disabled == nil {
+		disabled = []string{}
+	}
+	return huntScoreMixDTO{
+		Source:         m.Source,
+		Requested:      mapRows(m.Requested),
+		Used:           mapRows(m.Used),
+		RequestedTotal: m.RequestedTotal,
+		UsedTotal:      m.UsedTotal,
+		Missing:        missing,
+		Disabled:       disabled,
+		Note:           m.Note,
+	}
 }
 
 func formatOptionalPct(v *float64) string {

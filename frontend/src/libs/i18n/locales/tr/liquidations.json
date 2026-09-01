@@ -80,6 +80,27 @@
       "share": "karışımın %{{pct}}’i",
       "effect": "ortaya göre {{value}}"
     },
+    "weights": {
+      "open": "Özel ağırlıklar",
+      "title": "Skor ağırlıkları",
+      "hint": "İstediğiniz girdileri seçin ve yüzde verin. Toplam 100 olmalı. Kapalı girdiler hesaba girmez. Eksik veri başka bir şeyle doldurulmaz.",
+      "apply": "Uygula",
+      "cancel": "Vazgeç",
+      "reset": "Varsayılana dön",
+      "total": "Toplam %{{total}}",
+      "needHundred": "uygulamak için 100 olmalı",
+      "custom": "özel karışım",
+      "defaultNote": "Varsayılan ağırlıklar.",
+      "usedOf": "{{total}} içinden {{used}} kullanıldı",
+      "factors": {
+        "proximity": "Bölgeye uzaklık",
+        "book": "Spot yürüyüş maliyeti",
+        "efficiency": "Liq / spot",
+        "trend": "Fiyat + OI eğilimi",
+        "crowding": "Kalabalık + fonlama",
+        "flow": "Taker + son likidasyonlar"
+      }
+    },
     "panels": {
       "compare": "Karşılaştır",
       "path": "Çığ yolu"

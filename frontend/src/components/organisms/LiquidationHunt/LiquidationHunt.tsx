@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Segmented } from 'antd';
+import { Alert, Button, InputNumber, Modal, Segmented, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
@@ -13,6 +13,8 @@ import {
   inputSpanText,
   inputTone,
   leanTone,
+  defaultHuntWeightDraft,
+  huntWeightTotal,
   parseHuntPanel,
   parseNum,
   pathLeverageLabel,
@@ -20,6 +22,7 @@ import {
   scoreValue,
   venueLabel,
 } from './helpers';
+import { HUNT_SCORE_FACTORS } from './constants';
 import {
   Banner,
   BannerTitle,
@@ -67,7 +70,9 @@ import type {
   HuntCoverage,
   HuntDirectionScore,
   HuntPanel,
+  HuntScoreMix,
   HuntVenue,
+  HuntWeightDraftRow,
   LiquidationHuntProps,
 } from './LiquidationHunt.types';
 
@@ -77,6 +82,8 @@ export function LiquidationHunt({
   errorMessage,
   panel,
   onPanelChange,
+  weightDraft,
+  onApplyWeights,
 }: LiquidationHuntProps) {
   const { t } = useTranslation(['liquidations', 'common']);
   const { formatCompact, formatPrice } = useDisplayCurrency();
@@ -85,6 +92,8 @@ export function LiquidationHunt({
   const venues = data?.venues ?? [];
   const lean = leanTone(data?.bias?.lean);
   const [localPanel, setLocalPanel] = useState<HuntPanel>('compare');
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [draft, setDraft] = useState<HuntWeightDraftRow[]>(() => weightDraft ?? defaultHuntWeightDraft());
   const activePanel = panel ?? localPanel;
   const setPanel = (next: HuntPanel) => {
     if (onPanelChange) onPanelChange(next);
@@ -113,6 +122,16 @@ export function LiquidationHunt({
       {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
 
       <PanelSwitch>
+        <Button
+          size="small"
+          data-testid="liquidation-hunt-weights"
+          onClick={() => {
+            setDraft(weightDraft ?? defaultHuntWeightDraft());
+            setWeightsOpen(true);
+          }}
+        >
+          {t('liquidations:hunt.weights.open')}
+        </Button>
         <Segmented
           size="small"
           value={activePanel}
@@ -130,6 +149,7 @@ export function LiquidationHunt({
         <Text variant="bodySm" color="secondary">
           {t(activePanel === 'path' ? 'liquidations:hunt.path.hint' : 'liquidations:hunt.hint')}
         </Text>
+        <ScoreMixStrip mix={data?.scoreMix} />
       </Banner>
 
       {venues.length === 0 ? (
@@ -153,6 +173,23 @@ export function LiquidationHunt({
       )}
 
       <Hint>{data?.note || t('liquidations:disclaimer')}</Hint>
+
+      <HuntWeightsModal
+        open={weightsOpen}
+        draft={draft}
+        onDraft={setDraft}
+        onClose={() => setWeightsOpen(false)}
+        onApply={() => {
+          onApplyWeights?.(draft);
+          setWeightsOpen(false);
+        }}
+        onReset={() => {
+          const next = defaultHuntWeightDraft();
+          setDraft(next);
+          onApplyWeights?.(null);
+          setWeightsOpen(false);
+        }}
+      />
     </Panel>
   );
 }
@@ -443,6 +480,94 @@ function DirectionCard({
         </ReasonList>
       ) : null}
     </SideCard>
+  );
+}
+
+function ScoreMixStrip({ mix }: { mix?: HuntScoreMix }) {
+  const { t } = useTranslation('liquidations');
+  if (!mix) return null;
+  return (
+    <Text variant="caption" color="secondary" data-testid="liquidation-hunt-score-mix">
+      {mix.note || t('hunt.weights.defaultNote')}
+      {mix.source === 'custom' ? ` (${t('hunt.weights.custom')})` : ''}
+      {mix.usedTotal != null && mix.requestedTotal != null
+        ? ` · ${t('hunt.weights.usedOf', { used: Math.round(mix.usedTotal), total: Math.round(mix.requestedTotal) })}`
+        : ''}
+    </Text>
+  );
+}
+
+function HuntWeightsModal({
+  open,
+  draft,
+  onDraft,
+  onClose,
+  onApply,
+  onReset,
+}: {
+  open: boolean;
+  draft: HuntWeightDraftRow[];
+  onDraft: (next: HuntWeightDraftRow[]) => void;
+  onClose: () => void;
+  onApply: () => void;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation('liquidations');
+  const total = huntWeightTotal(draft);
+  const ok = Math.abs(total - 100) < 0.05;
+  return (
+    <Modal
+      open={open}
+      title={t('hunt.weights.title')}
+      onCancel={onClose}
+      footer={[
+        <Button key="reset" onClick={onReset}>
+          {t('hunt.weights.reset')}
+        </Button>,
+        <Button key="cancel" onClick={onClose}>
+          {t('hunt.weights.cancel')}
+        </Button>,
+        <Button key="apply" type="primary" disabled={!ok} onClick={onApply} data-testid="liquidation-hunt-weights-apply">
+          {t('hunt.weights.apply')}
+        </Button>,
+      ]}
+    >
+      <Text variant="bodySm" color="secondary">
+        {t('hunt.weights.hint')}
+      </Text>
+      {HUNT_SCORE_FACTORS.map((factor) => {
+        const row = draft.find((d) => d.id === factor.id) ?? { id: factor.id, enabled: false, pct: 0 };
+        return (
+          <div key={factor.id} style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+            <Switch
+              size="small"
+              checked={row.enabled}
+              onChange={(on) =>
+                onDraft(draft.map((d) => (d.id === factor.id ? { ...d, enabled: on, pct: on ? d.pct || factor.defaultPct : 0 } : d)))
+              }
+            />
+            <Text variant="bodySm" style={{ flex: 1 }}>
+              {t(`hunt.weights.factors.${factor.id}`)}
+            </Text>
+            <InputNumber
+              min={0}
+              max={100}
+              value={row.enabled ? row.pct : 0}
+              disabled={!row.enabled}
+              addonAfter="%"
+              style={{ width: 120 }}
+              onChange={(value) =>
+                onDraft(draft.map((d) => (d.id === factor.id ? { ...d, pct: Number(value) || 0 } : d)))
+              }
+            />
+          </div>
+        );
+      })}
+      <Text variant="bodySm" color={ok ? 'secondary' : 'error'} data-testid="liquidation-hunt-weights-total">
+        {t('hunt.weights.total', { total: Math.round(total * 10) / 10 })}
+        {!ok ? ` — ${t('hunt.weights.needHundred')}` : ''}
+      </Text>
+    </Modal>
   );
 }
 

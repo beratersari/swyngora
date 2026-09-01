@@ -80,6 +80,27 @@
       "share": "{{pct}}% of mix",
       "effect": "{{value}} vs even"
     },
+    "weights": {
+      "open": "Custom weights",
+      "title": "Score weights",
+      "hint": "Include the inputs you want and give them percents. Total must be 100. Disabled inputs are left out. Missing data is not replaced.",
+      "apply": "Apply",
+      "cancel": "Cancel",
+      "reset": "Reset defaults",
+      "total": "Total {{total}}%",
+      "needHundred": "must be 100 to apply",
+      "custom": "custom mix",
+      "defaultNote": "Default weights.",
+      "usedOf": "used {{used}} of {{total}}",
+      "factors": {
+        "proximity": "Distance to zone",
+        "book": "Spot walk cost",
+        "efficiency": "Liq per spot",
+        "trend": "Price + OI trend",
+        "crowding": "Crowding + funding",
+        "flow": "Taker + recent liqs"
+      }
+    },
     "panels": {
       "compare": "Compare",
       "path": "Cascade path"

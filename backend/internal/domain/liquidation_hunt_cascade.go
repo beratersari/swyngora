@@ -39,6 +39,7 @@ type HuntCascadeStep struct {
 	Remaining            BookReach `json:"remaining"`
 	PriorCascadeNotional float64   `json:"priorCascadeNotional"`
 	FuelSpent            float64   `json:"fuelSpent"`
+	FuelLeft             float64   `json:"fuelLeft"`
 	AssistancePct        *float64  `json:"assistancePct,omitempty"`
 	Strength             *float64  `json:"strength,omitempty"`
 	StrengthLevel        string    `json:"strengthLevel,omitempty"`
@@ -70,10 +71,9 @@ type HuntCascadePath struct {
 }
 
 // BuildHuntCascadePath walks bands nearest-to-last first.
-// A later hop is self-fueling only when prior assumed exit flow
-// (HuntCascadeFillRate × earlier EstNotional) is at least the visible
-// hop cost from WalkBookToPrice. Remaining, assistance, and easier are
-// taken from that same final walk — the self-fueling flag is never undone.
+// Fuel is a running pool: a hop spends from the pool, leftover stays,
+// and only a reached modeled zone adds new assumed exit flow. Spent
+// fuel is not reapplied on the next hop.
 func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []ImpactSourceLevel, side string) HuntCascadePath {
 	out := HuntCascadePath{Direction: dir, Steps: []HuntCascadeStep{}}
 	if mid <= 0 {
@@ -85,10 +85,23 @@ func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []Impa
 		out.Summary = "No liquidation zones on this side."
 		return out
 	}
-	var priorEst float64
+	var fuelPool float64
 	prevPrice := mid
+	var cumEst float64
 	for i, b := range ordered {
-		step := huntCascadeStep(i+1, b, mid, prevPrice, priorEst, push, side)
+		step := huntCascadeStep(i+1, b, mid, prevPrice, fuelPool, push, side)
+		left := fuelPool - step.FuelSpent
+		if left < 0 {
+			left = 0
+		}
+		step.FuelLeft = left
+		if step.Reachable && step.ZoneEst == "model" {
+			fuelPool = left + step.FuelAdds
+		} else {
+			fuelPool = left
+		}
+		cumEst += b.EstNotional
+		step.CumulativeNotional = cumEst
 		out.Steps = append(out.Steps, step)
 		if step.Reachable {
 			out.ReachableCount++
@@ -99,7 +112,6 @@ func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []Impa
 		if step.SelfFueling {
 			out.SelfFuelingCount++
 		}
-		priorEst += b.EstNotional
 		prevPrice = b.Price
 	}
 	markHuntCascadeStall(&out)
@@ -108,7 +120,7 @@ func BuildHuntCascadePath(dir string, bands []HuntBand, mid float64, push []Impa
 	return out
 }
 
-func huntCascadeStep(index int, b HuntBand, mid, fromPrice, priorEst float64, push []ImpactSourceLevel, side string) HuntCascadeStep {
+func huntCascadeStep(index int, b HuntBand, mid, fromPrice, fuelIn float64, push []ImpactSourceLevel, side string) HuntCascadeStep {
 	step := HuntCascadeStep{
 		Index:                index,
 		Band:                 b,
@@ -116,9 +128,8 @@ func huntCascadeStep(index int, b HuntBand, mid, fromPrice, priorEst float64, pu
 		MovePct:              (b.Price - mid) / mid * 100,
 		HopPct:               (b.Price - fromPrice) / mid * 100,
 		ZoneNotional:         b.EstNotional,
-		CumulativeNotional:   priorEst + b.EstNotional,
 		FuelAdds:             b.EstNotional * HuntCascadeFillRate,
-		PriorCascadeNotional: priorEst * HuntCascadeFillRate,
+		PriorCascadeNotional: fuelIn,
 	}
 	if b.EstNotional > 0 {
 		step.ZoneEst = "model"

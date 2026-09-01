@@ -81,6 +81,16 @@ Each step:
 
 Path-level `feedsUntilIndex` / `stallsAtIndex` mark where the chain last walks itself and where extra spot is first required.
 
+Fuel is a **running pool**. A hop spends `fuelSpent` from `priorCascadeNotional`. The next hop gets `fuelLeft` plus `fuelAdds` only if this zone was reached. Spent fuel is not reused.
+
+### Score weights
+
+Default mix (percent): proximity 20, book 16, efficiency 12, trend 20, crowding 18, flow 14.
+
+`GET /api/v1/market/liquidation-hunt?weightProximity=40&weightBook=60` (and the other `weight*` keys) applies a **custom** mix. Omitted keys are 0 (disabled). The six must sum to **100** or the request is 400 — the server does not rescale.
+
+`scoreMix` on the report lists `requested`, `used`, `missing`, and `disabled` so an AI (or the desk) can see how the score was built. A missing input is not replaced (no 24h ticker for trend, no 4h window for 1h flow). Web: **Custom weights** on Hunt.
+
 Observed-only clusters are shown but **not** used as fuel. Missing book or missing zone size is labeled — nothing is substituted from the other venue or from a default score.
 
 ### Assumptions (also returned on `assumptions`)

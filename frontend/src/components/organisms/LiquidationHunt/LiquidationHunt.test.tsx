@@ -17,6 +17,7 @@ vi.mock('@/libs/hooks', async (importOriginal) => {
 
 const sample: HuntReport = {
   symbol: 'BTCUSDT',
+  scoreMix: { source: 'default', requestedTotal: 100, usedTotal: 100, note: 'Default weights.' },
   bias: {
     lean: 'up',
     margin: 20,
@@ -139,6 +140,7 @@ describe('LiquidationHunt', () => {
     expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('+6.6');
     expect(screen.getByTestId('liquidation-hunt-up-factors')).toHaveTextContent('Crowding + funding');
     expect(screen.queryByTestId('liquidation-hunt-path-up')).not.toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-hunt-weights')).toBeInTheDocument();
   });
 
   it('opens the cascade path subview without the compare scores', async () => {

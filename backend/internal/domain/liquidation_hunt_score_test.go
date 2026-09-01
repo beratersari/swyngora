@@ -63,6 +63,69 @@ func testHuntInputsCrowdedShorts() HuntInputs {
 	}
 }
 
+func TestParseHuntScoreWeights_DefaultAndCustom(t *testing.T) {
+	def, err := ParseHuntScoreWeights(func(string) string { return "" })
+	if err != nil || def.Source != "default" || def.pctOf(HuntFactorProximity) != 20 {
+		t.Fatalf("%+v %v", def, err)
+	}
+	get := func(k string) string {
+		switch k {
+		case "weightProximity":
+			return "40"
+		case "weightBook":
+			return "60"
+		default:
+			return ""
+		}
+	}
+	got, err := ParseHuntScoreWeights(get)
+	if err != nil || got.Source != "custom" || got.pctOf(HuntFactorTrend) != 0 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	bad, err := ParseHuntScoreWeights(func(k string) string {
+		if k == "weightProximity" {
+			return "50"
+		}
+		return ""
+	})
+	if err == nil || bad.Pct != nil {
+		t.Fatalf("want sum error, got %+v %v", bad, err)
+	}
+}
+
+func TestAttachHuntDirectionScores_CustomWeightsSkipDisabledAndMissing(t *testing.T) {
+	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
+	w := HuntScoreWeights{Source: "custom", Pct: map[string]float64{
+		HuntFactorProximity: 50, HuntFactorBook: 50,
+		HuntFactorEfficiency: 0, HuntFactorTrend: 0,
+		HuntFactorCrowding: 0, HuntFactorFlow: 0,
+	}}
+	AttachHuntDirectionScoresWeighted(&got, HuntSignals{HasBook: true}, w)
+	if got.ScoreMix.Source != "custom" || got.ScoreMix.RequestedTotal != 100 {
+		t.Fatalf("mix %+v", got.ScoreMix)
+	}
+	var used int
+	for _, f := range got.UpScore.Factors {
+		switch f.ID {
+		case HuntFactorTrend, HuntFactorFlow:
+			if f.Status != HuntFactorDisabled {
+				t.Fatalf("%s status %s", f.ID, f.Status)
+			}
+		case HuntFactorProximity, HuntFactorBook:
+			if f.Status != HuntFactorUsed || f.RequestedPct != 50 {
+				t.Fatalf("%+v", f)
+			}
+			used++
+		}
+	}
+	if used != 2 {
+		t.Fatalf("used %d mix %+v", used, got.UpScore.Factors)
+	}
+	if got.ScoreMix.UsedTotal != 100 {
+		t.Fatalf("used total %+v", got.ScoreMix)
+	}
+}
+
 func TestAttachHuntDirectionScores_DoesNotChangeZones(t *testing.T) {
 	got := BuildHuntVenue(testHuntInputsCrowdedShorts())
 	beforeUp := got.UpHunt
@@ -133,8 +196,8 @@ func TestAttachHuntDirectionScores_MissingTapeStillScoresBook(t *testing.T) {
 		t.Fatalf("book-only scores should still land: %+v %+v", got.UpScore, got.DownScore)
 	}
 	for _, f := range got.UpScore.Factors {
-		if f.ID == "trend" || f.ID == "flow" {
-			t.Fatalf("missing tape should drop trend/flow: %+v", got.UpScore.Factors)
+		if (f.ID == HuntFactorTrend || f.ID == HuntFactorFlow) && f.Status == HuntFactorUsed {
+			t.Fatalf("missing tape must not enter the mix: %+v", f)
 		}
 	}
 	if got.Coverage.Score >= 85 || got.Coverage.Level == HuntCoverageComplete {

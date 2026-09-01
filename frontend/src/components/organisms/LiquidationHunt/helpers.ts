@@ -1,3 +1,4 @@
+import { HUNT_SCORE_FACTORS } from './constants';
 import type {
   HuntCascadeStep,
   HuntCoverageLevel,
@@ -8,10 +9,45 @@ import type {
   HuntPanel,
   HuntScenario,
   HuntVenue,
+  HuntWeightDraftRow,
 } from './LiquidationHunt.types';
 
 export function parseHuntPanel(raw?: string | null): HuntPanel {
   return raw === 'path' ? 'path' : 'compare';
+}
+
+export function defaultHuntWeightDraft(): HuntWeightDraftRow[] {
+  return HUNT_SCORE_FACTORS.map((f) => ({ id: f.id, enabled: true, pct: f.defaultPct }));
+}
+
+export function huntWeightTotal(draft: HuntWeightDraftRow[]): number {
+  return draft.reduce((sum, row) => sum + (row.enabled ? row.pct : 0), 0);
+}
+
+export function isDefaultHuntWeightDraft(draft: HuntWeightDraftRow[]): boolean {
+  const def = defaultHuntWeightDraft();
+  if (draft.length !== def.length) return false;
+  return def.every((d, i) => draft[i]?.id === d.id && draft[i]?.enabled === d.enabled && draft[i]?.pct === d.pct);
+}
+
+export function parseHuntWeightDraft(get: (key: string) => string | null): HuntWeightDraftRow[] | null {
+  const any = HUNT_SCORE_FACTORS.some((f) => (get(f.query) ?? '').trim() !== '');
+  if (!any) return null;
+  return HUNT_SCORE_FACTORS.map((f) => {
+    const raw = (get(f.query) ?? '').trim();
+    if (raw === '') return { id: f.id, enabled: false, pct: 0 };
+    const n = Number(raw);
+    return { id: f.id, enabled: Number.isFinite(n) && n > 0, pct: Number.isFinite(n) ? n : 0 };
+  });
+}
+
+export function huntWeightQueryParams(draft: HuntWeightDraftRow[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const factor of HUNT_SCORE_FACTORS) {
+    const row = draft.find((d) => d.id === factor.id);
+    out[factor.query] = row?.enabled ? row.pct : 0;
+  }
+  return out;
 }
 
 export function leanTone(lean?: HuntLean): 'up' | 'down' | 'even' {

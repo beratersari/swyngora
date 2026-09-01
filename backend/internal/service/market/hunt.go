@@ -15,6 +15,11 @@ import (
 // GetLiquidationHunt builds a hypothetical per-venue “house hunt” report.
 // exchange=all returns Binance and Bybit separately (never averaged).
 func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (*domain.HuntReport, error) {
+	return s.GetLiquidationHuntWeighted(ctx, exchange, symbol, domain.DefaultHuntScoreWeights())
+}
+
+// GetLiquidationHuntWeighted is GetLiquidationHunt with an explicit score mix.
+func (s *Service) GetLiquidationHuntWeighted(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (*domain.HuntReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
@@ -46,7 +51,7 @@ func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol strin
 		wg.Add(1)
 		go func(v domain.Exchange) {
 			defer wg.Done()
-			ven := s.huntOne(ctx, v, symbol, now)
+			ven := s.huntOne(ctx, v, symbol, now, weights)
 			mu.Lock()
 			out.Venues = append(out.Venues, ven)
 			mu.Unlock()
@@ -61,12 +66,17 @@ func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol strin
 		cov := out.Bias.Coverage
 		out.Coverage = &cov
 	}
+	if len(out.Venues) > 0 {
+		out.ScoreMix = out.Venues[0].ScoreMix
+	} else {
+		out.ScoreMix = domain.BuildHuntScoreMix(weights, nil)
+	}
 	return out, nil
 }
 
 const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. upCascade / downCascade list zones in price order and whether earlier estimated liquidations cheapen the next hop. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
 
-func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) domain.HuntVenueReport {
+func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, weights domain.HuntScoreWeights) domain.HuntVenueReport {
 	in := domain.HuntInputs{Exchange: ex, Symbol: symbol}
 	sig := domain.HuntSignals{
 		Price1hPct:  math.NaN(),
@@ -267,7 +277,7 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 	case oiErr != nil && in.OIValue == 0:
 		got.Error = oiErr.Error()
 	}
-	domain.AttachHuntDirectionScores(&got, sig)
+	domain.AttachHuntDirectionScoresWeighted(&got, sig, weights)
 	if got.Error != "" {
 		got.Coverage.Usable = false
 		got.Bias.Coverage = got.Coverage

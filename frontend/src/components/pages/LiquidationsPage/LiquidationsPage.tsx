@@ -25,6 +25,10 @@ import {
   LIQ_HUNT_POLL_MS,
   LiquidationHunt,
 } from '@/components/organisms/LiquidationHunt';
+import {
+  huntWeightQueryParams,
+  parseHuntWeightDraft,
+} from '@/components/organisms/LiquidationHunt/helpers';
 import { LiquidationFeedHealth } from '@/components/organisms/LiquidationFeedHealth';
 import { LiquidationTreemap } from '@/components/organisms/LiquidationTreemap';
 import { LiquidationWindowCards } from '@/components/organisms/LiquidationWindowCards';
@@ -68,6 +72,7 @@ export function LiquidationsPage() {
   const visible = useDocumentVisible();
   const view = parseLiqView(searchParams.get('view'));
   const huntPanel = parseLiqHuntPanel(searchParams.get('panel'));
+  const huntWeights = parseHuntWeightDraft((key) => searchParams.get(key));
   const windowId = parseLiqWindow(searchParams.get('window'));
   const exchange = parseLiqExchange(searchParams.get('exchange'));
   const symbol = parseLiqSymbol(searchParams.get('symbol'));
@@ -115,7 +120,11 @@ export function LiquidationsPage() {
   );
 
   const huntQuery = useGetMarketLiquidationHuntQuery(
-    { symbol, exchange: exchange === 'all' ? 'all' : exchange },
+    {
+      symbol,
+      exchange: exchange === 'all' ? 'all' : exchange,
+      ...(huntWeights ? huntWeightQueryParams(huntWeights) : {}),
+    },
     {
       skip: view !== 'hunt' || !symbol,
       pollingInterval: visible && view === 'hunt' ? LIQ_HUNT_POLL_MS : 0,
@@ -354,6 +363,29 @@ export function LiquidationsPage() {
             isFetching={huntQuery.isFetching}
             panel={huntPanel}
             onPanelChange={(next) => patchParams({ panel: next === 'compare' ? null : next })}
+            weightDraft={huntWeights ?? undefined}
+            onApplyWeights={(draft) => {
+              if (!draft) {
+                patchParams({
+                  weightProximity: null,
+                  weightBook: null,
+                  weightEfficiency: null,
+                  weightTrend: null,
+                  weightCrowding: null,
+                  weightFlow: null,
+                });
+                return;
+              }
+              const q = huntWeightQueryParams(draft);
+              patchParams({
+                weightProximity: String(q.weightProximity),
+                weightBook: String(q.weightBook),
+                weightEfficiency: String(q.weightEfficiency),
+                weightTrend: String(q.weightTrend),
+                weightCrowding: String(q.weightCrowding),
+                weightFlow: String(q.weightFlow),
+              });
+            }}
             errorMessage={
               huntQuery.isError
                 ? rtkErrorMessage(huntQuery.error, {

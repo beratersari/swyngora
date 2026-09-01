@@ -7,9 +7,30 @@ export type HuntFactor = {
   label?: string;
   score?: number;
   weight?: number;
+  requestedPct?: number;
   sharePct?: number;
   effect?: number;
+  status?: string;
   detail?: string;
+};
+
+export type HuntWeightRow = {
+  id?: string;
+  label?: string;
+  weightPct?: number;
+  status?: string;
+  detail?: string;
+};
+
+export type HuntScoreMix = {
+  source?: string;
+  requested?: HuntWeightRow[];
+  used?: HuntWeightRow[];
+  requestedTotal?: number;
+  usedTotal?: number;
+  missing?: string[];
+  disabled?: string[];
+  note?: string;
 };
 
 export type HuntCoverageLevel = 'complete' | 'usable' | 'thin' | 'insufficient' | string;
@@ -189,7 +210,14 @@ export type HuntReport = {
   venues?: HuntVenue[];
   bias?: HuntBias;
   coverage?: HuntCoverage;
+  scoreMix?: HuntScoreMix;
   note?: string;
+};
+
+export type HuntWeightDraftRow = {
+  id: string;
+  enabled: boolean;
+  pct: number;
 };
 
 export type LiquidationHuntProps = {
@@ -199,4 +227,6 @@ export type LiquidationHuntProps = {
   errorMessage?: string | null;
   panel?: HuntPanel;
   onPanelChange?: (panel: HuntPanel) => void;
+  weightDraft?: HuntWeightDraftRow[];
+  onApplyWeights?: (draft: HuntWeightDraftRow[] | null) => void;
 };

@@ -132,6 +132,7 @@ type HuntVenueReport struct {
 	DownScore          HuntDirectionScore `json:"downScore"`
 	Bias               HuntBias           `json:"bias"`
 	Coverage           HuntCoverage       `json:"coverage"`
+	ScoreMix           HuntScoreMix       `json:"scoreMix"`
 	Error              string             `json:"error,omitempty"`
 }
 
@@ -144,6 +145,7 @@ type HuntReport struct {
 	Venues      []HuntVenueReport `json:"venues"`
 	Bias        *HuntBias         `json:"bias,omitempty"`
 	Coverage    *HuntCoverage     `json:"coverage,omitempty"`
+	ScoreMix    HuntScoreMix      `json:"scoreMix"`
 	Note        string            `json:"note,omitempty"`
 }
 

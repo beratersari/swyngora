@@ -8,7 +8,11 @@ import {
   inputSpanText,
   inputTone,
   leanTone,
+  defaultHuntWeightDraft,
+  huntWeightTotal,
+  isDefaultHuntWeightDraft,
   parseHuntPanel,
+  parseHuntWeightDraft,
   pathLeverageLabel,
   pathStepTone,
   scoreValue,
@@ -69,5 +73,17 @@ describe('LiquidationHunt helpers', () => {
     expect(pathStepTone({ role: 'missing' })).toBe('missing');
     expect(pathStepTone({ role: 'start' })).toBe('start');
     expect(pathLeverageLabel({ band: { leverage: '125' } })).toBe('125x');
+  });
+
+  it('parses custom hunt weights without silent normalize', () => {
+    const def = defaultHuntWeightDraft();
+    expect(huntWeightTotal(def)).toBe(100);
+    expect(isDefaultHuntWeightDraft(def)).toBe(true);
+    const custom = parseHuntWeightDraft((k) => (k === 'weightProximity' ? '40' : k === 'weightBook' ? '60' : ''));
+    expect(custom).not.toBeNull();
+    expect(huntWeightTotal(custom ?? [])).toBe(100);
+    expect(custom?.find((r) => r.id === 'trend')?.enabled).toBe(false);
+    const partial = parseHuntWeightDraft((k) => (k === 'weightProximity' ? '40' : ''));
+    expect(huntWeightTotal(partial ?? [])).toBe(40);
   });
 });

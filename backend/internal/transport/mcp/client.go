@@ -526,11 +526,18 @@ func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol stri
 }
 
 // GetLiquidationHunt returns the hypothetical per-venue liquidation-hunt model.
-func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+func (c *APIClient) GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
 		q.Set("exchange", exchange)
+	}
+	if weights.Source == "custom" {
+		for id, key := range domain.HuntScoreQueryKeys {
+			if v, ok := weights.Pct[id]; ok {
+				q.Set(key, strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
 	}
 	return c.get(ctx, "/api/v1/market/liquidation-hunt", q)
 }

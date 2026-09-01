@@ -2476,6 +2476,25 @@ paths:
           in: query
           description: binance | bybit | all (default all = both, never averaged)
           schema: { type: string, default: all }
+        - name: weightProximity
+          in: query
+          description: Custom mix percent for distance to zone. If any weight* is sent, omitted factors are 0 and the six must sum to 100 (not rescaled).
+          schema: { type: number }
+        - name: weightBook
+          in: query
+          schema: { type: number }
+        - name: weightEfficiency
+          in: query
+          schema: { type: number }
+        - name: weightTrend
+          in: query
+          schema: { type: number }
+        - name: weightCrowding
+          in: query
+          schema: { type: number }
+        - name: weightFlow
+          in: query
+          schema: { type: number }
       responses:
         '200':
           description: Per-venue hunt report
@@ -7478,6 +7497,34 @@ components:
           items: { $ref: '#/components/schemas/MarketLiquidationCascadeHit' }
         summary: { type: string }
         note: { type: string }
+    LiquidationHuntWeightRow:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        weightPct: { type: number }
+        status: { type: string, enum: [used, missing, disabled] }
+        detail: { type: string }
+    LiquidationHuntScoreMix:
+      type: object
+      description: How direction scores were built (requested vs actually used weights)
+      properties:
+        source: { type: string, enum: [default, custom] }
+        requested:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntWeightRow' }
+        used:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationHuntWeightRow' }
+        requestedTotal: { type: number }
+        usedTotal: { type: number }
+        missing:
+          type: array
+          items: { type: string }
+        disabled:
+          type: array
+          items: { type: string }
+        note: { type: string }
     LiquidationHuntFactor:
       type: object
       properties:
@@ -7485,8 +7532,10 @@ components:
         label: { type: string }
         score: { type: number, description: 0–100 for this direction }
         weight: { type: number }
-        sharePct: { type: number, description: 0–100 of the mix used for this direction }
+        requestedPct: { type: number }
+        sharePct: { type: number, description: Stated mix percent; not silently rescaled }
         effect: { type: number, description: Signed points this factor adds to the direction score versus 50 }
+        status: { type: string, enum: [used, missing, disabled] }
         detail: { type: string }
     LiquidationHuntDirectionScore:
       type: object
@@ -7605,6 +7654,7 @@ components:
         remaining: { $ref: '#/components/schemas/LiquidationHuntWalk' }
         priorCascadeNotional: { type: string }
         fuelSpent: { type: string }
+        fuelLeft: { type: string }
         assistancePct: { type: string, description: Omitted when the hop cannot be scored }
         strength: { type: string, description: 0–100 hop feed strength; omitted when inputs are missing }
         strengthLevel: { type: string, enum: [self, strong, mixed, weak] }
@@ -7674,6 +7724,7 @@ components:
         downScore: { $ref: '#/components/schemas/LiquidationHuntDirectionScore' }
         bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
         coverage: { $ref: '#/components/schemas/LiquidationHuntCoverage' }
+        scoreMix: { $ref: '#/components/schemas/LiquidationHuntScoreMix' }
         error: { type: string }
     LiquidationHunt:
       type: object
@@ -7690,6 +7741,7 @@ components:
           items: { $ref: '#/components/schemas/LiquidationHuntVenue' }
         bias: { $ref: '#/components/schemas/LiquidationHuntBias' }
         coverage: { $ref: '#/components/schemas/LiquidationHuntCoverage' }
+        scoreMix: { $ref: '#/components/schemas/LiquidationHuntScoreMix' }
         note: { type: string }
     LiquidationHuntHeatmapGrid:
       type: object

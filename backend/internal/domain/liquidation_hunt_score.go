@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -21,15 +22,147 @@ const (
 	huntLeanMargin = 8.0
 )
 
+const (
+	HuntFactorProximity  = "proximity"
+	HuntFactorBook       = "book"
+	HuntFactorEfficiency = "efficiency"
+	HuntFactorTrend      = "trend"
+	HuntFactorCrowding   = "crowding"
+	HuntFactorFlow       = "flow"
+
+	HuntFactorUsed     = "used"
+	HuntFactorMissing  = "missing"
+	HuntFactorDisabled = "disabled"
+)
+
+// HuntScoreFactorIDs is the score mix in display order.
+var HuntScoreFactorIDs = []string{
+	HuntFactorProximity, HuntFactorBook, HuntFactorEfficiency,
+	HuntFactorTrend, HuntFactorCrowding, HuntFactorFlow,
+}
+
+// HuntScoreQueryKeys maps factor id → query/MCP parameter name.
+var HuntScoreQueryKeys = map[string]string{
+	HuntFactorProximity:  "weightProximity",
+	HuntFactorBook:       "weightBook",
+	HuntFactorEfficiency: "weightEfficiency",
+	HuntFactorTrend:      "weightTrend",
+	HuntFactorCrowding:   "weightCrowding",
+	HuntFactorFlow:       "weightFlow",
+}
+
+var huntScoreFactorLabel = map[string]string{
+	HuntFactorProximity:  "Distance to zone",
+	HuntFactorBook:       "Spot walk cost",
+	HuntFactorEfficiency: "Liq per spot",
+	HuntFactorTrend:      "Price + OI trend",
+	HuntFactorCrowding:   "Crowding + funding",
+	HuntFactorFlow:       "Taker + recent liqs",
+}
+
+var defaultHuntScorePct = map[string]float64{
+	HuntFactorProximity:  20,
+	HuntFactorBook:       16,
+	HuntFactorEfficiency: 12,
+	HuntFactorTrend:      20,
+	HuntFactorCrowding:   18,
+	HuntFactorFlow:       14,
+}
+
+// HuntScoreWeights is the requested mix. Pct values are 0–100 and are not
+// silently rescaled. Source is "default" or "custom".
+type HuntScoreWeights struct {
+	Source string
+	Pct    map[string]float64
+}
+
+// HuntWeightRow is one factor in the requested or used mix.
+type HuntWeightRow struct {
+	ID        string  `json:"id"`
+	Label     string  `json:"label"`
+	WeightPct float64 `json:"weightPct"`
+	Status    string  `json:"status"`
+	Detail    string  `json:"detail,omitempty"`
+}
+
+// HuntScoreMix is how the direction score was built. For AI and the desk.
+type HuntScoreMix struct {
+	Source         string          `json:"source"`
+	Requested      []HuntWeightRow `json:"requested"`
+	Used           []HuntWeightRow `json:"used"`
+	RequestedTotal float64         `json:"requestedTotal"`
+	UsedTotal      float64         `json:"usedTotal"`
+	Missing        []string        `json:"missing"`
+	Disabled       []string        `json:"disabled"`
+	Note           string          `json:"note"`
+}
+
+// DefaultHuntScoreWeights is the built-in mix (sums to 100).
+func DefaultHuntScoreWeights() HuntScoreWeights {
+	pct := make(map[string]float64, len(defaultHuntScorePct))
+	for id, v := range defaultHuntScorePct {
+		pct[id] = v
+	}
+	return HuntScoreWeights{Source: "default", Pct: pct}
+}
+
+// ParseHuntScoreWeights reads weightProximity… query/MCP fields.
+// No weight params → defaults. Any present → custom; omitted keys are 0
+// (disabled). Custom mix must sum to 100; it is never renormalized.
+func ParseHuntScoreWeights(get func(string) string) (HuntScoreWeights, error) {
+	any := false
+	raw := make(map[string]string, len(HuntScoreFactorIDs))
+	for _, id := range HuntScoreFactorIDs {
+		v := strings.TrimSpace(get(HuntScoreQueryKeys[id]))
+		raw[id] = v
+		if v != "" {
+			any = true
+		}
+	}
+	if !any {
+		return DefaultHuntScoreWeights(), nil
+	}
+	out := HuntScoreWeights{Source: "custom", Pct: make(map[string]float64, len(HuntScoreFactorIDs))}
+	var sum float64
+	for _, id := range HuntScoreFactorIDs {
+		if raw[id] == "" {
+			out.Pct[id] = 0
+			continue
+		}
+		n, err := strconv.ParseFloat(raw[id], 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return HuntScoreWeights{}, fmt.Errorf("%w: %s is not a number", ErrInvalidArgument, HuntScoreQueryKeys[id])
+		}
+		if n < 0 {
+			return HuntScoreWeights{}, fmt.Errorf("%w: %s cannot be negative", ErrInvalidArgument, HuntScoreQueryKeys[id])
+		}
+		out.Pct[id] = n
+		sum += n
+	}
+	if math.Abs(sum-100) > 0.05 {
+		return HuntScoreWeights{}, fmt.Errorf("%w: custom score weights sum to %.2f, not 100 — not applied", ErrInvalidArgument, sum)
+	}
+	return out, nil
+}
+
+func (w HuntScoreWeights) pctOf(id string) float64 {
+	if w.Pct == nil {
+		return defaultHuntScorePct[id]
+	}
+	return w.Pct[id]
+}
+
 // HuntFactor is one scored driver of how easy / likely a hunt direction is.
 type HuntFactor struct {
-	ID       string  `json:"id"`
-	Label    string  `json:"label"`
-	Score    float64 `json:"score"`
-	Weight   float64 `json:"weight"`
-	SharePct float64 `json:"sharePct,omitempty"`
-	Effect   float64 `json:"effect"`
-	Detail   string  `json:"detail"`
+	ID           string  `json:"id"`
+	Label        string  `json:"label"`
+	Score        float64 `json:"score"`
+	Weight       float64 `json:"weight"`
+	RequestedPct float64 `json:"requestedPct"`
+	SharePct     float64 `json:"sharePct,omitempty"`
+	Effect       float64 `json:"effect"`
+	Status       string  `json:"status"`
+	Detail       string  `json:"detail"`
 }
 
 // HuntDirectionScore is the 0–100 read for up (hunt shorts) or down (hunt longs).
@@ -141,13 +274,22 @@ func HuntCoverageLevel(score float64) string {
 // AttachHuntDirectionScores fills UpScore / DownScore / Bias / Coverage
 // without changing zone bands or hunt P&L fields.
 func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
+	AttachHuntDirectionScoresWeighted(v, sig, DefaultHuntScoreWeights())
+}
+
+// AttachHuntDirectionScoresWeighted is AttachHuntDirectionScores with an
+// explicit mix. Custom weights are used as given and never renormalized.
+func AttachHuntDirectionScoresWeighted(v *HuntVenueReport, sig HuntSignals, w HuntScoreWeights) {
 	if v == nil {
 		return
 	}
+	if w.Pct == nil {
+		w = DefaultHuntScoreWeights()
+	}
 	cov := buildHuntCoverage(*v, sig)
 	v.Coverage = cov
-	up := scoreHuntDirection("up", *v, sig)
-	down := scoreHuntDirection("down", *v, sig)
+	up := scoreHuntDirection("up", *v, sig, w)
+	down := scoreHuntDirection("down", *v, sig, w)
 	keep := huntScoreKeep(cov.Score)
 	up.Score = shrinkHuntScore(up.Score, cov.Score)
 	down.Score = shrinkHuntScore(down.Score, cov.Score)
@@ -169,6 +311,7 @@ func AttachHuntDirectionScores(v *HuntVenueReport, sig HuntSignals) {
 	v.DownScore = down
 	v.Bias = huntBiasFromScores(up, down)
 	v.Bias.Coverage = cov
+	v.ScoreMix = BuildHuntScoreMix(w, up.Factors)
 }
 
 // shrinkHuntScore pulls a raw factor mix toward 50 when inputs are thin,
@@ -191,13 +334,6 @@ func huntScoreKeep(coverage float64) float64 {
 // applyHuntFactorEffects fills sharePct (mix weight) and effect (signed
 // points this factor adds to the direction score versus 50).
 func applyHuntFactorEffects(factors []HuntFactor, keep float64) {
-	var den float64
-	for _, f := range factors {
-		den += f.Weight
-	}
-	if den <= 0 {
-		return
-	}
 	if keep < 0 {
 		keep = 0
 	}
@@ -205,10 +341,68 @@ func applyHuntFactorEffects(factors []HuntFactor, keep float64) {
 		keep = 1
 	}
 	for i := range factors {
-		share := factors[i].Weight / den
-		factors[i].SharePct = clampScore(share * 100)
-		factors[i].Effect = round1((factors[i].Score - 50) * share * keep)
+		// Stated weight, not a silent rescale of whatever remains.
+		factors[i].SharePct = factors[i].RequestedPct
+		if factors[i].Status != HuntFactorUsed {
+			factors[i].Effect = 0
+			continue
+		}
+		factors[i].Effect = round1((factors[i].Score - 50) * (factors[i].RequestedPct / 100) * keep)
 	}
+}
+
+func BuildHuntScoreMix(w HuntScoreWeights, factors []HuntFactor) HuntScoreMix {
+	out := HuntScoreMix{
+		Source:    w.Source,
+		Requested: make([]HuntWeightRow, 0, len(HuntScoreFactorIDs)),
+		Used:      make([]HuntWeightRow, 0, len(HuntScoreFactorIDs)),
+		Missing:   []string{},
+		Disabled:  []string{},
+	}
+	if out.Source == "" {
+		out.Source = "default"
+	}
+	byID := make(map[string]HuntFactor, len(factors))
+	for _, f := range factors {
+		byID[f.ID] = f
+	}
+	for _, id := range HuntScoreFactorIDs {
+		req := w.pctOf(id)
+		row := HuntWeightRow{ID: id, Label: huntScoreFactorLabel[id], WeightPct: req}
+		f, ok := byID[id]
+		if ok {
+			row.Status = f.Status
+			row.Detail = f.Detail
+		} else if req <= 0 {
+			row.Status = HuntFactorDisabled
+		} else {
+			row.Status = HuntFactorMissing
+		}
+		out.Requested = append(out.Requested, HuntWeightRow{
+			ID: id, Label: row.Label, WeightPct: req, Status: row.Status, Detail: row.Detail,
+		})
+		out.RequestedTotal += req
+		switch row.Status {
+		case HuntFactorUsed:
+			out.Used = append(out.Used, row)
+			out.UsedTotal += req
+		case HuntFactorMissing:
+			out.Missing = append(out.Missing, id)
+		case HuntFactorDisabled:
+			out.Disabled = append(out.Disabled, id)
+		}
+	}
+	switch {
+	case len(out.Missing) > 0 && out.UsedTotal > 0:
+		out.Note = fmt.Sprintf("Score uses %.0f of the requested %.0f mix. Missing factors were not replaced and weights were not rescaled.", out.UsedTotal, out.RequestedTotal)
+	case len(out.Missing) > 0:
+		out.Note = "No requested factor had data. Score was not invented from a substitute mix."
+	case out.Source == "custom":
+		out.Note = "Custom weights as given (sum 100)."
+	default:
+		out.Note = "Default weights."
+	}
+	return out
 }
 
 // CombineHuntBias is an OI-weighted lean across usable venues only.
@@ -275,32 +469,54 @@ func CombineHuntBias(venues []HuntVenueReport) *HuntBias {
 	return &bias
 }
 
-func scoreHuntDirection(dir string, v HuntVenueReport, sig HuntSignals) HuntDirectionScore {
+func scoreHuntDirection(dir string, v HuntVenueReport, sig HuntSignals, w HuntScoreWeights) HuntDirectionScore {
 	self, other := v.UpHunt, v.DownHunt
 	if dir == "down" {
 		self, other = v.DownHunt, v.UpHunt
 	}
 	factors := []HuntFactor{
-		huntProximityFactor(dir, self),
-		huntBookFactor(dir, self, other, v),
-		huntEfficiencyFactor(dir, self),
-		huntTrendFactor(dir, sig),
-		huntCrowdingFactor(dir, v),
-		huntFlowFactor(dir, sig),
+		applyHuntWeight(huntProximityFactor(dir, self), w),
+		applyHuntWeight(huntBookFactor(dir, self, other, v), w),
+		applyHuntWeight(huntEfficiencyFactor(dir, self), w),
+		applyHuntWeight(huntTrendFactor(dir, sig), w),
+		applyHuntWeight(huntCrowdingFactor(dir, v), w),
+		applyHuntWeight(huntFlowFactor(dir, sig), w),
 	}
 	return assembleHuntScore(dir, factors)
 }
 
+func applyHuntWeight(f HuntFactor, w HuntScoreWeights) HuntFactor {
+	f.RequestedPct = w.pctOf(f.ID)
+	if f.RequestedPct <= 0 {
+		f.Status = HuntFactorDisabled
+		f.Weight = 0
+		if f.Detail == "" {
+			f.Detail = "Disabled in this mix."
+		}
+		return f
+	}
+	if f.Weight <= 0 {
+		f.Status = HuntFactorMissing
+		f.Weight = 0
+		if f.Detail == "" {
+			f.Detail = "No data for this factor; nothing was substituted."
+		}
+		return f
+	}
+	f.Status = HuntFactorUsed
+	f.Weight = f.RequestedPct / 100
+	return f
+}
+
 func assembleHuntScore(dir string, factors []HuntFactor) HuntDirectionScore {
 	var num, den float64
-	kept := make([]HuntFactor, 0, len(factors))
+	used := make([]HuntFactor, 0, len(factors))
 	for _, f := range factors {
-		if f.Weight <= 0 {
-			continue
+		if f.Status == HuntFactorUsed && f.Weight > 0 {
+			num += f.Score * f.Weight
+			den += f.Weight
+			used = append(used, f)
 		}
-		kept = append(kept, f)
-		num += f.Score * f.Weight
-		den += f.Weight
 	}
 	score := 0.0
 	if den > 0 {
@@ -310,8 +526,8 @@ func assembleHuntScore(dir string, factors []HuntFactor) HuntDirectionScore {
 		Direction: dir,
 		Score:     score,
 		Level:     HuntEaseFromScore(score),
-		Factors:   kept,
-		Reasons:   pickHuntReasons(dir, score, kept),
+		Factors:   factors,
+		Reasons:   pickHuntReasons(dir, score, used),
 	}
 }
 
@@ -447,9 +663,6 @@ func huntEfficiencyFactor(dir string, sc HuntScenario) HuntFactor {
 	if sc.Spot.Notional <= 0 || sc.EstLiquidated <= 0 {
 		f.Score = 14
 		f.Detail = fmt.Sprintf("%s has little estimated liquidation versus the spot walk", dir)
-		if sc.HouseEdge == "unreachable" {
-			f.Weight = 0.08
-		}
 		return f
 	}
 	eff := sc.Efficiency
@@ -467,23 +680,9 @@ func huntEfficiencyFactor(dir string, sc HuntScenario) HuntFactor {
 
 func huntTrendFactor(dir string, sig HuntSignals) HuntFactor {
 	f := HuntFactor{ID: "trend", Label: "Price + OI trend", Weight: 0.20}
-	if !sig.HasPrice {
+	if !sig.HasPrice || (sig.PriceFromTicker && !sig.Has1hPrice && !sig.Has4hPrice) {
 		f.Weight = 0
-		return f
-	}
-	if sig.PriceFromTicker && !sig.Has1hPrice && !sig.Has4hPrice {
-		px := sig.Price24hPct
-		score := 50.0
-		if !math.IsNaN(px) {
-			if dir == "up" {
-				score += clampAbs(px, 6) * 1.2
-			} else {
-				score -= clampAbs(px, 6) * 1.2
-			}
-		}
-		f.Weight *= 0.5
-		f.Score = clampScore(50 + (score-50)*0.4)
-		f.Detail = "trend is the 24h ticker only, not a 1h/4h path"
+		f.Detail = "No 1h/4h price path. 24h ticker was not used."
 		return f
 	}
 	p1, p4 := sig.Price1hPct, sig.Price4hPct
@@ -627,13 +826,16 @@ func huntCrowdingFactor(dir string, v HuntVenueReport) HuntFactor {
 
 func huntFlowFactor(dir string, sig HuntSignals) HuntFactor {
 	f := HuntFactor{ID: "flow", Label: "Taker + recent liqs", Weight: 0.14}
-	if !sig.HasTaker && !sig.HasLiqWindows {
+	has1hTaker := sig.HasTaker && sig.TakerBuy1h+sig.TakerSell1h > 0
+	has1hLiq := sig.HasLiqWindows && sig.LongLiq1h+sig.ShortLiq1h > 0
+	if !has1hTaker && !has1hLiq {
 		f.Weight = 0
+		f.Detail = "No 1h taker or 1h liquidation window. A longer window was not substituted."
 		return f
 	}
 	score := 50.0
 	var bits []string
-	if sig.HasTaker {
+	if has1hTaker {
 		tot := sig.TakerBuy1h + sig.TakerSell1h
 		if tot > 0 {
 			buyShare := sig.TakerBuy1h / tot
@@ -660,15 +862,10 @@ func huntFlowFactor(dir string, sig HuntSignals) HuntFactor {
 			}
 		}
 	}
-	if sig.HasLiqWindows {
+	if has1hLiq {
 		longN, shortN := sig.LongLiq1h, sig.ShortLiq1h
 		liqFrac := HuntSpanFraction(sig.LiqSpan1h)
 		liqWin := "1h"
-		if longN+shortN <= 0 {
-			longN, shortN = sig.LongLiq4h, sig.ShortLiq4h
-			liqFrac = HuntSpanFraction(sig.LiqSpan4h)
-			liqWin = "4h"
-		}
 		tot := longN + shortN
 		if tot > 0 {
 			// shorts already liquidating → tape already walking up

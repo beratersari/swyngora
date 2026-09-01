@@ -1266,6 +1266,19 @@ func TestGetLiquidationHunt_OK(t *testing.T) {
 	if v.Coverage.Level == "" {
 		t.Fatalf("want coverage: %+v", v)
 	}
+	if body.ScoreMix.Source != "default" || body.ScoreMix.RequestedTotal != 100 {
+		t.Fatalf("score mix %+v", body.ScoreMix)
+	}
+}
+
+func TestGetLiquidationHunt_BadWeights(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-hunt?symbol=BTCUSDT&weightProximity=40", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationHunt(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
 }
 
 func TestGetLiquidationCascade_OK(t *testing.T) {

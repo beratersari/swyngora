@@ -105,6 +105,49 @@ func TestBuildHuntCascadePath_TinyFuelAtWallIsNotSelfFueling(t *testing.T) {
 	}
 }
 
+func TestBuildHuntCascadePath_SpentFuelIsNotReused(t *testing.T) {
+	// Hop 2 costs almost all of zone-1 fuel. Hop 3 must see leftover + zone-2 add,
+	// not 50% of (zone1+zone2) as if nothing was spent.
+	bands := []HuntBand{
+		{Direction: "up", Leverage: 100, Price: 101, EstNotional: 20_000}, // adds 10_000
+		{Direction: "up", Leverage: 50, Price: 102, EstNotional: 10_000},  // adds 5_000 if reached
+		{Direction: "up", Leverage: 25, Price: 104, EstNotional: 8_000},
+	}
+	asks := []ImpactSourceLevel{
+		{Price: 100.50, Quantity: 1},
+		{Price: 101.00, Quantity: 1},
+		{Price: 101.20, Quantity: 40},
+		{Price: 102.00, Quantity: 40},
+		{Price: 103.00, Quantity: 40},
+		{Price: 104.00, Quantity: 40},
+	}
+	got := BuildHuntCascadePath("up", bands, 100, asks, ImpactSideBuy)
+	if len(got.Steps) != 3 {
+		t.Fatalf("%+v", got)
+	}
+	if got.Steps[0].FuelAdds != 10_000 || got.Steps[0].FuelSpent != 0 {
+		t.Fatalf("start fuel %+v", got.Steps[0])
+	}
+	if got.Steps[1].PriorCascadeNotional != 10_000 {
+		t.Fatalf("hop2 pool %+v", got.Steps[1])
+	}
+	if got.Steps[1].FuelSpent <= 0 || got.Steps[1].FuelSpent >= 10_000 {
+		t.Fatalf("hop2 should spend some but not all: %+v", got.Steps[1])
+	}
+	wantNext := got.Steps[1].FuelLeft
+	if got.Steps[1].Reachable && got.Steps[1].ZoneEst == "model" {
+		wantNext += got.Steps[1].FuelAdds
+	}
+	if math.Abs(got.Steps[2].PriorCascadeNotional-wantNext) > 1e-6 {
+		t.Fatalf("hop3 pool %v want leftover+add %v (not reused spent). step2=%+v",
+			got.Steps[2].PriorCascadeNotional, wantNext, got.Steps[1])
+	}
+	reusedAll := (20_000 + 10_000) * HuntCascadeFillRate
+	if math.Abs(got.Steps[2].PriorCascadeNotional-reusedAll) < 1 {
+		t.Fatalf("hop3 reused full prior est as fuel: %v", got.Steps[2].PriorCascadeNotional)
+	}
+}
+
 func TestBuildHuntCascadePath_ThickBookStalls(t *testing.T) {
 	asks := make([]ImpactSourceLevel, 0, 20)
 	for i := 0; i < 20; i++ {

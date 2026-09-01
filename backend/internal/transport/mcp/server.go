@@ -56,7 +56,7 @@ type DataPort interface {
 	ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
-	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -879,12 +879,32 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithDescription("Hypothetical only: if Binance or Bybit walked their own spot book to push price and force futures liquidations, where is the main long/short pressure, how much spot buy/sell the visible book needs, and a rough desk result (book-only unwind vs assuming part of estimated liquidations become exit flow). Also returns upScore/downScore (0–100) and bias (up|down|even) with reasons: zone distance, visible book cost, price+OI trend, crowding/funding, recent taker and liquidation flow. upCascade/downCascade list zones from last price outward. Each step has role (start|self|helped|stall|unreachable|missing|observed), remaining hop after prior assumed exit flow, assistancePct/strength only when the hop can be scored, zoneEst (model|observed|missing), and the path marks feedsUntil / stallsAt where self-fueling stops. Self-fueling means prior flow covers the visible WalkBookToPrice hop cost — remaining and assistance always match that final state. Scores and paths do not change the zone or P&L numbers. coverage says how complete the inputs are (have/need/coverPct/age on time windows; a few minutes of taker is not a full hour; a 2h-old OI print is not 1h OI). Each factor has sharePct and effect (points versus 50); a venue with an error is shown but excluded from the combined lean. Venues are never averaged. Not evidence of exchange behavior. Not financial advice. Long/short is account count; leverage mix is assumed; mark price is multi-venue."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both, separately)")),
+		mcp.WithNumber("weightProximity", mcp.Description("Custom mix % for distance to zone. If any weight* is set, omitted factors are 0 and the six must sum to 100.")),
+		mcp.WithNumber("weightBook", mcp.Description("Custom mix % for spot walk cost")),
+		mcp.WithNumber("weightEfficiency", mcp.Description("Custom mix % for liq per spot")),
+		mcp.WithNumber("weightTrend", mcp.Description("Custom mix % for price + OI trend")),
+		mcp.WithNumber("weightCrowding", mcp.Description("Custom mix % for crowding + funding")),
+		mcp.WithNumber("weightFlow", mcp.Description("Custom mix % for 1h taker + 1h liquidations")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol)
+		weights, err := domain.ParseHuntScoreWeights(func(k string) string {
+			args := req.GetArguments()
+			if args == nil {
+				return ""
+			}
+			v, ok := args[k]
+			if !ok || v == nil {
+				return ""
+			}
+			return fmt.Sprint(v)
+		})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationHunt(ctx, req.GetString("exchange", "all"), symbol, weights)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

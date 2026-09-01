@@ -4133,16 +4133,39 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        LiquidationHuntWeightRow: {
+            id?: string;
+            label?: string;
+            weightPct?: number;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
+            detail?: string;
+        };
+        /** @description How direction scores were built (requested vs actually used weights) */
+        LiquidationHuntScoreMix: {
+            /** @enum {string} */
+            source?: "default" | "custom";
+            requested?: components["schemas"]["LiquidationHuntWeightRow"][];
+            used?: components["schemas"]["LiquidationHuntWeightRow"][];
+            requestedTotal?: number;
+            usedTotal?: number;
+            missing?: string[];
+            disabled?: string[];
+            note?: string;
+        };
         LiquidationHuntFactor: {
             id?: string;
             label?: string;
             /** @description 0–100 for this direction */
             score?: number;
             weight?: number;
-            /** @description 0–100 of the mix used for this direction */
+            requestedPct?: number;
+            /** @description Stated mix percent; not silently rescaled */
             sharePct?: number;
             /** @description Signed points this factor adds to the direction score versus 50 */
             effect?: number;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
             detail?: string;
         };
         /** @description How easy / likely one hunt direction looks (does not change zone math) */
@@ -4255,6 +4278,7 @@ export interface components {
             remaining?: components["schemas"]["LiquidationHuntWalk"];
             priorCascadeNotional?: string;
             fuelSpent?: string;
+            fuelLeft?: string;
             /** @description Omitted when the hop cannot be scored */
             assistancePct?: string;
             /** @description 0–100 hop feed strength; omitted when inputs are missing */
@@ -4322,6 +4346,7 @@ export interface components {
             downScore?: components["schemas"]["LiquidationHuntDirectionScore"];
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
+            scoreMix?: components["schemas"]["LiquidationHuntScoreMix"];
             error?: string;
         };
         /** @description Hypothetical per-venue hunt plus directional ease scores and cascade paths */
@@ -4336,6 +4361,7 @@ export interface components {
             venues?: components["schemas"]["LiquidationHuntVenue"][];
             bias?: components["schemas"]["LiquidationHuntBias"];
             coverage?: components["schemas"]["LiquidationHuntCoverage"];
+            scoreMix?: components["schemas"]["LiquidationHuntScoreMix"];
             note?: string;
         };
         LiquidationHuntHeatmapGrid: {
@@ -7846,6 +7872,13 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | all (default all = both, never averaged) */
                 exchange?: string;
+                /** @description Custom mix percent for distance to zone. If any weight* is sent, omitted factors are 0 and the six must sum to 100 (not rescaled). */
+                weightProximity?: number;
+                weightBook?: number;
+                weightEfficiency?: number;
+                weightTrend?: number;
+                weightCrowding?: number;
+                weightFlow?: number;
             };
             header?: never;
             path?: never;

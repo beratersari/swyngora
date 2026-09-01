@@ -258,11 +258,11 @@ func (b *Backend) GetLongShortRatio(ctx context.Context, exchange, symbol string
 	return mustJSON(longShortSnapshotMap(got))
 }
 
-func (b *Backend) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+func (b *Backend) GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
-	got, err := b.Market.GetLiquidationHunt(ctx, exchange, symbol)
+	got, err := b.Market.GetLiquidationHuntWeighted(ctx, exchange, symbol, weights)
 	if err != nil {
 		return nil, err
 	}
