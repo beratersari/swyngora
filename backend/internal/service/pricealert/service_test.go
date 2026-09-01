@@ -189,6 +189,36 @@ func TestChecker_SkipsClosedAccount(t *testing.T) {
 	}
 }
 
+func TestChecker_SkipsHaltedLastPrint(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "halt-alert", Symbol: "GONEUSDT", Condition: "above", TargetPrice: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mkt := haltedTicker{price: "200"}
+	c := &Checker{Alerts: svc, Market: mkt}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "halt-alert", a.ID)
+	if got.Status != domain.AlertStatusActive {
+		t.Fatalf("halted last print must not fire: %+v", got)
+	}
+}
+
+type haltedTicker struct {
+	price string
+}
+
+func (h haltedTicker) GetTicker24h(_ context.Context, _, symbol string) (*domain.Ticker24h, error) {
+	p := h.price
+	if p == "" {
+		p = "100"
+	}
+	return &domain.Ticker24h{Symbol: symbol, LastPrice: p, Halted: true}, nil
+}
+
 func TestChecker_TriggersOnce(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

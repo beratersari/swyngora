@@ -42,7 +42,7 @@ No separate resolve endpoint. After a **409**:
 | POST add | Body `baseVersion` |
 | DELETE item | Query `baseVersion` or header `If-Match` |
 
-Omitting `baseVersion` keeps **unconditional** writes (legacy clients / Telegram / import).
+Omitting `baseVersion` keeps **unconditional** writes (legacy clients / Telegram / import). The product web app always sends `baseVersion` from the last GET.
 
 ## Where the code lives
 

@@ -378,7 +378,9 @@ func applyRequestedFill(out *PriceDiffQuote, fill quoteFill, buyFeePct, sellFeeP
 		out.ProfitPct = round4(profit / cost * 100)
 	}
 	out.profitAmount = profit
-	out.Profitable = profit > 1e-8
+	// Same floor as maxProfitableSize, with a tiny epsilon so rematch float
+	// error on a capped fill does not flip Profitable to false.
+	out.Profitable = profit > 1e-8-1e-12
 	out.MeetsMinNet = out.Profitable && out.ProfitPct+1e-12 >= minNetPct
 
 	filledReq := !fill.buyExh && !fill.sellExh
@@ -405,7 +407,9 @@ func capFillToMax(fill quoteFill, max maxFill, buy, sell []ImpactSourceLevel, no
 		if fill.buyN <= max.buyN+1e-8 {
 			return fill
 		}
-		capped, err := matchRequestedSize(buy, sell, max.buyN, 0)
+		// Rematch by the walk's quantity so the fill matches max profit, not a
+		// slightly different notional clip that can drop under the profit floor.
+		capped, err := matchRequestedSize(buy, sell, 0, max.qty)
 		if err != nil {
 			return fill
 		}

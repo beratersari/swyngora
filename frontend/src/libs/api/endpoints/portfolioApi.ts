@@ -17,24 +17,8 @@ export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSumma
 export type PaperTrade = components['schemas']['PaperTrade'];
 export type PendingOrder = components['schemas']['PendingOrder'];
 
-/** Spot position row (OpenAPI codegen flattens positions to `Record<string, never>[]`). */
-export type SpotPosition = {
-  exchange?: string;
-  symbol?: string;
-  quantity?: number;
-  reservedQuantity?: number;
-  availableQuantity?: number;
-  avgCost?: number;
-  markPrice?: number;
-  marketValue?: number;
-  unrealizedPnL?: number;
-  costBasis?: number;
-  lots?: TaxLot[];
-};
-
-export type PortfolioView = Omit<components['schemas']['PortfolioView'], 'positions'> & {
-  positions?: SpotPosition[];
-};
+export type SpotPosition = components['schemas']['SpotPosition'];
+export type PortfolioView = components['schemas']['PortfolioView'];
 
 export type PaperOrderType =
   | 'market'

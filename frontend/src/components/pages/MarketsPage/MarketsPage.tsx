@@ -356,8 +356,16 @@ export function MarketsPage() {
         watchedKeys={watchedKeys}
         onToggleWatch={(symbol, watched) => {
           const run = watched
-            ? removeWatch({ exchange: state.exchange, symbol }).unwrap()
-            : addWatch({ exchange: state.exchange, symbol }).unwrap();
+            ? removeWatch({
+                exchange: state.exchange,
+                symbol,
+                baseVersion: watchlistQuery.data?.version,
+              }).unwrap()
+            : addWatch({
+                exchange: state.exchange,
+                symbol,
+                baseVersion: watchlistQuery.data?.version,
+              }).unwrap();
           void run.catch((err) => {
             void message.error(
               rtkErrorMessage(err, { resource: t('markets:watchlistResource') }),

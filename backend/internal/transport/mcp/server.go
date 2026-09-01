@@ -187,6 +187,11 @@ type DataPort interface {
 	UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	StartScannerBacktest(ctx context.Context, clientID, ruleID, exchange, symbol, rangeStart, rangeEnd string) (json.RawMessage, error)
+	ListScannerBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	GetScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	CancelScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListScannerBacktestSignals(ctx context.Context, clientID, id string, limit, offset int) (json.RawMessage, error)
 	StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error)
 	GetExport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListExports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
@@ -3676,6 +3681,121 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListScannerResults(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("start_scanner_backtest",
+		mcp.WithDescription("Start a historical backtest of a scanner rule on one symbol. rangeStart and rangeEnd are RFC3339. Poll get_scanner_backtest for progress. Informational only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("ruleId", mcp.Required(), mcp.Description("Scanner rule id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist, default binance")),
+		mcp.WithString("rangeStart", mcp.Required(), mcp.Description("RFC3339 start")),
+		mcp.WithString("rangeEnd", mcp.Required(), mcp.Description("RFC3339 end")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ruleID, err := req.RequireString("ruleId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		start, err := req.RequireString("rangeStart")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		end, err := req.RequireString("rangeEnd")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.StartScannerBacktest(ctx, clientID, ruleID, req.GetString("exchange", "binance"), symbol, start, end)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_scanner_backtests",
+		mcp.WithDescription("List scanner backtest jobs for a clientId (newest first)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListScannerBacktests(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_scanner_backtest",
+		mcp.WithDescription("Get one scanner backtest job by id (status, progress, signal count)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("backtestId", mcp.Required(), mcp.Description("Backtest job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("backtestId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetScannerBacktest(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("cancel_scanner_backtest",
+		mcp.WithDescription("Cancel a pending or running scanner backtest."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("backtestId", mcp.Required(), mcp.Description("Backtest job id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("backtestId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CancelScannerBacktest(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_scanner_backtest_signals",
+		mcp.WithDescription("List historical match signals for a scanner backtest (time, close, optional forward returns)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("backtestId", mcp.Required(), mcp.Description("Backtest job id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("backtestId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListScannerBacktestSignals(ctx, clientID, id, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

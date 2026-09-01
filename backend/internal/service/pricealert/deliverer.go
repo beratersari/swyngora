@@ -244,7 +244,7 @@ func (d *Deliverer) postWebhook(ctx context.Context, webhookURL, payload string)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, "", err
+		return 0, "", redactWebhookErr(err, webhookURL)
 	}
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))

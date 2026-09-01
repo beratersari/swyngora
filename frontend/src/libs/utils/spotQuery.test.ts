@@ -11,7 +11,7 @@ import {
 describe('defaultQuoteForExchange', () => {
   it('uses USD on Coinbase and USDT elsewhere', () => {
     const quotes = { coinbase: 'USD', binance: 'USDT', bybit: 'USDT', nasdaq: 'USD', bist: 'TRY' };
-    expect(defaultQuoteForExchange('coinbase')).toBe('');
+    expect(defaultQuoteForExchange('coinbase')).toBe('USD');
     expect(defaultQuoteForExchange('coinbase', quotes)).toBe('USD');
     expect(defaultQuoteForExchange('binance', quotes)).toBe('USDT');
     expect(defaultQuoteForExchange('bist', quotes)).toBe('TRY');
@@ -32,7 +32,7 @@ describe('spotQuery', () => {
     expect(parseMarketsSearchParams(new URLSearchParams('exchange=bybit'), quotes).quote).toBe(
       'USDT',
     );
-    expect(parseMarketsSearchParams(new URLSearchParams('exchange=coinbase')).quote).toBe('');
+    expect(parseMarketsSearchParams(new URLSearchParams('exchange=coinbase')).quote).toBe('USD');
   });
 
   it('honors explicit quote override on any exchange', () => {

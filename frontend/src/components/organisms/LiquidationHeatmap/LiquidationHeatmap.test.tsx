@@ -104,6 +104,22 @@ describe('LiquidationHeatmap', () => {
     expect(onSideChange).toHaveBeenCalledWith('longs');
   });
 
+  it('names missing venues on the combined map', () => {
+    renderWithProviders(
+      <LiquidationHeatmap
+        data={{ ...data, missingVenues: ['bybit'] }}
+        range="24h"
+        onRangeChange={() => undefined}
+        venue="combined"
+        onVenueChange={() => undefined}
+        side="totals"
+        onSideChange={() => undefined}
+      />,
+    );
+    expect(screen.getByText(/No data from bybit/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not fill/i)).toBeInTheDocument();
+  });
+
   it('shows empty copy when there is no grid yet', () => {
     renderWithProviders(
       <LiquidationHeatmap

@@ -812,8 +812,8 @@ export function CoinDetailPage() {
         signalsTo="/signals"
         onToggleWatch={() => {
           const run = watched
-            ? removeWatch({ exchange, symbol }).unwrap()
-            : addWatch({ exchange, symbol }).unwrap();
+            ? removeWatch({ exchange, symbol, baseVersion: watchlistQuery.data?.version }).unwrap()
+            : addWatch({ exchange, symbol, baseVersion: watchlistQuery.data?.version }).unwrap();
           void run.catch((err) => {
             void message.error(
               rtkErrorMessage(err, { resource: t('detail:watchFailed') }),

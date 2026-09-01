@@ -1909,6 +1909,9 @@ func (s *Service) lastPrice(ctx context.Context, exchange, symbol string) (float
 	if tkr == nil || tkr.LastPrice == "" {
 		return 0, fmt.Errorf("%w: last price unavailable", domain.ErrUpstream)
 	}
+	if tkr.Halted {
+		return 0, fmt.Errorf("%w: last price is a halted delist print", domain.ErrUpstream)
+	}
 	p, err := strconv.ParseFloat(tkr.LastPrice, 64)
 	if err != nil || p <= 0 || math.IsNaN(p) || math.IsInf(p, 0) {
 		return 0, fmt.Errorf("%w: invalid last price", domain.ErrUpstream)

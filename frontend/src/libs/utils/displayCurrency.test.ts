@@ -15,8 +15,11 @@ describe('displayCurrency', () => {
   const mcaps = { bist: 'TRY', nasdaq: 'USD', binance: 'USD' };
   const aliases = { USDT: 'USD', USDC: 'USD', BUSD: 'USD' };
 
-  it('reads venue quotes only from the API map', () => {
-    expect(venueQuote('bist')).toBe('');
+  it('prefers the API map and last-resorts Coinbase/Nasdaq/BIST', () => {
+    expect(venueQuote('bist')).toBe('TRY');
+    expect(venueQuote('coinbase')).toBe('USD');
+    expect(venueQuote('nasdaq')).toBe('USD');
+    expect(venueQuote('binance')).toBe('');
     expect(venueQuote('bist', venues)).toBe('TRY');
     expect(venueQuote('binance', venues)).toBe('USDT');
     expect(marketCapQuote('bist')).toBe('');

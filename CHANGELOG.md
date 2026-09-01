@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Paper does not fill a halted last print:** delisted tickers stay visible as `halted`, but paper orders, pending fills, margin marks, and price alerts no longer treat that leftover print as a live price.
+- **Margin interest starts at open time:** the first hour is no longer charged at the next clock hour when a position opened mid-hour.
+- **Price-diff capped quotes stay profitable:** a request larger than the max still-profitable size reports `Profitable=true` on the usable clip.
+- **Telegram and webhook logs no longer leak secrets:** transport errors redact the bot token and webhook path token; Telegram Info logs only the command verb, not chat text.
+- **Realtime client no longer double-connects** while a ticket is minting; orphan socket close does not mark the live socket disconnected.
+- **Mobile market reads use the current symbol/venue** (`rtkCurrent`) and refetch when the app returns to the foreground.
+- **Coinbase quote last-resort is USD** before the FX map loads so Markets does not mix USD/USDT pairs.
+- **Watchlist writes send `baseVersion`** from the last GET so product web is not last-write-wins.
+- **Liquidation heatmap last-price line uses that venue's futures last** (no spot fallback) and shows `missingVenues`.
+- **OpenAPI types paper `positions`** as `SpotPosition` so clients no longer invent the DTO.
+
+### Added
+- **Scanner backtest MCP + AI tools:** `start_scanner_backtest`, `list_scanner_backtests`, `get_scanner_backtest`, `cancel_scanner_backtest`, `list_scanner_backtest_signals`.
+- **AI HTTP bindings** for `get_liquidation_max_pain`, `set_margin_mode`, `adjust_margin`, and `repay_margin_debt`.
+
 ### Security
 - **No query-string API secrets:** `?token=` / `?apiKey=` no longer authenticate any HTTP route. Browsers mint a 60s one-time ticket (`POST /api/v1/realtime/ticket`) and pass `?ticket=` on the WebSocket only.
 - **Remote master token cannot impersonate tenants:** unless `ALLOW_MASTER_IMPERSONATE=true` or the peer is loopback, the process master token cannot select an arbitrary `clientId` for tenant APIs or MCP tools. First-key bootstrap (`POST /api/v1/account/api-keys` when that client has zero keys) still works.

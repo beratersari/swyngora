@@ -195,7 +195,7 @@ func (c *Client) call(ctx context.Context, method string, query url.Values, form
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		return redactSecret(err, c.token)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -213,4 +213,17 @@ func (c *Client) call(ctx context.Context, method string, query url.Values, form
 		return nil
 	}
 	return json.Unmarshal(ar.Result, dest)
+}
+
+// redactSecret strips a process secret from an error so transport failures
+// (net/http embeds the request URL) cannot leak TELEGRAM_BOT_TOKEN into logs.
+func redactSecret(err error, secret string) error {
+	if err == nil || secret == "" {
+		return err
+	}
+	msg := strings.ReplaceAll(err.Error(), secret, "***")
+	if msg == err.Error() {
+		return err
+	}
+	return fmt.Errorf("%s", msg)
 }

@@ -51,6 +51,38 @@ func validateWebhookURL(raw string, allowPrivate bool) (string, error) {
 	return u.String(), nil
 }
 
+// redactWebhookURL keeps scheme+host so operators can debug, but drops the
+// path token (Discord/Slack put the secret in the path).
+func redactWebhookURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return "(webhook)"
+	}
+	u.Path = "/***"
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.User = nil
+	return u.String()
+}
+
+// redactWebhookErr strips the full webhook URL (and its path) from a transport error.
+func redactWebhookErr(err error, rawURL string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if raw := strings.TrimSpace(rawURL); raw != "" {
+		msg = strings.ReplaceAll(msg, raw, redactWebhookURL(raw))
+		if u, perr := url.Parse(raw); perr == nil && u.Path != "" && u.Path != "/" {
+			msg = strings.ReplaceAll(msg, u.Path, "/***")
+		}
+	}
+	if msg == err.Error() {
+		return err
+	}
+	return fmt.Errorf("%s", msg)
+}
+
 func isBlockedHostname(host string) bool {
 	h := strings.ToLower(strings.TrimSpace(host))
 	switch h {

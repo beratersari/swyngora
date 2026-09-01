@@ -31,13 +31,28 @@ export function saveDisplayCurrency(next: DisplayCurrency): void {
   }
 }
 
-/** Native quote from the API `venueQuotes` map. Empty until that payload loads. */
+/** Last-resort native quote matching Go `QuoteForVenue` when the API map is missing. */
+export function lastResortVenueQuote(exchange?: string | null): string {
+  switch ((exchange ?? '').toLowerCase()) {
+    case 'bist':
+      return 'TRY';
+    case 'nasdaq':
+    case 'coinbase':
+      return 'USD';
+    default:
+      return '';
+  }
+}
+
+/** Native quote from the API `venueQuotes` map, else the venue last-resort. */
 export function venueQuote(
   exchange?: string | null,
   quotes?: Record<string, string> | null,
 ): string {
   const key = (exchange ?? '').toLowerCase();
-  return quotes?.[key] ?? '';
+  const fromApi = quotes?.[key];
+  if (fromApi) return fromApi;
+  return lastResortVenueQuote(key);
 }
 
 /** Pair quote when the symbol splits; otherwise the venue default. */

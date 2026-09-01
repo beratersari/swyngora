@@ -14,6 +14,7 @@ export {
   saveDisplayCurrency,
   scalePriceSeries,
   venueQuote,
+  lastResortVenueQuote,
 } from './displayCurrency';
 export type { DisplayCurrency, FxRatesMap } from './displayCurrency';
 export { formatSymbolDisplay, parseTradingPair } from './formatSymbol';
@@ -22,6 +23,17 @@ export { getOrCreateClientId } from './clientId';
 export { BROWSER_API_TOKEN_KEY, getBrowserApiToken, setBrowserApiToken } from './apiAuth';
 export { newPaperIdempotencyKey } from './paperIdempotency';
 export { rtkCurrent, rtkCurrentPending } from './rtkQuery';
+export {
+  DESK_TAPE_SOURCES,
+  DESK_TAPE_SOURCE_STORAGE_KEY,
+  DESK_TAPE_VENUE_LIMIT,
+  isDeskTapeSource,
+  loadDeskTapeSource,
+  saveDeskTapeSource,
+} from './deskTape';
+export type { DeskTapeSource } from './deskTape';
+export { toTickerTapeItem, tapeCellLabel } from './tickerTape';
+export type { TickerTapeItem } from './tickerTape';
 export { CHART_LOCALIZATION, CHART_TIME_SCALE, formatChartDateTime } from './chartTime';
 export type { RtkQuerySlice } from './rtkQuery';
 export {

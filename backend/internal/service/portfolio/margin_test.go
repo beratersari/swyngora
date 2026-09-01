@@ -1485,7 +1485,7 @@ func TestMargin_ApplyMarginCloseRestartNoDoubleCash(t *testing.T) {
 	p2.UpdatedAt = now
 	closed := *got
 	tr := domain.MarginTrade{
-		ID: domain.SystemCloseTradeID(domain.MarginCloseLiquidation, pos.ID),
+		ID:       domain.SystemCloseTradeID(domain.MarginCloseLiquidation, pos.ID),
 		ClientID: clientID, PositionID: pos.ID, Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
 		Side: domain.MarginLong, Action: domain.MarginCloseLiquidation, Quantity: 1, Price: 81,
 		Notional: 81, MarginDelta: 50, CreatedAt: now,
@@ -1619,14 +1619,9 @@ func TestMargin_HourTruncatedCursorChargesInterestEarly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Force the production open cursor (now.Truncate(hour)) if the test is
-	// running near an hour boundary where LastInterestAt == OpenedAt.
 	truncated := pos.OpenedAt.UTC().Truncate(time.Hour)
-	if !pos.LastInterestAt.Equal(truncated) {
-		pos.LastInterestAt = truncated
-		if err := svc.store.UpdateMarginPosition(ctx, *pos); err != nil {
-			t.Fatal(err)
-		}
+	if pos.LastInterestAt.Before(pos.OpenedAt.Add(-time.Millisecond)) {
+		t.Fatalf("open cursor %v is before OpenedAt %v", pos.LastInterestAt, pos.OpenedAt)
 	}
 	if !pos.OpenedAt.After(truncated.Add(time.Minute)) {
 		t.Skip("opened within 1m of the hour; truncation impact is not visible")
@@ -1647,5 +1642,5 @@ func TestMargin_HourTruncatedCursorChargesInterestEarly(t *testing.T) {
 		return
 	}
 	t.Fatalf("charged interest %v (accrued=%d) at %v after only %v open (opened=%v cursor=%v)",
-		got.DebtInterest, accrued, tick, tick.Sub(pos.OpenedAt), pos.OpenedAt, truncated)
+		got.DebtInterest, accrued, tick, tick.Sub(pos.OpenedAt), pos.OpenedAt, pos.LastInterestAt)
 }

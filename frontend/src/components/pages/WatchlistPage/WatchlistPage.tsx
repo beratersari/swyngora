@@ -102,7 +102,7 @@ export function WatchlistPage() {
           <WatchlistLiveMetric exchange={exchange} symbol={symbol} metric={metric} />
         )}
         onRemove={(exchange, symbol) => {
-          void removeItem({ exchange, symbol })
+          void removeItem({ exchange, symbol, baseVersion: wl.data?.version })
             .unwrap()
             .catch((err) => {
               void message.error(

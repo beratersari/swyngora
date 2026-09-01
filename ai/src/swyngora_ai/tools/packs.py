@@ -69,6 +69,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_long_short_ratio",
         "get_futures_history",
         "estimate_liquidation_hunt",
+        "get_liquidation_max_pain",
         "get_liquidation_heatmap",
         "get_squeeze_risk",
         "get_positioning",
@@ -136,6 +137,9 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "preview_portfolio_rebalance",
         "rebalance_portfolio_basket",
         "place_margin_order",
+        "set_margin_mode",
+        "adjust_margin",
+        "repay_margin_debt",
         "list_margin_positions",
         "close_margin_position",
         "set_margin_brackets",
@@ -196,6 +200,11 @@ ACCOUNT_TOOLS: frozenset[str] = frozenset(
         "update_scanner_rule",
         "delete_scanner_rule",
         "list_scanner_results",
+        "start_scanner_backtest",
+        "list_scanner_backtests",
+        "get_scanner_backtest",
+        "cancel_scanner_backtest",
+        "list_scanner_backtest_signals",
     }
 )
 

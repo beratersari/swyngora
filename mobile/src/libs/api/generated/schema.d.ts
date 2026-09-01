@@ -5255,13 +5255,28 @@ export interface components {
             realizedPnLTotal?: number;
             /** @description equity minus contributedCapital (deposits/withdrawals are not P&L) */
             totalPnL?: number;
-            positions?: Record<string, never>[];
+            positions?: components["schemas"]["SpotPosition"][];
             marginPositions?: components["schemas"]["MarginPosition"][];
             note?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /** @description Open paper spot position with remaining FIFO/LIFO lots */
+        SpotPosition: {
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            /** @description Quantity locked by open sell pending orders */
+            reservedQuantity?: number;
+            availableQuantity?: number;
+            avgCost?: number;
+            markPrice?: number;
+            marketValue?: number;
+            unrealizedPnL?: number;
+            costBasis?: number;
+            lots?: components["schemas"]["TaxLot"][];
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {

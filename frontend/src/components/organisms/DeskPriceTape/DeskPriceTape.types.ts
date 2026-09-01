@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import type { TickerTapeItem } from '@/components/molecules/TickerTape';
+import { DESK_TAPE_SOURCES, type DeskTapeSource, type TickerTapeItem } from '@/libs/utils';
 
-export const DESK_TAPE_SOURCES = ['binance', 'coinbase', 'bist', 'watchlist'] as const;
-
-export type DeskTapeSource = (typeof DESK_TAPE_SOURCES)[number];
+export { DESK_TAPE_SOURCES };
+export type { DeskTapeSource };
 
 export type DeskPriceTapeProps = {
   source: DeskTapeSource;

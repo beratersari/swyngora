@@ -1,4 +1,4 @@
-import { Spin } from 'antd';
+import { Alert, Spin } from 'antd';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
@@ -63,7 +63,7 @@ export function LiquidationHeatmap({
   isFetching,
   errorMessage,
 }: LiquidationHeatmapProps) {
-  const { t } = useTranslation('detail');
+  const { t } = useTranslation(['detail', 'liquidations']);
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 720, h: 400 });
@@ -136,6 +136,13 @@ export function LiquidationHeatmap({
       <Text variant="caption" color="secondary">
         {t('liqHeatmap.subtitle')}
       </Text>
+      {data?.missingVenues && data.missingVenues.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('liquidations:feed.missingVenues', { venues: data.missingVenues.join(', ') })}
+        />
+      ) : null}
       <ChipRow>
         <Text variant="caption" color="secondary">
           {t('liqHeatmap.range')}

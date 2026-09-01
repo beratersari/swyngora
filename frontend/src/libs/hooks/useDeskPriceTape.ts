@@ -2,13 +2,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
 import { useListSpotMarketsQuery, type MarketExchange, type SpotMarket } from '@/libs/api';
 import {
-  loadDeskTapeSource,
-  saveDeskTapeSource,
   DESK_TAPE_VENUE_LIMIT,
+  loadDeskTapeSource,
+  rtkCurrent,
+  rtkCurrentPending,
+  saveDeskTapeSource,
+  toTickerTapeItem,
   type DeskTapeSource,
-} from '@/components/organisms/DeskPriceTape';
-import { toTickerTapeItem, type TickerTapeItem } from '@/components/molecules/TickerTape';
-import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
+  type TickerTapeItem,
+} from '@/libs/utils';
 import type { DisplayCurrency, FxRatesMap } from '@/libs/utils';
 import { useDisplayCurrency } from './displayCurrency';
 import { useDocumentVisible } from './useDocumentVisible';

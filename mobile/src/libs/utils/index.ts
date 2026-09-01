@@ -1,4 +1,6 @@
 export { formatPrice } from './formatPrice';
+export { rtkCurrent, rtkCurrentPending } from './rtkQuery';
+export type { RtkQuerySlice } from './rtkQuery';
 export { toSupplyAsset } from './assetKey';
 export { CHART_LOCALIZATION, CHART_TIME_SCALE, formatChartDateTime } from './chartTime';
 export {

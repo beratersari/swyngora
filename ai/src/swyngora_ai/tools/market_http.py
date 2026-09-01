@@ -513,6 +513,14 @@ class LiquidationHeatmapInput(BaseModel):
     )
 
 
+class LiquidationMaxPainInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both, separately)",
+    )
+
+
 class SqueezeRiskInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -1480,6 +1488,26 @@ class MarginBracketsInput(BaseModel):
     clear_take_profit: bool = False
 
 
+class MarginModeInput(BaseModel):
+    client_id: str
+    mode: str = Field(description="isolated | cross")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class MarginAdjustInput(BaseModel):
+    client_id: str
+    position_id: str
+    delta: float = Field(description="Positive add, negative remove")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class MarginRepayInput(BaseModel):
+    client_id: str
+    position_id: str
+    amount: float = Field(gt=0, description="Debt units to repay")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class PriceDiffWatchCreateInput(BaseModel):
     client_id: str
     symbol: str
@@ -1637,6 +1665,33 @@ class ScannerRuleCreateInput(BaseModel):
 class ScannerRuleDeleteInput(BaseModel):
     client_id: str
     rule_id: str
+
+
+class ScannerBacktestStartInput(BaseModel):
+    client_id: str
+    rule_id: str
+    symbol: str
+    range_start: str = Field(description="RFC3339 start")
+    range_end: str = Field(description="RFC3339 end")
+    exchange: str = "binance"
+
+
+class ScannerBacktestIdInput(BaseModel):
+    client_id: str
+    backtest_id: str
+
+
+class ScannerBacktestListInput(BaseModel):
+    client_id: str
+    limit: int = 50
+    offset: int = 0
+
+
+class ScannerBacktestSignalsInput(BaseModel):
+    client_id: str
+    backtest_id: str
+    limit: int = 50
+    offset: int = 0
 
 
 class ScannerRuleUpdateInput(BaseModel):
@@ -1863,6 +1918,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidation-hunt/heatmap",
             {"symbol": symbol, "range": range, "exchange": exchange},
+        )
+
+    def get_liquidation_max_pain(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-max-pain",
+            {"symbol": symbol, "exchange": exchange},
         )
 
     def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
@@ -3340,6 +3401,34 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {},
         )
 
+    def set_margin_mode(client_id: str, mode: str, portfolio_id: str = "") -> str:
+        body: dict[str, Any] = {"clientId": client_id, "mode": mode}
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        return http.put("/api/v1/portfolio/margin/mode", body)
+
+    def adjust_margin(
+        client_id: str, position_id: str, delta: float, portfolio_id: str = ""
+    ) -> str:
+        q = f"clientId={client_id}"
+        if portfolio_id:
+            q += f"&portfolioId={portfolio_id}"
+        return http.post(
+            f"/api/v1/portfolio/margin/positions/{position_id}/margin?{q}",
+            {"delta": delta},
+        )
+
+    def repay_margin_debt(
+        client_id: str, position_id: str, amount: float, portfolio_id: str = ""
+    ) -> str:
+        q = f"clientId={client_id}"
+        if portfolio_id:
+            q += f"&portfolioId={portfolio_id}"
+        return http.post(
+            f"/api/v1/portfolio/margin/positions/{position_id}/repay?{q}",
+            {"amount": amount},
+        )
+
     def place_margin_order(
         client_id: str,
         symbol: str,
@@ -3712,6 +3801,52 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def list_scanner_results(client_id: str) -> str:
         return http.get("/api/v1/scanner/results", {"clientId": client_id})
+
+    def start_scanner_backtest(
+        client_id: str,
+        rule_id: str,
+        symbol: str,
+        range_start: str,
+        range_end: str,
+        exchange: str = "binance",
+    ) -> str:
+        return http.post(
+            "/api/v1/scanner/backtests",
+            {
+                "clientId": client_id,
+                "ruleId": rule_id,
+                "symbol": symbol,
+                "exchange": exchange,
+                "rangeStart": range_start,
+                "rangeEnd": range_end,
+            },
+        )
+
+    def list_scanner_backtests(client_id: str, limit: int = 50, offset: int = 0) -> str:
+        return http.get(
+            "/api/v1/scanner/backtests",
+            {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
+        )
+
+    def get_scanner_backtest(client_id: str, backtest_id: str) -> str:
+        return http.get(
+            f"/api/v1/scanner/backtests/{backtest_id}",
+            {"clientId": client_id},
+        )
+
+    def cancel_scanner_backtest(client_id: str, backtest_id: str) -> str:
+        return http.post(
+            f"/api/v1/scanner/backtests/{backtest_id}/cancel?clientId={client_id}",
+            {},
+        )
+
+    def list_scanner_backtest_signals(
+        client_id: str, backtest_id: str, limit: int = 50, offset: int = 0
+    ) -> str:
+        return http.get(
+            f"/api/v1/scanner/backtests/{backtest_id}/signals",
+            {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
+        )
 
     def detect_pump_events(
         symbol: str,
@@ -4104,6 +4239,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Bybit, and combined (sum) grids. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_max_pain,
+            name="get_liquidation_max_pain",
+            description=(
+                "Largest estimated liquidation pockets above last (shorts) and "
+                "below last (longs) for one coin. This is not the hunt target. "
+                "Venues stay separate. Not financial advice."
+            ),
+            args_schema=LiquidationMaxPainInput,
         ),
         StructuredTool.from_function(
             get_squeeze_risk,
@@ -4985,6 +5130,24 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=BasketIdInput,
         ),
         StructuredTool.from_function(
+            set_margin_mode,
+            name="set_margin_mode",
+            description="Set paper portfolio margin mode isolated|cross. Blocked while open margin positions or pending margin orders exist.",
+            args_schema=MarginModeInput,
+        ),
+        StructuredTool.from_function(
+            adjust_margin,
+            name="adjust_margin",
+            description="Add (delta>0) or remove (delta<0) margin from an isolated paper position.",
+            args_schema=MarginAdjustInput,
+        ),
+        StructuredTool.from_function(
+            repay_margin_debt,
+            name="repay_margin_debt",
+            description="Repay margin debt without closing: interest first, then principal.",
+            args_schema=MarginRepayInput,
+        ),
+        StructuredTool.from_function(
             place_margin_order,
             name="place_margin_order",
             description=(
@@ -5171,6 +5334,40 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_scanner_results",
             description="List saved scanner match history (deduped by rule/symbol/bar).",
             args_schema=ClientIdInput,
+        ),
+        StructuredTool.from_function(
+            start_scanner_backtest,
+            name="start_scanner_backtest",
+            description=(
+                "Start a historical backtest of a scanner rule on one symbol. "
+                "range_start and range_end are RFC3339. Poll get_scanner_backtest. "
+                "Informational only."
+            ),
+            args_schema=ScannerBacktestStartInput,
+        ),
+        StructuredTool.from_function(
+            list_scanner_backtests,
+            name="list_scanner_backtests",
+            description="List scanner backtest jobs for a clientId (newest first).",
+            args_schema=ScannerBacktestListInput,
+        ),
+        StructuredTool.from_function(
+            get_scanner_backtest,
+            name="get_scanner_backtest",
+            description="Get one scanner backtest job by id (status, progress, signal count).",
+            args_schema=ScannerBacktestIdInput,
+        ),
+        StructuredTool.from_function(
+            cancel_scanner_backtest,
+            name="cancel_scanner_backtest",
+            description="Cancel a pending or running scanner backtest.",
+            args_schema=ScannerBacktestIdInput,
+        ),
+        StructuredTool.from_function(
+            list_scanner_backtest_signals,
+            name="list_scanner_backtest_signals",
+            description="List historical match signals for a scanner backtest.",
+            args_schema=ScannerBacktestSignalsInput,
         ),
         StructuredTool.from_function(
             detect_pump_events,

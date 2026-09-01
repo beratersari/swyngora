@@ -45,7 +45,6 @@ import {
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
-  useGetTicker24hQuery,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
@@ -152,12 +151,6 @@ export function LiquidationsPage() {
       refetchOnFocus: true,
     },
   );
-  const heatTickerExchange = liqHeatVenue === 'bybit' ? 'bybit' : liqHeatVenue === 'binance' ? 'binance' : null;
-  const tickerQuery = useGetTicker24hQuery(
-    { symbol, exchange: heatTickerExchange ?? 'binance' },
-    { skip: view !== 'heatmap' || !symbol || heatTickerExchange == null },
-  );
-
   const cascadeScanQuery = useGetMarketLiquidationCascadeScanQuery(
     { exchange },
     {
@@ -451,10 +444,7 @@ export function LiquidationsPage() {
               lastPrice={
                 liqHeatVenue === 'combined'
                   ? undefined
-                  : Number(
-                      rtkCurrent(heatQuery)?.[liqHeatVenue]?.lastPrice ||
-                        rtkCurrent(tickerQuery)?.lastPrice,
-                    ) || undefined
+                  : Number(rtkCurrent(heatQuery)?.[liqHeatVenue]?.lastPrice) || undefined
               }
               isLoading={rtkCurrentPending(heatQuery)}
               isFetching={heatQuery.isFetching}

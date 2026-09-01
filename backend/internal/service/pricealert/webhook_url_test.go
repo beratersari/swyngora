@@ -92,6 +92,21 @@ func TestValidateWebhookURL_DNSResolvesToPublic(t *testing.T) {
 	}
 }
 
+func TestRedactWebhookErr_StripsPathToken(t *testing.T) {
+	const raw = "http://127.0.0.1:1/api/webhooks/999/DISCORD_WEBHOOK_TOKEN_LEAKME_xyz"
+	err := errors.New(`Post "` + raw + `": dial tcp 127.0.0.1:1: connect: connection refused`)
+	got := redactWebhookErr(err, raw)
+	if got == nil {
+		t.Fatal("expected redacted error")
+	}
+	if strings.Contains(got.Error(), "DISCORD_WEBHOOK_TOKEN_LEAKME_xyz") {
+		t.Fatalf("token leaked: %s", got.Error())
+	}
+	if !strings.Contains(got.Error(), "***") && !strings.Contains(got.Error(), "%2A%2A%2A") {
+		t.Fatalf("expected redacted path: %s", got.Error())
+	}
+}
+
 func TestIsGlobalUnicastPublic(t *testing.T) {
 	if isGlobalUnicastPublic(net.ParseIP("1.1.1.1")) != true {
 		t.Fatal("1.1.1.1")

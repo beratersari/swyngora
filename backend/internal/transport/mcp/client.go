@@ -2512,6 +2512,62 @@ func (c *APIClient) ListScannerResults(ctx context.Context, clientID string, lim
 	return c.get(ctx, "/api/v1/scanner/results", q)
 }
 
+func (c *APIClient) StartScannerBacktest(ctx context.Context, clientID, ruleID, exchange, symbol, rangeStart, rangeEnd string) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "ruleId": ruleID, "exchange": exchange, "symbol": symbol,
+		"rangeStart": rangeStart, "rangeEnd": rangeEnd,
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/scanner/backtests", body)
+}
+
+func (c *APIClient) ListScannerBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests", q)
+}
+
+func (c *APIClient) GetScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests/"+url.PathEscape(id), q)
+}
+
+func (c *APIClient) CancelScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/scanner/backtests/" + url.PathEscape(id) + "/cancel"
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
+}
+
+func (c *APIClient) ListScannerBacktestSignals(ctx context.Context, clientID, id string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests/"+url.PathEscape(id)+"/signals", q)
+}
+
 // StartExport queues a user data export job.
 func (c *APIClient) StartExport(ctx context.Context, clientID, format string, sections []string) (json.RawMessage, error) {
 	body := map[string]any{"clientId": clientID, "format": format}

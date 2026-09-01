@@ -8729,7 +8729,10 @@ components:
         totalPnL:
           type: number
           description: equity minus contributedCapital (deposits/withdrawals are not P&L)
-        positions: { type: array, items: { type: object } }
+        positions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpotPosition'
         marginPositions:
           type: array
           items:
@@ -8737,6 +8740,23 @@ components:
         note: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    SpotPosition:
+      type: object
+      description: Open paper spot position with remaining FIFO/LIFO lots
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        quantity: { type: number }
+        reservedQuantity: { type: number, description: Quantity locked by open sell pending orders }
+        availableQuantity: { type: number }
+        avgCost: { type: number }
+        markPrice: { type: number }
+        marketValue: { type: number }
+        unrealizedPnL: { type: number }
+        costBasis: { type: number }
+        lots:
+          type: array
+          items: { $ref: '#/components/schemas/TaxLot' }
     TaxLot:
       type: object
       description: One remaining (or closed) buy lot used for FIFO/LIFO realized PnL

@@ -64,6 +64,8 @@ Import example: `@/components/molecules/star-button` → `export { StarButton } 
 
 - Use `useAppStateActive()` and set `pollingInterval` to `0` when inactive.
 - Prefer `refetchOnFocus: false`.
+- Use `rtkCurrent` (not `.data`) for symbol/venue/book-keyed reads so a previous arg is not treated as live.
+- Call `useRefetchOnResume(query.refetch, active)` so a long background does not keep showing the last print as live.
 
 ## Related docs
 

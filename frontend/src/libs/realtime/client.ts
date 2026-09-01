@@ -19,6 +19,8 @@ type MessageListener = (msg: RealtimeMessage) => void;
 export class RealtimeClient {
   private ws: WebSocket | null = null;
   private stopped = true;
+  private opening = false;
+  private openGen = 0;
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -30,7 +32,7 @@ export class RealtimeClient {
   connected = false;
 
   start(): void {
-    if (!this.stopped && this.ws) return;
+    if (!this.stopped && (this.ws || this.opening)) return;
     this.stopped = false;
     this.open();
   }
@@ -116,60 +118,74 @@ export class RealtimeClient {
 
   private ensureStarted(): void {
     if (this.stopped) this.start();
-    else if (!this.ws && !this.reconnectTimer) this.open();
+    else if (!this.ws && !this.reconnectTimer && !this.opening) this.open();
   }
 
   private open(): void {
-    if (this.stopped) return;
+    if (this.stopped || this.opening) return;
     this.clearTimers();
+    this.opening = true;
     void this.openWithTicket();
   }
 
   private async openWithTicket(): Promise<void> {
-    const ticket = await mintRealtimeTicket();
-    if (this.stopped) return;
-    const url = realtimeWsUrl(undefined, undefined, undefined, undefined, ticket);
-    let ws: WebSocket;
+    const gen = ++this.openGen;
     try {
-      ws = new WebSocket(url);
-    } catch {
-      this.scheduleReconnect();
-      return;
-    }
-    this.ws = ws;
-    ws.onopen = () => {
-      this.attempt = 0;
-      this.setConnected(true);
-      this.resubscribeAll();
-      this.pingTimer = setInterval(() => {
-        this.send({ type: REALTIME_OP.ping });
-      }, REALTIME_PING_MS);
-    };
-    ws.onmessage = (ev) => {
-      let parsed: unknown = ev.data;
-      if (typeof ev.data === 'string') {
-        try {
-          parsed = JSON.parse(ev.data);
-        } catch {
-          return;
+      const ticket = await mintRealtimeTicket();
+      if (this.stopped || gen !== this.openGen) return;
+      const url = realtimeWsUrl(undefined, undefined, undefined, undefined, ticket);
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(url);
+      } catch {
+        this.scheduleReconnect();
+        return;
+      }
+      if (this.ws && this.ws !== ws) {
+        const prev = this.ws;
+        this.ws = null;
+        prev.close();
+      }
+      this.ws = ws;
+      ws.onopen = () => {
+        if (this.ws !== ws) return;
+        this.attempt = 0;
+        this.setConnected(true);
+        this.resubscribeAll();
+        this.pingTimer = setInterval(() => {
+          this.send({ type: REALTIME_OP.ping });
+        }, REALTIME_PING_MS);
+      };
+      ws.onmessage = (ev) => {
+        if (this.ws !== ws) return;
+        let parsed: unknown = ev.data;
+        if (typeof ev.data === 'string') {
+          try {
+            parsed = JSON.parse(ev.data);
+          } catch {
+            return;
+          }
         }
-      }
-      if (!parsed || typeof parsed !== 'object' || !('type' in parsed)) return;
-      const msg = parsed as RealtimeMessage;
-      if (msg.type === REALTIME_TYPE.error || msg.type === REALTIME_TYPE.hello || msg.type === REALTIME_TYPE.ack) {
-        // still fan out
-      }
-      for (const fn of this.messageListeners) fn(msg);
-    };
-    ws.onerror = () => {
-      /* onclose handles reconnect */
-    };
-    ws.onclose = () => {
-      if (this.ws === ws) this.ws = null;
-      this.setConnected(false);
-      this.clearPing();
-      if (!this.stopped) this.scheduleReconnect();
-    };
+        if (!parsed || typeof parsed !== 'object' || !('type' in parsed)) return;
+        const msg = parsed as RealtimeMessage;
+        if (msg.type === REALTIME_TYPE.error || msg.type === REALTIME_TYPE.hello || msg.type === REALTIME_TYPE.ack) {
+          // still fan out
+        }
+        for (const fn of this.messageListeners) fn(msg);
+      };
+      ws.onerror = () => {
+        /* onclose handles reconnect */
+      };
+      ws.onclose = () => {
+        if (this.ws !== ws) return;
+        this.ws = null;
+        this.setConnected(false);
+        this.clearPing();
+        if (!this.stopped) this.scheduleReconnect();
+      };
+    } finally {
+      if (gen === this.openGen) this.opening = false;
+    }
   }
 
   private resubscribeAll(): void {

@@ -10,11 +10,12 @@ import {
   usePostIndicatorsBatchQuery,
   type SpotMarket,
 } from '@/libs/api';
-import { useAppStateActive, useDebouncedValue } from '@/libs/hooks';
+import { useAppStateActive, useDebouncedValue, useRefetchOnResume } from '@/libs/hooks';
 import {
   buildBatchIndicatorsArg,
   indexBatchItemsBySymbol,
   rsiFieldsFromItem,
+  rtkCurrent,
   toSpotListQuery,
 } from '@/libs/utils';
 import {
@@ -128,14 +129,16 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     pollingInterval: pollingEnabled ? SPOT_POLL_MS : 0,
     refetchOnFocus: false,
   });
+  useRefetchOnResume(spotQuery.refetch, active && focused);
 
   const exchangesQuery = useListExchangesQuery();
+  const liveSpot = rtkCurrent(spotQuery);
 
   // Merge query results into accumulated rows
   useEffect(() => {
-    if (!spotQuery.data || spotQuery.isError) return;
-    const items = spotQuery.data.items ?? [];
-    const nextTotal = spotQuery.data.total ?? 0;
+    if (!liveSpot || spotQuery.isError) return;
+    const items = liveSpot.items ?? [];
+    const nextTotal = liveSpot.total ?? 0;
     setTotal(nextTotal);
 
     if (offset === 0) {
@@ -143,7 +146,7 @@ export function useMarketsPageViewModel(): MarketsPageViewModel {
     } else {
       setRows((prev) => mergeUniqueRows(prev, items));
     }
-  }, [spotQuery.data, spotQuery.isError, offset]);
+  }, [liveSpot, spotQuery.isError, offset]);
 
   const exchanges =
     exchangesQuery.data?.exchanges?.length

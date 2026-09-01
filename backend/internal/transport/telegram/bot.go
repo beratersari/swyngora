@@ -79,7 +79,7 @@ func (b *Bot) Start(ctx context.Context) {
 				userID = u.Message.From.ID
 			}
 			text := u.Message.Text
-			log.Info("telegram command", "chat_id", chatID, "user_id", userID, "text", truncate(text, 80))
+			log.Info("telegram command", "cmd", telegramCommandVerb(text))
 			// AI runs in a goroutine so long /ask turns do not block getUpdates.
 			if b.Router.IsAIRequest(text) && b.Router.ai != nil {
 				go b.handleAI(ctx, chatID, userID, text)
@@ -348,4 +348,21 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
+}
+
+// telegramCommandVerb is the first token only (e.g. /ask). Never the rest of
+// the message — users paste API keys into /ask and that must not hit Info logs.
+func telegramCommandVerb(text string) string {
+	s := strings.TrimSpace(text)
+	if s == "" {
+		return ""
+	}
+	cmd, _, _ := strings.Cut(s, " ")
+	if strings.HasPrefix(cmd, "/") {
+		if i := strings.Index(cmd, "@"); i > 0 {
+			cmd = cmd[:i]
+		}
+		return cmd
+	}
+	return "(text)"
 }

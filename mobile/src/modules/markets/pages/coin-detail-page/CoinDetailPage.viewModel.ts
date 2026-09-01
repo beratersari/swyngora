@@ -19,7 +19,7 @@ import {
   useListIntervalsQuery,
   type MarketExchange,
 } from '@/libs/api';
-import { useAppStateActive } from '@/libs/hooks';
+import { useAppStateActive, useRefetchOnResume } from '@/libs/hooks';
 import {
   apiCandlesToChart,
   buildDetailPumpQuery,
@@ -45,6 +45,7 @@ import {
   pumpModeLabel,
   pumpReturnTone,
   resolveInterval,
+  rtkCurrent,
   sortedEmaKeys,
   type ChartCandle,
 } from '@/libs/utils';
@@ -204,9 +205,10 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
   const [fetchOlderCandles] = useLazyGetCandlesQuery();
 
+  const liveCandles = rtkCurrent(candlesQuery);
   const latestCandles = useMemo(
-    () => mapApiCandlesToChart(candlesQuery.data?.candles ?? []),
-    [candlesQuery.data?.candles],
+    () => mapApiCandlesToChart(liveCandles?.candles ?? []),
+    [liveCandles?.candles],
   );
 
   const candles = useMemo(
@@ -247,6 +249,11 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       refetchOnFocus: false,
     },
   );
+
+  useRefetchOnResume(tickerQuery.refetch, polling);
+  useRefetchOnResume(candlesQuery.refetch, polling);
+  useRefetchOnResume(indicatorsQuery.refetch, polling);
+  useRefetchOnResume(supplyQuery.refetch, polling);
 
   const onRequestOlderHistory = useCallback(async () => {
     if (
@@ -313,7 +320,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
   const candleOverlays: CandleChartOverlay[] = useMemo(() => {
     if (!showEma) return [];
-    const fromApi = parseEmaPeriods((indicatorsQuery.data?.emaPeriods ?? []).join(','));
+    const fromApi = parseEmaPeriods((rtkCurrent(indicatorsQuery)?.emaPeriods ?? []).join(','));
     const periods = fromApi.length > 0 ? fromApi : parseEmaPeriods(DEFAULT_EMA_PERIODS);
     return periods.map((period, i) => ({
       id: `ema-${period}`,
@@ -321,26 +328,27 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       color: emaColor(String(period), i),
       data: emaLineFromCloses(candles, period),
     }));
-  }, [showEma, indicatorsQuery.data?.emaPeriods, candles, t]);
+  }, [showEma, indicatorsQuery, candles, t]);
 
+  const liveIndicators = rtkCurrent(indicatorsQuery);
   const rsiPoints = useMemo(
-    () => indicatorPointsToRsi(indicatorsQuery.data?.points),
-    [indicatorsQuery.data?.points],
+    () => indicatorPointsToRsi(liveIndicators?.points),
+    [liveIndicators?.points],
   );
 
-  const latestRsi = indicatorsQuery.data?.latest?.rsi ?? null;
+  const latestRsi = liveIndicators?.latest?.rsi ?? null;
 
   const emaLatestLabels = useMemo(() => {
-    const ema = indicatorsQuery.data?.latest?.ema;
+    const ema = liveIndicators?.latest?.ema;
     if (!ema) return [];
     return sortedEmaKeys(ema).map((k) =>
       t('detail:emaLatest', { period: k, value: formatPrice(ema[k]) }),
     );
-  }, [indicatorsQuery.data?.latest?.ema, t]);
+  }, [liveIndicators?.latest?.ema, t]);
 
-  const ticker = tickerQuery.data;
-  const supply = supplyQuery.data;
-  const holders = holdersQuery.data;
+  const ticker = rtkCurrent(tickerQuery);
+  const supply = rtkCurrent(supplyQuery);
+  const holders = rtkCurrent(holdersQuery);
 
   const statsItems = useMemo(() => {
     const items = [

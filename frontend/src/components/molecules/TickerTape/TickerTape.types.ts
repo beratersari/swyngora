@@ -1,11 +1,6 @@
-export type TickerTapeItem = {
-  exchange: string;
-  symbol: string;
-  lastPrice: string;
-  changePercent: string;
-  changeValue: number | null;
-  href: string;
-};
+import type { TickerTapeItem } from '@/libs/utils';
+
+export type { TickerTapeItem };
 
 export type TickerTapeProps = {
   items: TickerTapeItem[];

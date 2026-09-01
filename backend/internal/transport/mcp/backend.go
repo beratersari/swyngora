@@ -3928,6 +3928,133 @@ func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit
 	})
 }
 
+func scannerBacktestMap(b *domain.ScannerBacktest) map[string]any {
+	if b == nil {
+		return nil
+	}
+	m := map[string]any{
+		"id": b.ID, "clientId": b.ClientID, "ruleId": b.RuleID, "exchange": string(b.Exchange),
+		"symbol": b.Symbol, "interval": b.Interval,
+		"rangeStart": b.RangeStart.UTC().Format(time.RFC3339Nano),
+		"rangeEnd":   b.RangeEnd.UTC().Format(time.RFC3339Nano),
+		"status":     string(b.Status), "progressPct": b.ProgressPct,
+		"processedBars": b.ProcessedBars, "totalBars": b.TotalBars, "signalCount": b.SignalCount,
+		"createdAt": b.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if b.ErrorMessage != "" {
+		m["errorMessage"] = b.ErrorMessage
+	}
+	if b.StartedAt != nil {
+		m["startedAt"] = b.StartedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if b.FinishedAt != nil {
+		m["finishedAt"] = b.FinishedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return m
+}
+
+func (b *Backend) StartScannerBacktest(ctx context.Context, clientID, ruleID, exchange, symbol, rangeStart, rangeEnd string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	start, err := time.Parse(time.RFC3339Nano, rangeStart)
+	if err != nil {
+		start, err = time.Parse(time.RFC3339, rangeStart)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: rangeStart must be RFC3339", domain.ErrInvalidArgument)
+	}
+	end, err := time.Parse(time.RFC3339Nano, rangeEnd)
+	if err != nil {
+		end, err = time.Parse(time.RFC3339, rangeEnd)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: rangeEnd must be RFC3339", domain.ErrInvalidArgument)
+	}
+	job, err := b.Scanner.StartBacktest(ctx, scanner.StartBacktestInput{
+		ClientID: clientID, RuleID: ruleID, Exchange: exchange, Symbol: symbol,
+		RangeStart: start.UTC(), RangeEnd: end.UTC(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(scannerBacktestMap(job))
+}
+
+func (b *Backend) ListScannerBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Scanner.ListBacktests(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, scannerBacktestMap(&list[i]))
+	}
+	return mustJSON(map[string]any{
+		"clientId": clientID, "backtests": items, "count": len(items), "total": total,
+	})
+}
+
+func (b *Backend) GetScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	job, err := b.Scanner.GetBacktest(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(scannerBacktestMap(job))
+}
+
+func (b *Backend) CancelScannerBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	job, err := b.Scanner.CancelBacktest(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(scannerBacktestMap(job))
+}
+
+func (b *Backend) ListScannerBacktestSignals(ctx context.Context, clientID, id string, limit, offset int) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Scanner.ListBacktestSignals(ctx, clientID, id, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		s := list[i]
+		m := map[string]any{
+			"id": s.ID, "backtestId": s.BacktestID,
+			"signalAt":   s.SignalAt.UTC().Format(time.RFC3339Nano),
+			"closePrice": s.ClosePrice, "summary": s.Summary,
+		}
+		if s.Return1d != nil {
+			m["return1d"] = *s.Return1d
+		}
+		if s.Return5d != nil {
+			m["return5d"] = *s.Return5d
+		}
+		if s.Return20d != nil {
+			m["return20d"] = *s.Return20d
+		}
+		if s.Metrics != nil {
+			m["metrics"] = s.Metrics
+		}
+		items = append(items, m)
+	}
+	return mustJSON(map[string]any{
+		"backtestId": id, "signals": items, "count": len(items), "total": total,
+	})
+}
+
 func exportJobJSON(j *domain.ExportJob) (json.RawMessage, error) {
 	secs := make([]string, 0, len(j.Sections))
 	for _, s := range j.Sections {

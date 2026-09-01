@@ -738,7 +738,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 	if err != nil {
 		return nil, nil, err
 	}
-	lastInt := now.Truncate(time.Hour)
+	lastInt := now
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym, Side: side, Mode: mode,
 		Quantity: in.Quantity, EntryPrice: entry, Leverage: in.Leverage, Margin: margin,
@@ -1343,7 +1343,7 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 	if err != nil {
 		return false
 	}
-	lastInt := now.Truncate(time.Hour)
+	lastInt := now
 	pos := domain.MarginPosition{
 		ID: uuid.NewString(), ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol, Side: o.Side, Mode: mode,
 		Quantity: o.Quantity, EntryPrice: entry, Leverage: o.Leverage, Margin: margin,

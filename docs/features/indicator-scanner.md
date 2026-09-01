@@ -95,7 +95,7 @@ Re-running the scanner on the same bar does not create another row.
 | Store | `backend/internal/adapter/scannerstore` |
 | Service | `backend/internal/service/scanner` |
 | HTTP | `backend/internal/transport/http/handler/scanner.go` |
-| MCP | `create_scanner_rule`, `list_scanner_rules`, `update_scanner_rule`, `delete_scanner_rule`, `list_scanner_results` |
+| MCP | `create_scanner_rule`, `list_scanner_rules`, `update_scanner_rule`, `delete_scanner_rule`, `list_scanner_results`, `start_scanner_backtest`, `list_scanner_backtests`, `get_scanner_backtest`, `cancel_scanner_backtest`, `list_scanner_backtest_signals` |
 
 ## Config
 
@@ -115,6 +115,8 @@ Run a saved rule over a symbol and date range to see past signals and what price
 | `GET` | `/api/v1/scanner/backtests/{id}` | Progress (`progressPct`, `signalCount`, `status`) |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel pending/running job |
 | `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) |
+
+MCP / AI: `start_scanner_backtest`, `list_scanner_backtests`, `get_scanner_backtest`, `cancel_scanner_backtest`, `list_scanner_backtest_signals`.
 
 ### Behavior
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).

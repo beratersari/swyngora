@@ -11,7 +11,7 @@ import inspect
 from swyngora_ai.config import Settings
 from swyngora_ai.graph.orchestrator import Orchestrator
 from swyngora_ai.tools.market_http import build_market_tools
-from swyngora_ai.tools.packs import BOOK_TOOLS, PACKS
+from swyngora_ai.tools.packs import BOOK_TOOLS, PACKS, PAPER_TOOLS
 
 # Market analytics that docs list as assistant-capable; must sit on a specialist pack.
 BOOK_FLOW_ANALYTICS = frozenset(
@@ -55,7 +55,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
     }
 )
 
-MARGIN_EXTRAS_MISSING_PYTHON = frozenset(
+MARGIN_EXTRAS = frozenset(
     {
         "set_margin_mode",
         "adjust_margin",
@@ -78,10 +78,12 @@ def test_review_evidence_analytics_are_on_book_pack():
     assert BOOK_FLOW_ANALYTICS <= PACKS["book"]
 
 
-def test_review_evidence_margin_extras_have_no_python_binding():
+def test_review_evidence_margin_extras_have_python_binding():
     names = _all_tool_names()
-    present = MARGIN_EXTRAS_MISSING_PYTHON & names
-    assert not present, f"margin extras now bound in Python: {sorted(present)}"
+    missing = MARGIN_EXTRAS - names
+    assert not missing, f"margin extras missing Python binding: {sorted(missing)}"
+    not_in_paper = MARGIN_EXTRAS - PAPER_TOOLS
+    assert not not_in_paper, f"margin extras missing from paper pack: {sorted(not_in_paper)}"
 
 
 def test_review_evidence_orchestrator_chat_is_not_desk_graph():

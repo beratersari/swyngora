@@ -9,11 +9,13 @@ import {
   useGetTicker24hQuery,
   type MarketExchange,
 } from '@/libs/api';
+import { useRefetchOnResume } from '@/libs/hooks';
 import {
   changeTone,
   formatChangePercent,
   formatPrice,
   isMarketExchange,
+  rtkCurrent,
   watchKey,
   type RsiRowFields,
 } from '@/libs/utils';
@@ -47,6 +49,8 @@ function EnrichedWatchlistRow({
       refetchOnFocus: false,
     },
   );
+  useRefetchOnResume(query.refetch, pollQuotes);
+  const ticker = rtkCurrent(query);
 
   return (
     <WatchlistRow
@@ -54,9 +58,9 @@ function EnrichedWatchlistRow({
         id: watchKey(exchange, symbol),
         exchange,
         symbol,
-        lastPriceLabel: formatPrice(query.data?.lastPrice),
-        changePercentLabel: formatChangePercent(query.data?.priceChangePercent),
-        changeTone: changeTone(query.data?.priceChangePercent),
+        lastPriceLabel: formatPrice(ticker?.lastPrice),
+        changePercentLabel: formatChangePercent(ticker?.priceChangePercent),
+        changeTone: changeTone(ticker?.priceChangePercent),
         quoteLoading: query.isLoading || query.isFetching,
         rsiLabel: rsi?.rsiLabel,
         rsiTone: rsi?.rsiTone,

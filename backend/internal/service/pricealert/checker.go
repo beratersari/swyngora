@@ -239,6 +239,10 @@ func (c *Checker) evalPriceGroup(ctx context.Context, exchange, symbol string, a
 		c.Logger.Debug("ticker for alert failed", "exchange", exchange, "symbol", symbol, "err", err)
 		return
 	}
+	if tkr.Halted {
+		c.Logger.Debug("skip halted last print for alert", "exchange", exchange, "symbol", symbol)
+		return
+	}
 	last, err := strconv.ParseFloat(tkr.LastPrice, 64)
 	if err != nil || last <= 0 {
 		c.Logger.Debug("bad last price for alert", "symbol", symbol, "last", tkr.LastPrice)

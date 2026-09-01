@@ -10,11 +10,13 @@ export type AddWatchlistItemArg = {
   exchange?: string;
   symbol: string;
   note?: string;
+  baseVersion?: number;
 };
 
 export type RemoveWatchlistItemArg = {
   exchange: string;
   symbol: string;
+  baseVersion?: number;
 };
 
 export const watchlistApi = baseApi.injectEndpoints({
@@ -35,9 +37,17 @@ export const watchlistApi = baseApi.injectEndpoints({
           exchange: body.exchange ?? 'binance',
           symbol: body.symbol,
           note: body.note,
+          ...(typeof body.baseVersion === 'number' ? { baseVersion: body.baseVersion } : {}),
         },
       }),
       invalidatesTags: ['Watchlist'],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+        } catch {
+          dispatch(baseApi.util.invalidateTags(['Watchlist']));
+        }
+      },
     }),
     listWatchlistShares: build.query<
       { ownerClientId?: string; count?: number; shares?: WatchlistShare[] },
@@ -65,16 +75,24 @@ export const watchlistApi = baseApi.injectEndpoints({
       invalidatesTags: ['WatchlistShare'],
     }),
     removeWatchlistItem: build.mutation<Watchlist, RemoveWatchlistItemArg>({
-      query: ({ exchange, symbol }) => ({
+      query: ({ exchange, symbol, baseVersion }) => ({
         url: '/api/v1/watchlist/items',
         method: 'DELETE',
         params: {
           exchange,
           symbol,
           clientId: getOrCreateClientId(),
+          ...(typeof baseVersion === 'number' ? { baseVersion } : {}),
         },
       }),
       invalidatesTags: ['Watchlist'],
+      async onQueryStarted(_arg, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+        } catch {
+          dispatch(baseApi.util.invalidateTags(['Watchlist']));
+        }
+      },
     }),
   }),
 });
