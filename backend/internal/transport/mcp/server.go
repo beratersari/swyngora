@@ -211,6 +211,12 @@ type DataPort interface {
 	QuotePriceDiffWatch(ctx context.Context, clientID, watchID string, notional, quantity, minProfitPct, minProfitAmount float64) (json.RawMessage, error)
 	AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanSwingSetups(ctx context.Context, clientID, exchange string, limit int) (json.RawMessage, error)
+	ListCustomSignalFactors(ctx context.Context) (json.RawMessage, error)
+	ListCustomSignalProfiles(ctx context.Context, clientID string) (json.RawMessage, error)
+	CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error)
+	UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error)
+	DeleteCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ScanCustomSignals(ctx context.Context, clientID, profileID, exchange string, limit int, weights domain.CustomSignalWeights, hasWeights bool) (json.RawMessage, error)
 	Health(ctx context.Context) (json.RawMessage, error)
 }
 
@@ -3659,6 +3665,154 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ScanSwingSetups(ctx, clientID, req.GetString("exchange", ""), int(req.GetFloat("limit", 25)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_custom_signal_factors",
+		mcp.WithDescription("List mixable custom-signal factors (swing patterns + optional liquidation-hunt up) and built-in percents."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ListCustomSignalFactors(ctx)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_custom_signal_profiles",
+		mcp.WithDescription("List saved custom-signal weight mixes for a clientId."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ListCustomSignalProfiles(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_custom_signal_profile",
+		mcp.WithDescription("Save a named custom-signal mix. weights is factor id → percent and must sum to 100. Omitted factors are 0."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("name", mcp.Required(), mcp.Description("Profile name")),
+		mcp.WithString("weightsJson", mcp.Required(), mcp.Description("JSON object of factor id to percent, e.g. {\"hunt_up\":40,\"rsi_recovery\":60}")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		name, err := req.RequireString("name")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		weights, err := parseCustomSignalWeightsJSON(req.GetString("weightsJson", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateCustomSignalProfile(ctx, clientID, name, weights)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("update_custom_signal_profile",
+		mcp.WithDescription("Update a saved custom-signal mix (name and/or weights). weightsJson must sum to 100 when set."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Profile id")),
+		mcp.WithString("name", mcp.Description("New name")),
+		mcp.WithString("weightsJson", mcp.Description("JSON object of factor id to percent")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		var weights map[string]float64
+		if rawW := req.GetString("weightsJson", ""); rawW != "" {
+			weights, err = parseCustomSignalWeightsJSON(rawW)
+			if err != nil {
+				return mcp.NewToolResultError(err.Error()), nil
+			}
+		}
+		raw, err := api.UpdateCustomSignalProfile(ctx, clientID, id, req.GetString("name", ""), weights)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("delete_custom_signal_profile",
+		mcp.WithDescription("Delete a saved custom-signal mix."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Profile id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.DeleteCustomSignalProfile(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_custom_signals",
+		mcp.WithDescription("Scan the watchlist with a custom factor mix (swing patterns + optional hunt_up). Optional weight* must sum to 100. Missing hunt adds 0. scoreCompare is default vs applied. Informational only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("profileId", mcp.Description("Saved mix id; ignored when any weight* is set")),
+		mcp.WithString("exchange", mcp.Description("Optional venue filter")),
+		mcp.WithNumber("limit", mcp.Description("Max symbols, default 25")),
+		mcp.WithNumber("weightEmaCrossover", mcp.Description("Custom mix % for EMA 9/21. If any weight* is set, omitted factors are 0 and the mix must sum to 100.")),
+		mcp.WithNumber("weightEmaTrend", mcp.Description("Custom mix % for EMA 50/200 pullback")),
+		mcp.WithNumber("weightSupertrend", mcp.Description("Custom mix % for SuperTrend")),
+		mcp.WithNumber("weightRsiRecovery", mcp.Description("Custom mix % for RSI recovery")),
+		mcp.WithNumber("weightMacd", mcp.Description("Custom mix % for MACD histogram")),
+		mcp.WithNumber("weightAdx", mcp.Description("Custom mix % for ADX trend")),
+		mcp.WithNumber("weightAccumulation", mcp.Description("Custom mix % for BB squeeze / dry-up")),
+		mcp.WithNumber("weightVolumeBreakout", mcp.Description("Custom mix % for volume breakout")),
+		mcp.WithNumber("weightHuntUp", mcp.Description("Custom mix % for liquidation-hunt up score")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		argStr := func(k string) string {
+			args := req.GetArguments()
+			if args == nil {
+				return ""
+			}
+			v, ok := args[k]
+			if !ok || v == nil {
+				return ""
+			}
+			return fmt.Sprint(v)
+		}
+		weights, err := domain.ParseCustomSignalWeights(argStr)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		hasW := false
+		for _, id := range domain.CustomSignalFactorIDs {
+			if argStr(domain.CustomSignalQueryKeys[id]) != "" {
+				hasW = true
+				break
+			}
+		}
+		raw, err := api.ScanCustomSignals(ctx, clientID, req.GetString("profileId", ""), req.GetString("exchange", ""), int(req.GetFloat("limit", 25)), weights, hasW)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

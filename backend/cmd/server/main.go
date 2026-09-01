@@ -611,7 +611,7 @@ func main() {
 
 	aiClient := aiagent.New(cfg.AIServiceURL, cfg.AITimeout).WithServiceToken(cfg.AIServiceToken)
 
-	swingSvc := swing.New(marketSvc, watchSvc)
+	swingSvc := swing.New(marketSvc, watchSvc).WithProfiles(scannerStore).WithHunt(marketSvc)
 
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler

@@ -5,6 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SignalsBacktestPanel } from '@/components/organisms/SignalsBacktestPanel';
+import {
+  CUSTOM_SIGNAL_BUILT_IN_ID,
+  defaultCustomWeightDraft,
+  draftFromWeights,
+  scanWeightParams,
+  SignalsCustomPanel,
+  type CustomWeightDraftRow,
+} from '@/components/organisms/SignalsCustomPanel';
 import { SignalsHitsTable } from '@/components/organisms/SignalsHitsTable';
 import { SignalsRuleForm } from '@/components/organisms/SignalsRuleForm';
 import { SignalsRulesTable } from '@/components/organisms/SignalsRulesTable';
@@ -24,7 +32,13 @@ import {
   useListScannerRulesQuery,
   useStartScannerBacktestMutation,
   useListSwingSetupsQuery,
+  useListCustomSignalProfilesQuery,
+  useCreateCustomSignalProfileMutation,
+  useUpdateCustomSignalProfileMutation,
+  useDeleteCustomSignalProfileMutation,
+  useScanCustomSignalsQuery,
   type CreateScannerRuleArg,
+  type ScanCustomSignalsArg,
   type ScannerRule,
 } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
@@ -51,6 +65,9 @@ export function SignalsPage() {
   const [tab, setTab] = useState('setups');
   const [selectedBacktestId, setSelectedBacktestId] = useState<string | null>(null);
   const [editingRule, setEditingRule] = useState<ScannerRule | null>(null);
+  const [customProfileId, setCustomProfileId] = useState(CUSTOM_SIGNAL_BUILT_IN_ID);
+  const [customDraft, setCustomDraft] = useState<CustomWeightDraftRow[]>(() => defaultCustomWeightDraft());
+  const [customApplied, setCustomApplied] = useState<ScanCustomSignalsArg | null>(null);
 
   const watchlist = useGetWatchlistQuery(undefined, { refetchOnFocus: true });
   const intervalsQuery = useListIntervalsQuery({ exchange: 'binance' });
@@ -80,6 +97,22 @@ export function SignalsPage() {
   const [deleteRule, deleteState] = useDeleteScannerRuleMutation();
   const [startBacktest, startState] = useStartScannerBacktestMutation();
   const [cancelBacktest, cancelState] = useCancelScannerBacktestMutation();
+  const customProfilesQuery = useListCustomSignalProfilesQuery(undefined, {
+    skip: tab !== 'custom',
+    refetchOnFocus: true,
+  });
+  const customScanArg: ScanCustomSignalsArg = customApplied ?? {
+    profileId: customProfileId || undefined,
+    limit: 25,
+  };
+  const customScanQuery = useScanCustomSignalsQuery(customScanArg, {
+    skip: tab !== 'custom' || watchlist.isLoading || (watchlist.data?.items?.length ?? 0) === 0,
+    pollingInterval: visible && tab === 'custom' ? SIGNALS_RESULTS_POLL_MS * 2 : 0,
+    refetchOnFocus: true,
+  });
+  const [createCustomProfile, createCustomState] = useCreateCustomSignalProfileMutation();
+  const [updateCustomProfile, updateCustomState] = useUpdateCustomSignalProfileMutation();
+  const [deleteCustomProfile, deleteCustomState] = useDeleteCustomSignalProfileMutation();
 
   const selectedSignals = useListScannerBacktestSignalsQuery(
     { id: selectedBacktestId ?? '', limit: 100 },
@@ -237,6 +270,89 @@ export function SignalsPage() {
                   onOpen={openChart}
                 />
               </Section>
+            ),
+          },
+          {
+            key: 'custom',
+            label: t('signals:tabs.custom'),
+            children: (
+              <SignalsCustomPanel
+                profiles={customProfilesQuery.data?.profiles ?? []}
+                selectedId={customProfileId}
+                draft={customDraft}
+                items={customScanQuery.data?.items ?? []}
+                loading={customScanQuery.isLoading || customProfilesQuery.isLoading}
+                scanning={customScanQuery.isFetching}
+                saving={createCustomState.isLoading || updateCustomState.isLoading || deleteCustomState.isLoading}
+                saveError={createCustomState.error ?? updateCustomState.error ?? deleteCustomState.error}
+                onSelectProfile={(id) => {
+                  setCustomProfileId(id);
+                  setCustomApplied(null);
+                  if (!id) {
+                    setCustomDraft(defaultCustomWeightDraft());
+                    return;
+                  }
+                  const profile = (customProfilesQuery.data?.profiles ?? []).find((p) => p.id === id);
+                  setCustomDraft(draftFromWeights(profile?.weights));
+                }}
+                onDraft={setCustomDraft}
+                onSave={(name) => {
+                  if (!customProfileId) return;
+                  void updateCustomProfile({
+                    id: customProfileId,
+                    name,
+                    weights: Object.fromEntries(customDraft.map((r) => [r.id, r.enabled ? r.pct : 0])),
+                  })
+                    .unwrap()
+                    .then(() => {
+                      setCustomApplied(null);
+                      void message.success(t('signals:custom.saveSuccess'));
+                      void customProfilesQuery.refetch();
+                    })
+                    .catch(() => undefined);
+                }}
+                onSaveAs={(name) => {
+                  void createCustomProfile({
+                    name,
+                    weights: Object.fromEntries(customDraft.map((r) => [r.id, r.enabled ? r.pct : 0])),
+                  })
+                    .unwrap()
+                    .then((p) => {
+                      setCustomProfileId(p.id ?? '');
+                      setCustomApplied(null);
+                      void message.success(t('signals:custom.saveSuccess'));
+                      void customProfilesQuery.refetch();
+                    })
+                    .catch(() => undefined);
+                }}
+                onDelete={() => {
+                  if (!customProfileId) return;
+                  void deleteCustomProfile({ id: customProfileId })
+                    .unwrap()
+                    .then(() => {
+                      setCustomProfileId(CUSTOM_SIGNAL_BUILT_IN_ID);
+                      setCustomDraft(defaultCustomWeightDraft());
+                      setCustomApplied(null);
+                      void message.success(t('signals:custom.deleteSuccess'));
+                      void customProfilesQuery.refetch();
+                    })
+                    .catch(() => undefined);
+                }}
+                onApply={() => {
+                  setCustomApplied({ ...scanWeightParams(customDraft), limit: 25 });
+                }}
+                onReset={() => {
+                  if (!customProfileId) {
+                    setCustomDraft(defaultCustomWeightDraft());
+                    setCustomApplied(null);
+                    return;
+                  }
+                  const profile = (customProfilesQuery.data?.profiles ?? []).find((p) => p.id === customProfileId);
+                  setCustomDraft(draftFromWeights(profile?.weights));
+                  setCustomApplied(null);
+                }}
+                onOpen={openChart}
+              />
             ),
           },
           {

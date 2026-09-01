@@ -20,15 +20,38 @@ const (
 	maxScan      = 25
 )
 
+// HuntReader loads a liquidation-hunt report (optional custom-signal factor).
+type HuntReader interface {
+	GetLiquidationHunt(ctx context.Context, exchange, symbol string) (*domain.HuntReport, error)
+}
+
 // Service orchestrates candle fetch + domain.EvaluateSwing.
 type Service struct {
-	market *market.Service
-	watch  *watchlist.Service
+	market   *market.Service
+	watch    *watchlist.Service
+	profiles domain.CustomSignalProfilePort
+	hunt     HuntReader
 }
 
 // New constructs a swing service.
 func New(m *market.Service, w *watchlist.Service) *Service {
 	return &Service{market: m, watch: w}
+}
+
+// WithProfiles attaches saved custom-signal mixes.
+func (s *Service) WithProfiles(p domain.CustomSignalProfilePort) *Service {
+	if s != nil {
+		s.profiles = p
+	}
+	return s
+}
+
+// WithHunt attaches liquidation hunt for the optional custom factor.
+func (s *Service) WithHunt(h HuntReader) *Service {
+	if s != nil {
+		s.hunt = h
+	}
+	return s
 }
 
 // Analyze evaluates one symbol (public market data).

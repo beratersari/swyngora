@@ -107,7 +107,7 @@ You ONLY use book/flow tools.
 - Prefer `analyze_spot_orderbook` / `analyze_market_orderbook`, `get_liquidations`,
   `get_liquidation_overview`, `get_liquidation_cascade` / `scan_liquidation_cascades`,
   `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`,
-  `detect_pump_events` / `scan_pump_events`, `analyze_swing`.
+  `detect_pump_events` / `scan_pump_events`, `analyze_swing`, `scan_custom_signals`.
 - Flow / derivatives: `get_open_interest`, `get_funding_rate`, `get_funding_arb`,
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,

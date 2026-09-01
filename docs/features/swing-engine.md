@@ -20,21 +20,30 @@ Informational only — not financial advice.
 |--------|------|------|
 | `GET` | `/api/v1/market/swing?exchange=&symbol=` | Public |
 | `GET` | `/api/v1/swing/setups?limit=&exchange=` | `X-Client-Id` (watchlist) |
+| `GET` | `/api/v1/swing/custom/factors` | Public catalog |
+| `GET`/`POST` | `/api/v1/swing/custom/profiles` | Saved mixes (`X-Client-Id`) |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/swing/custom/profiles/{id}` | One mix |
+| `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`) |
 
-MCP: `analyze_swing`, `scan_swing_setups`.
+MCP: `analyze_swing`, `scan_swing_setups`, `list_custom_signal_factors`, `list_custom_signal_profiles`, `create_custom_signal_profile`, `update_custom_signal_profile`, `delete_custom_signal_profile`, `scan_custom_signals`.
+
+### Custom mix
+
+The built-in engine on Setups is unchanged. The **Custom** tab lets the user pick which swing patterns to include, assign percents that must sum to 100, and optionally add **liquidation hunt (up)** — the combined hunt `upScore`. Requested percents stay as given; a missing hunt keeps its share and adds 0 (neutral 50). The desk previews the score vs the built-in mix and shows each factor’s effect before save. Mixes persist per `clientId` in the scanner SQLite file.
 
 ## Code
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/swing.go`, `swing_indicators.go` |
+| Domain | `backend/internal/domain/swing.go`, `swing_indicators.go`, `custom_signal.go` |
 | Service | `backend/internal/service/swing` |
-| HTTP | `backend/internal/transport/http/handler/swing.go` |
-| UI | `/signals` `SwingEngineGrid` |
+| HTTP | `backend/internal/transport/http/handler/swing.go`, `swing_custom.go` |
+| Store | `backend/internal/adapter/scannerstore` (`custom_signal_profiles`) |
+| UI | `/signals` `SwingEngineGrid` + Custom tab `SignalsCustomPanel` |
 
 ## Tests
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/swing/ ./internal/transport/http/handler/ -run 'Swing|ATR|ADX|MACD' -count=1
+go test ./internal/domain/ ./internal/service/swing/ ./internal/adapter/scannerstore/ ./internal/transport/http/handler/ -run 'Swing|ATR|ADX|MACD|CustomSignal' -count=1
 ```

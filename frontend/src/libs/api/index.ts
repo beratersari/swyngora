@@ -229,5 +229,26 @@ export type {
   ScannerRuleType,
   StartScannerBacktestArg,
 } from './endpoints/scannerApi';
-export { useAnalyzeSwingQuery, useListSwingSetupsQuery } from './endpoints/swingApi';
-export type { SwingDecision, SwingLevels, SwingPattern, SwingSetupList } from './endpoints/swingApi';
+export {
+  useAnalyzeSwingQuery,
+  useListSwingSetupsQuery,
+  useListCustomSignalFactorsQuery,
+  useListCustomSignalProfilesQuery,
+  useCreateCustomSignalProfileMutation,
+  useUpdateCustomSignalProfileMutation,
+  useDeleteCustomSignalProfileMutation,
+  useScanCustomSignalsQuery,
+} from './endpoints/swingApi';
+export type {
+  SwingDecision,
+  SwingLevels,
+  SwingPattern,
+  SwingSetupList,
+  CustomSignalProfile,
+  CustomSignalProfileList,
+  CustomSignalItem,
+  CustomSignalScan,
+  CustomSignalFactorList,
+  CustomSignalProfileWrite,
+  ScanCustomSignalsArg,
+} from './endpoints/swingApi';

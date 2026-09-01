@@ -2844,6 +2844,201 @@ paths:
                 $ref: '#/components/schemas/SwingSetupList'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/swing/custom/factors:
+    get:
+      summary: List custom-signal factors
+      description: Swing-engine pattern ids plus optional liquidation-hunt up score. Built-in percents match the engine; hunt defaults to 0.
+      operationId: listCustomSignalFactors
+      tags: [Scanner]
+      responses:
+        '200':
+          description: Factor catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalFactorList'
+  /api/v1/swing/custom/profiles:
+    get:
+      summary: List saved custom-signal mixes
+      operationId: listCustomSignalProfiles
+      tags: [Scanner]
+      parameters:
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Saved profiles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfileList'
+        '400':
+          $ref: '#/components/responses/Error'
+    post:
+      summary: Save a custom-signal mix
+      description: Weights are factor id → percent and must sum to 100. Omitted factors are 0.
+      operationId: createCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomSignalProfileWrite'
+      responses:
+        '201':
+          description: Created profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfile'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/swing/custom/profiles/{id}:
+    get:
+      summary: Get a saved custom-signal mix
+      operationId: getCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfile'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      summary: Update a saved custom-signal mix
+      operationId: updateCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomSignalProfileWrite'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalProfile'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      summary: Delete a saved custom-signal mix
+      operationId: deleteCustomSignalProfile
+      tags: [Scanner]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/swing/custom/scan:
+    get:
+      summary: Scan the watchlist with a custom signal mix
+      description: |
+        Scores watchlist coins with the selected factor weights (must sum to 100).
+        Default mix matches the swing engine (hunt off). Inline weight* overrides
+        a saved profileId. Missing hunt keeps its percent and adds 0 (neutral 50).
+        scoreCompare is default vs applied with per-factor effect. Informational only.
+      operationId: scanCustomSignals
+      tags: [Scanner]
+      parameters:
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: profileId
+          in: query
+          schema: { type: string }
+        - name: exchange
+          in: query
+          schema: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist] }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25, maximum: 25 }
+        - name: weightEmaCrossover
+          in: query
+          schema: { type: number }
+        - name: weightEmaTrend
+          in: query
+          schema: { type: number }
+        - name: weightSupertrend
+          in: query
+          schema: { type: number }
+        - name: weightRsiRecovery
+          in: query
+          schema: { type: number }
+        - name: weightMacd
+          in: query
+          schema: { type: number }
+        - name: weightAdx
+          in: query
+          schema: { type: number }
+        - name: weightAccumulation
+          in: query
+          schema: { type: number }
+        - name: weightVolumeBreakout
+          in: query
+          schema: { type: number }
+        - name: weightHuntUp
+          in: query
+          description: Combined liquidation-hunt up score (long-side). 0 = omitted.
+          schema: { type: number }
+      responses:
+        '200':
+          description: Ranked custom scores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomSignalScan'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/indicators:
     get:
       summary: RSI and EMA indicators for a symbol
@@ -8623,6 +8818,114 @@ components:
             $ref: '#/components/schemas/SwingDecision'
         count: { type: integer }
         accepted: { type: integer }
+        note: { type: string }
+    CustomSignalFactorInfo:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        group: { type: string, enum: [swing, hunt] }
+        defaultPct: { type: number }
+    CustomSignalFactorList:
+      type: object
+      properties:
+        factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSignalFactorInfo'
+        note: { type: string }
+    CustomSignalProfile:
+      type: object
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        name: { type: string }
+        weights:
+          type: object
+          additionalProperties: { type: number }
+        source: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CustomSignalProfileList:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSignalProfile'
+        count: { type: integer }
+    CustomSignalProfileWrite:
+      type: object
+      properties:
+        clientId: { type: string }
+        name: { type: string }
+        weights:
+          type: object
+          additionalProperties: { type: number }
+    CustomSignalFactor:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        score: { type: number }
+        requestedPct: { type: number }
+        sharePct: { type: number }
+        effect: { type: number }
+        status: { type: string, enum: [used, missing, disabled] }
+        detail: { type: string }
+    CustomSignalScore:
+      type: object
+      properties:
+        score: { type: number }
+        grade: { type: string }
+        factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSignalFactor'
+        scoreMix:
+          type: object
+          additionalProperties: true
+    CustomSignalCompare:
+      type: object
+      properties:
+        default:
+          type: object
+          additionalProperties: true
+        applied:
+          type: object
+          additionalProperties: true
+        delta:
+          type: object
+          additionalProperties: true
+        note: { type: string }
+    CustomSignalItem:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        interval: { type: string }
+        price: { type: number }
+        barTime: { type: string, format: date-time }
+        engine:
+          $ref: '#/components/schemas/SwingDecision'
+        custom:
+          $ref: '#/components/schemas/CustomSignalScore'
+        scoreCompare:
+          $ref: '#/components/schemas/CustomSignalCompare'
+        huntDetail: { type: string }
+    CustomSignalScan:
+      type: object
+      properties:
+        profileId: { type: string }
+        source: { type: string }
+        weights:
+          type: object
+          additionalProperties: { type: number }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomSignalItem'
+        count: { type: integer }
         note: { type: string }
     ScannerSetup:
       type: object

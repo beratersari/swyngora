@@ -24,6 +24,7 @@
   },
   "tabs": {
     "setups": "Kurulumlar",
+    "custom": "Özel",
     "hits": "Eşleşmeler",
     "rules": "Kurallar",
     "lab": "Lab"
@@ -125,6 +126,41 @@
       "90d": "90 gün",
       "180d": "180 gün",
       "365d": "365 gün"
+    }
+  },
+  "custom": {
+    "hint": "Salınım faktörlerini ve isteğe bağlı likidasyon avı (yukarı) skorunu seçin. Ağırlıklar 100 olmalı. Skor önizlemesi düzenlerken güncellenir — avı yüklemek için uygulayın. Yalnızca bilgilendirme.",
+    "profile": "Kayıtlı karışım",
+    "builtIn": "Yerleşik salınım karışımı",
+    "name": "Ad",
+    "namePlaceholder": "Kaydetmek için bir ad verin",
+    "total": "Ağırlık toplamı {{total}}",
+    "needHundred": "100 olmalı",
+    "apply": "Karışımı uygula",
+    "save": "Kaydet",
+    "saveAs": "Farklı kaydet",
+    "reset": "Sıfırla",
+    "delete": "Sil",
+    "saveSuccess": "Özel karışım kaydedildi",
+    "deleteSuccess": "Özel karışım silindi",
+    "previewHint": "Yerleşik karışıma göre canlı önizleme. Her faktör skora kaç puan eklediğini veya çıkardığını gösterir.",
+    "loading": "İzleme listesi skorlanıyor…",
+    "empty": "Henüz skor yok. Çift ekleyip bir karışım uygulayın.",
+    "grade": "Not {{grade}} · {{score}}",
+    "vsDefault": "Özel {{applied}} / yerleşik {{def}} ({{delta}})",
+    "largestChange": "En büyük etki: {{factor}} {{delta}}",
+    "missing": "eksik",
+    "huntReload": "Av açık ama bu taramada av verisi yok. Likidasyon avını yüklemek için karışımı uygulayın.",
+    "factors": {
+      "ema_crossover": "EMA 9/21 kesişimi",
+      "ema_trend_bias": "EMA 50/200 geri çekilme",
+      "supertrend": "SuperTrend",
+      "rsi_recovery": "RSI toparlanması",
+      "macd_momentum": "MACD histogramı",
+      "adx_trend_strength": "ADX trend",
+      "accumulation": "BB sıkışması",
+      "volume_breakout": "Hacim kırılması",
+      "hunt_up": "Likidasyon avı (yukarı)"
     }
   }
 }

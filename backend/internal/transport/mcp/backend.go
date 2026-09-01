@@ -4572,6 +4572,135 @@ func (b *Backend) ScanSwingSetups(ctx context.Context, clientID, exchange string
 	})
 }
 
+func parseCustomSignalWeightsJSON(raw string) (map[string]float64, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("%w: weightsJson is required", domain.ErrInvalidArgument)
+	}
+	var out map[string]float64
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("%w: weightsJson must be a JSON object of factor id to percent", domain.ErrInvalidArgument)
+	}
+	return out, nil
+}
+
+func customProfileMap(p *domain.CustomSignalProfile) map[string]any {
+	if p == nil {
+		return map[string]any{}
+	}
+	pct := p.Weights.Pct
+	if pct == nil {
+		pct = map[string]float64{}
+	}
+	return map[string]any{
+		"id": p.ID, "clientId": p.ClientID, "name": p.Name, "weights": pct,
+		"source":    p.Weights.Source,
+		"createdAt": p.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+func (b *Backend) ListCustomSignalFactors(context.Context) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	return mustJSON(map[string]any{
+		"factors": b.Swing.ListFactors(),
+		"note":    "Built-in percents match the swing engine. Hunt is off until you give it weight.",
+	})
+}
+
+func (b *Backend) ListCustomSignalProfiles(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	list, err := b.Swing.ListProfiles(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, customProfileMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"profiles": items, "count": len(items)})
+}
+
+func (b *Backend) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	p, err := b.Swing.CreateProfile(ctx, swing.CreateProfileInput{ClientID: clientID, Name: name, Weights: weights})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(customProfileMap(p))
+}
+
+func (b *Backend) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	in := swing.UpdateProfileInput{ClientID: clientID, ID: id, HasWeights: weights != nil}
+	if strings.TrimSpace(name) != "" {
+		n := name
+		in.Name = &n
+	}
+	in.Weights = weights
+	p, err := b.Swing.UpdateProfile(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(customProfileMap(p))
+}
+
+func (b *Backend) DeleteCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	if err := b.Swing.DeleteProfile(ctx, clientID, id); err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{"ok": true})
+}
+
+func (b *Backend) ScanCustomSignals(ctx context.Context, clientID, profileID, exchange string, limit int, weights domain.CustomSignalWeights, hasWeights bool) (json.RawMessage, error) {
+	if b.Swing == nil {
+		return nil, fmt.Errorf("%w: swing service not configured", domain.ErrUpstream)
+	}
+	wts, resolvedID, err := b.Swing.ResolveCustomWeights(ctx, clientID, profileID, weights, hasWeights)
+	if err != nil {
+		return nil, err
+	}
+	res, err := b.Swing.ScanCustom(ctx, swing.CustomScanInput{
+		ClientID: clientID, Exchange: exchange, Limit: limit, ProfileID: resolvedID, Weights: wts,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(res.Items))
+	for i := range res.Items {
+		it := res.Items[i]
+		row := map[string]any{
+			"exchange": string(it.Exchange), "symbol": it.Symbol, "interval": it.Interval,
+			"price": it.Price, "custom": it.Custom, "scoreCompare": it.Compare,
+		}
+		if !it.BarTime.IsZero() {
+			row["barTime"] = it.BarTime.UTC().Format(time.RFC3339Nano)
+		}
+		if it.HuntDetail != "" {
+			row["huntDetail"] = it.HuntDetail
+		}
+		if it.Engine != nil {
+			row["engine"] = swingDecisionMap(it.Engine)
+		}
+		items = append(items, row)
+	}
+	return mustJSON(map[string]any{
+		"profileId": res.ProfileID, "source": res.Weights.Source, "weights": res.Weights.Pct,
+		"items": items, "count": res.Count, "note": res.Note,
+	})
+}
+
 func swingDecisionMap(d *domain.SwingDecision) map[string]any {
 	if d == nil {
 		return map[string]any{}

@@ -368,6 +368,42 @@ class SwingScanInput(BaseModel):
     limit: int = Field(default=25, ge=1, le=25)
 
 
+class CustomSignalProfileInput(BaseModel):
+    client_id: str
+    name: str
+    weights_json: str = Field(
+        description='JSON object of factor id to percent summing to 100, e.g. {"hunt_up":40,"rsi_recovery":60}'
+    )
+
+
+class CustomSignalProfileUpdateInput(BaseModel):
+    client_id: str
+    profile_id: str
+    name: str = ""
+    weights_json: str = Field(default="", description="JSON object of factor id to percent")
+
+
+class CustomSignalProfileDeleteInput(BaseModel):
+    client_id: str
+    profile_id: str
+
+
+class CustomSignalScanInput(BaseModel):
+    client_id: str
+    profile_id: str = ""
+    exchange: str = ""
+    limit: int = Field(default=25, ge=1, le=25)
+    weight_ema_crossover: float | None = None
+    weight_ema_trend: float | None = None
+    weight_supertrend: float | None = None
+    weight_rsi_recovery: float | None = None
+    weight_macd: float | None = None
+    weight_adx: float | None = None
+    weight_accumulation: float | None = None
+    weight_volume_breakout: float | None = None
+    weight_hunt_up: float | None = None
+
+
 class OrderBookInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
@@ -2511,6 +2547,71 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["exchange"] = exchange
         return http.get("/api/v1/swing/setups", params)
 
+    def list_custom_signal_factors() -> str:
+        return http.get("/api/v1/swing/custom/factors", {})
+
+    def list_custom_signal_profiles(client_id: str) -> str:
+        return http.get("/api/v1/swing/custom/profiles", {"clientId": client_id})
+
+    def create_custom_signal_profile(client_id: str, name: str, weights_json: str) -> str:
+        weights = json.loads(weights_json) if weights_json else {}
+        return http.post(
+            "/api/v1/swing/custom/profiles",
+            {"clientId": client_id, "name": name, "weights": weights},
+        )
+
+    def update_custom_signal_profile(
+        client_id: str, profile_id: str, name: str = "", weights_json: str = ""
+    ) -> str:
+        body: dict[str, Any] = {"clientId": client_id}
+        if name:
+            body["name"] = name
+        if weights_json:
+            body["weights"] = json.loads(weights_json)
+        return http.patch(f"/api/v1/swing/custom/profiles/{profile_id}", body)
+
+    def delete_custom_signal_profile(client_id: str, profile_id: str) -> str:
+        return http.delete(
+            f"/api/v1/swing/custom/profiles/{profile_id}",
+            {"clientId": client_id},
+        )
+
+    def scan_custom_signals(
+        client_id: str,
+        profile_id: str = "",
+        exchange: str = "",
+        limit: int = 25,
+        weight_ema_crossover: float | None = None,
+        weight_ema_trend: float | None = None,
+        weight_supertrend: float | None = None,
+        weight_rsi_recovery: float | None = None,
+        weight_macd: float | None = None,
+        weight_adx: float | None = None,
+        weight_accumulation: float | None = None,
+        weight_volume_breakout: float | None = None,
+        weight_hunt_up: float | None = None,
+    ) -> str:
+        params: dict[str, Any] = {"clientId": client_id, "limit": limit}
+        if profile_id:
+            params["profileId"] = profile_id
+        if exchange:
+            params["exchange"] = exchange
+        weights = {
+            "weightEmaCrossover": weight_ema_crossover,
+            "weightEmaTrend": weight_ema_trend,
+            "weightSupertrend": weight_supertrend,
+            "weightRsiRecovery": weight_rsi_recovery,
+            "weightMacd": weight_macd,
+            "weightAdx": weight_adx,
+            "weightAccumulation": weight_accumulation,
+            "weightVolumeBreakout": weight_volume_breakout,
+            "weightHuntUp": weight_hunt_up,
+        }
+        for key, val in weights.items():
+            if val is not None:
+                params[key] = val
+        return http.get("/api/v1/swing/custom/scan", params)
+
     def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
         params: dict[str, Any] = {"clientId": client_id}
         if owner_client_id:
@@ -4473,6 +4574,44 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="scan_swing_setups",
             description="Scan the client's watchlist for quality-gated swing setups.",
             args_schema=SwingScanInput,
+        ),
+        StructuredTool.from_function(
+            list_custom_signal_factors,
+            name="list_custom_signal_factors",
+            description="List mixable custom-signal factors (swing patterns + hunt_up) and built-in percents.",
+        ),
+        StructuredTool.from_function(
+            list_custom_signal_profiles,
+            name="list_custom_signal_profiles",
+            description="List saved custom-signal mixes for a clientId.",
+            args_schema=ClientIdInput,
+        ),
+        StructuredTool.from_function(
+            create_custom_signal_profile,
+            name="create_custom_signal_profile",
+            description="Save a named custom-signal mix. weights_json must sum to 100.",
+            args_schema=CustomSignalProfileInput,
+        ),
+        StructuredTool.from_function(
+            update_custom_signal_profile,
+            name="update_custom_signal_profile",
+            description="Update a saved custom-signal mix.",
+            args_schema=CustomSignalProfileUpdateInput,
+        ),
+        StructuredTool.from_function(
+            delete_custom_signal_profile,
+            name="delete_custom_signal_profile",
+            description="Delete a saved custom-signal mix.",
+            args_schema=CustomSignalProfileDeleteInput,
+        ),
+        StructuredTool.from_function(
+            scan_custom_signals,
+            name="scan_custom_signals",
+            description=(
+                "Scan the watchlist with a custom factor mix. Optional weight_* must sum to 100. "
+                "Missing hunt adds 0. scoreCompare is default vs applied. Informational only."
+            ),
+            args_schema=CustomSignalScanInput,
         ),
         StructuredTool.from_function(
             get_watchlist,

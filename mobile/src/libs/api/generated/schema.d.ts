@@ -1732,6 +1732,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/swing/custom/factors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List custom-signal factors
+         * @description Swing-engine pattern ids plus optional liquidation-hunt up score. Built-in percents match the engine; hunt defaults to 0.
+         */
+        get: operations["listCustomSignalFactors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/custom/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List saved custom-signal mixes */
+        get: operations["listCustomSignalProfiles"];
+        put?: never;
+        /**
+         * Save a custom-signal mix
+         * @description Weights are factor id → percent and must sum to 100. Omitted factors are 0.
+         */
+        post: operations["createCustomSignalProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/swing/custom/profiles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a saved custom-signal mix */
+        get: operations["getCustomSignalProfile"];
+        put?: never;
+        post?: never;
+        /** Delete a saved custom-signal mix */
+        delete: operations["deleteCustomSignalProfile"];
+        options?: never;
+        head?: never;
+        /** Update a saved custom-signal mix */
+        patch: operations["updateCustomSignalProfile"];
+        trace?: never;
+    };
+    "/api/v1/swing/custom/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan the watchlist with a custom signal mix
+         * @description Scores watchlist coins with the selected factor weights (must sum to 100).
+         *     Default mix matches the swing engine (hunt off). Inline weight* overrides
+         *     a saved profileId. Missing hunt keeps its percent and adds 0 (neutral 50).
+         *     scoreCompare is default vs applied with per-factor effect. Informational only.
+         */
+        get: operations["scanCustomSignals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/indicators": {
         parameters: {
             query?: never;
@@ -5161,6 +5244,94 @@ export interface components {
             accepted?: number;
             note?: string;
         };
+        CustomSignalFactorInfo: {
+            id?: string;
+            label?: string;
+            /** @enum {string} */
+            group?: "swing" | "hunt";
+            defaultPct?: number;
+        };
+        CustomSignalFactorList: {
+            factors?: components["schemas"]["CustomSignalFactorInfo"][];
+            note?: string;
+        };
+        CustomSignalProfile: {
+            id?: string;
+            clientId?: string;
+            name?: string;
+            weights?: {
+                [key: string]: number;
+            };
+            source?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        CustomSignalProfileList: {
+            profiles?: components["schemas"]["CustomSignalProfile"][];
+            count?: number;
+        };
+        CustomSignalProfileWrite: {
+            clientId?: string;
+            name?: string;
+            weights?: {
+                [key: string]: number;
+            };
+        };
+        CustomSignalFactor: {
+            id?: string;
+            label?: string;
+            score?: number;
+            requestedPct?: number;
+            sharePct?: number;
+            effect?: number;
+            /** @enum {string} */
+            status?: "used" | "missing" | "disabled";
+            detail?: string;
+        };
+        CustomSignalScore: {
+            score?: number;
+            grade?: string;
+            factors?: components["schemas"]["CustomSignalFactor"][];
+            scoreMix?: {
+                [key: string]: unknown;
+            };
+        };
+        CustomSignalCompare: {
+            default?: {
+                [key: string]: unknown;
+            };
+            applied?: {
+                [key: string]: unknown;
+            };
+            delta?: {
+                [key: string]: unknown;
+            };
+            note?: string;
+        };
+        CustomSignalItem: {
+            exchange?: string;
+            symbol?: string;
+            interval?: string;
+            price?: number;
+            /** Format: date-time */
+            barTime?: string;
+            engine?: components["schemas"]["SwingDecision"];
+            custom?: components["schemas"]["CustomSignalScore"];
+            scoreCompare?: components["schemas"]["CustomSignalCompare"];
+            huntDetail?: string;
+        };
+        CustomSignalScan: {
+            profileId?: string;
+            source?: string;
+            weights?: {
+                [key: string]: number;
+            };
+            items?: components["schemas"]["CustomSignalItem"][];
+            count?: number;
+            note?: string;
+        };
         ScannerSetup: {
             key?: string;
             exchange?: string;
@@ -8312,6 +8483,198 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SwingSetupList"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    listCustomSignalFactors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Factor catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalFactorList"];
+                };
+            };
+        };
+    };
+    listCustomSignalProfiles: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved profiles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfileList"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    createCustomSignalProfile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomSignalProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Created profile */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfile"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getCustomSignalProfile: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfile"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    deleteCustomSignalProfile: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    updateCustomSignalProfile: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomSignalProfileWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalProfile"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    scanCustomSignals: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                profileId?: string;
+                exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                limit?: number;
+                weightEmaCrossover?: number;
+                weightEmaTrend?: number;
+                weightSupertrend?: number;
+                weightRsiRecovery?: number;
+                weightMacd?: number;
+                weightAdx?: number;
+                weightAccumulation?: number;
+                weightVolumeBreakout?: number;
+                /** @description Combined liquidation-hunt up score (long-side). 0 = omitted. */
+                weightHuntUp?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked custom scores */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomSignalScan"];
                 };
             };
             400: components["responses"]["Error"];

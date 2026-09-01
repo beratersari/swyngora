@@ -48,13 +48,13 @@ func trendCandles(n int) []domain.Candle {
 		o := px
 		px += 0.7
 		out[i] = domain.Candle{
-			OpenTime: t0.Add(time.Duration(i) * 4 * time.Hour),
+			OpenTime:  t0.Add(time.Duration(i) * 4 * time.Hour),
 			CloseTime: t0.Add(time.Duration(i+1) * 4 * time.Hour),
-			Open: strconv.FormatFloat(o, 'f', -1, 64),
-			High: strconv.FormatFloat(px+0.3, 'f', -1, 64),
-			Low:  strconv.FormatFloat(o-0.2, 'f', -1, 64),
-			Close: strconv.FormatFloat(px, 'f', -1, 64),
-			Volume: "1000",
+			Open:      strconv.FormatFloat(o, 'f', -1, 64),
+			High:      strconv.FormatFloat(px+0.3, 'f', -1, 64),
+			Low:       strconv.FormatFloat(o-0.2, 'f', -1, 64),
+			Close:     strconv.FormatFloat(px, 'f', -1, 64),
+			Volume:    "1000",
 		}
 	}
 	// last bar closed
@@ -97,5 +97,116 @@ func TestScanWatchlist_UsesClientList(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].Symbol != "ETHUSDT" {
 		t.Fatalf("%+v", list)
+	}
+}
+
+type memProfiles struct {
+	byID map[string]domain.CustomSignalProfile
+}
+
+func (m *memProfiles) CreateProfile(_ context.Context, p domain.CustomSignalProfile) (*domain.CustomSignalProfile, error) {
+	if m.byID == nil {
+		m.byID = map[string]domain.CustomSignalProfile{}
+	}
+	m.byID[p.ID] = p
+	return &p, nil
+}
+func (m *memProfiles) GetProfile(_ context.Context, clientID, id string) (*domain.CustomSignalProfile, error) {
+	p, ok := m.byID[id]
+	if !ok || p.ClientID != clientID {
+		return nil, domain.ErrNotFound
+	}
+	return &p, nil
+}
+func (m *memProfiles) UpdateProfile(_ context.Context, p domain.CustomSignalProfile) (*domain.CustomSignalProfile, error) {
+	cur, ok := m.byID[p.ID]
+	if !ok || cur.ClientID != p.ClientID {
+		return nil, domain.ErrNotFound
+	}
+	m.byID[p.ID] = p
+	return &p, nil
+}
+func (m *memProfiles) ListProfiles(_ context.Context, clientID string) ([]domain.CustomSignalProfile, error) {
+	out := make([]domain.CustomSignalProfile, 0)
+	for _, p := range m.byID {
+		if p.ClientID == clientID {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+func (m *memProfiles) DeleteProfile(_ context.Context, clientID, id string) error {
+	p, ok := m.byID[id]
+	if !ok || p.ClientID != clientID {
+		return domain.ErrNotFound
+	}
+	delete(m.byID, id)
+	return nil
+}
+func (m *memProfiles) CountProfiles(_ context.Context, clientID string) (int, error) {
+	n := 0
+	for _, p := range m.byID {
+		if p.ClientID == clientID {
+			n++
+		}
+	}
+	return n, nil
+}
+func (m *memProfiles) PurgeProfiles(_ context.Context, clientID string) error {
+	for id, p := range m.byID {
+		if p.ClientID == clientID {
+			delete(m.byID, id)
+		}
+	}
+	return nil
+}
+
+type fakeHunt struct {
+	up float64
+}
+
+func (f fakeHunt) GetLiquidationHunt(context.Context, string, string) (*domain.HuntReport, error) {
+	return &domain.HuntReport{Bias: &domain.HuntBias{
+		UpScore: f.up, DownScore: 30, Lean: domain.HuntLeanUp,
+		Coverage: domain.HuntCoverage{Usable: true},
+	}}, nil
+}
+
+func TestCreateAndScanCustom(t *testing.T) {
+	bars := trendCandles(80)
+	m := market.NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fakePort{candles: bars},
+	}, fakeSupply{})
+	wl := watchlist.New(watchliststore.NewMemory())
+	if _, err := wl.Add(context.Background(), "user-cs", "", "binance", "ETHUSDT", "", domain.WatchlistUnconditionalVersion); err != nil {
+		t.Fatal(err)
+	}
+	store := &memProfiles{}
+	svc := New(m, wl).WithProfiles(store).WithHunt(fakeHunt{up: 88})
+	p, err := svc.CreateProfile(context.Background(), CreateProfileInput{
+		ClientID: "user-cs", Name: "Hunt lean",
+		Weights: map[string]float64{domain.CustomFactorHuntUp: 100},
+	})
+	if err != nil || p.ID == "" {
+		t.Fatalf("%+v %v", p, err)
+	}
+	wts, id, err := svc.ResolveCustomWeights(context.Background(), "user-cs", p.ID, domain.CustomSignalWeights{}, false)
+	if err != nil || id != p.ID || !wts.NeedsHunt() {
+		t.Fatalf("%+v %s %v", wts, id, err)
+	}
+	res, err := svc.ScanCustom(context.Background(), CustomScanInput{
+		ClientID: "user-cs", ProfileID: p.ID, Weights: wts, Limit: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Count != 1 || res.Items[0].Symbol != "ETHUSDT" {
+		t.Fatalf("%+v", res)
+	}
+	if res.Items[0].Custom.Score < 80 {
+		t.Fatalf("expected hunt-heavy score, got %+v", res.Items[0].Custom)
+	}
+	if res.Items[0].Compare.Delta.LargestChange == nil {
+		t.Fatal("expected compare largest change")
 	}
 }

@@ -44,6 +44,19 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useDeleteScannerRuleMutation: () => [vi.fn(), { isLoading: false }],
     useStartScannerBacktestMutation: () => [vi.fn(), { isLoading: false, isError: false }],
     useCancelScannerBacktestMutation: () => [vi.fn(), { isLoading: false }],
+    useListCustomSignalProfilesQuery: () => ({
+      data: { profiles: [], count: 0 },
+      isLoading: false,
+      refetch: vi.fn(),
+    }),
+    useScanCustomSignalsQuery: () => ({
+      data: { items: [], count: 0 },
+      isLoading: false,
+      isFetching: false,
+    }),
+    useCreateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
+    useUpdateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
+    useDeleteCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useLazyListSpotMarketsQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
   };
 });
@@ -53,5 +66,6 @@ describe('SignalsPage', () => {
     renderWithProviders(<SignalsPage />, { routerEntries: ['/signals'] });
     expect(await screen.findByRole('heading', { name: /swing signals|salınım sinyalleri/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /setups|kurulumlar/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /custom|özel/i })).toBeInTheDocument();
   });
 });

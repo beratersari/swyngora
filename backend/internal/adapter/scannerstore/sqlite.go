@@ -170,6 +170,26 @@ CREATE INDEX IF NOT EXISTS idx_scanner_backtest_signals ON scanner_backtest_sign
 		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
 			return err
 		}
+		v = 3
+	}
+	if v < 4 {
+		if err := sqliteutil.ExecAllowExists(s.db, `
+CREATE TABLE IF NOT EXISTS custom_signal_profiles (
+	id          TEXT PRIMARY KEY NOT NULL,
+	client_id   TEXT NOT NULL,
+	name        TEXT NOT NULL,
+	weights_json TEXT NOT NULL,
+	created_at  TEXT NOT NULL,
+	updated_at  TEXT NOT NULL
+)`); err != nil {
+			return err
+		}
+		if err := sqliteutil.ExecAllowExists(s.db, `CREATE INDEX IF NOT EXISTS idx_custom_signal_profiles_client ON custom_signal_profiles(client_id, updated_at DESC)`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -662,6 +682,9 @@ func (s *SQLite) PurgeClient(ctx context.Context, clientID string) error {
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM scanner_rules WHERE client_id = ?`, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM custom_signal_profiles WHERE client_id = ?`, clientID); err != nil {
 		return err
 	}
 	return nil

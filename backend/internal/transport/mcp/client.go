@@ -2497,6 +2497,72 @@ func (c *APIClient) ScanSwingSetups(ctx context.Context, clientID, exchange stri
 	return c.get(ctx, "/api/v1/swing/setups", q)
 }
 
+func (c *APIClient) ListCustomSignalFactors(ctx context.Context) (json.RawMessage, error) {
+	return c.get(ctx, "/api/v1/swing/custom/factors", nil)
+}
+
+func (c *APIClient) ListCustomSignalProfiles(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	return c.get(ctx, "/api/v1/swing/custom/profiles", q)
+}
+
+func (c *APIClient) CreateCustomSignalProfile(ctx context.Context, clientID, name string, weights map[string]float64) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/swing/custom/profiles", map[string]any{
+		"clientId": clientID, "name": name, "weights": weights,
+	})
+}
+
+func (c *APIClient) UpdateCustomSignalProfile(ctx context.Context, clientID, id, name string, weights map[string]float64) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID}
+	if name != "" {
+		body["name"] = name
+	}
+	if weights != nil {
+		body["weights"] = weights
+	}
+	return c.sendJSON(ctx, http.MethodPatch, "/api/v1/swing/custom/profiles/"+url.PathEscape(id), body)
+}
+
+func (c *APIClient) DeleteCustomSignalProfile(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/swing/custom/profiles/" + url.PathEscape(id)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
+}
+
+func (c *APIClient) ScanCustomSignals(ctx context.Context, clientID, profileID, exchange string, limit int, weights domain.CustomSignalWeights, hasWeights bool) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if profileID != "" {
+		q.Set("profileId", profileID)
+	}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if hasWeights {
+		for _, id := range domain.CustomSignalFactorIDs {
+			key := domain.CustomSignalQueryKeys[id]
+			if v, ok := weights.Pct[id]; ok {
+				q.Set(key, strconv.FormatFloat(v, 'f', -1, 64))
+			}
+		}
+	}
+	return c.get(ctx, "/api/v1/swing/custom/scan", q)
+}
+
 // ListScannerResults lists scanner match history.
 func (c *APIClient) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
 	q := url.Values{}

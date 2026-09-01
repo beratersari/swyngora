@@ -24,6 +24,7 @@
   },
   "tabs": {
     "setups": "Setups",
+    "custom": "Custom",
     "hits": "Hits",
     "rules": "Rules",
     "lab": "Lab"
@@ -125,6 +126,41 @@
       "90d": "90 days",
       "180d": "180 days",
       "365d": "365 days"
+    }
+  },
+  "custom": {
+    "hint": "Pick swing factors and optional liquidation-hunt up. Weights must sum to 100. Score preview updates as you edit — apply to reload hunt. Informational only.",
+    "profile": "Saved mix",
+    "builtIn": "Built-in swing mix",
+    "name": "Name",
+    "namePlaceholder": "Name this mix to save it",
+    "total": "Weights total {{total}}",
+    "needHundred": "must equal 100",
+    "apply": "Apply mix",
+    "save": "Save",
+    "saveAs": "Save as",
+    "reset": "Reset",
+    "delete": "Delete",
+    "saveSuccess": "Custom mix saved",
+    "deleteSuccess": "Custom mix deleted",
+    "previewHint": "Live preview vs the built-in mix. Each factor shows how many points it adds or subtracts.",
+    "loading": "Scoring the watchlist…",
+    "empty": "No watchlist scores yet. Add pairs and apply a mix.",
+    "grade": "Grade {{grade}} · {{score}}",
+    "vsDefault": "Custom {{applied}} vs built-in {{def}} ({{delta}})",
+    "largestChange": "Largest mover: {{factor}} {{delta}}",
+    "missing": "missing",
+    "huntReload": "Hunt is on but this scan has no hunt data yet. Apply the mix to load liquidation hunt.",
+    "factors": {
+      "ema_crossover": "EMA 9/21 cross",
+      "ema_trend_bias": "EMA 50/200 pullback",
+      "supertrend": "SuperTrend",
+      "rsi_recovery": "RSI recovery",
+      "macd_momentum": "MACD histogram",
+      "adx_trend_strength": "ADX trend",
+      "accumulation": "BB squeeze / dry-up",
+      "volume_breakout": "Volume breakout",
+      "hunt_up": "Liquidation hunt (up)"
     }
   }
 }

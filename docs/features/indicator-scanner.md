@@ -13,6 +13,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 | Tab | Behavior |
 |-----|----------|
 | Setups | API confluence on `GET /api/v1/scanner/results`: ≥2 of EMA / RSI / volume on the same pair+interval in 24h. Grade A = 3/3. Same-bar overlap is flagged. |
+| Custom | User-picked swing-engine factors + optional liquidation-hunt up score, with live weight preview and saved mixes (`GET /api/v1/swing/custom/scan`). Existing swing cards stay on Setups. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
 | Rules | Create, edit, enable/disable, or delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
 | Lab | Historical backtest on one symbol with 1/5/20d forward returns. |

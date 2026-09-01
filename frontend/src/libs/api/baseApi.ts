@@ -40,6 +40,8 @@ export const baseApi = createApi({
     'ScannerResult',
     'ScannerBacktest',
     'SwingSetup',
+    'CustomSignalProfile',
+    'CustomSignalScan',
   ],
   endpoints: () => ({}),
 });

@@ -28,7 +28,7 @@ Reserved tenant names (`default`, `anonymous`, `http-default`, `ai-assistant`, e
 
 - Watchlist items + meta, shares (as owner or grantee), audit  
 - Price alerts, webhooks, notification/digest rows  
-- Scanner rules, results, backtests (+ signals)  
+- Scanner rules, results, backtests (+ signals), and custom-signal profiles  
 - Export jobs + files  
 - Import jobs + source/payload files  
 - User API keys  

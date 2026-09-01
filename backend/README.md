@@ -156,6 +156,10 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/scanner/backtests/{id}` | Backtest progress/summary |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel backtest |
 | `GET` | `/api/v1/scanner/backtests/{id}/signals` | Backtest signals + 1/5/20d returns |
+| `GET` | `/api/v1/swing/custom/factors` | Mixable swing + hunt factors and built-in percents |
+| `GET`/`POST` | `/api/v1/swing/custom/profiles` | List / save a named custom mix (weights sum to 100) |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/swing/custom/profiles/{id}` | Get / update / delete a saved mix |
+| `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`) |
 | `POST` | `/api/v1/export` | Start JSON/CSV export of own watchlist/shares/alerts/backtests/portfolios |
 | `GET` | `/api/v1/export` | List export jobs |
 | `GET` | `/api/v1/export/{id}` | Export progress / status |
@@ -195,7 +199,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **Indicator scanner:** create RSI / EMA crossover / volume-increase rules for the client's watchlist (`/api/v1/scanner/rules`). Select one or more conditions and `matchMode` `all` (every selected condition) or `any` (one is enough); a hit stores one combined result. Combo rules load enough candles for the longest selected condition. `PATCH` enables/disables a rule or edits periods and thresholds without deleting it. A background job evaluates **enabled** rules on `SCANNER_CHECK_INTERVAL` (default `60s`) and writes a hit only when the rule **becomes** true (not on every later bar that stays true). **Historical backtests** (`/api/v1/scanner/backtests`) snapshot the rule when queued, then replay that copy over a date range for one symbol, track progress, support cancel, and report 1/5/20-day forward returns per signal. SQLite path `SCANNER_DB_PATH` (default `data/scanner.db`).
 
-**Swing engine:** `GET /api/v1/market/swing?symbol=` analyzes one pair on **closed** 4h+1d bars (Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB, BTC regime, min R:R 1.8 for trigger). `GET /api/v1/swing/setups` scans the watchlist (max 25). Informational only.
+**Swing engine:** `GET /api/v1/market/swing?symbol=` analyzes one pair on **closed** 4h+1d bars (Wilder RSI/ADX/ATR, SuperTrend, MACD, volume/BB, BTC regime, min R:R 1.8 for trigger). `GET /api/v1/swing/setups` scans the watchlist (max 25). **Custom mixes** (`/api/v1/swing/custom/*`) let a client pick those pattern weights plus optional liquidation-hunt up score (must sum to 100; missing hunt adds 0). Saved profiles live in the scanner SQLite file. Informational only.
 
 **User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, backtests, and paper portfolios. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
 
