@@ -4,7 +4,7 @@ Closest wins for files under `ai/`.
 
 ## Scope
 
-Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only. `create_agent` retries the primary, then falls back to the other provider via `build_agent_middleware`.
+Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only. `create_agent` retries the primary, then falls back to the other provider via `build_agent_middleware`. The same list includes `ToolRetryMiddleware` for transient **read** market-tool HTTP errors (`ToolTransientError`: timeout, connect, 429, 5xx). Mutating paper/account calls stay fail-soft strings and are not retried.
 
 ## Rules
 

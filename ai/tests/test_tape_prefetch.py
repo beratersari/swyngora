@@ -43,6 +43,30 @@ def test_prefetch_calls_ticker(monkeypatch):
     assert facts.symbol == "THYAO"
 
 
+def test_prefetch_ticker_exception_does_not_abort(monkeypatch):
+    from swyngora_ai.graph import tape_fetch as tf
+    from swyngora_ai.tools.errors import ToolTransientError
+
+    class _Boom:
+        name = "get_ticker"
+
+        def invoke(self, args: dict[str, Any]) -> str:
+            raise ToolTransientError("timeout: blip")
+
+    class _Ind:
+        name = "get_indicators"
+
+        def invoke(self, args: dict[str, Any]) -> str:
+            return '{"rsi": 51}'
+
+    monkeypatch.setattr(tf, "build_market_tools", lambda settings, pack=None: [_Boom(), _Ind()])
+    blobs = prefetch_tape(Settings(_env_file=None), "THY longest flight")
+    assert any("rsi" in b for b in blobs)
+    facts = extract_market_facts(*blobs)
+    assert facts.last_price == ""
+    assert facts.rsi == "51"
+
+
 def test_packet_never_mentions_stale_cache():
     text = _packet(
         {

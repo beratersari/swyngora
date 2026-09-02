@@ -16,7 +16,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from swyngora_ai.config import Settings
 from swyngora_ai.graph.orchestrator import Orchestrator, SessionMemory
 from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures
-from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
+from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY, build_agent_middleware
 from test_specialists_and_orchestrator import ScriptedModel
 
 
@@ -87,7 +87,7 @@ def test_no_fallback_without_grok_key(monkeypatch) -> None:
     monkeypatch.setenv("AI_LLM_PROVIDER", "ollama")
     monkeypatch.setenv("XAI_API_KEY", "")
     mw = build_agent_middleware(Settings(_env_file=None))
-    assert mw == [MODEL_RETRY]
+    assert mw == [MODEL_RETRY, TOOL_RETRY]
 
 
 def test_ollama_primary_adds_grok_fallback(monkeypatch) -> None:
@@ -101,11 +101,12 @@ def test_ollama_primary_adds_grok_fallback(monkeypatch) -> None:
     monkeypatch.setenv("AI_LLM_PROVIDER", "ollama")
     monkeypatch.setenv("XAI_API_KEY", "test-key")
     mw = build_agent_middleware(Settings(_env_file=None))
-    assert len(mw) == 2
+    assert len(mw) == 3
     assert isinstance(mw[0], ModelFallbackMiddleware)
     assert isinstance(mw[1], ModelRetryMiddleware)
     assert mw[1].on_failure == "error"
     assert mw[1].max_retries == MODEL_RETRY.max_retries
+    assert mw[2] is TOOL_RETRY
     assert captured["max_retries"] == 0
 
 
@@ -123,6 +124,7 @@ def test_grok_primary_adds_ollama_fallback(monkeypatch) -> None:
     assert isinstance(mw[0], ModelFallbackMiddleware)
     assert isinstance(mw[1], ModelRetryMiddleware)
     assert mw[1].on_failure == "error"
+    assert mw[2] is TOOL_RETRY
     assert "model" in ollama_kwargs
 
 
@@ -260,4 +262,4 @@ def test_injected_orchestrator_model_skips_fallback(monkeypatch) -> None:
         model=ScriptedModel(responses=[AIMessage(content="scripted. Not financial advice.")]),
     )
     assert constructed == []
-    assert orch._middleware == [MODEL_RETRY]
+    assert orch._middleware == [MODEL_RETRY, TOOL_RETRY]

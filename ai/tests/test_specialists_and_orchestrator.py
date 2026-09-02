@@ -67,6 +67,28 @@ def test_should_refresh_tape_uses_finmem_ttl():
     assert not _should_refresh_tape(mem, "c1", "hello")
 
 
+def test_orchestrator_chat_survives_prefetch_ticker_timeout(monkeypatch):
+    from swyngora_ai.graph import tape_fetch as tf
+    from swyngora_ai.tools.errors import ToolTransientError
+
+    class _Boom:
+        name = "get_ticker"
+
+        def invoke(self, args: dict[str, Any]) -> str:
+            raise ToolTransientError("timeout: blip")
+
+    monkeypatch.setattr(tf, "build_market_tools", lambda settings, pack=None: [_Boom()])
+    orch = Orchestrator(
+        settings=Settings(_env_file=None),
+        memory=FinMem(path=":memory:"),
+        model=ScriptedModel(
+            responses=[AIMessage(content="Could not refresh tape. Not financial advice.")]
+        ),
+    )
+    out = orch.chat("What is BTC price?", session_id="prefetch-boom")
+    assert "Could not refresh" in out.reply
+
+
 def test_orchestrator_chat_with_scripted_model():
     model = ScriptedModel(
         responses=[

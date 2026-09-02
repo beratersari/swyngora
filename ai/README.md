@@ -22,7 +22,7 @@ User
 |-----------|-----------------|
 | Centralized control | Orchestrator owns routing; specialists do not talk to each other |
 | Tool-grounded numbers | Market agent must call tools; no invented prices |
-| Fail soft | Tool errors returned as text; orchestrator degrades |
+| Fail soft | Tool errors returned as text; orchestrator degrades. Read-tool timeout/429/5xx retry twice first |
 | Provider constraint | **Ollama** (local default) or **Grok/xAI** only |
 | No paid data tiers | DuckDuckGo free search; market data via our backend |
 

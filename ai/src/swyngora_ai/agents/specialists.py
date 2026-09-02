@@ -30,7 +30,7 @@ from swyngora_ai.constants import (
     SPECIALIST_WEB,
     SPECIALIST_X,
 )
-from swyngora_ai.llm.retry import MODEL_RETRY
+from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY
 from swyngora_ai.progress import emit
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
@@ -96,7 +96,7 @@ def _run_react(
             model,
             list(tools),
             system_prompt=system,
-            middleware=list(middleware) if middleware is not None else [MODEL_RETRY],
+            middleware=list(middleware) if middleware is not None else [MODEL_RETRY, TOOL_RETRY],
         )
     msgs = run_agent_with_progress(
         agent,
@@ -134,7 +134,7 @@ class SpecialistRunner:
         self.model = model
         self.settings = settings or get_settings()
         self.client_id = self.settings.default_client_id
-        self._middleware = list(middleware) if middleware is not None else [MODEL_RETRY]
+        self._middleware = list(middleware) if middleware is not None else [MODEL_RETRY, TOOL_RETRY]
         self._compiled: dict[str, Any] = {}
         self._tools: dict[str, list[BaseTool]] = {}
         self._systems: dict[str, str] = {}

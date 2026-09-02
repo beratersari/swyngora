@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.constants import EXCHANGE_VENUES, EXCHANGE_VENUES_OR_ALL
+from swyngora_ai.tools.errors import ToolTransientError
 from swyngora_ai.tools.packs import filter_tools
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
@@ -284,8 +285,10 @@ class _HTTP:
             return err
         return self._scope_error(norm, mutating=mutating)
 
-    def _body_text(self, r: httpx.Response) -> str:
+    def _body_text(self, r: httpx.Response, *, retryable: bool = False) -> str:
         if r.status_code >= 400:
+            if retryable and (r.status_code == 429 or r.status_code >= 500):
+                raise ToolTransientError(f"{r.status_code}: {r.text[:500]}")
             return f"ERROR {r.status_code}: {r.text[:500]}"
         try:
             text = format_tool_json(r.json())
@@ -294,23 +297,38 @@ class _HTTP:
         record_tool_json(text)
         return text
 
-    def _request(self, method: str, url: str, **kwargs: Any) -> str:
+    def _request(self, method: str, url: str, *, retryable: bool = False, **kwargs: Any) -> str:
         try:
             r = self._client.request(method, url, **kwargs)
         except httpx.TimeoutException as e:
-            return f"ERROR timeout: {e}"[:500]
+            msg = f"timeout: {e}"
+            if retryable:
+                raise ToolTransientError(msg[:500]) from e
+            return f"ERROR {msg}"[:500]
         except httpx.ConnectError as e:
-            return f"ERROR connect: {e}"[:500]
+            msg = f"connect: {e}"
+            if retryable:
+                raise ToolTransientError(msg[:500]) from e
+            return f"ERROR {msg}"[:500]
         except httpx.HTTPError as e:
-            return f"ERROR {type(e).__name__}: {e}"[:500]
-        return self._body_text(r)
+            msg = f"{type(e).__name__}: {e}"
+            if retryable:
+                raise ToolTransientError(msg[:500]) from e
+            return f"ERROR {msg}"[:500]
+        return self._body_text(r, retryable=retryable)
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> str:
         if err := self._gate(path, mutating=False):
             return err
         params = dict(params or {})
         self._apply_client_id(params, None)
-        return self._request("GET", f"{self.base}{path}", params=params, headers=self._headers())
+        return self._request(
+            "GET",
+            f"{self.base}{path}",
+            retryable=True,
+            params=params,
+            headers=self._headers(),
+        )
 
     def post(self, path: str, body: dict[str, Any]) -> str:
         if err := self._gate(path, mutating=True):
