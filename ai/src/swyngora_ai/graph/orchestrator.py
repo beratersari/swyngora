@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
@@ -19,7 +19,12 @@ from swyngora_ai.graph.route import classify_route
 from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
-from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures, note_handlers_on
+from swyngora_ai.llm.errors import (
+    NoteLLMError,
+    NoteToolError,
+    format_llm_failures,
+    note_handlers_on,
+)
 from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY, build_agent_middleware
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
@@ -186,6 +191,17 @@ def _emit_tool_call(item: Any, specialist: str | None) -> None:
     emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
 
 
+def _config_with_tool_notes(config: RunnableConfig) -> RunnableConfig:
+    """Attach NoteToolError so leaf tool retries show up on the thinking trace."""
+    raw = config.get("callbacks")
+    existing: list[Any] = list(raw) if isinstance(raw, list) else ([] if raw is None else [raw])
+    if any(isinstance(cb, NoteToolError) for cb in existing):
+        return config
+    merged = dict(config)
+    merged["callbacks"] = [*existing, NoteToolError()]
+    return cast(RunnableConfig, merged)
+
+
 def run_agent_with_progress(
     graph: Any,
     messages: list[BaseMessage],
@@ -194,6 +210,10 @@ def run_agent_with_progress(
     specialist: str | None = None,
 ) -> list[BaseMessage]:
     """Run a create_agent graph via stream_events v3 and emit Process events."""
+    # Specialists own the market tools. The orchestrator run only calls specialists,
+    # so attaching here too would double Retrying lines (inner inherits callbacks).
+    if specialist is not None:
+        config = _config_with_tool_notes(config)
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
