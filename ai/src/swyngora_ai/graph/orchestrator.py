@@ -29,6 +29,7 @@ from swyngora_ai.llm.factory import build_chat_model
 from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY, build_agent_middleware
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import (
+    as_tool_error_preview,
     emit,
     emit_tool_outcome,
     is_tool_error_text,
@@ -175,20 +176,71 @@ def _preview_output(result: object) -> str:
     return preview
 
 
-def _emit_tool_call(item: Any, specialist: str | None) -> None:
-    name = str(getattr(item, "tool_name", None) or "unnamed_tool")
+def _tool_call_id(item: Any) -> str:
+    return str(getattr(item, "tool_call_id", None) or getattr(item, "tool_name", None) or "unnamed")
+
+
+def _tool_call_name(item: Any) -> str:
+    return str(getattr(item, "tool_name", None) or "unnamed_tool")
+
+
+def _emit_tool_start(item: Any, specialist: str | None) -> None:
+    name = _tool_call_name(item)
     raw_args = getattr(item, "input", None) or {}
     args = raw_args if isinstance(raw_args, dict) else {}
     label = f"{specialist} → {name}" if specialist else name
     emit("tool", f"{label}({_fmt_tool_args(args)})" if args else label)
     emit("status", f"Calling {name}…")
-    # v3 is pull-based: item.output stays None until output_deltas is consumed.
-    # Our tools return one complete string, so discard chunks and just wait.
-    for _ in getattr(item, "output_deltas", ()) or ():
-        pass
-    preview = _preview_output(getattr(item, "output", None))
+
+
+def _emit_tool_finished(name: str, output: object | None, error: str | None = None) -> None:
+    """Classify the terminal attempt. Empty output is a failure, not a tick."""
+    if output is not None:
+        preview = _preview_output(output)
+        if getattr(output, "status", None) == "error" or not preview:
+            preview = (
+                preview
+                if is_tool_error_text(preview)
+                else as_tool_error_preview(preview or error or "")
+            )
+    else:
+        preview = as_tool_error_preview(error or "")
     emit_tool_outcome(name, preview)
     emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
+
+
+def _observe_tool_call(
+    item: Any,
+    specialist: str | None,
+    started: set[str],
+    pending: dict[str, tuple[str, str]],
+) -> None:
+    """One v3 tool_calls item. Retries share tool_call_id — start once, outcome last."""
+    # v3 is pull-based: item.output stays None until output_deltas is consumed.
+    for _ in getattr(item, "output_deltas", ()) or ():
+        pass
+    call_id = _tool_call_id(item)
+    name = _tool_call_name(item)
+    if call_id not in started:
+        _emit_tool_start(item, specialist)
+        started.add(call_id)
+    output = getattr(item, "output", None)
+    error = getattr(item, "error", None)
+    if output is not None:
+        pending.pop(call_id, None)
+        _emit_tool_finished(name, output)
+        return
+    if error:
+        pending[call_id] = (name, str(error))
+        return
+    if getattr(item, "completed", True):
+        pending.setdefault(call_id, (name, ""))
+
+
+def _flush_pending_tool_errors(pending: dict[str, tuple[str, str]]) -> None:
+    for name, err in pending.values():
+        _emit_tool_finished(name, None, err)
+    pending.clear()
 
 
 def _config_with_tool_notes(config: RunnableConfig) -> RunnableConfig:
@@ -220,13 +272,16 @@ def run_agent_with_progress(
             message="The v3 streaming protocol on Pregel is experimental.",
         )
         stream = graph.stream_events({"messages": messages}, config, version="v3")
+        started: set[str] = set()
+        pending: dict[str, tuple[str, str]] = {}
         for kind, item in stream.interleave("tool_calls", "messages"):
             if kind == "tool_calls":
-                _emit_tool_call(item, specialist)
+                _observe_tool_call(item, specialist, started, pending)
             elif kind == "messages":
                 text = str(getattr(item, "text", None) or "").strip()
                 if text:
                     emit("status", "Composing answer…")
+        _flush_pending_tool_errors(pending)
         out = stream.output or {}
     return list(out.get("messages") or [])
 

@@ -31,7 +31,7 @@ from swyngora_ai.constants import (
     SPECIALIST_X,
 )
 from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY
-from swyngora_ai.progress import emit
+from swyngora_ai.progress import as_tool_error_preview, emit, is_tool_error_text
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
 from swyngora_ai.tools.web_search import build_web_tools
@@ -76,6 +76,17 @@ def _content_text_local(content: Any) -> str:
     return str(content)
 
 
+def _tool_message_failed(msg: ToolMessage) -> bool:
+    if getattr(msg, "status", None) == "error":
+        return True
+    return is_tool_error_text(_content_text_local(getattr(msg, "content", "")))
+
+
+def _all_leaf_tools_failed(msgs: Sequence[Any]) -> bool:
+    tools = [m for m in msgs if isinstance(m, ToolMessage)]
+    return bool(tools) and all(_tool_message_failed(m) for m in tools)
+
+
 def _run_react(
     model: BaseChatModel,
     tools: Sequence[BaseTool],
@@ -115,6 +126,9 @@ def _run_react(
     if refs:
         lines = "\n".join(f"- [{r.title}]({r.url})" for r in refs[:12])
         reply = f"{reply.rstrip()}\n\nSOURCES:\n{lines}"
+    # Orchestrator classifies this return as ✓ unless it starts with ERROR.
+    if _all_leaf_tools_failed(msgs):
+        reply = as_tool_error_preview(reply)
     return reply
 
 

@@ -44,12 +44,23 @@ def is_tool_error_text(text: str) -> bool:
     return (text or "").lstrip().startswith("ERROR")
 
 
+def as_tool_error_preview(text: str) -> str:
+    """Prefix ERROR so emit_tool_outcome / grounding treat this as a tool failure."""
+    text = (text or "").strip()
+    if is_tool_error_text(text):
+        return text
+    return f"ERROR {text}" if text else "ERROR"
+
+
 def emit_tool_outcome(name: str, preview: str) -> None:
-    """Emit tool_result (✓) or tool_error when the body is an ERROR … string."""
+    """Emit tool_result (✓) or tool_error. Empty preview is a failure, not a tick."""
     if is_tool_error_text(preview):
-        emit("tool_error", f"{name} failed: {preview}" if preview else f"{name} failed")
+        emit("tool_error", f"{name} failed: {preview}")
         return
-    emit("tool_result", f"{name} ✓ {preview}" if preview else f"{name} ✓")
+    if not (preview or "").strip():
+        emit("tool_error", f"{name} failed")
+        return
+    emit("tool_result", f"{name} ✓ {preview}")
 
 
 def emit(event_type: str, text: str = "", **extra: Any) -> None:

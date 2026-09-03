@@ -62,6 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Price-diff max size:** keep filling while the **total** after-fee profit is still positive, even if the next book level loses money on its own (`docs/features/price-diff.md`)
 
 ### Fixed
+- **AI tool outcome:** exhausted market-tool retries no longer show `get_ticker ✓` in the tool column (`docs/features/ai-assistant.md`)
 - **Liquidation hunt combined factor detail:** a combined `used` factor no longer keeps another venue's missing explanation. Combined rows list `usedVenues` / `missingVenues` and `venues[]`. Combined effects are OI-weighted across used venues only (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt custom weights:** a missing factor no longer has its percent silently given to the remaining factors. Requested percents stay as given; a missing factor keeps its share and adds 0 (neutral 50). `sharePct`, `effect`, and the direction score use the same mix (`50 + sum(effect)`) (`docs/features/liquidation-hunt.md`)
 - **Liquidation hunt cascade leftover scores:** a hop that is not self-fueling no longer keeps 100% assistance / zero remaining from an earlier self-fueling check. Remaining, assistance, and easier always match the final hop walk. Touching a wall price with tiny fuel is not treated as covering the hop (`docs/features/liquidation-hunt.md`)
